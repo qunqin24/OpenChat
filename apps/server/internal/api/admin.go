@@ -1,12 +1,9 @@
 package api
 
 import (
-	"errors"
 	"net/http"
 	"strings"
 
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	"github.com/qunqin/openchat/apps/server/internal/auth"
@@ -92,15 +89,9 @@ func (s *Server) ListUsers(w http.ResponseWriter, r *http.Request, params ListUs
 		return
 	}
 
-	counts, err := s.conversationCounts(r, rows)
-	if err != nil {
-		httpx.Fail(w, r, err)
-		return
-	}
-
 	items := make([]User, 0, len(rows))
 	for _, row := range rows {
-		items = append(items, toUser(row, counts[row.ID]))
+		items = append(items, toUser(row))
 	}
 
 	httpx.JSON(w, http.StatusOK, UserPage{
@@ -186,36 +177,5 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, userId opena
 		}
 	}
 
-	counts, err := s.conversationCounts(r, []sqlc.User{updated})
-	if err != nil {
-		httpx.Fail(w, r, err)
-		return
-	}
-	httpx.JSON(w, http.StatusOK, toUser(updated, counts[updated.ID]))
-}
-
-// conversationCounts resolves the per-user conversation totals for a page of
-// users in one query.
-func (s *Server) conversationCounts(r *http.Request, rows []sqlc.User) (map[uuid.UUID]int64, error) {
-	if len(rows) == 0 {
-		return nil, nil
-	}
-
-	ids := make([]uuid.UUID, 0, len(rows))
-	for _, row := range rows {
-		ids = append(ids, row.ID)
-	}
-
-	found, err := s.q.CountConversationsByUsers(r.Context(), ids)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return nil, err
-	}
-
-	counts := make(map[uuid.UUID]int64, len(found))
-	for _, row := range found {
-		if row.UserID != nil {
-			counts[*row.UserID] = row.Total
-		}
-	}
-	return counts, nil
+	httpx.JSON(w, http.StatusOK, toUser(updated))
 }

@@ -52,15 +52,14 @@ func toSessionUser(row sqlc.User) SessionUser {
 	}
 }
 
-func toUser(row sqlc.User, conversations int64) User {
+func toUser(row sqlc.User) User {
 	user := User{
-		Id:                row.ID,
-		Email:             openapi_types.Email(row.Email),
-		Name:              row.Name,
-		Role:              UserRole(row.Role),
-		Disabled:          row.DisabledAt.Valid,
-		CreatedAt:         row.CreatedAt.Time,
-		ConversationCount: &conversations,
+		Id:        row.ID,
+		Email:     openapi_types.Email(row.Email),
+		Name:      row.Name,
+		Role:      UserRole(row.Role),
+		Disabled:  row.DisabledAt.Valid,
+		CreatedAt: row.CreatedAt.Time,
 	}
 	if row.LastSeenAt.Valid {
 		seen := row.LastSeenAt.Time

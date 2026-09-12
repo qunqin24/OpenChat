@@ -66,10 +66,3 @@ SELECT count(*)
 FROM users
 WHERE role = 'admin'
   AND disabled_at IS NULL;
-
--- name: CountConversationsByUsers :many
-SELECT user_id, count(*)::bigint AS total
-FROM conversations
-WHERE deleted_at IS NULL
-  AND user_id = ANY (sqlc.arg('user_ids')::uuid[])
-GROUP BY user_id;

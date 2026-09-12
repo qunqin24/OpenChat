@@ -25,39 +25,6 @@ func (q *Queries) CountAdmins(ctx context.Context) (int64, error) {
 	return count, err
 }
 
-const countConversationsByUsers = `-- name: CountConversationsByUsers :many
-SELECT user_id, count(*)::bigint AS total
-FROM conversations
-WHERE deleted_at IS NULL
-  AND user_id = ANY ($1::uuid[])
-GROUP BY user_id
-`
-
-type CountConversationsByUsersRow struct {
-	UserID *uuid.UUID `json:"user_id"`
-	Total  int64      `json:"total"`
-}
-
-func (q *Queries) CountConversationsByUsers(ctx context.Context, userIds []uuid.UUID) ([]CountConversationsByUsersRow, error) {
-	rows, err := q.db.Query(ctx, countConversationsByUsers, userIds)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []CountConversationsByUsersRow{}
-	for rows.Next() {
-		var i CountConversationsByUsersRow
-		if err := rows.Scan(&i.UserID, &i.Total); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const countUsers = `-- name: CountUsers :one
 SELECT count(*)
 FROM users

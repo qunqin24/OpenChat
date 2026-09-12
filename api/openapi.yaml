@@ -512,7 +512,6 @@ components:
         disabled: { type: boolean }
         createdAt: { type: string, format: date-time }
         lastSeenAt: { type: string, format: date-time, nullable: true }
-        conversationCount: { type: integer, format: int64 }
 
     UserPage:
       type: object

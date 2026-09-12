@@ -14,7 +14,6 @@ type Querier interface {
 	AppendMessageContent(ctx context.Context, arg AppendMessageContentParams) (Message, error)
 	AttachToMessage(ctx context.Context, arg AttachToMessageParams) error
 	CountAdmins(ctx context.Context) (int64, error)
-	CountConversationsByUsers(ctx context.Context, userIds []uuid.UUID) ([]CountConversationsByUsersRow, error)
 	CountUsers(ctx context.Context) (int64, error)
 	CountUsersFiltered(ctx context.Context, search *string) (int64, error)
 	CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (Attachment, error)

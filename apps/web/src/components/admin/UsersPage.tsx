@@ -69,7 +69,6 @@ export function UsersPage() {
                   <tr>
                     <th>{t('admin.users.account')}</th>
                     <th>{t('admin.users.role')}</th>
-                    <th className="num">{t('admin.users.conversations')}</th>
                     <th>{t('admin.users.last-seen')}</th>
                     <th>{t('admin.users.joined')}</th>
                     <th className="actions">{t('admin.users.actions')}</th>
@@ -78,7 +77,7 @@ export function UsersPage() {
                 <tbody>
                   {isError && (
                     <tr>
-                      <td colSpan={6} className="n-admin-empty">
+                      <td colSpan={5} className="n-admin-empty">
                         {t('state.error')}
                       </td>
                     </tr>
@@ -86,7 +85,7 @@ export function UsersPage() {
 
                   {!isError && isPending && (
                     <tr>
-                      <td colSpan={6} className="n-admin-empty">
+                      <td colSpan={5} className="n-admin-empty">
                         {t('state.loading')}
                       </td>
                     </tr>
@@ -94,7 +93,7 @@ export function UsersPage() {
 
                   {!isError && !isPending && data?.items.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="n-admin-empty">
+                      <td colSpan={5} className="n-admin-empty">
                         {t('admin.users.none')}
                       </td>
                     </tr>
@@ -121,7 +120,6 @@ export function UsersPage() {
                               <span className="n-admin-tag off">{t('admin.users.disabled')}</span>
                             )}
                           </td>
-                          <td className="num">{user.conversationCount ?? 0}</td>
                           <td>{formatRelative(user.lastSeenAt ?? undefined, t) || '—'}</td>
                           <td>{formatRelative(user.createdAt, t)}</td>
                           <td className="actions">

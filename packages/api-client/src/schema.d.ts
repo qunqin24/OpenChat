@@ -370,8 +370,6 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             lastSeenAt?: string | null;
-            /** Format: int64 */
-            conversationCount?: number;
         };
         UserPage: {
             items: components["schemas"]["User"][];
