@@ -15,6 +15,11 @@ interface StreamState {
 interface ChatState {
   stream: StreamState | null
   controller: AbortController | null
+  /**
+   * Prompt typed on the empty-state screen, carried across the navigation that
+   * follows creating the conversation for it. The new route consumes it on mount.
+   */
+  pendingPrompt: string | null
 
   /** Begins a stream, aborting any previous one. Returns the signal to pass to fetch. */
   start: (conversationId: string) => AbortSignal
@@ -25,12 +30,24 @@ interface ChatState {
   /** Aborts the in-flight stream, keeping whatever text already arrived. */
   stop: () => void
 
+  setPendingPrompt: (prompt: string | null) => void
+  takePendingPrompt: () => string | null
+
   isStreaming: (conversationId: string) => boolean
 }
 
 export const useChatStore = create<ChatState>()((set, get) => ({
   stream: null,
   controller: null,
+  pendingPrompt: null,
+
+  setPendingPrompt: (pendingPrompt) => set({ pendingPrompt }),
+
+  takePendingPrompt: () => {
+    const { pendingPrompt } = get()
+    if (pendingPrompt !== null) set({ pendingPrompt: null })
+    return pendingPrompt
+  },
 
   start: (conversationId) => {
     get().controller?.abort()

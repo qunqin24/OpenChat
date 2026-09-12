@@ -34,7 +34,12 @@ func main() {
 }
 
 func run() error {
-	_ = godotenv.Load(".env", "../../.env")
+	// Loaded one at a time on purpose: godotenv.Load returns at the first
+	// missing file, so passing both paths at once would skip the repo-root .env
+	// whenever the server is started from apps/server (which `make dev-server` does).
+	for _, path := range []string{".env", "../../.env"} {
+		_ = godotenv.Load(path)
+	}
 
 	cfg, err := config.Load()
 	if err != nil {

@@ -4,35 +4,98 @@
     "tagline": "An open, streaming chat workspace."
   },
   "nav": {
-    "newChat": "New chat",
-    "conversations": "Conversations",
     "toggleSidebar": "Toggle sidebar",
-    "toggleTheme": "Toggle theme",
+    "toggleTheme": "Appearance",
     "language": "Language"
   },
   "chat": {
-    "empty": {
-      "title": "Start a conversation",
-      "description": "Ask anything. Replies stream in token by token."
-    },
     "placeholder": "Send a message…",
     "send": "Send",
     "stop": "Stop",
-    "thinking": "Thinking…",
-    "you": "You",
-    "assistant": "Assistant",
     "copy": "Copy",
-    "copied": "Copied",
     "rename": "Rename",
     "delete": "Delete",
     "untitled": "New chat"
   },
   "state": {
     "loading": "Loading…",
-    "empty": "Nothing here yet",
     "error": "Something went wrong",
-    "retry": "Try again",
     "notFound": "Page not found",
     "backHome": "Back to chat"
+  },
+  "next": {
+    "more": "More",
+    "scroll-bottom": "Scroll to bottom",
+    "nav": {
+      "new": "New chat"
+    },
+    "conversation": {
+      "empty": "No conversations yet",
+      "remove-title": "Delete conversation",
+      "remove-description": "This cannot be undone. Permanently deleting",
+      "cancel": "Cancel"
+    },
+    "theme": {
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
+    },
+    "composer": {
+      "expand": "Expand the composer",
+      "collapse": "Collapse the composer"
+    },
+    "file": {
+      "upload": "Upload a file",
+      "unavailable": "This model does not accept files"
+    },
+    "time": {
+      "now": "just now",
+      "minutes": "{{n}}m ago",
+      "hours": "{{n}}h ago",
+      "days": "{{n}}d ago",
+      "weeks": "{{n}}w ago"
+    },
+    "group": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "week": "Previous 7 days",
+      "month": "Previous 30 days"
+    },
+    "welcome": {
+      "greeting": "What should we get into?",
+      "suggestions": "Try one of these",
+      "items": {
+        "explain": {
+          "title": "Explain something",
+          "detail": "Make a hard idea land",
+          "prompt": "Explain this in plain language: "
+        },
+        "code": {
+          "title": "Write code",
+          "detail": "Build a feature or fix a bug",
+          "prompt": "Write code that does the following: "
+        },
+        "polish": {
+          "title": "Polish writing",
+          "detail": "Sharpen the wording",
+          "prompt": "Tighten this up and make it clearer: "
+        },
+        "plan": {
+          "title": "Make a plan",
+          "detail": "Break a goal into steps",
+          "prompt": "Draft a plan I can actually follow for: "
+        },
+        "compare": {
+          "title": "Compare options",
+          "detail": "Weigh the trade-offs",
+          "prompt": "Compare these options and recommend one: "
+        },
+        "ideas": {
+          "title": "Brainstorm",
+          "detail": "Find a fresh angle",
+          "prompt": "Give me some fresh ideas around: "
+        }
+      }
+    }
   }
 }

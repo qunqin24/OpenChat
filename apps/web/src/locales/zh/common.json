@@ -4,35 +4,98 @@
     "tagline": "开放的流式对话工作台。"
   },
   "nav": {
-    "newChat": "新对话",
-    "conversations": "对话列表",
     "toggleSidebar": "切换侧边栏",
-    "toggleTheme": "切换主题",
+    "toggleTheme": "外观",
     "language": "语言"
   },
   "chat": {
-    "empty": {
-      "title": "开始一段对话",
-      "description": "随便问点什么，回复会逐字流式返回。"
-    },
     "placeholder": "发送消息…",
     "send": "发送",
     "stop": "停止",
-    "thinking": "思考中…",
-    "you": "你",
-    "assistant": "助手",
     "copy": "复制",
-    "copied": "已复制",
     "rename": "重命名",
     "delete": "删除",
     "untitled": "新对话"
   },
   "state": {
     "loading": "加载中…",
-    "empty": "暂无内容",
     "error": "出错了",
-    "retry": "重试",
     "notFound": "页面不存在",
     "backHome": "返回对话"
+  },
+  "next": {
+    "more": "更多",
+    "scroll-bottom": "回到底部",
+    "nav": {
+      "new": "新对话"
+    },
+    "conversation": {
+      "empty": "还没有对话",
+      "remove-title": "删除对话",
+      "remove-description": "此操作不可撤销，将永久删除",
+      "cancel": "取消"
+    },
+    "theme": {
+      "light": "浅色",
+      "dark": "深色",
+      "system": "跟随系统"
+    },
+    "composer": {
+      "expand": "展开输入框",
+      "collapse": "收起输入框"
+    },
+    "file": {
+      "upload": "上传文件",
+      "unavailable": "当前模型不支持文件"
+    },
+    "time": {
+      "now": "刚刚",
+      "minutes": "{{n}}分钟前",
+      "hours": "{{n}}小时前",
+      "days": "{{n}}天前",
+      "weeks": "{{n}}周前"
+    },
+    "group": {
+      "today": "今天",
+      "yesterday": "昨天",
+      "week": "过去 7 天",
+      "month": "过去 30 天"
+    },
+    "welcome": {
+      "greeting": "今天想聊点什么？",
+      "suggestions": "试试这些",
+      "items": {
+        "explain": {
+          "title": "解释概念",
+          "detail": "把复杂的东西讲明白",
+          "prompt": "用通俗的方式解释一下："
+        },
+        "code": {
+          "title": "写代码",
+          "detail": "实现一个功能或修个 bug",
+          "prompt": "帮我写一段代码，实现："
+        },
+        "polish": {
+          "title": "润色文字",
+          "detail": "让表达更清晰自然",
+          "prompt": "帮我润色下面这段话，让它更清晰："
+        },
+        "plan": {
+          "title": "制定计划",
+          "detail": "拆解目标，排出步骤",
+          "prompt": "帮我制定一个可执行的计划："
+        },
+        "compare": {
+          "title": "对比方案",
+          "detail": "列出取舍，给出建议",
+          "prompt": "帮我对比这几个方案的优劣："
+        },
+        "ideas": {
+          "title": "头脑风暴",
+          "detail": "发散思路，找新角度",
+          "prompt": "围绕这个主题给我一些新想法："
+        }
+      }
+    }
   }
 }

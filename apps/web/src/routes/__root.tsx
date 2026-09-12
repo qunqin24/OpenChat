@@ -1,11 +1,9 @@
 import type { QueryClient } from '@tanstack/react-query'
-import { createRootRouteWithContext, Outlet } from '@tanstack/react-router'
+import { createRootRouteWithContext } from '@tanstack/react-router'
 import { lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { AppShell } from '@/components/layout/app-shell'
-import { Button } from '@/components/ui/button'
-import { TooltipProvider } from '@/components/ui/tooltip'
+import NextShell from '@/components/next/NextShell'
 
 export interface RouterContext {
   queryClient: QueryClient
@@ -35,26 +33,28 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 
 function RootLayout() {
   return (
-    <TooltipProvider delayDuration={300}>
-      <AppShell>
-        <Outlet />
-      </AppShell>
+    <>
+      <NextShell />
       <Suspense fallback={null}>
         <RouterDevtools position="bottom-right" />
         <QueryDevtools buttonPosition="bottom-left" />
       </Suspense>
-    </TooltipProvider>
+    </>
   )
 }
 
 function NotFound() {
   const { t } = useTranslation()
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-4">
-      <p className="text-sm text-muted-foreground">{t('state.notFound')}</p>
-      <Button asChild variant="secondary">
-        <a href="/">{t('state.backHome')}</a>
-      </Button>
-    </div>
+    <main className="n-main">
+      <div className="flex h-full flex-col items-center justify-center gap-4">
+        <p className="text-sm" style={{ color: 'var(--n-text-2)' }}>
+          {t('state.notFound')}
+        </p>
+        <a className="n-row" style={{ width: 'auto' }} href="/">
+          {t('state.backHome')}
+        </a>
+      </div>
+    </main>
   )
 }
