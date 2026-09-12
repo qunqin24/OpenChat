@@ -90,13 +90,34 @@
     background 160ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/**
+ * Focus is carried by two layers rather than one heavy ring: a 1px edge at
+ * partial opacity, plus a wide, very faint halo. A solid 1.5px of `--n-accent`
+ * — pure black in light mode — reads as a hard border stamped on the field,
+ * which fights the hairline edges everywhere else in the theme. Splitting it
+ * keeps the focus obvious without that weight.
+ */
 .n-auth-input-wrap:focus-within {
   background: var(--n-card);
-  box-shadow: 0 0 0 1.5px var(--n-accent);
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--n-text) 45%, transparent),
+    0 0 0 4px color-mix(in oklab, var(--n-text) 7%, transparent);
 }
 
 .n-auth-input-wrap.invalid {
-  box-shadow: 0 0 0 1.5px var(--n-err);
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--n-err) 70%, transparent),
+    0 0 0 4px color-mix(in oklab, var(--n-err) 10%, transparent);
+}
+
+/* While a rejected field is being corrected, focus stays visible but keeps the
+   error's colour — swapping to the neutral ring would read as "fixed" before
+   anything changed. */
+.n-auth-input-wrap.invalid:focus-within {
+  background: var(--n-card);
+  box-shadow:
+    0 0 0 1px var(--n-err),
+    0 0 0 4px color-mix(in oklab, var(--n-err) 14%, transparent);
 }
 
 .n-auth-input {

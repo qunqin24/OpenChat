@@ -145,7 +145,9 @@
 }
 
 .prism-next .n-admin-search:focus-within {
-  box-shadow: 0 0 0 1.5px var(--n-accent);
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--n-text) 45%, transparent),
+    0 0 0 4px color-mix(in oklab, var(--n-text) 7%, transparent);
 }
 
 .prism-next .n-admin-search-input {
