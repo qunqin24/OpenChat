@@ -9,22 +9,26 @@ export interface RouterContext {
   queryClient: QueryClient
 }
 
-// Devtools are dev-only and code-split so they never reach the production bundle.
-const RouterDevtools = import.meta.env.PROD
-  ? () => null
-  : lazy(() =>
-      import('@tanstack/react-router-devtools').then((m) => ({
-        default: m.TanStackRouterDevtools,
-      })),
-    )
+/**
+ * Devtools are off by default: their floating buttons sit on top of the UI.
+ * Set `VITE_DEVTOOLS=true` in apps/web/.env to get them back.
+ *
+ * They are lazy, so with the flag off the chunks are never even requested, and
+ * a production build drops them regardless of the flag.
+ */
+const DEVTOOLS = !import.meta.env.PROD && import.meta.env.VITE_DEVTOOLS === 'true'
 
-const QueryDevtools = import.meta.env.PROD
-  ? () => null
-  : lazy(() =>
-      import('@tanstack/react-query-devtools').then((m) => ({
-        default: m.ReactQueryDevtools,
-      })),
-    )
+const RouterDevtools = lazy(() =>
+  import('@tanstack/react-router-devtools').then((m) => ({
+    default: m.TanStackRouterDevtools,
+  })),
+)
+
+const QueryDevtools = lazy(() =>
+  import('@tanstack/react-query-devtools').then((m) => ({
+    default: m.ReactQueryDevtools,
+  })),
+)
 
 export const Route = createRootRouteWithContext<RouterContext>()({
   component: RootLayout,
@@ -35,10 +39,15 @@ function RootLayout() {
   return (
     <>
       <NextShell />
-      <Suspense fallback={null}>
-        <RouterDevtools position="bottom-right" />
-        <QueryDevtools buttonPosition="bottom-left" />
-      </Suspense>
+      {DEVTOOLS && (
+        <Suspense fallback={null}>
+          {/* Both live on the right: the sidebar owns the bottom-left corner,
+              where a floating button would sit on top of the appearance and
+              language rows. */}
+          <RouterDevtools position="top-right" />
+          <QueryDevtools buttonPosition="bottom-right" />
+        </Suspense>
+      )}
     </>
   )
 }
