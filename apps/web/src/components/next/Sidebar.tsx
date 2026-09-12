@@ -2,6 +2,7 @@ import type { Conversation } from '@openchat/api-client'
 import { useNavigate } from '@tanstack/react-router'
 import {
   Languages,
+  LogOut,
   Monitor,
   Moon,
   MoreHorizontal,
@@ -19,11 +20,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useLogout, useSession } from '@/features/auth/use-auth'
 import { useConversations, useRenameConversation } from '@/hooks/use-conversations'
 import { groupConversations, formatRelative } from '@/lib/grouping'
 import { supportedLanguages } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { useUIStore, type Theme } from '@/stores/ui-store'
+import ModelAvatar from './ModelAvatar'
 
 interface SidebarProps {
   collapsed: boolean
@@ -110,6 +113,8 @@ export function Sidebar({ collapsed, activeId, onDelete }: SidebarProps) {
   const navigate = useNavigate()
 
   const { data, isPending } = useConversations()
+  const { data: session } = useSession()
+  const logout = useLogout()
   const theme = useUIStore((s) => s.theme)
   const setTheme = useUIStore((s) => s.setTheme)
 
@@ -154,6 +159,28 @@ export function Sidebar({ collapsed, activeId, onDelete }: SidebarProps) {
       </div>
 
       <div className="p-2">
+        {session && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className="n-row">
+                <ModelAvatar name={session.name || session.email} size={22} />
+                <span className="n-row-label">{session.name || session.email}</span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="top">
+              <DropdownMenuItem
+                onSelect={async () => {
+                  await logout.mutateAsync()
+                  await navigate({ to: '/login' })
+                }}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                {t('auth.logout')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button type="button" className="n-row">

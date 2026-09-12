@@ -1,0 +1,280 @@
+/**
+ * Sign-in and sign-up screens.
+ *
+ * Kept out of next-theme.css so that file stays a faithful copy of the prism
+ * original and can be re-synced. Everything here is built from the same `--n-*`
+ * tokens and the same techniques: hairline rings via box-shadow rather than
+ * borders, button fills on `::before` so a press scales the fill and not the
+ * label, and one shared easing curve.
+ */
+
+.n-auth {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow-y: auto;
+  background: var(--n-bg);
+  color: var(--n-text);
+  font-size: 15px;
+  line-height: 1.65;
+  letter-spacing: -0.005em;
+}
+
+.n-auth-card {
+  width: 100%;
+  max-width: 380px;
+}
+
+.n-auth-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 28px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.n-auth-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  text-align: center;
+}
+
+.n-auth-sub {
+  margin: 6px 0 26px;
+  color: var(--n-text-2);
+  font-size: 14px;
+  text-align: center;
+}
+
+.n-auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.n-auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.n-auth-label {
+  color: var(--n-text-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* The ring lives on the wrapper so the show/hide button can sit inside it
+   without breaking the outline. */
+.n-auth-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 42px;
+  padding: 0 6px 0 12px;
+  border-radius: 12px;
+  background: var(--n-panel);
+  box-shadow: 0 0 0 0.5px var(--n-line);
+  transition:
+    box-shadow 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    background 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.n-auth-input-wrap:focus-within {
+  background: var(--n-card);
+  box-shadow: 0 0 0 1.5px var(--n-accent);
+}
+
+.n-auth-input-wrap.invalid {
+  box-shadow: 0 0 0 1.5px var(--n-err);
+}
+
+.n-auth-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--n-text);
+  font: inherit;
+  font-size: 15px;
+}
+
+.n-auth-input::placeholder {
+  color: var(--n-text-3);
+}
+
+.n-auth-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Reveal toggle, same ::before fill trick as .n-icon-btn. */
+.n-auth-reveal {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  background: transparent;
+  color: var(--n-text-2);
+  cursor: pointer;
+}
+
+.n-auth-reveal::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: transparent;
+  transition:
+    background 150ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 150ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.n-auth-reveal:hover::before {
+  background: var(--n-hover);
+}
+
+.n-auth-reveal:active::before {
+  transform: scale(0.98);
+  background: var(--n-hover-strong);
+}
+
+.n-auth-reveal svg {
+  position: relative;
+}
+
+.n-auth-error {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--n-err);
+  font-size: 13px;
+}
+
+/* Form-level failure (bad credentials), above the submit button. */
+.n-auth-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--n-err) 12%, transparent);
+  color: var(--n-err);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.n-auth-submit {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  margin-top: 4px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--n-accent-fg);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.n-auth-submit::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--n-accent);
+  transition:
+    background 150ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 150ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.n-auth-submit:not(:disabled):hover::before {
+  background: var(--n-accent-hover);
+}
+
+.n-auth-submit:not(:disabled):active::before {
+  transform: scale(0.99);
+}
+
+.n-auth-submit:disabled {
+  cursor: not-allowed;
+}
+
+.n-auth-submit:disabled::before {
+  opacity: 0.45;
+}
+
+.n-auth-submit > * {
+  position: relative;
+}
+
+.n-auth-spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid color-mix(in oklab, var(--n-accent-fg) 35%, transparent);
+  border-top-color: var(--n-accent-fg);
+  border-radius: 999px;
+  animation: n-auth-spin 700ms linear infinite;
+}
+
+@keyframes n-auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.n-auth-foot {
+  margin-top: 20px;
+  color: var(--n-text-2);
+  font-size: 14px;
+  text-align: center;
+}
+
+.n-auth-link {
+  color: var(--n-text);
+  font-weight: 500;
+  text-decoration: none;
+  text-underline-offset: 3px;
+}
+
+.n-auth-link:hover {
+  text-decoration: underline;
+}
+
+/* Mock-only affordance: goes away with the mock. */
+.n-auth-hint {
+  margin-top: 22px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--n-panel);
+  color: var(--n-text-2);
+  font-size: 12.5px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.n-auth-hint code {
+  color: var(--n-text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}

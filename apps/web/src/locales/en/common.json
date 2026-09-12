@@ -97,5 +97,40 @@
         }
       }
     }
+  },
+  "auth": {
+    "logout": "Sign out",
+    "show-password": "Show password",
+    "hide-password": "Hide password",
+    "demo-hint": "Demo account (front-end mock, no backend yet):",
+    "field": {
+      "name": "Name",
+      "name-placeholder": "What should we call you",
+      "email": "Email",
+      "password": "Password",
+      "password-placeholder": "At least {{n}} characters"
+    },
+    "login": {
+      "title": "Welcome back",
+      "subtitle": "Sign in to pick up where you left off",
+      "action": "Sign in",
+      "no-account": "No account yet?"
+    },
+    "register": {
+      "title": "Create an account",
+      "subtitle": "It only takes a moment",
+      "action": "Sign up",
+      "have-account": "Already have an account?"
+    },
+    "error": {
+      "invalid-credentials": "That email or password is not right",
+      "email-taken": "That email is already registered",
+      "email-required": "Enter your email",
+      "email-invalid": "That does not look like an email address",
+      "name-required": "Enter a name",
+      "password-required": "Enter your password",
+      "password-short": "Use at least 8 characters",
+      "unknown": "Something went wrong. Try again."
+    }
   }
 }

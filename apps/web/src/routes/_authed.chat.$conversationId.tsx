@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import NextChat from '@/components/next/NextChat'
 
-export const Route = createFileRoute('/chat/$conversationId')({
+export const Route = createFileRoute('/_authed/chat/$conversationId')({
   component: ChatRoute,
 })
 

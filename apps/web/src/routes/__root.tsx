@@ -1,9 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query'
-import { createRootRouteWithContext } from '@tanstack/react-router'
+import { createRootRouteWithContext, Outlet } from '@tanstack/react-router'
 import { lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
-
-import NextShell from '@/components/next/NextShell'
 
 export interface RouterContext {
   queryClient: QueryClient
@@ -35,10 +33,14 @@ export const Route = createRootRouteWithContext<RouterContext>()({
   notFoundComponent: NotFound,
 })
 
+/**
+ * Deliberately bare: the app shell lives in the `_authed` layout, so the
+ * sign-in and sign-up screens render without a sidebar.
+ */
 function RootLayout() {
   return (
     <>
-      <NextShell />
+      <Outlet />
       {DEVTOOLS && (
         <Suspense fallback={null}>
           {/* Both live on the right: the sidebar owns the bottom-left corner,
@@ -55,15 +57,15 @@ function RootLayout() {
 function NotFound() {
   const { t } = useTranslation()
   return (
-    <main className="n-main">
-      <div className="flex h-full flex-col items-center justify-center gap-4">
+    <div className="n-auth">
+      <div className="flex flex-col items-center gap-4">
         <p className="text-sm" style={{ color: 'var(--n-text-2)' }}>
           {t('state.notFound')}
         </p>
-        <a className="n-row" style={{ width: 'auto' }} href="/">
+        <a className="n-auth-link" href="/">
           {t('state.backHome')}
         </a>
       </div>
-    </main>
+    </div>
   )
 }
