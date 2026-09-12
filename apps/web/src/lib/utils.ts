@@ -44,3 +44,8 @@ export function getPageNumbers(currentPage: number, totalPages: number) {
 
   return rangeWithDots
 }
+
+/** Resolves after `ms`. Used by the vendored admin dialogs to fake latency. */
+export function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}

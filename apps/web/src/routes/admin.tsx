@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
-import AdminLayout from '@/components/admin/AdminLayout'
+import { AuthenticatedLayout } from '@/components/shadcn/layout/authenticated-layout'
 import { sessionQueryOptions } from '@/features/auth/use-auth'
 
 /**
@@ -20,5 +20,5 @@ export const Route = createFileRoute('/admin')({
       throw redirect({ to: '/' })
     }
   },
-  component: AdminLayout,
+  component: AuthenticatedLayout,
 })

@@ -177,7 +177,10 @@
       "update-failed": "修改失败，可能是最后一个管理员或权限不足",
       "select-all": "全选本页",
       "select-row": "选择该行",
-      "you": "你自己"
+      "you": "你自己",
+      "status": "状态",
+      "enabled": "启用中",
+      "subtitle": "管理账号角色与启用状态。"
     },
     "bulk": {
       "announce": "已选中 {{n}} 个{{entity}}，可使用批量操作。",
@@ -192,6 +195,11 @@
       "disable": "停用",
       "done": "已更新 {{n}} 个账号",
       "skipped": "{{n}} 个被跳过"
+    },
+    "sign-out-confirm": "确定要退出登录吗？下次访问需要重新登录。",
+    "recent-users": {
+      "title": "最近注册",
+      "subtitle": "最新加入的账号"
     }
   }
 }

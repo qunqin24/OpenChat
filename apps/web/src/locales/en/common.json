@@ -177,7 +177,10 @@
       "update-failed": "Change refused — this may be the last admin",
       "select-all": "Select all on this page",
       "select-row": "Select row",
-      "you": "You"
+      "you": "You",
+      "status": "Status",
+      "enabled": "Enabled",
+      "subtitle": "Manage account roles and access."
     },
     "bulk": {
       "announce": "{{n}} {{entity}} selected. Bulk actions are available.",
@@ -192,6 +195,11 @@
       "disable": "Disable",
       "done": "Updated {{n}} accounts",
       "skipped": "{{n}} skipped"
+    },
+    "sign-out-confirm": "Sign out of OpenChat? You will need to sign in again.",
+    "recent-users": {
+      "title": "Recent signups",
+      "subtitle": "The newest accounts"
     }
   }
 }
