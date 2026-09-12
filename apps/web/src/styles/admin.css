@@ -224,7 +224,10 @@
   white-space: nowrap;
 }
 
-.prism-next .n-admin-table td.actions {
+/* The flex row lives inside the cell, never on it: `display: flex` on a <td>
+   drops it out of the table layout algorithm, so the column stops sizing with
+   the others and pushes the row wider than the panel. */
+.prism-next .n-admin-actions {
   display: flex;
   gap: 2px;
   justify-content: flex-end;

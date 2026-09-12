@@ -127,57 +127,59 @@ export function UsersPage() {
                           <td className="actions">
                             {/* Self-changes are refused by the server; disabling
                                 them here explains why instead of failing later. */}
-                            <Tooltip
-                              label={
-                                isSelf
-                                  ? t('admin.users.self-locked')
-                                  : isAdmin
-                                    ? t('admin.users.demote')
-                                    : t('admin.users.promote')
-                              }
-                            >
-                              <span className="n-tip-wrap">
-                                <button
-                                  type="button"
-                                  className="n-icon-btn sm"
-                                  disabled={isSelf || updateUser.isPending}
-                                  onClick={() =>
-                                    change(user, { role: isAdmin ? 'user' : 'admin' })
-                                  }
-                                >
-                                  {isAdmin ? (
-                                    <ShieldOff className="h-3.5 w-3.5" />
-                                  ) : (
-                                    <ShieldCheck className="h-3.5 w-3.5" />
-                                  )}
-                                </button>
-                              </span>
-                            </Tooltip>
+                            <div className="n-admin-actions">
+                              <Tooltip
+                                label={
+                                  isSelf
+                                    ? t('admin.users.self-locked')
+                                    : isAdmin
+                                      ? t('admin.users.demote')
+                                      : t('admin.users.promote')
+                                }
+                              >
+                                <span className="n-tip-wrap">
+                                  <button
+                                    type="button"
+                                    className="n-icon-btn sm"
+                                    disabled={isSelf || updateUser.isPending}
+                                    onClick={() =>
+                                      change(user, { role: isAdmin ? 'user' : 'admin' })
+                                    }
+                                  >
+                                    {isAdmin ? (
+                                      <ShieldOff className="h-3.5 w-3.5" />
+                                    ) : (
+                                      <ShieldCheck className="h-3.5 w-3.5" />
+                                    )}
+                                  </button>
+                                </span>
+                              </Tooltip>
 
-                            <Tooltip
-                              label={
-                                isSelf
-                                  ? t('admin.users.self-locked')
-                                  : user.disabled
-                                    ? t('admin.users.enable')
-                                    : t('admin.users.disable')
-                              }
-                            >
-                              <span className="n-tip-wrap">
-                                <button
-                                  type="button"
-                                  className="n-icon-btn sm"
-                                  disabled={isSelf || updateUser.isPending}
-                                  onClick={() => change(user, { disabled: !user.disabled })}
-                                >
-                                  {user.disabled ? (
-                                    <UserCheck className="h-3.5 w-3.5" />
-                                  ) : (
-                                    <UserX className="h-3.5 w-3.5" />
-                                  )}
-                                </button>
-                              </span>
-                            </Tooltip>
+                              <Tooltip
+                                label={
+                                  isSelf
+                                    ? t('admin.users.self-locked')
+                                    : user.disabled
+                                      ? t('admin.users.enable')
+                                      : t('admin.users.disable')
+                                }
+                              >
+                                <span className="n-tip-wrap">
+                                  <button
+                                    type="button"
+                                    className="n-icon-btn sm"
+                                    disabled={isSelf || updateUser.isPending}
+                                    onClick={() => change(user, { disabled: !user.disabled })}
+                                  >
+                                    {user.disabled ? (
+                                      <UserCheck className="h-3.5 w-3.5" />
+                                    ) : (
+                                      <UserX className="h-3.5 w-3.5" />
+                                    )}
+                                  </button>
+                                </span>
+                              </Tooltip>
+                            </div>
                           </td>
                         </tr>
                       )
