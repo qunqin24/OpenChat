@@ -4,6 +4,7 @@ import {
   Check,
   Languages,
   LogOut,
+  Shield,
   Monitor,
   Moon,
   MoreHorizontal,
@@ -204,6 +205,12 @@ export function Sidebar({ collapsed, activeId, onDelete }: SidebarProps) {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="match-trigger" align="start" side="top">
+              {session.role === 'admin' && (
+                <DropdownMenuItem onSelect={() => void navigate({ to: '/admin' })}>
+                  <Shield className="h-4 w-4" />
+                  <span>{t('admin.title')}</span>
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 onSelect={async () => {
                   await logout.mutateAsync()

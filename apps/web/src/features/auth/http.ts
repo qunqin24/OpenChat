@@ -1,69 +1,64 @@
-import { API_BASE_URL } from '@/lib/api'
+import { api } from '@/lib/api'
 import { AuthFieldError, type AuthApi, type AuthErrorKey, type SessionUser } from './types'
 
 /**
- * The real implementation, against HttpOnly session cookies.
- *
- * NOT YET EXERCISED: the backend has no auth endpoints, so this is the shape
- * the contract is expected to take, not verified code. Switch to it in
- * `features/auth/index.ts` once `api/openapi.yaml` grows the routes below.
- *
- * `credentials: 'include'` is the whole point — it is what makes the browser
- * send and store the session cookie. Without it the cookie is silently dropped.
+ * Auth against HttpOnly session cookies. The client sends `credentials:
+ * 'include'` on every request (see lib/api.ts) — without it the browser
+ * silently drops the cookie and every call looks signed out.
  */
 
-interface ErrorBody {
-  code?: string
-  field?: AuthFieldError['field']
-}
-
 /**
- * Server error codes mapped to locale keys. The server's own `message` is
- * never shown: it is not localised, and treating it as a translation key would
- * render the raw string whenever the two drift apart.
+ * Server error codes mapped to locale keys. The server's own `message` is never
+ * shown: it is not localised, and treating it as a translation key would render
+ * the raw string whenever the two drift apart.
  */
 const SERVER_ERRORS: Record<string, AuthErrorKey> = {
   invalid_credentials: 'auth.error.invalid-credentials',
   email_taken: 'auth.error.email-taken',
+  email_required: 'auth.error.email-required',
+  name_required: 'auth.error.name-required',
+  password_short: 'auth.error.password-short',
+  account_disabled: 'auth.error.account-disabled',
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
-  })
+interface ServerError {
+  code?: string
+  field?: AuthFieldError['field']
+}
 
-  if (!response.ok) {
-    let body: ErrorBody = {}
-    try {
-      body = (await response.json()) as ErrorBody
-    } catch {
-      // Non-JSON error body; fall back to a generic message.
-    }
-    const key = SERVER_ERRORS[body.code ?? ''] ?? 'auth.error.unknown'
-    throw new AuthFieldError(body.field ?? 'password', key)
-  }
-
-  return response.status === 204 ? (undefined as T) : ((await response.json()) as T)
+function toAuthError(error: unknown): AuthFieldError {
+  const body = (error ?? {}) as ServerError
+  return new AuthFieldError(
+    body.field ?? 'password',
+    SERVER_ERRORS[body.code ?? ''] ?? 'auth.error.unknown',
+  )
 }
 
 export function createHttpAuthApi(): AuthApi {
   return {
     async session() {
-      const response = await fetch(`${API_BASE_URL}/auth/session`, { credentials: 'include' })
+      const { data, error, response } = await api.GET('/auth/session')
       // 401 is the ordinary "not signed in" answer, not a failure.
       if (response.status === 401) return null
-      if (!response.ok) throw new Error(`auth: session check failed (${response.status})`)
-      return (await response.json()) as SessionUser
+      if (error) throw toAuthError(error)
+      return data as SessionUser
     },
 
-    login: (input) =>
-      request<SessionUser>('/auth/login', { method: 'POST', body: JSON.stringify(input) }),
+    async login(input) {
+      const { data, error } = await api.POST('/auth/login', { body: input })
+      if (error) throw toAuthError(error)
+      return data as SessionUser
+    },
 
-    register: (input) =>
-      request<SessionUser>('/auth/register', { method: 'POST', body: JSON.stringify(input) }),
+    async register(input) {
+      const { data, error } = await api.POST('/auth/register', { body: input })
+      if (error) throw toAuthError(error)
+      return data as SessionUser
+    },
 
-    logout: () => request<void>('/auth/logout', { method: 'POST' }),
+    async logout() {
+      const { error } = await api.POST('/auth/logout')
+      if (error) throw toAuthError(error)
+    },
   }
 }

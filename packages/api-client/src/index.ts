@@ -10,8 +10,10 @@ export type { paths, components } from './schema'
 export interface ClientOptions {
   /** Base URL of the API, e.g. `/api/v1` or `https://api.example.com/api/v1`. */
   baseUrl: string
-  /** Extra headers applied to every request (auth token, locale, …). */
+  /** Extra headers applied to every request (locale, tracing, …). */
   headers?: Record<string, string>
+  /** Pass 'include' so the browser carries the HttpOnly session cookie. */
+  credentials?: RequestCredentials
   fetch?: typeof globalThis.fetch
 }
 
@@ -20,6 +22,7 @@ export function createApiClient(options: ClientOptions) {
   return createClient<paths>({
     baseUrl: options.baseUrl,
     headers: options.headers,
+    credentials: options.credentials,
     fetch: options.fetch,
   })
 }

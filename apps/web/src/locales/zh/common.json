@@ -102,7 +102,6 @@
     "logout": "退出登录",
     "show-password": "显示密码",
     "hide-password": "隐藏密码",
-    "demo-hint": "演示账号（当前为前端 mock，未接后端）：",
     "field": {
       "name": "昵称",
       "name-placeholder": "怎么称呼你",
@@ -130,7 +129,52 @@
       "name-required": "请填写昵称",
       "password-required": "请填写密码",
       "password-short": "密码至少 8 位",
-      "unknown": "出了点问题，请稍后再试"
+      "unknown": "出了点问题，请稍后再试",
+      "account-disabled": "该账号已被停用"
+    }
+  },
+  "admin": {
+    "title": "管理后台",
+    "back-to-chat": "返回对话",
+    "nav": {
+      "dashboard": "仪表盘",
+      "users": "用户"
+    },
+    "stats": {
+      "users": "用户总数",
+      "active": "启用中",
+      "conversations": "对话总数",
+      "messages": "消息总数",
+      "new-users": "新增用户",
+      "new-7d": "近 7 天新增 {{n}}",
+      "disabled": "已停用 {{n}}",
+      "messages-7d": "近 7 天 {{n}} 条"
+    },
+    "trend": {
+      "title": "活跃趋势",
+      "days": "{{n}} 天"
+    },
+    "users": {
+      "search": "搜索邮箱或昵称",
+      "total": "共 {{n}} 个账号",
+      "none": "没有匹配的账号",
+      "account": "账号",
+      "role": "角色",
+      "conversations": "对话数",
+      "last-seen": "最近活跃",
+      "joined": "注册于",
+      "actions": "操作",
+      "role-admin": "管理员",
+      "role-user": "普通用户",
+      "disabled": "已停用",
+      "promote": "设为管理员",
+      "demote": "取消管理员",
+      "enable": "启用账号",
+      "disable": "停用账号",
+      "self-locked": "不能修改自己的权限",
+      "previous": "上一页",
+      "next": "下一页",
+      "update-failed": "修改失败，可能是最后一个管理员或权限不足"
     }
   }
 }

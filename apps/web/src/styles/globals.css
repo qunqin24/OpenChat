@@ -9,6 +9,7 @@
 /* Sign-in / sign-up screens and dropdown menus, built on the same tokens. */
 @import './auth.css';
 @import './menu.css';
+@import './admin.css';
 
 /* Theme is toggled by adding/removing `.dark` on <html> (see stores/ui-store.ts),
    which is also the hook the `--n-*` tokens switch on. */

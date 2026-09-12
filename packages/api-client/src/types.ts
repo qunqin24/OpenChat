@@ -18,6 +18,18 @@ export type UpdateConversationRequest = Schemas['UpdateConversationRequest']
 export type CreateMessageRequest = Schemas['CreateMessageRequest']
 export type CreateUploadRequest = Schemas['CreateUploadRequest']
 
+export type SessionUser = Schemas['SessionUser']
+export type User = Schemas['User']
+export type UserPage = Schemas['UserPage']
+export type UserRole = Schemas['UserRole']
+export type RegisterRequest = Schemas['RegisterRequest']
+export type LoginRequest = Schemas['LoginRequest']
+export type UpdateUserRequest = Schemas['UpdateUserRequest']
+
+export type AdminStats = Schemas['AdminStats']
+export type AdminTotals = Schemas['AdminTotals']
+export type TrendPoint = Schemas['TrendPoint']
+
 export type StreamEvent = Schemas['StreamEvent']
 export type StreamStart = Schemas['StreamStart']
 export type StreamDelta = Schemas['StreamDelta']

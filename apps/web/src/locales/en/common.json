@@ -102,7 +102,6 @@
     "logout": "Sign out",
     "show-password": "Show password",
     "hide-password": "Hide password",
-    "demo-hint": "Demo account (front-end mock, no backend yet):",
     "field": {
       "name": "Name",
       "name-placeholder": "What should we call you",
@@ -130,7 +129,52 @@
       "name-required": "Enter a name",
       "password-required": "Enter your password",
       "password-short": "Use at least 8 characters",
-      "unknown": "Something went wrong. Try again."
+      "unknown": "Something went wrong. Try again.",
+      "account-disabled": "This account has been disabled"
+    }
+  },
+  "admin": {
+    "title": "Admin",
+    "back-to-chat": "Back to chat",
+    "nav": {
+      "dashboard": "Dashboard",
+      "users": "Users"
+    },
+    "stats": {
+      "users": "Total users",
+      "active": "Enabled",
+      "conversations": "Conversations",
+      "messages": "Messages",
+      "new-users": "New users",
+      "new-7d": "{{n}} in the last 7 days",
+      "disabled": "{{n}} disabled",
+      "messages-7d": "{{n}} in the last 7 days"
+    },
+    "trend": {
+      "title": "Activity",
+      "days": "{{n}} days"
+    },
+    "users": {
+      "search": "Search email or name",
+      "total": "{{n}} accounts",
+      "none": "No matching accounts",
+      "account": "Account",
+      "role": "Role",
+      "conversations": "Chats",
+      "last-seen": "Last seen",
+      "joined": "Joined",
+      "actions": "Actions",
+      "role-admin": "Admin",
+      "role-user": "User",
+      "disabled": "Disabled",
+      "promote": "Make admin",
+      "demote": "Remove admin",
+      "enable": "Enable account",
+      "disable": "Disable account",
+      "self-locked": "You cannot change your own access",
+      "previous": "Previous page",
+      "next": "Next page",
+      "update-failed": "Change refused — this may be the last admin"
     }
   }
 }

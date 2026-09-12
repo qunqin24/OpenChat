@@ -3,11 +3,7 @@ import { AlertCircle } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import {
-  DEMO_CREDENTIALS,
-  isAuthFieldError,
-  type AuthErrorKey,
-} from '@/features/auth'
+import { isAuthFieldError, type AuthErrorKey } from '@/features/auth'
 import { useLogin } from '@/features/auth/use-auth'
 import AuthField from './AuthField'
 import AuthShell from './AuthShell'
@@ -104,12 +100,6 @@ export function LoginPage() {
         </button>
       </form>
 
-      {/* Goes away with the mock. */}
-      <div className="n-auth-hint">
-        {t('auth.demo-hint')}
-        <br />
-        <code>{DEMO_CREDENTIALS.email}</code> / <code>{DEMO_CREDENTIALS.password}</code>
-      </div>
     </AuthShell>
   )
 }

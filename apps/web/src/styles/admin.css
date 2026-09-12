@@ -1,0 +1,288 @@
+/**
+ * Admin panel.
+ *
+ * The panel reuses `.prism-next` as its shell, so the sidebar, top bar, scroll
+ * area, cards (`.n-log-stat`, `.n-log-panel`) and pager all come from
+ * next-theme.css unchanged. Only what the panel adds lives here, scoped the
+ * same way.
+ */
+
+.prism-next .n-admin-page {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 24px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ----------------------------------------------------------------- sections */
+
+.prism-next .n-admin-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.prism-next .n-admin-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.prism-next .n-admin-section-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Segmented control for the trend window. */
+.prism-next .n-admin-windows {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  background: var(--n-panel);
+}
+
+.prism-next .n-admin-window {
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--n-text-2);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition:
+    background 150ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 150ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.prism-next .n-admin-window:hover {
+  color: var(--n-text);
+}
+
+.prism-next .n-admin-window.active {
+  background: var(--n-card);
+  color: var(--n-text);
+  box-shadow: var(--n-ring);
+}
+
+/* ------------------------------------------------------------------- charts */
+
+.prism-next .n-admin-charts {
+  display: grid;
+  gap: 12px;
+}
+
+.prism-next .n-admin-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--n-card);
+  box-shadow: var(--n-shadow-card);
+}
+
+.prism-next .n-admin-chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.prism-next .n-admin-chart-label {
+  color: var(--n-text-2);
+  font-size: 13px;
+}
+
+.prism-next .n-admin-chart-total {
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* `preserveAspectRatio: none` stretches the viewBox to whatever width is
+   available, so the height here is the only thing fixing the chart's size. */
+.prism-next .n-admin-chart-canvas {
+  width: 100%;
+  height: 120px;
+}
+
+.prism-next .n-admin-chart-area {
+  fill: var(--n-hover);
+  stroke: none;
+}
+
+/* ------------------------------------------------------------------- table */
+
+.prism-next .n-admin-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 0.5px solid var(--n-line);
+}
+
+.prism-next .n-admin-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  max-width: 320px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 10px;
+  background: var(--n-panel);
+  transition: box-shadow 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.prism-next .n-admin-search:focus-within {
+  box-shadow: 0 0 0 1.5px var(--n-accent);
+}
+
+.prism-next .n-admin-search-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--n-text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.prism-next .n-admin-search-input::placeholder {
+  color: var(--n-text-3);
+}
+
+.prism-next .n-admin-count {
+  flex: none;
+  color: var(--n-text-2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.prism-next .n-admin-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--n-line) transparent;
+}
+
+.prism-next .n-admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.prism-next .n-admin-table th {
+  padding: 10px 16px;
+  color: var(--n-text-2);
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 0.5px solid var(--n-line);
+}
+
+.prism-next .n-admin-table td {
+  padding: 12px 16px;
+  border-bottom: 0.5px solid var(--n-line);
+  vertical-align: middle;
+}
+
+.prism-next .n-admin-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.prism-next .n-admin-table tr:hover td {
+  background: var(--n-hover);
+}
+
+/* A disabled account stays legible but visibly inactive. */
+.prism-next .n-admin-table tr.disabled .n-admin-name,
+.prism-next .n-admin-table tr.disabled .n-admin-email {
+  color: var(--n-text-3);
+}
+
+.prism-next .n-admin-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.prism-next .n-admin-table .actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.prism-next .n-admin-table td.actions {
+  display: flex;
+  gap: 2px;
+  justify-content: flex-end;
+}
+
+.prism-next .n-admin-account {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.prism-next .n-admin-name {
+  font-weight: 500;
+}
+
+.prism-next .n-admin-email {
+  color: var(--n-text-2);
+  font-size: 12.5px;
+}
+
+/* Role and status pills. Neutral by default; hue is reserved for meaning. */
+.prism-next .n-admin-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--n-panel);
+  color: var(--n-text-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.prism-next .n-admin-tag + .n-admin-tag {
+  margin-left: 4px;
+}
+
+.prism-next .n-admin-tag.admin {
+  background: var(--n-accent);
+  color: var(--n-accent-fg);
+}
+
+.prism-next .n-admin-tag.off {
+  background: color-mix(in oklab, var(--n-err) 14%, transparent);
+  color: var(--n-err);
+}
+
+.prism-next .n-admin-empty {
+  padding: 40px 16px;
+  color: var(--n-text-3);
+  font-size: 13px;
+  text-align: center;
+}
+
+.prism-next .n-admin-alert {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--n-err) 12%, transparent);
+  color: var(--n-err);
+  font-size: 13px;
+}

@@ -1,9 +1,7 @@
-/** The signed-in user, as the session endpoint reports them. */
-export interface SessionUser {
-  id: string
-  email: string
-  name: string
-}
+import type { SessionUser as GeneratedSessionUser } from '@openchat/api-client'
+
+/** The signed-in user, straight from the contract. */
+export type SessionUser = GeneratedSessionUser
 
 export interface LoginInput {
   email: string
@@ -17,8 +15,7 @@ export interface RegisterInput {
 }
 
 /**
- * Every auth call goes through this interface, so swapping the mock for the
- * real backend is a one-line change in `features/auth/index.ts`.
+ * Every auth call goes through this interface.
  *
  * Shaped for HttpOnly session cookies: nothing here returns or accepts a token,
  * because the browser carries the cookie and JavaScript never sees it. "Am I
@@ -45,6 +42,7 @@ export type AuthErrorKey =
   | 'auth.error.name-required'
   | 'auth.error.password-required'
   | 'auth.error.password-short'
+  | 'auth.error.account-disabled'
   | 'auth.error.unknown'
 
 /** Field-level failures the forms surface next to the offending input. */
