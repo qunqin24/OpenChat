@@ -1,7 +1,12 @@
 /**
- * Dropdown menus (Radix), matching the picker and mention popovers in
- * next-theme.css: a 16px panel carried by a hairline ring with a shadow that
- * only lifts it slightly, and 10px rows whose fill sits on `::before`.
+ * Dropdown menus (Radix), carried by a hairline ring with a shadow that only
+ * lifts the panel slightly, as the picker and mention popovers do.
+ *
+ * Rows are sized to `.n-row`, the sidebar row that opens them — same 36px
+ * height, same 10px padding, same 10px gap, same 8px fill radius — so a menu
+ * reads as an extension of the row rather than a differently proportioned
+ * surface. The panel's own radius is the row's 8px plus its 6px padding, which
+ * keeps the inner and outer curves concentric.
  *
  * The fill sits on `background` rather than a `::before` layer: that trick
  * exists so pressing an icon button scales the fill and not the icon, which a
@@ -22,7 +27,7 @@
   max-width: calc(100vw - 24px);
   padding: 6px;
   border: 0;
-  border-radius: 16px;
+  border-radius: 14px;
   background: var(--n-bg);
   box-shadow:
     0 0 0 0.5px rgba(0, 0, 0, 0.07),
@@ -39,11 +44,12 @@
 .n-menu-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
-  padding: 8px 10px;
+  min-height: 36px;
+  padding: 0 10px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   background: transparent;
   color: var(--n-text);
   font-size: 14px;
@@ -76,4 +82,15 @@
   padding-left: 8px;
   color: var(--n-text-3);
   font-size: 12px;
+}
+
+/**
+ * Matches the panel to the control that opened it. Used by the sidebar's
+ * account, appearance and language rows, where the trigger is a full-width
+ * `.n-row` — without it the menu is narrower than the row it drops from.
+ * Left off the conversation `…` menu, whose trigger is a 32px icon button.
+ */
+.n-menu.match-trigger {
+  width: var(--radix-dropdown-menu-trigger-width);
+  min-width: 0;
 }

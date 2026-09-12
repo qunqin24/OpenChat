@@ -168,7 +168,7 @@ export function Sidebar({ collapsed, activeId, onDelete }: SidebarProps) {
                 <span className="n-row-label">{session.name || session.email}</span>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="top">
+            <DropdownMenuContent className="match-trigger" align="start" side="top">
               <DropdownMenuItem
                 onSelect={async () => {
                   await logout.mutateAsync()
@@ -189,7 +189,7 @@ export function Sidebar({ collapsed, activeId, onDelete }: SidebarProps) {
               <span className="n-row-label">{t('nav.toggleTheme')}</span>
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" side="top">
+          <DropdownMenuContent className="match-trigger" align="start" side="top">
             {THEMES.map(({ value, icon: Icon }) => (
               <DropdownMenuItem key={value} onSelect={() => setTheme(value)}>
                 <Icon className="h-4 w-4" />
@@ -207,7 +207,7 @@ export function Sidebar({ collapsed, activeId, onDelete }: SidebarProps) {
               <span className="n-row-label">{t('nav.language')}</span>
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" side="top">
+          <DropdownMenuContent className="match-trigger" align="start" side="top">
             {supportedLanguages.map((lang) => (
               <DropdownMenuItem key={lang} onSelect={() => void i18n.changeLanguage(lang)}>
                 <span>{LANGUAGE_LABELS[lang] ?? lang}</span>
