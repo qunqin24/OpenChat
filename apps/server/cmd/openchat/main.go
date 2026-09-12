@@ -20,9 +20,11 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/qunqin/openchat/apps/server/internal/api"
+	"github.com/qunqin/openchat/apps/server/internal/auth"
 	"github.com/qunqin/openchat/apps/server/internal/chat"
 	"github.com/qunqin/openchat/apps/server/internal/config"
 	"github.com/qunqin/openchat/apps/server/internal/db"
+	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin/openchat/apps/server/internal/storage"
 )
 
@@ -83,9 +85,11 @@ func run() error {
 	// Swap this for a real model client when one is wired up.
 	provider := chat.Echo{Delay: 25 * time.Millisecond}
 
+	queries := sqlc.New(pool)
+
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.NewRouter(cfg, api.NewServer(cfg, pool, store, provider)),
+		Handler:           api.NewRouter(cfg, api.NewServer(cfg, pool, store, provider), auth.NewMiddleware(queries)),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 		// No WriteTimeout: SSE responses stay open for the length of a reply.

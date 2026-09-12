@@ -43,11 +43,20 @@ const getConversation = `-- name: GetConversation :one
 SELECT id, user_id, title, model, created_at, updated_at, deleted_at
 FROM conversations
 WHERE id = $1
+  AND user_id = $2
   AND deleted_at IS NULL
 `
 
-func (q *Queries) GetConversation(ctx context.Context, id uuid.UUID) (Conversation, error) {
-	row := q.db.QueryRow(ctx, getConversation, id)
+type GetConversationParams struct {
+	ID     uuid.UUID  `json:"id"`
+	UserID *uuid.UUID `json:"user_id"`
+}
+
+// Ownership is part of the lookup, not a separate check: a conversation
+// belonging to someone else must read as "not found", never as "forbidden",
+// or the response tells a stranger the id exists.
+func (q *Queries) GetConversation(ctx context.Context, arg GetConversationParams) (Conversation, error) {
+	row := q.db.QueryRow(ctx, getConversation, arg.ID, arg.UserID)
 	var i Conversation
 	err := row.Scan(
 		&i.ID,
@@ -64,21 +73,28 @@ func (q *Queries) GetConversation(ctx context.Context, id uuid.UUID) (Conversati
 const listConversations = `-- name: ListConversations :many
 SELECT id, user_id, title, model, created_at, updated_at, deleted_at
 FROM conversations
-WHERE deleted_at IS NULL
-  AND ($1::timestamptz IS NULL
-    OR (updated_at, id) < ($1::timestamptz, $2::uuid))
+WHERE user_id = $1
+  AND deleted_at IS NULL
+  AND ($2::timestamptz IS NULL
+    OR (updated_at, id) < ($2::timestamptz, $3::uuid))
 ORDER BY updated_at DESC, id DESC
-LIMIT $3
+LIMIT $4
 `
 
 type ListConversationsParams struct {
+	UserID          *uuid.UUID         `json:"user_id"`
 	CursorUpdatedAt pgtype.Timestamptz `json:"cursor_updated_at"`
 	CursorID        *uuid.UUID         `json:"cursor_id"`
 	RowLimit        int32              `json:"row_limit"`
 }
 
 func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error) {
-	rows, err := q.db.Query(ctx, listConversations, arg.CursorUpdatedAt, arg.CursorID, arg.RowLimit)
+	rows, err := q.db.Query(ctx, listConversations,
+		arg.UserID,
+		arg.CursorUpdatedAt,
+		arg.CursorID,
+		arg.RowLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -109,11 +125,17 @@ const softDeleteConversation = `-- name: SoftDeleteConversation :execrows
 UPDATE conversations
 SET deleted_at = now()
 WHERE id = $1
+  AND user_id = $2
   AND deleted_at IS NULL
 `
 
-func (q *Queries) SoftDeleteConversation(ctx context.Context, id uuid.UUID) (int64, error) {
-	result, err := q.db.Exec(ctx, softDeleteConversation, id)
+type SoftDeleteConversationParams struct {
+	ID     uuid.UUID  `json:"id"`
+	UserID *uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) SoftDeleteConversation(ctx context.Context, arg SoftDeleteConversationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, softDeleteConversation, arg.ID, arg.UserID)
 	if err != nil {
 		return 0, err
 	}
@@ -133,20 +155,22 @@ func (q *Queries) TouchConversation(ctx context.Context, id uuid.UUID) error {
 
 const updateConversationTitle = `-- name: UpdateConversationTitle :one
 UPDATE conversations
-SET title      = $2,
+SET title      = $1,
     updated_at = now()
-WHERE id = $1
+WHERE id = $2
+  AND user_id = $3
   AND deleted_at IS NULL
 RETURNING id, user_id, title, model, created_at, updated_at, deleted_at
 `
 
 type UpdateConversationTitleParams struct {
-	ID    uuid.UUID `json:"id"`
-	Title string    `json:"title"`
+	Title  string     `json:"title"`
+	ID     uuid.UUID  `json:"id"`
+	UserID *uuid.UUID `json:"user_id"`
 }
 
 func (q *Queries) UpdateConversationTitle(ctx context.Context, arg UpdateConversationTitleParams) (Conversation, error) {
-	row := q.db.QueryRow(ctx, updateConversationTitle, arg.ID, arg.Title)
+	row := q.db.QueryRow(ctx, updateConversationTitle, arg.Title, arg.ID, arg.UserID)
 	var i Conversation
 	err := row.Scan(
 		&i.ID,

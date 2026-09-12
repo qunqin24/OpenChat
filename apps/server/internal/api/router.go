@@ -8,13 +8,20 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
+	"github.com/qunqin/openchat/apps/server/internal/auth"
 	"github.com/qunqin/openchat/apps/server/internal/config"
 	"github.com/qunqin/openchat/apps/server/internal/httpx"
 )
 
-// NewRouter mounts the generated routes under /api/v1 behind the standard
+// NewRouter mounts the generated handlers under /api/v1 behind the standard
 // middleware stack.
-func NewRouter(cfg *config.Config, s *Server) http.Handler {
+//
+// Routes are registered by hand rather than through HandlerFromMux so that each
+// one's protection level is visible here. The generated wrapper still does all
+// the parameter parsing; only the mounting is explicit. A new endpoint added to
+// the contract therefore has to be given a group deliberately — it cannot
+// inherit "public" by being forgotten.
+func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
@@ -24,16 +31,54 @@ func NewRouter(cfg *config.Config, s *Server) http.Handler {
 	// No global timeout: CreateMessage streams for as long as the model takes.
 	r.Use(middleware.Compress(5, "application/json"))
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   cfg.CORSOrigins,
-		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Request-Id"},
-		ExposedHeaders:   []string{"X-Request-Id"},
+		AllowedOrigins: cfg.CORSOrigins,
+		AllowedMethods: []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
+		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "X-Request-Id"},
+		ExposedHeaders: []string{"X-Request-Id"},
+		// Required for the session cookie to survive a cross-origin request.
 		AllowCredentials: true,
 		MaxAge:           int((12 * time.Hour).Seconds()),
 	}))
 
+	wrapper := ServerInterfaceWrapper{
+		Handler: s,
+		ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
+			httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "invalid_request", err.Error()))
+		},
+	}
+
 	r.Route("/api/v1", func(r chi.Router) {
-		HandlerFromMux(s, r)
+		// ---- public -----------------------------------------------------
+		r.Get("/healthz", wrapper.GetHealth)
+		r.Post("/auth/register", wrapper.Register)
+		r.Post("/auth/login", wrapper.Login)
+
+		// ---- signed in --------------------------------------------------
+		r.Group(func(r chi.Router) {
+			r.Use(mw.Require)
+
+			r.Post("/auth/logout", wrapper.Logout)
+			r.Get("/auth/session", wrapper.GetSession)
+
+			r.Get("/conversations", wrapper.ListConversations)
+			r.Post("/conversations", wrapper.CreateConversation)
+			r.Get("/conversations/{conversationId}", wrapper.GetConversation)
+			r.Patch("/conversations/{conversationId}", wrapper.UpdateConversation)
+			r.Delete("/conversations/{conversationId}", wrapper.DeleteConversation)
+			r.Get("/conversations/{conversationId}/messages", wrapper.ListMessages)
+			r.Post("/conversations/{conversationId}/messages", wrapper.CreateMessage)
+
+			r.Post("/files", wrapper.CreateUpload)
+
+			// ---- admin ---------------------------------------------------
+			r.Group(func(r chi.Router) {
+				r.Use(mw.RequireAdmin)
+
+				r.Get("/admin/stats", wrapper.GetAdminStats)
+				r.Get("/admin/users", wrapper.ListUsers)
+				r.Patch("/admin/users/{userId}", wrapper.UpdateUser)
+			})
+		})
 	})
 
 	// Unversioned probe for load balancers and container health checks.

@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/qunqin/openchat/apps/server/internal/auth"
+
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin/openchat/apps/server/internal/httpx"
 )
@@ -15,9 +17,11 @@ func (s *Server) ListConversations(w http.ResponseWriter, r *http.Request, param
 		return
 	}
 
+	user := auth.MustUser(r.Context())
 	limit := clampLimit(params.Limit)
 	// Fetch one extra row to learn whether another page exists.
 	rows, err := s.q.ListConversations(r.Context(), sqlc.ListConversationsParams{
+		UserID:          &user.ID,
 		CursorUpdatedAt: cursorAt,
 		CursorID:        cursorID,
 		RowLimit:        limit + 1,
@@ -52,9 +56,11 @@ func (s *Server) CreateConversation(w http.ResponseWriter, r *http.Request) {
 		title = strings.TrimSpace(*body.Title)
 	}
 
+	user := auth.MustUser(r.Context())
 	row, err := s.q.CreateConversation(r.Context(), sqlc.CreateConversationParams{
-		Title: title,
-		Model: body.Model,
+		UserID: &user.ID,
+		Title:  title,
+		Model:  body.Model,
 	})
 	if err != nil {
 		httpx.Fail(w, r, err)
@@ -64,7 +70,11 @@ func (s *Server) CreateConversation(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) GetConversation(w http.ResponseWriter, r *http.Request, conversationId ConversationId) {
-	row, err := s.q.GetConversation(r.Context(), conversationId)
+	user := auth.MustUser(r.Context())
+	row, err := s.q.GetConversation(r.Context(), sqlc.GetConversationParams{
+		ID:     conversationId,
+		UserID: &user.ID,
+	})
 	if err != nil {
 		httpx.Fail(w, r, dbErr(err))
 		return
@@ -83,9 +93,11 @@ func (s *Server) UpdateConversation(w http.ResponseWriter, r *http.Request, conv
 		return
 	}
 
+	user := auth.MustUser(r.Context())
 	row, err := s.q.UpdateConversationTitle(r.Context(), sqlc.UpdateConversationTitleParams{
-		ID:    conversationId,
-		Title: strings.TrimSpace(*body.Title),
+		ID:     conversationId,
+		UserID: &user.ID,
+		Title:  strings.TrimSpace(*body.Title),
 	})
 	if err != nil {
 		httpx.Fail(w, r, dbErr(err))
@@ -95,7 +107,11 @@ func (s *Server) UpdateConversation(w http.ResponseWriter, r *http.Request, conv
 }
 
 func (s *Server) DeleteConversation(w http.ResponseWriter, r *http.Request, conversationId ConversationId) {
-	affected, err := s.q.SoftDeleteConversation(r.Context(), conversationId)
+	user := auth.MustUser(r.Context())
+	affected, err := s.q.SoftDeleteConversation(r.Context(), sqlc.SoftDeleteConversationParams{
+		ID:     conversationId,
+		UserID: &user.ID,
+	})
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return

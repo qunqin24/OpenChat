@@ -1,6 +1,8 @@
 package api
 
 import (
+	openapi_types "github.com/oapi-codegen/runtime/types"
+
 	"github.com/qunqin/openchat/apps/server/internal/chat"
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 )
@@ -39,4 +41,30 @@ func toChatMessages(rows []sqlc.Message) []chat.Message {
 		})
 	}
 	return out
+}
+
+func toSessionUser(row sqlc.User) SessionUser {
+	return SessionUser{
+		Id:    row.ID,
+		Email: openapi_types.Email(row.Email),
+		Name:  row.Name,
+		Role:  UserRole(row.Role),
+	}
+}
+
+func toUser(row sqlc.User, conversations int64) User {
+	user := User{
+		Id:                row.ID,
+		Email:             openapi_types.Email(row.Email),
+		Name:              row.Name,
+		Role:              UserRole(row.Role),
+		Disabled:          row.DisabledAt.Valid,
+		CreatedAt:         row.CreatedAt.Time,
+		ConversationCount: &conversations,
+	}
+	if row.LastSeenAt.Valid {
+		seen := row.LastSeenAt.Time
+		user.LastSeenAt = &seen
+	}
+	return user
 }

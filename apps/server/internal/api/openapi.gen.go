@@ -66,22 +66,22 @@ func (e MessageStatus) Valid() bool {
 
 // Defines values for Role.
 const (
-	Assistant Role = "assistant"
-	System    Role = "system"
-	Tool      Role = "tool"
-	User      Role = "user"
+	RoleAssistant Role = "assistant"
+	RoleSystem    Role = "system"
+	RoleTool      Role = "tool"
+	RoleUser      Role = "user"
 )
 
 // Valid indicates whether the value is a known member of the Role enum.
 func (e Role) Valid() bool {
 	switch e {
-	case Assistant:
+	case RoleAssistant:
 		return true
-	case System:
+	case RoleSystem:
 		return true
-	case Tool:
+	case RoleTool:
 		return true
-	case User:
+	case RoleUser:
 		return true
 	default:
 		return false
@@ -148,6 +148,40 @@ func (e StreamStartType) Valid() bool {
 	}
 }
 
+// Defines values for UserRole.
+const (
+	UserRoleAdmin UserRole = "admin"
+	UserRoleUser  UserRole = "user"
+)
+
+// Valid indicates whether the value is a known member of the UserRole enum.
+func (e UserRole) Valid() bool {
+	switch e {
+	case UserRoleAdmin:
+		return true
+	case UserRoleUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// AdminStats defines model for AdminStats.
+type AdminStats struct {
+	Totals AdminTotals  `json:"totals"`
+	Trend  []TrendPoint `json:"trend"`
+}
+
+// AdminTotals defines model for AdminTotals.
+type AdminTotals struct {
+	ActiveUsers        int64 `json:"activeUsers"`
+	Messages7d         int64 `json:"messages7d"`
+	NewUsers7d         int64 `json:"newUsers7d"`
+	TotalConversations int64 `json:"totalConversations"`
+	TotalMessages      int64 `json:"totalMessages"`
+	TotalUsers         int64 `json:"totalUsers"`
+}
+
 // Attachment defines model for Attachment.
 type Attachment struct {
 	ContentType string             `json:"contentType"`
@@ -197,7 +231,10 @@ type Error struct {
 	// Code Examples: not_found
 	Code    string                  `json:"code"`
 	Details *map[string]interface{} `json:"details,omitempty"`
-	Message string                  `json:"message"`
+
+	// Field Examples: email
+	Field   *string `json:"field,omitempty"`
+	Message string  `json:"message"`
 }
 
 // Health defines model for Health.
@@ -208,6 +245,12 @@ type Health struct {
 
 // HealthStatus defines model for Health.Status.
 type HealthStatus string
+
+// LoginRequest defines model for LoginRequest.
+type LoginRequest struct {
+	Email    openapi_types.Email `json:"email"`
+	Password string              `json:"password"`
+}
 
 // Message defines model for Message.
 type Message struct {
@@ -229,8 +272,23 @@ type MessagePage struct {
 // MessageStatus defines model for MessageStatus.
 type MessageStatus string
 
+// RegisterRequest defines model for RegisterRequest.
+type RegisterRequest struct {
+	Email    openapi_types.Email `json:"email"`
+	Name     string              `json:"name"`
+	Password string              `json:"password"`
+}
+
 // Role defines model for Role.
 type Role string
+
+// SessionUser defines model for SessionUser.
+type SessionUser struct {
+	Email openapi_types.Email `json:"email"`
+	Id    openapi_types.UUID  `json:"id"`
+	Name  string              `json:"name"`
+	Role  UserRole            `json:"role"`
+}
 
 // StreamDelta defines model for StreamDelta.
 type StreamDelta struct {
@@ -273,9 +331,23 @@ type StreamStart struct {
 // StreamStartType defines model for StreamStart.Type.
 type StreamStartType string
 
+// TrendPoint defines model for TrendPoint.
+type TrendPoint struct {
+	Conversations int64              `json:"conversations"`
+	Day           openapi_types.Date `json:"day"`
+	Messages      int64              `json:"messages"`
+	Users         int64              `json:"users"`
+}
+
 // UpdateConversationRequest defines model for UpdateConversationRequest.
 type UpdateConversationRequest struct {
 	Title *string `json:"title,omitempty"`
+}
+
+// UpdateUserRequest Only the fields present are changed.
+type UpdateUserRequest struct {
+	Disabled *bool     `json:"disabled,omitempty"`
+	Role     *UserRole `json:"role,omitempty"`
 }
 
 // Upload defines model for Upload.
@@ -286,6 +358,29 @@ type Upload struct {
 	Url       string             `json:"url"`
 }
 
+// User defines model for User.
+type User struct {
+	ConversationCount *int64              `json:"conversationCount,omitempty"`
+	CreatedAt         time.Time           `json:"createdAt"`
+	Disabled          bool                `json:"disabled"`
+	Email             openapi_types.Email `json:"email"`
+	Id                openapi_types.UUID  `json:"id"`
+	LastSeenAt        *time.Time          `json:"lastSeenAt,omitempty"`
+	Name              string              `json:"name"`
+	Role              UserRole            `json:"role"`
+}
+
+// UserPage defines model for UserPage.
+type UserPage struct {
+	Items []User `json:"items"`
+	Limit int    `json:"limit"`
+	Page  int    `json:"page"`
+	Total int64  `json:"total"`
+}
+
+// UserRole defines model for UserRole.
+type UserRole string
+
 // ConversationId defines model for ConversationId.
 type ConversationId = openapi_types.UUID
 
@@ -294,6 +389,21 @@ type Cursor = string
 
 // Limit defines model for Limit.
 type Limit = int
+
+// GetAdminStatsParams defines parameters for GetAdminStats.
+type GetAdminStatsParams struct {
+	// Days Length of the trend window.
+	Days *int `form:"days,omitempty" json:"days,omitempty"`
+}
+
+// ListUsersParams defines parameters for ListUsers.
+type ListUsersParams struct {
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+	Page  *int   `form:"page,omitempty" json:"page,omitempty"`
+
+	// Search Matches against email and name.
+	Search *string `form:"search,omitempty" json:"search,omitempty"`
+}
 
 // ListConversationsParams defines parameters for ListConversations.
 type ListConversationsParams struct {
@@ -306,6 +416,15 @@ type ListMessagesParams struct {
 	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
+
+// UpdateUserJSONRequestBody defines body for UpdateUser for application/json ContentType.
+type UpdateUserJSONRequestBody = UpdateUserRequest
+
+// LoginJSONRequestBody defines body for Login for application/json ContentType.
+type LoginJSONRequestBody = LoginRequest
+
+// RegisterJSONRequestBody defines body for Register for application/json ContentType.
+type RegisterJSONRequestBody = RegisterRequest
 
 // CreateConversationJSONRequestBody defines body for CreateConversation for application/json ContentType.
 type CreateConversationJSONRequestBody = CreateConversationRequest
@@ -494,6 +613,27 @@ func (t *StreamEvent) UnmarshalJSON(b []byte) error {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// GetAdminStats Dashboard totals and activity trend
+	// (GET /admin/stats)
+	GetAdminStats(w http.ResponseWriter, r *http.Request, params GetAdminStatsParams)
+	// ListUsers List accounts
+	// (GET /admin/users)
+	ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams)
+	// UpdateUser Change an account's role or enabled state
+	// (PATCH /admin/users/{userId})
+	UpdateUser(w http.ResponseWriter, r *http.Request, userId openapi_types.UUID)
+	// Login Start a session
+	// (POST /auth/login)
+	Login(w http.ResponseWriter, r *http.Request)
+	// Logout End the current session
+	// (POST /auth/logout)
+	Logout(w http.ResponseWriter, r *http.Request)
+	// Register Create an account and start a session
+	// (POST /auth/register)
+	Register(w http.ResponseWriter, r *http.Request)
+	// GetSession Who the current session belongs to
+	// (GET /auth/session)
+	GetSession(w http.ResponseWriter, r *http.Request)
 	// ListConversations List conversations
 	// (GET /conversations)
 	ListConversations(w http.ResponseWriter, r *http.Request, params ListConversationsParams)
@@ -526,6 +666,48 @@ type ServerInterface interface {
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// GetAdminStats Dashboard totals and activity trend
+// (GET /admin/stats)
+func (_ Unimplemented) GetAdminStats(w http.ResponseWriter, r *http.Request, params GetAdminStatsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListUsers List accounts
+// (GET /admin/users)
+func (_ Unimplemented) ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateUser Change an account's role or enabled state
+// (PATCH /admin/users/{userId})
+func (_ Unimplemented) UpdateUser(w http.ResponseWriter, r *http.Request, userId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Login Start a session
+// (POST /auth/login)
+func (_ Unimplemented) Login(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Logout End the current session
+// (POST /auth/logout)
+func (_ Unimplemented) Logout(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Register Create an account and start a session
+// (POST /auth/register)
+func (_ Unimplemented) Register(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetSession Who the current session belongs to
+// (GET /auth/session)
+func (_ Unimplemented) GetSession(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // ListConversations List conversations
 // (GET /conversations)
@@ -589,6 +771,180 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetAdminStats operation middleware
+func (siw *ServerInterfaceWrapper) GetAdminStats(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetAdminStatsParams
+
+	// ------------- Optional query parameter "days" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "days", r.URL.Query(), &params.Days, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "days"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "days", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAdminStats(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListUsers operation middleware
+func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListUsersParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page", r.URL.Query(), &params.Page, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "search" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "search", r.URL.Query(), &params.Search, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "search"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "search", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListUsers(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateUser operation middleware
+func (siw *ServerInterfaceWrapper) UpdateUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateUser(w, r, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Login operation middleware
+func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Login(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Logout operation middleware
+func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Logout(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Register operation middleware
+func (siw *ServerInterfaceWrapper) Register(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Register(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSession operation middleware
+func (siw *ServerInterfaceWrapper) GetSession(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSession(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListConversations operation middleware
 func (siw *ServerInterfaceWrapper) ListConversations(w http.ResponseWriter, r *http.Request) {
@@ -954,6 +1310,27 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/healthz", wrapper.GetHealth)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/register", wrapper.Register)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/login", wrapper.Login)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/logout", wrapper.Logout)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/auth/session", wrapper.GetSession)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/stats", wrapper.GetAdminStats)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/users", wrapper.ListUsers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/admin/users/{userId}", wrapper.UpdateUser)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/conversations", wrapper.ListConversations)
 	})
 	r.Group(func(r chi.Router) {
@@ -986,35 +1363,51 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

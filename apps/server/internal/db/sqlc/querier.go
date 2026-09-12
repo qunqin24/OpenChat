@@ -13,17 +13,49 @@ import (
 type Querier interface {
 	AppendMessageContent(ctx context.Context, arg AppendMessageContentParams) (Message, error)
 	AttachToMessage(ctx context.Context, arg AttachToMessageParams) error
+	CountAdmins(ctx context.Context) (int64, error)
+	CountConversationsByUsers(ctx context.Context, userIds []uuid.UUID) ([]CountConversationsByUsersRow, error)
+	CountUsers(ctx context.Context) (int64, error)
+	CountUsersFiltered(ctx context.Context, search *string) (int64, error)
 	CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (Attachment, error)
 	CreateConversation(ctx context.Context, arg CreateConversationParams) (Conversation, error)
 	CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error)
+	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
+	DeleteExpiredSessions(ctx context.Context) (int64, error)
+	DeleteSession(ctx context.Context, tokenHash []byte) error
+	DeleteUserSessions(ctx context.Context, userID uuid.UUID) error
 	FinishMessage(ctx context.Context, arg FinishMessageParams) (Message, error)
-	GetConversation(ctx context.Context, id uuid.UUID) (Conversation, error)
+	// One row per day for the requested window, including days with no activity —
+	// a gap in the series would otherwise draw as a straight line across the chart.
+	GetActivityTrend(ctx context.Context, days int32) ([]GetActivityTrendRow, error)
+	// Ownership is part of the lookup, not a separate check: a conversation
+	// belonging to someone else must read as "not found", never as "forbidden",
+	// or the response tells a stranger the id exists.
+	GetConversation(ctx context.Context, arg GetConversationParams) (Conversation, error)
+	GetDashboardTotals(ctx context.Context) (GetDashboardTotalsRow, error)
+	// One round trip for the whole auth check: the session must be unexpired and
+	// the account still enabled.
+	GetSessionUser(ctx context.Context, tokenHash []byte) (GetSessionUserRow, error)
+	GetUser(ctx context.Context, id uuid.UUID) (User, error)
+	GetUserByEmail(ctx context.Context, email string) (User, error)
 	ListAttachmentsByMessages(ctx context.Context, messageIds []uuid.UUID) ([]Attachment, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
-	SoftDeleteConversation(ctx context.Context, id uuid.UUID) (int64, error)
+	// Offset paging rather than keyset: the admin table needs page numbers and a
+	// total, and the row count here stays small enough that the scan is cheap.
+	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
+	// The first account created becomes the admin: someone has to be able to reach
+	// the admin panel, and there is no other bootstrap path. The decision is made
+	// inside the INSERT so two concurrent registrations cannot both see an empty
+	// table and both claim it.
+	RegisterUser(ctx context.Context, arg RegisterUserParams) (User, error)
+	SetUserDisabled(ctx context.Context, arg SetUserDisabledParams) (User, error)
+	SoftDeleteConversation(ctx context.Context, arg SoftDeleteConversationParams) (int64, error)
 	TouchConversation(ctx context.Context, id uuid.UUID) error
+	TouchSession(ctx context.Context, id uuid.UUID) error
+	TouchUserSeen(ctx context.Context, id uuid.UUID) error
 	UpdateConversationTitle(ctx context.Context, arg UpdateConversationTitleParams) (Conversation, error)
+	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error)
 }
 
 var _ Querier = (*Queries)(nil)

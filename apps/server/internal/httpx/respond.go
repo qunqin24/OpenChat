@@ -12,9 +12,12 @@ import (
 
 // APIError is the error shape defined in the OpenAPI contract.
 type APIError struct {
-	Status  int            `json:"-"`
-	Code    string         `json:"code"`
-	Message string         `json:"message"`
+	Status  int    `json:"-"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	// Field names the input that caused the failure, when one did, so a form
+	// can show the message next to it rather than as a banner.
+	Field   string         `json:"field,omitempty"`
 	Details map[string]any `json:"details,omitempty"`
 }
 
@@ -22,6 +25,11 @@ func (e *APIError) Error() string { return fmt.Sprintf("%s: %s", e.Code, e.Messa
 
 func NewError(status int, code, message string) *APIError {
 	return &APIError{Status: status, Code: code, Message: message}
+}
+
+// NewFieldError is a 400 that points at one input.
+func NewFieldError(field, code, message string) *APIError {
+	return &APIError{Status: http.StatusBadRequest, Code: code, Message: message, Field: field}
 }
 
 var (

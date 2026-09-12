@@ -5,11 +5,13 @@ package api
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/qunqin/openchat/apps/server/internal/auth"
 	"github.com/qunqin/openchat/apps/server/internal/chat"
 	"github.com/qunqin/openchat/apps/server/internal/config"
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
@@ -47,6 +49,11 @@ func (s *Server) GetHealth(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, http.StatusOK, Health{Status: status, Version: s.cfg.Version})
 }
 
+// logWarn records a failure that should not fail the request.
+func logWarn(r *http.Request, msg string, err error) {
+	slog.WarnContext(r.Context(), msg, "error", err, "path", r.URL.Path)
+}
+
 // dbErr maps pgx sentinel errors onto the contract's error shape.
 func dbErr(err error) error {
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -55,9 +62,12 @@ func dbErr(err error) error {
 	return err
 }
 
-// conversationExists returns httpx.ErrNotFound when the id is unknown or soft-deleted.
+// conversationExists returns httpx.ErrNotFound when the id is unknown, deleted,
+// or owned by someone else — the three are indistinguishable to the caller by
+// design.
 func (s *Server) conversationExists(ctx context.Context, id ConversationId) error {
-	if _, err := s.q.GetConversation(ctx, id); err != nil {
+	user := auth.MustUser(ctx)
+	if _, err := s.q.GetConversation(ctx, sqlc.GetConversationParams{ID: id, UserID: &user.ID}); err != nil {
 		return dbErr(err)
 	}
 	return nil
