@@ -1,0 +1,54 @@
+/**
+ * One focus treatment for the whole app.
+ *
+ * Left to itself Chromium draws a hard black ring squared off at the element's
+ * own box. That is wrong here twice over: the weight fights a theme built on
+ * hairlines, and most controls carry their visible shape on a `::before` with
+ * its own radius — so the element box has no radius, and the ring comes out
+ * rectangular around a rounded button.
+ *
+ * The replacement matches the form fields: a soft edge at partial opacity,
+ * offset just clear of the control. Each control below then gets the radius
+ * its fill already has, so the ring follows the shape the eye sees.
+ *
+ * Only `:focus-visible` is targeted, so a mouse click never draws a ring —
+ * but keyboard navigation always does. Removing it outright would leave anyone
+ * tabbing through the app with no idea where they are.
+ */
+
+:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--n-text) 40%, transparent);
+  outline-offset: 2px;
+}
+
+.prism-next .n-row:focus-visible {
+  border-radius: 8px;
+}
+
+.prism-next .n-suggest:focus-visible {
+  border-radius: 10px;
+}
+
+.prism-next .n-icon-btn:focus-visible,
+.n-auth-reveal:focus-visible {
+  border-radius: 999px;
+}
+
+/* 20px square with a 5px fill, not a pill like the other icon buttons. */
+.prism-next .n-pager-btn:focus-visible {
+  border-radius: 5px;
+}
+
+.n-menu-item:focus-visible {
+  border-radius: 8px;
+}
+
+.prism-next .n-admin-window:focus-visible {
+  border-radius: 8px;
+}
+
+/* The wrapper already shows focus through `:focus-within`, so the input inside
+   it would otherwise draw a second ring within the first. */
+.n-auth-input:focus-visible {
+  outline: none;
+}
