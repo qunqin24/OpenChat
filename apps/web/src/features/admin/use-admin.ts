@@ -14,6 +14,12 @@ export function useAdminStats(days = 30) {
     queryKey: adminKeys.stats(days),
     queryFn: async ({ signal }) =>
       unwrap(await api.GET('/admin/stats', { params: { query: { days } }, signal })),
+    // Changing the window changes the key, which would otherwise drop `data` to
+    // undefined until the new request lands — the charts would empty out and
+    // redraw on every switch. Keeping the previous response on screen also
+    // leaves the totals correct throughout, since they do not depend on `days`
+    // at all; only the trend does.
+    placeholderData: (previous) => previous,
   })
 }
 
