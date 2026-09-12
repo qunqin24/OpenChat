@@ -1,6 +1,7 @@
 import type { Conversation } from '@openchat/api-client'
 import { useNavigate } from '@tanstack/react-router'
 import {
+  Check,
   Languages,
   LogOut,
   Monitor,
@@ -87,12 +88,12 @@ function ConversationRow({
               }
             }}
           >
-            <PencilLine className="mr-2 h-4 w-4" />
-            {t('chat.rename')}
+            <PencilLine className="h-4 w-4" />
+            <span>{t('chat.rename')}</span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => onDelete(conversation)}>
-            <Trash2 className="mr-2 h-4 w-4" />
-            {t('chat.delete')}
+            <Trash2 className="h-4 w-4" />
+            <span>{t('chat.delete')}</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -174,8 +175,8 @@ export function Sidebar({ collapsed, activeId, onDelete }: SidebarProps) {
                   await navigate({ to: '/login' })
                 }}
               >
-                <LogOut className="mr-2 h-4 w-4" />
-                {t('auth.logout')}
+                <LogOut className="h-4 w-4" />
+                <span>{t('auth.logout')}</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -191,8 +192,9 @@ export function Sidebar({ collapsed, activeId, onDelete }: SidebarProps) {
           <DropdownMenuContent align="start" side="top">
             {THEMES.map(({ value, icon: Icon }) => (
               <DropdownMenuItem key={value} onSelect={() => setTheme(value)}>
-                <Icon className="mr-2 h-4 w-4" />
-                {t(`next.theme.${value}`)}
+                <Icon className="h-4 w-4" />
+                <span>{t(`next.theme.${value}`)}</span>
+                {theme === value && <Check className="n-menu-check h-3.5 w-3.5" />}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -208,7 +210,8 @@ export function Sidebar({ collapsed, activeId, onDelete }: SidebarProps) {
           <DropdownMenuContent align="start" side="top">
             {supportedLanguages.map((lang) => (
               <DropdownMenuItem key={lang} onSelect={() => void i18n.changeLanguage(lang)}>
-                {LANGUAGE_LABELS[lang] ?? lang}
+                <span>{LANGUAGE_LABELS[lang] ?? lang}</span>
+                {i18n.resolvedLanguage === lang && <Check className="n-menu-check h-3.5 w-3.5" />}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
