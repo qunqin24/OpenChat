@@ -1,7 +1,10 @@
 import type { QueryClient } from '@tanstack/react-query'
-import { createRootRouteWithContext, Outlet } from '@tanstack/react-router'
-import { lazy, Suspense } from 'react'
+import { createRootRouteWithContext, Outlet, useRouterState } from '@tanstack/react-router'
+import { lazy, Suspense, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { GlobalProgress } from '@/components/GlobalProgress'
+import { dismissBootSplash } from '@/lib/boot'
 
 export interface RouterContext {
   queryClient: QueryClient
@@ -38,8 +41,18 @@ export const Route = createRootRouteWithContext<RouterContext>()({
  * sign-in and sign-up screens render without a sidebar.
  */
 function RootLayout() {
+  // The splash covers the gap until the first route has actually resolved —
+  // this component renders while the session check is still in flight, so
+  // dismissing on mount would reveal an empty shell.
+  const isReady = useRouterState({ select: (state) => state.status === 'idle' })
+
+  useEffect(() => {
+    if (isReady) dismissBootSplash()
+  }, [isReady])
+
   return (
     <>
+      <GlobalProgress />
       <Outlet />
       {DEVTOOLS && (
         <Suspense fallback={null}>
