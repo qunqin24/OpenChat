@@ -135,6 +135,41 @@ export function Sidebar({ collapsed, activeId, onDelete }: SidebarProps) {
           <SquarePen className="h-4 w-4 shrink-0" />
           <span className="n-row-label">{t('next.nav.new')}</span>
         </button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" className="n-row">
+              <ThemeIcon className="h-4 w-4 shrink-0" />
+              <span className="n-row-label">{t('nav.toggleTheme')}</span>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="match-trigger" align="start" side="bottom">
+            {THEMES.map(({ value, icon: Icon }) => (
+              <DropdownMenuItem key={value} onSelect={() => setTheme(value)}>
+                <Icon className="h-4 w-4" />
+                <span>{t(`next.theme.${value}`)}</span>
+                {theme === value && <Check className="n-menu-check h-3.5 w-3.5" />}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" className="n-row">
+              <Languages className="h-4 w-4 shrink-0" />
+              <span className="n-row-label">{t('nav.language')}</span>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="match-trigger" align="start" side="bottom">
+            {supportedLanguages.map((lang) => (
+              <DropdownMenuItem key={lang} onSelect={() => void i18n.changeLanguage(lang)}>
+                <span>{LANGUAGE_LABELS[lang] ?? lang}</span>
+                {i18n.resolvedLanguage === lang && <Check className="n-menu-check h-3.5 w-3.5" />}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div className="n-sidebar-scroll">
@@ -182,40 +217,6 @@ export function Sidebar({ collapsed, activeId, onDelete }: SidebarProps) {
           </DropdownMenu>
         )}
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button type="button" className="n-row">
-              <ThemeIcon className="h-4 w-4 shrink-0" />
-              <span className="n-row-label">{t('nav.toggleTheme')}</span>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="match-trigger" align="start" side="top">
-            {THEMES.map(({ value, icon: Icon }) => (
-              <DropdownMenuItem key={value} onSelect={() => setTheme(value)}>
-                <Icon className="h-4 w-4" />
-                <span>{t(`next.theme.${value}`)}</span>
-                {theme === value && <Check className="n-menu-check h-3.5 w-3.5" />}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button type="button" className="n-row">
-              <Languages className="h-4 w-4 shrink-0" />
-              <span className="n-row-label">{t('nav.language')}</span>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="match-trigger" align="start" side="top">
-            {supportedLanguages.map((lang) => (
-              <DropdownMenuItem key={lang} onSelect={() => void i18n.changeLanguage(lang)}>
-                <span>{LANGUAGE_LABELS[lang] ?? lang}</span>
-                {i18n.resolvedLanguage === lang && <Check className="n-menu-check h-3.5 w-3.5" />}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
     </aside>
   )
