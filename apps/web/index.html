@@ -71,14 +71,17 @@
         height: 44px;
       }
 
+      /* The track is tinted through the colour, not through `opacity`:
+         opacity applies to the element *and its pseudo-elements*, so it would
+         fade the sweeping fill below to the same 12% and leave the bar looking
+         static. */
       #boot-bar {
         position: relative;
         width: 160px;
         height: 3px;
         overflow: hidden;
         border-radius: 999px;
-        background: currentColor;
-        opacity: 0.12;
+        background: color-mix(in oklab, currentColor 14%, transparent);
       }
 
       /* An indeterminate sweep, not a fake percentage: how long the bundle

@@ -19,6 +19,19 @@ const REQUEST_GAP_MS = 700
  * actually in flight.
  */
 export function LoadingPreview() {
+  // The splash and the bar both stand still under this setting — deliberately,
+  // but it looks identical to a broken animation, so it is surfaced here.
+  const [reducedMotion, setReducedMotion] = useState(
+    () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  )
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const onChange = () => setReducedMotion(media.matches)
+    media.addEventListener('change', onChange)
+    return () => media.removeEventListener('change', onChange)
+  }, [])
+
   const [splashRunning, setSplashRunning] = useState(false)
   const [barRunning, setBarRunning] = useState(true)
   const [tick, setTick] = useState(0)
@@ -71,6 +84,13 @@ export function LoadingPreview() {
       <div className="n-auth-card" style={{ maxWidth: 520 }}>
         <h1 className="n-auth-title">加载动画预览</h1>
         <p className="n-auth-sub">开发预览页，两种全局加载状态各自循环。</p>
+
+        {reducedMotion && (
+          <div className="n-auth-alert" role="status" style={{ marginBottom: 16 }}>
+            你的系统开启了「减少动态效果」，所以两个动画都被刻意停用了 —— 看到的静止
+            条不是 bug。要看动画，先在系统设置里关掉它。
+          </div>
+        )}
 
         <div className="n-auth-form">
           <button
