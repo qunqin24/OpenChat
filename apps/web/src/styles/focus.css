@@ -14,9 +14,16 @@
  * Only `:focus-visible` is targeted, so a mouse click never draws a ring —
  * but keyboard navigation always does. Removing it outright would leave anyone
  * tabbing through the app with no idea where they are.
+ *
+ * Scoped to the prism surfaces rather than applied globally: shadcn components
+ * bring their own focus treatment (`focus-visible:ring-[3px]` and friends), and
+ * an unscoped rule stacks a second outline on top of it — which is what put a
+ * large rounded box around the command palette's input.
  */
 
-:focus-visible {
+.prism-next :focus-visible,
+.n-auth :focus-visible,
+.n-menu :focus-visible {
   outline: 2px solid color-mix(in oklab, var(--n-text) 40%, transparent);
   outline-offset: 2px;
 }
@@ -40,10 +47,6 @@
 }
 
 .n-menu-item:focus-visible {
-  border-radius: 8px;
-}
-
-.prism-next .n-admin-window:focus-visible {
   border-radius: 8px;
 }
 

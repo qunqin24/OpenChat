@@ -200,6 +200,47 @@
     "recent-users": {
       "title": "Recent signups",
       "subtitle": "The newest accounts"
+    },
+    "ui": {
+      "table": {
+        "rows-per-page": "Rows per page",
+        "page-of": "Page {{page}} of {{total}}",
+        "first-page": "Go to first page",
+        "previous-page": "Go to previous page",
+        "next-page": "Go to next page",
+        "last-page": "Go to last page",
+        "view": "View",
+        "toggle-columns": "Toggle columns",
+        "filter": "Filter…",
+        "reset": "Reset",
+        "no-results": "No results found.",
+        "clear-filters": "Clear filters",
+        "selected": "Selected"
+      },
+      "menu": {
+        "settings": "Settings",
+        "sign-out": "Sign out",
+        "toggle-theme": "Toggle theme",
+        "theme": "Theme",
+        "light": "Light",
+        "dark": "Dark",
+        "system": "System",
+        "toggle-sidebar": "Toggle sidebar",
+        "close": "Close"
+      },
+      "command": {
+        "placeholder": "Type a command or search…",
+        "search": "Search",
+        "no-results": "No results found."
+      },
+      "nav-group": {
+        "general": "General",
+        "other": "Other"
+      },
+      "coming-soon": {
+        "title": "Coming soon",
+        "description": "This page has not been built yet."
+      }
     }
   }
 }

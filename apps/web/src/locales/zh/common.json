@@ -200,6 +200,47 @@
     "recent-users": {
       "title": "最近注册",
       "subtitle": "最新加入的账号"
+    },
+    "ui": {
+      "table": {
+        "rows-per-page": "每页行数",
+        "page-of": "第 {{page}} / {{total}} 页",
+        "first-page": "首页",
+        "previous-page": "上一页",
+        "next-page": "下一页",
+        "last-page": "末页",
+        "view": "列",
+        "toggle-columns": "显示的列",
+        "filter": "筛选…",
+        "reset": "重置",
+        "no-results": "没有匹配结果",
+        "clear-filters": "清除筛选",
+        "selected": "已选"
+      },
+      "menu": {
+        "settings": "设置",
+        "sign-out": "退出登录",
+        "toggle-theme": "切换主题",
+        "theme": "主题",
+        "light": "浅色",
+        "dark": "深色",
+        "system": "跟随系统",
+        "toggle-sidebar": "切换侧边栏",
+        "close": "关闭"
+      },
+      "command": {
+        "placeholder": "输入命令或搜索…",
+        "search": "搜索",
+        "no-results": "没有找到结果"
+      },
+      "nav-group": {
+        "general": "常规",
+        "other": "其他"
+      },
+      "coming-soon": {
+        "title": "敬请期待",
+        "description": "这个页面还没做，很快就来。"
+      }
     }
   }
 }

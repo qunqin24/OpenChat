@@ -24,7 +24,11 @@
   }
 
   .shadcn-scope *,
-  [data-slot] {
+  [data-slot],
+  /* Portalled content sits outside .shadcn-scope, and only its root carries
+     the attribute — plain elements nested inside it (the icon frames in the
+     team switcher, for one) would still fall back to currentColor. */
+  [data-slot] * {
     border-color: var(--border);
   }
 
