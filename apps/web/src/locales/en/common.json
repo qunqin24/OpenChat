@@ -1,0 +1,38 @@
+{
+  "app": {
+    "name": "OpenChat",
+    "tagline": "An open, streaming chat workspace."
+  },
+  "nav": {
+    "newChat": "New chat",
+    "conversations": "Conversations",
+    "toggleSidebar": "Toggle sidebar",
+    "toggleTheme": "Toggle theme",
+    "language": "Language"
+  },
+  "chat": {
+    "empty": {
+      "title": "Start a conversation",
+      "description": "Ask anything. Replies stream in token by token."
+    },
+    "placeholder": "Send a message…",
+    "send": "Send",
+    "stop": "Stop",
+    "thinking": "Thinking…",
+    "you": "You",
+    "assistant": "Assistant",
+    "copy": "Copy",
+    "copied": "Copied",
+    "rename": "Rename",
+    "delete": "Delete",
+    "untitled": "New chat"
+  },
+  "state": {
+    "loading": "Loading…",
+    "empty": "Nothing here yet",
+    "error": "Something went wrong",
+    "retry": "Try again",
+    "notFound": "Page not found",
+    "backHome": "Back to chat"
+  }
+}

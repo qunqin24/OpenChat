@@ -1,0 +1,131 @@
+@import 'tailwindcss';
+
+/* Theme is toggled by adding/removing `.dark` on <html> (see stores/ui-store.ts). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------------------------------------------------------------------
+   Design tokens. Every colour lives here as a CSS variable so themes can be
+   swapped at runtime without touching component code.
+   --------------------------------------------------------------------------- */
+:root {
+  --background: oklch(99% 0.002 250);
+  --foreground: oklch(20% 0.01 260);
+
+  --surface: oklch(100% 0 0);
+  --surface-muted: oklch(97% 0.003 250);
+  --surface-hover: oklch(95% 0.004 250);
+
+  --border: oklch(91% 0.005 250);
+  --ring: oklch(62% 0.16 265);
+
+  --muted-foreground: oklch(52% 0.015 260);
+
+  --primary: oklch(55% 0.19 265);
+  --primary-foreground: oklch(99% 0 0);
+
+  --accent: oklch(70% 0.14 190);
+  --accent-foreground: oklch(20% 0.02 200);
+
+  --destructive: oklch(58% 0.21 27);
+  --destructive-foreground: oklch(99% 0 0);
+
+  --bubble-user: oklch(94% 0.02 265);
+  --bubble-assistant: oklch(97% 0.003 250);
+
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: oklch(16% 0.008 260);
+  --foreground: oklch(95% 0.004 250);
+
+  --surface: oklch(19% 0.009 260);
+  --surface-muted: oklch(22% 0.01 260);
+  --surface-hover: oklch(26% 0.012 260);
+
+  --border: oklch(28% 0.012 260);
+  --ring: oklch(68% 0.15 265);
+
+  --muted-foreground: oklch(68% 0.012 260);
+
+  --primary: oklch(66% 0.17 265);
+  --primary-foreground: oklch(16% 0.01 260);
+
+  --accent: oklch(72% 0.13 190);
+  --accent-foreground: oklch(16% 0.02 200);
+
+  --destructive: oklch(64% 0.19 27);
+  --destructive-foreground: oklch(16% 0.01 260);
+
+  --bubble-user: oklch(28% 0.035 265);
+  --bubble-assistant: oklch(22% 0.01 260);
+}
+
+/* Expose the tokens to Tailwind so `bg-surface`, `text-muted-foreground`, … work. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-bubble-user: var(--bubble-user);
+  --color-bubble-assistant: var(--bubble-assistant);
+
+  --radius-card: var(--radius);
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'JetBrains Mono', Menlo, monospace;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Respect the OS setting for anyone who asked for less motion. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+}

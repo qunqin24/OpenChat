@@ -1,0 +1,12 @@
+# Generates chi server interfaces + models from ../../api/openapi.yaml.
+# Plain `chi-server` (not strict-server) is deliberate: the message endpoint
+# streams SSE and needs the raw http.ResponseWriter.
+package: api
+output: internal/api/openapi.gen.go
+generate:
+  chi-server: true
+  models: true
+  embedded-spec: true
+output-options:
+  skip-prune: true
+  nullable-type: true

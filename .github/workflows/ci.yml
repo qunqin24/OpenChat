@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    name: Go
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/server
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: apps/server/go.mod
+          cache-dependency-path: apps/server/go.sum
+      - run: go vet ./...
+      - run: go test -race ./...
+      - run: go build ./...
+      - name: Generated code is up to date
+        run: |
+          go tool sqlc generate
+          go tool oapi-codegen -config oapi-codegen.yaml ../../api/openapi.yaml
+          git diff --exit-code || (echo "::error::run 'make generate' and commit the result" && exit 1)
+
+  web:
+    name: Web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @openchat/api-client generate
+      - name: Generated client is up to date
+        run: git diff --exit-code packages/api-client/src/schema.d.ts
+      - run: pnpm -r typecheck
+      - run: pnpm --filter @openchat/web lint
+      - run: pnpm --filter @openchat/web build
