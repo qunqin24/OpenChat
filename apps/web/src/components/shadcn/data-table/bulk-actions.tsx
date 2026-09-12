@@ -172,7 +172,7 @@ export function DataTableBulkActions<TData>({
                 title={t('admin.bulk.clear-hint')}
               >
                 <X />
-                <span className='sr-only'>Clear selection</span>
+                <span className='sr-only'>{t('admin.bulk.clear')}</span>
               </Button>
             </TooltipTrigger>
             <TooltipContent>

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { type SVGProps } from 'react'
 import { Root as Radio, Item } from '@radix-ui/react-radio-group'
 import { CircleCheck, RotateCcw, Settings } from 'lucide-react'
@@ -28,6 +29,7 @@ import {
 import { useSidebar } from './ui/sidebar'
 
 export function ConfigDrawer() {
+  const { t } = useTranslation()
   const { setOpen } = useSidebar()
   const { resetDir } = useDirection()
   const { resetTheme } = useTheme()
@@ -46,7 +48,7 @@ export function ConfigDrawer() {
         <Button
           size='icon'
           variant='ghost'
-          aria-label='Open theme settings'
+          aria-label={t('admin.ui.config.open')}
           className='rounded-full'
         >
           <Settings aria-hidden='true' />
@@ -54,7 +56,7 @@ export function ConfigDrawer() {
       </SheetTrigger>
       <SheetContent className='flex flex-col'>
         <SheetHeader className='pb-0 text-start'>
-          <SheetTitle>Theme Settings</SheetTitle>
+          <SheetTitle>{t('admin.ui.config.title')}</SheetTitle>
           <SheetDescription>
             Adjust the appearance and layout to suit your preferences.
           </SheetDescription>
@@ -173,6 +175,7 @@ function RadioGroupItem({
 }
 
 function ThemeConfig() {
+  const { t } = useTranslation()
   const { defaultTheme, theme, setTheme } = useTheme()
   return (
     <div>
@@ -186,7 +189,7 @@ function ThemeConfig() {
         value={theme}
         onValueChange={setTheme}
         className='grid w-full max-w-md grid-cols-3 gap-4'
-        aria-label='Select theme preference'
+        aria-label={t('admin.ui.config.select-theme')}
         aria-describedby='theme-description'
       >
         {[
@@ -217,6 +220,7 @@ function ThemeConfig() {
 }
 
 function SidebarConfig() {
+  const { t } = useTranslation()
   const { defaultVariant, variant, setVariant } = useLayout()
   return (
     <div className='max-md:hidden'>
@@ -224,13 +228,13 @@ function SidebarConfig() {
         title='Sidebar'
         showReset={defaultVariant !== variant}
         onReset={() => setVariant(defaultVariant)}
-        resetAriaLabel='Reset sidebar style to default'
+        resetAriaLabel={t('admin.ui.config.reset-sidebar')}
       />
       <Radio
         value={variant}
         onValueChange={setVariant}
         className='grid w-full max-w-md grid-cols-3 gap-4'
-        aria-label='Select sidebar style'
+        aria-label={t('admin.ui.config.select-sidebar')}
         aria-describedby='sidebar-description'
       >
         {[
@@ -261,6 +265,7 @@ function SidebarConfig() {
 }
 
 function LayoutConfig() {
+  const { t } = useTranslation()
   const { open, setOpen } = useSidebar()
   const { defaultCollapsible, collapsible, setCollapsible } = useLayout()
 
@@ -275,7 +280,7 @@ function LayoutConfig() {
           setOpen(true)
           setCollapsible(defaultCollapsible)
         }}
-        resetAriaLabel='Reset layout options to default'
+        resetAriaLabel={t('admin.ui.config.reset-layout')}
       />
       <Radio
         value={radioState}
@@ -288,7 +293,7 @@ function LayoutConfig() {
           setCollapsible(v as Collapsible)
         }}
         className='grid w-full max-w-md grid-cols-3 gap-4'
-        aria-label='Select layout style'
+        aria-label={t('admin.ui.config.select-layout')}
         aria-describedby='layout-description'
       >
         {[
@@ -319,6 +324,7 @@ function LayoutConfig() {
 }
 
 function DirConfig() {
+  const { t } = useTranslation()
   const { defaultDir, dir, setDir } = useDirection()
   return (
     <div>
@@ -326,13 +332,13 @@ function DirConfig() {
         title='Direction'
         showReset={defaultDir !== dir}
         onReset={() => setDir(defaultDir)}
-        resetAriaLabel='Reset text direction to default'
+        resetAriaLabel={t('admin.ui.config.reset-direction')}
       />
       <Radio
         value={dir}
         onValueChange={setDir}
         className='grid w-full max-w-md grid-cols-3 gap-4'
-        aria-label='Select site direction'
+        aria-label={t('admin.ui.config.select-direction')}
         aria-describedby='direction-description'
       >
         {[

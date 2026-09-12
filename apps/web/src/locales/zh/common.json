@@ -226,7 +226,10 @@
         "dark": "深色",
         "system": "跟随系统",
         "toggle-sidebar": "切换侧边栏",
-        "close": "关闭"
+        "close": "关闭",
+        "toggle-nav": "切换导航菜单",
+        "sidebar": "侧边栏",
+        "sidebar-description": "在移动端显示侧边栏。"
       },
       "command": {
         "placeholder": "输入命令或搜索…",
@@ -240,6 +243,36 @@
       "coming-soon": {
         "title": "敬请期待",
         "description": "这个页面还没做，很快就来。"
+      },
+      "teams": {
+        "label": "团队",
+        "add": "新建团队"
+      },
+      "config": {
+        "open": "外观设置",
+        "theme": "主题",
+        "layout": "布局",
+        "sidebar": "侧边栏",
+        "direction": "文字方向",
+        "select-theme": "选择主题",
+        "select-layout": "选择布局",
+        "select-sidebar": "选择侧边栏样式",
+        "select-direction": "选择文字方向",
+        "reset-theme": "恢复默认主题",
+        "reset-layout": "恢复默认布局",
+        "reset-sidebar": "恢复默认侧边栏",
+        "reset-direction": "恢复默认方向",
+        "light": "浅色",
+        "dark": "深色",
+        "system": "跟随系统",
+        "default": "默认",
+        "full": "全宽",
+        "inset": "内嵌",
+        "floating": "浮动",
+        "compact": "紧凑",
+        "ltr": "从左到右",
+        "rtl": "从右到左",
+        "title": "外观设置"
       }
     }
   }

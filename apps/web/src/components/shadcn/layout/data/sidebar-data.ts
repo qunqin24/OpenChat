@@ -3,65 +3,47 @@ import {
   LayoutDashboard,
   MessagesSquare,
   Settings,
-  ShieldCheck,
   Users,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { type SidebarData } from '../types'
 
 /**
  * Navigation for the admin panel.
  *
- * Same shape as upstream's so the vendored NavGroup, TeamSwitcher and
- * CommandMenu work unchanged; the entries are ours. The `user` block here is a
- * fallback — AppSidebar overrides it with the real session.
+ * A hook rather than the constant upstream exports, because every label here
+ * is translated and `t` is only available inside a component. The shape is
+ * unchanged, so NavGroup, TeamSwitcher and CommandMenu consume it as before.
+ * The `user` block is a fallback — AppSidebar overrides it with the session.
  */
-export const sidebarData: SidebarData = {
-  user: {
-    name: '',
-    email: '',
-    avatar: '',
-  },
-  teams: [
-    {
-      name: 'OpenChat',
-      logo: MessagesSquare,
-      plan: 'Admin',
-    },
-  ],
-  navGroups: [
-    {
-      title: 'General',
-      items: [
-        {
-          title: 'Dashboard',
-          url: '/admin',
-          icon: LayoutDashboard,
-        },
-        {
-          title: 'Users',
-          url: '/admin/users',
-          icon: Users,
-        },
-      ],
-    },
-    {
-      title: 'Other',
-      items: [
-        {
-          title: 'Settings',
-          url: '/admin/settings',
-          icon: Settings,
-        },
-        {
-          title: 'Back to chat',
-          url: '/',
-          icon: ArrowLeft,
-        },
-      ],
-    },
-  ],
-}
+export function useSidebarData(): SidebarData {
+  const { t } = useTranslation()
 
-/** Re-exported for the command menu, which groups by the same data. */
-export const adminIcon = ShieldCheck
+  return {
+    user: { name: '', email: '', avatar: '' },
+    teams: [
+      {
+        name: 'OpenChat',
+        logo: MessagesSquare,
+        plan: t('admin.title'),
+      },
+    ],
+    navGroups: [
+      {
+        title: t('admin.ui.nav-group.general'),
+        items: [
+          { title: t('admin.nav.dashboard'), url: '/admin', icon: LayoutDashboard },
+          { title: t('admin.nav.users'), url: '/admin/users', icon: Users },
+        ],
+      },
+      {
+        title: t('admin.ui.nav-group.other'),
+        items: [
+          { title: t('admin.ui.menu.settings'), url: '/admin/settings', icon: Settings },
+          { title: t('admin.back-to-chat'), url: '/', icon: ArrowLeft },
+        ],
+      },
+    ],
+  }
+}

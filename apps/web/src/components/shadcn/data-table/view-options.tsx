@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { DropdownMenuTrigger } from '@radix-ui/react-dropdown-menu'
 import { MixerHorizontalIcon } from '@radix-ui/react-icons'
 import { type Table } from '@tanstack/react-table'
@@ -17,6 +18,7 @@ type DataTableViewOptionsProps<TData> = {
 export function DataTableViewOptions<TData>({
   table,
 }: DataTableViewOptionsProps<TData>) {
+  const { t } = useTranslation()
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
@@ -30,7 +32,7 @@ export function DataTableViewOptions<TData>({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align='end' className='w-37.5'>
-        <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+        <DropdownMenuLabel>{t('admin.ui.table.toggle-columns')}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {table
           .getAllColumns()

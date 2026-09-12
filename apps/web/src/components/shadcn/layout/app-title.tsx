@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { Link } from '@tanstack/react-router'
 import { Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -41,6 +42,7 @@ function ToggleSidebar({
   onClick,
   ...props
 }: React.ComponentProps<typeof Button>) {
+  const { t } = useTranslation()
   const { toggleSidebar } = useSidebar()
 
   return (
@@ -58,7 +60,7 @@ function ToggleSidebar({
     >
       <X className='md:hidden' />
       <Menu className='max-md:hidden' />
-      <span className='sr-only'>Toggle Sidebar</span>
+      <span className='sr-only'>{t('admin.ui.menu.toggle-sidebar')}</span>
     </Button>
   )
 }
