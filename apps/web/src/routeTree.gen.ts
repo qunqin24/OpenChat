@@ -17,6 +17,7 @@ import { Route as AuthedIndexRouteImport } from './routes/_authed.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
+import { Route as DevLoadingRouteImport } from './routes/dev.loading'
 import { Route as AuthedChatConversationIdRouteImport } from './routes/_authed.chat.$conversationId'
 
 const AuthedRoute = AuthedRouteImport.update({
@@ -58,6 +59,11 @@ const AdminUsersRoute = AdminUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AdminRoute,
 } as any)
+const DevLoadingRoute = DevLoadingRouteImport.update({
+  id: '/dev/loading',
+  path: '/dev/loading',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthedChatConversationIdRoute =
   AuthedChatConversationIdRouteImport.update({
     id: '/chat/$conversationId',
@@ -72,6 +78,7 @@ export interface FileRoutesByFullPath {
   '/register': typeof RegisterRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
+  '/dev/loading': typeof DevLoadingRoute
   '/admin/': typeof AdminIndexRoute
   '/chat/$conversationId': typeof AuthedChatConversationIdRoute
 }
@@ -80,6 +87,7 @@ export interface FileRoutesByTo {
   '/register': typeof RegisterRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
+  '/dev/loading': typeof DevLoadingRoute
   '/': typeof AuthedIndexRoute
   '/admin': typeof AdminIndexRoute
   '/chat/$conversationId': typeof AuthedChatConversationIdRoute
@@ -92,6 +100,7 @@ export interface FileRoutesById {
   '/register': typeof RegisterRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
+  '/dev/loading': typeof DevLoadingRoute
   '/_authed/': typeof AuthedIndexRoute
   '/admin/': typeof AdminIndexRoute
   '/_authed/chat/$conversationId': typeof AuthedChatConversationIdRoute
@@ -105,6 +114,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/admin/settings'
     | '/admin/users'
+    | '/dev/loading'
     | '/admin/'
     | '/chat/$conversationId'
   fileRoutesByTo: FileRoutesByTo
@@ -113,6 +123,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/admin/settings'
     | '/admin/users'
+    | '/dev/loading'
     | '/'
     | '/admin'
     | '/chat/$conversationId'
@@ -124,6 +135,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/admin/settings'
     | '/admin/users'
+    | '/dev/loading'
     | '/_authed/'
     | '/admin/'
     | '/_authed/chat/$conversationId'
@@ -134,6 +146,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRouteWithChildren
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
+  DevLoadingRoute: typeof DevLoadingRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -194,6 +207,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminUsersRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/dev/loading': {
+      id: '/dev/loading'
+      path: '/dev/loading'
+      fullPath: '/dev/loading'
+      preLoaderRoute: typeof DevLoadingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authed/chat/$conversationId': {
       id: '/_authed/chat/$conversationId'
       path: '/chat/$conversationId'
@@ -236,6 +256,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRouteWithChildren,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
+  DevLoadingRoute: DevLoadingRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
