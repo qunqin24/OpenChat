@@ -1,0 +1,39 @@
+/**
+ * shadcn's base layer, confined so it cannot reach the prism side.
+ *
+ * Upstream applies `* { border-color: … }` and paints `body` globally. Both
+ * would leak into the chat UI, which has its own tokens and its own surfaces.
+ *
+ * The scoping hook is `[data-slot]`: every shadcn component carries it, and
+ * crucially so do the ones Radix portals out to <body> — dialogs, dropdowns,
+ * tooltips, popovers. A descendant selector alone would miss those and leave
+ * them drawing 1px of `currentColor`, which is how an unstyled Radix menu ends
+ * up as a black rectangle.
+ */
+
+.shadcn-scope {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+.shadcn-scope *,
+[data-slot] {
+  border-color: var(--border);
+}
+
+.shadcn-scope *:focus-visible,
+[data-slot]:focus-visible {
+  outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
+}
+
+.shadcn-scope button:not(:disabled),
+.shadcn-scope [role='button']:not(:disabled),
+[data-slot]button:not(:disabled) {
+  cursor: pointer;
+}
+
+/* Radix locks body scrolling for modals; upstream unsets it so sticky headers
+   keep working. */
+body[data-scroll-locked] {
+  overflow: unset !important;
+}

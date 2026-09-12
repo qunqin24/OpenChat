@@ -138,7 +138,8 @@
     "back-to-chat": "Back to chat",
     "nav": {
       "dashboard": "Dashboard",
-      "users": "Users"
+      "users": "Users",
+      "manage": "Manage"
     },
     "stats": {
       "users": "Total users",
@@ -173,7 +174,24 @@
       "self-locked": "You cannot change your own access",
       "previous": "Previous page",
       "next": "Next page",
-      "update-failed": "Change refused — this may be the last admin"
+      "update-failed": "Change refused — this may be the last admin",
+      "select-all": "Select all on this page",
+      "select-row": "Select row",
+      "you": "You"
+    },
+    "bulk": {
+      "announce": "{{n}} {{entity}} selected. Bulk actions are available.",
+      "toolbar": "Bulk actions for {{n}} selected {{entity}}",
+      "clear": "Clear selection",
+      "clear-hint": "Clear selection (Escape)",
+      "selected": "{{entity}} selected",
+      "entity-user": "users",
+      "promote": "Make admin",
+      "demote": "Remove admin",
+      "enable": "Enable",
+      "disable": "Disable",
+      "done": "Updated {{n}} accounts",
+      "skipped": "{{n}} skipped"
     }
   }
 }

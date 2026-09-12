@@ -123,6 +123,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/users/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply one change to several accounts
+         * @description Applied in a single transaction. Accounts the caller may not change are
+         *     reported in `skipped` rather than failing the whole request; a change
+         *     that would leave no enabled admin is refused outright.
+         */
+        post: operations["bulkUpdateUsers"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/users/{userId}": {
         parameters: {
             query?: never;
@@ -422,6 +444,27 @@ export interface components {
             /** Format: int64 */
             users: number;
         };
+        /** @description Exactly one of `role` or `disabled` must be given. */
+        BulkUpdateUsersRequest: {
+            userIds: string[];
+            role?: components["schemas"]["UserRole"];
+            disabled?: boolean;
+        };
+        /**
+         * @description `self` — the caller's own account, which cannot be demoted or disabled.
+         *     `not_found` — no such account.
+         * @enum {string}
+         */
+        BulkSkipReason: "self" | "not_found";
+        BulkSkipped: {
+            /** Format: uuid */
+            userId: string;
+            reason: components["schemas"]["BulkSkipReason"];
+        };
+        BulkUpdateResult: {
+            updated: number;
+            skipped: components["schemas"]["BulkSkipped"][];
+        };
     };
     responses: {
         /** @description error */
@@ -611,6 +654,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserPage"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    bulkUpdateUsers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkUpdateUsersRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkUpdateResult"];
                 };
             };
             default: components["responses"]["Error"];

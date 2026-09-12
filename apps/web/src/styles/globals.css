@@ -9,8 +9,13 @@
 /* Sign-in / sign-up screens and dropdown menus, built on the same tokens. */
 @import './auth.css';
 @import './menu.css';
-@import './admin.css';
 @import './focus.css';
+
+/* The admin panel keeps shadcn's own look, so its tokens and base layer come
+   across unchanged — the base layer scoped so it cannot reach the chat UI. */
+@import 'tw-animate-css';
+@import './shadcn-theme.css';
+@import './shadcn-base.css';
 
 /* Theme is toggled by adding/removing `.dark` on <html> (see stores/ui-store.ts),
    which is also the hook the `--n-*` tokens switch on. */

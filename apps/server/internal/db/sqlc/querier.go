@@ -13,6 +13,8 @@ import (
 type Querier interface {
 	AppendMessageContent(ctx context.Context, arg AppendMessageContentParams) (Message, error)
 	AttachToMessage(ctx context.Context, arg AttachToMessageParams) error
+	BulkSetUserDisabled(ctx context.Context, arg BulkSetUserDisabledParams) (int64, error)
+	BulkUpdateUserRole(ctx context.Context, arg BulkUpdateUserRoleParams) (int64, error)
 	CountAdmins(ctx context.Context) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
 	CountUsersFiltered(ctx context.Context, search *string) (int64, error)
@@ -22,6 +24,7 @@ type Querier interface {
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	DeleteExpiredSessions(ctx context.Context) (int64, error)
 	DeleteSession(ctx context.Context, tokenHash []byte) error
+	DeleteSessionsForUsers(ctx context.Context, userIds []uuid.UUID) error
 	DeleteUserSessions(ctx context.Context, userID uuid.UUID) error
 	FinishMessage(ctx context.Context, arg FinishMessageParams) (Message, error)
 	// One row per day for the requested window, including days with no activity —
@@ -43,6 +46,7 @@ type Querier interface {
 	// Offset paging rather than keyset: the admin table needs page numbers and a
 	// total, and the row count here stays small enough that the scan is cheap.
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
+	ListUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]User, error)
 	// The first account created becomes the admin: someone has to be able to reach
 	// the admin panel, and there is no other bootstrap path. The decision is made
 	// inside the INSERT so two concurrent registrations cannot both see an empty

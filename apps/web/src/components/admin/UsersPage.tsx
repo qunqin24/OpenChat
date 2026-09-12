@@ -1,23 +1,43 @@
 import type { User } from '@openchat/api-client'
-import { ChevronLeft, ChevronRight, Search, ShieldCheck, ShieldOff, UserCheck, UserX } from 'lucide-react'
+import {
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+  type RowSelectionState,
+} from '@tanstack/react-table'
+import { ChevronLeft, ChevronRight, Search, Shield, ShieldOff, UserCheck, UserX } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
+import { DataTableBulkActions } from '@/components/shadcn/data-table'
+import { Button } from '@/components/shadcn/ui/button'
+import { Card } from '@/components/shadcn/ui/card'
+import { Input } from '@/components/shadcn/ui/input'
+import { Skeleton } from '@/components/shadcn/ui/skeleton'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/shadcn/ui/table'
+import { useAdminUsers, useBulkUpdateUsers } from '@/features/admin/use-admin'
 import { useSession } from '@/features/auth/use-auth'
-import { useAdminUsers, useUpdateUser } from '@/features/admin/use-admin'
-import { formatRelative } from '@/lib/grouping'
-import Tooltip, { TooltipGroup } from '@/components/next/Tooltip'
+import { usersColumns } from './users-columns'
 
 const PAGE_SIZE = 20
 
 export function UsersPage() {
   const { t } = useTranslation()
   const { data: session } = useSession()
-  const updateUser = useUpdateUser()
+  const bulkUpdate = useBulkUpdateUsers()
 
   const [input, setInput] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
 
   // Debounced so typing does not fire a request per keystroke.
   useEffect(() => {
@@ -30,198 +50,197 @@ export function UsersPage() {
 
   const { data, isPending, isError } = useAdminUsers({ page, search, limit: PAGE_SIZE })
 
-  const pages = useMemo(
-    () => Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE)),
-    [data?.total],
-  )
+  const rows = useMemo(() => data?.items ?? [], [data])
+  const columns = useMemo(() => usersColumns(t, session?.id), [t, session?.id])
+  const pages = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE))
 
-  const change = (user: User, body: { role?: User['role']; disabled?: boolean }) =>
-    updateUser.mutate({ userId: user.id, ...body })
+  const table = useReactTable<User>({
+    data: rows,
+    columns,
+    state: { rowSelection },
+    // Selection survives a re-fetch because rows are keyed by account id
+    // rather than by their position on the page.
+    getRowId: (row) => row.id,
+    onRowSelectionChange: setRowSelection,
+    getCoreRowModel: getCoreRowModel(),
+    // The server owns paging and filtering; the table only renders what it is
+    // handed, so it must not try to slice the rows again.
+    manualPagination: true,
+    manualFiltering: true,
+    pageCount: pages,
+  })
+
+  const selected = table.getFilteredSelectedRowModel().rows.map((row) => row.original)
+
+  const applyBulk = async (body: { role?: User['role']; disabled?: boolean }) => {
+    if (selected.length === 0) return
+
+    const result = await bulkUpdate.mutateAsync({
+      userIds: selected.map((user) => user.id),
+      ...body,
+    })
+
+    table.resetRowSelection()
+
+    const parts = [t('admin.bulk.done', { n: result.updated })]
+    if (result.skipped.length > 0) {
+      parts.push(t('admin.bulk.skipped', { n: result.skipped.length }))
+    }
+    toast.success(parts.join(' · '))
+  }
 
   return (
-    <main className="n-main">
-      <div className="n-topbar">
-        <div className="truncate font-medium">{t('admin.nav.users')}</div>
+    <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">{t('admin.nav.users')}</h1>
+        <p className="text-muted-foreground text-sm">
+          {t('admin.users.total', { n: data?.total ?? 0 })}
+        </p>
       </div>
 
-      <div className="n-scroll">
-        <div className="n-admin-page">
-          <div className="n-log-panel">
-            <div className="n-admin-toolbar">
-              <div className="n-admin-search">
-                <Search className="h-4 w-4 shrink-0" style={{ color: 'var(--n-text-3)' }} />
-                <input
-                  className="n-admin-search-input"
-                  value={input}
-                  placeholder={t('admin.users.search')}
-                  aria-label={t('admin.users.search')}
-                  onChange={(event) => setInput(event.target.value)}
-                />
-              </div>
-              <span className="n-admin-count">
-                {t('admin.users.total', { n: data?.total ?? 0 })}
-              </span>
-            </div>
+      <div className="relative max-w-sm">
+        <Search className="text-muted-foreground pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2" />
+        <Input
+          value={input}
+          placeholder={t('admin.users.search')}
+          aria-label={t('admin.users.search')}
+          className="ps-9"
+          onChange={(event) => setInput(event.target.value)}
+        />
+      </div>
 
-            <div className="n-admin-table-wrap">
-              <table className="n-admin-table">
-                <thead>
-                  <tr>
-                    <th>{t('admin.users.account')}</th>
-                    <th>{t('admin.users.role')}</th>
-                    <th>{t('admin.users.last-seen')}</th>
-                    <th>{t('admin.users.joined')}</th>
-                    <th className="actions">{t('admin.users.actions')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {isError && (
-                    <tr>
-                      <td colSpan={5} className="n-admin-empty">
-                        {t('state.error')}
-                      </td>
-                    </tr>
-                  )}
+      <Card className="overflow-hidden p-0">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((group) => (
+              <TableRow key={group.id}>
+                {group.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(header.column.columnDef.header, header.getContext())}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
 
-                  {!isError && isPending && (
-                    <tr>
-                      <td colSpan={5} className="n-admin-empty">
-                        {t('state.loading')}
-                      </td>
-                    </tr>
-                  )}
-
-                  {!isError && !isPending && data?.items.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="n-admin-empty">
-                        {t('admin.users.none')}
-                      </td>
-                    </tr>
-                  )}
-
-                  <TooltipGroup>
-                    {data?.items.map((user) => {
-                      const isSelf = user.id === session?.id
-                      const isAdmin = user.role === 'admin'
-
-                      return (
-                        <tr key={user.id} className={user.disabled ? 'disabled' : undefined}>
-                          <td>
-                            <div className="n-admin-account">
-                              <span className="n-admin-name">{user.name}</span>
-                              <span className="n-admin-email">{user.email}</span>
-                            </div>
-                          </td>
-                          <td>
-                            <span className={`n-admin-tag${isAdmin ? ' admin' : ''}`}>
-                              {t(`admin.users.role-${user.role}`)}
-                            </span>
-                            {user.disabled && (
-                              <span className="n-admin-tag off">{t('admin.users.disabled')}</span>
-                            )}
-                          </td>
-                          <td>{formatRelative(user.lastSeenAt ?? undefined, t) || '—'}</td>
-                          <td>{formatRelative(user.createdAt, t)}</td>
-                          <td className="actions">
-                            {/* Self-changes are refused by the server; disabling
-                                them here explains why instead of failing later. */}
-                            <div className="n-admin-actions">
-                              <Tooltip
-                                label={
-                                  isSelf
-                                    ? t('admin.users.self-locked')
-                                    : isAdmin
-                                      ? t('admin.users.demote')
-                                      : t('admin.users.promote')
-                                }
-                              >
-                                <span className="n-tip-wrap">
-                                  <button
-                                    type="button"
-                                    className="n-icon-btn sm"
-                                    disabled={isSelf || updateUser.isPending}
-                                    onClick={() =>
-                                      change(user, { role: isAdmin ? 'user' : 'admin' })
-                                    }
-                                  >
-                                    {isAdmin ? (
-                                      <ShieldOff className="h-3.5 w-3.5" />
-                                    ) : (
-                                      <ShieldCheck className="h-3.5 w-3.5" />
-                                    )}
-                                  </button>
-                                </span>
-                              </Tooltip>
-
-                              <Tooltip
-                                label={
-                                  isSelf
-                                    ? t('admin.users.self-locked')
-                                    : user.disabled
-                                      ? t('admin.users.enable')
-                                      : t('admin.users.disable')
-                                }
-                              >
-                                <span className="n-tip-wrap">
-                                  <button
-                                    type="button"
-                                    className="n-icon-btn sm"
-                                    disabled={isSelf || updateUser.isPending}
-                                    onClick={() => change(user, { disabled: !user.disabled })}
-                                  >
-                                    {user.disabled ? (
-                                      <UserCheck className="h-3.5 w-3.5" />
-                                    ) : (
-                                      <UserX className="h-3.5 w-3.5" />
-                                    )}
-                                  </button>
-                                </span>
-                              </Tooltip>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </TooltipGroup>
-                </tbody>
-              </table>
-            </div>
-
-            {pages > 1 && (
-              <div className="n-log-pager">
-                <button
-                  type="button"
-                  className="n-pager-btn"
-                  disabled={page <= 1}
-                  aria-label={t('admin.users.previous')}
-                  onClick={() => setPage((value) => Math.max(1, value - 1))}
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </button>
-                <span className="n-log-pager-label">
-                  {page} / {pages}
-                </span>
-                <button
-                  type="button"
-                  className="n-pager-btn"
-                  disabled={page >= pages}
-                  aria-label={t('admin.users.next')}
-                  onClick={() => setPage((value) => Math.min(pages, value + 1))}
-                >
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-              </div>
+          <TableBody>
+            {isError && (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="h-32 text-center">
+                  {t('state.error')}
+                </TableCell>
+              </TableRow>
             )}
-          </div>
 
-          {updateUser.isError && (
-            <p className="n-admin-alert" role="alert">
-              {t('admin.users.update-failed')}
-            </p>
-          )}
+            {!isError &&
+              isPending &&
+              Array.from({ length: 5 }).map((_, index) => (
+                <TableRow key={index}>
+                  <TableCell colSpan={columns.length}>
+                    <Skeleton className="h-8 w-full" />
+                  </TableCell>
+                </TableRow>
+              ))}
+
+            {!isError && !isPending && rows.length === 0 && (
+              <TableRow>
+                <TableCell
+                  colSpan={columns.length}
+                  className="text-muted-foreground h-32 text-center"
+                >
+                  {t('admin.users.none')}
+                </TableCell>
+              </TableRow>
+            )}
+
+            {!isError &&
+              !isPending &&
+              table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'}>
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+          </TableBody>
+        </Table>
+      </Card>
+
+      {pages > 1 && (
+        <div className="flex items-center justify-end gap-2">
+          <span className="text-muted-foreground text-sm">
+            {page} / {pages}
+          </span>
+          <Button
+            variant="outline"
+            size="icon"
+            disabled={page <= 1}
+            aria-label={t('admin.users.previous')}
+            onClick={() => {
+              setPage((value) => Math.max(1, value - 1))
+              table.resetRowSelection()
+            }}
+          >
+            <ChevronLeft />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            disabled={page >= pages}
+            aria-label={t('admin.users.next')}
+            onClick={() => {
+              setPage((value) => Math.min(pages, value + 1))
+              table.resetRowSelection()
+            }}
+          >
+            <ChevronRight />
+          </Button>
         </div>
-      </div>
-    </main>
+      )}
+
+      <DataTableBulkActions table={table} entityName={t('admin.bulk.entity-user')}>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={bulkUpdate.isPending}
+          onClick={() => void applyBulk({ role: 'admin' })}
+        >
+          <Shield />
+          {t('admin.bulk.promote')}
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={bulkUpdate.isPending}
+          onClick={() => void applyBulk({ role: 'user' })}
+        >
+          <ShieldOff />
+          {t('admin.bulk.demote')}
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={bulkUpdate.isPending}
+          onClick={() => void applyBulk({ disabled: false })}
+        >
+          <UserCheck />
+          {t('admin.bulk.enable')}
+        </Button>
+        <Button
+          variant="destructive"
+          size="sm"
+          disabled={bulkUpdate.isPending}
+          onClick={() => void applyBulk({ disabled: true })}
+        >
+          <UserX />
+          {t('admin.bulk.disable')}
+        </Button>
+      </DataTableBulkActions>
+    </div>
   )
 }
 

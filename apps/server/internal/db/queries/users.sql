@@ -66,3 +66,20 @@ SELECT count(*)
 FROM users
 WHERE role = 'admin'
   AND disabled_at IS NULL;
+
+-- name: ListUsersByIDs :many
+SELECT *
+FROM users
+WHERE id = ANY (sqlc.arg('ids')::uuid[]);
+
+-- name: BulkUpdateUserRole :execrows
+UPDATE users
+SET role       = sqlc.arg('role'),
+    updated_at = now()
+WHERE id = ANY (sqlc.arg('ids')::uuid[]);
+
+-- name: BulkSetUserDisabled :execrows
+UPDATE users
+SET disabled_at = CASE WHEN sqlc.arg('disabled')::boolean THEN now() ELSE NULL END,
+    updated_at  = now()
+WHERE id = ANY (sqlc.arg('ids')::uuid[]);

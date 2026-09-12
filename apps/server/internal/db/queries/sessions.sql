@@ -32,3 +32,8 @@ WHERE user_id = $1;
 DELETE
 FROM sessions
 WHERE expires_at <= now();
+
+-- name: DeleteSessionsForUsers :exec
+DELETE
+FROM sessions
+WHERE user_id = ANY (sqlc.arg('user_ids')::uuid[]);

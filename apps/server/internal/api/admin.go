@@ -1,8 +1,11 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/google/uuid"
 
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
@@ -132,6 +135,9 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, userId opena
 		return
 	}
 
+	// As in the bulk path, this cannot currently fire — the caller is an admin
+	// and self-changes are refused above, so a second admin always exists — but
+	// it keeps the invariant explicit rather than implied by two other rules.
 	if demoting || (disabling && target.Role == sqlc.UserRoleAdmin) {
 		admins, err := s.q.CountAdmins(r.Context())
 		if err != nil {
@@ -178,4 +184,128 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, userId opena
 	}
 
 	httpx.JSON(w, http.StatusOK, toUser(updated))
+}
+
+// maxBulkUsers mirrors the contract's cap on one request.
+const maxBulkUsers = 200
+
+// BulkUpdateUsers applies one change across several accounts in a single
+// transaction.
+//
+// Accounts the caller cannot change are reported in `skipped` rather than
+// failing the request: a batch is a selection, and one ineligible row in it is
+// not a reason to reject the other forty-nine. A change that would leave the
+// system with no enabled admin is refused outright, because that one is not
+// recoverable through the UI.
+func (s *Server) BulkUpdateUsers(w http.ResponseWriter, r *http.Request) {
+	var body BulkUpdateUsersRequest
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+
+	switch {
+	case len(body.UserIds) == 0:
+		httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "no_users", "no accounts were given"))
+		return
+	case len(body.UserIds) > maxBulkUsers:
+		httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "too_many_users",
+			fmt.Sprintf("at most %d accounts can be changed at once", maxBulkUsers)))
+		return
+	case (body.Role == nil) == (body.Disabled == nil):
+		httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "one_change_required",
+			"give exactly one of role or disabled"))
+		return
+	}
+
+	actor := auth.MustUser(r.Context())
+
+	tx, err := s.pool.Begin(r.Context())
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+
+	q := s.q.WithTx(tx)
+
+	found, err := q.ListUsersByIDs(r.Context(), body.UserIds)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+
+	present := make(map[uuid.UUID]sqlc.User, len(found))
+	for _, user := range found {
+		present[user.ID] = user
+	}
+
+	// Demoting or disabling yourself is the one change an admin cannot make;
+	// promoting or re-enabling yourself is harmless, so it is not skipped.
+	removesOwnAccess := (body.Role != nil && *body.Role != UserRole(sqlc.UserRoleAdmin)) ||
+		(body.Disabled != nil && *body.Disabled)
+
+	skipped := make([]BulkSkipped, 0)
+	targets := make([]uuid.UUID, 0, len(body.UserIds))
+
+	for _, id := range body.UserIds {
+		switch {
+		case present[id].ID == uuid.Nil:
+			skipped = append(skipped, BulkSkipped{UserId: id, Reason: NotFound})
+		case id == actor.ID && removesOwnAccess:
+			skipped = append(skipped, BulkSkipped{UserId: id, Reason: Self})
+		default:
+			targets = append(targets, id)
+		}
+	}
+
+	var updated int64
+	if len(targets) > 0 {
+		if body.Role != nil {
+			updated, err = q.BulkUpdateUserRole(r.Context(), sqlc.BulkUpdateUserRoleParams{
+				Ids:  targets,
+				Role: sqlc.UserRole(*body.Role),
+			})
+		} else {
+			updated, err = q.BulkSetUserDisabled(r.Context(), sqlc.BulkSetUserDisabledParams{
+				Ids:      targets,
+				Disabled: *body.Disabled,
+			})
+		}
+		if err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+
+		// A safety net rather than a reachable branch: the caller is an enabled
+		// admin (RequireAdmin guarantees it) and is skipped from any change that
+		// would remove their own access, so at least one admin always survives.
+		// Kept because it asserts the invariant against the state the commit
+		// would actually leave behind, and would catch a future change to the
+		// skip rules that quietly broke it.
+		admins, err := q.CountAdmins(r.Context())
+		if err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+		if admins == 0 {
+			httpx.Fail(w, r, httpx.NewError(http.StatusConflict, "last_admin",
+				"this would leave no enabled admin"))
+			return
+		}
+
+		if body.Disabled != nil && *body.Disabled {
+			if err := q.DeleteSessionsForUsers(r.Context(), targets); err != nil {
+				httpx.Fail(w, r, err)
+				return
+			}
+		}
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+
+	httpx.JSON(w, http.StatusOK, BulkUpdateResult{Updated: int(updated), Skipped: skipped})
 }

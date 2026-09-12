@@ -28,6 +28,12 @@ export default tseslint.config(
     },
   },
   {
+    // Vendored from shadcn-admin and kept close to upstream so it can be
+    // re-synced; their mixed exports are not ours to reorganise.
+    files: ['src/components/shadcn/**'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
+  {
     // Route modules must export `Route`, and main.tsx exports nothing at all.
     files: ['src/routes/**/*.tsx', 'src/main.tsx'],
     rules: { 'react-refresh/only-export-components': 'off' },

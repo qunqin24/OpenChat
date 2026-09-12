@@ -1,4 +1,4 @@
-import type { UpdateUserRequest, User } from '@openchat/api-client'
+import type { BulkUpdateUsersRequest } from '@openchat/api-client'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/lib/api'
@@ -47,16 +47,13 @@ export function useAdminUsers({
   })
 }
 
-export function useUpdateUser() {
+export function useBulkUpdateUsers() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ userId, ...body }: UpdateUserRequest & { userId: string }) =>
-      unwrap(
-        await api.PATCH('/admin/users/{userId}', { params: { path: { userId } }, body }),
-      ),
-    onSuccess: (_updated: User) => {
-      // Role and status changes move the totals too.
+    mutationFn: async (body: BulkUpdateUsersRequest) =>
+      unwrap(await api.POST('/admin/users/bulk', { body })),
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.all })
     },
   })

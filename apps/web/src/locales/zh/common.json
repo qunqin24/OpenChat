@@ -138,7 +138,8 @@
     "back-to-chat": "返回对话",
     "nav": {
       "dashboard": "仪表盘",
-      "users": "用户"
+      "users": "用户",
+      "manage": "管理"
     },
     "stats": {
       "users": "用户总数",
@@ -173,7 +174,24 @@
       "self-locked": "不能修改自己的权限",
       "previous": "上一页",
       "next": "下一页",
-      "update-failed": "修改失败，可能是最后一个管理员或权限不足"
+      "update-failed": "修改失败，可能是最后一个管理员或权限不足",
+      "select-all": "全选本页",
+      "select-row": "选择该行",
+      "you": "你自己"
+    },
+    "bulk": {
+      "announce": "已选中 {{n}} 个{{entity}}，可使用批量操作。",
+      "toolbar": "对选中的 {{n}} 个{{entity}}批量操作",
+      "clear": "清除选择",
+      "clear-hint": "清除选择（Esc）",
+      "selected": "个{{entity}}已选中",
+      "entity-user": "用户",
+      "promote": "设为管理员",
+      "demote": "取消管理员",
+      "enable": "启用",
+      "disable": "停用",
+      "done": "已更新 {{n}} 个账号",
+      "skipped": "{{n}} 个被跳过"
     }
   }
 }

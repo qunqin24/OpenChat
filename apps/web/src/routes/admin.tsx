@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
-import AdminShell from '@/components/admin/AdminShell'
+import AdminLayout from '@/components/admin/AdminLayout'
 import { sessionQueryOptions } from '@/features/auth/use-auth'
 
 /**
@@ -20,5 +20,5 @@ export const Route = createFileRoute('/admin')({
       throw redirect({ to: '/' })
     }
   },
-  component: AdminShell,
+  component: AdminLayout,
 })

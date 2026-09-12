@@ -11,6 +11,46 @@ import (
 	"github.com/google/uuid"
 )
 
+const bulkSetUserDisabled = `-- name: BulkSetUserDisabled :execrows
+UPDATE users
+SET disabled_at = CASE WHEN $1::boolean THEN now() ELSE NULL END,
+    updated_at  = now()
+WHERE id = ANY ($2::uuid[])
+`
+
+type BulkSetUserDisabledParams struct {
+	Disabled bool        `json:"disabled"`
+	Ids      []uuid.UUID `json:"ids"`
+}
+
+func (q *Queries) BulkSetUserDisabled(ctx context.Context, arg BulkSetUserDisabledParams) (int64, error) {
+	result, err := q.db.Exec(ctx, bulkSetUserDisabled, arg.Disabled, arg.Ids)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const bulkUpdateUserRole = `-- name: BulkUpdateUserRole :execrows
+UPDATE users
+SET role       = $1,
+    updated_at = now()
+WHERE id = ANY ($2::uuid[])
+`
+
+type BulkUpdateUserRoleParams struct {
+	Role UserRole    `json:"role"`
+	Ids  []uuid.UUID `json:"ids"`
+}
+
+func (q *Queries) BulkUpdateUserRole(ctx context.Context, arg BulkUpdateUserRoleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, bulkUpdateUserRole, arg.Role, arg.Ids)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const countAdmins = `-- name: CountAdmins :one
 SELECT count(*)
 FROM users
@@ -118,6 +158,42 @@ type ListUsersParams struct {
 // total, and the row count here stays small enough that the scan is cheap.
 func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error) {
 	rows, err := q.db.Query(ctx, listUsers, arg.Search, arg.RowOffset, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []User{}
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.Name,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PasswordHash,
+			&i.Role,
+			&i.DisabledAt,
+			&i.LastSeenAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUsersByIDs = `-- name: ListUsersByIDs :many
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at
+FROM users
+WHERE id = ANY ($1::uuid[])
+`
+
+func (q *Queries) ListUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]User, error) {
+	rows, err := q.db.Query(ctx, listUsersByIDs, ids)
 	if err != nil {
 		return nil, err
 	}
