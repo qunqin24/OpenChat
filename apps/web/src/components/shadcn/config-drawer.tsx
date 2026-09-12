@@ -140,7 +140,11 @@ function RadioGroupItem({
       <div
         className={cn(
           'relative rounded-[6px] ring-[1px] ring-border',
-          'group-data-[state=checked]:shadow-2xl group-data-[state=checked]:ring-primary',
+          // Upstream marks the checked card with shadow-2xl — a 50px blur at
+          // 25% black. Stacked across four option grids it washes the whole
+          // scroll area grey and stops dead where the content ends. The ring
+          // and the check badge already say which one is selected.
+          'group-data-[state=checked]:ring-primary group-data-[state=checked]:ring-2',
           'group-focus-visible:ring-2'
         )}
         role='img'
