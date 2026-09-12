@@ -272,7 +272,17 @@
         "compact": "Compact",
         "ltr": "Left to Right",
         "rtl": "Right to Left",
-        "title": "Theme Settings"
+        "title": "Theme Settings",
+        "description": "Adjust the appearance and layout to suit your preferences.",
+        "reset-all": "Reset all settings to default values",
+        "reset-theme-aria": "Reset theme preference to default",
+        "reset-sidebar-aria": "Reset sidebar style to default",
+        "reset-layout-aria": "Reset layout options to default",
+        "reset-direction-aria": "Reset text direction to default",
+        "theme-hint": "Choose between system preference, light mode, or dark mode",
+        "sidebar-hint": "Choose between inset, floating, or standard sidebar layout",
+        "layout-hint": "Choose between default expanded, compact icon-only, or full layout mode",
+        "direction-hint": "Choose between left-to-right or right-to-left site direction"
       }
     }
   }

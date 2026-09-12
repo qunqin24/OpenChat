@@ -58,7 +58,7 @@ export function ConfigDrawer() {
         <SheetHeader className='pb-0 text-start'>
           <SheetTitle>{t('admin.ui.config.title')}</SheetTitle>
           <SheetDescription>
-            Adjust the appearance and layout to suit your preferences.
+            {t('admin.ui.config.description')}
           </SheetDescription>
         </SheetHeader>
         <div className='space-y-6 overflow-y-auto px-4'>
@@ -71,9 +71,9 @@ export function ConfigDrawer() {
           <Button
             variant='destructive'
             onClick={handleReset}
-            aria-label='Reset all settings to default values'
+            aria-label={t('admin.ui.config.reset-all')}
           >
-            Reset
+            {t('admin.ui.table.reset')}
           </Button>
         </SheetFooter>
       </SheetContent>
@@ -180,10 +180,10 @@ function ThemeConfig() {
   return (
     <div>
       <SectionTitle
-        title='Theme'
+        title={t('admin.ui.config.theme')}
         showReset={theme !== defaultTheme}
         onReset={() => setTheme(defaultTheme)}
-        resetAriaLabel='Reset theme preference to default'
+        resetAriaLabel={t('admin.ui.config.reset-theme-aria')}
       />
       <Radio
         value={theme}
@@ -195,17 +195,17 @@ function ThemeConfig() {
         {[
           {
             value: 'system',
-            label: 'System',
+            label: t('admin.ui.config.system'),
             icon: IconThemeSystem,
           },
           {
             value: 'light',
-            label: 'Light',
+            label: t('admin.ui.config.light'),
             icon: IconThemeLight,
           },
           {
             value: 'dark',
-            label: 'Dark',
+            label: t('admin.ui.config.dark'),
             icon: IconThemeDark,
           },
         ].map((item) => (
@@ -213,7 +213,7 @@ function ThemeConfig() {
         ))}
       </Radio>
       <div id='theme-description' className='sr-only'>
-        Choose between system preference, light mode, or dark mode
+        {t('admin.ui.config.theme-hint')}
       </div>
     </div>
   )
@@ -225,7 +225,7 @@ function SidebarConfig() {
   return (
     <div className='max-md:hidden'>
       <SectionTitle
-        title='Sidebar'
+        title={t('admin.ui.config.sidebar')}
         showReset={defaultVariant !== variant}
         onReset={() => setVariant(defaultVariant)}
         resetAriaLabel={t('admin.ui.config.reset-sidebar')}
@@ -240,17 +240,17 @@ function SidebarConfig() {
         {[
           {
             value: 'inset',
-            label: 'Inset',
+            label: t('admin.ui.config.inset'),
             icon: IconSidebarInset,
           },
           {
             value: 'floating',
-            label: 'Floating',
+            label: t('admin.ui.config.floating'),
             icon: IconSidebarFloating,
           },
           {
             value: 'sidebar',
-            label: 'Sidebar',
+            label: t('admin.ui.config.sidebar'),
             icon: IconSidebarSidebar,
           },
         ].map((item) => (
@@ -258,7 +258,7 @@ function SidebarConfig() {
         ))}
       </Radio>
       <div id='sidebar-description' className='sr-only'>
-        Choose between inset, floating, or standard sidebar layout
+        {t('admin.ui.config.sidebar-hint')}
       </div>
     </div>
   )
@@ -274,7 +274,7 @@ function LayoutConfig() {
   return (
     <div className='max-md:hidden'>
       <SectionTitle
-        title='Layout'
+        title={t('admin.ui.config.layout')}
         showReset={radioState !== 'default'}
         onReset={() => {
           setOpen(true)
@@ -299,17 +299,17 @@ function LayoutConfig() {
         {[
           {
             value: 'default',
-            label: 'Default',
+            label: t('admin.ui.config.default'),
             icon: IconLayoutDefault,
           },
           {
             value: 'icon',
-            label: 'Compact',
+            label: t('admin.ui.config.compact'),
             icon: IconLayoutCompact,
           },
           {
             value: 'offcanvas',
-            label: 'Full layout',
+            label: t('admin.ui.config.full'),
             icon: IconLayoutFull,
           },
         ].map((item) => (
@@ -317,7 +317,7 @@ function LayoutConfig() {
         ))}
       </Radio>
       <div id='layout-description' className='sr-only'>
-        Choose between default expanded, compact icon-only, or full layout mode
+        {t('admin.ui.config.layout-hint')}
       </div>
     </div>
   )
@@ -329,7 +329,7 @@ function DirConfig() {
   return (
     <div>
       <SectionTitle
-        title='Direction'
+        title={t('admin.ui.config.direction')}
         showReset={defaultDir !== dir}
         onReset={() => setDir(defaultDir)}
         resetAriaLabel={t('admin.ui.config.reset-direction')}
@@ -344,14 +344,14 @@ function DirConfig() {
         {[
           {
             value: 'ltr',
-            label: 'Left to Right',
+            label: t('admin.ui.config.ltr'),
             icon: (props: SVGProps<SVGSVGElement>) => (
               <IconDir dir='ltr' {...props} />
             ),
           },
           {
             value: 'rtl',
-            label: 'Right to Left',
+            label: t('admin.ui.config.rtl'),
             icon: (props: SVGProps<SVGSVGElement>) => (
               <IconDir dir='rtl' {...props} />
             ),
@@ -361,7 +361,7 @@ function DirConfig() {
         ))}
       </Radio>
       <div id='direction-description' className='sr-only'>
-        Choose between left-to-right or right-to-left site direction
+        {t('admin.ui.config.direction-hint')}
       </div>
     </div>
   )

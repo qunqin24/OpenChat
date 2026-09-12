@@ -272,7 +272,17 @@
         "compact": "紧凑",
         "ltr": "从左到右",
         "rtl": "从右到左",
-        "title": "外观设置"
+        "title": "外观设置",
+        "description": "调整外观与布局，按你的习惯来。",
+        "reset-all": "全部恢复默认",
+        "reset-theme-aria": "恢复默认主题",
+        "reset-sidebar-aria": "恢复默认侧边栏样式",
+        "reset-layout-aria": "恢复默认布局",
+        "reset-direction-aria": "恢复默认文字方向",
+        "theme-hint": "可选跟随系统、浅色或深色",
+        "sidebar-hint": "可选内嵌、浮动或标准侧边栏",
+        "layout-hint": "可选默认展开、紧凑图标或全宽布局",
+        "direction-hint": "可选从左到右或从右到左"
       }
     }
   }
