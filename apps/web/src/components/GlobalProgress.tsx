@@ -73,7 +73,7 @@ export function GlobalProgress() {
 
   return (
     <div className="n-progress" role="progressbar" aria-hidden="true">
-      <div className="n-progress-bar" style={{ width: `${progress}%` }} />
+      <div className="n-progress-bar" data-motion="essential" style={{ width: `${progress}%` }} />
     </div>
   )
 }

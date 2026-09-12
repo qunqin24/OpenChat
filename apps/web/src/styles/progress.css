@@ -24,8 +24,11 @@
   box-shadow: 0 0 8px color-mix(in oklab, var(--n-accent) 45%, transparent);
 }
 
+/* Shortened, not removed: the width *is* the message here, and a bar that
+   teleports between values is harder to follow than one that eases quickly.
+   There is no travel to speak of either — the fill grows in place. */
 @media (prefers-reduced-motion: reduce) {
   .n-progress-bar {
-    transition: none;
+    transition-duration: 120ms;
   }
 }

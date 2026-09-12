@@ -26,7 +26,7 @@ const BOOT_MARKUP = `
       stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" />
     <path d="M11 13.5h10M11 18h6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
   </svg>
-  <div id="boot-bar"></div>
+  <div id="boot-bar" data-motion="essential"></div>
 `
 
 /**

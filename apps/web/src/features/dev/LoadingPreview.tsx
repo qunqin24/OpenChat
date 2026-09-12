@@ -87,8 +87,8 @@ export function LoadingPreview() {
 
         {reducedMotion && (
           <div className="n-auth-alert" role="status" style={{ marginBottom: 16 }}>
-            你的系统开启了「减少动态效果」，所以两个动画都被刻意停用了 —— 看到的静止
-            条不是 bug。要看动画，先在系统设置里关掉它。
+            你的系统开启了「减少动态效果」。进度条不会被停掉 —— 只是把横向扫动换成了
+            原地的明暗脉动，因为完全静止的加载条看起来像卡死了。
           </div>
         )}
 

@@ -105,13 +105,26 @@
         }
       }
 
+      /* Softened rather than switched off. The preference is about motion that
+         can cause vestibular discomfort — travel, scaling, parallax — and a 3px
+         bar easing in place is not that. Killing it outright leaves a loading
+         screen that is completely still, which reads as a hung page: worse for
+         the reader it was meant to help. So the sweep becomes an opacity pulse,
+         which carries no movement at all. */
       @media (prefers-reduced-motion: reduce) {
         #boot-bar::after {
-          animation: none;
           width: 100%;
+          animation: boot-pulse 1.8s ease-in-out infinite;
         }
-        #boot {
-          transition: none;
+      }
+
+      @keyframes boot-pulse {
+        0%,
+        100% {
+          opacity: 0.3;
+        }
+        50% {
+          opacity: 1;
         }
       }
     </style>
@@ -134,7 +147,7 @@
           stroke-linecap="round"
         />
       </svg>
-      <div id="boot-bar"></div>
+      <div id="boot-bar" data-motion="essential"></div>
     </div>
 
     <script type="module" src="/src/main.tsx"></script>

@@ -44,11 +44,16 @@
     text-rendering: optimizeLegibility;
   }
 
-  /* Respect the OS setting for anyone who asked for less motion. */
+  /* Respect the OS setting for anyone who asked for less motion.
+     `[data-motion='essential']` opts out: the preference is about motion that
+     can cause vestibular discomfort, not about feedback. A loading indicator
+     frozen to a single 0.01ms frame is indistinguishable from a hung page,
+     which is worse for the reader it was meant to help. Those elements handle
+     the preference themselves, by swapping travel for an opacity pulse. */
   @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
+    *:not([data-motion='essential']),
+    *:not([data-motion='essential'])::before,
+    *:not([data-motion='essential'])::after {
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
