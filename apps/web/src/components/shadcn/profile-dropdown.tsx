@@ -6,10 +6,8 @@ import { Button } from '@/components/shadcn/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/shadcn/ui/dropdown-menu'
@@ -41,16 +39,12 @@ export function ProfileDropdown() {
               </p>
             </div>
           </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuGroup>
-            <DropdownMenuItem asChild>
-              <Link to='/admin/settings'>
-                {t('admin.ui.menu.settings')}
-                <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
-              </Link>
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-          <DropdownMenuSeparator />
+          <DropdownMenuItem asChild>
+            <Link to='/admin/settings'>
+              {t('admin.ui.menu.settings')}
+              <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
+            </Link>
+          </DropdownMenuItem>
           <DropdownMenuItem variant='destructive' onClick={() => setOpen(true)}>
             {t('admin.ui.menu.sign-out')}
             <DropdownMenuShortcut className='text-current'>
