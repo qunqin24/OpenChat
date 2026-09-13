@@ -1,11 +1,7 @@
-import {
-  ArrowLeft,
-  LayoutDashboard,
-  MessagesSquare,
-  Settings,
-  Users,
-} from 'lucide-react'
+import { ArrowLeft, LayoutDashboard, Settings, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+
+import { IconAperture } from '@/assets/custom/icon-aperture'
 
 import { type SidebarData } from '../types'
 
@@ -25,7 +21,7 @@ export function useSidebarData(): SidebarData {
     teams: [
       {
         name: 'OpenChat',
-        logo: MessagesSquare,
+        logo: IconAperture,
         plan: t('admin.title'),
       },
     ],

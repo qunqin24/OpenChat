@@ -133,19 +133,15 @@
     <div id="root"></div>
 
     <div id="boot" role="status" aria-label="Loading OpenChat">
+      <!-- Same mark as public/favicon.svg, inline so the splash needs no
+           second request before it can paint. Keep the two in step. -->
       <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
-        <path
-          d="M16 4C9.4 4 4 8.9 4 15c0 3.2 1.5 6.1 3.9 8.1L6.6 28l5.3-2.5c1.3.3 2.7.5 4.1.5 6.6 0 12-4.9 12-11S22.6 4 16 4Z"
-          stroke="currentColor"
-          stroke-width="2.5"
-          stroke-linejoin="round"
-        />
-        <path
-          d="M11 13.5h10M11 18h6"
-          stroke="currentColor"
-          stroke-width="2.5"
-          stroke-linecap="round"
-        />
+        <g stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+          <circle cx="16" cy="16" r="11.5" />
+          <path d="M20.5 5.42V26.58" />
+          <path d="M4.59 14.61L22.91 25.19" />
+          <path d="M22.91 6.81L4.59 17.39" />
+        </g>
       </svg>
       <div id="boot-bar" data-motion="essential"></div>
     </div>

@@ -1,12 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
   <style>
-    path { stroke: #1a1a1a }
-    @media (prefers-color-scheme: dark) { path { stroke: #f5f5f5 } }
+    g { stroke: #1a1a1a }
+    @media (prefers-color-scheme: dark) { g { stroke: #f5f5f5 } }
   </style>
-  <path
-    d="M16 4C9.4 4 4 8.9 4 15c0 3.2 1.5 6.1 3.9 8.1L6.6 28l5.3-2.5c1.3.3 2.7.5 4.1.5 6.6 0 12-4.9 12-11S22.6 4 16 4Z"
-    stroke-width="2.5"
-    stroke-linejoin="round"
-  />
-  <path d="M11 13.5h10M11 18h6" stroke-width="2.5" stroke-linecap="round" />
+  <!-- A three-bladed aperture: the outer ring plus three chords, each tangent
+       to an inner circle of radius 4.5, at 0°, 120° and 240°. The blades stop
+       short of each other, so the iris reads as open rather than as a closed
+       triangle. -->
+  <g stroke-width="2.4" stroke-linecap="round">
+    <circle cx="16" cy="16" r="11.5" />
+    <path d="M20.5 5.42V26.58" />
+    <path d="M4.59 14.61L22.91 25.19" />
+    <path d="M22.91 6.81L4.59 17.39" />
+  </g>
 </svg>
