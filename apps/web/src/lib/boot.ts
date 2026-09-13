@@ -18,16 +18,16 @@ export function dismissBootSplash(): void {
   window.setTimeout(() => boot.remove(), 600)
 }
 
-/** The splash markup, kept in one place so the preview cannot drift from it. */
-const BOOT_MARKUP = `
-  <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
-    <path
-      d="M16 4C9.4 4 4 8.9 4 15c0 3.2 1.5 6.1 3.9 8.1L6.6 28l5.3-2.5c1.3.3 2.7.5 4.1.5 6.6 0 12-4.9 12-11S22.6 4 16 4Z"
-      stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" />
-    <path d="M11 13.5h10M11 18h6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
-  </svg>
-  <div id="boot-bar" data-motion="essential"></div>
-`
+/**
+ * The splash markup, read from the live element rather than restated here.
+ *
+ * This module is imported during bootstrap, while index.html's `#boot` is still
+ * on the page, so the capture always succeeds in the app. Holding a second copy
+ * in a template literal is what let the preview go on showing the old logo
+ * after the real splash had been redesigned — there is now one copy in the
+ * codebase, and it is the one that actually paints.
+ */
+const BOOT_MARKUP = document.getElementById('boot')?.innerHTML ?? ''
 
 /**
  * Re-creates the splash after it has been dismissed, for the preview page.
@@ -38,6 +38,10 @@ const BOOT_MARKUP = `
  */
 export function showBootSplash(): () => void {
   if (document.getElementById('boot')) return () => undefined
+  // Empty only if this module was first imported after the splash had gone,
+  // which bootstrap order rules out; showing nothing beats showing a stale
+  // hand-written copy.
+  if (!BOOT_MARKUP) return () => undefined
 
   const boot = document.createElement('div')
   boot.id = 'boot'
