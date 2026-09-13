@@ -31,13 +31,20 @@ reset: ## Destroy local data and start fresh
 
 ## ------------------------------------------------------------------ dev ----
 
-.PHONY: dev-server
-dev-server: ## Run the Go API on :8080 (migrates on boot)
+.PHONY: ser
+ser: ## Run the Go API on :8080 (migrates on boot)
 	cd $(SERVER) && go run ./cmd/openchat
 
-.PHONY: dev-web
-dev-web: ## Run the Vite dev server on :5173
+.PHONY: web
+web: ## Run the Vite dev server on :5173
 	pnpm --filter @openchat/web dev
+
+# The old names, kept working so existing notes and muscle memory do not break.
+# Undocumented on purpose: `make help` should list one name per job, or the
+# short names are no easier to find than the long ones were.
+.PHONY: dev-server dev-web
+dev-server: ser
+dev-web: web
 
 ## ------------------------------------------------------------- database ----
 

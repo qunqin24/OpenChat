@@ -9,8 +9,8 @@
 ```bash
 make setup          # 安装依赖，创建 .env
 make up             # 通过 docker compose 起 Postgres + MinIO
-make dev-server     # Go API 跑在 :8080，启动时自动迁移
-make dev-web        # Vite 跑在 :5173，把 /api 代理到 :8080
+make ser            # Go API 跑在 :8080，启动时自动迁移
+make web            # Vite 跑在 :5173，把 /api 代理到 :8080
 make check          # lint + test + build —— CI 跑的就是这个
 make generate       # 重新生成 sqlc 和 API 契约（两端都生成）
 ```
