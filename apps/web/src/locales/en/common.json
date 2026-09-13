@@ -229,7 +229,8 @@
         "close": "Close",
         "toggle-nav": "Toggle navigation menu",
         "sidebar": "Sidebar",
-        "sidebar-description": "Displays the mobile sidebar."
+        "sidebar-description": "Displays the mobile sidebar.",
+        "skip-to-main": "Skip to main content"
       },
       "command": {
         "placeholder": "Type a command or search…",

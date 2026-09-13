@@ -135,7 +135,7 @@ export function DataTableFacetedFilter<TData, TValue>({
                     onSelect={() => column?.setFilterValue(undefined)}
                     className='justify-center text-center'
                   >
-                    Clear filters
+                    {t('admin.ui.table.clear-filters')}
                   </CommandItem>
                 </CommandGroup>
               </>

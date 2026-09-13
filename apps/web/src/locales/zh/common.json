@@ -229,7 +229,8 @@
         "close": "关闭",
         "toggle-nav": "切换导航菜单",
         "sidebar": "侧边栏",
-        "sidebar-description": "在移动端显示侧边栏。"
+        "sidebar-description": "在移动端显示侧边栏。",
+        "skip-to-main": "跳到主要内容"
       },
       "command": {
         "placeholder": "输入命令或搜索…",

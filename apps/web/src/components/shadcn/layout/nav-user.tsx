@@ -5,7 +5,6 @@ import {
   ChevronsUpDown,
   CreditCard,
   LogOut,
-  Sparkles,
 } from 'lucide-react'
 import useDialogState from '@/hooks/use-dialog-state'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/shadcn/ui/avatar'
@@ -25,6 +24,7 @@ import {
   useSidebar,
 } from '@/components/shadcn/ui/sidebar'
 import { SignOutDialog } from '@/components/shadcn/sign-out-dialog'
+import { useTranslation } from 'react-i18next'
 
 type NavUserProps = {
   user: {
@@ -35,6 +35,7 @@ type NavUserProps = {
 }
 
 export function NavUser({ user }: NavUserProps) {
+  const { t } = useTranslation()
   const { isMobile } = useSidebar()
   const [open, setOpen] = useDialogState()
 
@@ -79,13 +80,6 @@ export function NavUser({ user }: NavUserProps) {
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <DropdownMenuItem>
-                  <Sparkles />
-                  Upgrade to Pro
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
                 <DropdownMenuItem asChild>
                   <Link to='/admin/settings'>
                     <BadgeCheck />
@@ -111,7 +105,7 @@ export function NavUser({ user }: NavUserProps) {
                 onClick={() => setOpen(true)}
               >
                 <LogOut />
-                Sign out
+                {t('admin.ui.menu.sign-out')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
