@@ -56,7 +56,7 @@ Three rules keep them apart:
 
 Our `:focus-visible` treatment in `focus.css` is scoped to the prism surfaces on purpose; shadcn components ship their own focus rings and the two stack if it goes global.
 
-`components/shadcn/**` is vendored from [satnaing/shadcn-admin](https://github.com/satnaing/shadcn-admin) (MIT). Keep deviations from upstream commented with the reason, so a future re-sync can tell intent from drift. Known deviations: theme provider proxies our store, greys are zero-chroma, bulk-actions bar is localised and no longer scales on hover.
+`components/shadcn/**` is vendored from [satnaing/shadcn-admin](https://github.com/satnaing/shadcn-admin) (MIT). Keep deviations from upstream commented with the reason, so a future re-sync can tell intent from drift. Known deviations: theme provider proxies our store, greys are zero-chroma, bulk-actions bar is localised and no longer scales on hover, destructive menu items are red text rather than a red row.
 
 ## State: server vs client
 
