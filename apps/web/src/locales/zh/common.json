@@ -313,7 +313,8 @@
       "save": "保存",
       "show-password": "显示密码",
       "hide-password": "隐藏密码",
-      "continue": "继续"
+      "continue": "继续",
+      "select": "请选择"
     }
   }
 }

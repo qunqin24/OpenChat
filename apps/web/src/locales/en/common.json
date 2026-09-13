@@ -313,7 +313,8 @@
       "save": "Save",
       "show-password": "Show password",
       "hide-password": "Hide password",
-      "continue": "Continue"
+      "continue": "Continue",
+      "select": "Select"
     }
   }
 }
