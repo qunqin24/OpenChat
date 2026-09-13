@@ -4,6 +4,8 @@ import type { ApiError } from './types'
 export class OpenChatError extends Error {
   readonly status: number
   readonly code: string
+  /** Set when one input caused the failure, so a form can blame that field. */
+  readonly field?: string
   readonly details?: Record<string, unknown>
 
   constructor(status: number, body: ApiError) {
@@ -11,6 +13,7 @@ export class OpenChatError extends Error {
     this.name = 'OpenChatError'
     this.status = status
     this.code = body.code
+    this.field = body.field
     this.details = body.details
   }
 

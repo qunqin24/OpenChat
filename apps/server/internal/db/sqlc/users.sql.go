@@ -11,6 +11,100 @@ import (
 	"github.com/google/uuid"
 )
 
+const adminCreateUser = `-- name: AdminCreateUser :one
+INSERT INTO users (email, name, password_hash, role, disabled_at)
+VALUES ($1, $2, $3, $4,
+        CASE WHEN $5::boolean THEN now() ELSE NULL END)
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at
+`
+
+type AdminCreateUserParams struct {
+	Email        string   `json:"email"`
+	Name         string   `json:"name"`
+	PasswordHash string   `json:"password_hash"`
+	Role         UserRole `json:"role"`
+	Disabled     bool     `json:"disabled"`
+}
+
+// Registration derives the role from an empty table; here the caller picks it,
+// so the admin panel can create a second admin without a bootstrap dance.
+func (q *Queries) AdminCreateUser(ctx context.Context, arg AdminCreateUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, adminCreateUser,
+		arg.Email,
+		arg.Name,
+		arg.PasswordHash,
+		arg.Role,
+		arg.Disabled,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PasswordHash,
+		&i.Role,
+		&i.DisabledAt,
+		&i.LastSeenAt,
+	)
+	return i, err
+}
+
+const adminUpdateUser = `-- name: AdminUpdateUser :one
+UPDATE users
+SET name          = COALESCE($1::text, name),
+    email         = COALESCE($2::text, email),
+    password_hash = COALESCE($3::text, password_hash),
+    role          = COALESCE($4::user_role, role),
+    disabled_at   = CASE
+                        WHEN $5::boolean IS NULL THEN disabled_at
+                        WHEN $5::boolean THEN COALESCE(disabled_at, now())
+                        ELSE NULL
+                        END,
+    updated_at    = now()
+WHERE id = $6
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at
+`
+
+type AdminUpdateUserParams struct {
+	Name         *string   `json:"name"`
+	Email        *string   `json:"email"`
+	PasswordHash *string   `json:"password_hash"`
+	Role         *UserRole `json:"role"`
+	Disabled     *bool     `json:"disabled"`
+	ID           uuid.UUID `json:"id"`
+}
+
+// Every editable field in one statement: a partial edit is one round trip and
+// one row version, rather than a sequence that can half-apply.
+//
+// `disabled_at` keeps its original value when the account is already disabled,
+// so re-saving the form does not reset when access was cut off.
+func (q *Queries) AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, adminUpdateUser,
+		arg.Name,
+		arg.Email,
+		arg.PasswordHash,
+		arg.Role,
+		arg.Disabled,
+		arg.ID,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PasswordHash,
+		&i.Role,
+		&i.DisabledAt,
+		&i.LastSeenAt,
+	)
+	return i, err
+}
+
 const bulkSetUserDisabled = `-- name: BulkSetUserDisabled :execrows
 UPDATE users
 SET disabled_at = CASE WHEN $1::boolean THEN now() ELSE NULL END,
@@ -258,36 +352,6 @@ func (q *Queries) RegisterUser(ctx context.Context, arg RegisterUserParams) (Use
 	return i, err
 }
 
-const setUserDisabled = `-- name: SetUserDisabled :one
-UPDATE users
-SET disabled_at = CASE WHEN $1::boolean THEN now() ELSE NULL END,
-    updated_at  = now()
-WHERE id = $2
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at
-`
-
-type SetUserDisabledParams struct {
-	Disabled bool      `json:"disabled"`
-	ID       uuid.UUID `json:"id"`
-}
-
-func (q *Queries) SetUserDisabled(ctx context.Context, arg SetUserDisabledParams) (User, error) {
-	row := q.db.QueryRow(ctx, setUserDisabled, arg.Disabled, arg.ID)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.Email,
-		&i.Name,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.PasswordHash,
-		&i.Role,
-		&i.DisabledAt,
-		&i.LastSeenAt,
-	)
-	return i, err
-}
-
 const touchUserSeen = `-- name: TouchUserSeen :exec
 UPDATE users
 SET last_seen_at = now()
@@ -297,34 +361,4 @@ WHERE id = $1
 func (q *Queries) TouchUserSeen(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, touchUserSeen, id)
 	return err
-}
-
-const updateUserRole = `-- name: UpdateUserRole :one
-UPDATE users
-SET role       = $1,
-    updated_at = now()
-WHERE id = $2
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at
-`
-
-type UpdateUserRoleParams struct {
-	Role UserRole  `json:"role"`
-	ID   uuid.UUID `json:"id"`
-}
-
-func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error) {
-	row := q.db.QueryRow(ctx, updateUserRole, arg.Role, arg.ID)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.Email,
-		&i.Name,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.PasswordHash,
-		&i.Role,
-		&i.DisabledAt,
-		&i.LastSeenAt,
-	)
-	return i, err
 }

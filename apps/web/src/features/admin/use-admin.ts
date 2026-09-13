@@ -1,4 +1,8 @@
-import type { BulkUpdateUsersRequest } from '@openchat/api-client'
+import type {
+  BulkUpdateUsersRequest,
+  CreateUserRequest,
+  UpdateUserRequest,
+} from '@openchat/api-client'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/lib/api'
@@ -53,6 +57,40 @@ export function useBulkUpdateUsers() {
   return useMutation({
     mutationFn: async (body: BulkUpdateUsersRequest) =>
       unwrap(await api.POST('/admin/users/bulk', { body })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.all })
+    },
+  })
+}
+
+/**
+ * The single-row counterpart to the bulk endpoint. Refuses the same two
+ * changes — removing your own admin access, or the last enabled admin — with a
+ * 409, which the caller turns into a toast.
+ */
+export function useUpdateUser() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ userId, ...body }: UpdateUserRequest & { userId: string }) =>
+      unwrap(await api.PATCH('/admin/users/{userId}', { params: { path: { userId } }, body })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.all })
+    },
+  })
+}
+
+/**
+ * Creating an account here does not sign anyone in — unlike registration, the
+ * caller is an admin acting on somebody else's behalf, so no cookie changes
+ * hands.
+ */
+export function useCreateUser() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (body: CreateUserRequest) =>
+      unwrap(await api.POST('/admin/users', { body })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.all })
     },

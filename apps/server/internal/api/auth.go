@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/qunqin/openchat/apps/server/internal/auth"
@@ -81,8 +80,7 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 		PasswordHash: hash,
 	})
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation {
+		if isUniqueViolation(err) {
 			httpx.Fail(w, r, httpx.NewFieldError("email", "email_taken", "that email is already registered"))
 			return
 		}

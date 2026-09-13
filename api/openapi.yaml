@@ -145,6 +145,27 @@ paths:
               schema: { $ref: "#/components/schemas/UserPage" }
         default: { $ref: "#/components/responses/Error" }
 
+    post:
+      tags: [admin]
+      summary: Create an account
+      description: |
+        The account is usable immediately; no invitation or verification step
+        exists. Unlike registration, the role is chosen by the caller rather
+        than derived from whether the table is empty.
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateUserRequest" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        default: { $ref: "#/components/responses/Error" }
+
   /admin/users/bulk:
     post:
       tags: [admin]
@@ -561,10 +582,26 @@ components:
         email: { type: string, format: email }
         password: { type: string }
 
+    CreateUserRequest:
+      type: object
+      required: [email, name, password, role]
+      properties:
+        email: { type: string, format: email }
+        name: { type: string, minLength: 1, maxLength: 80 }
+        password: { type: string, minLength: 8, maxLength: 200 }
+        role: { $ref: "#/components/schemas/UserRole" }
+        disabled: { type: boolean, default: false }
+
     UpdateUserRequest:
       type: object
-      description: Only the fields present are changed.
+      description: |
+        Only the fields present are changed. Setting `password` signs the
+        account out everywhere — the old sessions outlive the old credential
+        otherwise.
       properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8, maxLength: 200 }
         role: { $ref: "#/components/schemas/UserRole" }
         disabled: { type: boolean }
 

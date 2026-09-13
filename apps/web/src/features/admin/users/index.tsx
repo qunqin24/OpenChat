@@ -6,6 +6,7 @@ import { Main } from '@/components/shadcn/layout/main'
 import { ProfileDropdown } from '@/components/shadcn/profile-dropdown'
 import { Search } from '@/components/shadcn/search'
 import { ThemeSwitch } from '@/components/shadcn/theme-switch'
+import { UsersPrimaryButtons } from './components/users-primary-buttons'
 import { UsersTable } from './components/users-table'
 
 export function Users() {
@@ -26,6 +27,7 @@ export function Users() {
             <h2 className="text-2xl font-bold tracking-tight">{t('admin.nav.users')}</h2>
             <p className="text-muted-foreground">{t('admin.users.subtitle')}</p>
           </div>
+          <UsersPrimaryButtons />
         </div>
         <UsersTable />
       </Main>

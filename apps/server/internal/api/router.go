@@ -76,6 +76,7 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 
 				r.Get("/admin/stats", wrapper.GetAdminStats)
 				r.Get("/admin/users", wrapper.ListUsers)
+				r.Post("/admin/users", wrapper.CreateUser)
 				r.Post("/admin/users/bulk", wrapper.BulkUpdateUsers)
 				r.Patch("/admin/users/{userId}", wrapper.UpdateUser)
 			})

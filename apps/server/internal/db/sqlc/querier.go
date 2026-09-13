@@ -11,6 +11,15 @@ import (
 )
 
 type Querier interface {
+	// Registration derives the role from an empty table; here the caller picks it,
+	// so the admin panel can create a second admin without a bootstrap dance.
+	AdminCreateUser(ctx context.Context, arg AdminCreateUserParams) (User, error)
+	// Every editable field in one statement: a partial edit is one round trip and
+	// one row version, rather than a sequence that can half-apply.
+	//
+	// `disabled_at` keeps its original value when the account is already disabled,
+	// so re-saving the form does not reset when access was cut off.
+	AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams) (User, error)
 	AppendMessageContent(ctx context.Context, arg AppendMessageContentParams) (Message, error)
 	AttachToMessage(ctx context.Context, arg AttachToMessageParams) error
 	BulkSetUserDisabled(ctx context.Context, arg BulkSetUserDisabledParams) (int64, error)
@@ -52,13 +61,11 @@ type Querier interface {
 	// inside the INSERT so two concurrent registrations cannot both see an empty
 	// table and both claim it.
 	RegisterUser(ctx context.Context, arg RegisterUserParams) (User, error)
-	SetUserDisabled(ctx context.Context, arg SetUserDisabledParams) (User, error)
 	SoftDeleteConversation(ctx context.Context, arg SoftDeleteConversationParams) (int64, error)
 	TouchConversation(ctx context.Context, id uuid.UUID) error
 	TouchSession(ctx context.Context, id uuid.UUID) error
 	TouchUserSeen(ctx context.Context, id uuid.UUID) error
 	UpdateConversationTitle(ctx context.Context, arg UpdateConversationTitleParams) (Conversation, error)
-	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error)
 }
 
 var _ Querier = (*Queries)(nil)

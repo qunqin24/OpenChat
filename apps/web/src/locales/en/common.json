@@ -180,7 +180,30 @@
       "you": "You",
       "status": "Status",
       "enabled": "Enabled",
-      "subtitle": "Manage account roles and access."
+      "subtitle": "Manage account roles and access.",
+      "edit": "Edit account",
+      "updated": "Saved",
+      "enabled-hint": "A disabled account is signed out at once, and can be enabled again later.",
+      "enabled-done": "Account enabled",
+      "disabled-done": "Account disabled",
+      "disable-confirm": "This ends every session {{name}} has open and blocks sign-in. You can enable the account again at any time.",
+      "create": "Add user",
+      "created": "Account created",
+      "edit-hint": "Changes take effect immediately.",
+      "create-hint": "The account can sign in right away — pass the password on yourself.",
+      "form": {
+        "name": "Name",
+        "email": "Email",
+        "password": "Password",
+        "confirm-password": "Confirm password",
+        "password-keep": "Leave blank to keep it",
+        "name-required": "A name is required",
+        "email-invalid": "Enter a valid email address",
+        "email-taken": "That email is already registered",
+        "password-required": "Set a password",
+        "password-short": "At least {{n}} characters",
+        "password-mismatch": "The passwords do not match"
+      }
     },
     "bulk": {
       "announce": "{{n}} {{entity}} selected. Bulk actions are available.",
@@ -284,7 +307,11 @@
         "sidebar-hint": "Choose between inset, floating, or standard sidebar layout",
         "layout-hint": "Choose between default expanded, compact icon-only, or full layout mode",
         "direction-hint": "Choose between left-to-right or right-to-left site direction"
-      }
+      },
+      "cancel": "Cancel",
+      "save": "Save",
+      "show-password": "Show password",
+      "hide-password": "Hide password"
     }
   }
 }

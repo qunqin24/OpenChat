@@ -116,7 +116,13 @@ export interface paths {
         /** List accounts */
         get: operations["listUsers"];
         put?: never;
-        post?: never;
+        /**
+         * Create an account
+         * @description The account is usable immediately; no invitation or verification step
+         *     exists. Unlike registration, the role is chosen by the caller rather
+         *     than derived from whether the table is empty.
+         */
+        post: operations["createUser"];
         delete?: never;
         options?: never;
         head?: never;
@@ -411,8 +417,25 @@ export interface components {
             email: string;
             password: string;
         };
-        /** @description Only the fields present are changed. */
+        CreateUserRequest: {
+            /** Format: email */
+            email: string;
+            name: string;
+            password: string;
+            role: components["schemas"]["UserRole"];
+            /** @default false */
+            disabled: boolean;
+        };
+        /**
+         * @description Only the fields present are changed. Setting `password` signs the
+         *     account out everywhere — the old sessions outlive the old credential
+         *     otherwise.
+         */
         UpdateUserRequest: {
+            name?: string;
+            /** Format: email */
+            email?: string;
+            password?: string;
             role?: components["schemas"]["UserRole"];
             disabled?: boolean;
         };
@@ -654,6 +677,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserPage"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateUserRequest"];
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
                 };
             };
             default: components["responses"]["Error"];

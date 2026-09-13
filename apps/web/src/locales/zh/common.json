@@ -180,7 +180,30 @@
       "you": "你自己",
       "status": "状态",
       "enabled": "启用中",
-      "subtitle": "管理账号角色与启用状态。"
+      "subtitle": "管理账号角色与启用状态。",
+      "edit": "编辑账号",
+      "updated": "已保存",
+      "enabled-hint": "停用后该账号会立即退出登录，可随时重新启用。",
+      "enabled-done": "账号已启用",
+      "disabled-done": "账号已停用",
+      "disable-confirm": "将立即结束 {{name}} 的所有登录会话，该账号无法再登录。可随时重新启用。",
+      "create": "新建用户",
+      "created": "账号已创建",
+      "edit-hint": "修改后立即生效。",
+      "create-hint": "账号创建后即可登录，密码请另行告知对方。",
+      "form": {
+        "name": "昵称",
+        "email": "邮箱",
+        "password": "密码",
+        "confirm-password": "确认密码",
+        "password-keep": "留空表示不修改",
+        "name-required": "请填写昵称",
+        "email-invalid": "请填写有效的邮箱地址",
+        "email-taken": "该邮箱已被注册",
+        "password-required": "请设置密码",
+        "password-short": "密码至少 {{n}} 位",
+        "password-mismatch": "两次输入的密码不一致"
+      }
     },
     "bulk": {
       "announce": "已选中 {{n}} 个{{entity}}，可使用批量操作。",
@@ -284,7 +307,11 @@
         "sidebar-hint": "可选内嵌、浮动或标准侧边栏",
         "layout-hint": "可选默认展开、紧凑图标或全宽布局",
         "direction-hint": "可选从左到右或从右到左"
-      }
+      },
+      "cancel": "取消",
+      "save": "保存",
+      "show-password": "显示密码",
+      "hide-password": "隐藏密码"
     }
   }
 }

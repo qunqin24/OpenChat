@@ -8,6 +8,7 @@ import { LongText } from '@/components/shadcn/long-text'
 import { Badge } from '@/components/shadcn/ui/badge'
 import { Checkbox } from '@/components/shadcn/ui/checkbox'
 import { DataTableColumnHeader } from '@/components/shadcn/data-table'
+import { UsersRowActions } from './users-row-actions'
 
 /**
  * Built from `t` rather than calling useTranslation in each cell, so the column
@@ -111,6 +112,15 @@ export function usersColumns(t: TFunction<'common'>, currentUserId?: string): Co
         </span>
       ),
       enableSorting: false,
+    },
+    {
+      id: 'actions',
+      cell: ({ row }) => (
+        <UsersRowActions user={row.original} isSelf={row.original.id === currentUserId} />
+      ),
+      meta: { className: 'w-12 text-end' },
+      enableSorting: false,
+      enableHiding: false,
     },
   ]
 }

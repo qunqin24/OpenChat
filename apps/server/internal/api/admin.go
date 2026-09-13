@@ -105,15 +105,102 @@ func (s *Server) ListUsers(w http.ResponseWriter, r *http.Request, params ListUs
 	})
 }
 
+// CreateUser adds an account from the admin panel.
+//
+// Registration is the other way in, and differs in two ways that matter: the
+// role is chosen here rather than derived from an empty table, and no session
+// is issued — the admin is creating someone else's account, not signing into
+// it.
+func (s *Server) CreateUser(w http.ResponseWriter, r *http.Request) {
+	var body CreateUserRequest
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+
+	email := strings.TrimSpace(string(body.Email))
+	name := strings.TrimSpace(body.Name)
+
+	switch {
+	case email == "":
+		httpx.Fail(w, r, httpx.NewFieldError("email", "email_required", "email is required"))
+		return
+	case name == "":
+		httpx.Fail(w, r, httpx.NewFieldError("name", "name_required", "name is required"))
+		return
+	case len(body.Password) < minPasswordLength:
+		httpx.Fail(w, r, httpx.NewFieldError("password", "password_short", "password is too short"))
+		return
+	}
+
+	hash, err := auth.HashPassword(body.Password)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+
+	user, err := s.q.AdminCreateUser(r.Context(), sqlc.AdminCreateUserParams{
+		Email:        email,
+		Name:         name,
+		PasswordHash: hash,
+		Role:         sqlc.UserRole(body.Role),
+		Disabled:     body.Disabled != nil && *body.Disabled,
+	})
+	if err != nil {
+		if isUniqueViolation(err) {
+			httpx.Fail(w, r, httpx.NewFieldError("email", "email_taken", "that email is already registered"))
+			return
+		}
+		httpx.Fail(w, r, err)
+		return
+	}
+
+	httpx.JSON(w, http.StatusCreated, toUser(user))
+}
+
 func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, userId openapi_types.UUID) {
 	var body UpdateUserRequest
 	if err := httpx.DecodeJSON(r, &body); err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
-	if body.Role == nil && body.Disabled == nil {
+	if body.Role == nil && body.Disabled == nil && body.Name == nil &&
+		body.Email == nil && body.Password == nil {
 		httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "nothing_to_update", "no changes were given"))
 		return
+	}
+
+	var name, email, passwordHash *string
+
+	if body.Name != nil {
+		trimmed := strings.TrimSpace(*body.Name)
+		if trimmed == "" {
+			httpx.Fail(w, r, httpx.NewFieldError("name", "name_required", "name is required"))
+			return
+		}
+		name = &trimmed
+	}
+
+	if body.Email != nil {
+		trimmed := strings.TrimSpace(string(*body.Email))
+		if trimmed == "" {
+			httpx.Fail(w, r, httpx.NewFieldError("email", "email_required", "email is required"))
+			return
+		}
+		email = &trimmed
+	}
+
+	if body.Password != nil {
+		if len(*body.Password) < minPasswordLength {
+			httpx.Fail(w, r, httpx.NewFieldError("password", "password_short", "password is too short"))
+			return
+		}
+		hash, err := auth.HashPassword(*body.Password)
+		if err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+		passwordHash = &hash
 	}
 
 	actor := auth.MustUser(r.Context())
@@ -151,35 +238,40 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, userId opena
 		}
 	}
 
-	updated := target
+	var role *sqlc.UserRole
 	if body.Role != nil {
-		updated, err = s.q.UpdateUserRole(r.Context(), sqlc.UpdateUserRoleParams{
-			ID:   userId,
-			Role: sqlc.UserRole(*body.Role),
-		})
-		if err != nil {
-			httpx.Fail(w, r, dbErr(err))
-			return
-		}
+		converted := sqlc.UserRole(*body.Role)
+		role = &converted
 	}
 
-	if body.Disabled != nil {
-		updated, err = s.q.SetUserDisabled(r.Context(), sqlc.SetUserDisabledParams{
-			ID:       userId,
-			Disabled: *body.Disabled,
-		})
-		if err != nil {
-			httpx.Fail(w, r, dbErr(err))
+	updated, err := s.q.AdminUpdateUser(r.Context(), sqlc.AdminUpdateUserParams{
+		ID:           userId,
+		Name:         name,
+		Email:        email,
+		PasswordHash: passwordHash,
+		Role:         role,
+		Disabled:     body.Disabled,
+	})
+	if err != nil {
+		if isUniqueViolation(err) {
+			httpx.Fail(w, r, httpx.NewFieldError("email", "email_taken", "that email is already registered"))
 			return
 		}
+		httpx.Fail(w, r, dbErr(err))
+		return
+	}
 
-		// Disabling has to cut the person off now, not whenever their cookie
-		// expires. The session lookup already excludes disabled accounts, but
-		// dropping the rows also frees them and makes the effect visible.
-		if *body.Disabled {
-			if err := s.q.DeleteUserSessions(r.Context(), userId); err != nil {
-				logWarn(r, "revoke sessions for disabled user", err)
-			}
+	// Two changes have to cut the person off now rather than whenever their
+	// cookie expires: being disabled, and having their password replaced. The
+	// session lookup already excludes disabled accounts, but a rotated
+	// credential is only meaningful if the sessions it issued go with it.
+	//
+	// An admin who changes their own password is signed out by this too, which
+	// is the point — the browser holding the old session cannot be assumed to
+	// be theirs.
+	if (body.Disabled != nil && *body.Disabled) || passwordHash != nil {
+		if err := s.q.DeleteUserSessions(r.Context(), userId); err != nil {
+			logWarn(r, "revoke sessions after account change", err)
 		}
 	}
 

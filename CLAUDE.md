@@ -77,6 +77,7 @@ Consequences that shape the code:
 - The API client sets `credentials: 'include'` (`lib/api.ts`). Without it the browser silently drops the cookie.
 - `features/auth/` holds the seam: an `AuthApi` interface selected on one line in `index.ts`.
 - The first account registered becomes the admin, decided inside the INSERT so concurrent registrations cannot both claim it. Admins cannot remove their own access, and the last enabled admin cannot be demoted or disabled.
+- Admins can also create accounts (`POST /admin/users`), which differs from registration in picking the role explicitly and issuing no session. Disabling an account or replacing its password drops every session it has — a rotated credential means nothing if the sessions it issued outlive it, including the admin's own.
 
 ## Backend conventions
 
@@ -94,7 +95,11 @@ The chat provider is a two-method interface (`internal/chat`). `Echo` ships by d
 
 **Routing** is file-based under `src/routes/`. Pathless layouts carry the guards: `_authed.tsx` requires a session, `admin.tsx` additionally requires the admin role. Both run in `beforeLoad`, so a signed-out visitor never sees a flash of the shell. Guards use `context.queryClient.ensureQueryData`, so navigating between protected routes costs no extra request.
 
-**Tables** run in manual mode (`manualPagination`, `manualFiltering`) — paging and search belong to the server. `getRowId` must be the account id so a selection survives a re-fetch.
+**Tables** run in manual mode (`manualPagination`, `manualFiltering`) — paging and search belong to the server. `getRowId` must be the account id so a selection survives a re-fetch. A column's translated name goes on `meta.title` as well as in its header renderer; the column-visibility menu has no header to read and falls back to the raw column id.
+
+**Forms** follow whichever half of the app they are in. The auth pages validate by hand (`components/auth/validation.ts`, validators returning locale keys) because they predate the admin panel and have two fields each. The admin panel uses react-hook-form + zod through the vendored `ui/form.tsx`, as upstream does. Build the zod schema inside the component — the messages are translated, and in `users-action-dialog.tsx` the password rule also depends on whether the dialog is creating or editing. Use `useWatch` rather than `form.watch()`; the React compiler refuses to memoise around the latter.
+
+Field-level API errors reach the form through `OpenChatError.field`, which the contract sets for exactly one input (a duplicate email, a short password). Anything else is a banner or a toast.
 
 **i18n**: every user-facing string goes through `t()`, including in vendored components — locales are `zh` and `en`. Keys are typed against the locale files (`types/i18next.d.ts`), so a renamed key breaks the build. Vendoring a new shadcn component means translating its strings before using it; upstream ships hardcoded English, and `sidebar-data.ts` had to become a `useSidebarData()` hook because `t` is only available inside a component.
 
@@ -102,4 +107,4 @@ The chat provider is a two-method interface (`internal/chat`). `Echo` ships by d
 
 ## Scoped out so far
 
-No model provider catalogue (the ported UI expects one: per-provider keys, model lists, reasoning effort, web-search toggles). No attachments UI, tool calls, or reasoning blocks. No user-deletion endpoint — disabling is the reversible equivalent, and deleting a user would cascade away their conversations.
+No account deletion — disabling is the reversible equivalent, and deleting a user would cascade away their conversations. No invitation or email verification either: an admin creating an account sets the password and passes it on out of band. No model provider catalogue (the ported UI expects one: per-provider keys, model lists, reasoning effort, web-search toggles). No attachments UI, tool calls, or reasoning blocks.

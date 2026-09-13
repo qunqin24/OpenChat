@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/qunqin/openchat/apps/server/internal/auth"
@@ -60,6 +61,14 @@ func dbErr(err error) error {
 		return httpx.ErrNotFound
 	}
 	return err
+}
+
+// isUniqueViolation reports whether the error is Postgres rejecting a duplicate
+// key — the only way an email collision surfaces, since checking first would
+// still race with a concurrent insert.
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == uniqueViolation
 }
 
 // conversationExists returns httpx.ErrNotFound when the id is unknown, deleted,
