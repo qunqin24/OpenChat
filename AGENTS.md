@@ -40,7 +40,20 @@ TypeScript 全仓库锁定在 5.9.3。`openapi-typescript` 需要 JS 版编译�
 
 ## 两套设计系统，有意为之
 
-**这是本仓库最大的 bug 来源。** 聊天界面和后台面板**不**共用一套视觉语言：
+**这是本仓库最大的 bug 来源。** 聊天界面（AI Chatbot）和后台管理面板是**两套完全不同的样式系统，不要混用**：
+
+- 聊天/登录界面的组件**不要** import `components/shadcn/**`。
+- 后台面板的组件**不要**用 `--n-*` 令牌、`n-` 前缀的类名或 `.prism-next`。
+- 需要在两边都用的东西，写成不依赖任何一套令牌的组件（`lib/`、`hooks/` 里那些），或者干脆各写一份——**照搬一个组件比让它同时伺候两套令牌便宜得多**。
+
+这条边界目前是干净的，任何时候都可以用一行命令验证（应当无输出）：
+
+```bash
+grep -rn "components/shadcn" apps/web/src/components/next apps/web/src/components/auth
+grep -rn -- "--n-\|prism-next" apps/web/src/features/admin apps/web/src/components/shadcn
+```
+
+两套的分工如下：
 
 | | 聊天 / 登录 | 后台面板 |
 | --- | --- | --- |
