@@ -9,13 +9,13 @@ import { z } from 'zod'
 import { PasswordInput } from '@/components/shadcn/password-input'
 import { Button } from '@/components/shadcn/ui/button'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/shadcn/ui/dialog'
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/shadcn/ui/sheet'
 import {
   Form,
   FormControl,
@@ -29,7 +29,7 @@ import { Input } from '@/components/shadcn/ui/input'
 import { Switch } from '@/components/shadcn/ui/switch'
 import { useCreateChannel, useUpdateChannel } from '@/features/admin/use-admin'
 
-type ChannelsActionDialogProps = {
+type ChannelsActionPanelProps = {
   /** Absent in create mode. */
   channel?: Channel
   open: boolean
@@ -46,7 +46,7 @@ type ChannelsActionDialogProps = {
  * from the PATCH body: sending `''` would clear the key, which would turn
  * renaming a channel into silently breaking it.
  */
-export function ChannelsActionDialog({ channel, open, onOpenChange }: ChannelsActionDialogProps) {
+export function ChannelsActionPanel({ channel, open, onOpenChange }: ChannelsActionPanelProps) {
   const { t } = useTranslation()
   const createChannel = useCreateChannel()
   const updateChannel = useUpdateChannel()
@@ -129,17 +129,17 @@ export function ChannelsActionDialog({ channel, open, onOpenChange }: ChannelsAc
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader className="text-start">
-          <DialogTitle>{t(isEdit ? 'admin.channels.edit' : 'admin.channels.create')}</DialogTitle>
-          <DialogDescription>{t('admin.channels.subtitle')}</DialogDescription>
-        </DialogHeader>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="w-full sm:max-w-lg">
+        <SheetHeader className="text-start">
+          <SheetTitle>{t(isEdit ? 'admin.channels.edit' : 'admin.channels.create')}</SheetTitle>
+          <SheetDescription>{t('admin.channels.subtitle')}</SheetDescription>
+        </SheetHeader>
 
         <Form {...form}>
           <form
             id="channels-action-form"
-            className="space-y-4 p-0.5"
+            className="flex-1 space-y-4 overflow-y-auto px-4 py-1"
             onSubmit={form.handleSubmit((values) => void submit(values))}
           >
             <FormField
@@ -261,7 +261,7 @@ export function ChannelsActionDialog({ channel, open, onOpenChange }: ChannelsAc
           </form>
         </Form>
 
-        <DialogFooter>
+        <SheetFooter className="flex-row justify-end">
           <Button variant="outline" disabled={pending} onClick={() => onOpenChange(false)}>
             {t('admin.ui.cancel')}
           </Button>
@@ -274,8 +274,8 @@ export function ChannelsActionDialog({ channel, open, onOpenChange }: ChannelsAc
           >
             {t('admin.ui.save')}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   )
 }

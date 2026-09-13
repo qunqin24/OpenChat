@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/shadcn/ui/button'
-import { ChannelsActionDialog } from './channels-action-dialog'
+import { ChannelsActionPanel } from './channels-action-panel'
 
 export function ChannelsPrimaryButtons() {
   const { t } = useTranslation()
@@ -18,7 +18,7 @@ export function ChannelsPrimaryButtons() {
 
       {/* Mounted only while open, so every new channel starts from a blank
           form — including the key field, which has nothing to restore. */}
-      {creating && <ChannelsActionDialog open onOpenChange={setCreating} />}
+      {creating && <ChannelsActionPanel open onOpenChange={setCreating} />}
     </>
   )
 }

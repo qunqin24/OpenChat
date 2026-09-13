@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/shadcn/ui/dropdown-menu'
 import { useDeleteChannel } from '@/features/admin/use-admin'
-import { ChannelsActionDialog } from './channels-action-dialog'
+import { ChannelsActionPanel } from './channels-action-panel'
 
 type ChannelsRowActionsProps = {
   channel: Channel
@@ -77,7 +77,7 @@ export function ChannelsRowActions({ channel }: ChannelsRowActionsProps) {
 
       {/* Mounted only while open, so the form starts from the row as it
           currently stands rather than from whatever it held last time. */}
-      {editing && <ChannelsActionDialog channel={channel} open onOpenChange={setEditing} />}
+      {editing && <ChannelsActionPanel channel={channel} open onOpenChange={setEditing} />}
 
       <ConfirmDialog
         open={confirming}
