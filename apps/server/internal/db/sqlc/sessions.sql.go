@@ -59,6 +59,26 @@ func (q *Queries) DeleteExpiredSessions(ctx context.Context) (int64, error) {
 	return result.RowsAffected(), nil
 }
 
+const deleteOtherUserSessions = `-- name: DeleteOtherUserSessions :exec
+DELETE
+FROM sessions
+WHERE user_id = $1
+  AND id <> $2
+`
+
+type DeleteOtherUserSessionsParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	KeepID uuid.UUID `json:"keep_id"`
+}
+
+// Used when someone changes their own password: every session issued under the
+// old credential goes, except the one asking, so the change does not sign the
+// person out of the tab they are standing in.
+func (q *Queries) DeleteOtherUserSessions(ctx context.Context, arg DeleteOtherUserSessionsParams) error {
+	_, err := q.db.Exec(ctx, deleteOtherUserSessions, arg.UserID, arg.KeepID)
+	return err
+}
+
 const deleteSession = `-- name: DeleteSession :exec
 DELETE
 FROM sessions

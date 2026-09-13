@@ -14,6 +14,17 @@ export interface RegisterInput {
   password: string
 }
 
+/** Only the fields present are changed. */
+export interface UpdateProfileInput {
+  name?: string
+  email?: string
+}
+
+export interface ChangePasswordInput {
+  currentPassword: string
+  newPassword: string
+}
+
 /**
  * Every auth call goes through this interface.
  *
@@ -27,6 +38,10 @@ export interface AuthApi {
   login(input: LoginInput): Promise<SessionUser>
   register(input: RegisterInput): Promise<SessionUser>
   logout(): Promise<void>
+  /** Self-service: cannot reach role or enabled state, by contract. */
+  updateProfile(input: UpdateProfileInput): Promise<SessionUser>
+  /** Requires the current password; other sessions are revoked, this one is not. */
+  changePassword(input: ChangePasswordInput): Promise<void>
 }
 
 /**
@@ -43,11 +58,13 @@ export type AuthErrorKey =
   | 'auth.error.password-required'
   | 'auth.error.password-short'
   | 'auth.error.account-disabled'
+  | 'auth.error.password-wrong'
+  | 'auth.error.nothing-to-update'
   | 'auth.error.unknown'
 
 /** Field-level failures the forms surface next to the offending input. */
 export class AuthFieldError extends Error {
-  readonly field: 'email' | 'name' | 'password'
+  readonly field: 'email' | 'name' | 'password' | 'currentPassword' | 'newPassword'
   readonly key: AuthErrorKey
 
   constructor(field: AuthFieldError['field'], key: AuthErrorKey) {

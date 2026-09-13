@@ -130,7 +130,9 @@
       "password-required": "Enter your password",
       "password-short": "Use at least 8 characters",
       "unknown": "Something went wrong. Try again.",
-      "account-disabled": "This account has been disabled"
+      "account-disabled": "This account has been disabled",
+      "password-wrong": "That is not your current password",
+      "nothing-to-update": "Nothing was changed"
     }
   },
   "admin": {
@@ -265,10 +267,6 @@
         "general": "General",
         "other": "Other"
       },
-      "coming-soon": {
-        "title": "Coming soon",
-        "description": "This page has not been built yet."
-      },
       "teams": {
         "label": "Teams",
         "add": "Add team"
@@ -315,6 +313,37 @@
       "hide-password": "Hide password",
       "continue": "Continue",
       "select": "Select"
+    },
+    "settings": {
+      "subtitle": "Manage your account and appearance preferences.",
+      "save": "Save",
+      "saved": "Saved",
+      "profile": {
+        "title": "Profile",
+        "desc": "This is how others see you in the app.",
+        "name-hint": "The name shown in conversations and the admin panel.",
+        "email-hint": "Also the address you sign in with."
+      },
+      "account": {
+        "title": "Account",
+        "desc": "Change your sign-in password.",
+        "current-password": "Current password",
+        "new-password": "New password",
+        "change": "Change password",
+        "changed": "Password changed",
+        "revoke-hint": "Sessions on your other devices are signed out; this one is not."
+      },
+      "appearance": {
+        "title": "Appearance",
+        "desc": "Customise the language, font and theme of the interface.",
+        "language": "Language",
+        "language-hint": "Applies to this browser only.",
+        "font": "Font",
+        "font-hint": "The font used across the admin panel.",
+        "theme-hint": "Select the colour scheme for the admin panel.",
+        "lang-zh": "简体中文",
+        "lang-en": "English"
+      }
     }
   }
 }

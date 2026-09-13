@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { authApi, type LoginInput, type RegisterInput, type SessionUser } from './index'
+import {
+  authApi,
+  type ChangePasswordInput,
+  type LoginInput,
+  type RegisterInput,
+  type SessionUser,
+  type UpdateProfileInput,
+} from './index'
 
 /**
  * The session is server state, not client state: with an HttpOnly cookie the
@@ -49,5 +56,24 @@ export function useLogout() {
       // Everything cached was scoped to the person signing out.
       queryClient.clear()
     },
+  })
+}
+
+export function useUpdateProfile() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (input: UpdateProfileInput) => authApi.updateProfile(input),
+    onSuccess: (user: SessionUser) => {
+      queryClient.setQueryData(sessionQueryOptions.queryKey, user)
+      // The admin user list shows the same row under a different key.
+      void queryClient.invalidateQueries({ queryKey: ['admin'] })
+    },
+  })
+}
+
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (input: ChangePasswordInput) => authApi.changePassword(input),
   })
 }

@@ -19,6 +19,9 @@ import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as DevLoadingRouteImport } from './routes/dev.loading'
 import { Route as AuthedChatConversationIdRouteImport } from './routes/_authed.chat.$conversationId'
+import { Route as AdminSettingsIndexRouteImport } from './routes/admin.settings.index'
+import { Route as AdminSettingsAccountRouteImport } from './routes/admin.settings.account'
+import { Route as AdminSettingsAppearanceRouteImport } from './routes/admin.settings.appearance'
 
 const AuthedRoute = AuthedRouteImport.update({
   id: '/_authed',
@@ -70,27 +73,47 @@ const AuthedChatConversationIdRoute =
     path: '/chat/$conversationId',
     getParentRoute: () => AuthedRoute,
   } as any)
+const AdminSettingsIndexRoute = AdminSettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminSettingsRoute,
+} as any)
+const AdminSettingsAccountRoute = AdminSettingsAccountRouteImport.update({
+  id: '/account',
+  path: '/account',
+  getParentRoute: () => AdminSettingsRoute,
+} as any)
+const AdminSettingsAppearanceRoute = AdminSettingsAppearanceRouteImport.update({
+  id: '/appearance',
+  path: '/appearance',
+  getParentRoute: () => AdminSettingsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthedIndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
-  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/settings': typeof AdminSettingsRouteWithChildren
   '/admin/users': typeof AdminUsersRoute
   '/dev/loading': typeof DevLoadingRoute
   '/admin/': typeof AdminIndexRoute
   '/chat/$conversationId': typeof AuthedChatConversationIdRoute
+  '/admin/settings/account': typeof AdminSettingsAccountRoute
+  '/admin/settings/appearance': typeof AdminSettingsAppearanceRoute
+  '/admin/settings/': typeof AdminSettingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
-  '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
   '/dev/loading': typeof DevLoadingRoute
   '/': typeof AuthedIndexRoute
   '/admin': typeof AdminIndexRoute
   '/chat/$conversationId': typeof AuthedChatConversationIdRoute
+  '/admin/settings/account': typeof AdminSettingsAccountRoute
+  '/admin/settings/appearance': typeof AdminSettingsAppearanceRoute
+  '/admin/settings': typeof AdminSettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -98,12 +121,15 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
-  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/settings': typeof AdminSettingsRouteWithChildren
   '/admin/users': typeof AdminUsersRoute
   '/dev/loading': typeof DevLoadingRoute
   '/_authed/': typeof AuthedIndexRoute
   '/admin/': typeof AdminIndexRoute
   '/_authed/chat/$conversationId': typeof AuthedChatConversationIdRoute
+  '/admin/settings/account': typeof AdminSettingsAccountRoute
+  '/admin/settings/appearance': typeof AdminSettingsAppearanceRoute
+  '/admin/settings/': typeof AdminSettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -117,16 +143,21 @@ export interface FileRouteTypes {
     | '/dev/loading'
     | '/admin/'
     | '/chat/$conversationId'
+    | '/admin/settings/account'
+    | '/admin/settings/appearance'
+    | '/admin/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
     | '/register'
-    | '/admin/settings'
     | '/admin/users'
     | '/dev/loading'
     | '/'
     | '/admin'
     | '/chat/$conversationId'
+    | '/admin/settings/account'
+    | '/admin/settings/appearance'
+    | '/admin/settings'
   id:
     | '__root__'
     | '/_authed'
@@ -139,6 +170,9 @@ export interface FileRouteTypes {
     | '/_authed/'
     | '/admin/'
     | '/_authed/chat/$conversationId'
+    | '/admin/settings/account'
+    | '/admin/settings/appearance'
+    | '/admin/settings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -221,6 +255,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedChatConversationIdRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/admin/settings/': {
+      id: '/admin/settings/'
+      path: '/'
+      fullPath: '/admin/settings/'
+      preLoaderRoute: typeof AdminSettingsIndexRouteImport
+      parentRoute: typeof AdminSettingsRoute
+    }
+    '/admin/settings/account': {
+      id: '/admin/settings/account'
+      path: '/account'
+      fullPath: '/admin/settings/account'
+      preLoaderRoute: typeof AdminSettingsAccountRouteImport
+      parentRoute: typeof AdminSettingsRoute
+    }
+    '/admin/settings/appearance': {
+      id: '/admin/settings/appearance'
+      path: '/appearance'
+      fullPath: '/admin/settings/appearance'
+      preLoaderRoute: typeof AdminSettingsAppearanceRouteImport
+      parentRoute: typeof AdminSettingsRoute
+    }
   }
 }
 
@@ -237,14 +292,30 @@ const AuthedRouteChildren: AuthedRouteChildren = {
 const AuthedRouteWithChildren =
   AuthedRoute._addFileChildren(AuthedRouteChildren)
 
+interface AdminSettingsRouteChildren {
+  AdminSettingsAccountRoute: typeof AdminSettingsAccountRoute
+  AdminSettingsAppearanceRoute: typeof AdminSettingsAppearanceRoute
+  AdminSettingsIndexRoute: typeof AdminSettingsIndexRoute
+}
+
+const AdminSettingsRouteChildren: AdminSettingsRouteChildren = {
+  AdminSettingsAccountRoute: AdminSettingsAccountRoute,
+  AdminSettingsAppearanceRoute: AdminSettingsAppearanceRoute,
+  AdminSettingsIndexRoute: AdminSettingsIndexRoute,
+}
+
+const AdminSettingsRouteWithChildren = AdminSettingsRoute._addFileChildren(
+  AdminSettingsRouteChildren,
+)
+
 interface AdminRouteChildren {
-  AdminSettingsRoute: typeof AdminSettingsRoute
+  AdminSettingsRoute: typeof AdminSettingsRouteWithChildren
   AdminUsersRoute: typeof AdminUsersRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
-  AdminSettingsRoute: AdminSettingsRoute,
+  AdminSettingsRoute: AdminSettingsRouteWithChildren,
   AdminUsersRoute: AdminUsersRoute,
   AdminIndexRoute: AdminIndexRoute,
 }

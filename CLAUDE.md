@@ -78,6 +78,7 @@ Consequences that shape the code:
 - `features/auth/` holds the seam: an `AuthApi` interface selected on one line in `index.ts`.
 - The first account registered becomes the admin, decided inside the INSERT so concurrent registrations cannot both claim it. Admins cannot remove their own access, and the last enabled admin cannot be demoted or disabled.
 - Admins can also create accounts (`POST /admin/users`), which differs from registration in picking the role explicitly and issuing no session. Disabling an account or replacing its password drops every session it has — a rotated credential means nothing if the sessions it issued outlive it, including the admin's own.
+- The self-service endpoints (`PATCH /auth/me`, `POST /auth/password`) are deliberately separate from the admin ones, and narrower: `UpdateOwnProfile` has no `role` or `disabled` parameter at all, so no input can raise the caller's own privileges. Changing your own password requires the current one and keeps the session making the request, revoking only the others; an admin changing someone else's requires neither.
 
 ## Backend conventions
 
@@ -99,7 +100,9 @@ The chat provider is a two-method interface (`internal/chat`). `Echo` ships by d
 
 **Forms** follow whichever half of the app they are in. The auth pages validate by hand (`components/auth/validation.ts`, validators returning locale keys) because they predate the admin panel and have two fields each. The admin panel uses react-hook-form + zod through the vendored `ui/form.tsx`, as upstream does. Build the zod schema inside the component — the messages are translated, and in `users-action-dialog.tsx` the password rule also depends on whether the dialog is creating or editing. Use `useWatch` rather than `form.watch()`; the React compiler refuses to memoise around the latter.
 
-Field-level API errors reach the form through `OpenChatError.field`, which the contract sets for exactly one input (a duplicate email, a short password). Anything else is a banner or a toast.
+Field-level API errors reach the form through `OpenChatError.field`, which the contract sets for exactly one input (a duplicate email, a short password). Anything else is a banner or a toast. Auth calls are the exception: they go through `features/auth/`, which maps server codes to `AuthErrorKey` locale keys — the server's own `message` is never rendered, since it is not localised.
+
+**Fonts** are self-hosted (`@fontsource-variable/*`), so the picker in settings works offline and sends nothing to a third party. The choice applies inside `.shadcn-scope` only: `body` sets its own `font-family`, which an inherited class on `<html>` cannot beat, and the chat UI's typography belongs to the ported prism design rather than to the reader.
 
 **i18n**: every user-facing string goes through `t()`, including in vendored components — locales are `zh` and `en`. Keys are typed against the locale files (`types/i18next.d.ts`), so a renamed key breaks the build. Vendoring a new shadcn component means translating its strings before using it; upstream ships hardcoded English, and `sidebar-data.ts` had to become a `useSidebarData()` hook because `t` is only available inside a component.
 
@@ -107,4 +110,4 @@ Field-level API errors reach the form through `OpenChatError.field`, which the c
 
 ## Scoped out so far
 
-No account deletion — disabling is the reversible equivalent, and deleting a user would cascade away their conversations. No invitation or email verification either: an admin creating an account sets the password and passes it on out of band. No model provider catalogue (the ported UI expects one: per-provider keys, model lists, reasoning effort, web-search toggles). No attachments UI, tool calls, or reasoning blocks.
+No account deletion — disabling is the reversible equivalent, and deleting a user would cascade away their conversations. No invitation or email verification either: an admin creating an account sets the password and passes it on out of band. The settings page ports three of upstream's five sections; Notifications has nothing to notify about, and Display duplicates the config drawer. No model provider catalogue (the ported UI expects one: per-provider keys, model lists, reasoning effort, web-search toggles). No attachments UI, tool calls, or reasoning blocks.

@@ -37,3 +37,12 @@ WHERE expires_at <= now();
 DELETE
 FROM sessions
 WHERE user_id = ANY (sqlc.arg('user_ids')::uuid[]);
+
+-- name: DeleteOtherUserSessions :exec
+-- Used when someone changes their own password: every session issued under the
+-- old credential goes, except the one asking, so the change does not sign the
+-- person out of the tab they are standing in.
+DELETE
+FROM sessions
+WHERE user_id = sqlc.arg('user_id')
+  AND id <> sqlc.arg('keep_id');

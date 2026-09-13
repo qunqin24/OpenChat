@@ -32,6 +32,10 @@ type Querier interface {
 	CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	DeleteExpiredSessions(ctx context.Context) (int64, error)
+	// Used when someone changes their own password: every session issued under the
+	// old credential goes, except the one asking, so the change does not sign the
+	// person out of the tab they are standing in.
+	DeleteOtherUserSessions(ctx context.Context, arg DeleteOtherUserSessionsParams) error
 	DeleteSession(ctx context.Context, tokenHash []byte) error
 	DeleteSessionsForUsers(ctx context.Context, userIds []uuid.UUID) error
 	DeleteUserSessions(ctx context.Context, userID uuid.UUID) error
@@ -66,6 +70,11 @@ type Querier interface {
 	TouchSession(ctx context.Context, id uuid.UUID) error
 	TouchUserSeen(ctx context.Context, id uuid.UUID) error
 	UpdateConversationTitle(ctx context.Context, arg UpdateConversationTitleParams) (Conversation, error)
+	// Deliberately narrower than AdminUpdateUser: role and disabled_at are not
+	// reachable from here, so the self-service form cannot touch them even if the
+	// handler above it were wrong.
+	UpdateOwnProfile(ctx context.Context, arg UpdateOwnProfileParams) (User, error)
+	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 }
 
 var _ Querier = (*Queries)(nil)

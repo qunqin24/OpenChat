@@ -362,3 +362,55 @@ func (q *Queries) TouchUserSeen(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, touchUserSeen, id)
 	return err
 }
+
+const updateOwnProfile = `-- name: UpdateOwnProfile :one
+UPDATE users
+SET name       = COALESCE($1::text, name),
+    email      = COALESCE($2::text, email),
+    updated_at = now()
+WHERE id = $3
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at
+`
+
+type UpdateOwnProfileParams struct {
+	Name  *string   `json:"name"`
+	Email *string   `json:"email"`
+	ID    uuid.UUID `json:"id"`
+}
+
+// Deliberately narrower than AdminUpdateUser: role and disabled_at are not
+// reachable from here, so the self-service form cannot touch them even if the
+// handler above it were wrong.
+func (q *Queries) UpdateOwnProfile(ctx context.Context, arg UpdateOwnProfileParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateOwnProfile, arg.Name, arg.Email, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PasswordHash,
+		&i.Role,
+		&i.DisabledAt,
+		&i.LastSeenAt,
+	)
+	return i, err
+}
+
+const updateUserPassword = `-- name: UpdateUserPassword :exec
+UPDATE users
+SET password_hash = $1,
+    updated_at    = now()
+WHERE id = $2
+`
+
+type UpdateUserPasswordParams struct {
+	PasswordHash string    `json:"password_hash"`
+	ID           uuid.UUID `json:"id"`
+}
+
+func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
+	_, err := q.db.Exec(ctx, updateUserPassword, arg.PasswordHash, arg.ID)
+	return err
+}

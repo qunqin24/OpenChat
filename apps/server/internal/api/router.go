@@ -59,6 +59,8 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 
 			r.Post("/auth/logout", wrapper.Logout)
 			r.Get("/auth/session", wrapper.GetSession)
+			r.Patch("/auth/me", wrapper.UpdateMe)
+			r.Post("/auth/password", wrapper.ChangePassword)
 
 			r.Get("/conversations", wrapper.ListConversations)
 			r.Post("/conversations", wrapper.CreateConversation)

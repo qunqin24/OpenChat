@@ -165,6 +165,119 @@ func (s *Server) GetSession(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, http.StatusOK, toSessionUser(user))
 }
 
+// UpdateMe changes the signed-in account's own name or email.
+//
+// Note what it cannot reach: role and disabled_at are not parameters of
+// UpdateOwnProfile at all, so no combination of input here can raise the
+// caller's own privileges.
+func (s *Server) UpdateMe(w http.ResponseWriter, r *http.Request) {
+	var body UpdateMeRequest
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	if body.Name == nil && body.Email == nil {
+		httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "nothing_to_update", "no changes were given"))
+		return
+	}
+
+	var name, email *string
+
+	if body.Name != nil {
+		trimmed := strings.TrimSpace(*body.Name)
+		if trimmed == "" {
+			httpx.Fail(w, r, httpx.NewFieldError("name", "name_required", "name is required"))
+			return
+		}
+		name = &trimmed
+	}
+
+	if body.Email != nil {
+		trimmed := strings.TrimSpace(string(*body.Email))
+		if trimmed == "" {
+			httpx.Fail(w, r, httpx.NewFieldError("email", "email_required", "email is required"))
+			return
+		}
+		email = &trimmed
+	}
+
+	user := auth.MustUser(r.Context())
+	updated, err := s.q.UpdateOwnProfile(r.Context(), sqlc.UpdateOwnProfileParams{
+		ID:    user.ID,
+		Name:  name,
+		Email: email,
+	})
+	if err != nil {
+		if isUniqueViolation(err) {
+			httpx.Fail(w, r, httpx.NewFieldError("email", "email_taken", "that email is already registered"))
+			return
+		}
+		httpx.Fail(w, r, dbErr(err))
+		return
+	}
+
+	httpx.JSON(w, http.StatusOK, toSessionUser(updated))
+}
+
+// ChangePassword replaces the signed-in account's own password.
+//
+// The current password is required, which the admin endpoint does not ask for:
+// an admin is acting on an account they do not own, while the whole point here
+// is to prove the person at the keyboard is the account holder and not someone
+// who found the machine unlocked.
+func (s *Server) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	var body ChangePasswordRequest
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	if len(body.NewPassword) < minPasswordLength {
+		httpx.Fail(w, r, httpx.NewFieldError("newPassword", "password_short", "password is too short"))
+		return
+	}
+
+	user := auth.MustUser(r.Context())
+
+	if err := auth.VerifyPassword(body.CurrentPassword, user.PasswordHash); err != nil {
+		if errors.Is(err, auth.ErrMismatch) || errors.Is(err, auth.ErrInvalidHash) {
+			httpx.Fail(w, r, httpx.NewFieldError("currentPassword", "invalid_credentials",
+				"that is not your current password"))
+			return
+		}
+		httpx.Fail(w, r, err)
+		return
+	}
+
+	hash, err := auth.HashPassword(body.NewPassword)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+
+	if err := s.q.UpdateUserPassword(r.Context(), sqlc.UpdateUserPasswordParams{
+		ID:           user.ID,
+		PasswordHash: hash,
+	}); err != nil {
+		httpx.Fail(w, r, dbErr(err))
+		return
+	}
+
+	// Sessions issued under the old password go, except this one — signing
+	// someone out of the tab they just used to change their password is
+	// punishment, not security. If the context has no session id the middleware
+	// did not run, which cannot happen behind Require.
+	if sessionID, ok := auth.SessionIDFrom(r.Context()); ok {
+		if err := s.q.DeleteOtherUserSessions(r.Context(), sqlc.DeleteOtherUserSessionsParams{
+			UserID: user.ID,
+			KeepID: sessionID,
+		}); err != nil {
+			logWarn(r, "revoke other sessions after password change", err)
+		}
+	}
+
+	httpx.NoContent(w)
+}
+
 func truncate(value string, max int) string {
 	if len(value) <= max {
 		return value

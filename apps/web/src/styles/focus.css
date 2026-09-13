@@ -55,3 +55,13 @@
 .n-auth-input:focus-visible {
   outline: none;
 }
+
+/* Text fields match `:focus-visible` on a plain mouse click, unlike buttons, so
+   the ring here appeared every single time someone went to type — a hard grey
+   rectangle inside the composer's own rounded card. The caret is the focus
+   indicator for a text field, and the card around it never goes away, so the
+   ring has no work to do. The theme sets `outline: none` on both; this is only
+   restating it at the specificity the rule above introduced. */
+.prism-next .n-composer-input:focus-visible {
+  outline: none;
+}

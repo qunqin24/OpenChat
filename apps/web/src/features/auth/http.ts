@@ -1,5 +1,10 @@
 import { api } from '@/lib/api'
-import { AuthFieldError, type AuthApi, type AuthErrorKey, type SessionUser } from './types'
+import {
+  AuthFieldError,
+  type AuthApi,
+  type AuthErrorKey,
+  type SessionUser,
+} from './types'
 
 /**
  * Auth against HttpOnly session cookies. The client sends `credentials:
@@ -19,6 +24,7 @@ const SERVER_ERRORS: Record<string, AuthErrorKey> = {
   name_required: 'auth.error.name-required',
   password_short: 'auth.error.password-short',
   account_disabled: 'auth.error.account-disabled',
+  nothing_to_update: 'auth.error.nothing-to-update',
 }
 
 interface ServerError {
@@ -28,10 +34,17 @@ interface ServerError {
 
 function toAuthError(error: unknown): AuthFieldError {
   const body = (error ?? {}) as ServerError
-  return new AuthFieldError(
-    body.field ?? 'password',
-    SERVER_ERRORS[body.code ?? ''] ?? 'auth.error.unknown',
-  )
+  const field = body.field ?? 'password'
+
+  // The server reuses `invalid_credentials` for "that is not your current
+  // password", which reads wrong on a settings form; the field it blames is
+  // what tells the two apart.
+  const key: AuthErrorKey =
+    body.code === 'invalid_credentials' && field === 'currentPassword'
+      ? 'auth.error.password-wrong'
+      : (SERVER_ERRORS[body.code ?? ''] ?? 'auth.error.unknown')
+
+  return new AuthFieldError(field, key)
 }
 
 export function createHttpAuthApi(): AuthApi {
@@ -58,6 +71,17 @@ export function createHttpAuthApi(): AuthApi {
 
     async logout() {
       const { error } = await api.POST('/auth/logout')
+      if (error) throw toAuthError(error)
+    },
+
+    async updateProfile(input) {
+      const { data, error } = await api.PATCH('/auth/me', { body: input })
+      if (error) throw toAuthError(error)
+      return data as SessionUser
+    },
+
+    async changePassword(input) {
+      const { error } = await api.POST('/auth/password', { body: input })
       if (error) throw toAuthError(error)
     },
   }

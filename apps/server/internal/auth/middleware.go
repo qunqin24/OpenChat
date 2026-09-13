@@ -40,7 +40,9 @@ func (m *Middleware) Require(next http.Handler) http.Handler {
 			return
 		}
 
-		next.ServeHTTP(w, r.WithContext(WithUser(r.Context(), row.User)))
+		ctx := WithUser(r.Context(), row.User)
+		ctx = WithSessionID(ctx, row.SessionID)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 

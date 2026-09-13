@@ -97,3 +97,20 @@ UPDATE users
 SET disabled_at = CASE WHEN sqlc.arg('disabled')::boolean THEN now() ELSE NULL END,
     updated_at  = now()
 WHERE id = ANY (sqlc.arg('ids')::uuid[]);
+
+-- name: UpdateOwnProfile :one
+-- Deliberately narrower than AdminUpdateUser: role and disabled_at are not
+-- reachable from here, so the self-service form cannot touch them even if the
+-- handler above it were wrong.
+UPDATE users
+SET name       = COALESCE(sqlc.narg('name')::text, name),
+    email      = COALESCE(sqlc.narg('email')::text, email),
+    updated_at = now()
+WHERE id = sqlc.arg('id')
+RETURNING *;
+
+-- name: UpdateUserPassword :exec
+UPDATE users
+SET password_hash = sqlc.arg('password_hash'),
+    updated_at    = now()
+WHERE id = sqlc.arg('id');

@@ -130,7 +130,9 @@
       "password-required": "请填写密码",
       "password-short": "密码至少 8 位",
       "unknown": "出了点问题，请稍后再试",
-      "account-disabled": "该账号已被停用"
+      "account-disabled": "该账号已被停用",
+      "password-wrong": "当前密码不正确",
+      "nothing-to-update": "没有任何改动"
     }
   },
   "admin": {
@@ -265,10 +267,6 @@
         "general": "常规",
         "other": "其他"
       },
-      "coming-soon": {
-        "title": "敬请期待",
-        "description": "这个页面还没做，很快就来。"
-      },
       "teams": {
         "label": "团队",
         "add": "新建团队"
@@ -315,6 +313,37 @@
       "hide-password": "隐藏密码",
       "continue": "继续",
       "select": "请选择"
+    },
+    "settings": {
+      "subtitle": "管理你的账号与外观偏好。",
+      "save": "保存",
+      "saved": "已保存",
+      "profile": {
+        "title": "个人资料",
+        "desc": "其他人在应用里看到的就是这些。",
+        "name-hint": "显示在对话和后台里的名字，可以随时修改。",
+        "email-hint": "同时也是你的登录账号。"
+      },
+      "account": {
+        "title": "账号安全",
+        "desc": "修改登录密码。",
+        "current-password": "当前密码",
+        "new-password": "新密码",
+        "change": "修改密码",
+        "changed": "密码已修改",
+        "revoke-hint": "修改后，其他设备上的登录会被退出，当前这个不会。"
+      },
+      "appearance": {
+        "title": "外观",
+        "desc": "自定义界面的语言、字体和主题。",
+        "language": "语言",
+        "language-hint": "只影响当前浏览器。",
+        "font": "字体",
+        "font-hint": "后台面板使用的字体。",
+        "theme-hint": "选择后台面板的配色。",
+        "lang-zh": "简体中文",
+        "lang-en": "English"
+      }
     }
   }
 }

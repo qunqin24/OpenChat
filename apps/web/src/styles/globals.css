@@ -1,5 +1,11 @@
 @import 'tailwindcss';
 
+/* Self-hosted so the font picker in /admin/settings/appearance works offline
+   and without a request to a third party. Variable builds: one file each,
+   every weight. */
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/manrope';
+
 /* The next-gen chat UI's own design system, lifted wholesale from the prism
    `next` UI. It owns every visual decision inside `.prism-next`: the `--n-*`
    tokens, the layout, and the markdown typography. Imported after Tailwind so
