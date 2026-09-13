@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/jackc/pgx/v5"
@@ -23,6 +24,11 @@ func (m *Middleware) Require(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := TokenFromRequest(r)
 		if token == "" {
+			// A 401 with no explanation is the single most common thing to be
+			// puzzled by here, and the three causes are indistinguishable from
+			// the outside: no cookie at all, an expired or revoked session, or a
+			// disabled account. Debug logging tells them apart.
+			slog.DebugContext(r.Context(), "rejected: no session cookie", "path", r.URL.Path)
 			httpx.Fail(w, r, httpx.ErrUnauthorized)
 			return
 		}
@@ -32,6 +38,9 @@ func (m *Middleware) Require(next http.Handler) http.Handler {
 			if errors.Is(err, pgx.ErrNoRows) {
 				// Expired, revoked, or the account was disabled. Clear the
 				// cookie so the browser stops sending a token that is dead.
+				slog.DebugContext(r.Context(), "rejected: session not valid",
+					"path", r.URL.Path,
+					"reason", "expired, revoked, or the account is disabled")
 				ClearCookie(w, r.TLS != nil)
 				httpx.Fail(w, r, httpx.ErrUnauthorized)
 				return
@@ -55,6 +64,8 @@ func (m *Middleware) RequireAdmin(next http.Handler) http.Handler {
 			return
 		}
 		if user.Role != sqlc.UserRoleAdmin {
+			slog.DebugContext(r.Context(), "rejected: not an admin",
+				"path", r.URL.Path, "user", user.Email, "role", user.Role)
 			// Deliberately "not found", not "forbidden": a 403 confirms the
 			// admin API exists to someone who has no business knowing.
 			httpx.Fail(w, r, httpx.ErrNotFound)

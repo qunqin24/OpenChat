@@ -176,6 +176,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Server-wide settings */
+        get: operations["getSystemSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change server-wide settings */
+        patch: operations["updateSystemSettings"];
+        trace?: never;
+    };
     "/admin/channels": {
         parameters: {
             query?: never;
@@ -561,6 +579,18 @@ export interface components {
             role?: components["schemas"]["UserRole"];
             disabled?: boolean;
         };
+        SystemSettings: {
+            /**
+             * @description Whether the server logs at debug level. Takes effect immediately —
+             *     no restart — and persists across one, because the fault worth
+             *     chasing is usually the intermittent kind.
+             */
+            debugLogging: boolean;
+        };
+        /** @description Only the fields present are changed. */
+        UpdateSystemSettingsRequest: {
+            debugLogging?: boolean;
+        };
         Channel: {
             /** Format: uuid */
             id: string;
@@ -918,6 +948,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["User"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getSystemSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateSystemSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSystemSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemSettings"];
                 };
             };
             default: components["responses"]["Error"];

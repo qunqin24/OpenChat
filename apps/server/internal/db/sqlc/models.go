@@ -142,6 +142,12 @@ func (ns NullUserRole) Value() (driver.Value, error) {
 	return string(ns.UserRole), nil
 }
 
+type AppSetting struct {
+	Key       string             `json:"key"`
+	Value     []byte             `json:"value"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Attachment struct {
 	ID          uuid.UUID          `json:"id"`
 	MessageID   *uuid.UUID         `json:"message_id"`

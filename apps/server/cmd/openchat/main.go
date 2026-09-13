@@ -25,6 +25,7 @@ import (
 	"github.com/qunqin/openchat/apps/server/internal/config"
 	"github.com/qunqin/openchat/apps/server/internal/db"
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin/openchat/apps/server/internal/logging"
 	"github.com/qunqin/openchat/apps/server/internal/storage"
 )
 
@@ -87,9 +88,14 @@ func run() error {
 
 	queries := sqlc.New(pool)
 
+	server := api.NewServer(cfg, pool, store, provider)
+	// Before the listener opens, so a server started with debug logging on logs
+	// its own startup in detail — which is when you want it most.
+	server.LoadSettings(ctx)
+
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.NewRouter(cfg, api.NewServer(cfg, pool, store, provider), auth.NewMiddleware(queries)),
+		Handler:           api.NewRouter(cfg, server, auth.NewMiddleware(queries)),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 		// No WriteTimeout: SSE responses stay open for the length of a reply.
@@ -123,15 +129,8 @@ func command() string {
 }
 
 func setupLogging(cfg *config.Config) {
-	level := slog.LevelDebug
-	if cfg.IsProduction() {
-		level = slog.LevelInfo
-	}
-	var handler slog.Handler
-	if cfg.IsProduction() {
-		handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})
-	} else {
-		handler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level})
-	}
-	slog.SetDefault(slog.New(handler))
+	// Development used to start at Debug. It starts at Info now, in both
+	// environments, so that the switch in the admin panel is what turns detail
+	// on — a toggle that changes nothing where you develop is not a toggle.
+	logging.Setup(cfg.IsProduction())
 }

@@ -23,6 +23,10 @@
     "notFound": "Page not found",
     "backHome": "Back to chat"
   },
+  "notifications": {
+    "region": "Notifications",
+    "close": "Dismiss notification"
+  },
   "next": {
     "more": "More",
     "scroll-bottom": "Scroll to bottom",
@@ -60,6 +64,8 @@
       "collapse": "Collapse the composer"
     },
     "file": {
+      "add": "Add Files",
+      "drop": "Drop any files here to upload",
       "upload": "Upload a file",
       "unavailable": "This model does not accept files"
     },
@@ -364,6 +370,14 @@
         "theme-hint": "Select the colour scheme for the admin panel.",
         "lang-zh": "简体中文",
         "lang-en": "English"
+      },
+      "system": {
+        "title": "System",
+        "subtitle": "Server-wide settings. They apply to everyone.",
+        "debug": "Debug mode",
+        "debug-hint": "Logs at debug level, so the terminal shows every step. Takes effect at once, needs no restart, and survives one. Turn it on to chase a problem — it is verbose, and may include request detail.",
+        "on": "Debug logging is on",
+        "off": "Debug logging is off"
       }
     }
   }

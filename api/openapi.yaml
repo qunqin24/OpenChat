@@ -209,6 +209,35 @@ paths:
               schema: { $ref: "#/components/schemas/User" }
         default: { $ref: "#/components/responses/Error" }
 
+  /admin/system:
+    get:
+      tags: [admin]
+      summary: Server-wide settings
+      operationId: getSystemSettings
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemSettings" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [admin]
+      summary: Change server-wide settings
+      operationId: updateSystemSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateSystemSettingsRequest" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemSettings" }
+        default: { $ref: "#/components/responses/Error" }
+
   /admin/channels:
     get:
       tags: [admin]
@@ -754,6 +783,23 @@ components:
         password: { type: string, minLength: 8, maxLength: 200 }
         role: { $ref: "#/components/schemas/UserRole" }
         disabled: { type: boolean }
+
+    SystemSettings:
+      type: object
+      required: [debugLogging]
+      properties:
+        debugLogging:
+          type: boolean
+          description: |
+            Whether the server logs at debug level. Takes effect immediately —
+            no restart — and persists across one, because the fault worth
+            chasing is usually the intermittent kind.
+
+    UpdateSystemSettingsRequest:
+      type: object
+      description: Only the fields present are changed.
+      properties:
+        debugLogging: { type: boolean }
 
     Channel:
       type: object

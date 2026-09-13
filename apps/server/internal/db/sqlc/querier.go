@@ -54,6 +54,7 @@ type Querier interface {
 	// One round trip for the whole auth check: the session must be unexpired and
 	// the account still enabled.
 	GetSessionUser(ctx context.Context, tokenHash []byte) (GetSessionUserRow, error)
+	GetSetting(ctx context.Context, key string) ([]byte, error)
 	GetUser(ctx context.Context, id uuid.UUID) (User, error)
 	// Sign-in accepts either identifier, so one lookup covers both.
 	//
@@ -77,6 +78,8 @@ type Querier interface {
 	// inside the INSERT so two concurrent registrations cannot both see an empty
 	// table and both claim it.
 	RegisterUser(ctx context.Context, arg RegisterUserParams) (User, error)
+	// Upsert, so a setting added after this database was created still writes.
+	SetSetting(ctx context.Context, arg SetSettingParams) error
 	SoftDeleteConversation(ctx context.Context, arg SoftDeleteConversationParams) (int64, error)
 	TouchConversation(ctx context.Context, id uuid.UUID) error
 	TouchSession(ctx context.Context, id uuid.UUID) error

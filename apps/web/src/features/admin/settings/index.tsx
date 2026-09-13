@@ -1,5 +1,5 @@
 import { Outlet } from '@tanstack/react-router'
-import { Palette, UserCog, Wrench } from 'lucide-react'
+import { Bug, Palette, UserCog, Wrench } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { ConfigDrawer } from '@/components/shadcn/config-drawer'
@@ -30,6 +30,11 @@ export function Settings() {
       title: t('admin.settings.appearance.title'),
       href: '/admin/settings/appearance',
       icon: <Palette size={18} />,
+    },
+    {
+      title: t('admin.settings.system.title'),
+      href: '/admin/settings/system',
+      icon: <Bug size={18} />,
     },
   ]
 

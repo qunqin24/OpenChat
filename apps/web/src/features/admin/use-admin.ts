@@ -11,6 +11,7 @@ export const adminKeys = {
   all: ['admin'] as const,
   stats: (days: number) => [...adminKeys.all, 'stats', days] as const,
   users: (page: number, search: string) => [...adminKeys.all, 'users', page, search] as const,
+  system: () => [...adminKeys.all, 'system'] as const,
 }
 
 export function useAdminStats(days = 30) {

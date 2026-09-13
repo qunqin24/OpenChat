@@ -23,6 +23,10 @@
     "notFound": "页面不存在",
     "backHome": "返回对话"
   },
+  "notifications": {
+    "region": "通知",
+    "close": "关闭通知"
+  },
   "next": {
     "more": "更多",
     "scroll-bottom": "回到底部",
@@ -60,6 +64,8 @@
       "collapse": "收起输入框"
     },
     "file": {
+      "add": "添加文件",
+      "drop": "拖拽文件至此上传",
       "upload": "上传文件",
       "unavailable": "当前模型不支持文件"
     },
@@ -364,6 +370,14 @@
         "theme-hint": "选择后台面板的配色。",
         "lang-zh": "简体中文",
         "lang-en": "English"
+      },
+      "system": {
+        "title": "系统",
+        "subtitle": "影响整个服务端的设置，对所有人生效。",
+        "debug": "调试模式",
+        "debug-hint": "打开后服务端按 debug 级别输出日志，终端能看到每一步的细节。立即生效，无需重启，重启后依然保持。仅排查问题时打开——日志量很大，且可能包含请求细节。",
+        "on": "调试日志已开启",
+        "off": "调试日志已关闭"
       }
     }
   }
