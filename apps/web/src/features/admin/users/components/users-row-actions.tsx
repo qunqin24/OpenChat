@@ -90,11 +90,12 @@ export function UsersRowActions({ user, isSelf }: UsersRowActionsProps) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Mounted only while open, so the form starts from the row as it
-          currently stands rather than from whatever it held last time. */}
-      {editing && (
-        <UsersActionDialog user={user} isSelf={isSelf} open onOpenChange={setEditing} />
-      )}
+      {/* Not wrapped in `open && …`: Radix unmounts the content itself once
+          the exit animation has finished, and removing the element early is
+          what leaves an overlay that animates in and then simply vanishes. The
+          form still starts fresh every time, because its fields only mount
+          when the overlay opens. */}
+      <UsersActionDialog user={user} isSelf={isSelf} open={editing} onOpenChange={setEditing} />
 
       <ConfirmDialog
         open={confirming}

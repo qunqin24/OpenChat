@@ -75,9 +75,7 @@ export function ChannelsRowActions({ channel }: ChannelsRowActionsProps) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Mounted only while open, so the form starts from the row as it
-          currently stands rather than from whatever it held last time. */}
-      {editing && <ChannelsActionPanel channel={channel} open onOpenChange={setEditing} />}
+      <ChannelsActionPanel channel={channel} open={editing} onOpenChange={setEditing} />
 
       <ConfirmDialog
         open={confirming}

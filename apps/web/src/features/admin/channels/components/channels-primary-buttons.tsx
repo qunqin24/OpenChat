@@ -16,9 +16,12 @@ export function ChannelsPrimaryButtons() {
         <Plus size={18} />
       </Button>
 
-      {/* Mounted only while open, so every new channel starts from a blank
-          form — including the key field, which has nothing to restore. */}
-      {creating && <ChannelsActionPanel open onOpenChange={setCreating} />}
+      {/* Not wrapped in `open && …`: Radix unmounts the content itself once
+          the exit animation has finished, and removing the element early is
+          what leaves an overlay that animates in and then simply vanishes. The
+          form still starts fresh every time, because its fields only mount
+          when the overlay opens. */}
+      <ChannelsActionPanel open={creating} onOpenChange={setCreating} />
     </>
   )
 }

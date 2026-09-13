@@ -58,6 +58,37 @@ type UsersActionDialogProps = {
  */
 export function UsersActionDialog({ user, isSelf, open, onOpenChange }: UsersActionDialogProps) {
   const { t } = useTranslation()
+  const isEdit = user !== undefined
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader className="text-start">
+          <DialogTitle>{t(isEdit ? 'admin.users.edit' : 'admin.users.create')}</DialogTitle>
+          <DialogDescription>
+            {t(isEdit ? 'admin.users.edit-hint' : 'admin.users.create-hint')}
+          </DialogDescription>
+        </DialogHeader>
+
+        <UserForm user={user} isSelf={isSelf} onOpenChange={onOpenChange} />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/**
+ * The fields and the footer, which Radix mounts when the dialog opens.
+ *
+ * The split is what lets the shell above stay mounted while closed — Radix
+ * needs the element present to animate it out — without the form remembering
+ * what was typed the last time. Nothing resets it; it simply was not there.
+ */
+function UserForm({
+  user,
+  isSelf,
+  onOpenChange,
+}: Pick<UsersActionDialogProps, 'user' | 'isSelf' | 'onOpenChange'>) {
+  const { t } = useTranslation()
   const createUser = useCreateUser()
   const updateUser = useUpdateUser()
   const isEdit = user !== undefined
@@ -172,154 +203,145 @@ export function UsersActionDialog({ user, isSelf, open, onOpenChange }: UsersAct
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader className="text-start">
-          <DialogTitle>{t(isEdit ? 'admin.users.edit' : 'admin.users.create')}</DialogTitle>
-          <DialogDescription>
-            {t(isEdit ? 'admin.users.edit-hint' : 'admin.users.create-hint')}
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <ScrollArea className="-me-4 h-[26rem] w-full py-1 pe-4">
+        <Form {...form}>
+          <form
+            id="users-action-form"
+            className="space-y-4 p-0.5"
+            onSubmit={form.handleSubmit((values) => void submit(values))}
+          >
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
+                  <FormLabel className="col-span-2">{t('admin.users.form.name')}</FormLabel>
+                  <FormControl>
+                    <Input className="col-span-4" autoComplete="off" {...field} />
+                  </FormControl>
+                  <FormMessage className="col-span-4 col-start-3" />
+                </FormItem>
+              )}
+            />
 
-        <ScrollArea className="-me-4 h-[26rem] w-full py-1 pe-4">
-          <Form {...form}>
-            <form
-              id="users-action-form"
-              className="space-y-4 p-0.5"
-              onSubmit={form.handleSubmit((values) => void submit(values))}
-            >
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
-                    <FormLabel className="col-span-2">{t('admin.users.form.name')}</FormLabel>
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
+                  <FormLabel className="col-span-2">{t('admin.users.form.email')}</FormLabel>
+                  <FormControl>
+                    <Input className="col-span-4" autoComplete="off" {...field} />
+                  </FormControl>
+                  <FormMessage className="col-span-4 col-start-3" />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="role"
+              render={({ field }) => (
+                <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
+                  <FormLabel className="col-span-2">{t('admin.users.role')}</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
-                      <Input className="col-span-4" autoComplete="off" {...field} />
+                      <SelectTrigger className="col-span-4 w-full">
+                        <SelectValue />
+                      </SelectTrigger>
                     </FormControl>
-                    <FormMessage className="col-span-4 col-start-3" />
-                  </FormItem>
-                )}
-              />
+                    <SelectContent>
+                      <SelectItem value="admin">{t('admin.users.role-admin')}</SelectItem>
+                      {/* Demoting yourself would lock you out of this panel. */}
+                      <SelectItem value="user" disabled={isSelf}>
+                        {t('admin.users.role-user')}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage className="col-span-4 col-start-3" />
+                </FormItem>
+              )}
+            />
 
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
-                    <FormLabel className="col-span-2">{t('admin.users.form.email')}</FormLabel>
+            <FormField
+              control={form.control}
+              name="enabled"
+              render={({ field }) => (
+                <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
+                  <FormLabel className="col-span-2">{t('admin.users.status')}</FormLabel>
+                  <div className="col-span-4 flex items-center gap-3">
                     <FormControl>
-                      <Input className="col-span-4" autoComplete="off" {...field} />
-                    </FormControl>
-                    <FormMessage className="col-span-4 col-start-3" />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="role"
-                render={({ field }) => (
-                  <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
-                    <FormLabel className="col-span-2">{t('admin.users.role')}</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger className="col-span-4 w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="admin">{t('admin.users.role-admin')}</SelectItem>
-                        {/* Demoting yourself would lock you out of this panel. */}
-                        <SelectItem value="user" disabled={isSelf}>
-                          {t('admin.users.role-user')}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage className="col-span-4 col-start-3" />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="enabled"
-                render={({ field }) => (
-                  <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
-                    <FormLabel className="col-span-2">{t('admin.users.status')}</FormLabel>
-                    <div className="col-span-4 flex items-center gap-3">
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          disabled={isSelf}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <span className="text-muted-foreground text-sm">
-                        {t(field.value ? 'admin.users.enabled' : 'admin.users.disabled')}
-                      </span>
-                    </div>
-                    <FormDescription className="col-span-4 col-start-3 text-xs">
-                      {t(isSelf ? 'admin.users.self-locked' : 'admin.users.enabled-hint')}
-                    </FormDescription>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
-                    <FormLabel className="col-span-2">{t('admin.users.form.password')}</FormLabel>
-                    <FormControl>
-                      <PasswordInput
-                        className="col-span-4"
-                        autoComplete="new-password"
-                        placeholder={
-                          isEdit ? t('admin.users.form.password-keep') : 'S3cur3P@ssw0rd'
-                        }
-                        {...field}
+                      <Switch
+                        checked={field.value}
+                        disabled={isSelf}
+                        onCheckedChange={field.onChange}
                       />
                     </FormControl>
-                    <FormMessage className="col-span-4 col-start-3" />
-                  </FormItem>
-                )}
-              />
+                    <span className="text-muted-foreground text-sm">
+                      {t(field.value ? 'admin.users.enabled' : 'admin.users.disabled')}
+                    </span>
+                  </div>
+                  <FormDescription className="col-span-4 col-start-3 text-xs">
+                    {t(isSelf ? 'admin.users.self-locked' : 'admin.users.enabled-hint')}
+                  </FormDescription>
+                </FormItem>
+              )}
+            />
 
-              <FormField
-                control={form.control}
-                name="confirmPassword"
-                render={({ field }) => (
-                  <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
-                    <FormLabel className="col-span-2">
-                      {t('admin.users.form.confirm-password')}
-                    </FormLabel>
-                    <FormControl>
-                      <PasswordInput
-                        className="col-span-4"
-                        autoComplete="new-password"
-                        disabled={!password}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage className="col-span-4 col-start-3" />
-                  </FormItem>
-                )}
-              />
-            </form>
-          </Form>
-        </ScrollArea>
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
+                  <FormLabel className="col-span-2">{t('admin.users.form.password')}</FormLabel>
+                  <FormControl>
+                    <PasswordInput
+                      className="col-span-4"
+                      autoComplete="new-password"
+                      placeholder={
+                        isEdit ? t('admin.users.form.password-keep') : 'S3cur3P@ssw0rd'
+                      }
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage className="col-span-4 col-start-3" />
+                </FormItem>
+              )}
+            />
 
-        <DialogFooter>
-          <Button variant="outline" disabled={pending} onClick={() => onOpenChange(false)}>
-            {t('admin.ui.cancel')}
-          </Button>
-          <Button type="submit" form="users-action-form" disabled={pending}>
-            {t('admin.ui.save')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            <FormField
+              control={form.control}
+              name="confirmPassword"
+              render={({ field }) => (
+                <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
+                  <FormLabel className="col-span-2">
+                    {t('admin.users.form.confirm-password')}
+                  </FormLabel>
+                  <FormControl>
+                    <PasswordInput
+                      className="col-span-4"
+                      autoComplete="new-password"
+                      disabled={!password}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage className="col-span-4 col-start-3" />
+                </FormItem>
+              )}
+            />
+          </form>
+        </Form>
+      </ScrollArea>
+
+      <DialogFooter>
+        <Button variant="outline" disabled={pending} onClick={() => onOpenChange(false)}>
+          {t('admin.ui.cancel')}
+        </Button>
+        <Button type="submit" form="users-action-form" disabled={pending}>
+          {t('admin.ui.save')}
+        </Button>
+      </DialogFooter>
+    </>
   )
 }

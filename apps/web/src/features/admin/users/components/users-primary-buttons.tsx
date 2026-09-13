@@ -21,7 +21,7 @@ export function UsersPrimaryButtons() {
         <UserPlus size={18} />
       </Button>
 
-      {creating && <UsersActionDialog open onOpenChange={setCreating} />}
+      <UsersActionDialog open={creating} onOpenChange={setCreating} />
     </>
   )
 }

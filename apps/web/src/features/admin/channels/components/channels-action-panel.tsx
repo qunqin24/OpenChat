@@ -39,6 +39,34 @@ type ChannelsActionPanelProps = {
 /**
  * Both halves of the channel form: adding a connection and editing one.
  *
+ * Split in two on purpose. The shell stays mounted whether or not the panel is
+ * open, because Radix needs the element to still be there to animate it out —
+ * removing it the moment `open` goes false is what leaves a panel that slides
+ * in and then blinks away. The body below it holds the form, and Radix mounts
+ * that only while the panel is open, so every opening starts from a clean form
+ * without anything having to reset it.
+ */
+export function ChannelsActionPanel({ channel, open, onOpenChange }: ChannelsActionPanelProps) {
+  const { t } = useTranslation()
+  const isEdit = channel !== undefined
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="w-full sm:max-w-lg">
+        <SheetHeader className="text-start">
+          <SheetTitle>{t(isEdit ? 'admin.channels.edit' : 'admin.channels.create')}</SheetTitle>
+          <SheetDescription>{t('admin.channels.subtitle')}</SheetDescription>
+        </SheetHeader>
+
+        <ChannelForm channel={channel} onOpenChange={onOpenChange} />
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+/**
+ * The fields and the footer. Mounted by Radix when the panel opens.
+ *
  * The one rule that matters here is the API key. It is write-only — the server
  * returns `hasKey` and a `keyPreview` like `…4f2a` and never the key itself —
  * so the field starts empty in *both* modes and an untouched field means
@@ -46,7 +74,10 @@ type ChannelsActionPanelProps = {
  * from the PATCH body: sending `''` would clear the key, which would turn
  * renaming a channel into silently breaking it.
  */
-export function ChannelsActionPanel({ channel, open, onOpenChange }: ChannelsActionPanelProps) {
+function ChannelForm({
+  channel,
+  onOpenChange,
+}: Pick<ChannelsActionPanelProps, 'channel' | 'onOpenChange'>) {
   const { t } = useTranslation()
   const createChannel = useCreateChannel()
   const updateChannel = useUpdateChannel()
@@ -129,153 +160,146 @@ export function ChannelsActionPanel({ channel, open, onOpenChange }: ChannelsAct
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-lg">
-        <SheetHeader className="text-start">
-          <SheetTitle>{t(isEdit ? 'admin.channels.edit' : 'admin.channels.create')}</SheetTitle>
-          <SheetDescription>{t('admin.channels.subtitle')}</SheetDescription>
-        </SheetHeader>
+    <>
+      <Form {...form}>
+        <form
+          id="channels-action-form"
+          className="flex-1 space-y-4 overflow-y-auto px-4 py-1"
+          onSubmit={form.handleSubmit((values) => void submit(values))}
+        >
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
+                <FormLabel className="col-span-2">{t('admin.channels.name')}</FormLabel>
+                <FormControl>
+                  <Input className="col-span-4" autoComplete="off" {...field} />
+                </FormControl>
+                <FormMessage className="col-span-4 col-start-3" />
+              </FormItem>
+            )}
+          />
 
-        <Form {...form}>
-          <form
-            id="channels-action-form"
-            className="flex-1 space-y-4 overflow-y-auto px-4 py-1"
-            onSubmit={form.handleSubmit((values) => void submit(values))}
-          >
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
-                  <FormLabel className="col-span-2">{t('admin.channels.name')}</FormLabel>
-                  <FormControl>
-                    <Input className="col-span-4" autoComplete="off" {...field} />
-                  </FormControl>
-                  <FormMessage className="col-span-4 col-start-3" />
-                </FormItem>
-              )}
-            />
+          <FormField
+            control={form.control}
+            name="providerId"
+            render={({ field }) => (
+              <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
+                <FormLabel className="col-span-2">{t('admin.channels.provider')}</FormLabel>
+                <FormControl>
+                  <Input
+                    className="col-span-4"
+                    autoComplete="off"
+                    spellCheck={false}
+                    placeholder="openai"
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage className="col-span-4 col-start-3" />
+              </FormItem>
+            )}
+          />
 
-            <FormField
-              control={form.control}
-              name="providerId"
-              render={({ field }) => (
-                <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
-                  <FormLabel className="col-span-2">{t('admin.channels.provider')}</FormLabel>
-                  <FormControl>
-                    <Input
-                      className="col-span-4"
+          <FormField
+            control={form.control}
+            name="baseUrl"
+            render={({ field }) => (
+              <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
+                <FormLabel className="col-span-2">{t('admin.channels.base-url')}</FormLabel>
+                <FormControl>
+                  <Input
+                    className="col-span-4"
+                    autoComplete="off"
+                    spellCheck={false}
+                    inputMode="url"
+                    {...field}
+                  />
+                </FormControl>
+                <FormDescription className="col-span-4 col-start-3 text-xs">
+                  {t('admin.channels.base-url-hint')}
+                </FormDescription>
+                <FormMessage className="col-span-4 col-start-3" />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="apiKey"
+            render={({ field }) => (
+              <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
+                <FormLabel className="col-span-2">{t('admin.channels.api-key')}</FormLabel>
+                <FormControl>
+                  <div className="col-span-4 flex items-center gap-2">
+                    <PasswordInput
+                      className="flex-1"
                       autoComplete="off"
-                      spellCheck={false}
-                      placeholder="openai"
+                      // The stored key can only ever be hinted at, so the
+                      // preview stands in for a value the field cannot hold.
+                      placeholder={
+                        clearKey
+                          ? t('admin.channels.api-key-clearing')
+                          : (channel?.keyPreview ?? 'sk-…')
+                      }
+                      disabled={clearKey}
                       {...field}
                     />
-                  </FormControl>
-                  <FormMessage className="col-span-4 col-start-3" />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="baseUrl"
-              render={({ field }) => (
-                <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
-                  <FormLabel className="col-span-2">{t('admin.channels.base-url')}</FormLabel>
-                  <FormControl>
-                    <Input
-                      className="col-span-4"
-                      autoComplete="off"
-                      spellCheck={false}
-                      inputMode="url"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription className="col-span-4 col-start-3 text-xs">
-                    {t('admin.channels.base-url-hint')}
-                  </FormDescription>
-                  <FormMessage className="col-span-4 col-start-3" />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="apiKey"
-              render={({ field }) => (
-                <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
-                  <FormLabel className="col-span-2">{t('admin.channels.api-key')}</FormLabel>
-                  <FormControl>
-                    <div className="col-span-4 flex items-center gap-2">
-                      <PasswordInput
-                        className="flex-1"
-                        autoComplete="off"
-                        // The stored key can only ever be hinted at, so the
-                        // preview stands in for a value the field cannot hold.
-                        placeholder={
-                          clearKey
-                            ? t('admin.channels.api-key-clearing')
-                            : (channel?.keyPreview ?? 'sk-…')
-                        }
-                        disabled={clearKey}
-                        {...field}
-                      />
-                      {isEdit && channel.hasKey && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="shrink-0"
-                          onClick={() => {
-                            setClearKey((current) => !current)
-                            form.setValue('apiKey', '')
-                          }}
-                        >
-                          {t(clearKey ? 'admin.ui.cancel' : 'admin.channels.api-key-clear')}
-                        </Button>
-                      )}
-                    </div>
-                  </FormControl>
-                  <FormDescription className="col-span-4 col-start-3 text-xs">
-                    {t('admin.channels.api-key-hint')}
-                  </FormDescription>
-                  <FormMessage className="col-span-4 col-start-3" />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="enabled"
-              render={({ field }) => (
-                <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
-                  <FormLabel className="col-span-2">{t('admin.channels.enabled')}</FormLabel>
-                  <div className="col-span-4 flex items-center gap-3">
-                    <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
+                    {isEdit && channel.hasKey && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="shrink-0"
+                        onClick={() => {
+                          setClearKey((current) => !current)
+                          form.setValue('apiKey', '')
+                        }}
+                      >
+                        {t(clearKey ? 'admin.ui.cancel' : 'admin.channels.api-key-clear')}
+                      </Button>
+                    )}
                   </div>
-                </FormItem>
-              )}
-            />
-          </form>
-        </Form>
+                </FormControl>
+                <FormDescription className="col-span-4 col-start-3 text-xs">
+                  {t('admin.channels.api-key-hint')}
+                </FormDescription>
+                <FormMessage className="col-span-4 col-start-3" />
+              </FormItem>
+            )}
+          />
 
-        <SheetFooter className="flex-row justify-end">
-          <Button variant="outline" disabled={pending} onClick={() => onOpenChange(false)}>
-            {t('admin.ui.cancel')}
-          </Button>
-          <Button
-            type="submit"
-            form="channels-action-form"
-            // Keeps the two required fields from ever reaching zod, whose
-            // built-in messages are not localised.
-            disabled={pending || !name.trim() || !providerId.trim()}
-          >
-            {t('admin.ui.save')}
-          </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+          <FormField
+            control={form.control}
+            name="enabled"
+            render={({ field }) => (
+              <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
+                <FormLabel className="col-span-2">{t('admin.channels.enabled')}</FormLabel>
+                <div className="col-span-4 flex items-center gap-3">
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                </div>
+              </FormItem>
+            )}
+          />
+        </form>
+      </Form>
+
+      <SheetFooter className="flex-row justify-end">
+        <Button variant="outline" disabled={pending} onClick={() => onOpenChange(false)}>
+          {t('admin.ui.cancel')}
+        </Button>
+        <Button
+          type="submit"
+          form="channels-action-form"
+          // Keeps the two required fields from ever reaching zod, whose
+          // built-in messages are not localised.
+          disabled={pending || !name.trim() || !providerId.trim()}
+        >
+          {t('admin.ui.save')}
+        </Button>
+      </SheetFooter>
+    </>
   )
 }
