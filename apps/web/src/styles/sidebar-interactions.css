@@ -29,6 +29,10 @@
   background: var(--n-sidebar-selected);
 }
 
+.prism-next .n-sidebar .n-row.active:focus-visible::before {
+  background: var(--n-sidebar-hover);
+}
+
 .prism-next .n-sidebar .n-row:focus-visible {
   border-radius: 12px;
   /* The rounded fill carries focus, including when Radix restores it on close.

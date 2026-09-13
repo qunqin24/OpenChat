@@ -3,8 +3,13 @@ import { DropdownMenu as RadixDropdownMenu } from 'radix-ui'
 
 import { cn } from '@/lib/utils'
 
-export const DropdownMenu = RadixDropdownMenu.Root
 export const DropdownMenuTrigger = RadixDropdownMenu.Trigger
+
+export function DropdownMenu({ modal = false, ...props }: ComponentProps<typeof RadixDropdownMenu.Root>) {
+  // Like OpenWebUI's floating menu, another sidebar control works on the first
+  // click; opening a menu must not make the rest of the page inert.
+  return <RadixDropdownMenu.Root modal={modal} {...props} />
+}
 
 export function DropdownMenuContent({
   className,

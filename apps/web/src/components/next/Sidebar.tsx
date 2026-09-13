@@ -4,7 +4,6 @@ import {
   Check,
   Languages,
   LogOut,
-  Shield,
   Monitor,
   Moon,
   MoreHorizontal,
@@ -12,6 +11,7 @@ import {
   SquarePen,
   Sun,
   Trash2,
+  UserRound,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -216,7 +216,7 @@ export function Sidebar({ collapsed, activeId, onDelete }: SidebarProps) {
               <DropdownMenuSeparator />
               {session.role === 'admin' && (
                 <DropdownMenuItem onSelect={() => void navigate({ to: '/admin' })}>
-                  <Shield className="h-4 w-4" />
+                  <UserRound className="h-4 w-4" />
                   <span>{t('admin.title')}</span>
                 </DropdownMenuItem>
               )}

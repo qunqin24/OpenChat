@@ -7,7 +7,6 @@ import { Header } from '@/components/shadcn/layout/header'
 import { Main } from '@/components/shadcn/layout/main'
 import { ProfileDropdown } from '@/components/shadcn/profile-dropdown'
 import { Search } from '@/components/shadcn/search'
-import { ThemeSwitch } from '@/components/shadcn/theme-switch'
 import { Separator } from '@/components/shadcn/ui/separator'
 import { SidebarNav } from './components/sidebar-nav'
 
@@ -38,7 +37,6 @@ export function Settings() {
     <>
       <Header fixed>
         <Search className="me-auto" />
-        <ThemeSwitch />
         <ConfigDrawer />
         <ProfileDropdown />
       </Header>

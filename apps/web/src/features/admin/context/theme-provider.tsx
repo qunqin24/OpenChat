@@ -20,8 +20,8 @@ const ThemeContext = createContext<ThemeProviderState | null>(null)
  * Upstream keeps the theme in a cookie and writes `light`/`dark` onto <html>
  * itself. The chat UI already does that from the ui-store, and two writers
  * would fight: a change made here would be reverted the next time the store's
- * effect ran. So this keeps upstream's context shape — ThemeSwitch and
- * ConfigDrawer use it unchanged — while reading and writing the store.
+ * effect ran. So this keeps upstream's context shape — the ConfigDrawer
+ * uses it unchanged — while reading and writing the store.
  */
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const theme = useUIStore((s) => s.theme)
