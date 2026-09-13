@@ -8,6 +8,7 @@ package sqlc
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -38,6 +39,8 @@ WHERE ($1::text IS NULL
   AND (NOT $5::boolean OR m.attachment)
   AND (NOT $6::boolean OR m.structured_output)
   AND ($7::boolean IS NULL OR coalesce(s.enabled, false) = $7::boolean)
+  AND (NOT $8::boolean
+    OR EXISTS (SELECT 1 FROM channels c WHERE c.provider_id = m.provider_id))
 `
 
 type CountCatalogModelsFilteredParams struct {
@@ -48,6 +51,7 @@ type CountCatalogModelsFilteredParams struct {
 	RequireAttachment       bool    `json:"require_attachment"`
 	RequireStructuredOutput bool    `json:"require_structured_output"`
 	Enabled                 *bool   `json:"enabled"`
+	ChannelsOnly            bool    `json:"channels_only"`
 }
 
 func (q *Queries) CountCatalogModelsFiltered(ctx context.Context, arg CountCatalogModelsFilteredParams) (int64, error) {
@@ -59,6 +63,7 @@ func (q *Queries) CountCatalogModelsFiltered(ctx context.Context, arg CountCatal
 		arg.RequireAttachment,
 		arg.RequireStructuredOutput,
 		arg.Enabled,
+		arg.ChannelsOnly,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -239,8 +244,10 @@ WHERE ($1::text IS NULL
   AND (NOT $5::boolean OR m.attachment)
   AND (NOT $6::boolean OR m.structured_output)
   AND ($7::boolean IS NULL OR coalesce(s.enabled, false) = $7::boolean)
+  AND (NOT $8::boolean
+    OR EXISTS (SELECT 1 FROM channels c WHERE c.provider_id = m.provider_id))
 ORDER BY p.name, m.name, m.model_id
-LIMIT $9 OFFSET $8
+LIMIT $10 OFFSET $9
 `
 
 type ListCatalogModelsParams struct {
@@ -251,6 +258,7 @@ type ListCatalogModelsParams struct {
 	RequireAttachment       bool    `json:"require_attachment"`
 	RequireStructuredOutput bool    `json:"require_structured_output"`
 	Enabled                 *bool   `json:"enabled"`
+	ChannelsOnly            bool    `json:"channels_only"`
 	RowOffset               int32   `json:"row_offset"`
 	RowLimit                int32   `json:"row_limit"`
 }
@@ -295,6 +303,7 @@ func (q *Queries) ListCatalogModels(ctx context.Context, arg ListCatalogModelsPa
 		arg.RequireAttachment,
 		arg.RequireStructuredOutput,
 		arg.Enabled,
+		arg.ChannelsOnly,
 		arg.RowOffset,
 		arg.RowLimit,
 	)
@@ -374,6 +383,49 @@ func (q *Queries) ListCatalogProviders(ctx context.Context) ([]ListCatalogProvid
 			&i.Doc,
 			&i.Env,
 			&i.ModelCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listChannelsForProviders = `-- name: ListChannelsForProviders :many
+SELECT id, name, enabled, provider_id
+FROM channels
+WHERE provider_id = ANY ($1::text[])
+ORDER BY sort_order, created_at
+`
+
+type ListChannelsForProvidersRow struct {
+	ID         uuid.UUID `json:"id"`
+	Name       string    `json:"name"`
+	Enabled    bool      `json:"enabled"`
+	ProviderID string    `json:"provider_id"`
+}
+
+// Which configured channels can serve each of these providers. Fetched for one
+// page of models rather than joined into the list, because a provider with
+// three channels would otherwise multiply its models by three and break both
+// the paging and the count.
+func (q *Queries) ListChannelsForProviders(ctx context.Context, providerIds []string) ([]ListChannelsForProvidersRow, error) {
+	rows, err := q.db.Query(ctx, listChannelsForProviders, providerIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListChannelsForProvidersRow{}
+	for rows.Next() {
+		var i ListChannelsForProvidersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Enabled,
+			&i.ProviderID,
 		); err != nil {
 			return nil, err
 		}

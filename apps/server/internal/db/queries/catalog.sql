@@ -81,6 +81,8 @@ WHERE (sqlc.narg('search')::text IS NULL
   AND (NOT sqlc.arg('require_attachment')::boolean OR m.attachment)
   AND (NOT sqlc.arg('require_structured_output')::boolean OR m.structured_output)
   AND (sqlc.narg('enabled')::boolean IS NULL OR coalesce(s.enabled, false) = sqlc.narg('enabled')::boolean)
+  AND (NOT sqlc.arg('channels_only')::boolean
+    OR EXISTS (SELECT 1 FROM channels c WHERE c.provider_id = m.provider_id))
 ORDER BY p.name, m.name, m.model_id
 LIMIT sqlc.arg('row_limit') OFFSET sqlc.arg('row_offset');
 
@@ -98,7 +100,9 @@ WHERE (sqlc.narg('search')::text IS NULL
   AND (NOT sqlc.arg('require_tool_call')::boolean OR m.tool_call)
   AND (NOT sqlc.arg('require_attachment')::boolean OR m.attachment)
   AND (NOT sqlc.arg('require_structured_output')::boolean OR m.structured_output)
-  AND (sqlc.narg('enabled')::boolean IS NULL OR coalesce(s.enabled, false) = sqlc.narg('enabled')::boolean);
+  AND (sqlc.narg('enabled')::boolean IS NULL OR coalesce(s.enabled, false) = sqlc.narg('enabled')::boolean)
+  AND (NOT sqlc.arg('channels_only')::boolean
+    OR EXISTS (SELECT 1 FROM channels c WHERE c.provider_id = m.provider_id));
 
 -- name: GetCatalogModel :one
 SELECT m.provider_id,
@@ -142,3 +146,14 @@ WHERE m.provider_id = sqlc.arg('provider_id')
 ON CONFLICT (provider_id, model_id)
     DO UPDATE SET enabled    = excluded.enabled,
                   updated_at = now();
+
+
+-- name: ListChannelsForProviders :many
+-- Which configured channels can serve each of these providers. Fetched for one
+-- page of models rather than joined into the list, because a provider with
+-- three channels would otherwise multiply its models by three and break both
+-- the paging and the count.
+SELECT id, name, enabled, provider_id
+FROM channels
+WHERE provider_id = ANY (sqlc.arg('provider_ids')::text[])
+ORDER BY sort_order, created_at;

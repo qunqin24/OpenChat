@@ -403,7 +403,17 @@
       "updated": "渠道已更新",
       "deleted": "渠道已删除",
       "api-key-clear": "清除",
-      "api-key-clearing": "保存后将清除密钥"
+      "api-key-clearing": "保存后将清除密钥",
+      "provider-pick": "选择供应商",
+      "provider-search": "搜索供应商",
+      "provider-models": "{{n}} 个模型",
+      "provider-doc": "查看文档",
+      "provider-env": "官方通常用环境变量 {{name}} 存放它",
+      "provider-custom": "找不到？直接填 id",
+      "section-connection": "连接",
+      "section-credential": "凭据",
+      "base-url-default": "使用默认地址",
+      "models-available": "接入后可用 {{n}} 个模型"
     },
     "models": {
       "title": "模型市场",
@@ -427,7 +437,15 @@
       "sync-failed": "刷新失败，仍在使用上一次的目录",
       "stale": "目录已过期",
       "count": "{{models}} 个模型 · {{providers}} 家供应商",
-      "filter-enabled": "仅看已启用"
+      "filter-enabled": "仅看已启用",
+      "scope-channels": "我的渠道",
+      "scope-all": "全部目录",
+      "no-channels": "还没有渠道，先去添加一个，这里才会出现可用的模型。",
+      "go-to-channels": "去添加渠道",
+      "via": "来自",
+      "unreachable": "无渠道可用",
+      "channel-disabled": "渠道已停用",
+      "browse-all": "浏览完整目录"
     }
   }
 }

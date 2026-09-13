@@ -692,6 +692,11 @@ export interface components {
             providerId: string;
             providerName: string;
             modelId: string;
+            /**
+             * @description The configured channels that can serve this model. Empty means the
+             *     catalogue knows about it but nothing here can reach it.
+             */
+            channels?: components["schemas"]["ModelChannel"][];
             name: string;
             description?: string;
             family?: string;
@@ -719,6 +724,13 @@ export interface components {
             knowledge?: string;
             inputModalities?: string[];
             outputModalities?: string[];
+        };
+        ModelChannel: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @description Whether the channel itself is switched on, not the model. */
+            enabled: boolean;
         };
         CatalogModelPage: {
             items: components["schemas"]["CatalogModel"][];
@@ -1176,6 +1188,13 @@ export interface operations {
                 capability?: ("reasoning" | "toolCall" | "attachment" | "structuredOutput")[];
                 /** @description Restrict to models that are, or are not, switched on here. */
                 enabled?: boolean;
+                /**
+                 * @description `channels` (the default) lists only models a configured channel can
+                 *     actually reach — which is what an operator means by "our models".
+                 *     `all` browses the whole upstream catalogue, which is where you go to
+                 *     find out what a provider offers before adding a channel for it.
+                 */
+                scope?: "channels" | "all";
             };
             header?: never;
             path?: never;

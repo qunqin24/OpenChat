@@ -176,8 +176,12 @@ func (s *Server) ListCatalogModels(w http.ResponseWriter, r *http.Request, param
 		RequireAttachment:       wanted[ListCatalogModelsParamsCapabilityAttachment],
 		RequireStructuredOutput: wanted[ListCatalogModelsParamsCapabilityStructuredOutput],
 		Enabled:                 params.Enabled,
-		RowLimit:                limit,
-		RowOffset:               (page - 1) * limit,
+		// The default is the narrow one. "Our models" means the ones a channel
+		// can actually reach; the whole upstream catalogue is what you browse
+		// when deciding which channel to add next, not what you manage.
+		ChannelsOnly: params.Scope == nil || *params.Scope == Channels,
+		RowLimit:     limit,
+		RowOffset:    (page - 1) * limit,
 	}
 
 	total, err := s.q.CountCatalogModelsFiltered(r.Context(), sqlc.CountCatalogModelsFilteredParams{
@@ -188,6 +192,7 @@ func (s *Server) ListCatalogModels(w http.ResponseWriter, r *http.Request, param
 		RequireAttachment:       filter.RequireAttachment,
 		RequireStructuredOutput: filter.RequireStructuredOutput,
 		Enabled:                 filter.Enabled,
+		ChannelsOnly:            filter.ChannelsOnly,
 	})
 	if err != nil {
 		httpx.Fail(w, r, err)
@@ -200,9 +205,25 @@ func (s *Server) ListCatalogModels(w http.ResponseWriter, r *http.Request, param
 		return
 	}
 
+	// One lookup for the page rather than a join, which would multiply a
+	// provider's models by its channel count and break both paging and total.
+	byProvider, err := s.channelsByProvider(r.Context(), rows)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+
 	items := make([]CatalogModel, 0, len(rows))
 	for _, row := range rows {
-		items = append(items, toCatalogModel(row))
+		model := toCatalogModel(row)
+		// Always a list, never absent: "no channel reaches this" is an answer,
+		// and a missing field would read as "not asked".
+		channels := byProvider[row.ProviderID]
+		if channels == nil {
+			channels = []ModelChannel{}
+		}
+		model.Channels = &channels
+		items = append(items, model)
 	}
 
 	httpx.JSON(w, http.StatusOK, CatalogModelPage{
@@ -211,6 +232,41 @@ func (s *Server) ListCatalogModels(w http.ResponseWriter, r *http.Request, param
 		Page:  int(page),
 		Limit: int(limit),
 	})
+}
+
+// channelsByProvider names, for each provider on this page, the channels that
+// can serve it. A model with none is in the catalogue but out of reach, which
+// the card says rather than hides.
+func (s *Server) channelsByProvider(
+	ctx context.Context, rows []sqlc.ListCatalogModelsRow,
+) (map[string][]ModelChannel, error) {
+	seen := make(map[string]struct{}, len(rows))
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if _, ok := seen[row.ProviderID]; ok {
+			continue
+		}
+		seen[row.ProviderID] = struct{}{}
+		ids = append(ids, row.ProviderID)
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	channels, err := s.q.ListChannelsForProviders(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	byProvider := make(map[string][]ModelChannel, len(ids))
+	for _, c := range channels {
+		byProvider[c.ProviderID] = append(byProvider[c.ProviderID], ModelChannel{
+			Id:      c.ID,
+			Name:    c.Name,
+			Enabled: c.Enabled,
+		})
+	}
+	return byProvider, nil
 }
 
 func (s *Server) UpdateCatalogModel(w http.ResponseWriter, r *http.Request, providerId string, modelId string) {

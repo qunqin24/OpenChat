@@ -1,4 +1,4 @@
-import { Braces, Brain, Paperclip, Wrench } from 'lucide-react'
+import { Braces, Brain, Paperclip, PlugZap, PowerOff, Wrench } from 'lucide-react'
 import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -8,6 +8,7 @@ import { Badge } from '@/components/shadcn/ui/badge'
 import { Card } from '@/components/shadcn/ui/card'
 import { Label } from '@/components/shadcn/ui/label'
 import { Switch } from '@/components/shadcn/ui/switch'
+import { cn } from '@/lib/utils'
 import { formatCost, formatTokenLimit } from '../format'
 import { useUpdateCatalogModel, type CatalogModel } from '../use-catalog'
 
@@ -40,8 +41,16 @@ export function ModelCard({ model }: { model: CatalogModel }) {
   const { t } = useTranslation()
   const update = useUpdateCatalogModel()
   const switchId = useId()
+  const reachId = useId()
 
   const capabilities = CAPABILITIES.filter((capability) => model[capability.key])
+
+  // Which of our channels can serve this. Only the full catalogue can turn up a
+  // model with none — under `scope=channels` the server has already excluded
+  // those — and switching one of those on would be a setting with no effect, so
+  // the card says so and the switch refuses rather than pretending.
+  const channels = model.channels ?? []
+  const unreachable = channels.length === 0
 
   const cost =
     model.inputCost === undefined && model.outputCost === undefined
@@ -111,6 +120,43 @@ export function ModelCard({ model }: { model: CatalogModel }) {
         <Stat label={t('admin.models.cost')} value={cost ?? '—'} />
       </dl>
 
+      {/* Sits directly above the switch, because it is the caveat on it: a model
+          whose only channel is switched off is not something this site can
+          answer with, however green the toggle looks. */}
+      <div className="flex flex-wrap items-center gap-1.5 px-4 pt-3 text-xs">
+        {unreachable ? (
+          <span id={reachId} className="text-muted-foreground inline-flex items-center gap-1.5">
+            <PlugZap className="size-3.5 shrink-0" aria-hidden="true" />
+            {t('admin.models.unreachable')}
+          </span>
+        ) : (
+          <>
+            <span className="text-muted-foreground shrink-0">{t('admin.models.via')}</span>
+            {channels.map((channel) => (
+              <Badge
+                key={channel.id}
+                variant={channel.enabled ? 'secondary' : 'outline'}
+                className={cn(
+                  'max-w-full font-normal',
+                  !channel.enabled && 'text-muted-foreground border-dashed',
+                )}
+                title={
+                  channel.enabled
+                    ? channel.name
+                    : `${channel.name} · ${t('admin.models.channel-disabled')}`
+                }
+              >
+                {!channel.enabled && <PowerOff aria-hidden="true" />}
+                <span className="truncate">{channel.name}</span>
+                {!channel.enabled && (
+                  <span className="shrink-0">· {t('admin.models.channel-disabled')}</span>
+                )}
+              </Badge>
+            ))}
+          </>
+        )}
+      </div>
+
       <div className="mt-4 flex items-center justify-between gap-2 border-t px-4 py-3">
         <Label htmlFor={switchId} className="text-muted-foreground text-xs font-normal">
           {model.enabled ? t('admin.models.enabled') : t('admin.models.enable')}
@@ -118,7 +164,10 @@ export function ModelCard({ model }: { model: CatalogModel }) {
         <Switch
           id={switchId}
           checked={model.enabled}
-          disabled={update.isPending}
+          disabled={update.isPending || unreachable}
+          // A disabled control with no stated reason is a dead end; the line
+          // above is the reason, so the switch points at it.
+          aria-describedby={unreachable ? reachId : undefined}
           onCheckedChange={toggle}
         />
       </div>

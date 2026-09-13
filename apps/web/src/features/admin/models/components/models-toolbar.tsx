@@ -1,4 +1,4 @@
-import { Search as SearchIcon } from 'lucide-react'
+import { Boxes, Plug, Search as SearchIcon, type LucideIcon } from 'lucide-react'
 import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -12,11 +12,21 @@ import {
   SelectValue,
 } from '@/components/shadcn/ui/select'
 import { Switch } from '@/components/shadcn/ui/switch'
+import { TabsList, TabsTrigger } from '@/components/shadcn/ui/tabs'
 import { CatalogStatusLine } from './catalog-status-line'
-import { useCatalogProviders } from '../use-catalog'
+import { SCOPES, useCatalogProviders, type CatalogScope } from '../use-catalog'
 
 /** Radix's Select has no value for "no selection", so the sentinel is explicit. */
 export const ALL_PROVIDERS = 'all'
+
+/**
+ * `as const` so the labels stay literal for `t()`, `satisfies` so every scope
+ * the contract allows has to be given a tab here before this compiles.
+ */
+const SCOPE_TABS = {
+  channels: { label: 'admin.models.scope-channels', icon: Plug },
+  all: { label: 'admin.models.scope-all', icon: Boxes },
+} as const satisfies Record<CatalogScope, { label: string; icon: LucideIcon }>
 
 type ModelsToolbarProps = {
   search: string
@@ -41,6 +51,23 @@ export function ModelsToolbar({
 
   return (
     <div className="flex flex-col gap-3">
+      {/* The scope decides what the grid *means*, so it leads the toolbar rather
+          than sitting among the filters: the two answers are mutually exclusive
+          and both worth naming on screen. The `Tabs` root is the page's, not
+          this component's — Radix passes the value down by context, and keeping
+          the root up there lets each tab point at a panel that exists. */}
+      <TabsList>
+        {SCOPES.map((value) => {
+          const { label, icon: Icon } = SCOPE_TABS[value]
+          return (
+            <TabsTrigger key={value} value={value} className="px-3">
+              <Icon aria-hidden="true" />
+              {t(label)}
+            </TabsTrigger>
+          )
+        })}
+      </TabsList>
+
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative w-full sm:w-64">
           <SearchIcon

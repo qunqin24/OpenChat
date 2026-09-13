@@ -14,6 +14,8 @@ export const adminKeys = {
   stats: (days: number) => [...adminKeys.all, 'stats', days] as const,
   users: (page: number, search: string) => [...adminKeys.all, 'users', page, search] as const,
   system: () => [...adminKeys.all, 'system'] as const,
+  /** Shared with features/admin/models, which owns the rest of this subtree. */
+  catalog: () => [...adminKeys.all, 'catalog'] as const,
   channels: () => [...adminKeys.all, 'channels'] as const,
 }
 
@@ -121,6 +123,10 @@ export function useCreateChannel() {
       unwrap(await api.POST('/admin/channels', { body })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.channels() })
+      // A channel decides which models are reachable, so the catalogue's
+      // answer changed as well — it lives under a different key and would
+      // otherwise go on reporting the reach this channel just altered.
+      void queryClient.invalidateQueries({ queryKey: adminKeys.catalog() })
     },
   })
 }
@@ -146,6 +152,10 @@ export function useUpdateChannel() {
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.channels() })
+      // A channel decides which models are reachable, so the catalogue's
+      // answer changed as well — it lives under a different key and would
+      // otherwise go on reporting the reach this channel just altered.
+      void queryClient.invalidateQueries({ queryKey: adminKeys.catalog() })
     },
   })
 }
@@ -162,6 +172,10 @@ export function useDeleteChannel() {
       unwrap(await api.DELETE('/admin/channels/{channelId}', { params: { path: { channelId } } })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.channels() })
+      // A channel decides which models are reachable, so the catalogue's
+      // answer changed as well — it lives under a different key and would
+      // otherwise go on reporting the reach this channel just altered.
+      void queryClient.invalidateQueries({ queryKey: adminKeys.catalog() })
     },
   })
 }

@@ -1,4 +1,5 @@
-import { Boxes, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
+import { Boxes, ChevronLeft, ChevronRight, Plug, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/shadcn/ui/button'
@@ -6,7 +7,7 @@ import { Card } from '@/components/shadcn/ui/card'
 import { Skeleton } from '@/components/shadcn/ui/skeleton'
 import { CatalogRefreshButton } from './catalog-refresh-button'
 import { ModelCard } from './model-card'
-import type { CatalogModel } from '../use-catalog'
+import type { CatalogModel, CatalogScope } from '../use-catalog'
 
 const GRID =
   'grid grid-cols-1 gap-4 @xl/content:grid-cols-2 @4xl/content:grid-cols-3 @6xl/content:grid-cols-4'
@@ -28,11 +29,29 @@ function CardSkeleton() {
   )
 }
 
-function Placeholder({ message, action }: { message: string; action?: React.ReactNode }) {
+function LoadingGrid({ label }: { label: string }) {
+  return (
+    <div className={GRID} aria-busy="true" aria-label={label}>
+      {Array.from({ length: 8 }).map((_, index) => (
+        <CardSkeleton key={index} />
+      ))}
+    </div>
+  )
+}
+
+function Placeholder({
+  message,
+  icon: Icon = Boxes,
+  action,
+}: {
+  message: string
+  icon?: LucideIcon
+  action?: React.ReactNode
+}) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 rounded-md border border-dashed px-6 py-16 text-center">
-      <Boxes className="text-muted-foreground size-8" aria-hidden="true" />
-      <p className="text-muted-foreground text-sm">{message}</p>
+      <Icon className="text-muted-foreground size-8" aria-hidden="true" />
+      <p className="text-muted-foreground max-w-sm text-sm text-balance">{message}</p>
       {action}
     </div>
   )
@@ -48,6 +67,18 @@ type ModelsGridProps = {
   isError: boolean
   /** True when the catalogue itself is empty, not merely the current filter. */
   isCatalogueEmpty: boolean
+  /** Which catalogue is being listed; only `channels` can run out of channels. */
+  scope: CatalogScope
+  /**
+   * Whether any configured channel reaches anything — the answer to the
+   * unfiltered channel-scope probe, not to the query behind this grid.
+   * `undefined` while that question is still open.
+   */
+  hasChannels: boolean | undefined
+  /** True while the probe above is in flight. */
+  isReachPending: boolean
+  /** Switches the page to the full catalogue, for the no-channels state. */
+  onBrowseAll: () => void
 }
 
 export function ModelsGrid({
@@ -59,30 +90,61 @@ export function ModelsGrid({
   isPending,
   isError,
   isCatalogueEmpty,
+  scope,
+  hasChannels,
+  isReachPending,
+  onBrowseAll,
 }: ModelsGridProps) {
   const { t } = useTranslation()
   const pageCount = Math.max(1, Math.ceil(total / limit))
 
   if (isError) return <Placeholder message={t('state.error')} />
 
-  if (isPending) {
-    return (
-      <div className={GRID} aria-busy="true" aria-label={t('state.loading')}>
-        {Array.from({ length: 8 }).map((_, index) => (
-          <CardSkeleton key={index} />
-        ))}
-      </div>
-    )
-  }
+  if (isPending) return <LoadingGrid label={t('state.loading')} />
 
   if (models.length === 0) {
     // Before the first sync there is nothing to browse and nothing to clear —
     // the only useful thing on the page is the refresh, so it goes here too.
-    return isCatalogueEmpty ? (
-      <Placeholder message={t('admin.models.never-synced')} action={<CatalogRefreshButton />} />
-    ) : (
-      <Placeholder message={t('admin.models.none')} />
-    )
+    // This outranks the channel question: with an empty catalogue every scope is
+    // empty, and blaming the channels would send the operator to the wrong page.
+    if (isCatalogueEmpty) {
+      return (
+        <Placeholder message={t('admin.models.never-synced')} action={<CatalogRefreshButton />} />
+      )
+    }
+
+    if (scope === 'channels') {
+      // An empty grid means two very different things here, and the difference
+      // is not visible in this query: "nothing matched your filters" and "there
+      // is nothing to match, because no channel has been added". Only the
+      // unfiltered probe separates them, so wait for it rather than guess — a
+      // wrong message flashed for a frame is worse than a frame of skeleton.
+      if (isReachPending) return <LoadingGrid label={t('state.loading')} />
+
+      if (hasChannels === false) {
+        return (
+          <Placeholder
+            icon={Plug}
+            message={t('admin.models.no-channels')}
+            action={
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button asChild size="sm">
+                  <Link to="/admin/channels">{t('admin.models.go-to-channels')}</Link>
+                </Button>
+                {/* Adding a channel is the fix; browsing the catalogue is how
+                    you decide which one to add. Secondary, but on the same
+                    screen, because the two questions arrive together. */}
+                <Button variant="ghost" size="sm" onClick={onBrowseAll}>
+                  {t('admin.models.browse-all')}
+                </Button>
+              </div>
+            }
+          />
+        )
+      }
+    }
+
+    return <Placeholder message={t('admin.models.none')} />
   }
 
   return (

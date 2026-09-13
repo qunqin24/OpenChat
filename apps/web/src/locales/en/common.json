@@ -403,7 +403,17 @@
       "updated": "Channel updated",
       "deleted": "Channel deleted",
       "api-key-clear": "Clear",
-      "api-key-clearing": "Will be removed on save"
+      "api-key-clearing": "Will be removed on save",
+      "provider-pick": "Choose a provider",
+      "provider-search": "Search providers",
+      "provider-models": "{{n}} models",
+      "provider-doc": "Documentation",
+      "provider-env": "Usually kept in {{name}}",
+      "provider-custom": "Not listed? Enter an id",
+      "section-connection": "Connection",
+      "section-credential": "Credential",
+      "base-url-default": "Provider default",
+      "models-available": "{{n}} models become available"
     },
     "models": {
       "title": "Models",
@@ -427,7 +437,15 @@
       "sync-failed": "Refresh failed — still serving the previous catalogue",
       "stale": "Catalogue is stale",
       "count": "{{models}} models · {{providers}} providers",
-      "filter-enabled": "Enabled only"
+      "filter-enabled": "Enabled only",
+      "scope-channels": "My channels",
+      "scope-all": "Full catalogue",
+      "no-channels": "No channels yet. Add one and the models it can reach appear here.",
+      "go-to-channels": "Add a channel",
+      "via": "via",
+      "unreachable": "No channel reaches this",
+      "channel-disabled": "Channel is off",
+      "browse-all": "Browse the full catalogue"
     }
   }
 }

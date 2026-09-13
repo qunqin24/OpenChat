@@ -89,6 +89,11 @@ type Querier interface {
 	// hiding.
 	ListCatalogProviders(ctx context.Context) ([]ListCatalogProvidersRow, error)
 	ListChannels(ctx context.Context) ([]Channel, error)
+	// Which configured channels can serve each of these providers. Fetched for one
+	// page of models rather than joined into the list, because a provider with
+	// three channels would otherwise multiply its models by three and break both
+	// the paging and the count.
+	ListChannelsForProviders(ctx context.Context, providerIds []string) ([]ListChannelsForProvidersRow, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
 	// Offset paging rather than keyset: the admin table needs page numbers and a
