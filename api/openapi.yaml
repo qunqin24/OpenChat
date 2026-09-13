@@ -620,9 +620,14 @@ components:
 
     LoginRequest:
       type: object
-      required: [email, password]
+      required: [identifier, password]
       properties:
-        email: { type: string, format: email }
+        identifier:
+          type: string
+          description: |
+            An email address or a username. Not `format: email` — half the
+            values it accepts are not addresses, and the server decides which
+            kind it is rather than the caller declaring it.
         password: { type: string }
 
     UpdateMeRequest:

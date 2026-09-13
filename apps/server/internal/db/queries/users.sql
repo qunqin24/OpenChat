@@ -15,10 +15,20 @@ SELECT *
 FROM users
 WHERE id = $1;
 
--- name: GetUserByEmail :one
+-- name: GetUserByLogin :one
+-- Sign-in accepts either identifier, so one lookup covers both.
+--
+-- Nothing stops a username from being spelled like somebody else's address, so
+-- the two columns can match different rows for the same input. The ORDER BY
+-- settles it in favour of the address: your own email always signs you in, and
+-- no username anyone else picks can take that away. Without it `:one` would
+-- take whichever row the planner returned first.
 SELECT *
 FROM users
-WHERE lower(email) = lower(sqlc.arg('email')::text);
+WHERE lower(email) = lower(sqlc.arg('identifier')::text)
+   OR lower(name) = lower(sqlc.arg('identifier')::text)
+ORDER BY (lower(email) = lower(sqlc.arg('identifier')::text)) DESC
+LIMIT 1;
 
 -- name: CountUsers :one
 SELECT count(*)

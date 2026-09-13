@@ -460,8 +460,12 @@ export interface components {
             password: string;
         };
         LoginRequest: {
-            /** Format: email */
-            email: string;
+            /**
+             * @description An email address or a username. Not `format: email` — half the
+             *     values it accepts are not addresses, and the server decides which
+             *     kind it is rather than the caller declaring it.
+             */
+            identifier: string;
             password: string;
         };
         /** @description Only the fields present are changed. */

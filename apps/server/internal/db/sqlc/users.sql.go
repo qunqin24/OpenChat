@@ -209,14 +209,24 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
 	return i, err
 }
 
-const getUserByEmail = `-- name: GetUserByEmail :one
+const getUserByLogin = `-- name: GetUserByLogin :one
 SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at
 FROM users
 WHERE lower(email) = lower($1::text)
+   OR lower(name) = lower($1::text)
+ORDER BY (lower(email) = lower($1::text)) DESC
+LIMIT 1
 `
 
-func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
-	row := q.db.QueryRow(ctx, getUserByEmail, email)
+// Sign-in accepts either identifier, so one lookup covers both.
+//
+// Nothing stops a username from being spelled like somebody else's address, so
+// the two columns can match different rows for the same input. The ORDER BY
+// settles it in favour of the address: your own email always signs you in, and
+// no username anyone else picks can take that away. Without it `:one` would
+// take whichever row the planner returned first.
+func (q *Queries) GetUserByLogin(ctx context.Context, identifier string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByLogin, identifier)
 	var i User
 	err := row.Scan(
 		&i.ID,

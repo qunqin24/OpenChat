@@ -52,7 +52,14 @@ type Querier interface {
 	// the account still enabled.
 	GetSessionUser(ctx context.Context, tokenHash []byte) (GetSessionUserRow, error)
 	GetUser(ctx context.Context, id uuid.UUID) (User, error)
-	GetUserByEmail(ctx context.Context, email string) (User, error)
+	// Sign-in accepts either identifier, so one lookup covers both.
+	//
+	// Nothing stops a username from being spelled like somebody else's address, so
+	// the two columns can match different rows for the same input. The ORDER BY
+	// settles it in favour of the address: your own email always signs you in, and
+	// no username anyone else picks can take that away. Without it `:one` would
+	// take whichever row the planner returned first.
+	GetUserByLogin(ctx context.Context, identifier string) (User, error)
 	ListAttachmentsByMessages(ctx context.Context, messageIds []uuid.UUID) ([]Attachment, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)

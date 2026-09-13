@@ -14,6 +14,17 @@ export function validateEmail(value: string): AuthErrorKey | null {
   return null
 }
 
+/**
+ * Sign-in accepts an address or a username, so the only thing worth checking
+ * here is that something was typed. Guessing which kind it is and applying the
+ * email pattern would reject a perfectly good username that happens to contain
+ * an @ — and the server has to check the value against the database regardless.
+ */
+export function validateIdentifier(value: string): AuthErrorKey | null {
+  if (!value.trim()) return 'auth.error.identifier-required'
+  return null
+}
+
 export function validateName(value: string): AuthErrorKey | null {
   if (!value.trim()) return 'auth.error.name-required'
   return null

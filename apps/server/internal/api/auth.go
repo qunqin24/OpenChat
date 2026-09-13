@@ -103,14 +103,14 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// One error for every failure mode below. Distinguishing "no such account"
-	// from "wrong password" would let anyone probe for registered addresses.
-	invalid := httpx.NewError(http.StatusUnauthorized, "invalid_credentials", "email or password is incorrect")
+	// from "wrong password" would let anyone probe for registered accounts.
+	invalid := httpx.NewError(http.StatusUnauthorized, "invalid_credentials", "those credentials are incorrect")
 
-	user, err := s.q.GetUserByEmail(r.Context(), strings.TrimSpace(string(body.Email)))
+	user, err := s.q.GetUserByLogin(r.Context(), strings.TrimSpace(body.Identifier))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Spend the same time as a real verification, so the response
-			// duration does not reveal whether the address exists.
+			// duration does not reveal whether the account exists.
 			auth.DummyVerify(body.Password)
 			httpx.Fail(w, r, invalid)
 			return

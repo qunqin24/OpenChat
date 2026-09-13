@@ -1,15 +1,14 @@
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
-import { AlertCircle } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { isAuthFieldError, type AuthErrorKey } from '@/features/auth'
 import { useLogin } from '@/features/auth/use-auth'
 import AuthField from './AuthField'
 import AuthShell from './AuthShell'
-import { validateEmail, validatePassword } from './validation'
+import { validateIdentifier, validatePassword } from './validation'
 
-type Errors = Partial<Record<'email' | 'password', AuthErrorKey>>
+type Errors = Partial<Record<'identifier' | 'password', AuthErrorKey>>
 
 export function LoginPage() {
   const { t } = useTranslation()
@@ -17,89 +16,109 @@ export function LoginPage() {
   const { redirect } = useSearch({ from: '/login' })
   const login = useLogin()
 
-  const [email, setEmail] = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [errors, setErrors] = useState<Errors>({})
+  // The failure the user has since edited away — hidden, but the mutation
+  // itself is never reset (resetting mid-flight would reopen the submit
+  // path). A retry produces a fresh error object, which shows again.
+  const [dismissedFailure, setDismissedFailure] = useState<unknown>(null)
+  // The button's disabled state is styling; this ref is the actual guard
+  // against a second request (requestSubmit, a fast second Enter, …).
+  const submittingRef = useRef(false)
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
+    if (submittingRef.current) return
 
     const next: Errors = {}
-    const emailError = validateEmail(email)
+    const identifierError = validateIdentifier(identifier)
     const passwordError = validatePassword(password)
-    if (emailError) next.email = emailError
+    if (identifierError) next.identifier = identifierError
     if (passwordError) next.password = passwordError
 
     setErrors(next)
     if (Object.keys(next).length > 0) return
 
+    submittingRef.current = true
     try {
-      await login.mutateAsync({ email, password })
+      await login.mutateAsync({ identifier, password })
       await navigate({ to: redirect ?? '/' })
     } catch {
       // Rendered from `login.error` below; mutateAsync only rethrows here.
+    } finally {
+      // Always released, so a failed attempt can be retried.
+      submittingRef.current = false
     }
   }
 
-  const failure = login.error
+  const failure = login.error && login.error !== dismissedFailure ? login.error : null
   const formError = isAuthFieldError(failure) ? failure.key : failure ? 'auth.error.unknown' : null
 
+  const dismissFailure = () => {
+    if (login.error) setDismissedFailure(login.error)
+  }
+
   return (
-    <AuthShell
-      title={t('auth.login.title')}
-      subtitle={t('auth.login.subtitle')}
-      footer={
-        <>
-          {t('auth.login.no-account')}{' '}
-          <Link className="n-auth-link" to="/register">
-            {t('auth.register.action')}
-          </Link>
-        </>
-      }
-    >
+    <AuthShell title={t('auth.login.title', { name: t('app.name') })}>
       <form className="n-auth-form" onSubmit={(event) => void handleSubmit(event)} noValidate>
-        <AuthField
-          label={t('auth.field.email')}
-          type="email"
-          autoComplete="email"
-          autoFocus
-          placeholder="you@example.com"
-          value={email}
-          disabled={login.isPending}
-          error={errors.email && t(errors.email)}
-          onChange={(event) => {
-            setEmail(event.target.value)
-            setErrors((current) => ({ ...current, email: undefined }))
-          }}
-        />
+        <div className="n-auth-fields">
+          <AuthField
+            label={t('auth.field.identifier')}
+            // `type="email"` would make the browser reject a username, and
+            // autoComplete="username" is the token password managers use for
+            // whichever handle signs you in — including an address.
+            autoComplete="username"
+            autoFocus
+            placeholder={t('auth.field.identifier-placeholder')}
+            value={identifier}
+            disabled={login.isPending}
+            error={errors.identifier && t(errors.identifier)}
+            onChange={(event) => {
+              setIdentifier(event.target.value)
+              setErrors((current) => ({ ...current, identifier: undefined }))
+              dismissFailure()
+            }}
+          />
 
-        <AuthField
-          label={t('auth.field.password')}
-          secret
-          autoComplete="current-password"
-          placeholder="••••••••"
-          value={password}
-          disabled={login.isPending}
-          error={errors.password && t(errors.password)}
-          onChange={(event) => {
-            setPassword(event.target.value)
-            setErrors((current) => ({ ...current, password: undefined }))
-          }}
-        />
+          <AuthField
+            label={t('auth.field.password')}
+            secret
+            autoComplete="current-password"
+            placeholder={t('auth.field.password-placeholder')}
+            value={password}
+            disabled={login.isPending}
+            error={errors.password && t(errors.password)}
+            onChange={(event) => {
+              setPassword(event.target.value)
+              setErrors((current) => ({ ...current, password: undefined }))
+              dismissFailure()
+            }}
+          />
+        </div>
 
-        {formError && (
-          <div className="n-auth-alert" role="alert">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{t(formError)}</span>
+        <div className="n-auth-actions">
+          {formError && (
+            <div className="n-auth-alert" role="alert">
+              {t(formError)}
+            </div>
+          )}
+
+          <button type="submit" className="n-auth-submit" disabled={login.isPending}>
+            <span>{t('auth.login.action')}</span>
+            {login.isPending && (
+              <span className="n-auth-spinner" data-motion="essential" aria-hidden="true" />
+            )}
+          </button>
+
+          <div className="n-auth-switch">
+            {t('auth.login.no-account')}{' '}
+            <Link className="n-auth-link" to="/register">
+              {t('auth.register.link')}
+            </Link>
           </div>
-        )}
-
-        <button type="submit" className="n-auth-submit" disabled={login.isPending}>
-          {login.isPending && <span className="n-auth-spinner" aria-hidden="true" />}
-          <span>{t('auth.login.action')}</span>
-        </button>
+        </div>
       </form>
-
     </AuthShell>
   )
 }

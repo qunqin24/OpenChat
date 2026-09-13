@@ -26,6 +26,21 @@
   "next": {
     "more": "More",
     "scroll-bottom": "Scroll to bottom",
+    "sidebar": {
+      "open": "Open sidebar",
+      "close": "Close sidebar",
+      "history": "Chat history",
+      "navigation": "Chat navigation",
+      "chats": "Chats",
+      "search": "Search",
+      "search-placeholder": "Search loaded chat titles…",
+      "search-description": "Search loaded conversations by title. Load more to search older chats.",
+      "search-empty": "No matching conversations",
+      "load-more": "Load more conversations",
+      "retry": "Could not load conversations. Try again",
+      "resize": "Resize sidebar",
+      "save": "Save title"
+    },
     "nav": {
       "new": "New chat"
     },
@@ -62,8 +77,8 @@
       "month": "Previous 30 days"
     },
     "welcome": {
-      "greeting": "What should we get into?",
-      "suggestions": "Try one of these",
+      "greeting": "How can I help you today?",
+      "suggestions": "Suggested",
       "items": {
         "explain": {
           "title": "Explain something",
@@ -103,36 +118,40 @@
     "show-password": "Show password",
     "hide-password": "Hide password",
     "field": {
-      "name": "Name",
-      "name-placeholder": "What should we call you",
+      "name": "Username",
+      "name-placeholder": "Enter your username",
       "email": "Email",
+      "email-placeholder": "Enter your email",
       "password": "Password",
-      "password-placeholder": "At least {{n}} characters"
+      "password-placeholder": "Enter your password",
+      "identifier": "Email or username",
+      "identifier-placeholder": "Your email or username"
     },
     "login": {
-      "title": "Welcome back",
-      "subtitle": "Sign in to pick up where you left off",
+      "title": "Sign in to {{name}}",
       "action": "Sign in",
-      "no-account": "No account yet?"
+      "no-account": "Don't have an account?"
     },
     "register": {
-      "title": "Create an account",
-      "subtitle": "It only takes a moment",
-      "action": "Sign up",
+      "title": "Sign up to {{name}}",
+      "action": "Create Account",
+      "link": "Sign up",
       "have-account": "Already have an account?"
     },
     "error": {
-      "invalid-credentials": "That email or password is not right",
+      "invalid-credentials": "Those credentials are incorrect",
       "email-taken": "That email is already registered",
       "email-required": "Enter your email",
       "email-invalid": "That does not look like an email address",
-      "name-required": "Enter a name",
+      "name-required": "Enter a username",
       "password-required": "Enter your password",
       "password-short": "Use at least 8 characters",
       "unknown": "Something went wrong. Try again.",
       "account-disabled": "This account has been disabled",
       "password-wrong": "That is not your current password",
-      "nothing-to-update": "Nothing was changed"
+      "nothing-to-update": "Nothing was changed",
+      "name-taken": "That username is already taken",
+      "identifier-required": "Enter your email or username"
     }
   },
   "admin": {
@@ -159,7 +178,7 @@
       "messages": "Messages"
     },
     "users": {
-      "search": "Search email or name",
+      "search": "Search email or username",
       "total": "{{n}} accounts",
       "none": "No matching accounts",
       "account": "Account",
@@ -195,17 +214,18 @@
       "edit-hint": "Changes take effect immediately.",
       "create-hint": "The account can sign in right away — pass the password on yourself.",
       "form": {
-        "name": "Name",
+        "name": "Username",
         "email": "Email",
         "password": "Password",
         "confirm-password": "Confirm password",
         "password-keep": "Leave blank to keep it",
-        "name-required": "A name is required",
+        "name-required": "A username is required",
         "email-invalid": "Enter a valid email address",
         "email-taken": "That email is already registered",
         "password-required": "Set a password",
         "password-short": "At least {{n}} characters",
-        "password-mismatch": "The passwords do not match"
+        "password-mismatch": "The passwords do not match",
+        "name-taken": "That username is already taken"
       }
     },
     "bulk": {
@@ -320,7 +340,7 @@
       "profile": {
         "title": "Profile",
         "desc": "This is how others see you in the app.",
-        "name-hint": "The name shown in conversations and the admin panel.",
+        "name-hint": "The username shown in conversations and the admin panel.",
         "email-hint": "Also the address you sign in with."
       },
       "account": {

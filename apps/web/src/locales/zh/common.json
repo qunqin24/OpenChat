@@ -26,6 +26,21 @@
   "next": {
     "more": "更多",
     "scroll-bottom": "回到底部",
+    "sidebar": {
+      "open": "展开侧边栏",
+      "close": "收起侧边栏",
+      "history": "对话历史",
+      "navigation": "对话导航",
+      "chats": "对话",
+      "search": "搜索",
+      "search-placeholder": "搜索已加载的对话标题…",
+      "search-description": "按标题搜索已加载的对话，加载更多可查找更早的对话。",
+      "search-empty": "没有找到匹配的对话",
+      "load-more": "加载更多对话",
+      "retry": "对话加载失败，点击重试",
+      "resize": "调整侧边栏宽度",
+      "save": "保存标题"
+    },
     "nav": {
       "new": "新对话"
     },
@@ -62,8 +77,8 @@
       "month": "过去 30 天"
     },
     "welcome": {
-      "greeting": "今天想聊点什么？",
-      "suggestions": "试试这些",
+      "greeting": "有什么我能帮您的吗？",
+      "suggestions": "建议",
       "items": {
         "explain": {
           "title": "解释概念",
@@ -103,36 +118,40 @@
     "show-password": "显示密码",
     "hide-password": "隐藏密码",
     "field": {
-      "name": "昵称",
-      "name-placeholder": "怎么称呼你",
+      "name": "用户名",
+      "name-placeholder": "输入你的用户名",
       "email": "邮箱",
+      "email-placeholder": "输入你的邮箱",
       "password": "密码",
-      "password-placeholder": "至少 {{n}} 位"
+      "password-placeholder": "输入你的密码",
+      "identifier": "邮箱或用户名",
+      "identifier-placeholder": "输入你的邮箱或用户名"
     },
     "login": {
-      "title": "欢迎回来",
-      "subtitle": "登录后继续你的对话",
+      "title": "登录 {{name}}",
       "action": "登录",
-      "no-account": "还没有账号？"
+      "no-account": "没有账号？"
     },
     "register": {
-      "title": "创建账号",
-      "subtitle": "几秒钟就好",
-      "action": "注册",
-      "have-account": "已经有账号了？"
+      "title": "注册 {{name}}",
+      "action": "创建账号",
+      "link": "注册",
+      "have-account": "已拥有账号？"
     },
     "error": {
-      "invalid-credentials": "邮箱或密码不正确",
+      "invalid-credentials": "账号或密码不正确",
       "email-taken": "该邮箱已被注册",
       "email-required": "请填写邮箱",
       "email-invalid": "邮箱格式不正确",
-      "name-required": "请填写昵称",
+      "name-required": "请填写用户名",
       "password-required": "请填写密码",
       "password-short": "密码至少 8 位",
       "unknown": "出了点问题，请稍后再试",
       "account-disabled": "该账号已被停用",
       "password-wrong": "当前密码不正确",
-      "nothing-to-update": "没有任何改动"
+      "nothing-to-update": "没有任何改动",
+      "name-taken": "该用户名已被占用",
+      "identifier-required": "请填写邮箱或用户名"
     }
   },
   "admin": {
@@ -159,7 +178,7 @@
       "messages": "消息"
     },
     "users": {
-      "search": "搜索邮箱或昵称",
+      "search": "搜索邮箱或用户名",
       "total": "共 {{n}} 个账号",
       "none": "没有匹配的账号",
       "account": "账号",
@@ -195,17 +214,18 @@
       "edit-hint": "修改后立即生效。",
       "create-hint": "账号创建后即可登录，密码请另行告知对方。",
       "form": {
-        "name": "昵称",
+        "name": "用户名",
         "email": "邮箱",
         "password": "密码",
         "confirm-password": "确认密码",
         "password-keep": "留空表示不修改",
-        "name-required": "请填写昵称",
+        "name-required": "请填写用户名",
         "email-invalid": "请填写有效的邮箱地址",
         "email-taken": "该邮箱已被注册",
         "password-required": "请设置密码",
         "password-short": "密码至少 {{n}} 位",
-        "password-mismatch": "两次输入的密码不一致"
+        "password-mismatch": "两次输入的密码不一致",
+        "name-taken": "该用户名已被占用"
       }
     },
     "bulk": {
@@ -320,7 +340,7 @@
       "profile": {
         "title": "个人资料",
         "desc": "其他人在应用里看到的就是这些。",
-        "name-hint": "显示在对话和后台里的名字，可以随时修改。",
+        "name-hint": "显示在对话和后台里的用户名，可以随时修改。",
         "email-hint": "同时也是你的登录账号。"
       },
       "account": {

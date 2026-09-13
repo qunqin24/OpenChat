@@ -4,7 +4,8 @@ import type { SessionUser as GeneratedSessionUser } from '@openchat/api-client'
 export type SessionUser = GeneratedSessionUser
 
 export interface LoginInput {
-  email: string
+  /** An email address or a username; the server works out which. */
+  identifier: string
   password: string
 }
 
@@ -52,8 +53,10 @@ export interface AuthApi {
 export type AuthErrorKey =
   | 'auth.error.invalid-credentials'
   | 'auth.error.email-taken'
+  | 'auth.error.name-taken'
   | 'auth.error.email-required'
   | 'auth.error.email-invalid'
+  | 'auth.error.identifier-required'
   | 'auth.error.name-required'
   | 'auth.error.password-required'
   | 'auth.error.password-short'
@@ -64,7 +67,13 @@ export type AuthErrorKey =
 
 /** Field-level failures the forms surface next to the offending input. */
 export class AuthFieldError extends Error {
-  readonly field: 'email' | 'name' | 'password' | 'currentPassword' | 'newPassword'
+  readonly field:
+    | 'identifier'
+    | 'email'
+    | 'name'
+    | 'password'
+    | 'currentPassword'
+    | 'newPassword'
   readonly key: AuthErrorKey
 
   constructor(field: AuthFieldError['field'], key: AuthErrorKey) {
