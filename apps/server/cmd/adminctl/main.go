@@ -13,11 +13,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 
@@ -90,6 +92,12 @@ func run(email, name, password, role string) error {
 		       updated_at    = now()
 		RETURNING id, (xmax = 0)`, email, name, hash, role).Scan(&id, &created)
 	if err != nil {
+		// The upsert resolves a clash on the address; a clash on the username
+		// belongs to a different account and cannot be resolved here.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.ConstraintName == "users_name_lower_idx" {
+			return fmt.Errorf("the username %q is already taken by another account", name)
+		}
 		return err
 	}
 

@@ -147,8 +147,8 @@ func (s *Server) CreateUser(w http.ResponseWriter, r *http.Request) {
 		Disabled:     body.Disabled != nil && *body.Disabled,
 	})
 	if err != nil {
-		if isUniqueViolation(err) {
-			httpx.Fail(w, r, httpx.NewFieldError("email", "email_taken", "that email is already registered"))
+		if dup := duplicateError(err); dup != nil {
+			httpx.Fail(w, r, dup)
 			return
 		}
 		httpx.Fail(w, r, err)
@@ -253,8 +253,8 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, userId opena
 		Disabled:     body.Disabled,
 	})
 	if err != nil {
-		if isUniqueViolation(err) {
-			httpx.Fail(w, r, httpx.NewFieldError("email", "email_taken", "that email is already registered"))
+		if dup := duplicateError(err); dup != nil {
+			httpx.Fail(w, r, dup)
 			return
 		}
 		httpx.Fail(w, r, dbErr(err))

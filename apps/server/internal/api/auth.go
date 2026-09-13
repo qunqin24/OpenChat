@@ -80,8 +80,8 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 		PasswordHash: hash,
 	})
 	if err != nil {
-		if isUniqueViolation(err) {
-			httpx.Fail(w, r, httpx.NewFieldError("email", "email_taken", "that email is already registered"))
+		if dup := duplicateError(err); dup != nil {
+			httpx.Fail(w, r, dup)
 			return
 		}
 		httpx.Fail(w, r, err)
@@ -208,8 +208,8 @@ func (s *Server) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		Email: email,
 	})
 	if err != nil {
-		if isUniqueViolation(err) {
-			httpx.Fail(w, r, httpx.NewFieldError("email", "email_taken", "that email is already registered"))
+		if dup := duplicateError(err); dup != nil {
+			httpx.Fail(w, r, dup)
 			return
 		}
 		httpx.Fail(w, r, dbErr(err))

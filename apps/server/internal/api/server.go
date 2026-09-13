@@ -63,12 +63,41 @@ func dbErr(err error) error {
 	return err
 }
 
-// isUniqueViolation reports whether the error is Postgres rejecting a duplicate
-// key — the only way an email collision surfaces, since checking first would
-// still race with a concurrent insert.
-func isUniqueViolation(err error) bool {
+// conflictingField names the input a duplicate-key error blames, or "" when the
+// error is something else.
+//
+// Checking for a collision before writing would still race with a concurrent
+// insert, so the unique index is the check and this reads its verdict. Two
+// indexes can fire, and telling a form "that email is taken" when the username
+// is what clashed sends the person to fix the wrong field.
+func conflictingField(err error) string {
 	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == uniqueViolation
+	if !errors.As(err, &pgErr) || pgErr.Code != uniqueViolation {
+		return ""
+	}
+	switch pgErr.ConstraintName {
+	case "users_name_lower_idx":
+		return "name"
+	case "users_email_lower_idx":
+		return "email"
+	default:
+		// A unique index we have not taught this function about. Blaming a
+		// field at random would be worse than owning up to a server error.
+		return ""
+	}
+}
+
+// duplicateError turns a duplicate-key error into the field error its form can
+// show, or nil when the error was not a duplicate.
+func duplicateError(err error) error {
+	switch conflictingField(err) {
+	case "email":
+		return httpx.NewFieldError("email", "email_taken", "that email is already registered")
+	case "name":
+		return httpx.NewFieldError("name", "name_taken", "that username is already taken")
+	default:
+		return nil
+	}
 }
 
 // conversationExists returns httpx.ErrNotFound when the id is unknown, deleted,
