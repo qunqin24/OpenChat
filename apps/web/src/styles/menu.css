@@ -1,68 +1,94 @@
 /**
- * Dropdown menus (Radix), carried by a hairline ring with a shadow that only
- * lifts the panel slightly, as the picker and mention popovers do.
- *
- * Rows are sized to `.n-row`, the sidebar row that opens them — same 36px
- * height, same 10px padding, same 10px gap, same 8px fill radius — so a menu
- * reads as an extension of the row rather than a differently proportioned
- * surface. The panel's own radius is the row's 8px plus its 6px padding, which
- * keeps the inner and outer curves concentric.
- *
- * The fill sits on `background` rather than a `::before` layer: that trick
- * exists so pressing an icon button scales the fill and not the icon, which a
- * menu row has no need for — and an absolutely positioned layer would paint
- * over the row's own text.
- *
- * No `.prism-next` prefix on purpose — Radix renders menu content through a
- * portal attached to <body>, which is outside that element, so a descendant
- * selector would never match.
+ * Chat dropdowns, matched to OpenWebUI's DropdownMenu/UserMenu at 0a7c15832f:
+ * 12px corners, 2px inset, 27px rows, 13px type and Tailwind's two-layer shadow-lg.
+ * Keep these tokens separate from both the ported prism theme and shadcn.
+ * Content is portalled to <body>, so the palette must be available there too.
  */
-
-.n-menu {
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 180px;
-  max-width: calc(100vw - 24px);
-  padding: 6px;
-  border: 0;
-  border-radius: 14px;
-  background: var(--n-bg);
-  box-shadow:
-    0 0 0 0.5px rgba(0, 0, 0, 0.07),
-    0 3px 10px rgba(0, 0, 0, 0.07);
+:root {
+  --n-menu-bg: #fff;
+  --n-menu-text: #000;
+  --n-menu-border: oklch(0.94 0 0);
+  --n-menu-hover: oklch(0.98 0 0 / 60%);
+  --n-menu-separator: oklch(0.98 0 0 / 30%);
 }
 
-.dark .n-menu {
+.dark {
+  --n-menu-bg: oklch(0.27 0 0);
+  --n-menu-text: #fff;
+  --n-menu-border: oklch(0.32 0 0);
+  --n-menu-hover: oklch(0.32 0 0 / 60%);
+  --n-menu-separator: oklch(0.32 0 0 / 30%);
+}
+
+.n-menu {
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  min-width: 170px;
+  max-width: calc(100vw - 16px);
+  max-height: min(32rem, var(--radix-dropdown-menu-content-available-height));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px;
+  border: 1px solid var(--n-menu-border);
+  border-radius: 12px;
+  background: var(--n-menu-bg);
+  color: var(--n-menu-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
   box-shadow:
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.06),
-    0 0 0 0.5px rgba(255, 255, 255, 0.1),
-    0 3px 12px rgba(0, 0, 0, 0.4);
+    0 10px 15px -3px rgb(0 0 0 / 10%),
+    0 4px 6px -4px rgb(0 0 0 / 10%);
+  scrollbar-width: thin;
+  scrollbar-color: var(--n-menu-border) transparent;
+}
+
+.n-menu[data-state='open'] {
+  animation: n-menu-in 200ms cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+
+.n-menu[data-state='closed'] {
+  pointer-events: none;
+  animation: n-menu-out 200ms cubic-bezier(0.55, 0.055, 0.675, 0.19);
+}
+
+.n-menu-item,
+.n-menu-label {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  height: 27px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  user-select: none;
 }
 
 .n-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 36px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--n-text);
-  font-size: 14px;
-  line-height: 1.4;
-  text-align: left;
   outline: none;
   cursor: pointer;
-  user-select: none;
-  transition: background 150ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .n-menu-item[data-highlighted] {
-  background: var(--n-hover);
+  background: var(--n-menu-hover);
+}
+
+/* Radix moves focus with the highlighted item; the fill is its focus indicator.
+ * Scoped more tightly than focus.css so pointer movement never draws a ring.
+ */
+.n-menu .n-menu-item:focus-visible {
+  border-radius: 12px;
+  outline: none;
 }
 
 .n-menu-item[data-disabled] {
@@ -70,27 +96,68 @@
   opacity: 0.5;
 }
 
+.n-menu-item > svg {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.5;
+}
+
+.n-menu-item > span:not(.n-menu-check),
+.n-menu-label-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .n-menu-sep {
+  flex-shrink: 0;
   height: 1px;
-  margin: 4px 2px;
-  background: var(--n-line);
+  margin: 2px 4px;
+  background: var(--n-menu-separator);
 }
 
-/* Trailing marker for the active choice in a set (theme, language). */
 .n-menu-check {
+  flex-shrink: 0;
   margin-left: auto;
-  padding-left: 8px;
-  color: var(--n-text-3);
-  font-size: 12px;
 }
 
-/**
- * Matches the panel to the control that opened it. Used by the sidebar's
- * account, appearance and language rows, where the trigger is a full-width
- * `.n-row` — without it the menu is narrower than the row it drops from.
- * Left off the conversation `…` menu, whose trigger is a 32px icon button.
- */
 .n-menu.match-trigger {
   width: var(--radix-dropdown-menu-trigger-width);
   min-width: 0;
+}
+
+/* The account panel is inset 8px from the row's left edge, right-aligned. */
+.n-menu.n-account-menu {
+  width: calc(var(--radix-dropdown-menu-trigger-width) - 8px);
+  min-width: 0;
+}
+
+@keyframes n-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes n-menu-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.95);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .n-menu[data-state] {
+    animation: none;
+  }
 }

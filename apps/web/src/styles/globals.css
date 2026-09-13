@@ -11,6 +11,7 @@
    tokens, the layout, and the markdown typography. Imported after Tailwind so
    its rules win over preflight. */
 @import './next-theme.css';
+@import './sidebar-interactions.css';
 
 /* Sign-in / sign-up screens and dropdown menus, built on the same tokens. */
 @import './auth.css';

@@ -20,6 +20,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useLogout, useSession } from '@/features/auth/use-auth'
@@ -61,6 +63,8 @@ function ConversationRow({
       tabIndex={0}
       onClick={open}
       onKeyDown={(event) => {
+        // A menu's keyboard events bubble through the row, including its portal.
+        if (event.target !== event.currentTarget) return
         if (event.key !== 'Enter' && event.key !== ' ') return
         event.preventDefault()
         open()
@@ -195,16 +199,21 @@ export function Sidebar({ collapsed, activeId, onDelete }: SidebarProps) {
         )}
       </div>
 
-      <div className="p-2">
+      <div className="n-sidebar-account">
         {session && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button type="button" className="n-row">
+              <button type="button" className="n-row n-account-trigger">
                 <ModelAvatar name={session.name || session.email} size={22} />
                 <span className="n-row-label">{session.name || session.email}</span>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="match-trigger" align="start" side="top">
+            <DropdownMenuContent className="n-account-menu" align="end" side="top">
+              <DropdownMenuLabel>
+                <ModelAvatar name={session.name || session.email} size={18} />
+                <span className="n-menu-label-text">{session.name || session.email}</span>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
               {session.role === 'admin' && (
                 <DropdownMenuItem onSelect={() => void navigate({ to: '/admin' })}>
                   <Shield className="h-4 w-4" />
@@ -223,7 +232,6 @@ export function Sidebar({ collapsed, activeId, onDelete }: SidebarProps) {
             </DropdownMenuContent>
           </DropdownMenu>
         )}
-
       </div>
     </aside>
   )

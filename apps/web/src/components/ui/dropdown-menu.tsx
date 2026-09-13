@@ -9,7 +9,8 @@ export const DropdownMenuTrigger = RadixDropdownMenu.Trigger
 export function DropdownMenuContent({
   className,
   align = 'end',
-  sideOffset = 6,
+  sideOffset = 4,
+  collisionPadding = 8,
   ...props
 }: ComponentProps<typeof RadixDropdownMenu.Content>) {
   return (
@@ -17,6 +18,7 @@ export function DropdownMenuContent({
       <RadixDropdownMenu.Content
         align={align}
         sideOffset={sideOffset}
+        collisionPadding={collisionPadding}
         className={cn('n-menu', className)}
         {...props}
       />
@@ -36,4 +38,11 @@ export function DropdownMenuSeparator({
   ...props
 }: ComponentProps<typeof RadixDropdownMenu.Separator>) {
   return <RadixDropdownMenu.Separator className={cn('n-menu-sep', className)} {...props} />
+}
+
+export function DropdownMenuLabel({
+  className,
+  ...props
+}: ComponentProps<typeof RadixDropdownMenu.Label>) {
+  return <RadixDropdownMenu.Label className={cn('n-menu-label', className)} {...props} />
 }
