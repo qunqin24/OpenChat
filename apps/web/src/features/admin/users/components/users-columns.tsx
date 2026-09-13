@@ -55,6 +55,7 @@ export function usersColumns(t: TFunction<'common'>, currentUserId?: string): Co
     },
     {
       accessorKey: 'role',
+      meta: { title: t('admin.users.role') },
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title={t('admin.users.role')} />
       ),
@@ -72,6 +73,7 @@ export function usersColumns(t: TFunction<'common'>, currentUserId?: string): Co
     },
     {
       id: 'status',
+      meta: { title: t('admin.users.status') },
       accessorFn: (row) => (row.disabled ? 'disabled' : 'enabled'),
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title={t('admin.users.status')} />
@@ -86,6 +88,7 @@ export function usersColumns(t: TFunction<'common'>, currentUserId?: string): Co
     },
     {
       accessorKey: 'lastSeenAt',
+      meta: { title: t('admin.users.last-seen') },
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title={t('admin.users.last-seen')} />
       ),
@@ -98,6 +101,7 @@ export function usersColumns(t: TFunction<'common'>, currentUserId?: string): Co
     },
     {
       accessorKey: 'createdAt',
+      meta: { title: t('admin.users.joined') },
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title={t('admin.users.joined')} />
       ),

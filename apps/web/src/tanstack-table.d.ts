@@ -6,5 +6,9 @@ declare module '@tanstack/react-table' {
     className?: string // apply to both th and td
     tdClassName?: string
     thClassName?: string
+    // Translated column name. The header renders its own title, but the
+    // column-visibility menu has no header to read from and would otherwise
+    // fall back to the raw column id.
+    title?: string
   }
 }

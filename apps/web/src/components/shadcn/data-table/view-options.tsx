@@ -28,7 +28,7 @@ export function DataTableViewOptions<TData>({
           className='ms-auto hidden h-8 lg:flex'
         >
           <MixerHorizontalIcon className='size-4' />
-          View
+          {t('admin.ui.table.view')}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align='end' className='w-37.5'>
@@ -44,11 +44,10 @@ export function DataTableViewOptions<TData>({
             return (
               <DropdownMenuCheckboxItem
                 key={column.id}
-                className='capitalize'
                 checked={column.getIsVisible()}
                 onCheckedChange={(value) => column.toggleVisibility(!!value)}
               >
-                {column.id}
+                {column.columnDef.meta?.title ?? column.id}
               </DropdownMenuCheckboxItem>
             )
           })}
