@@ -7,6 +7,7 @@ import {
   LogOut,
 } from 'lucide-react'
 import useDialogState from '@/hooks/use-dialog-state'
+import { initialsOf } from '@/lib/initials'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/shadcn/ui/avatar'
 import {
   DropdownMenu,
@@ -51,7 +52,10 @@ export function NavUser({ user }: NavUserProps) {
               >
                 <Avatar className='h-8 w-8 rounded-lg'>
                   <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className='rounded-lg'>SN</AvatarFallback>
+                  {/* Upstream hardcodes "SN" here, its author's initials. */}
+                  <AvatarFallback className='rounded-lg'>
+                    {initialsOf(user.name || user.email)}
+                  </AvatarFallback>
                 </Avatar>
                 <div className='grid flex-1 text-start text-sm leading-tight'>
                   <span className='truncate font-semibold'>{user.name}</span>
@@ -70,7 +74,9 @@ export function NavUser({ user }: NavUserProps) {
                 <div className='flex items-center gap-2 px-1 py-1.5 text-start text-sm'>
                   <Avatar className='h-8 w-8 rounded-lg'>
                     <AvatarImage src={user.avatar} alt={user.name} />
-                    <AvatarFallback className='rounded-lg'>SN</AvatarFallback>
+                    <AvatarFallback className='rounded-lg'>
+                      {initialsOf(user.name || user.email)}
+                    </AvatarFallback>
                   </Avatar>
                   <div className='grid flex-1 text-start text-sm leading-tight'>
                     <span className='truncate font-semibold'>{user.name}</span>

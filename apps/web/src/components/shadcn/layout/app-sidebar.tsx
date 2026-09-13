@@ -36,7 +36,7 @@ export function AppSidebar() {
           user={{
             name: session?.name ?? '',
             email: session?.email ?? '',
-            avatar: '',
+            avatar: session?.avatarUrl ?? '',
           }}
         />
       </SidebarFooter>

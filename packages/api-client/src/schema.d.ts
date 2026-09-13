@@ -432,7 +432,19 @@ export interface components {
             email: string;
             name: string;
             role: components["schemas"]["UserRole"];
+            avatarUrl: components["schemas"]["AvatarUrl"];
         };
+        /**
+         * Format: uri
+         * @description Where to fetch this account's picture. Derived from the address rather
+         *     than stored, so it is the server's answer to "what does this person
+         *     look like" and not a column — when uploads exist, this field points at
+         *     them instead and no caller changes.
+         *
+         *     It resolves to 404 when the address has no picture registered, which is
+         *     the signal to fall back to initials.
+         */
+        AvatarUrl: string;
         User: {
             /** Format: uuid */
             id: string;
@@ -440,6 +452,7 @@ export interface components {
             email: string;
             name: string;
             role: components["schemas"]["UserRole"];
+            avatarUrl: components["schemas"]["AvatarUrl"];
             disabled: boolean;
             /** Format: date-time */
             createdAt: string;

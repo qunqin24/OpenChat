@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 
-import { Avatar, AvatarFallback } from '@/components/shadcn/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/shadcn/ui/avatar'
 import { Badge } from '@/components/shadcn/ui/badge'
 import { Skeleton } from '@/components/shadcn/ui/skeleton'
 import { useAdminUsers } from '@/features/admin/use-admin'
@@ -34,6 +34,7 @@ export function RecentUsers() {
       {data?.items.map((user) => (
         <div key={user.id} className="flex items-center gap-4">
           <Avatar className="h-9 w-9">
+            <AvatarImage src={user.avatarUrl} alt={user.name} />
             <AvatarFallback>{initialsOf(user.name || user.email)}</AvatarFallback>
           </Avatar>
           <div className="flex flex-1 flex-wrap items-center justify-between gap-2">

@@ -220,11 +220,12 @@ LIMIT 1
 
 // Sign-in accepts either identifier, so one lookup covers both.
 //
-// Nothing stops a username from being spelled like somebody else's address, so
-// the two columns can match different rows for the same input. The ORDER BY
-// settles it in favour of the address: your own email always signs you in, and
-// no username anyone else picks can take that away. Without it `:one` would
-// take whichever row the planner returned first.
+// The `users_name_no_at` constraint keeps usernames and addresses in disjoint
+// name spaces, so the two columns cannot match different rows for one input and
+// the ORDER BY can no longer decide anything. It stays as the guard for if that
+// constraint is ever dropped: without it `:one` would silently take whichever
+// row the planner returned first, which is the wrong account rather than an
+// error. Addresses win, so nobody's username can shadow somebody's email.
 func (q *Queries) GetUserByLogin(ctx context.Context, identifier string) (User, error) {
 	row := q.db.QueryRow(ctx, getUserByLogin, identifier)
 	var i User

@@ -45,10 +45,11 @@ func toChatMessages(rows []sqlc.Message) []chat.Message {
 
 func toSessionUser(row sqlc.User) SessionUser {
 	return SessionUser{
-		Id:    row.ID,
-		Email: openapi_types.Email(row.Email),
-		Name:  row.Name,
-		Role:  UserRole(row.Role),
+		Id:        row.ID,
+		Email:     openapi_types.Email(row.Email),
+		Name:      row.Name,
+		Role:      UserRole(row.Role),
+		AvatarUrl: avatarURL(row.Email),
 	}
 }
 
@@ -60,6 +61,7 @@ func toUser(row sqlc.User) User {
 		Role:      UserRole(row.Role),
 		Disabled:  row.DisabledAt.Valid,
 		CreatedAt: row.CreatedAt.Time,
+		AvatarUrl: avatarURL(row.Email),
 	}
 	if row.LastSeenAt.Valid {
 		seen := row.LastSeenAt.Time

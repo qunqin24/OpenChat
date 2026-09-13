@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Link } from '@tanstack/react-router'
 import useDialogState from '@/hooks/use-dialog-state'
-import { Avatar, AvatarFallback } from '@/components/shadcn/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/shadcn/ui/avatar'
 import { Button } from '@/components/shadcn/ui/button'
 import {
   DropdownMenu,
@@ -26,6 +26,7 @@ export function ProfileDropdown() {
         <DropdownMenuTrigger asChild>
           <Button variant='ghost' className='relative h-8 w-8 rounded-full'>
             <Avatar className='h-8 w-8'>
+              <AvatarImage src={session?.avatarUrl} alt={session?.name ?? ''} />
               <AvatarFallback>{initialsOf(session?.name ?? session?.email)}</AvatarFallback>
             </Avatar>
           </Button>

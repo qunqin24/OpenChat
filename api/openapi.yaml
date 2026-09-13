@@ -580,21 +580,35 @@ components:
 
     SessionUser:
       type: object
-      required: [id, email, name, role]
+      required: [id, email, name, role, avatarUrl]
       properties:
         id: { type: string, format: uuid }
         email: { type: string, format: email }
         name: { type: string }
         role: { $ref: "#/components/schemas/UserRole" }
+        avatarUrl: { $ref: "#/components/schemas/AvatarUrl" }
+
+    AvatarUrl:
+      type: string
+      format: uri
+      description: |
+        Where to fetch this account's picture. Derived from the address rather
+        than stored, so it is the server's answer to "what does this person
+        look like" and not a column — when uploads exist, this field points at
+        them instead and no caller changes.
+
+        It resolves to 404 when the address has no picture registered, which is
+        the signal to fall back to initials.
 
     User:
       type: object
-      required: [id, email, name, role, disabled, createdAt]
+      required: [id, email, name, role, disabled, createdAt, avatarUrl]
       properties:
         id: { type: string, format: uuid }
         email: { type: string, format: email }
         name: { type: string }
         role: { $ref: "#/components/schemas/UserRole" }
+        avatarUrl: { $ref: "#/components/schemas/AvatarUrl" }
         disabled: { type: boolean }
         createdAt: { type: string, format: date-time }
         lastSeenAt: { type: string, format: date-time, nullable: true }
