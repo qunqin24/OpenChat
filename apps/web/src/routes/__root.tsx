@@ -4,6 +4,7 @@ import { lazy, Suspense, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { GlobalProgress } from '@/components/GlobalProgress'
+import { Toaster } from '@/components/Toaster'
 import { dismissBootSplash } from '@/lib/boot'
 
 export interface RouterContext {
@@ -54,6 +55,7 @@ function RootLayout() {
     <>
       <GlobalProgress />
       <Outlet />
+      <Toaster />
       {DEVTOOLS && (
         <Suspense fallback={null}>
           {/* Both live on the right: the sidebar owns the bottom-left corner,
@@ -71,7 +73,7 @@ function NotFound() {
   const { t } = useTranslation()
   return (
     <div className="n-auth">
-      <div className="flex flex-col items-center gap-4">
+      <div className="m-auto flex flex-col items-center gap-4">
         <p className="text-sm" style={{ color: 'var(--n-text-2)' }}>
           {t('state.notFound')}
         </p>

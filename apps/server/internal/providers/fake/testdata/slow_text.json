@@ -1,0 +1,16 @@
+{
+  "provider": "fake",
+  "model": "fake-1",
+  "finish_reason": "stop",
+  "steps": [
+    {
+      "kind": "text",
+      "chunks": ["An aperture ", "is an opening "]
+    },
+    {
+      "kind": "text",
+      "delay_ms": 60000,
+      "chunks": ["through which light travels."]
+    }
+  ]
+}

@@ -1,6 +1,8 @@
 import type {
   BulkUpdateUsersRequest,
+  CreateChannelRequest,
   CreateUserRequest,
+  UpdateChannelRequest,
   UpdateUserRequest,
 } from '@openchat/api-client'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -12,6 +14,7 @@ export const adminKeys = {
   stats: (days: number) => [...adminKeys.all, 'stats', days] as const,
   users: (page: number, search: string) => [...adminKeys.all, 'users', page, search] as const,
   system: () => [...adminKeys.all, 'system'] as const,
+  channels: () => [...adminKeys.all, 'channels'] as const,
 }
 
 export function useAdminStats(days = 30) {
@@ -94,6 +97,71 @@ export function useCreateUser() {
       unwrap(await api.POST('/admin/users', { body })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.all })
+    },
+  })
+}
+
+/**
+ * The whole list in one response — there are a handful of channels at most, so
+ * there is nothing to page through and no filter in the key. That is also why
+ * none of the channel hooks need `placeholderData`: the key never changes.
+ */
+export function useAdminChannels() {
+  return useQuery({
+    queryKey: adminKeys.channels(),
+    queryFn: async ({ signal }) => unwrap(await api.GET('/admin/channels', { signal })),
+  })
+}
+
+export function useCreateChannel() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (body: CreateChannelRequest) =>
+      unwrap(await api.POST('/admin/channels', { body })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.channels() })
+    },
+  })
+}
+
+/**
+ * A partial update: only the fields present in `body` change.
+ *
+ * `apiKey` in particular is write-only — the server never hands a key back, so
+ * an absent `apiKey` means "keep the stored one" and an empty string means
+ * "clear it". Callers that are not deliberately changing the credential must
+ * leave the property off the object entirely rather than passing `''`.
+ */
+export function useUpdateChannel() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ channelId, ...body }: UpdateChannelRequest & { channelId: string }) =>
+      unwrap(
+        await api.PATCH('/admin/channels/{channelId}', {
+          params: { path: { channelId } },
+          body,
+        }),
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.channels() })
+    },
+  })
+}
+
+/**
+ * Unlike an account, a channel owns no user data — deleting one drops the
+ * connection and its key, and leaves every conversation untouched.
+ */
+export function useDeleteChannel() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (channelId: string) =>
+      unwrap(await api.DELETE('/admin/channels/{channelId}', { params: { path: { channelId } } })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.channels() })
     },
   })
 }

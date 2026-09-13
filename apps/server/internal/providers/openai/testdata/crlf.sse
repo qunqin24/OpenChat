@@ -1,0 +1,8 @@
+data: {"id":"chatcmpl-crlf","object":"chat.completion.chunk","created":1730000000,"model":"gpt-4o-mini","choices":[{"index":0,"delta":{"role":"assistant","content":"Windows line endings"},"finish_reason":null}]}
+
+: heartbeat
+
+data: {"id":"chatcmpl-crlf","object":"chat.completion.chunk","created":1730000000,"model":"gpt-4o-mini","choices":[{"index":0,"delta":{"content":" are still SSE."},"finish_reason":"stop"}]}
+
+data: [DONE]
+

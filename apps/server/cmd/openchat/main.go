@@ -92,6 +92,9 @@ func run() error {
 	// Before the listener opens, so a server started with debug logging on logs
 	// its own startup in detail — which is when you want it most.
 	server.LoadSettings(ctx)
+	// Deliberately not waited on: the model catalogue comes from a third party,
+	// and a boot that blocked on it would be a boot somebody else can hold up.
+	server.StartCatalogRefresh(ctx)
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

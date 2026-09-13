@@ -176,6 +176,88 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Catalogue freshness */
+        get: operations["getCatalogStatus"];
+        put?: never;
+        /**
+         * Refresh the catalogue from models.dev
+         * @description Fetches the upstream file and replaces the snapshot. A failed fetch
+         *     leaves the previous snapshot in place — a stale catalogue is worth more
+         *     than an empty one — and answers 502 rather than 200, because the refresh
+         *     is what failed. The snapshot being served is unchanged, and `GET` on
+         *     this path reports why through `lastError`.
+         */
+        post: operations["refreshCatalog"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/catalog/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Providers in the catalogue
+         * @description The source for the provider picker when adding a channel.
+         */
+        get: operations["listCatalogProviders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/catalog/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Browse the model catalogue */
+        get: operations["listCatalogModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/catalog/models/{providerId}/{modelId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                providerId: string;
+                modelId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Switch a model on or off for this installation */
+        patch: operations["updateCatalogModel"];
+        trace?: never;
+    };
     "/admin/system": {
         parameters: {
             query?: never;
@@ -579,6 +661,72 @@ export interface components {
             role?: components["schemas"]["UserRole"];
             disabled?: boolean;
         };
+        CatalogStatus: {
+            /**
+             * Format: date-time
+             * @description Absent when nothing has ever been fetched.
+             */
+            fetchedAt?: string;
+            providerCount: number;
+            modelCount: number;
+            /** @description Whether the snapshot is old enough to be worth refreshing. */
+            stale: boolean;
+            /**
+             * @description Why the most recent refresh failed, if it did. The snapshot it
+             *     failed to replace is still the one being served.
+             */
+            lastError?: string;
+        };
+        CatalogProvider: {
+            /** @example anthropic */
+            id: string;
+            /** @example Anthropic */
+            name: string;
+            modelCount: number;
+            /** Format: uri */
+            doc?: string;
+            /** @description Environment variables upstream documents for this provider's key. */
+            env?: string[];
+        };
+        CatalogModel: {
+            providerId: string;
+            providerName: string;
+            modelId: string;
+            name: string;
+            description?: string;
+            family?: string;
+            /** @description Whether this installation has switched the model on. */
+            enabled: boolean;
+            attachment: boolean;
+            reasoning: boolean;
+            toolCall: boolean;
+            structuredOutput: boolean;
+            /** Format: int64 */
+            contextLimit?: number;
+            /** Format: int64 */
+            outputLimit?: number;
+            /**
+             * Format: double
+             * @description USD per million input tokens.
+             */
+            inputCost?: number;
+            /**
+             * Format: double
+             * @description USD per million output tokens.
+             */
+            outputCost?: number;
+            releaseDate?: string;
+            knowledge?: string;
+            inputModalities?: string[];
+            outputModalities?: string[];
+        };
+        CatalogModelPage: {
+            items: components["schemas"]["CatalogModel"][];
+            /** Format: int64 */
+            total: number;
+            page: number;
+            limit: number;
+        };
         SystemSettings: {
             /**
              * @description Whether the server logs at debug level. Takes effect immediately —
@@ -948,6 +1096,130 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["User"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getCatalogStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogStatus"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    refreshCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogStatus"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listCatalogProviders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogProvider"][];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listCatalogModels: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                page?: number;
+                /** @description Matches against model id, name and family. */
+                search?: string;
+                providerId?: string;
+                /** @description Only models with all of these. */
+                capability?: ("reasoning" | "toolCall" | "attachment" | "structuredOutput")[];
+                /** @description Restrict to models that are, or are not, switched on here. */
+                enabled?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogModelPage"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateCatalogModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                providerId: string;
+                modelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    enabled?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogModel"];
                 };
             };
             default: components["responses"]["Error"];

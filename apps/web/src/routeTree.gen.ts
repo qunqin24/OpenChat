@@ -15,6 +15,8 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as AuthedIndexRouteImport } from './routes/_authed.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminChannelsRouteImport } from './routes/admin.channels'
+import { Route as AdminModelsRouteImport } from './routes/admin.models'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as DevLoadingRouteImport } from './routes/dev.loading'
@@ -22,6 +24,7 @@ import { Route as AuthedChatConversationIdRouteImport } from './routes/_authed.c
 import { Route as AdminSettingsIndexRouteImport } from './routes/admin.settings.index'
 import { Route as AdminSettingsAccountRouteImport } from './routes/admin.settings.account'
 import { Route as AdminSettingsAppearanceRouteImport } from './routes/admin.settings.appearance'
+import { Route as AdminSettingsSystemRouteImport } from './routes/admin.settings.system'
 
 const AuthedRoute = AuthedRouteImport.update({
   id: '/_authed',
@@ -50,6 +53,16 @@ const AuthedIndexRoute = AuthedIndexRouteImport.update({
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminChannelsRoute = AdminChannelsRouteImport.update({
+  id: '/channels',
+  path: '/channels',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminModelsRoute = AdminModelsRouteImport.update({
+  id: '/models',
+  path: '/models',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
@@ -88,12 +101,19 @@ const AdminSettingsAppearanceRoute = AdminSettingsAppearanceRouteImport.update({
   path: '/appearance',
   getParentRoute: () => AdminSettingsRoute,
 } as any)
+const AdminSettingsSystemRoute = AdminSettingsSystemRouteImport.update({
+  id: '/system',
+  path: '/system',
+  getParentRoute: () => AdminSettingsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthedIndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/admin/channels': typeof AdminChannelsRoute
+  '/admin/models': typeof AdminModelsRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
   '/admin/users': typeof AdminUsersRoute
   '/dev/loading': typeof DevLoadingRoute
@@ -101,11 +121,14 @@ export interface FileRoutesByFullPath {
   '/chat/$conversationId': typeof AuthedChatConversationIdRoute
   '/admin/settings/account': typeof AdminSettingsAccountRoute
   '/admin/settings/appearance': typeof AdminSettingsAppearanceRoute
+  '/admin/settings/system': typeof AdminSettingsSystemRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/admin/channels': typeof AdminChannelsRoute
+  '/admin/models': typeof AdminModelsRoute
   '/admin/users': typeof AdminUsersRoute
   '/dev/loading': typeof DevLoadingRoute
   '/': typeof AuthedIndexRoute
@@ -113,6 +136,7 @@ export interface FileRoutesByTo {
   '/chat/$conversationId': typeof AuthedChatConversationIdRoute
   '/admin/settings/account': typeof AdminSettingsAccountRoute
   '/admin/settings/appearance': typeof AdminSettingsAppearanceRoute
+  '/admin/settings/system': typeof AdminSettingsSystemRoute
   '/admin/settings': typeof AdminSettingsIndexRoute
 }
 export interface FileRoutesById {
@@ -121,6 +145,8 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/admin/channels': typeof AdminChannelsRoute
+  '/admin/models': typeof AdminModelsRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
   '/admin/users': typeof AdminUsersRoute
   '/dev/loading': typeof DevLoadingRoute
@@ -129,6 +155,7 @@ export interface FileRoutesById {
   '/_authed/chat/$conversationId': typeof AuthedChatConversationIdRoute
   '/admin/settings/account': typeof AdminSettingsAccountRoute
   '/admin/settings/appearance': typeof AdminSettingsAppearanceRoute
+  '/admin/settings/system': typeof AdminSettingsSystemRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
 }
 export interface FileRouteTypes {
@@ -138,6 +165,8 @@ export interface FileRouteTypes {
     | '/admin'
     | '/login'
     | '/register'
+    | '/admin/channels'
+    | '/admin/models'
     | '/admin/settings'
     | '/admin/users'
     | '/dev/loading'
@@ -145,11 +174,14 @@ export interface FileRouteTypes {
     | '/chat/$conversationId'
     | '/admin/settings/account'
     | '/admin/settings/appearance'
+    | '/admin/settings/system'
     | '/admin/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
     | '/register'
+    | '/admin/channels'
+    | '/admin/models'
     | '/admin/users'
     | '/dev/loading'
     | '/'
@@ -157,6 +189,7 @@ export interface FileRouteTypes {
     | '/chat/$conversationId'
     | '/admin/settings/account'
     | '/admin/settings/appearance'
+    | '/admin/settings/system'
     | '/admin/settings'
   id:
     | '__root__'
@@ -164,6 +197,8 @@ export interface FileRouteTypes {
     | '/admin'
     | '/login'
     | '/register'
+    | '/admin/channels'
+    | '/admin/models'
     | '/admin/settings'
     | '/admin/users'
     | '/dev/loading'
@@ -172,6 +207,7 @@ export interface FileRouteTypes {
     | '/_authed/chat/$conversationId'
     | '/admin/settings/account'
     | '/admin/settings/appearance'
+    | '/admin/settings/system'
     | '/admin/settings/'
   fileRoutesById: FileRoutesById
 }
@@ -227,6 +263,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/channels': {
+      id: '/admin/channels'
+      path: '/channels'
+      fullPath: '/admin/channels'
+      preLoaderRoute: typeof AdminChannelsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/models': {
+      id: '/admin/models'
+      path: '/models'
+      fullPath: '/admin/models'
+      preLoaderRoute: typeof AdminModelsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/settings': {
       id: '/admin/settings'
       path: '/settings'
@@ -276,6 +326,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsAppearanceRouteImport
       parentRoute: typeof AdminSettingsRoute
     }
+    '/admin/settings/system': {
+      id: '/admin/settings/system'
+      path: '/system'
+      fullPath: '/admin/settings/system'
+      preLoaderRoute: typeof AdminSettingsSystemRouteImport
+      parentRoute: typeof AdminSettingsRoute
+    }
   }
 }
 
@@ -295,12 +352,14 @@ const AuthedRouteWithChildren =
 interface AdminSettingsRouteChildren {
   AdminSettingsAccountRoute: typeof AdminSettingsAccountRoute
   AdminSettingsAppearanceRoute: typeof AdminSettingsAppearanceRoute
+  AdminSettingsSystemRoute: typeof AdminSettingsSystemRoute
   AdminSettingsIndexRoute: typeof AdminSettingsIndexRoute
 }
 
 const AdminSettingsRouteChildren: AdminSettingsRouteChildren = {
   AdminSettingsAccountRoute: AdminSettingsAccountRoute,
   AdminSettingsAppearanceRoute: AdminSettingsAppearanceRoute,
+  AdminSettingsSystemRoute: AdminSettingsSystemRoute,
   AdminSettingsIndexRoute: AdminSettingsIndexRoute,
 }
 
@@ -309,12 +368,16 @@ const AdminSettingsRouteWithChildren = AdminSettingsRoute._addFileChildren(
 )
 
 interface AdminRouteChildren {
+  AdminChannelsRoute: typeof AdminChannelsRoute
+  AdminModelsRoute: typeof AdminModelsRoute
   AdminSettingsRoute: typeof AdminSettingsRouteWithChildren
   AdminUsersRoute: typeof AdminUsersRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminChannelsRoute: AdminChannelsRoute,
+  AdminModelsRoute: AdminModelsRoute,
   AdminSettingsRoute: AdminSettingsRouteWithChildren,
   AdminUsersRoute: AdminUsersRoute,
   AdminIndexRoute: AdminIndexRoute,

@@ -167,7 +167,9 @@
     "nav": {
       "dashboard": "Dashboard",
       "users": "Users",
-      "manage": "Manage"
+      "manage": "Manage",
+      "channels": "Channels",
+      "models": "Models"
     },
     "stats": {
       "users": "Total users",
@@ -379,6 +381,53 @@
         "on": "Debug logging is on",
         "off": "Debug logging is off"
       }
+    },
+    "channels": {
+      "title": "Channels",
+      "subtitle": "Connections to model providers.",
+      "create": "Add channel",
+      "edit": "Edit channel",
+      "none": "No channels yet",
+      "name": "Name",
+      "provider": "Provider",
+      "base-url": "Base URL",
+      "base-url-hint": "Leave blank to use the provider's default.",
+      "api-key": "API key",
+      "api-key-hint": "Leave blank to keep the stored key; it cannot be read back.",
+      "api-key-set": "Set",
+      "api-key-none": "Not set",
+      "enabled": "Enabled",
+      "delete": "Delete channel",
+      "delete-confirm": "Deletes the channel \"{{name}}\" and its key. This cannot be undone, but no chat history is affected.",
+      "created": "Channel created",
+      "updated": "Channel updated",
+      "deleted": "Channel deleted",
+      "api-key-clear": "Clear",
+      "api-key-clearing": "Will be removed on save"
+    },
+    "models": {
+      "title": "Models",
+      "subtitle": "Browse the models.dev catalogue and choose what this site offers.",
+      "none": "No matching models",
+      "search": "Search name or family",
+      "all-providers": "All providers",
+      "enable": "Enable",
+      "enabled": "Enabled",
+      "context": "Context",
+      "output": "Output",
+      "cost": "$/M tokens",
+      "cap-reasoning": "Reasoning",
+      "cap-tool": "Tools",
+      "cap-attachment": "Attachments",
+      "cap-structured": "Structured output",
+      "refresh": "Refresh catalogue",
+      "refreshing": "Refreshing…",
+      "synced": "Catalogue updated {{time}}",
+      "never-synced": "Never synced",
+      "sync-failed": "Refresh failed — still serving the previous catalogue",
+      "stale": "Catalogue is stale",
+      "count": "{{models}} models · {{providers}} providers",
+      "filter-enabled": "Enabled only"
     }
   }
 }

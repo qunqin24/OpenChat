@@ -1,4 +1,4 @@
-import { ArrowLeft, LayoutDashboard, Settings, Users } from 'lucide-react'
+import { ArrowLeft, Boxes, LayoutDashboard, Plug, Settings, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { IconAperture } from '@/assets/custom/icon-aperture'
@@ -31,6 +31,8 @@ export function useSidebarData(): SidebarData {
         items: [
           { title: t('admin.nav.dashboard'), url: '/admin', icon: LayoutDashboard },
           { title: t('admin.nav.users'), url: '/admin/users', icon: Users },
+          { title: t('admin.nav.channels'), url: '/admin/channels', icon: Plug },
+          { title: t('admin.nav.models'), url: '/admin/models', icon: Boxes },
         ],
       },
       {

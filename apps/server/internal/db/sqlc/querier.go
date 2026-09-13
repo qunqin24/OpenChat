@@ -25,6 +25,9 @@ type Querier interface {
 	BulkSetUserDisabled(ctx context.Context, arg BulkSetUserDisabledParams) (int64, error)
 	BulkUpdateUserRole(ctx context.Context, arg BulkUpdateUserRoleParams) (int64, error)
 	CountAdmins(ctx context.Context) (int64, error)
+	CountCatalogModels(ctx context.Context) (int64, error)
+	CountCatalogModelsFiltered(ctx context.Context, arg CountCatalogModelsFilteredParams) (int64, error)
+	CountCatalogProviders(ctx context.Context) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
 	CountUsersFiltered(ctx context.Context, search *string) (int64, error)
 	CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (Attachment, error)
@@ -32,6 +35,8 @@ type Querier interface {
 	CreateConversation(ctx context.Context, arg CreateConversationParams) (Conversation, error)
 	CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
+	DeleteCatalogModels(ctx context.Context) error
+	DeleteCatalogProviders(ctx context.Context) error
 	DeleteChannel(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteExpiredSessions(ctx context.Context) (int64, error)
 	// Used when someone changes their own password: every session issued under the
@@ -45,6 +50,7 @@ type Querier interface {
 	// One row per day for the requested window, including days with no activity —
 	// a gap in the series would otherwise draw as a straight line across the chart.
 	GetActivityTrend(ctx context.Context, days int32) ([]GetActivityTrendRow, error)
+	GetCatalogModel(ctx context.Context, arg GetCatalogModelParams) (GetCatalogModelRow, error)
 	GetChannel(ctx context.Context, id uuid.UUID) (Channel, error)
 	// Ownership is part of the lookup, not a separate check: a conversation
 	// belonging to someone else must read as "not found", never as "forbidden",
@@ -65,7 +71,23 @@ type Querier interface {
 	// row the planner returned first, which is the wrong account rather than an
 	// error. Addresses win, so nobody's username can shadow somebody's email.
 	GetUserByLogin(ctx context.Context, identifier string) (User, error)
+	InsertCatalogModels(ctx context.Context, arg []InsertCatalogModelsParams) (int64, error)
+	InsertCatalogProviders(ctx context.Context, arg []InsertCatalogProvidersParams) (int64, error)
 	ListAttachmentsByMessages(ctx context.Context, messageIds []uuid.UUID) ([]Attachment, error)
+	// Offset paging, as in ListUsers: the table wants page numbers and a total.
+	//
+	// `enabled` is a left join rather than a column because model_settings is this
+	// installation's decision and the catalogue is a cache of somebody else's file;
+	// a model nobody has touched has no row at all. `raw` is deliberately not
+	// selected, being several times the size of everything else here.
+	//
+	// Each capability narrows rather than widens, so asking for two gets models
+	// that have both.
+	ListCatalogModels(ctx context.Context, arg ListCatalogModelsParams) ([]ListCatalogModelsRow, error)
+	// The model count comes from the same read as the provider: the picker shows
+	// both, and a provider with no models is worth showing as empty rather than
+	// hiding.
+	ListCatalogProviders(ctx context.Context) ([]ListCatalogProvidersRow, error)
 	ListChannels(ctx context.Context) ([]Channel, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
@@ -78,6 +100,14 @@ type Querier interface {
 	// inside the INSERT so two concurrent registrations cannot both see an empty
 	// table and both claim it.
 	RegisterUser(ctx context.Context, arg RegisterUserParams) (User, error)
+	// The only statement in this file that writes model_settings. A sync must not
+	// reach it: replacing the catalogue is not a reason to switch a model on or
+	// off.
+	//
+	// The SELECT is the existence check rather than a query before it: a settings
+	// row for a model no provider offers is a row nothing would ever read again.
+	// No rows affected therefore means the model is unknown.
+	SetModelEnabled(ctx context.Context, arg SetModelEnabledParams) (int64, error)
 	// Upsert, so a setting added after this database was created still writes.
 	SetSetting(ctx context.Context, arg SetSettingParams) error
 	SoftDeleteConversation(ctx context.Context, arg SoftDeleteConversationParams) (int64, error)

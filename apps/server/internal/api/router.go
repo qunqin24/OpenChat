@@ -80,6 +80,12 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 				r.Get("/admin/system", wrapper.GetSystemSettings)
 				r.Patch("/admin/system", wrapper.UpdateSystemSettings)
 
+				r.Get("/admin/catalog", wrapper.GetCatalogStatus)
+				r.Post("/admin/catalog", wrapper.RefreshCatalog)
+				r.Get("/admin/catalog/providers", wrapper.ListCatalogProviders)
+				r.Get("/admin/catalog/models", wrapper.ListCatalogModels)
+				r.Patch("/admin/catalog/models/{providerId}/{modelId}", wrapper.UpdateCatalogModel)
+
 				r.Get("/admin/channels", wrapper.ListChannels)
 				r.Post("/admin/channels", wrapper.CreateChannel)
 				r.Patch("/admin/channels/{channelId}", wrapper.UpdateChannel)

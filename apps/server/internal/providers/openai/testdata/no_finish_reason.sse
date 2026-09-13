@@ -1,0 +1,4 @@
+data: {"id":"chatcmpl-nofinish","object":"chat.completion.chunk","created":1730000000,"model":"local-model","choices":[{"index":0,"delta":{"role":"assistant","content":"Gateways do this."},"finish_reason":null}]}
+
+data: [DONE]
+

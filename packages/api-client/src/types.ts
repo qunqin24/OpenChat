@@ -30,6 +30,10 @@ export type BulkUpdateUsersRequest = Schemas['BulkUpdateUsersRequest']
 export type BulkUpdateResult = Schemas['BulkUpdateResult']
 export type BulkSkipped = Schemas['BulkSkipped']
 
+export type Channel = Schemas['Channel']
+export type CreateChannelRequest = Schemas['CreateChannelRequest']
+export type UpdateChannelRequest = Schemas['UpdateChannelRequest']
+
 export type AdminStats = Schemas['AdminStats']
 export type AdminTotals = Schemas['AdminTotals']
 export type TrendPoint = Schemas['TrendPoint']

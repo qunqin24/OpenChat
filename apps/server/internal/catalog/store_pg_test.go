@@ -1,0 +1,244 @@
+package catalog
+
+import (
+	"context"
+	"net/http"
+	"os"
+	"testing"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/qunqin/openchat/apps/server/internal/db"
+	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
+)
+
+// The tests in this file need a database, which CI does not have and a
+// developer may not have running, so they ask for one by name and skip when
+// they are not given it:
+//
+//	CATALOG_TEST_DATABASE_URL=postgres://... go test ./internal/catalog/
+//
+// Point it at a scratch database: these tests empty the catalogue tables.
+func testPool(t *testing.T) *pgxpool.Pool {
+	t.Helper()
+
+	dsn := os.Getenv("CATALOG_TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("set CATALOG_TEST_DATABASE_URL to run the database-backed catalogue tests")
+	}
+
+	ctx := context.Background()
+	pool, err := db.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(pool.Close)
+
+	if err := db.Migrate(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	for _, table := range []string{"catalog_models", "catalog_providers", "model_settings"} {
+		if _, err := pool.Exec(ctx, "DELETE FROM "+table); err != nil {
+			t.Fatalf("clear %s: %v", table, err)
+		}
+	}
+	return pool
+}
+
+// TestPgStoreReplace is the counterpart to the fake-store tests: it runs the
+// statements themselves, where a NOT NULL column or a numeric conversion can
+// fail in a way no amount of Go-level mocking would notice.
+func TestPgStoreReplace(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	q := sqlc.New(pool)
+
+	// Two switched-on models: one the incoming snapshot still has, one it does
+	// not. A sync has no business with either.
+	for _, model := range [][2]string{{"openai", "gpt-4o"}, {"legacy", "model-gone"}} {
+		if _, err := pool.Exec(ctx,
+			"INSERT INTO model_settings (provider_id, model_id, enabled) VALUES ($1, $2, true)",
+			model[0], model[1]); err != nil {
+			t.Fatalf("seed model_settings: %v", err)
+		}
+	}
+
+	client := serveFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(fixture(t))
+	})
+	result, err := client.Fetch(ctx, "")
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+
+	store := NewStore(pool)
+	if err := store.Replace(ctx, result.Providers); err != nil {
+		t.Fatalf("replace: %v", err)
+	}
+	// Twice, because the second one is the case the delete-then-insert strategy
+	// has to survive: every row already exists.
+	if err := store.Replace(ctx, result.Providers); err != nil {
+		t.Fatalf("second replace: %v", err)
+	}
+
+	providers, err := q.CountCatalogProviders(ctx)
+	if err != nil {
+		t.Fatalf("count providers: %v", err)
+	}
+	models, err := q.CountCatalogModels(ctx)
+	if err != nil {
+		t.Fatalf("count models: %v", err)
+	}
+	if providers != 3 || models != 4 {
+		t.Errorf("snapshot = %d providers, %d models; want 3 and 4", providers, models)
+	}
+
+	var settings int
+	if err := pool.QueryRow(ctx,
+		"SELECT count(*) FROM model_settings WHERE enabled").Scan(&settings); err != nil {
+		t.Fatalf("count settings: %v", err)
+	}
+	if settings != 2 {
+		t.Errorf("enabled models = %d, want the two the sync was told nothing about", settings)
+	}
+
+	// The costs are stored as numeric and read back as a float, which is the
+	// round trip the cost columns exist for.
+	model, err := q.GetCatalogModel(ctx, sqlc.GetCatalogModelParams{ProviderID: "openai", ModelID: "gpt-4o-mini"})
+	if err != nil {
+		t.Fatalf("get model: %v", err)
+	}
+	if model.InputCost != 0.15 || model.OutputCost != 0.6 {
+		t.Errorf("cost = %v/%v, want 0.15/0.6", model.InputCost, model.OutputCost)
+	}
+	if model.ProviderName != "OpenAI" || model.Enabled {
+		t.Errorf("model = %+v, want it named by its provider and switched off", model)
+	}
+	// The one the operator had switched on before the sync is still on.
+	enabled, err := q.GetCatalogModel(ctx, sqlc.GetCatalogModelParams{ProviderID: "openai", ModelID: "gpt-4o"})
+	if err != nil {
+		t.Fatalf("get model: %v", err)
+	}
+	if !enabled.Enabled {
+		t.Error("a refresh switched off a model the operator had switched on")
+	}
+}
+
+func TestPgListCatalogModelsFilters(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	q := sqlc.New(pool)
+
+	client := serveFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(fixture(t))
+	})
+	result, err := client.Fetch(ctx, "")
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if err := NewStore(pool).Replace(ctx, result.Providers); err != nil {
+		t.Fatalf("replace: %v", err)
+	}
+
+	if _, err := q.SetModelEnabled(ctx, sqlc.SetModelEnabledParams{
+		ProviderID: "anthropic", ModelID: "claude-sonnet-4-5", Enabled: true,
+	}); err != nil {
+		t.Fatalf("enable: %v", err)
+	}
+
+	provider := "openai"
+	search := "MINI"
+	enabled := true
+
+	cases := []struct {
+		name   string
+		params sqlc.ListCatalogModelsParams
+		want   int
+	}{
+		{"unfiltered", sqlc.ListCatalogModelsParams{}, 4},
+		{"by provider", sqlc.ListCatalogModelsParams{ProviderID: &provider}, 2},
+		{"search is case insensitive", sqlc.ListCatalogModelsParams{Search: &search}, 1},
+		{"capabilities are all-of", sqlc.ListCatalogModelsParams{
+			RequireReasoning: true, RequireToolCall: true,
+		}, 1},
+		{"enabled", sqlc.ListCatalogModelsParams{Enabled: &enabled}, 1},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			params := tc.params
+			params.RowLimit = 50
+
+			rows, err := q.ListCatalogModels(ctx, params)
+			if err != nil {
+				t.Fatalf("list: %v", err)
+			}
+			if len(rows) != tc.want {
+				t.Errorf("rows = %d, want %d", len(rows), tc.want)
+			}
+
+			total, err := q.CountCatalogModelsFiltered(ctx, sqlc.CountCatalogModelsFilteredParams{
+				Search:                  params.Search,
+				ProviderID:              params.ProviderID,
+				RequireReasoning:        params.RequireReasoning,
+				RequireToolCall:         params.RequireToolCall,
+				RequireAttachment:       params.RequireAttachment,
+				RequireStructuredOutput: params.RequireStructuredOutput,
+				Enabled:                 params.Enabled,
+			})
+			if err != nil {
+				t.Fatalf("count: %v", err)
+			}
+			// The count has to agree with the page, or paging lands on a page
+			// number the list cannot fill.
+			if int(total) != tc.want {
+				t.Errorf("total = %d, want %d", total, tc.want)
+			}
+		})
+	}
+}
+
+// Switching on a model the catalogue does not have writes nothing, which is
+// what the handler turns into a 404.
+func TestPgSetModelEnabledRejectsUnknownModels(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+
+	affected, err := sqlc.New(pool).SetModelEnabled(ctx, sqlc.SetModelEnabledParams{
+		ProviderID: "nobody", ModelID: "nothing", Enabled: true,
+	})
+	if err != nil {
+		t.Fatalf("enable: %v", err)
+	}
+	if affected != 0 {
+		t.Errorf("rows = %d, want a model nobody offers to be left unwritten", affected)
+	}
+}
+
+// The bookkeeping shares app_settings with the rest of the installation, so it
+// has to survive the round trip through jsonb.
+func TestPgStoreState(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	store := NewStore(pool)
+
+	state, err := store.LoadState(ctx)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if !state.Stale(state.FetchedAt.Add(StaleAfter)) || !state.FetchedAt.IsZero() {
+		t.Fatalf("state = %+v, want the zero state before anything is written", state)
+	}
+
+	written := State{FetchedAt: state.FetchedAt.UTC(), ETag: `"v1"`, LastError: "upstream said no"}
+	if err := store.SaveState(ctx, written); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	read, err := store.LoadState(ctx)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if read.ETag != written.ETag || read.LastError != written.LastError {
+		t.Errorf("state = %+v, want %+v", read, written)
+	}
+}

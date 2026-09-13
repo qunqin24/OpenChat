@@ -1,0 +1,71 @@
+{
+  "openai": {
+    "id": "openai",
+    "env": ["OPENAI_API_KEY"],
+    "npm": "@ai-sdk/openai",
+    "api": "https://api.openai.com/v1",
+    "name": "OpenAI",
+    "doc": "https://platform.openai.com/docs/models",
+    "models": {
+      "gpt-4o-mini": {
+        "id": "gpt-4o-mini",
+        "name": "GPT-4o mini",
+        "family": "gpt-4o",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2023-09",
+        "release_date": "2024-07-18",
+        "last_updated": "2024-07-18",
+        "modalities": { "input": ["text", "image"], "output": ["text"] },
+        "open_weights": false,
+        "limit": { "context": 128000, "output": 16384 },
+        "cost": { "input": 0.15, "output": 0.6, "cache_read": 0.075 }
+      },
+      "gpt-4o": {
+        "id": "gpt-4o",
+        "name": "GPT-4o",
+        "family": "gpt-4o",
+        "attachment": true,
+        "tool_call": true,
+        "structured_output": true,
+        "knowledge": "2023-09",
+        "release_date": "2024-05-13",
+        "modalities": { "input": ["text", "image"], "output": ["text"] },
+        "limit": { "context": 128000, "output": 16384 },
+        "cost": { "input": 2.5, "output": 10 }
+      }
+    }
+  },
+  "anthropic": {
+    "id": "anthropic",
+    "env": ["ANTHROPIC_API_KEY"],
+    "name": "Anthropic",
+    "doc": "https://docs.anthropic.com/en/docs/about-claude/models",
+    "models": {
+      "claude-sonnet-4-5": {
+        "id": "claude-sonnet-4-5",
+        "name": "Claude Sonnet 4.5",
+        "description": "Balanced for everyday work.",
+        "family": "claude",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "structured_output": true,
+        "knowledge": "2025-07",
+        "release_date": "2025-09-29",
+        "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
+        "limit": { "context": 200000, "output": 64000 },
+        "cost": { "input": 3, "output": 15, "cache_write": 3.75 }
+      }
+    }
+  },
+  "sparse": {
+    "name": "Sparse",
+    "models": {
+      "bare": {}
+    }
+  }
+}

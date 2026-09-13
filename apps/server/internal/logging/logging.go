@@ -19,10 +19,11 @@ var level = new(slog.LevelVar)
 func Setup(json bool) {
 	level.Set(slog.LevelInfo)
 
-	opts := &slog.HandlerOptions{Level: level}
-	var handler slog.Handler = slog.NewTextHandler(os.Stdout, opts)
+	// JSON in production, where the reader is a log pipeline. A terminal gets
+	// the console handler instead; slog's TextHandler serves neither well.
+	var handler slog.Handler = newConsoleHandler(os.Stdout, level)
 	if json {
-		handler = slog.NewJSONHandler(os.Stdout, opts)
+		handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})
 	}
 	slog.SetDefault(slog.New(handler))
 }

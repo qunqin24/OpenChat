@@ -26,6 +26,10 @@
 @import './shadcn-theme.css';
 @import './shadcn-base.css';
 
+/* Last, and after both design systems, because it is the one thing that
+   deliberately applies to both. */
+@import './scrollbar.css';
+
 /* Theme is toggled by adding/removing `.dark` on <html> (see stores/ui-store.ts),
    which is also the hook the `--n-*` tokens switch on. */
 @custom-variant dark (&:where(.dark, .dark *));

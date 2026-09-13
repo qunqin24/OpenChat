@@ -1,0 +1,10 @@
+data: {"id":"chatcmpl-long","object":"chat.completion.chunk","created":1730000000,"model":"gpt-4o-mini","choices":[{"index":0,"delta":{"role":"assistant","content":"An aperture "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-long","object":"chat.completion.chunk","created":1730000000,"model":"gpt-4o-mini","choices":[{"index":0,"delta":{"content":"is an opening "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-long","object":"chat.completion.chunk","created":1730000000,"model":"gpt-4o-mini","choices":[{"index":0,"delta":{"content":"through which light travels."},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-long","object":"chat.completion.chunk","created":1730000000,"model":"gpt-4o-mini","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: [DONE]
+

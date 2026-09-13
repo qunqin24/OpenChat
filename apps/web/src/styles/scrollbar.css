@@ -1,0 +1,65 @@
+/* One scrollbar for the whole app.
+ *
+ * The chat side defined a slim rail per surface; the admin panel defined
+ * nothing and got the operating system's chunky one. Scrolling a conversation
+ * and scrolling a table looked like two different products.
+ *
+ * The colours are their own tokens rather than either design system's, because
+ * this is the one thing that has to look identical across the boundary the rest
+ * of the CSS works to keep. Both palettes are zero-chroma greys, so a single
+ * neutral pair belongs to neither and suits both.
+ *
+ * Firefox and WebKit share no properties here, so everything is stated twice.
+ * Setting only `scrollbar-width` leaves WebKit on the system scrollbar, which
+ * is the mistake that leaves one browser looking untouched. */
+
+:root {
+  --scrollbar-size: 10px;
+  --scrollbar-thumb: rgba(0, 0, 0, 0.18);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.32);
+}
+
+html.dark {
+  --scrollbar-thumb: rgba(255, 255, 255, 0.18);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.32);
+}
+
+/* Firefox. `thin` is the only width it offers, which is close enough to the
+   rail below that the two read as the same design. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+/* WebKit and Blink. Deliberately unscoped and low specificity: any surface that
+   wants something else — the composer and the conversation list both hide their
+   rail on purpose — overrides this with a class selector and wins. */
+::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  /* The transparent border plus `background-clip` is what makes the thumb
+     narrower than the track it sits in. Setting a smaller width instead would
+     shrink the target you have to hit with the pointer as well. */
+  background: var(--scrollbar-thumb);
+  background-clip: content-box;
+  border: 3px solid transparent;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  background-clip: content-box;
+}
+
+/* Where two scrollable areas meet. Left alone it renders as a small raised
+   square in the corner, which belongs to no design system here. */
+::-webkit-scrollbar-corner {
+  background: transparent;
+}

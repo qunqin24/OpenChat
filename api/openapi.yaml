@@ -209,6 +209,115 @@ paths:
               schema: { $ref: "#/components/schemas/User" }
         default: { $ref: "#/components/responses/Error" }
 
+  /admin/catalog:
+    get:
+      tags: [admin]
+      summary: Catalogue freshness
+      operationId: getCatalogStatus
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogStatus" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [admin]
+      summary: Refresh the catalogue from models.dev
+      description: |
+        Fetches the upstream file and replaces the snapshot. A failed fetch
+        leaves the previous snapshot in place — a stale catalogue is worth more
+        than an empty one — and answers 502 rather than 200, because the refresh
+        is what failed. The snapshot being served is unchanged, and `GET` on
+        this path reports why through `lastError`.
+      operationId: refreshCatalog
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogStatus" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/catalog/providers:
+    get:
+      tags: [admin]
+      summary: Providers in the catalogue
+      description: The source for the provider picker when adding a channel.
+      operationId: listCatalogProviders
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CatalogProvider" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/catalog/models:
+    get:
+      tags: [admin]
+      summary: Browse the model catalogue
+      operationId: listCatalogModels
+      parameters:
+        - { $ref: "#/components/parameters/Limit" }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: search
+          in: query
+          description: Matches against model id, name and family.
+          schema: { type: string }
+        - name: providerId
+          in: query
+          schema: { type: string }
+        - name: capability
+          in: query
+          description: Only models with all of these.
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [reasoning, toolCall, attachment, structuredOutput]
+        - name: enabled
+          in: query
+          description: Restrict to models that are, or are not, switched on here.
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogModelPage" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/catalog/models/{providerId}/{modelId}:
+    parameters:
+      - { name: providerId, in: path, required: true, schema: { type: string } }
+      - { name: modelId, in: path, required: true, schema: { type: string } }
+    patch:
+      tags: [admin]
+      summary: Switch a model on or off for this installation
+      operationId: updateCatalogModel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled: { type: boolean }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogModel" }
+        default: { $ref: "#/components/responses/Error" }
+
   /admin/system:
     get:
       tags: [admin]
@@ -783,6 +892,81 @@ components:
         password: { type: string, minLength: 8, maxLength: 200 }
         role: { $ref: "#/components/schemas/UserRole" }
         disabled: { type: boolean }
+
+    CatalogStatus:
+      type: object
+      required: [providerCount, modelCount, stale]
+      properties:
+        fetchedAt:
+          type: string
+          format: date-time
+          description: Absent when nothing has ever been fetched.
+        providerCount: { type: integer }
+        modelCount: { type: integer }
+        stale:
+          type: boolean
+          description: Whether the snapshot is old enough to be worth refreshing.
+        lastError:
+          type: string
+          description: |
+            Why the most recent refresh failed, if it did. The snapshot it
+            failed to replace is still the one being served.
+
+    CatalogProvider:
+      type: object
+      required: [id, name, modelCount]
+      properties:
+        id: { type: string, examples: ["anthropic"] }
+        name: { type: string, examples: ["Anthropic"] }
+        modelCount: { type: integer }
+        doc: { type: string, format: uri }
+        env:
+          type: array
+          description: Environment variables upstream documents for this provider's key.
+          items: { type: string }
+
+    CatalogModel:
+      type: object
+      required:
+        [providerId, providerName, modelId, name, enabled, attachment, reasoning,
+         toolCall, structuredOutput]
+      properties:
+        providerId: { type: string }
+        providerName: { type: string }
+        modelId: { type: string }
+        name: { type: string }
+        description: { type: string }
+        family: { type: string }
+        enabled:
+          type: boolean
+          description: Whether this installation has switched the model on.
+        attachment: { type: boolean }
+        reasoning: { type: boolean }
+        toolCall: { type: boolean }
+        structuredOutput: { type: boolean }
+        contextLimit: { type: integer, format: int64 }
+        outputLimit: { type: integer, format: int64 }
+        inputCost: { type: number, format: double, description: USD per million input tokens. }
+        outputCost: { type: number, format: double, description: USD per million output tokens. }
+        releaseDate: { type: string }
+        knowledge: { type: string }
+        inputModalities:
+          type: array
+          items: { type: string }
+        outputModalities:
+          type: array
+          items: { type: string }
+
+    CatalogModelPage:
+      type: object
+      required: [items, total, page, limit]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CatalogModel" }
+        total: { type: integer, format: int64 }
+        page: { type: integer }
+        limit: { type: integer }
 
     SystemSettings:
       type: object

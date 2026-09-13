@@ -1,0 +1,28 @@
+{
+  "provider": "fake",
+  "model": "fake-reasoner",
+  "response_id": "run-fixture-1",
+  "finish_reason": "tool_calls",
+  "steps": [
+    {
+      "kind": "reasoning",
+      "chunks": ["The user wants a note. ", "I should search first."]
+    },
+    {
+      "kind": "text",
+      "chunks": ["Looking that up", " for you."]
+    },
+    {
+      "kind": "tool_call",
+      "tool_call_id": "call_fixture_1",
+      "tool_name": "search_notes",
+      "chunks": ["{\"quer", "y\": \"quarterly re", "port\"}"]
+    }
+  ],
+  "usage": {
+    "input_tokens": 420,
+    "output_tokens": 58,
+    "reasoning_tokens": 30,
+    "cache_read_tokens": 180
+  }
+}

@@ -12,11 +12,15 @@
     "build": "pnpm --filter @openchat/web build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
-    "gen:api": "pnpm --filter @openchat/api-client generate"
+    "gen:api": "pnpm --filter @openchat/api-client generate",
+    "sync:model-icons": "node scripts/sync-model-icons.mjs"
   },
   "pnpm": {
     "overrides": {
       "typescript": "5.9.3"
     }
+  },
+  "devDependencies": {
+    "@lobehub/icons-static-svg": "^1.95.0"
   }
 }

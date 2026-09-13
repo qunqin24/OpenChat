@@ -158,6 +158,36 @@ type Attachment struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
+type CatalogModel struct {
+	ProviderID       string             `json:"provider_id"`
+	ModelID          string             `json:"model_id"`
+	Name             string             `json:"name"`
+	Description      string             `json:"description"`
+	Family           string             `json:"family"`
+	Attachment       bool               `json:"attachment"`
+	Reasoning        bool               `json:"reasoning"`
+	ToolCall         bool               `json:"tool_call"`
+	StructuredOutput bool               `json:"structured_output"`
+	ContextLimit     int64              `json:"context_limit"`
+	OutputLimit      int64              `json:"output_limit"`
+	InputCost        pgtype.Numeric     `json:"input_cost"`
+	OutputCost       pgtype.Numeric     `json:"output_cost"`
+	ReleaseDate      string             `json:"release_date"`
+	Knowledge        string             `json:"knowledge"`
+	InputModalities  []string           `json:"input_modalities"`
+	OutputModalities []string           `json:"output_modalities"`
+	Raw              []byte             `json:"raw"`
+	SyncedAt         pgtype.Timestamptz `json:"synced_at"`
+}
+
+type CatalogProvider struct {
+	ID       string             `json:"id"`
+	Name     string             `json:"name"`
+	Doc      string             `json:"doc"`
+	Env      []string           `json:"env"`
+	SyncedAt pgtype.Timestamptz `json:"synced_at"`
+}
+
 type Channel struct {
 	ID         uuid.UUID          `json:"id"`
 	Name       string             `json:"name"`
@@ -189,6 +219,13 @@ type Message struct {
 	Metadata       []byte             `json:"metadata"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ModelSetting struct {
+	ProviderID string             `json:"provider_id"`
+	ModelID    string             `json:"model_id"`
+	Enabled    bool               `json:"enabled"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Session struct {

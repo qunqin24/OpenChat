@@ -1,0 +1,14 @@
+: ping
+
+data: {"id":"chatcmpl-reason","object":"chat.completion.chunk","created":1730000000,"model":"deepseek-reasoner","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":"The user asks "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-reason","object":"chat.completion.chunk","created":1730000000,"model":"deepseek-reasoner","choices":[{"index":0,"delta":{"reasoning_content":"about apertures."},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-reason","object":"chat.completion.chunk","created":1730000000,"model":"deepseek-reasoner","choices":[{"index":0,"delta":{"content":"An aperture is an opening."},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-reason","object":"chat.completion.chunk","created":1730000000,"model":"deepseek-reasoner","choices":[{"index":0,"delta":{"reasoning_content":"Should I add the f-number?"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-reason","object":"chat.completion.chunk","created":1730000000,"model":"deepseek-reasoner","choices":[{"index":0,"delta":{"content":" Its size is the f-number."},"finish_reason":"stop"}]}
+
+data: [DONE]
+

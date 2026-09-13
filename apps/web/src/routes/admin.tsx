@@ -9,10 +9,11 @@ import { sessionQueryOptions } from '@/features/auth/use-auth'
  * adds a role check on top.
  */
 export const Route = createFileRoute('/admin')({
-  beforeLoad: async ({ context, location }) => {
+  beforeLoad: async ({ context }) => {
     const session = await context.queryClient.ensureQueryData(sessionQueryOptions)
     if (!session) {
-      throw redirect({ to: '/login', search: { redirect: location.href } })
+      // Signing in lands in chat; the admin panel is opened explicitly there.
+      throw redirect({ to: '/login' })
     }
     // Sent back to the app rather than shown a "forbidden" page: the server
     // answers 404 for the same reason, and a refusal confirms the panel exists.
