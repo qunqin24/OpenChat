@@ -13,6 +13,8 @@ interface ComposerProps {
   onStop: () => void
   working: boolean
   disabled?: boolean
+  /** Plain-text label for the active model; no selector until a catalogue exists. */
+  modelName?: string
   /** Whether the active model accepts file attachments. */
   canUpload?: boolean
 }
@@ -24,6 +26,7 @@ export function Composer({
   onStop,
   working,
   disabled,
+  modelName,
   canUpload = false,
 }: ComposerProps) {
   const { t } = useTranslation()
@@ -64,6 +67,7 @@ export function Composer({
               type="button"
               className="n-composer-toggle n-icon-btn sm"
               aria-expanded={expanded}
+              aria-label={expanded ? t('next.composer.collapse') : t('next.composer.expand')}
               onClick={() => setExpanded(!expanded)}
             >
               {expanded ? (
@@ -83,6 +87,7 @@ export function Composer({
             rows={1}
             value={value}
             disabled={disabled}
+            aria-label={t('chat.placeholder')}
             placeholder={t('chat.placeholder')}
             onChange={(event) => onValueChange(event.target.value)}
             onKeyDown={(event) => {
@@ -113,6 +118,8 @@ export function Composer({
           </Tooltip>
 
           <div className="grow" />
+
+          {modelName && <span className="n-composer-model">{modelName}</span>}
 
           <Tooltip label={working ? t('chat.stop') : t('chat.send')}>
             <button

@@ -1,14 +1,22 @@
 import type { Conversation } from '@openchat/api-client'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
 
 export function useConversations() {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: queryKeys.conversations.list(),
-    queryFn: async ({ signal }) =>
-      unwrap(await api.GET('/conversations', { params: { query: { limit: 50 } }, signal })),
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ signal, pageParam }) =>
+      unwrap(
+        await api.GET('/conversations', {
+          params: { query: { limit: 50, cursor: pageParam } },
+          signal,
+        }),
+      ),
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+    placeholderData: (previous) => previous,
   })
 }
 

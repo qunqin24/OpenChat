@@ -1,239 +1,186 @@
 import type { Conversation } from '@openchat/api-client'
-import { useNavigate } from '@tanstack/react-router'
-import {
-  Check,
-  Languages,
-  LogOut,
-  Monitor,
-  Moon,
-  MoreHorizontal,
-  PencilLine,
-  SquarePen,
-  Sun,
-  Trash2,
-  UserRound,
-} from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { Link, useNavigate } from '@tanstack/react-router'
+import { ChevronRight, PanelLeft, Search, SquarePen } from 'lucide-react'
+import { Collapsible } from 'radix-ui'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { useLogout, useSession } from '@/features/auth/use-auth'
-import { useConversations, useRenameConversation } from '@/hooks/use-conversations'
-import { groupConversations, formatRelative } from '@/lib/grouping'
-import { supportedLanguages } from '@/lib/i18n'
+import { useConversations } from '@/hooks/use-conversations'
+import { groupConversations } from '@/lib/grouping'
 import { cn } from '@/lib/utils'
-import { useUIStore, type Theme } from '@/stores/ui-store'
-import ModelAvatar from './ModelAvatar'
+import { useUIStore } from '@/stores/ui-store'
+import { SidebarAccount } from './SidebarAccount'
+import { SidebarConversation } from './SidebarConversation'
+import { SidebarResizeHandle } from './SidebarResizeHandle'
+import { SidebarSearch } from './SidebarSearch'
+import Tooltip, { TooltipGroup } from './Tooltip'
 
 interface SidebarProps {
   collapsed: boolean
-  /** Id of the conversation currently open, if any. */
+  mobile: boolean
+  onToggle: () => void
+  onNavigate: () => void
   activeId?: string
   onDelete: (target: Conversation) => void
 }
 
-function ConversationRow({
-  conversation,
-  active,
-  onDelete,
-}: {
-  conversation: Conversation
-  active: boolean
-  onDelete: (target: Conversation) => void
-}) {
-  const { t } = useTranslation()
-  const navigate = useNavigate()
-  const rename = useRenameConversation()
-  const [menuOpen, setMenuOpen] = useState(false)
-
-  const open = () =>
-    void navigate({ to: '/chat/$conversationId', params: { conversationId: conversation.id } })
-
-  return (
-    <div
-      className={cn('n-row', active && 'active', menuOpen && 'menu-open')}
-      role="button"
-      tabIndex={0}
-      onClick={open}
-      onKeyDown={(event) => {
-        // A menu's keyboard events bubble through the row, including its portal.
-        if (event.target !== event.currentTarget) return
-        if (event.key !== 'Enter' && event.key !== ' ') return
-        event.preventDefault()
-        open()
-      }}
-    >
-      <div className="n-row-label">{conversation.title || t('chat.untitled')}</div>
-      <div className="n-row-meta">{formatRelative(conversation.updatedAt, t)}</div>
-
-      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            className="n-row-menu n-icon-btn sm"
-            aria-label={t('next.more')}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
-          <DropdownMenuItem
-            onClick={() => {
-              const title = window.prompt(t('chat.rename'), conversation.title)
-              if (title && title !== conversation.title) {
-                rename.mutate({ conversationId: conversation.id, title })
-              }
-            }}
-          >
-            <PencilLine className="h-4 w-4" />
-            <span>{t('chat.rename')}</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onDelete(conversation)}>
-            <Trash2 className="h-4 w-4" />
-            <span>{t('chat.delete')}</span>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  )
-}
-
-const THEMES: Array<{ value: Theme; icon: typeof Sun }> = [
-  { value: 'light', icon: Sun },
-  { value: 'dark', icon: Moon },
-  { value: 'system', icon: Monitor },
-]
-
-const LANGUAGE_LABELS: Record<string, string> = { en: 'English', zh: '中文' }
-
-export function Sidebar({ collapsed, activeId, onDelete }: SidebarProps) {
+export function Sidebar({ collapsed, mobile, onToggle, onNavigate, activeId, onDelete }: SidebarProps) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
+  const conversations = useConversations()
+  const width = useUIStore((s) => s.sidebarWidth)
+  const setWidth = useUIStore((s) => s.setSidebarWidth)
+  const chatsOpen = useUIStore((s) => s.sidebarChatsOpen)
+  const setChatsOpen = useUIStore((s) => s.setSidebarChatsOpen)
+  const [dragWidth, setDragWidth] = useState<number | null>(null)
+  const [scrolled, setScrolled] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const scroll = useRef<HTMLDivElement>(null)
+  const loadMore = useRef<HTMLButtonElement>(null)
+  const searchTrigger = useRef<HTMLButtonElement>(null)
+  const searchOpener = useRef<HTMLElement | null>(null)
+  const [modifier] = useState(() => /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl')
 
-  const { data, isPending } = useConversations()
-  const { data: session } = useSession()
-  const logout = useLogout()
-  const theme = useUIStore((s) => s.theme)
-  const setTheme = useUIStore((s) => s.setTheme)
+  const history = useMemo(() => {
+    // A renamed/updated conversation can move between pages during a refetch.
+    const unique = new Map<string, Conversation>()
+    for (const page of conversations.data?.pages ?? []) {
+      for (const item of page.items) if (!unique.has(item.id)) unique.set(item.id, item)
+    }
+    return [...unique.values()]
+  }, [conversations.data])
+  const groups = useMemo(
+    () => groupConversations(history, t, i18n.resolvedLanguage),
+    [history, t, i18n.resolvedLanguage],
+  )
 
-  const history = useMemo(() => data?.items ?? [], [data])
-  const groups = useMemo(() => groupConversations(history, t), [history, t])
+  const openSearch = useCallback(() => {
+    searchOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setSearchOpen(true)
+  }, [])
 
-  const ThemeIcon = THEMES.find((option) => option.value === theme)?.icon ?? Monitor
+  useEffect(() => {
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || !(event.metaKey || event.ctrlKey)) return
+      if (event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        openSearch()
+      } else if (event.shiftKey && event.key.toLowerCase() === 'o') {
+        event.preventDefault()
+        setSearchOpen(false)
+        onNavigate()
+        void navigate({ to: '/' })
+      }
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [navigate, onNavigate, openSearch])
+
+  const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = conversations
+  useEffect(() => {
+    const target = loadMore.current
+    if (!target || collapsed || !chatsOpen || !hasNextPage || isFetchingNextPage || isFetchNextPageError) return
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry?.isIntersecting) void fetchNextPage()
+    }, { root: scroll.current, rootMargin: '0px 0px 100px 0px' })
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [collapsed, chatsOpen, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage])
+
+  const sidebarStyle = { '--n-sidebar-w': `${dragWidth ?? width}px` } as CSSProperties
 
   return (
-    <aside className={cn('n-sidebar', collapsed && 'collapsed')}>
-      <div className="px-2 pt-3">
-        <div className="n-brand">
-          <span className="n-brand-name">{t('app.name')}</span>
-        </div>
-
-        <button type="button" className="n-row" onClick={() => void navigate({ to: '/' })}>
-          <SquarePen className="h-4 w-4 shrink-0" />
-          <span className="n-row-label">{t('next.nav.new')}</span>
-        </button>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button type="button" className="n-row">
-              <ThemeIcon className="h-4 w-4 shrink-0" />
-              <span className="n-row-label">{t('nav.toggleTheme')}</span>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="match-trigger" align="start" side="bottom">
-            {THEMES.map(({ value, icon: Icon }) => (
-              <DropdownMenuItem key={value} onSelect={() => setTheme(value)}>
-                <Icon className="h-4 w-4" />
-                <span>{t(`next.theme.${value}`)}</span>
-                {theme === value && <Check className="n-menu-check h-3.5 w-3.5" />}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button type="button" className="n-row">
-              <Languages className="h-4 w-4 shrink-0" />
-              <span className="n-row-label">{t('nav.language')}</span>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="match-trigger" align="start" side="bottom">
-            {supportedLanguages.map((lang) => (
-              <DropdownMenuItem key={lang} onSelect={() => void i18n.changeLanguage(lang)}>
-                <span>{LANGUAGE_LABELS[lang] ?? lang}</span>
-                {i18n.resolvedLanguage === lang && <Check className="n-menu-check h-3.5 w-3.5" />}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      <div className="n-sidebar-scroll">
-        {groups.length === 0 ? (
-          <div className="px-3 py-6 text-center text-sm" style={{ color: 'var(--n-text-3)' }}>
-            {isPending ? t('state.loading') : t('next.conversation.empty')}
-          </div>
-        ) : (
-          groups.map((group) => (
-            <div key={group.key}>
-              <div className="n-group">{group.label}</div>
-              {group.items.map((conversation) => (
-                <ConversationRow
-                  key={conversation.id}
-                  conversation={conversation}
-                  active={conversation.id === activeId}
-                  onDelete={onDelete}
-                />
-              ))}
-            </div>
-          ))
-        )}
-      </div>
-
-      <div className="n-sidebar-account">
-        {session && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button type="button" className="n-row n-account-trigger">
-                <ModelAvatar name={session.name || session.email} size={22} />
-                <span className="n-row-label">{session.name || session.email}</span>
+    <TooltipGroup>
+      <aside
+        id="chat-sidebar"
+        className={cn('n-sidebar', collapsed && 'collapsed', scrolled && 'has-scrolled', dragWidth !== null && 'resizing')}
+        style={sidebarStyle}
+        aria-label={t('next.sidebar.history')}
+      >
+        <div className="n-sidebar-inner">
+          <header className="n-sidebar-header">
+            <Link to="/" className="n-sidebar-brand" tabIndex={collapsed ? -1 : undefined} aria-hidden={collapsed || undefined} onClick={(event) => { if (!event.metaKey && !event.ctrlKey) onNavigate() }}>
+              <span className="n-sidebar-logo" aria-hidden="true" />
+              <span className="n-sidebar-brand-label">{t('app.name')}</span>
+            </Link>
+            <Tooltip label={collapsed ? t('next.sidebar.open') : t('next.sidebar.close')} side={collapsed ? 'right' : 'bottom'} disabled={mobile}>
+              <button type="button" className="n-sidebar-toggle" aria-label={collapsed ? t('next.sidebar.open') : t('next.sidebar.close')} aria-expanded={!collapsed} aria-controls="chat-sidebar-content" onClick={onToggle}>
+                <span className="n-sidebar-rail-logo" aria-hidden="true" />
+                <PanelLeft aria-hidden="true" />
               </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="n-account-menu" align="end" side="top">
-              <DropdownMenuLabel>
-                <ModelAvatar name={session.name || session.email} size={18} />
-                <span className="n-menu-label-text">{session.name || session.email}</span>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {session.role === 'admin' && (
-                <DropdownMenuItem onSelect={() => void navigate({ to: '/admin' })}>
-                  <UserRound className="h-4 w-4" />
-                  <span>{t('admin.title')}</span>
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem
-                onSelect={async () => {
-                  await logout.mutateAsync()
-                  await navigate({ to: '/login' })
-                }}
-              >
-                <LogOut className="h-4 w-4" />
-                <span>{t('auth.logout')}</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-      </div>
-    </aside>
+            </Tooltip>
+          </header>
+
+          <div ref={scroll} className="n-sidebar-scroll" onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 0)}>
+            <nav className="n-sidebar-nav" aria-label={t('next.sidebar.navigation')}>
+              <Tooltip label={t('next.nav.new')} side="right" disabled={!collapsed || mobile}>
+                <Link className="n-row n-sidebar-nav-row" to="/" activeProps={{ className: '' }} onClick={(event) => { if (!event.metaKey && !event.ctrlKey) onNavigate() }} aria-label={t('next.nav.new')} aria-keyshortcuts="Control+Shift+O Meta+Shift+O">
+                  <SquarePen aria-hidden="true" />
+                  <span className="n-row-label">{t('next.nav.new')}</span>
+                  <kbd className="n-sidebar-hotkey" aria-hidden="true">{modifier} ⇧ O</kbd>
+                </Link>
+              </Tooltip>
+              <Tooltip label={t('next.sidebar.search')} side="right" disabled={!collapsed || mobile}>
+                <button ref={searchTrigger} type="button" className="n-row n-sidebar-nav-row" onClick={openSearch} aria-label={t('next.sidebar.search')} aria-keyshortcuts="Control+K Meta+K">
+                  <Search aria-hidden="true" />
+                  <span className="n-row-label">{t('next.sidebar.search')}</span>
+                  <kbd className="n-sidebar-hotkey" aria-hidden="true">{modifier} K</kbd>
+                </button>
+              </Tooltip>
+            </nav>
+
+            <div id="chat-sidebar-content" className="n-sidebar-history" hidden={collapsed}>
+              <Collapsible.Root open={chatsOpen} onOpenChange={setChatsOpen}>
+                <Collapsible.Trigger className="n-sidebar-section-toggle">
+                  <span>{t('next.sidebar.chats')}</span>
+                  <ChevronRight aria-hidden="true" />
+                </Collapsible.Trigger>
+                <Collapsible.Content>
+                  <div className="n-sidebar-groups">
+                    {conversations.isPending ? (
+                      <div className="n-sidebar-empty" role="status">{t('state.loading')}</div>
+                    ) : conversations.isError ? (
+                      <button type="button" className="n-sidebar-empty n-sidebar-retry" onClick={() => void conversations.refetch()}>{t('next.sidebar.retry')}</button>
+                    ) : groups.length === 0 ? (
+                      <div className="n-sidebar-empty">{t('next.conversation.empty')}</div>
+                    ) : groups.map((group) => (
+                      <section key={group.key} className="n-sidebar-group" aria-label={group.label}>
+                        <h3 className="n-group">{group.label}</h3>
+                        {group.items.map((conversation) => (
+                          <SidebarConversation key={conversation.id} conversation={conversation} active={conversation.id === activeId} onDelete={onDelete} onNavigate={onNavigate} />
+                        ))}
+                      </section>
+                    ))}
+                    {hasNextPage && (
+                      <button ref={loadMore} type="button" className="n-sidebar-load-more" disabled={isFetchingNextPage} onClick={() => void fetchNextPage()}>
+                        {isFetchingNextPage ? t('state.loading') : isFetchNextPageError ? t('next.sidebar.retry') : t('next.sidebar.load-more')}
+                      </button>
+                    )}
+                  </div>
+                </Collapsible.Content>
+              </Collapsible.Root>
+            </div>
+          </div>
+
+          <footer className="n-sidebar-account"><SidebarAccount collapsed={collapsed} onNavigate={onNavigate} /></footer>
+        </div>
+        {!collapsed && !mobile && <SidebarResizeHandle width={dragWidth ?? width} onResize={setDragWidth} onCommit={setWidth} />}
+      </aside>
+
+      <SidebarSearch
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        conversations={history}
+        hasMore={!!hasNextPage}
+        loading={isFetchingNextPage}
+        onLoadMore={() => void fetchNextPage()}
+        onNavigate={onNavigate}
+        onRestoreFocus={() => {
+          const target = searchOpener.current?.isConnected ? searchOpener.current : searchTrigger.current
+          target?.focus()
+        }}
+      />
+    </TooltipGroup>
   )
 }
 

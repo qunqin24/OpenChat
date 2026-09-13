@@ -45,7 +45,7 @@ function startOfDay(date: Date): number {
  * Bucket conversations into 今天 / 昨天 / 过去 7 天 / 过去 30 天 / 月份,
  * preserving the incoming (already recency-sorted) order inside each bucket.
  */
-export function groupConversations(history: Conversation[], t: Translate): ConversationGroup[] {
+export function groupConversations(history: Conversation[], t: Translate, locale?: string): ConversationGroup[] {
   const today = startOfDay(new Date())
   const groups: ConversationGroup[] = []
   const index = new Map<string, ConversationGroup>()
@@ -74,7 +74,7 @@ export function groupConversations(history: Conversation[], t: Translate): Conve
     else if (days <= 30) push('month', t('next.group.month'), conversation)
     else {
       const key = `${date.getFullYear()}-${date.getMonth()}`
-      const label = new Intl.DateTimeFormat(undefined, {
+      const label = new Intl.DateTimeFormat(locale, {
         year: date.getFullYear() === new Date().getFullYear() ? undefined : 'numeric',
         month: 'long',
       }).format(date)

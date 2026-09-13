@@ -8,7 +8,10 @@ export const router = createRouter({
   context: { queryClient },
   defaultPreload: 'intent',
   defaultPreloadStaleTime: 0, // let TanStack Query own caching
-  scrollRestoration: true,
+  // Chat parks its transcript at the tail before paint. Router restoration
+  // would overwrite that position with the previous conversation's offset.
+  scrollRestoration: ({ location }) =>
+    location.pathname !== '/' && !location.pathname.startsWith('/chat/'),
 })
 
 declare module '@tanstack/react-router' {

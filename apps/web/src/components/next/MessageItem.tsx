@@ -61,11 +61,10 @@ export function MessageItem({ role, content, model = 'Assistant', streaming }: M
 
       {!empty && (
         <div className="n-markdown">
-          {/* `markdown-body` is what the theme's 3k lines of markdown typography
-              key off, so Streamdown's output is wrapped in it rather than
-              restyled here. */}
+          {/* The local typography layer styles the actual Streamdown output;
+              markdown-body keeps the ported table selectors working. */}
           <div className="markdown-body">
-            <Streamdown parseIncompleteMarkdown={streaming}>{content}</Streamdown>
+            <Streamdown className="n-prose" parseIncompleteMarkdown={streaming}>{content}</Streamdown>
           </div>
         </div>
       )}

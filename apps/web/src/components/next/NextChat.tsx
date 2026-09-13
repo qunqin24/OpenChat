@@ -46,6 +46,7 @@ export function NextChat({ conversationId }: NextChatProps) {
   // The server persists the assistant row before the first token, so rows still
   // marked `streaming` are hidden here and rendered by the live bubble instead.
   const persisted = (messages.data?.items ?? []).filter((m) => m.status !== 'streaming')
+  const isEmpty = !conversationId || (!messages.isPending && persisted.length === 0 && !working)
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     const el = scrollRef.current
@@ -65,8 +66,10 @@ export function NextChat({ conversationId }: NextChatProps) {
 
   // Follow the tail while the reader has not scrolled away from it.
   useLayoutEffect(() => {
-    if (parked.current) scrollToBottom('auto')
-  }, [persisted.length, stream?.text, scrollToBottom])
+    // The landing page is its own scrollable document on short screens; opening
+    // it at the bottom would hide the model heading and the input above it.
+    if (!isEmpty && parked.current) scrollToBottom('auto')
+  }, [isEmpty, persisted.length, stream?.text, scrollToBottom])
 
   const handleSend = useCallback(async () => {
     const content = input.trim()
@@ -93,16 +96,29 @@ export function NextChat({ conversationId }: NextChatProps) {
   }, [conversationId, sendMessage, takePendingPrompt])
 
   const title = conversationId ? (conversation.data?.title ?? '') : t('next.nav.new')
-  const isEmpty = !conversationId || (!messages.isPending && persisted.length === 0 && !working)
+
+  // Exactly one composer for every state; on the empty state it docks beneath
+  // the centred welcome rather than living inside it.
+  const composer = (
+    <Composer
+      value={input}
+      onValueChange={setInput}
+      onSend={() => void handleSend()}
+      onStop={stop}
+      working={working}
+      disabled={createConversation.isPending}
+      modelName={MODEL_NAME}
+    />
+  )
 
   return (
     <main className="n-main">
       <div className="n-topbar">
         <SidebarToggle />
-        <div className="truncate font-medium">{title}</div>
+        {conversationId && <div className="n-chat-title">{title}</div>}
       </div>
 
-      <div className="n-scroll" ref={scrollRef} onScroll={handleScroll}>
+      <div className={isEmpty ? 'n-scroll n-scroll-welcome' : 'n-scroll'} ref={scrollRef} onScroll={handleScroll}>
         {conversationId && messages.isPending ? (
           <div className="n-loading" role="status" aria-label={t('state.loading')}>
             <span className="n-spinner" />
@@ -110,7 +126,7 @@ export function NextChat({ conversationId }: NextChatProps) {
         ) : isEmpty ? (
           <Welcome onPick={setInput} modelName={MODEL_NAME} />
         ) : (
-          <div className="n-column">
+          <div className="n-column n-chat-fade">
             {persisted.map((message) => (
               <MessageItem
                 key={message.id}
@@ -140,7 +156,7 @@ export function NextChat({ conversationId }: NextChatProps) {
 
       <div className="n-composer-dock">
         <div className="n-column relative">
-          {showJump && (
+          {showJump && !isEmpty && (
             <button
               type="button"
               className="n-scroll-bottom"
@@ -150,14 +166,7 @@ export function NextChat({ conversationId }: NextChatProps) {
               <ArrowDown className="h-4 w-4" />
             </button>
           )}
-          <Composer
-            value={input}
-            onValueChange={setInput}
-            onSend={() => void handleSend()}
-            onStop={stop}
-            working={working}
-            disabled={createConversation.isPending}
-          />
+          {composer}
         </div>
       </div>
     </main>

@@ -1,0 +1,293 @@
+/**
+ * OpenWebUI type scale and neutral text ramp, from ChatPlaceholder, Suggestions,
+ * Navbar, Messages/Name and app.css's markdown-prose at 0a7c15832f.
+ * The welcome screen here uses the left-aligned ChatPlaceholder variant.
+ * Keep this separate from the verbatim prism stylesheet and the admin theme.
+ */
+:root {
+  --n-chat-font: -apple-system, BlinkMacSystemFont, 'Inter Variable', ui-sans-serif,
+    system-ui, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif;
+}
+
+.prism-next {
+  --n-chat-body: oklch(0.42 0 0);
+  --n-chat-heading: oklch(0.32 0 0);
+  --n-chat-strong: oklch(0.2 0 0);
+  --n-chat-label: #000;
+  --n-chat-muted: oklch(0.51 0 0);
+  --n-chat-faint: oklch(0.77 0 0);
+  --n-chat-input: oklch(0.42 0 0);
+  --n-chat-placeholder: oklch(0.77 0 0);
+  --n-chat-code-text: oklch(0.32 0 0);
+  --n-chat-code-bg: oklch(0.94 0 0);
+  --n-chat-rule: oklch(0.98 0 0);
+  color: var(--n-chat-body);
+  font-family: var(--n-chat-font);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.625;
+  letter-spacing: 0;
+  font-optical-sizing: auto;
+}
+
+.dark .prism-next {
+  --n-chat-body: oklch(0.85 0 0);
+  --n-chat-heading: oklch(0.94 0 0);
+  --n-chat-strong: #fff;
+  --n-chat-label: #fff;
+  --n-chat-muted: oklch(0.77 0 0);
+  --n-chat-faint: oklch(0.69 0 0);
+  --n-chat-input: oklch(0.94 0 0);
+  --n-chat-code-text: oklch(0.92 0 0);
+  --n-chat-code-bg: oklch(0.32 0 0);
+  --n-chat-rule: oklch(0.27 0 0 / 30%);
+}
+
+.n-menu,
+.n-tip,
+.n-sidebar-search-dialog {
+  font-family: var(--n-chat-font);
+  letter-spacing: 0;
+}
+
+.n-menu-label {
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.n-tip,
+.n-tip-label {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.prism-next .n-chat-title {
+  overflow: hidden;
+  color: var(--n-chat-body);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 22.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prism-next .n-welcome-title {
+  color: var(--n-chat-heading);
+  font-size: 30px;
+  font-weight: 400;
+  line-height: 36px;
+  letter-spacing: 0;
+}
+
+.prism-next .n-welcome-sub {
+  color: var(--n-chat-faint);
+  font-size: 30px;
+  font-weight: 400;
+  line-height: 36px;
+  letter-spacing: 0;
+}
+
+.prism-next .n-suggest-head {
+  color: var(--n-chat-muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+}
+
+.prism-next .n-suggest-title {
+  color: var(--n-chat-body);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 19.25px;
+}
+
+.prism-next .n-suggest-detail {
+  color: var(--n-chat-muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16.5px;
+}
+
+.prism-next .n-suggest-title,
+.prism-next .n-suggest-detail {
+  transition: color 150ms;
+}
+
+.prism-next .n-suggest:is(:hover, :focus-visible) .n-suggest-title {
+  color: var(--n-chat-label);
+}
+
+.prism-next .n-suggest:is(:hover, :focus-visible) .n-suggest-detail {
+  color: var(--n-chat-strong);
+}
+
+.prism-next .n-composer-input {
+  color: var(--n-chat-input);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 26.25px;
+  letter-spacing: 0;
+}
+
+.prism-next .n-composer-input::placeholder {
+  color: var(--n-chat-placeholder);
+  opacity: 1;
+}
+
+.prism-next .n-msg-head {
+  color: var(--n-chat-label);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 22.5px;
+}
+
+.prism-next .n-bubble,
+.prism-next .n-markdown {
+  color: var(--n-chat-body);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.625;
+  letter-spacing: 0;
+}
+
+/* Own the renderer's typography explicitly instead of relying on utilities
+ * inside node_modules. The imported Streamdown stylesheet only supplies motion.
+ */
+.prism-next .n-markdown .n-prose {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.prism-next .n-markdown :where(.n-prose) > * {
+  margin-block: 0;
+}
+
+.prism-next .n-markdown .n-prose p {
+  margin: 0 0 8px;
+  color: inherit;
+  font-weight: 400;
+  line-height: 1.625;
+}
+
+.prism-next .n-markdown :is(h1, h2, h3, h4, h5, h6) {
+  margin: 8px 0 4px;
+  color: var(--n-chat-strong);
+  font-weight: 500;
+  line-height: 1.375;
+  letter-spacing: 0;
+}
+
+.prism-next .n-markdown h1 { font-size: 20px; }
+.prism-next .n-markdown h2 { font-size: 18px; }
+.prism-next .n-markdown h3 { font-size: 16px; }
+.prism-next .n-markdown h4 { font-size: 15px; }
+.prism-next .n-markdown :is(h5, h6) { font-size: 14px; }
+
+.prism-next .n-markdown :is(strong, b, [data-streamdown='strong']) {
+  color: var(--n-chat-strong);
+  font-weight: 500;
+}
+
+.prism-next .n-markdown :is(ul, ol) {
+  margin-block: 8px;
+  padding-inline-start: 1.625em;
+  list-style-position: outside;
+}
+
+.prism-next .n-markdown ul { list-style-type: disc; }
+.prism-next .n-markdown ul ul { list-style-type: circle; }
+.prism-next .n-markdown ol { list-style-type: decimal; }
+
+.prism-next .n-markdown li {
+  margin-block: 2px;
+  padding-block: 0;
+  padding-inline-start: 0.375em;
+  font-weight: 400;
+}
+
+.prism-next .n-markdown li::marker { color: var(--n-chat-muted); }
+
+.prism-next .n-markdown blockquote {
+  margin-block: 12px;
+  padding-inline-start: 1em;
+  border-inline-start: 2px solid var(--n-line);
+  color: var(--n-chat-body);
+  font-weight: 400;
+}
+
+.prism-next .n-markdown blockquote p::before,
+.prism-next .n-markdown blockquote p::after { content: none; }
+
+.prism-next .n-markdown :is(a, [data-streamdown='link']) {
+  color: var(--n-chat-strong);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.prism-next .n-markdown [data-streamdown='inline-code'] {
+  margin-inline: 2px;
+  padding: 0.15rem 0.3rem;
+  border-radius: 6px;
+  background: var(--n-chat-code-bg);
+  color: var(--n-chat-code-text);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  font-weight: 400;
+  line-height: 1.625;
+}
+
+.prism-next .n-markdown pre {
+  margin-block: 12px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+  white-space: pre;
+}
+
+.prism-next .n-markdown pre code {
+  font: inherit;
+  white-space: inherit;
+}
+
+.prism-next .n-markdown [data-streamdown='code-block-header'] {
+  color: var(--n-chat-muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+}
+
+.prism-next .n-markdown .markdown-body table {
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.prism-next .n-markdown .markdown-body table th {
+  color: var(--n-chat-muted);
+  font-weight: 500;
+}
+
+.prism-next .n-markdown .markdown-body table :is(th, td) {
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.prism-next .n-markdown hr {
+  margin-block: 16px;
+  border: 0;
+  border-top: 1px solid var(--n-chat-rule);
+}
+
+.prism-next .n-markdown .n-prose > :first-child,
+.prism-next .n-markdown :is(h1, h2, h3, h4, h5, h6):first-child {
+  margin-top: 0;
+}
+
+.prism-next .n-markdown .n-prose > :last-child {
+  margin-bottom: 0;
+}

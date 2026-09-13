@@ -23,8 +23,10 @@ export function ModelAvatar({ name, size = 32, className }: ModelAvatarProps) {
       aria-hidden="true"
       className={cn('inline-flex shrink-0 items-center justify-center rounded-full', className)}
       style={{
-        width: size,
-        height: size,
+        // Surfaces can adapt the avatar to container width without an inline
+        // style override; all other avatars retain their requested size.
+        width: `var(--n-avatar-size, ${size}px)`,
+        height: `var(--n-avatar-size, ${size}px)`,
         background: 'var(--n-panel)',
         boxShadow: 'var(--n-ring)',
         color: 'var(--n-text-2)',

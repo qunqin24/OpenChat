@@ -1,0 +1,240 @@
+/**
+ * OpenWebUI's chat landing page (ChatPlaceholder + Suggestions at
+ * 0a7c15832f): the avatar owns the first line, the model name and grey greeting
+ * follow it, then a two-column starter grid. The composer is always docked
+ * below, so the welcome centres itself in the scroll region left above it.
+ * This is the local override layer; next-theme.css stays verbatim.
+ */
+/* Messages.svelte's empty state is `h-full flex pt-18`; ChatPlaceholder then
+   centres itself with `m-auto`. Auto margins fall to zero once the frame is
+   taller than the scroller, so a short viewport starts at the top padding and
+   scrolls instead of clipping the heading. */
+.prism-next .n-scroll-welcome {
+  display: flex;
+  flex-direction: column;
+  padding-top: 72px;
+}
+
+.prism-next .n-welcome {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 58rem;
+  margin: auto;
+  padding: 0 32px;
+  text-align: left;
+  user-select: none;
+}
+
+/* ChatPlaceholder's size-2.7 (43.2px), a full circle. */
+.prism-next .n-welcome-avatar {
+  --n-avatar-size: 2.7rem;
+  display: flex;
+  border-radius: 9999px;
+}
+
+/* `mt-2 mb-4` around the name and greeting; both use chat-typography's 30px. */
+.prism-next .n-welcome-heading {
+  margin: 8px 0 16px;
+}
+
+.prism-next .n-welcome :is(.n-welcome-title, .n-welcome-sub) {
+  overflow: hidden;
+  margin: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prism-next .n-welcome-suggestions {
+  width: 100%;
+}
+
+/* Suggestions.svelte head: mb-1, gap-1, text-xs. */
+.prism-next .n-welcome .n-suggest-head {
+  gap: 4px;
+  margin: 0 0 4px;
+  text-align: left;
+}
+
+.prism-next .n-suggest-viewport {
+  height: 144px;
+}
+
+/* grid-cols-2 with no gap, kept at every width; h-36 scrolls any overflow. */
+.prism-next .n-welcome .n-suggest-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 0;
+  max-height: 144px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.prism-next .n-welcome .n-suggest-grid::-webkit-scrollbar {
+  display: none;
+}
+
+/* px-2.5 py-1.5 (10/6) and rounded-lg (8px), one row per suggestion. */
+.prism-next .n-welcome .n-suggest {
+  flex-shrink: 0;
+  width: 100%;
+  gap: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  animation: n-suggestion-in 200ms ease both;
+}
+
+/* Upstream suggestions lift the text colour on hover, not a filled card. */
+.prism-next .n-welcome .n-suggest::before {
+  display: none;
+}
+
+.prism-next .n-welcome .n-suggest:focus-visible {
+  outline: none;
+  background: var(--n-hover);
+}
+
+.prism-next .n-welcome :is(.n-suggest-title, .n-suggest-detail) {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ChatPlaceholder's `lg:px-20`; below 1024px the frame keeps px-8 (32px). */
+@media (min-width: 1024px) {
+  .prism-next .n-welcome { padding-inline: 80px; }
+}
+
+/* One material and control scale for the single docked composer. */
+.prism-next .n-composer {
+  --n-composer-border: oklch(0.94 0 0 / 30%);
+  --n-composer-hover-border: oklch(0.92 0 0);
+  --n-composer-focus-border: oklch(0.94 0 0);
+  gap: 0;
+  padding: 0 2px;
+  border: 1px solid var(--n-composer-border);
+  border-radius: 24px;
+  background: rgb(255 255 255 / 5%);
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 10%), 0 4px 6px -4px rgb(0 0 0 / 10%);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: border-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dark .prism-next .n-composer {
+  --n-composer-border: oklch(0.27 0 0 / 30%);
+  --n-composer-hover-border: oklch(0.32 0 0);
+  --n-composer-focus-border: oklch(0.32 0 0);
+  background: oklch(0.69 0 0 / 5%);
+}
+
+.prism-next .n-composer:hover { border-color: var(--n-composer-hover-border); }
+.prism-next .n-composer:focus-within { border-color: var(--n-composer-focus-border); }
+
+.prism-next .n-composer-field {
+  /* A little more writing room: +16px over the upstream compact composer. */
+  padding: 16px 10px 10px;
+}
+
+.prism-next .n-composer-input {
+  padding: 0 4px;
+  max-height: 384px;
+  scrollbar-width: none;
+}
+
+.prism-next .n-composer-input::-webkit-scrollbar { display: none; }
+
+.prism-next .n-composer.expanded .n-composer-input {
+  max-height: max(384px, calc(100dvh - 240px));
+}
+
+.prism-next .n-composer-bar {
+  min-height: 42px;
+  padding: 6px;
+  gap: 4px;
+}
+
+.prism-next .n-composer-bar .n-icon-btn {
+  width: 30px;
+  height: 30px;
+}
+
+.prism-next .n-composer-bar .n-icon-btn.primary:disabled {
+  color: #fff;
+}
+
+.prism-next .n-composer-bar .n-icon-btn.primary:disabled::before {
+  background: oklch(0.92 0 0);
+}
+
+.dark .prism-next .n-composer-bar .n-icon-btn.primary:disabled {
+  color: oklch(0.2 0 0);
+}
+
+.dark .prism-next .n-composer-bar .n-icon-btn.primary:disabled::before {
+  background: oklch(0.42 0 0);
+}
+
+/* Plain-text model tag before Send; matches MessageInput's triggerClass:
+   text-[0.8125rem] font-normal, gray-600 in light and gray-300 in dark. */
+.prism-next .n-composer-model {
+  align-self: center;
+  max-width: 14rem;
+  overflow: hidden;
+  padding-inline: 4px;
+  color: oklch(0.51 0 0);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 20px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dark .prism-next .n-composer-model {
+  color: oklch(0.85 0 0);
+}
+
+.prism-next .n-composer-dock {
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+}
+
+.prism-next .n-composer-dock .n-column {
+  max-width: 58rem;
+  padding-inline: 8px;
+}
+
+@keyframes n-suggestion-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prism-next .n-welcome .n-suggest { animation: none; }
+}
+
+/* OpenWebUI Chat.svelte at 0a7c15832f: no page exit or translation; ready
+ * content mounts with `in:fade={{ duration: 50 }}`. The loading branch never
+ * carries this class, and streaming updates reuse the mounted content node.
+ */
+.prism-next .n-chat-fade {
+  animation: n-chat-fade-in 50ms linear both;
+}
+
+/* Historical replies must not replay the ported 320ms entrance on every chat
+ * switch. The ready content above owns the single transition for the view.
+ */
+.prism-next .n-msg-assistant {
+  animation: none;
+}
+
+@keyframes n-chat-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prism-next .n-chat-fade { animation: none; }
+}

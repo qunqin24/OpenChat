@@ -83,6 +83,14 @@
   background: var(--n-menu-hover);
 }
 
+.n-menu-sub-trigger[data-state='open'] {
+  background: var(--n-menu-hover);
+}
+
+.n-menu.n-account-menu-rail {
+  width: 240px;
+}
+
 /* Radix moves focus with the highlighted item; the fill is its focus indicator.
  * Scoped more tightly than focus.css so pointer movement never draws a ring.
  */

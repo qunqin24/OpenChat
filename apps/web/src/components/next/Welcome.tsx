@@ -15,36 +15,54 @@ interface WelcomeProps {
   modelName: string
 }
 
-/** Empty-conversation state: the active model, a greeting, and starter prompts. */
+/**
+ * OpenWebUI's chat landing page (ChatPlaceholder at 0a7c15832f): the avatar
+ * owns the first line, the model name and grey greeting follow it, then a
+ * two-column starter grid. The composer is docked outside this component, so
+ * the welcome never has to know about it.
+ */
 export function Welcome({ onPick, modelName }: WelcomeProps) {
   const { t } = useTranslation()
 
   return (
-    <div className="n-column n-welcome">
-      <ModelAvatar name={modelName} size={44} />
-      <h1 className="n-welcome-title">{modelName}</h1>
-      <p className="n-welcome-sub">{t('next.welcome.greeting')}</p>
+    <div className="n-welcome n-chat-fade">
+      <ModelAvatar name={modelName} size={44} className="n-welcome-avatar" />
 
-      <div className="n-suggest-head">
-        <Zap className="h-3.5 w-3.5" />
-        {t('next.welcome.suggestions')}
+      <div className="n-welcome-heading">
+        <h1 className="n-welcome-title" title={modelName}>
+          {modelName}
+        </h1>
+        <p className="n-welcome-sub">{t('next.welcome.greeting')}</p>
       </div>
 
-      <div className="n-suggest-grid">
-        {SUGGESTIONS.map((id) => (
-          <button
-            key={id}
-            type="button"
-            className="n-suggest"
-            onClick={() => {
-              onPick(t(`next.welcome.items.${id}.prompt`))
-              document.getElementById('input')?.focus()
-            }}
+      <div className="n-welcome-suggestions">
+        <div className="n-suggest-head">
+          <Zap className="h-3.5 w-3.5" aria-hidden="true" />
+          {t('next.welcome.suggestions')}
+        </div>
+        <div className="n-suggest-viewport">
+          <div
+            className="n-suggest-grid"
+            role="group"
+            aria-label={t('next.welcome.suggestions')}
           >
-            <span className="n-suggest-title">{t(`next.welcome.items.${id}.title`)}</span>
-            <span className="n-suggest-detail">{t(`next.welcome.items.${id}.detail`)}</span>
-          </button>
-        ))}
+            {SUGGESTIONS.map((id, index) => (
+              <button
+                key={id}
+                type="button"
+                className="n-suggest"
+                style={{ animationDelay: `${index * 45}ms` }}
+                onClick={() => {
+                  onPick(t(`next.welcome.items.${id}.prompt`))
+                  document.getElementById('input')?.focus()
+                }}
+              >
+                <span className="n-suggest-title">{t(`next.welcome.items.${id}.title`)}</span>
+                <span className="n-suggest-detail">{t(`next.welcome.items.${id}.detail`)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   )

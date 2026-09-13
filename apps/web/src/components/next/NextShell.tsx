@@ -1,7 +1,7 @@
 import type { Conversation } from '@openchat/api-client'
-import { Outlet, useLocation, useNavigate, useParams } from '@tanstack/react-router'
+import { Outlet, useNavigate, useParams } from '@tanstack/react-router'
 import { PanelLeft } from 'lucide-react'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { Dialog } from 'radix-ui'
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -16,23 +16,14 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useDeleteConversation } from '@/hooks/use-conversations'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { useUIStore } from '@/stores/ui-store'
 import Sidebar from './Sidebar'
 
 interface NextShellContextValue {
   collapsed: boolean
   toggleCollapsed: () => void
-}
-
-const routeVariants = {
-  hidden: { opacity: 0, y: 10 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.28, ease: [0.22, 1, 0.36, 1] as const } },
-  exit: { opacity: 0, y: -6, transition: { duration: 0.16, ease: [0.4, 0, 1, 1] as const } },
-}
-
-const reducedRouteVariants = {
-  hidden: { opacity: 1, y: 0 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0 } },
-  exit: { opacity: 1, y: 0, transition: { duration: 0 } },
+  mobile: boolean
 }
 
 const NextShellContext = createContext<NextShellContextValue | null>(null)
@@ -43,32 +34,37 @@ export function SidebarToggle() {
 
   if (!context) throw new Error('SidebarToggle must be rendered inside NextShell')
 
+  if (!context.mobile) return null
+
   return (
-    <button
-      type="button"
-      className="n-icon-btn"
-      aria-label={t('nav.toggleSidebar')}
-      onClick={context.toggleCollapsed}
-    >
-      <PanelLeft className="h-[18px] w-[18px]" />
-    </button>
+    <Dialog.Trigger asChild>
+      <button type="button" className="n-icon-btn" aria-label={t('next.sidebar.open')}>
+        <PanelLeft className="h-[18px] w-[18px]" />
+      </button>
+    </Dialog.Trigger>
   )
 }
 
 export function NextShell() {
   const { t } = useTranslation()
-  const location = useLocation()
   const navigate = useNavigate()
-  const reduceMotion = useReducedMotion()
   const deleteConversation = useDeleteConversation()
 
-  const [collapsed, setCollapsed] = useState(false)
+  const mobile = useIsMobile()
+  const sidebarOpen = useUIStore((s) => s.sidebarOpen)
+  const toggleSidebar = useUIStore((s) => s.toggleSidebar)
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const collapsed = mobile ? !mobileOpen : !sidebarOpen
   const [pendingDelete, setPendingDelete] = useState<Conversation | null>(null)
 
-  const toggleCollapsed = useCallback(() => setCollapsed((value) => !value), [])
+  const toggleCollapsed = useCallback(() => {
+    if (mobile) setMobileOpen((value) => !value)
+    else toggleSidebar()
+  }, [mobile, toggleSidebar])
+  const closeMobile = useCallback(() => setMobileOpen(false), [])
   const shellContext = useMemo(
-    () => ({ collapsed, toggleCollapsed }),
-    [collapsed, toggleCollapsed],
+    () => ({ collapsed, toggleCollapsed, mobile }),
+    [collapsed, toggleCollapsed, mobile],
   )
 
   const params = useParams({ strict: false })
@@ -84,43 +80,60 @@ export function NextShell() {
 
   return (
     <NextShellContext.Provider value={shellContext}>
-      <div className="prism-next">
-        <Sidebar collapsed={collapsed} activeId={activeId} onDelete={setPendingDelete} />
+      <Dialog.Root open={mobile && mobileOpen} onOpenChange={setMobileOpen}>
+        <div className="prism-next">
+          {mobile ? (
+            <Dialog.Portal>
+              <Dialog.Overlay className="n-sidebar-backdrop" />
+              <Dialog.Content className="prism-next n-sidebar-mobile-frame" aria-describedby={undefined}>
+                <Dialog.Title className="sr-only">{t('next.sidebar.history')}</Dialog.Title>
+                <Sidebar
+                  mobile
+                  collapsed={false}
+                  onToggle={closeMobile}
+                  onNavigate={closeMobile}
+                  activeId={activeId}
+                  onDelete={setPendingDelete}
+                />
+              </Dialog.Content>
+            </Dialog.Portal>
+          ) : (
+            <Sidebar
+              mobile={false}
+              collapsed={collapsed}
+              onToggle={toggleCollapsed}
+              onNavigate={closeMobile}
+              activeId={activeId}
+              onDelete={setPendingDelete}
+            />
+          )}
 
-        <AnimatePresence mode="wait" initial={!reduceMotion}>
-          <motion.div
-            className="n-route-motion"
-            key={location.pathname}
-            variants={reduceMotion ? reducedRouteVariants : routeVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-          >
+          <div className="n-route-motion">
             <Outlet />
-          </motion.div>
-        </AnimatePresence>
+          </div>
 
-        <AlertDialog
-          open={pendingDelete !== null}
-          onOpenChange={(open) => !open && setPendingDelete(null)}
-        >
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>{t('next.conversation.remove-title')}</AlertDialogTitle>
-              <AlertDialogDescription>
-                {t('next.conversation.remove-description')}
-                <strong> {pendingDelete?.title}</strong>
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>{t('next.conversation.cancel')}</AlertDialogCancel>
-              <AlertDialogAction onClick={() => void handleDelete()}>
-                {t('chat.delete')}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
+          <AlertDialog
+            open={pendingDelete !== null}
+            onOpenChange={(open) => !open && setPendingDelete(null)}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{t('next.conversation.remove-title')}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t('next.conversation.remove-description')}
+                  <strong> {pendingDelete?.title}</strong>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{t('next.conversation.cancel')}</AlertDialogCancel>
+                <AlertDialogAction onClick={() => void handleDelete()}>
+                  {t('chat.delete')}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      </Dialog.Root>
     </NextShellContext.Provider>
   )
 }

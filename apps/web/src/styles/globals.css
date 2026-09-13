@@ -6,18 +6,19 @@
 @import '@fontsource-variable/inter';
 @import '@fontsource-variable/manrope';
 
-/* The next-gen chat UI's own design system, lifted wholesale from the prism
-   `next` UI. It owns every visual decision inside `.prism-next`: the `--n-*`
-   tokens, the layout, and the markdown typography. Imported after Tailwind so
-   its rules win over preflight. */
+/* The prism base stays verbatim for re-syncing. Local sidebar and typography
+   overrides below adapt the chat surface to OpenWebUI's visual specifications.
+   All of these rules are scoped, and outrank Tailwind's preflight layer. */
 @import './next-theme.css';
-@import './sidebar-interactions.css';
+@import './sidebar.css';
 
 /* Sign-in / sign-up screens and dropdown menus, built on the same tokens. */
 @import './auth.css';
 @import './menu.css';
 @import './focus.css';
 @import './progress.css';
+@import './chat-typography.css';
+@import './chat-layout.css';
 
 /* The admin panel keeps shadcn's own look, so its tokens and base layer come
    across unchanged — the base layer scoped so it cannot reach the chat UI. */

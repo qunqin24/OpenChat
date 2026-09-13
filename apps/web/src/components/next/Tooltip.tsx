@@ -16,6 +16,7 @@ interface TooltipProps {
   label: string
   hint?: string
   side?: 'top' | 'right' | 'bottom' | 'left'
+  disabled?: boolean
   children: ReactNode
 }
 
@@ -32,7 +33,9 @@ export function TooltipGroup({ children }: { children: ReactNode }) {
   )
 }
 
-export function Tooltip({ label, hint, side = 'top', children }: TooltipProps) {
+export function Tooltip({ label, hint, side = 'top', disabled, children }: TooltipProps) {
+  if (disabled) return children
+
   return (
     <RadixTooltip.Root>
       <RadixTooltip.Trigger asChild>{children}</RadixTooltip.Trigger>
