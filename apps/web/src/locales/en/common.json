@@ -153,7 +153,8 @@
     },
     "trend": {
       "title": "Activity",
-      "days": "{{n}} days"
+      "days": "{{n}} days",
+      "messages": "Messages"
     },
     "users": {
       "search": "Search email or name",
@@ -311,7 +312,8 @@
       "cancel": "Cancel",
       "save": "Save",
       "show-password": "Show password",
-      "hide-password": "Hide password"
+      "hide-password": "Hide password",
+      "continue": "Continue"
     }
   }
 }

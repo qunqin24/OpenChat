@@ -153,7 +153,8 @@
     },
     "trend": {
       "title": "活跃趋势",
-      "days": "{{n}} 天"
+      "days": "{{n}} 天",
+      "messages": "消息"
     },
     "users": {
       "search": "搜索邮箱或昵称",
@@ -311,7 +312,8 @@
       "cancel": "取消",
       "save": "保存",
       "show-password": "显示密码",
-      "hide-password": "隐藏密码"
+      "hide-password": "隐藏密码",
+      "continue": "继续"
     }
   }
 }
