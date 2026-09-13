@@ -27,6 +27,9 @@ export function validateIdentifier(value: string): AuthErrorKey | null {
 
 export function validateName(value: string): AuthErrorKey | null {
   if (!value.trim()) return 'auth.error.name-required'
+  // Sign-in takes a username or an address in one field, so the two have to
+  // stay distinguishable. A CHECK constraint enforces it; this is the message.
+  if (value.includes('@')) return 'auth.error.name-invalid'
   return null
 }
 

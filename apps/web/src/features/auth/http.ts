@@ -20,8 +20,10 @@ import {
 const SERVER_ERRORS: Record<string, AuthErrorKey> = {
   invalid_credentials: 'auth.error.invalid-credentials',
   email_taken: 'auth.error.email-taken',
+  name_taken: 'auth.error.name-taken',
   email_required: 'auth.error.email-required',
   name_required: 'auth.error.name-required',
+  name_invalid: 'auth.error.name-invalid',
   password_short: 'auth.error.password-short',
   account_disabled: 'auth.error.account-disabled',
   nothing_to_update: 'auth.error.nothing-to-update',

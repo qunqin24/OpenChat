@@ -151,7 +151,8 @@
       "password-wrong": "That is not your current password",
       "nothing-to-update": "Nothing was changed",
       "name-taken": "That username is already taken",
-      "identifier-required": "Enter your email or username"
+      "identifier-required": "Enter your email or username",
+      "name-invalid": "A username cannot contain @"
     }
   },
   "admin": {
@@ -225,7 +226,8 @@
         "password-required": "Set a password",
         "password-short": "At least {{n}} characters",
         "password-mismatch": "The passwords do not match",
-        "name-taken": "That username is already taken"
+        "name-taken": "That username is already taken",
+        "name-invalid": "A username cannot contain @"
       }
     },
     "bulk": {

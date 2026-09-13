@@ -610,12 +610,22 @@ components:
         page: { type: integer }
         limit: { type: integer }
 
+    Username:
+      type: string
+      minLength: 1
+      maxLength: 80
+      pattern: '^[^@]+$'
+      description: |
+        A username. `@` is excluded so that a username can never be spelled
+        like an email address: sign-in accepts either, and if the two could
+        collide, one account's username would shadow another's address.
+
     RegisterRequest:
       type: object
       required: [email, name, password]
       properties:
         email: { type: string, format: email }
-        name: { type: string, minLength: 1, maxLength: 80 }
+        name: { $ref: "#/components/schemas/Username" }
         password: { type: string, minLength: 8, maxLength: 200 }
 
     LoginRequest:
@@ -634,7 +644,7 @@ components:
       type: object
       description: Only the fields present are changed.
       properties:
-        name: { type: string, minLength: 1, maxLength: 80 }
+        name: { $ref: "#/components/schemas/Username" }
         email: { type: string, format: email }
 
     ChangePasswordRequest:
@@ -649,7 +659,7 @@ components:
       required: [email, name, password, role]
       properties:
         email: { type: string, format: email }
-        name: { type: string, minLength: 1, maxLength: 80 }
+        name: { $ref: "#/components/schemas/Username" }
         password: { type: string, minLength: 8, maxLength: 200 }
         role: { $ref: "#/components/schemas/UserRole" }
         disabled: { type: boolean, default: false }
@@ -661,7 +671,7 @@ components:
         account out everywhere — the old sessions outlive the old credential
         otherwise.
       properties:
-        name: { type: string, minLength: 1, maxLength: 80 }
+        name: { $ref: "#/components/schemas/Username" }
         email: { type: string, format: email }
         password: { type: string, minLength: 8, maxLength: 200 }
         role: { $ref: "#/components/schemas/UserRole" }

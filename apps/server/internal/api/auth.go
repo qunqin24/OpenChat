@@ -54,14 +54,15 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	email := strings.TrimSpace(string(body.Email))
-	name := strings.TrimSpace(body.Name)
+	name, err := validateUsername(body.Name)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
 
 	switch {
 	case email == "":
 		httpx.Fail(w, r, httpx.NewFieldError("email", "email_required", "email is required"))
-		return
-	case name == "":
-		httpx.Fail(w, r, httpx.NewFieldError("name", "name_required", "name is required"))
 		return
 	case len(body.Password) < minPasswordLength:
 		httpx.Fail(w, r, httpx.NewFieldError("password", "password_short", "password is too short"))
@@ -184,9 +185,9 @@ func (s *Server) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	var name, email *string
 
 	if body.Name != nil {
-		trimmed := strings.TrimSpace(*body.Name)
-		if trimmed == "" {
-			httpx.Fail(w, r, httpx.NewFieldError("name", "name_required", "name is required"))
+		trimmed, err := validateUsername(*body.Name)
+		if err != nil {
+			httpx.Fail(w, r, err)
 			return
 		}
 		name = &trimmed

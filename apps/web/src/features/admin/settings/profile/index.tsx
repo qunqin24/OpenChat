@@ -30,7 +30,14 @@ export function SettingsProfile() {
   const updateProfile = useUpdateProfile()
 
   const schema = z.object({
-    name: z.string().trim().min(1, t('admin.users.form.name-required')).max(80),
+    name: z
+      .string()
+      .trim()
+      .min(1, t('admin.users.form.name-required'))
+      .max(80)
+      // Sign-in takes a username or an address in one field; a CHECK
+      // constraint keeps the two name spaces disjoint.
+      .refine((value) => !value.includes('@'), t('admin.users.form.name-invalid')),
     email: z.email(t('admin.users.form.email-invalid')),
   })
 

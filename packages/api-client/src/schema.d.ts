@@ -453,10 +453,16 @@ export interface components {
             page: number;
             limit: number;
         };
+        /**
+         * @description A username. `@` is excluded so that a username can never be spelled
+         *     like an email address: sign-in accepts either, and if the two could
+         *     collide, one account's username would shadow another's address.
+         */
+        Username: string;
         RegisterRequest: {
             /** Format: email */
             email: string;
-            name: string;
+            name: components["schemas"]["Username"];
             password: string;
         };
         LoginRequest: {
@@ -470,7 +476,7 @@ export interface components {
         };
         /** @description Only the fields present are changed. */
         UpdateMeRequest: {
-            name?: string;
+            name?: components["schemas"]["Username"];
             /** Format: email */
             email?: string;
         };
@@ -481,7 +487,7 @@ export interface components {
         CreateUserRequest: {
             /** Format: email */
             email: string;
-            name: string;
+            name: components["schemas"]["Username"];
             password: string;
             role: components["schemas"]["UserRole"];
             /** @default false */
@@ -493,7 +499,7 @@ export interface components {
          *     otherwise.
          */
         UpdateUserRequest: {
-            name?: string;
+            name?: components["schemas"]["Username"];
             /** Format: email */
             email?: string;
             password?: string;

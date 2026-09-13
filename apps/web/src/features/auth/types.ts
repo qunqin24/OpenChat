@@ -58,6 +58,7 @@ export type AuthErrorKey =
   | 'auth.error.email-invalid'
   | 'auth.error.identifier-required'
   | 'auth.error.name-required'
+  | 'auth.error.name-invalid'
   | 'auth.error.password-required'
   | 'auth.error.password-short'
   | 'auth.error.account-disabled'

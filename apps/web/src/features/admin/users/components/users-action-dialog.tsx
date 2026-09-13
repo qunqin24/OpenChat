@@ -66,7 +66,14 @@ export function UsersActionDialog({ user, isSelf, open, onOpenChange }: UsersAct
   // so the password rule can depend on the mode.
   const schema = z
     .object({
-      name: z.string().trim().min(1, t('admin.users.form.name-required')).max(80),
+      name: z
+        .string()
+        .trim()
+        .min(1, t('admin.users.form.name-required'))
+        .max(80)
+        // Sign-in takes a username or an address in one field; a CHECK
+        // constraint keeps the two name spaces disjoint.
+        .refine((value) => !value.includes('@'), t('admin.users.form.name-invalid')),
       email: z.email(t('admin.users.form.email-invalid')),
       role: z.enum(['admin', 'user']),
       enabled: z.boolean(),
@@ -147,10 +154,17 @@ export function UsersActionDialog({ user, isSelf, open, onOpenChange }: UsersAct
       }
       onOpenChange(false)
     } catch (error) {
-      // The server rejects a duplicate address as a field error; anything else
-      // is a refused change (last admin, self-lockout) with no field to blame.
-      if (isOpenChatError(error) && error.field === 'email') {
-        form.setError('email', { message: t('admin.users.form.email-taken') })
+      // A duplicate address or username comes back blaming that field;
+      // anything else is a refused change (last admin, self-lockout) with no
+      // field to point at.
+      if (isOpenChatError(error) && (error.field === 'email' || error.field === 'name')) {
+        form.setError(error.field, {
+          message: t(
+            error.field === 'email'
+              ? 'admin.users.form.email-taken'
+              : 'admin.users.form.name-taken',
+          ),
+        })
         return
       }
       toast.error(t('admin.users.update-failed'))

@@ -151,7 +151,8 @@
       "password-wrong": "当前密码不正确",
       "nothing-to-update": "没有任何改动",
       "name-taken": "该用户名已被占用",
-      "identifier-required": "请填写邮箱或用户名"
+      "identifier-required": "请填写邮箱或用户名",
+      "name-invalid": "用户名不能包含 @"
     }
   },
   "admin": {
@@ -225,7 +226,8 @@
         "password-required": "请设置密码",
         "password-short": "密码至少 {{n}} 位",
         "password-mismatch": "两次输入的密码不一致",
-        "name-taken": "该用户名已被占用"
+        "name-taken": "该用户名已被占用",
+        "name-invalid": "用户名不能包含 @"
       }
     },
     "bulk": {

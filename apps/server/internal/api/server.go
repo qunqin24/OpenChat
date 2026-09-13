@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -61,6 +62,24 @@ func dbErr(err error) error {
 		return httpx.ErrNotFound
 	}
 	return err
+}
+
+// validateUsername trims a username and rejects the two values the column will
+// not hold: empty, and anything containing `@`.
+//
+// The `@` rule is what keeps usernames and email addresses in disjoint name
+// spaces, which sign-in depends on — it takes either one in a single field. A
+// CHECK constraint enforces the same rule, so this is the readable error rather
+// than the guarantee.
+func validateUsername(raw string) (string, error) {
+	name := strings.TrimSpace(raw)
+	switch {
+	case name == "":
+		return "", httpx.NewFieldError("name", "name_required", "a username is required")
+	case strings.ContainsRune(name, '@'):
+		return "", httpx.NewFieldError("name", "name_invalid", "a username cannot contain @")
+	}
+	return name, nil
 }
 
 // conflictingField names the input a duplicate-key error blames, or "" when the
