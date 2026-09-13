@@ -176,6 +176,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List channels */
+        get: operations["listChannels"];
+        put?: never;
+        /** Add a channel */
+        post: operations["createChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/channels/{channelId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a channel
+         * @description Unlike accounts, a channel owns no user data — deleting one removes a
+         *     connection, not anybody's history. It is therefore a real delete.
+         */
+        delete: operations["deleteChannel"];
+        options?: never;
+        head?: never;
+        /** Change a channel */
+        patch: operations["updateChannel"];
+        trace?: never;
+    };
     "/admin/users/bulk": {
         parameters: {
             query?: never;
@@ -519,6 +561,52 @@ export interface components {
             role?: components["schemas"]["UserRole"];
             disabled?: boolean;
         };
+        Channel: {
+            /** Format: uuid */
+            id: string;
+            /** @description What the operator calls this connection. */
+            name: string;
+            /**
+             * @description A models.dev provider id (`openai`, `anthropic`, …). It selects the
+             *     catalogue entry and the brand icon, so it is an identifier rather
+             *     than a label.
+             */
+            providerId: string;
+            /** @description Overrides the provider's default endpoint. Empty means use the default. */
+            baseUrl?: string;
+            enabled: boolean;
+            /** @description Whether a credential is stored. The credential itself is never returned. */
+            hasKey: boolean;
+            /**
+             * @description The last four characters, for telling two keys apart in the UI —
+             *     e.g. `…4f2a`. Absent when no key is stored.
+             */
+            keyPreview?: string;
+            sortOrder: number;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CreateChannelRequest: {
+            name: string;
+            providerId: string;
+            baseUrl?: string;
+            apiKey?: string;
+            /** @default true */
+            enabled: boolean;
+        };
+        /**
+         * @description Only the fields present are changed. An absent `apiKey` keeps the
+         *     stored one; an empty string clears it. There is no way to read a key
+         *     back, so a form that wants to leave it alone must omit the field.
+         */
+        UpdateChannelRequest: {
+            name?: string;
+            providerId?: string;
+            baseUrl?: string;
+            apiKey?: string;
+            enabled?: boolean;
+            sortOrder?: number;
+        };
         AdminStats: {
             totals: components["schemas"]["AdminTotals"];
             trend: components["schemas"]["TrendPoint"][];
@@ -830,6 +918,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["User"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listChannels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Channel"][];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateChannelRequest"];
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Channel"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateChannelRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Channel"];
                 };
             };
             default: components["responses"]["Error"];

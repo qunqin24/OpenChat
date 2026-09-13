@@ -28,9 +28,11 @@ type Querier interface {
 	CountUsers(ctx context.Context) (int64, error)
 	CountUsersFiltered(ctx context.Context, search *string) (int64, error)
 	CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (Attachment, error)
+	CreateChannel(ctx context.Context, arg CreateChannelParams) (Channel, error)
 	CreateConversation(ctx context.Context, arg CreateConversationParams) (Conversation, error)
 	CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
+	DeleteChannel(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteExpiredSessions(ctx context.Context) (int64, error)
 	// Used when someone changes their own password: every session issued under the
 	// old credential goes, except the one asking, so the change does not sign the
@@ -43,6 +45,7 @@ type Querier interface {
 	// One row per day for the requested window, including days with no activity —
 	// a gap in the series would otherwise draw as a straight line across the chart.
 	GetActivityTrend(ctx context.Context, days int32) ([]GetActivityTrendRow, error)
+	GetChannel(ctx context.Context, id uuid.UUID) (Channel, error)
 	// Ownership is part of the lookup, not a separate check: a conversation
 	// belonging to someone else must read as "not found", never as "forbidden",
 	// or the response tells a stranger the id exists.
@@ -62,6 +65,7 @@ type Querier interface {
 	// error. Addresses win, so nobody's username can shadow somebody's email.
 	GetUserByLogin(ctx context.Context, identifier string) (User, error)
 	ListAttachmentsByMessages(ctx context.Context, messageIds []uuid.UUID) ([]Attachment, error)
+	ListChannels(ctx context.Context) ([]Channel, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
 	// Offset paging rather than keyset: the admin table needs page numbers and a
@@ -77,6 +81,12 @@ type Querier interface {
 	TouchConversation(ctx context.Context, id uuid.UUID) error
 	TouchSession(ctx context.Context, id uuid.UUID) error
 	TouchUserSeen(ctx context.Context, id uuid.UUID) error
+	// Every editable field in one statement, so a partial edit cannot half-apply.
+	//
+	// `api_key` is the one field whose "absent" and "empty" mean different things:
+	// absent keeps the stored credential, empty clears it. A NULL argument is
+	// therefore "leave it", which COALESCE gives us for free.
+	UpdateChannel(ctx context.Context, arg UpdateChannelParams) (Channel, error)
 	UpdateConversationTitle(ctx context.Context, arg UpdateConversationTitleParams) (Conversation, error)
 	// Deliberately narrower than AdminUpdateUser: role and disabled_at are not
 	// reachable from here, so the self-service form cannot touch them even if the

@@ -152,6 +152,18 @@ type Attachment struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
+type Channel struct {
+	ID         uuid.UUID          `json:"id"`
+	Name       string             `json:"name"`
+	ProviderID string             `json:"provider_id"`
+	BaseUrl    string             `json:"base_url"`
+	ApiKey     string             `json:"api_key"`
+	Enabled    bool               `json:"enabled"`
+	SortOrder  int32              `json:"sort_order"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Conversation struct {
 	ID        uuid.UUID          `json:"id"`
 	UserID    *uuid.UUID         `json:"user_id"`

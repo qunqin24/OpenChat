@@ -77,6 +77,11 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 				r.Use(mw.RequireAdmin)
 
 				r.Get("/admin/stats", wrapper.GetAdminStats)
+				r.Get("/admin/channels", wrapper.ListChannels)
+				r.Post("/admin/channels", wrapper.CreateChannel)
+				r.Patch("/admin/channels/{channelId}", wrapper.UpdateChannel)
+				r.Delete("/admin/channels/{channelId}", wrapper.DeleteChannel)
+
 				r.Get("/admin/users", wrapper.ListUsers)
 				r.Post("/admin/users", wrapper.CreateUser)
 				r.Post("/admin/users/bulk", wrapper.BulkUpdateUsers)

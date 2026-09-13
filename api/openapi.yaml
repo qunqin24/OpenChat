@@ -209,6 +209,70 @@ paths:
               schema: { $ref: "#/components/schemas/User" }
         default: { $ref: "#/components/responses/Error" }
 
+  /admin/channels:
+    get:
+      tags: [admin]
+      summary: List channels
+      operationId: listChannels
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Channel" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [admin]
+      summary: Add a channel
+      operationId: createChannel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateChannelRequest" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Channel" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/channels/{channelId}:
+    parameters:
+      - name: channelId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [admin]
+      summary: Change a channel
+      operationId: updateChannel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateChannelRequest" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Channel" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [admin]
+      summary: Remove a channel
+      description: |
+        Unlike accounts, a channel owns no user data — deleting one removes a
+        connection, not anybody's history. It is therefore a real delete.
+      operationId: deleteChannel
+      responses:
+        "204": { description: deleted }
+        default: { $ref: "#/components/responses/Error" }
+
   /admin/users/bulk:
     post:
       tags: [admin]
@@ -690,6 +754,57 @@ components:
         password: { type: string, minLength: 8, maxLength: 200 }
         role: { $ref: "#/components/schemas/UserRole" }
         disabled: { type: boolean }
+
+    Channel:
+      type: object
+      required: [id, name, providerId, enabled, hasKey, sortOrder, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, description: What the operator calls this connection. }
+        providerId:
+          type: string
+          description: |
+            A models.dev provider id (`openai`, `anthropic`, …). It selects the
+            catalogue entry and the brand icon, so it is an identifier rather
+            than a label.
+        baseUrl:
+          type: string
+          description: Overrides the provider's default endpoint. Empty means use the default.
+        enabled: { type: boolean }
+        hasKey:
+          type: boolean
+          description: Whether a credential is stored. The credential itself is never returned.
+        keyPreview:
+          type: string
+          description: |
+            The last four characters, for telling two keys apart in the UI —
+            e.g. `…4f2a`. Absent when no key is stored.
+        sortOrder: { type: integer }
+        createdAt: { type: string, format: date-time }
+
+    CreateChannelRequest:
+      type: object
+      required: [name, providerId]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        providerId: { type: string, minLength: 1, maxLength: 80 }
+        baseUrl: { type: string, maxLength: 500 }
+        apiKey: { type: string, maxLength: 500 }
+        enabled: { type: boolean, default: true }
+
+    UpdateChannelRequest:
+      type: object
+      description: |
+        Only the fields present are changed. An absent `apiKey` keeps the
+        stored one; an empty string clears it. There is no way to read a key
+        back, so a form that wants to leave it alone must omit the field.
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        providerId: { type: string, minLength: 1, maxLength: 80 }
+        baseUrl: { type: string, maxLength: 500 }
+        apiKey: { type: string, maxLength: 500 }
+        enabled: { type: boolean }
+        sortOrder: { type: integer }
 
     AdminStats:
       type: object
