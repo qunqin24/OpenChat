@@ -1,0 +1,6 @@
+data: {"candidates":[{"content":{"parts":[{"text":"Let me look."}],"role":"model"},"index":0}],"modelVersion":"gemini-2.5-flash","responseId":"resp-tool"}
+
+data: {"candidates":[{"content":{"parts":[{"functionCall":{"name":"search_notes","args":{"query":"quarterly report","limit":5}}},{"functionCall":{"name":"read_note","args":{"id":"n-17"}}}],"role":"model"},"index":0}],"modelVersion":"gemini-2.5-flash","responseId":"resp-tool"}
+
+data: {"candidates":[{"content":{"parts":[{"text":""}],"role":"model"},"finishReason":"STOP","index":0}],"usageMetadata":{"promptTokenCount":210,"candidatesTokenCount":31,"totalTokenCount":241},"modelVersion":"gemini-2.5-flash","responseId":"resp-tool"}
+

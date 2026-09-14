@@ -168,7 +168,7 @@ func (s *Server) ListCatalogModels(w http.ResponseWriter, r *http.Request, param
 		}
 	}
 
-	filter := sqlc.ListCatalogModelsParams{
+	filter := modelFilter{
 		Search:                  search,
 		ProviderID:              providerID,
 		RequireReasoning:        wanted[ListCatalogModelsParamsCapabilityReasoning],
@@ -176,38 +176,28 @@ func (s *Server) ListCatalogModels(w http.ResponseWriter, r *http.Request, param
 		RequireAttachment:       wanted[ListCatalogModelsParamsCapabilityAttachment],
 		RequireStructuredOutput: wanted[ListCatalogModelsParamsCapabilityStructuredOutput],
 		Enabled:                 params.Enabled,
-		// The default is the narrow one. "Our models" means the ones a channel
-		// can actually reach; the whole upstream catalogue is what you browse
-		// when deciding which channel to add next, not what you manage.
-		ChannelsOnly: params.Scope == nil || *params.Scope == Channels,
-		RowLimit:     limit,
-		RowOffset:    (page - 1) * limit,
+		RowLimit:                limit,
+		RowOffset:               (page - 1) * limit,
 	}
 
-	total, err := s.q.CountCatalogModelsFiltered(r.Context(), sqlc.CountCatalogModelsFilteredParams{
-		Search:                  filter.Search,
-		ProviderID:              filter.ProviderID,
-		RequireReasoning:        filter.RequireReasoning,
-		RequireToolCall:         filter.RequireToolCall,
-		RequireAttachment:       filter.RequireAttachment,
-		RequireStructuredOutput: filter.RequireStructuredOutput,
-		Enabled:                 filter.Enabled,
-		ChannelsOnly:            filter.ChannelsOnly,
-	})
+	// The default is the narrow one. "Our models" means the ones a channel
+	// actually serves; the whole upstream catalogue is what you browse when
+	// deciding which channel to add next, not what you manage.
+	//
+	// The two scopes are two different questions, so they are two queries
+	// rather than one with a flag in it: the channel scope reads the channels'
+	// own model lists and decorates them from the catalogue, and the catalogue
+	// scope reads the catalogue. Both answer in the same row shape, which is
+	// what lets everything below this point be written once.
+	rows, total, err := s.modelPage(r.Context(), filter, params.Scope == nil || *params.Scope == Channels)
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
 
-	rows, err := s.q.ListCatalogModels(r.Context(), filter)
-	if err != nil {
-		httpx.Fail(w, r, err)
-		return
-	}
-
-	// One lookup for the page rather than a join, which would multiply a
-	// provider's models by its channel count and break both paging and total.
-	byProvider, err := s.channelsByProvider(r.Context(), rows)
+	// One lookup for the page rather than a join, which would multiply a model
+	// by its channel count and break both paging and total.
+	byModel, err := s.channelsByModel(r.Context(), rows)
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
@@ -216,9 +206,9 @@ func (s *Server) ListCatalogModels(w http.ResponseWriter, r *http.Request, param
 	items := make([]CatalogModel, 0, len(rows))
 	for _, row := range rows {
 		model := toCatalogModel(row)
-		// Always a list, never absent: "no channel reaches this" is an answer,
+		// Always a list, never absent: "no channel serves this" is an answer,
 		// and a missing field would read as "not asked".
-		channels := byProvider[row.ProviderID]
+		channels := byModel[row.ModelID]
 		if channels == nil {
 			channels = []ModelChannel{}
 		}
@@ -234,81 +224,128 @@ func (s *Server) ListCatalogModels(w http.ResponseWriter, r *http.Request, param
 	})
 }
 
-// channelsByProvider names, for each provider on this page, the channels that
-// can serve it. A model with none is in the catalogue but out of reach, which
-// the card says rather than hides.
-func (s *Server) channelsByProvider(
+// modelFilter is what the two scopes ask in common. It exists because the
+// generated params structs are two types with the same fields, and copying a
+// filter into one of them twice is how the two scopes start disagreeing about
+// what a filter means.
+type modelFilter struct {
+	Search                  *string
+	ProviderID              *string
+	RequireReasoning        bool
+	RequireToolCall         bool
+	RequireAttachment       bool
+	RequireStructuredOutput bool
+	Enabled                 *bool
+	RowLimit                int32
+	RowOffset               int32
+}
+
+// modelPage reads one page and its total, from whichever of the two sources the
+// scope names.
+//
+// Both come back as ListCatalogModelsRow. The served query selects the same
+// columns in the same order for exactly this reason: one row type means one
+// mapper, and if the two ever diverge the conversion below stops compiling,
+// which is when you want to hear about it.
+func (s *Server) modelPage(
+	ctx context.Context, f modelFilter, channelsOnly bool,
+) ([]sqlc.ListCatalogModelsRow, int64, error) {
+	if !channelsOnly {
+		total, err := s.q.CountCatalogModelsFiltered(ctx, sqlc.CountCatalogModelsFilteredParams{
+			Search:                  f.Search,
+			ProviderID:              f.ProviderID,
+			RequireReasoning:        f.RequireReasoning,
+			RequireToolCall:         f.RequireToolCall,
+			RequireAttachment:       f.RequireAttachment,
+			RequireStructuredOutput: f.RequireStructuredOutput,
+			Enabled:                 f.Enabled,
+		})
+		if err != nil {
+			return nil, 0, err
+		}
+		rows, err := s.q.ListCatalogModels(ctx, sqlc.ListCatalogModelsParams{
+			Search:                  f.Search,
+			ProviderID:              f.ProviderID,
+			RequireReasoning:        f.RequireReasoning,
+			RequireToolCall:         f.RequireToolCall,
+			RequireAttachment:       f.RequireAttachment,
+			RequireStructuredOutput: f.RequireStructuredOutput,
+			Enabled:                 f.Enabled,
+			RowLimit:                f.RowLimit,
+			RowOffset:               f.RowOffset,
+		})
+		return rows, total, err
+	}
+
+	total, err := s.q.CountServedModels(ctx, sqlc.CountServedModelsParams{
+		Search:                  f.Search,
+		ProviderID:              f.ProviderID,
+		RequireReasoning:        f.RequireReasoning,
+		RequireToolCall:         f.RequireToolCall,
+		RequireAttachment:       f.RequireAttachment,
+		RequireStructuredOutput: f.RequireStructuredOutput,
+		Enabled:                 f.Enabled,
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	served, err := s.q.ListServedModels(ctx, sqlc.ListServedModelsParams{
+		Search:                  f.Search,
+		ProviderID:              f.ProviderID,
+		RequireReasoning:        f.RequireReasoning,
+		RequireToolCall:         f.RequireToolCall,
+		RequireAttachment:       f.RequireAttachment,
+		RequireStructuredOutput: f.RequireStructuredOutput,
+		Enabled:                 f.Enabled,
+		RowLimit:                f.RowLimit,
+		RowOffset:               f.RowOffset,
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+
+	rows := make([]sqlc.ListCatalogModelsRow, len(served))
+	for i, row := range served {
+		rows[i] = sqlc.ListCatalogModelsRow(row)
+	}
+	return rows, total, nil
+}
+
+// channelsByModel names, for each model on this page, the channels that serve
+// it — asked of the channels' own model lists, which is the only thing that
+// knows. A model with none is in the catalogue but served by nothing, which the
+// card says rather than hides; under the channel scope there are none of those,
+// because a model is on that page precisely because some channel serves it.
+func (s *Server) channelsByModel(
 	ctx context.Context, rows []sqlc.ListCatalogModelsRow,
 ) (map[string][]ModelChannel, error) {
 	seen := make(map[string]struct{}, len(rows))
 	ids := make([]string, 0, len(rows))
 	for _, row := range rows {
-		if _, ok := seen[row.ProviderID]; ok {
+		if _, ok := seen[row.ModelID]; ok {
 			continue
 		}
-		seen[row.ProviderID] = struct{}{}
-		ids = append(ids, row.ProviderID)
+		seen[row.ModelID] = struct{}{}
+		ids = append(ids, row.ModelID)
 	}
 	if len(ids) == 0 {
 		return nil, nil
 	}
 
-	channels, err := s.q.ListChannelsForProviders(ctx, ids)
+	channels, err := s.q.ListChannelsServingModels(ctx, ids)
 	if err != nil {
 		return nil, err
 	}
 
-	byProvider := make(map[string][]ModelChannel, len(ids))
+	byModel := make(map[string][]ModelChannel, len(ids))
 	for _, c := range channels {
-		byProvider[c.ProviderID] = append(byProvider[c.ProviderID], ModelChannel{
+		byModel[c.ModelID] = append(byModel[c.ModelID], ModelChannel{
 			Id:      c.ID,
 			Name:    c.Name,
 			Enabled: c.Enabled,
 		})
 	}
-	return byProvider, nil
-}
-
-func (s *Server) UpdateCatalogModel(w http.ResponseWriter, r *http.Request, providerId string, modelId string) {
-	var body UpdateCatalogModelJSONRequestBody
-	if err := httpx.DecodeJSON(r, &body); err != nil {
-		httpx.Fail(w, r, err)
-		return
-	}
-	if body.Enabled == nil {
-		httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "nothing_to_update", "no changes were given"))
-		return
-	}
-
-	affected, err := s.q.SetModelEnabled(r.Context(), sqlc.SetModelEnabledParams{
-		ProviderID: providerId,
-		ModelID:    modelId,
-		Enabled:    *body.Enabled,
-	})
-	if err != nil {
-		httpx.Fail(w, r, err)
-		return
-	}
-	// The statement writes nothing when the catalogue has no such model, which
-	// is the existence check: a setting for a model nobody offers would be a row
-	// nothing reads.
-	if affected == 0 {
-		httpx.Fail(w, r, httpx.ErrNotFound)
-		return
-	}
-
-	row, err := s.q.GetCatalogModel(r.Context(), sqlc.GetCatalogModelParams{
-		ProviderID: providerId,
-		ModelID:    modelId,
-	})
-	if err != nil {
-		httpx.Fail(w, r, dbErr(err))
-		return
-	}
-	// Both queries select the same columns, so one mapper serves both rather
-	// than two that have to be kept in step. If they ever diverge this stops
-	// compiling, which is when you want to hear about it.
-	httpx.JSON(w, http.StatusOK, toCatalogModel(sqlc.ListCatalogModelsRow(row)))
+	return byModel, nil
 }
 
 func toCatalogModel(row sqlc.ListCatalogModelsRow) CatalogModel {
@@ -349,7 +386,10 @@ func toCatalogModel(row sqlc.ListCatalogModelsRow) CatalogModel {
 	}
 	// Zero in these columns means upstream stated nothing, which is far commoner
 	// than a model that is genuinely free or unlimited, so it is reported as
-	// absent rather than as a confident zero.
+	// absent rather than as a confident zero. Under the channel scope it is
+	// commoner still: a model the catalogue has never heard of arrives with
+	// every one of these at zero, and the card is expected to show a model with
+	// no figures rather than a model that costs nothing.
 	if row.ContextLimit > 0 {
 		contextLimit := row.ContextLimit
 		model.ContextLimit = &contextLimit

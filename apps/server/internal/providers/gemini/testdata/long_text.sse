@@ -1,0 +1,6 @@
+data: {"candidates":[{"content":{"parts":[{"text":"An aperture "}],"role":"model"},"index":0}],"modelVersion":"gemini-2.5-flash","responseId":"resp-long"}
+
+data: {"candidates":[{"content":{"parts":[{"text":"is an opening "}],"role":"model"},"index":0}],"modelVersion":"gemini-2.5-flash","responseId":"resp-long"}
+
+data: {"candidates":[{"content":{"parts":[{"text":"through which light travels."}],"role":"model"},"finishReason":"STOP","index":0}],"usageMetadata":{"promptTokenCount":9,"candidatesTokenCount":24,"totalTokenCount":33},"modelVersion":"gemini-2.5-flash","responseId":"resp-long"}
+

@@ -11,6 +11,15 @@ import (
 )
 
 type Querier interface {
+	// Typed in by an operator, for an endpoint that publishes no list or omits a
+	// model it actually serves. Enabled from the start: naming one model by hand is
+	// already the explicit act, and leaving it off would make the operator say the
+	// same thing twice.
+	//
+	// DO NOTHING rather than an upsert, so a model that is already here reports the
+	// conflict instead of quietly changing source and enabled under a refresh's
+	// feet. No rows back therefore means "already listed".
+	AddManualChannelModel(ctx context.Context, arg AddManualChannelModelParams) (ChannelModel, error)
 	// Registration derives the role from an empty table; here the caller picks it,
 	// so the admin panel can create a second admin without a bootstrap dance.
 	AdminCreateUser(ctx context.Context, arg AdminCreateUserParams) (User, error)
@@ -28,6 +37,15 @@ type Querier interface {
 	CountCatalogModels(ctx context.Context) (int64, error)
 	CountCatalogModelsFiltered(ctx context.Context, arg CountCatalogModelsFilteredParams) (int64, error)
 	CountCatalogProviders(ctx context.Context) (int64, error)
+	// One grouped read for the whole channel list rather than a count per channel.
+	// Channels with nothing enabled are absent rather than zero, which is the same
+	// answer a caller reading a map gets for free.
+	CountEnabledChannelModels(ctx context.Context) ([]CountEnabledChannelModelsRow, error)
+	CountEnabledChannelModelsFor(ctx context.Context, channelID uuid.UUID) (int64, error)
+	// The total behind ListServedModels; see the comments there. Counting `served`
+	// rather than channel_models is what keeps a model served by three channels
+	// from counting three times.
+	CountServedModels(ctx context.Context, arg CountServedModelsParams) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
 	CountUsersFiltered(ctx context.Context, search *string) (int64, error)
 	CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (Attachment, error)
@@ -39,12 +57,20 @@ type Querier interface {
 	DeleteCatalogProviders(ctx context.Context) error
 	DeleteChannel(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteExpiredSessions(ctx context.Context) (int64, error)
+	// Only a manual row can be deleted by hand. A fetched row is removed by the
+	// endpoint no longer listing it; deleting one here would just bring it back on
+	// the next refresh, which reads as the button not working.
+	DeleteManualChannelModel(ctx context.Context, arg DeleteManualChannelModelParams) (int64, error)
 	// Used when someone changes their own password: every session issued under the
 	// old credential goes, except the one asking, so the change does not sign the
 	// person out of the tab they are standing in.
 	DeleteOtherUserSessions(ctx context.Context, arg DeleteOtherUserSessionsParams) error
 	DeleteSession(ctx context.Context, tokenHash []byte) error
 	DeleteSessionsForUsers(ctx context.Context, userIds []uuid.UUID) error
+	// Models the endpoint stopped listing. Scoped to `source = 'fetched'`: a manual
+	// row was never the endpoint's to mention, so its absence says nothing about
+	// it.
+	DeleteStaleChannelModels(ctx context.Context, arg DeleteStaleChannelModelsParams) (int64, error)
 	DeleteUserSessions(ctx context.Context, userID uuid.UUID) error
 	FinishMessage(ctx context.Context, arg FinishMessageParams) (Message, error)
 	// One row per day for the requested window, including days with no activity —
@@ -52,6 +78,7 @@ type Querier interface {
 	GetActivityTrend(ctx context.Context, days int32) ([]GetActivityTrendRow, error)
 	GetCatalogModel(ctx context.Context, arg GetCatalogModelParams) (GetCatalogModelRow, error)
 	GetChannel(ctx context.Context, id uuid.UUID) (Channel, error)
+	GetChannelModel(ctx context.Context, arg GetChannelModelParams) (ChannelModel, error)
 	// Ownership is part of the lookup, not a separate check: a conversation
 	// belonging to someone else must read as "not found", never as "forbidden",
 	// or the response tells a stranger the id exists.
@@ -74,28 +101,86 @@ type Querier interface {
 	InsertCatalogModels(ctx context.Context, arg []InsertCatalogModelsParams) (int64, error)
 	InsertCatalogProviders(ctx context.Context, arg []InsertCatalogProvidersParams) (int64, error)
 	ListAttachmentsByMessages(ctx context.Context, messageIds []uuid.UUID) ([]Attachment, error)
+	// The full-catalogue scope: everything models.dev knows about. Not an
+	// inventory -- it is the pool you read when deciding which channel to add
+	// next, which is why membership here owes nothing to the channels.
+	//
 	// Offset paging, as in ListUsers: the table wants page numbers and a total.
 	//
-	// `enabled` is a left join rather than a column because model_settings is this
-	// installation's decision and the catalogue is a cache of somebody else's file;
-	// a model nobody has touched has no row at all. `raw` is deliberately not
+	// `enabled` is a left join rather than a column because offering a model is
+	// this installation's decision and the catalogue is a cache of somebody else's
+	// file. What decides it is the channels' own model lists: a model is offered
+	// when some channel that serves it has it switched on. The channels know a
+	// model by its id alone, so a model id served anywhere counts for every
+	// catalogue entry that spells it the same -- `claude-sonnet-4` reads as offered
+	// under both `anthropic` and `amazon-bedrock`. `raw` is deliberately not
 	// selected, being several times the size of everything else here.
 	//
 	// Each capability narrows rather than widens, so asking for two gets models
 	// that have both.
 	ListCatalogModels(ctx context.Context, arg ListCatalogModelsParams) ([]ListCatalogModelsRow, error)
+	// What models.dev knows about the models one channel lists.
+	//
+	// Deliberately the same column list as ListCatalogModels, so the row converts
+	// to that one and both go through a single mapper. If the two ever diverge this
+	// stops compiling, which is when you want to hear about it.
+	//
+	// The channel is the authority on which models exist; this only decorates them,
+	// so a model the catalogue has never heard of simply arrives undecorated.
+	// Keyed on the model id alone. The channel no longer carries a brand, and one
+	// model id can sit under several catalogue providers (`claude-sonnet-4` under
+	// both `anthropic` and `amazon-bedrock`), so DISTINCT ON picks one and picks
+	// the same one every time. Preferring the provider that matches the channel's
+	// protocol describes a direct connection correctly; for a relay any row is
+	// equally arbitrary, and an arbitrary context limit beats none.
+	ListCatalogModelsForChannel(ctx context.Context, arg ListCatalogModelsForChannelParams) ([]ListCatalogModelsForChannelRow, error)
 	// The model count comes from the same read as the provider: the picker shows
 	// both, and a provider with no models is worth showing as empty rather than
 	// hiding.
 	ListCatalogProviders(ctx context.Context) ([]ListCatalogProvidersRow, error)
+	// Ordered by id rather than by name: the id is what gets sent to the endpoint
+	// and what the operator recognises, and a display name is often absent.
+	ListChannelModels(ctx context.Context, channelID uuid.UUID) ([]ChannelModel, error)
 	ListChannels(ctx context.Context) ([]Channel, error)
-	// Which configured channels can serve each of these providers. Fetched for one
-	// page of models rather than joined into the list, because a provider with
-	// three channels would otherwise multiply its models by three and break both
+	// Which configured channels serve each of these models -- asked of the
+	// channels' own model lists, which is the only place that knows. A channel's
+	// provider id is branding and cannot answer it: it would hand a relay every
+	// model of the brand it names and none of the ones it actually serves.
+	//
+	// Fetched for one page of models rather than joined into the list, because a
+	// model with three channels would otherwise appear three times and break both
 	// the paging and the count.
-	ListChannelsForProviders(ctx context.Context, providerIds []string) ([]ListChannelsForProvidersRow, error)
+	ListChannelsServingModels(ctx context.Context, modelIds []string) ([]ListChannelsServingModelsRow, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
+	// The channel scope: the models this installation actually serves.
+	//
+	// A channel's own model list is the authority on which models exist. A relay
+	// serving Claude through an OpenAI-shaped API serves Claude; a provider id
+	// says nothing about it either way, and deriving reach from one credited every
+	// OpenAI model to that relay and none of the models it actually answers with.
+	// So the rows come from channel_models and models.dev is a LEFT JOIN that only
+	// decorates them: a model the catalogue has never heard of keeps its row and
+	// arrives with its metadata columns at their zero values, which the handler
+	// reports as absent rather than as a confident zero.
+	//
+	// One row per MODEL, never per (model, channel). Three channels serving the
+	// same model are one row carrying three channels, so the channels are folded
+	// into the aggregate here and named separately, one query per page, by
+	// ListChannelsServingModels. Joining them in would multiply the model by three
+	// and break both the paging and the total.
+	//
+	// A capability filter necessarily excludes an uncatalogued model: nothing is
+	// known about what it can do, and answering "it might" is not a filter.
+	// An uncatalogued model has no brand, and the serving channel's is not a
+	// substitute: a relay branded `openai` is exactly the thing that serves models
+	// OpenAI never made, so claiming its brand here would put the wrong mark on
+	// them. Empty is the honest answer, and the card falls back to the model's own
+	// name for its icon.
+	// By name rather than by brand: half these rows can have no brand to group
+	// under, and sorting on an empty one would herd every uncatalogued model into a
+	// block at the top that looks like a fault.
+	ListServedModels(ctx context.Context, arg ListServedModelsParams) ([]ListServedModelsRow, error)
 	// Offset paging rather than keyset: the admin table needs page numbers and a
 	// total, and the row count here stays small enough that the scan is cheap.
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
@@ -105,14 +190,11 @@ type Querier interface {
 	// inside the INSERT so two concurrent registrations cannot both see an empty
 	// table and both claim it.
 	RegisterUser(ctx context.Context, arg RegisterUserParams) (User, error)
-	// The only statement in this file that writes model_settings. A sync must not
-	// reach it: replacing the catalogue is not a reason to switch a model on or
-	// off.
-	//
-	// The SELECT is the existence check rather than a query before it: a settings
-	// row for a model no provider offers is a row nothing would ever read again.
-	// No rows affected therefore means the model is unknown.
-	SetModelEnabled(ctx context.Context, arg SetModelEnabledParams) (int64, error)
+	// The only statement in this file that writes `enabled`. That is the whole
+	// point of the column: whether this installation offers a model is our
+	// decision, and a refresh of somebody else's list is not an occasion to revisit
+	// it.
+	SetChannelModelEnabled(ctx context.Context, arg SetChannelModelEnabledParams) (ChannelModel, error)
 	// Upsert, so a setting added after this database was created still writes.
 	SetSetting(ctx context.Context, arg SetSettingParams) error
 	SoftDeleteConversation(ctx context.Context, arg SoftDeleteConversationParams) (int64, error)
@@ -131,6 +213,22 @@ type Querier interface {
 	// handler above it were wrong.
 	UpdateOwnProfile(ctx context.Context, arg UpdateOwnProfileParams) (User, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
+	// One statement for the whole list, so a refresh cannot half-apply.
+	//
+	// Two rules are enforced by what this statement does *not* say:
+	//
+	//   * `enabled` appears nowhere. A new row takes the column default (off), and
+	//     a row that already exists keeps whatever the operator set. A refresh
+	//     never turns a model on or off.
+	//   * The DO UPDATE is fenced to `source = 'fetched'`. A manual row whose id
+	//     the endpoint happens to list is left exactly as it was — still manual,
+	//     still with the operator's own display name, and still out of reach of the
+	//     prune below.
+	//
+	// The two arrays are zipped by ordinality rather than with the two-argument
+	// `unnest(ids, names)`, which says the same thing in one line but which sqlc's
+	// analyser cannot type.
+	UpsertFetchedChannelModels(ctx context.Context, arg UpsertFetchedChannelModelsParams) error
 }
 
 var _ Querier = (*Queries)(nil)

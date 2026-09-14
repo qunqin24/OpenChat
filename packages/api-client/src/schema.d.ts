@@ -176,6 +176,101 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/channel-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The vendors a channel can be
+         * @description Served rather than hardcoded in the form, so the table that fills in a
+         *     default endpoint is the same one the server later reads to decide which
+         *     protocol to speak. Two copies of it would drift, and the failure would
+         *     be a channel talking the wrong protocol to a real endpoint.
+         */
+        get: operations["listChannelTypes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/channels/{channelId}/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: string;
+            };
+            cookie?: never;
+        };
+        /** The models this channel offers */
+        get: operations["listChannelModels"];
+        put?: never;
+        /**
+         * Add a model by hand
+         * @description For an endpoint that publishes no model list, or omits one it serves.
+         *     Marked `manual`, so a later refresh does not remove it.
+         */
+        post: operations["addChannelModel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/channels/{channelId}/models/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask the endpoint what models it serves
+         * @description Calls the endpoint's own model list with the stored credential — the
+         *     first time this server makes an outbound request on an operator's
+         *     behalf. Requires a stored key.
+         *
+         *     Models already present keep their enabled state; models the endpoint
+         *     stopped listing are removed, and `manual` entries are left alone.
+         */
+        post: operations["refreshChannelModels"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/channels/{channelId}/models/{modelId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: string;
+                modelId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a manually added model */
+        delete: operations["deleteChannelModel"];
+        options?: never;
+        head?: never;
+        /** Offer this model, or stop offering it */
+        patch: operations["updateChannelModel"];
+        trace?: never;
+    };
     "/admin/catalog": {
         parameters: {
             query?: never;
@@ -236,26 +331,6 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
-        trace?: never;
-    };
-    "/admin/catalog/models/{providerId}/{modelId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                providerId: string;
-                modelId: string;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Switch a model on or off for this installation */
-        patch: operations["updateCatalogModel"];
         trace?: never;
     };
     "/admin/system": {
@@ -751,20 +826,76 @@ export interface components {
         UpdateSystemSettingsRequest: {
             debugLogging?: boolean;
         };
+        /**
+         * @description The vendor an operator picks. Most of these speak the OpenAI wire
+         *     protocol and differ only in endpoint and branding — which is the point:
+         *     choosing a protocol is a question the operator should not have to
+         *     answer, so the type answers it for them. `GET /admin/channel-types`
+         *     carries the full table.
+         * @enum {string}
+         */
+        ChannelType: "openai" | "anthropic" | "gemini" | "openrouter" | "deepseek" | "siliconflow" | "moonshot" | "zhipu" | "dashscope" | "volcengine" | "minimax" | "xai" | "groq" | "ollama" | "openai-compatible";
+        /**
+         * @description The protocol a channel type speaks. Three adapters, fifteen types.
+         * @enum {string}
+         */
+        WireApi: "openai" | "anthropic" | "gemini";
+        ChannelTypeInfo: {
+            id: components["schemas"]["ChannelType"];
+            /** @description A brand name, deliberately not translated — it reads the same in both locales. */
+            label: string;
+            wireApi: components["schemas"]["WireApi"];
+            /** @description The default base URL, empty for a type that has none to offer. */
+            endpoint: string;
+            keyHint: string;
+            /**
+             * @description The brand mark, which is not always the type id: `anthropic` is
+             *     drawn with the Claude mark. Empty when there is no brand to draw.
+             */
+            iconId: string;
+            /** Format: uri */
+            doc?: string;
+        };
+        ChannelModel: {
+            /** @description As the endpoint spells it, which is what gets sent back to it. */
+            modelId: string;
+            displayName: string;
+            /** @description Whether this installation offers the model. Ours to decide, never the refresh's. */
+            enabled: boolean;
+            /**
+             * @description `fetched` came from the endpoint's own model list; `manual` was
+             *     typed in, for an endpoint that does not publish one or omits a
+             *     model it actually serves.
+             * @enum {string}
+             */
+            source: "fetched" | "manual";
+            /**
+             * @description What models.dev knows about this model, when it knows anything.
+             *     Absent is ordinary: the endpoint is the authority on which models
+             *     exist, and the catalogue only decorates them.
+             */
+            catalog?: components["schemas"]["CatalogModel"];
+            /** Format: date-time */
+            fetchedAt?: string;
+        };
+        ChannelModelRefresh: {
+            total: number;
+            added: number;
+            /** @description Models the endpoint no longer lists. Their enabled state goes with them. */
+            removed: number;
+        };
         Channel: {
             /** Format: uuid */
             id: string;
             /** @description What the operator calls this connection. */
             name: string;
-            /**
-             * @description A models.dev provider id (`openai`, `anthropic`, …). It selects the
-             *     catalogue entry and the brand icon, so it is an identifier rather
-             *     than a label.
-             */
-            providerId: string;
+            type: components["schemas"]["ChannelType"];
+            wireApi: components["schemas"]["WireApi"];
             /** @description Overrides the provider's default endpoint. Empty means use the default. */
             baseUrl?: string;
             enabled: boolean;
+            /** @description How many models this channel offers, i.e. has enabled. */
+            modelCount: number;
             /** @description Whether a credential is stored. The credential itself is never returned. */
             hasKey: boolean;
             /**
@@ -778,7 +909,9 @@ export interface components {
         };
         CreateChannelRequest: {
             name: string;
-            providerId: string;
+            type: components["schemas"]["ChannelType"];
+            wireApi?: components["schemas"]["WireApi"];
+            REMOVE_providerId?: string;
             baseUrl?: string;
             apiKey?: string;
             /** @default true */
@@ -790,8 +923,8 @@ export interface components {
          *     back, so a form that wants to leave it alone must omit the field.
          */
         UpdateChannelRequest: {
+            type?: components["schemas"]["ChannelType"];
             name?: string;
-            providerId?: string;
             baseUrl?: string;
             apiKey?: string;
             enabled?: boolean;
@@ -1113,6 +1246,154 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    listChannelTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelTypeInfo"][];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listChannelModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelModel"][];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    addChannelModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    modelId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelModel"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    refreshChannelModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelModelRefresh"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteChannelModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: string;
+                modelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateChannelModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: string;
+                modelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    enabled?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelModel"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     getCatalogStatus: {
         parameters: {
             query?: never;
@@ -1209,36 +1490,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CatalogModelPage"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    updateCatalogModel: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                providerId: string;
-                modelId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    enabled?: boolean;
-                };
-            };
-        };
-        responses: {
-            /** @description ok */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CatalogModel"];
                 };
             };
             default: components["responses"]["Error"];

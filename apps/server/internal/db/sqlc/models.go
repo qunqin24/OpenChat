@@ -12,6 +12,61 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type ChannelType string
+
+const (
+	ChannelTypeOpenai           ChannelType = "openai"
+	ChannelTypeAnthropic        ChannelType = "anthropic"
+	ChannelTypeGemini           ChannelType = "gemini"
+	ChannelTypeOpenrouter       ChannelType = "openrouter"
+	ChannelTypeDeepseek         ChannelType = "deepseek"
+	ChannelTypeSiliconflow      ChannelType = "siliconflow"
+	ChannelTypeMoonshot         ChannelType = "moonshot"
+	ChannelTypeZhipu            ChannelType = "zhipu"
+	ChannelTypeDashscope        ChannelType = "dashscope"
+	ChannelTypeVolcengine       ChannelType = "volcengine"
+	ChannelTypeMinimax          ChannelType = "minimax"
+	ChannelTypeXai              ChannelType = "xai"
+	ChannelTypeGroq             ChannelType = "groq"
+	ChannelTypeOllama           ChannelType = "ollama"
+	ChannelTypeOpenaiCompatible ChannelType = "openai-compatible"
+)
+
+func (e *ChannelType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ChannelType(s)
+	case string:
+		*e = ChannelType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ChannelType: %T", src)
+	}
+	return nil
+}
+
+type NullChannelType struct {
+	ChannelType ChannelType `json:"channel_type"`
+	Valid       bool        `json:"valid"` // Valid is true if ChannelType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullChannelType) Scan(value interface{}) error {
+	if value == nil {
+		ns.ChannelType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ChannelType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullChannelType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ChannelType), nil
+}
+
 type MessageRole string
 
 const (
@@ -189,15 +244,25 @@ type CatalogProvider struct {
 }
 
 type Channel struct {
-	ID         uuid.UUID          `json:"id"`
-	Name       string             `json:"name"`
-	ProviderID string             `json:"provider_id"`
-	BaseUrl    string             `json:"base_url"`
-	ApiKey     string             `json:"api_key"`
-	Enabled    bool               `json:"enabled"`
-	SortOrder  int32              `json:"sort_order"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	ID        uuid.UUID          `json:"id"`
+	Name      string             `json:"name"`
+	BaseUrl   string             `json:"base_url"`
+	ApiKey    string             `json:"api_key"`
+	Enabled   bool               `json:"enabled"`
+	SortOrder int32              `json:"sort_order"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	Type      ChannelType        `json:"type"`
+}
+
+type ChannelModel struct {
+	ChannelID   uuid.UUID          `json:"channel_id"`
+	ModelID     string             `json:"model_id"`
+	DisplayName string             `json:"display_name"`
+	Source      string             `json:"source"`
+	Enabled     bool               `json:"enabled"`
+	FetchedAt   pgtype.Timestamptz `json:"fetched_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
 type Conversation struct {
@@ -219,13 +284,6 @@ type Message struct {
 	Metadata       []byte             `json:"metadata"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-}
-
-type ModelSetting struct {
-	ProviderID string             `json:"provider_id"`
-	ModelID    string             `json:"model_id"`
-	Enabled    bool               `json:"enabled"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Session struct {

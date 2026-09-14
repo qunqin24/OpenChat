@@ -84,12 +84,21 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 				r.Post("/admin/catalog", wrapper.RefreshCatalog)
 				r.Get("/admin/catalog/providers", wrapper.ListCatalogProviders)
 				r.Get("/admin/catalog/models", wrapper.ListCatalogModels)
-				r.Patch("/admin/catalog/models/{providerId}/{modelId}", wrapper.UpdateCatalogModel)
 
+				r.Get("/admin/channel-types", wrapper.ListChannelTypes)
 				r.Get("/admin/channels", wrapper.ListChannels)
 				r.Post("/admin/channels", wrapper.CreateChannel)
 				r.Patch("/admin/channels/{channelId}", wrapper.UpdateChannel)
 				r.Delete("/admin/channels/{channelId}", wrapper.DeleteChannel)
+
+				// The refresh is the one endpoint here that makes an outbound
+				// request with an operator's credential, which is reason enough
+				// for it to sit in the admin group rather than anywhere looser.
+				r.Get("/admin/channels/{channelId}/models", wrapper.ListChannelModels)
+				r.Post("/admin/channels/{channelId}/models", wrapper.AddChannelModel)
+				r.Post("/admin/channels/{channelId}/models/refresh", wrapper.RefreshChannelModels)
+				r.Patch("/admin/channels/{channelId}/models/{modelId}", wrapper.UpdateChannelModel)
+				r.Delete("/admin/channels/{channelId}/models/{modelId}", wrapper.DeleteChannelModel)
 
 				r.Get("/admin/users", wrapper.ListUsers)
 				r.Post("/admin/users", wrapper.CreateUser)

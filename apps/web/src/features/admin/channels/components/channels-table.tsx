@@ -14,6 +14,7 @@ import {
 } from '@/components/shadcn/ui/table'
 import { useAdminChannels } from '@/features/admin/use-admin'
 import { cn } from '@/lib/utils'
+import { useChannelTypes } from '../channel-types'
 import { channelsColumns } from './channels-columns'
 
 /**
@@ -24,10 +25,14 @@ import { channelsColumns } from './channels-columns'
  */
 export function ChannelsTable() {
   const { t } = useTranslation()
+  // The query's own array, not a `?? []` default: that default is a fresh
+  // array on every render, and as a useMemo dependency it would rebuild the
+  // columns each time.
+  const types = useChannelTypes().data
   const { data, isPending, isError } = useAdminChannels()
 
   const rows = useMemo(() => data ?? [], [data])
-  const columns = useMemo(() => channelsColumns(t), [t])
+  const columns = useMemo(() => channelsColumns(t, types ?? []), [t, types])
 
   const table = useReactTable<Channel>({
     data: rows,

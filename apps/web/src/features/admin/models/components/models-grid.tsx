@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { Boxes, ChevronLeft, ChevronRight, Plug, type LucideIcon } from 'lucide-react'
+import { Boxes, ChevronLeft, ChevronRight, PackageOpen, Plug, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/shadcn/ui/button'
@@ -70,12 +70,17 @@ type ModelsGridProps = {
   /** Which catalogue is being listed; only `channels` can run out of channels. */
   scope: CatalogScope
   /**
-   * Whether any configured channel reaches anything — the answer to the
+   * Whether a channel has been configured at all. `undefined` while the channel
+   * list is still being read.
+   */
+  hasChannels: boolean | undefined
+  /**
+   * Whether the configured channels serve anything — the answer to the
    * unfiltered channel-scope probe, not to the query behind this grid.
    * `undefined` while that question is still open.
    */
-  hasChannels: boolean | undefined
-  /** True while the probe above is in flight. */
+  hasModels: boolean | undefined
+  /** True while either question above is still in flight. */
   isReachPending: boolean
   /** Switches the page to the full catalogue, for the no-channels state. */
   onBrowseAll: () => void
@@ -92,6 +97,7 @@ export function ModelsGrid({
   isCatalogueEmpty,
   scope,
   hasChannels,
+  hasModels,
   isReachPending,
   onBrowseAll,
 }: ModelsGridProps) {
@@ -103,22 +109,13 @@ export function ModelsGrid({
   if (isPending) return <LoadingGrid label={t('state.loading')} />
 
   if (models.length === 0) {
-    // Before the first sync there is nothing to browse and nothing to clear —
-    // the only useful thing on the page is the refresh, so it goes here too.
-    // This outranks the channel question: with an empty catalogue every scope is
-    // empty, and blaming the channels would send the operator to the wrong page.
-    if (isCatalogueEmpty) {
-      return (
-        <Placeholder message={t('admin.models.never-synced')} action={<CatalogRefreshButton />} />
-      )
-    }
-
     if (scope === 'channels') {
-      // An empty grid means two very different things here, and the difference
-      // is not visible in this query: "nothing matched your filters" and "there
-      // is nothing to match, because no channel has been added". Only the
-      // unfiltered probe separates them, so wait for it rather than guess — a
-      // wrong message flashed for a frame is worse than a frame of skeleton.
+      // An empty grid means three very different things here, and none of them
+      // is visible in this query: "nothing matched your filters", "no channel
+      // has been added", and "a channel is there but nobody has fetched what it
+      // serves". Only the two unfiltered probes separate them, so wait for them
+      // rather than guess — a wrong message flashed for a frame is worse than a
+      // frame of skeleton.
       if (isReachPending) return <LoadingGrid label={t('state.loading')} />
 
       if (hasChannels === false) {
@@ -142,6 +139,35 @@ export function ModelsGrid({
           />
         )
       }
+
+      // The channel exists and lists nothing, which is where every new channel
+      // starts: what it serves is its own statement, and nobody has asked it
+      // for one yet. Saying "no matching models" here would blame the filters
+      // for an empty list that no filter could have changed.
+      if (hasModels === false) {
+        return (
+          <Placeholder
+            icon={PackageOpen}
+            message={t('admin.channels.models-empty-hint')}
+            action={
+              <Button asChild size="sm">
+                <Link to="/admin/channels">{t('admin.nav.channels')}</Link>
+              </Button>
+            }
+          />
+        )
+      }
+    } else if (isCatalogueEmpty) {
+      // Before the first sync there is nothing to browse and nothing to clear —
+      // the only useful thing on the page is the refresh, so it goes here too.
+      //
+      // Only on this tab. The channel tab's list comes from the channels, not
+      // from models.dev, so an unsynced catalogue is not the reason it is empty
+      // there — sending that operator to the refresh button would be sending
+      // them to the wrong page.
+      return (
+        <Placeholder message={t('admin.models.never-synced')} action={<CatalogRefreshButton />} />
+      )
     }
 
     return <Placeholder message={t('admin.models.none')} />

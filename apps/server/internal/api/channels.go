@@ -1,9 +1,11 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
@@ -16,13 +18,27 @@ const keyPreviewLength = 4
 
 // toChannel maps a row to the contract's shape, which deliberately has no field
 // the credential could travel in.
-func toChannel(row sqlc.Channel) Channel {
+//
+// modelCount is passed in rather than read here: the list needs one grouped
+// query for every channel, and a count per channel would be a query per row.
+func toChannel(row sqlc.Channel, modelCount int64) Channel {
+	wireApi, _ := wireApiFor(ChannelType(row.Type))
+
 	channel := Channel{
-		Id:         row.ID,
-		Name:       row.Name,
-		ProviderId: row.ProviderID,
-		Enabled:    row.Enabled,
-		HasKey:     row.ApiKey != "",
+		Id:   row.ID,
+		Name: row.Name,
+		Type: ChannelType(row.Type),
+		// Derived, never stored: the type is what the operator chose, and the
+		// protocol is a property of that choice. Storing both would let them
+		// disagree, and the disagreement would be a channel speaking the wrong
+		// protocol to a real endpoint.
+		WireApi: wireApi,
+		Enabled: row.Enabled,
+		HasKey:  row.ApiKey != "",
+		// How many models this channel offers, which is how many are switched
+		// on — a channel that lists two hundred models and offers none is
+		// configured but not yet useful, and the number is what says so.
+		ModelCount: int(modelCount),
 		SortOrder:  int(row.SortOrder),
 		CreatedAt:  row.CreatedAt.Time,
 	}
@@ -44,11 +60,31 @@ func (s *Server) ListChannels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	counts, err := s.enabledModelCounts(r.Context())
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+
 	channels := make([]Channel, 0, len(rows))
 	for _, row := range rows {
-		channels = append(channels, toChannel(row))
+		channels = append(channels, toChannel(row, counts[row.ID]))
 	}
 	httpx.JSON(w, http.StatusOK, channels)
+}
+
+// enabledModelCounts reads every channel's offered-model count in one query. A
+// channel with none is absent from the map, which reads back as zero.
+func (s *Server) enabledModelCounts(ctx context.Context) (map[uuid.UUID]int64, error) {
+	rows, err := s.q.CountEnabledChannelModels(ctx)
+	if err != nil {
+		return nil, err
+	}
+	counts := make(map[uuid.UUID]int64, len(rows))
+	for _, row := range rows {
+		counts[row.ChannelID] = row.ModelCount
+	}
+	return counts, nil
 }
 
 func (s *Server) CreateChannel(w http.ResponseWriter, r *http.Request) {
@@ -59,28 +95,31 @@ func (s *Server) CreateChannel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name := strings.TrimSpace(body.Name)
-	providerID := strings.TrimSpace(body.ProviderId)
-	switch {
-	case name == "":
+	if name == "" {
 		httpx.Fail(w, r, httpx.NewFieldError("name", "name_required", "a name is required"))
 		return
-	case providerID == "":
-		httpx.Fail(w, r, httpx.NewFieldError("providerId", "provider_required", "a provider is required"))
+	}
+	// The type carries the protocol with it, so this is the only thing the
+	// operator has to get right.
+	if _, ok := wireApiFor(body.Type); !ok {
+		httpx.Fail(w, r, httpx.NewFieldError("type", "type_invalid", "a known channel type is required"))
 		return
 	}
 
 	row, err := s.q.CreateChannel(r.Context(), sqlc.CreateChannelParams{
-		Name:       name,
-		ProviderID: providerID,
-		BaseUrl:    strings.TrimSpace(derefOr(body.BaseUrl, "")),
-		ApiKey:     strings.TrimSpace(derefOr(body.ApiKey, "")),
-		Enabled:    derefOr(body.Enabled, true),
+		Name:    name,
+		Type:    sqlc.ChannelType(body.Type),
+		BaseUrl: strings.TrimSpace(derefOr(body.BaseUrl, "")),
+		ApiKey:  strings.TrimSpace(derefOr(body.ApiKey, "")),
+		Enabled: derefOr(body.Enabled, true),
 	})
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
-	httpx.JSON(w, http.StatusCreated, toChannel(row))
+	// A channel that does not exist yet offers nothing; its models arrive from
+	// a refresh, which is a separate, deliberate call.
+	httpx.JSON(w, http.StatusCreated, toChannel(row, 0))
 }
 
 func (s *Server) UpdateChannel(w http.ResponseWriter, r *http.Request, channelId openapi_types.UUID) {
@@ -100,13 +139,17 @@ func (s *Server) UpdateChannel(w http.ResponseWriter, r *http.Request, channelId
 		}
 		params.Name = &trimmed
 	}
-	if body.ProviderId != nil {
-		trimmed := strings.TrimSpace(*body.ProviderId)
-		if trimmed == "" {
-			httpx.Fail(w, r, httpx.NewFieldError("providerId", "provider_required", "a provider is required"))
+	if body.Type != nil {
+		if _, ok := wireApiFor(*body.Type); !ok {
+			httpx.Fail(w, r, httpx.NewFieldError("type", "type_invalid", "a known channel type is required"))
 			return
 		}
-		params.ProviderID = &trimmed
+		// Changing the type does not clear the stored models. They were fetched
+		// from the old endpoint and may no longer be right, which the next
+		// refresh settles; throwing them away here would also throw away which
+		// ones the operator had switched on.
+		kind := sqlc.ChannelType(*body.Type)
+		params.Type = &kind
 	}
 	if body.BaseUrl != nil {
 		trimmed := strings.TrimSpace(*body.BaseUrl)
@@ -130,7 +173,13 @@ func (s *Server) UpdateChannel(w http.ResponseWriter, r *http.Request, channelId
 		httpx.Fail(w, r, dbErr(err))
 		return
 	}
-	httpx.JSON(w, http.StatusOK, toChannel(row))
+
+	count, err := s.q.CountEnabledChannelModelsFor(r.Context(), row.ID)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, toChannel(row, count))
 }
 
 func (s *Server) DeleteChannel(w http.ResponseWriter, r *http.Request, channelId openapi_types.UUID) {
@@ -154,4 +203,19 @@ func derefOr[T any](value *T, fallback T) T {
 		return fallback
 	}
 	return *value
+}
+
+// optionalText trims an optional string and turns an empty one into NULL.
+//
+// Empty is not a value this column accepts: a CHECK constraint requires a
+// non-blank provider id, and "no provider" is spelled NULL.
+func optionalText(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
 }

@@ -17,8 +17,10 @@
 @import './menu.css';
 @import './focus.css';
 @import './progress.css';
+@import './toast.css';
 @import './chat-typography.css';
 @import './chat-layout.css';
+@import './file-drop.css';
 
 /* The admin panel keeps shadcn's own look, so its tokens and base layer come
    across unchanged — the base layer scoped so it cannot reach the chat UI. */
@@ -54,6 +56,20 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+  }
+
+  /* Edge draws its own reveal button inside every password field, and Chrome
+     an equivalent clear button. They sit beside the toggle we render, so the
+     field ends up with two eyes that disagree: ours swaps its icon to show the
+     current state, the browser's does not.
+
+     Suppressing the browser's rather than dropping ours, because ours is the
+     one that is labelled, translated, keyboard-reachable and present in every
+     browser. Both halves of the app have a password field, so the rule belongs
+     here and not in either design system's stylesheet. */
+  input[type='password']::-ms-reveal,
+  input[type='password']::-ms-clear {
+    display: none;
   }
 
   /* Respect the OS setting for anyone who asked for less motion.

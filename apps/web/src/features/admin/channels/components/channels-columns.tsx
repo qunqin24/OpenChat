@@ -4,8 +4,10 @@ import type { TFunction } from 'i18next'
 
 import { LongText } from '@/components/shadcn/long-text'
 import { Badge } from '@/components/shadcn/ui/badge'
+import { ModelIcon } from '@/components/model-icon'
 import { DataTableColumnHeader } from '@/components/shadcn/data-table'
 import { cn } from '@/lib/utils'
+import type { ChannelTypeInfo } from '../channel-types'
 import { ChannelEnabledSwitch } from './channel-enabled-switch'
 import { ChannelsRowActions } from './channels-row-actions'
 
@@ -13,7 +15,13 @@ import { ChannelsRowActions } from './channels-row-actions'
  * Built from `t` rather than calling useTranslation in each cell, so the column
  * set stays a plain value the table can memoise.
  */
-export function channelsColumns(t: TFunction<'common'>): ColumnDef<Channel>[] {
+export function channelsColumns(
+  t: TFunction<'common'>,
+  /** The server's type table, for the vendor's own name and mark. */
+  types: ChannelTypeInfo[],
+): ColumnDef<Channel>[] {
+  const byId = new Map(types.map((type) => [type.id, type]))
+
   return [
     {
       accessorKey: 'name',
@@ -30,14 +38,49 @@ export function channelsColumns(t: TFunction<'common'>): ColumnDef<Channel>[] {
       enableHiding: false,
     },
     {
-      accessorKey: 'providerId',
-      meta: { title: t('admin.channels.provider') },
+      accessorKey: 'type',
+      meta: { title: t('admin.channels.type') },
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title={t('admin.channels.provider')} />
+        <DataTableColumnHeader column={column} title={t('admin.channels.type')} />
       ),
-      // An identifier, not a label — shown verbatim so it can be matched
-      // against the catalogue.
-      cell: ({ row }) => <span className="font-mono text-sm">{row.original.providerId}</span>,
+      // The vendor's own mark and its own name, which is what an operator
+      // recognises. The protocol behind it is not shown: it is a consequence of
+      // this choice rather than a second fact about the channel, and a column
+      // repeating "OpenAI" beside "OpenRouter" would invite the reading that
+      // the two can disagree.
+      cell: ({ row }) => (
+        <span className="flex items-center gap-2">
+          <ModelIcon
+            providerId={byId.get(row.original.type)?.iconId ?? ''}
+            name={row.original.type}
+            className="size-5"
+          />
+          {/* The id is the fallback, and a reasonable one: it is what the
+              operator picked, spelled the way the contract spells it. */}
+          <span className="text-sm">{byId.get(row.original.type)?.label ?? row.original.type}</span>
+        </span>
+      ),
+      enableSorting: false,
+    },
+    {
+      accessorKey: 'modelCount',
+      meta: { title: t('admin.channels.models'), className: 'text-end' },
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title={t('admin.channels.models')} />
+      ),
+      // How many models this channel offers — the count of the ones switched on
+      // in the panel's list, so a channel with a fetched list nobody has enabled
+      // reads as the zero it is.
+      cell: ({ row }) => (
+        <span
+          className={cn(
+            'text-sm tabular-nums',
+            row.original.modelCount === 0 && 'text-muted-foreground',
+          )}
+        >
+          {row.original.modelCount}
+        </span>
+      ),
       enableSorting: false,
     },
     {

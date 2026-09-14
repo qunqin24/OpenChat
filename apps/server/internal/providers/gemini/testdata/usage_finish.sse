@@ -1,0 +1,4 @@
+data: {"candidates":[{"content":{"parts":[{"text":"Counting tokens is the provider's job."}],"role":"model"},"index":0}],"modelVersion":"gemini-2.5-pro-preview","responseId":"resp-usage"}
+
+data: {"candidates":[{"content":{"parts":[{"text":""}],"role":"model"},"finishReason":"MAX_TOKENS","index":0}],"usageMetadata":{"promptTokenCount":1200,"candidatesTokenCount":96,"thoughtsTokenCount":64,"cachedContentTokenCount":800,"totalTokenCount":1360},"modelVersion":"gemini-2.5-pro-preview","responseId":"resp-usage"}
+

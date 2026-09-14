@@ -1,16 +1,14 @@
-import { Braces, Brain, Paperclip, PlugZap, PowerOff, Wrench } from 'lucide-react'
-import { useId } from 'react'
+import { Link } from '@tanstack/react-router'
+import { Braces, Brain, ChevronRight, Paperclip, PlugZap, PowerOff, Wrench } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 
 import { ModelIcon } from '@/components/model-icon'
 import { Badge } from '@/components/shadcn/ui/badge'
+import { Button } from '@/components/shadcn/ui/button'
 import { Card } from '@/components/shadcn/ui/card'
-import { Label } from '@/components/shadcn/ui/label'
-import { Switch } from '@/components/shadcn/ui/switch'
 import { cn } from '@/lib/utils'
 import { formatCost, formatTokenLimit } from '../format'
-import { useUpdateCatalogModel, type CatalogModel } from '../use-catalog'
+import { type CatalogModel } from '../use-catalog'
 
 /**
  * `as const` so the labels stay literal: i18next types `t()` against the
@@ -34,23 +32,25 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 /**
  * One model in the marketplace. The card carries everything a decision needs —
- * who makes it, what it can do, what it costs — and the switch that acts on it,
- * so nothing has to be opened to choose.
+ * who makes it, what it can do, what it costs, which channels serve it — and
+ * says whether this installation offers it.
+ *
+ * What a channel serves is the channel's own statement; models.dev is only the
+ * decoration on top of it. So every piece of metadata here is optional, and a
+ * model the catalogue has never heard of is an ordinary card with less on it,
+ * never an error: the blurb, the capability badges and the figures are each
+ * left out rather than filled with a placeholder that would read as damage.
  */
 export function ModelCard({ model }: { model: CatalogModel }) {
   const { t } = useTranslation()
-  const update = useUpdateCatalogModel()
-  const switchId = useId()
-  const reachId = useId()
 
   const capabilities = CAPABILITIES.filter((capability) => model[capability.key])
 
-  // Which of our channels can serve this. Only the full catalogue can turn up a
-  // model with none — under `scope=channels` the server has already excluded
-  // those — and switching one of those on would be a setting with no effect, so
-  // the card says so and the switch refuses rather than pretending.
+  // Which of our channels serve this, read from their own model lists. Only the
+  // full catalogue can turn up a model with none — under `scope=channels` a
+  // model is on the page precisely because some channel serves it.
   const channels = model.channels ?? []
-  const unreachable = channels.length === 0
+  const unserved = channels.length === 0
 
   const cost =
     model.inputCost === undefined && model.outputCost === undefined
@@ -59,22 +59,23 @@ export function ModelCard({ model }: { model: CatalogModel }) {
           model.outputCost === undefined ? '—' : formatCost(model.outputCost)
         }`
 
-  const toggle = (enabled: boolean) => {
-    update.mutate(
-      { providerId: model.providerId, modelId: model.modelId, enabled },
-      // The server's own message is not localised, so it is never rendered; the
-      // same refusal toast the user table uses says enough.
-      { onError: () => toast.error(t('admin.users.update-failed')) },
-    )
-  }
+  // Three dashes in a row are how a card looks broken. When upstream has said
+  // nothing about any of the figures — which is every model it does not list —
+  // the row is dropped instead, and the card simply ends sooner.
+  const hasFigures =
+    model.contextLimit !== undefined || model.outputLimit !== undefined || cost !== undefined
 
   return (
     <Card className="h-full gap-0 overflow-hidden py-0">
       <div className="flex items-start gap-3 p-4">
+        {/* With no catalogue entry there is no provider and no family, and the
+            model's own id is the best brand hint left: `qwen-max` on an unknown
+            relay still earns the Qwen mark, and anything unrecognised lands on
+            the designed letter rather than a broken image. */}
         <ModelIcon
           providerId={model.providerId}
-          family={model.family}
-          name={model.providerName}
+          family={model.family ?? model.modelId}
+          name={model.providerName || model.name}
         />
         <div className="min-w-0 flex-1">
           {/* The id is what goes into a config, so it is worth having to hand
@@ -85,8 +86,15 @@ export function ModelCard({ model }: { model: CatalogModel }) {
           >
             {model.name}
           </p>
-          <p className="text-muted-foreground truncate text-xs" title={model.providerName}>
-            {model.providerName}
+          {/* Borrowed from the channel panel's wording rather than duplicated:
+              "not in the catalogue" is the same fact stated in the same words,
+              and it explains the quieter card below without sounding like a
+              fault. */}
+          <p
+            className="text-muted-foreground truncate text-xs"
+            title={model.providerName || model.modelId}
+          >
+            {model.providerName || t('admin.channels.models-unknown')}
           </p>
         </div>
       </div>
@@ -108,24 +116,26 @@ export function ModelCard({ model }: { model: CatalogModel }) {
         </div>
       )}
 
-      <dl className="mt-auto grid grid-cols-3 gap-3 px-4 pt-4">
-        <Stat
-          label={t('admin.models.context')}
-          value={model.contextLimit === undefined ? '—' : formatTokenLimit(model.contextLimit)}
-        />
-        <Stat
-          label={t('admin.models.output')}
-          value={model.outputLimit === undefined ? '—' : formatTokenLimit(model.outputLimit)}
-        />
-        <Stat label={t('admin.models.cost')} value={cost ?? '—'} />
-      </dl>
+      {hasFigures && (
+        <dl className="grid grid-cols-3 gap-3 px-4 pt-4">
+          <Stat
+            label={t('admin.models.context')}
+            value={model.contextLimit === undefined ? '—' : formatTokenLimit(model.contextLimit)}
+          />
+          <Stat
+            label={t('admin.models.output')}
+            value={model.outputLimit === undefined ? '—' : formatTokenLimit(model.outputLimit)}
+          />
+          <Stat label={t('admin.models.cost')} value={cost ?? '—'} />
+        </dl>
+      )}
 
-      {/* Sits directly above the switch, because it is the caveat on it: a model
-          whose only channel is switched off is not something this site can
-          answer with, however green the toggle looks. */}
-      <div className="flex flex-wrap items-center gap-1.5 px-4 pt-3 text-xs">
-        {unreachable ? (
-          <span id={reachId} className="text-muted-foreground inline-flex items-center gap-1.5">
+      {/* The channels are the caveat on the status below: a model whose only
+          channel is switched off is not something this site can answer with,
+          however green its own switch looks in the channel panel. */}
+      <div className="mt-auto flex flex-wrap items-center gap-1.5 px-4 pt-4 text-xs">
+        {unserved ? (
+          <span className="text-muted-foreground inline-flex items-center gap-1.5">
             <PlugZap className="size-3.5 shrink-0" aria-hidden="true" />
             {t('admin.models.unreachable')}
           </span>
@@ -157,19 +167,37 @@ export function ModelCard({ model }: { model: CatalogModel }) {
         )}
       </div>
 
+      {/* Where the switch used to be, and deliberately not a switch any more.
+          Offering a model is a fact about a *channel's* model, so a control here
+          would have to guess which of the channels above it meant — and would
+          mean something different on a card with one channel than on a card with
+          three. The state is stated, and the channel panel is where it changes.
+          The colours are the panel's own tokens, so this reads the same in both
+          themes without inventing a palette. */}
       <div className="mt-4 flex items-center justify-between gap-2 border-t px-4 py-3">
-        <Label htmlFor={switchId} className="text-muted-foreground text-xs font-normal">
-          {model.enabled ? t('admin.models.enabled') : t('admin.models.enable')}
-        </Label>
-        <Switch
-          id={switchId}
-          checked={model.enabled}
-          disabled={update.isPending || unreachable}
-          // A disabled control with no stated reason is a dead end; the line
-          // above is the reason, so the switch points at it.
-          aria-describedby={unreachable ? reachId : undefined}
-          onCheckedChange={toggle}
-        />
+        <span className="inline-flex items-center gap-2 text-xs">
+          <span
+            aria-hidden="true"
+            className={cn(
+              'size-1.5 shrink-0 rounded-full',
+              model.enabled ? 'bg-primary' : 'bg-muted-foreground/40',
+            )}
+          />
+          <span className={cn(!model.enabled && 'text-muted-foreground')}>
+            {/* No "not enabled" string exists in either language file, and the
+                users table's "Disabled" is the same word for the same state. */}
+            {model.enabled ? t('admin.models.enabled') : t('admin.users.disabled')}
+          </span>
+        </span>
+
+        {!unserved && (
+          <Button asChild variant="ghost" size="sm" className="-me-2 h-7 px-2 text-xs">
+            <Link to="/admin/channels">
+              {t('admin.nav.channels')}
+              <ChevronRight aria-hidden="true" />
+            </Link>
+          </Button>
+        )}
       </div>
     </Card>
   )

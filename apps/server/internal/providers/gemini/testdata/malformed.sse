@@ -1,0 +1,6 @@
+data: {"candidates":[{"content":{"parts":[{"text":"Half a sentence"}],"role":"model"},"index":0}],"modelVersion":"gemini-2.5-flash","responseId":"resp-bad"}
+
+data: {"candidates":[{"content":{"parts":[{"text":
+
+data: {"candidates":[{"content":{"parts":[{"text":" and the rest of it."}],"role":"model"},"finishReason":"STOP","index":0}],"usageMetadata":{"promptTokenCount":9,"candidatesTokenCount":12,"totalTokenCount":21},"modelVersion":"gemini-2.5-flash","responseId":"resp-bad"}
+

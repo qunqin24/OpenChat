@@ -1,7 +1,7 @@
 import type { Channel } from '@openchat/api-client'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ExternalLink } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -27,11 +27,12 @@ import {
   FormMessage,
 } from '@/components/shadcn/ui/form'
 import { Input } from '@/components/shadcn/ui/input'
-import { Separator } from '@/components/shadcn/ui/separator'
 import { Switch } from '@/components/shadcn/ui/switch'
 import { useCreateChannel, useUpdateChannel } from '@/features/admin/use-admin'
-import { ProviderPicker } from './provider-picker'
-import { useProviderCatalog } from '../use-provider-catalog'
+import { ChannelTypeSelect } from './channel-type-select'
+import { ChannelModelsSection } from './channel-models-section'
+import { PanelSection } from './panel-section'
+import { DEFAULT_CHANNEL_TYPE, useChannelTypes, type ChannelType } from '../channel-types'
 
 type ChannelsActionPanelProps = {
   /** Absent in create mode. */
@@ -69,23 +70,6 @@ export function ChannelsActionPanel({ channel, open, onOpenChange }: ChannelsAct
 }
 
 /**
- * A labelled run of fields. A heading and a rule, nothing more — the panel is
- * 512px wide and a card inside it would spend most of that width on its own
- * border.
- */
-function FormSection({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="space-y-4">
-      <div className="space-y-2">
-        <h3 className="text-sm leading-none font-medium">{title}</h3>
-        <Separator />
-      </div>
-      {children}
-    </section>
-  )
-}
-
-/**
  * The fields and the footer. Mounted by Radix when the panel opens.
  *
  * The one rule that matters here is the API key. It is write-only — the server
@@ -101,6 +85,12 @@ function FormSection({ title, children }: { title: string; children: ReactNode }
  * narrow to hold a URL, a provider name next to its model count, or a key field
  * with a "clear" button beside it, and the hints underneath were reduced to two
  * words a line. Stacking gives every control the full width.
+ *
+ * The second rule: one question, not two. The protocol and the brand used to be
+ * separate fields, which asked the operator "which protocol does this speak" —
+ * a question they should never have to answer. A type answers it: the server's
+ * table maps each vendor to its protocol, its default endpoint and its key
+ * format, so picking "OpenRouter" settles all three.
  */
 function ChannelForm({
   channel,
@@ -109,19 +99,23 @@ function ChannelForm({
   const { t } = useTranslation()
   const createChannel = useCreateChannel()
   const updateChannel = useUpdateChannel()
-  const catalog = useProviderCatalog()
+  const channelTypes = useChannelTypes()
   const isEdit = channel !== undefined
 
   // Built here rather than at module scope so any message it carries is
-  // translated. Name and provider are required, but the submit button below is
-  // disabled while either is blank, so those messages are a backstop that the
-  // form does not rely on to explain itself.
+  // translated. The name is the only text that is required, and the submit
+  // button below is disabled while it is blank, so that message is a backstop
+  // the form does not rely on to explain itself.
   const schema = z.object({
     name: z.string().trim().min(1).max(80),
-    // A models.dev provider id rather than a label: it selects the catalogue
-    // entry and the brand icon. The picker writes it, but anything the
-    // catalogue does not list can still be typed in by hand.
-    providerId: z.string().trim().min(1).max(80),
+    // Required, and the one field here the server acts on: it picks the adapter
+    // that talks to the endpoint. The picker only ever emits one of these three,
+    // so the enum is a statement of what the contract allows rather than a check
+    // anyone is expected to fail.
+    // Not an enum of our own: the server owns the list, and a copy here would
+    // reject a type it had just started offering. `custom` keeps the union from
+    // the contract without restating its members.
+    type: z.custom<ChannelType>((value) => typeof value === 'string' && value.length > 0),
     baseUrl: z.string().trim(),
     apiKey: z.string(),
     enabled: z.boolean(),
@@ -131,7 +125,7 @@ function ChannelForm({
     resolver: zodResolver(schema),
     defaultValues: {
       name: channel?.name ?? '',
-      providerId: channel?.providerId ?? '',
+      type: channel?.type ?? DEFAULT_CHANNEL_TYPE,
       baseUrl: channel?.baseUrl ?? '',
       // Never seeded from the channel — there is nothing to seed it with, and
       // an empty field is exactly what "keep the stored key" looks like.
@@ -150,16 +144,12 @@ function ChannelForm({
   // useWatch rather than form.watch(): the latter returns a fresh function the
   // React compiler refuses to memoise around.
   const name = useWatch({ control: form.control, name: 'name' })
-  const providerId = useWatch({ control: form.control, name: 'providerId' })
+  const selectedType = useWatch({ control: form.control, name: 'type' })
 
-  const providers = catalog.data ?? []
-  // Undefined whenever the id was typed by hand or the catalogue is stale, in
-  // which case the extra hints below simply do not appear. Nothing here depends
-  // on the catalogue knowing the provider.
-  const selected = providers.find((provider) => provider.id === providerId)
-  // Upstream lists every variable a provider documents; the first is the one it
-  // actually tells people to use.
-  const envVar = selected?.env?.[0]
+  const types = channelTypes.data ?? []
+  // Undefined only while the table is still loading, in which case the hints
+  // below simply do not appear yet.
+  const selected = types.find((type) => type.id === selectedType)
 
   const submit = async (values: z.output<typeof schema>) => {
     try {
@@ -168,9 +158,9 @@ function ChannelForm({
           channelId: channel.id,
           // Only what actually moved, so a no-op save is a no-op request.
           ...(values.name !== channel.name ? { name: values.name } : {}),
-          ...(values.providerId !== channel.providerId
-            ? { providerId: values.providerId }
-            : {}),
+          ...(values.type !== channel.type ? { type: values.type } : {}),
+          // Compared against `?? ''` because the channel may carry no brand at
+          // all, and an empty string is how this field says "stop claiming one".
           ...(values.baseUrl !== (channel.baseUrl ?? '') ? { baseUrl: values.baseUrl } : {}),
           ...(values.enabled !== channel.enabled ? { enabled: values.enabled } : {}),
           // The load-bearing line: the property exists only when the admin
@@ -183,7 +173,7 @@ function ChannelForm({
       } else {
         await createChannel.mutateAsync({
           name: values.name,
-          providerId: values.providerId,
+          type: values.type,
           enabled: values.enabled,
           ...(values.baseUrl ? { baseUrl: values.baseUrl } : {}),
           ...(values.apiKey ? { apiKey: values.apiKey } : {}),
@@ -200,167 +190,175 @@ function ChannelForm({
 
   return (
     <>
-      <Form {...form}>
-        <form
-          id="channels-action-form"
-          className="flex-1 space-y-6 overflow-y-auto px-4 py-1"
-          onSubmit={form.handleSubmit((values) => void submit(values))}
-        >
-          <FormSection title={t('admin.channels.section-connection')}>
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('admin.channels.name')}</FormLabel>
-                  <FormControl>
-                    <Input autoComplete="off" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+      {/* The scroll container holds both the form and the model list, but only
+          the fields are inside the `<form>` element. The list mutates on its own
+          — every switch, every removal is a request of its own that has nothing
+          to do with Save — and nesting its inputs in the form would put a stray
+          Enter one keystroke away from submitting the channel. */}
+      <div className="flex-1 space-y-6 overflow-y-auto px-4 py-1">
+        <Form {...form}>
+          <form
+            id="channels-action-form"
+            className="space-y-6"
+            onSubmit={form.handleSubmit((values) => void submit(values))}
+          >
+            <PanelSection title={t('admin.channels.section-connection')}>
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('admin.channels.name')}</FormLabel>
+                    <FormControl>
+                      <Input autoComplete="off" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <FormField
-              control={form.control}
-              name="providerId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('admin.channels.provider')}</FormLabel>
-                  <FormControl>
-                    <ProviderPicker
-                      value={field.value}
-                      onChange={field.onChange}
-                      providers={providers}
-                      isPending={catalog.isPending}
-                      isError={catalog.isError}
-                    />
-                  </FormControl>
-                  {selected && (
+              <FormField
+                control={form.control}
+                name="type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('admin.channels.type')}</FormLabel>
+                    <FormControl>
+                      <ChannelTypeSelect
+                        types={types}
+                        isPending={channelTypes.isPending}
+                        value={field.value}
+                        onChange={field.onChange}
+                      />
+                    </FormControl>
                     <FormDescription className="text-xs">
-                      {t('admin.channels.models-available', { n: selected.modelCount })}
+                      {t('admin.channels.type-hint')}
                     </FormDescription>
-                  )}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <FormField
-              control={form.control}
-              name="baseUrl"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('admin.channels.base-url')}</FormLabel>
-                  <FormControl>
-                    <Input
-                      autoComplete="off"
-                      spellCheck={false}
-                      inputMode="url"
-                      // Blank is a real answer here, not an unfilled field, so
-                      // the placeholder says what blank will do.
-                      placeholder={t('admin.channels.base-url-default')}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription className="text-xs">
-                    {t('admin.channels.base-url-hint')}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </FormSection>
-
-          <FormSection title={t('admin.channels.section-credential')}>
-            <FormField
-              control={form.control}
-              name="apiKey"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('admin.channels.api-key')}</FormLabel>
-                  <FormControl>
-                    <div className="flex items-center gap-2">
-                      <PasswordInput
-                        className="flex-1"
+              <FormField
+                control={form.control}
+                name="baseUrl"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('admin.channels.base-url')}</FormLabel>
+                    <FormControl>
+                      <Input
                         autoComplete="off"
-                        // The stored key can only ever be hinted at, so the
-                        // preview stands in for a value the field cannot hold.
-                        placeholder={
-                          clearKey
-                            ? t('admin.channels.api-key-clearing')
-                            : (channel?.keyPreview ?? 'sk-…')
-                        }
-                        disabled={clearKey}
+                        spellCheck={false}
+                        inputMode="url"
+                        // Blank is a real answer here, not an unfilled field, so
+                        // the placeholder says what blank will do.
+                        // The type's own endpoint, so blank is not a mystery:
+                        // the field shows what it will fall back to.
+                        placeholder={selected?.endpoint || t('admin.channels.base-url-default')}
                         {...field}
                       />
-                      {isEdit && channel.hasKey && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="shrink-0"
-                          onClick={() => {
-                            setClearKey((current) => !current)
-                            form.setValue('apiKey', '')
-                          }}
-                        >
-                          {t(clearKey ? 'admin.ui.cancel' : 'admin.channels.api-key-clear')}
-                        </Button>
-                      )}
-                    </div>
-                  </FormControl>
-                  {/* One description element, because `FormDescription` carries
-                      the id the control's `aria-describedby` points at and two
-                      of them would be two elements with one id. The catalogue's
-                      two facts about the credential — where the key normally
-                      lives and where to go and read about it — belong next to
-                      the field you cannot fill without them. */}
-                  <FormDescription className="space-y-1 text-xs">
-                    <span className="block">{t('admin.channels.api-key-hint')}</span>
-                    {/* Not monospaced: the variable name is interpolated into a
-                        sentence, and styling the sentence to suit the one token
-                        inside it would set the surrounding prose — Chinese
-                        included — in a code face. */}
-                    {envVar && (
-                      <span className="block">
-                        {t('admin.channels.provider-env', { name: envVar })}
-                      </span>
-                    )}
-                    {selected?.doc && (
-                      <a
-                        href={selected.doc}
-                        // Leaves the app entirely, and `noreferrer` keeps the
-                        // provider from learning where the click came from.
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-foreground inline-flex items-center gap-1 underline underline-offset-2"
-                      >
-                        {t('admin.channels.provider-doc')}
-                        <ExternalLink className="size-3" aria-hidden="true" />
-                      </a>
-                    )}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                    </FormControl>
+                    <FormDescription className="text-xs">
+                      {t('admin.channels.base-url-hint')}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </PanelSection>
 
-            <FormField
-              control={form.control}
-              name="enabled"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between gap-4">
-                  <FormLabel className="font-normal">{t('admin.channels.enabled')}</FormLabel>
-                  <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-          </FormSection>
-        </form>
-      </Form>
+            <PanelSection title={t('admin.channels.section-credential')}>
+              <FormField
+                control={form.control}
+                name="apiKey"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('admin.channels.api-key')}</FormLabel>
+                    <FormControl>
+                      <div className="flex items-center gap-2">
+                        <PasswordInput
+                          className="flex-1"
+                          autoComplete="off"
+                          // The stored key can only ever be hinted at, so the
+                          // preview stands in for a value the field cannot hold.
+                          placeholder={
+                            clearKey
+                              ? t('admin.channels.api-key-clearing')
+                              : (channel?.keyPreview ?? 'sk-…')
+                          }
+                          disabled={clearKey}
+                          {...field}
+                        />
+                        {isEdit && channel.hasKey && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="shrink-0"
+                            onClick={() => {
+                              setClearKey((current) => !current)
+                              form.setValue('apiKey', '')
+                            }}
+                          >
+                            {t(clearKey ? 'admin.ui.cancel' : 'admin.channels.api-key-clear')}
+                          </Button>
+                        )}
+                      </div>
+                    </FormControl>
+                    {/* One description element, because `FormDescription` carries
+                        the id the control's `aria-describedby` points at and two
+                        of them would be two elements with one id. The catalogue's
+                        two facts about the credential — where the key normally
+                        lives and where to go and read about it — belong next to
+                        the field you cannot fill without them. */}
+                    <FormDescription className="space-y-1 text-xs">
+                      <span className="block">{t('admin.channels.api-key-hint')}</span>
+                      {/* The shape the vendor's keys take, which is how an
+                          operator tells a pasted key from the wrong one. */}
+                      {selected?.keyHint && (
+                        <span className="block">
+                          {t('admin.channels.api-key-format', { format: selected.keyHint })}
+                        </span>
+                      )}
+                      {selected?.doc && (
+                        <a
+                          href={selected.doc}
+                          // Leaves the app entirely, and `noreferrer` keeps the
+                          // provider from learning where the click came from.
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-foreground inline-flex items-center gap-1 underline underline-offset-2"
+                        >
+                          {t('admin.channels.api-key-doc')}
+                          <ExternalLink className="size-3" aria-hidden="true" />
+                        </a>
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="enabled"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between gap-4">
+                    <FormLabel className="font-normal">{t('admin.channels.enabled')}</FormLabel>
+                    <FormControl>
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </PanelSection>
+          </form>
+        </Form>
+
+        {/* Only when editing. A channel that has not been saved has no id to
+            hang models on, and nothing to ask the endpoint with. */}
+        {isEdit && <ChannelModelsSection channel={channel} />}
+      </div>
 
       <SheetFooter className="flex-row justify-end">
         <Button variant="outline" disabled={pending} onClick={() => onOpenChange(false)}>
@@ -369,9 +367,10 @@ function ChannelForm({
         <Button
           type="submit"
           form="channels-action-form"
-          // Keeps the two required fields from ever reaching zod, whose
-          // built-in messages are not localised.
-          disabled={pending || !name.trim() || !providerId.trim()}
+          // Keeps the one required text field from ever reaching zod, whose
+          // built-in messages are not localised. The protocol needs no such
+          // guard: it always holds one of three values, never an empty one.
+          disabled={pending || !name.trim()}
         >
           {t('admin.ui.save')}
         </Button>

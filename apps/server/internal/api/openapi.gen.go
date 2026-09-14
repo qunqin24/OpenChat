@@ -40,6 +40,81 @@ func (e BulkSkipReason) Valid() bool {
 	}
 }
 
+// Defines values for ChannelModelSource.
+const (
+	Fetched ChannelModelSource = "fetched"
+	Manual  ChannelModelSource = "manual"
+)
+
+// Valid indicates whether the value is a known member of the ChannelModelSource enum.
+func (e ChannelModelSource) Valid() bool {
+	switch e {
+	case Fetched:
+		return true
+	case Manual:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ChannelType.
+const (
+	ChannelTypeAnthropic        ChannelType = "anthropic"
+	ChannelTypeDashscope        ChannelType = "dashscope"
+	ChannelTypeDeepseek         ChannelType = "deepseek"
+	ChannelTypeGemini           ChannelType = "gemini"
+	ChannelTypeGroq             ChannelType = "groq"
+	ChannelTypeMinimax          ChannelType = "minimax"
+	ChannelTypeMoonshot         ChannelType = "moonshot"
+	ChannelTypeOllama           ChannelType = "ollama"
+	ChannelTypeOpenai           ChannelType = "openai"
+	ChannelTypeOpenaiCompatible ChannelType = "openai-compatible"
+	ChannelTypeOpenrouter       ChannelType = "openrouter"
+	ChannelTypeSiliconflow      ChannelType = "siliconflow"
+	ChannelTypeVolcengine       ChannelType = "volcengine"
+	ChannelTypeXai              ChannelType = "xai"
+	ChannelTypeZhipu            ChannelType = "zhipu"
+)
+
+// Valid indicates whether the value is a known member of the ChannelType enum.
+func (e ChannelType) Valid() bool {
+	switch e {
+	case ChannelTypeAnthropic:
+		return true
+	case ChannelTypeDashscope:
+		return true
+	case ChannelTypeDeepseek:
+		return true
+	case ChannelTypeGemini:
+		return true
+	case ChannelTypeGroq:
+		return true
+	case ChannelTypeMinimax:
+		return true
+	case ChannelTypeMoonshot:
+		return true
+	case ChannelTypeOllama:
+		return true
+	case ChannelTypeOpenai:
+		return true
+	case ChannelTypeOpenaiCompatible:
+		return true
+	case ChannelTypeOpenrouter:
+		return true
+	case ChannelTypeSiliconflow:
+		return true
+	case ChannelTypeVolcengine:
+		return true
+	case ChannelTypeXai:
+		return true
+	case ChannelTypeZhipu:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthStatus.
 const (
 	Degraded HealthStatus = "degraded"
@@ -178,6 +253,27 @@ func (e UserRole) Valid() bool {
 	case UserRoleAdmin:
 		return true
 	case UserRoleUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WireApi.
+const (
+	WireApiAnthropic WireApi = "anthropic"
+	WireApiGemini    WireApi = "gemini"
+	WireApiOpenai    WireApi = "openai"
+)
+
+// Valid indicates whether the value is a known member of the WireApi enum.
+func (e WireApi) Valid() bool {
+	switch e {
+	case WireApiAnthropic:
+		return true
+	case WireApiGemini:
+		return true
+	case WireApiOpenai:
 		return true
 	default:
 		return false
@@ -377,14 +473,90 @@ type Channel struct {
 	// e.g. `…4f2a`. Absent when no key is stored.
 	KeyPreview *string `json:"keyPreview,omitempty"`
 
-	// Name What the operator calls this connection.
-	Name string `json:"name"`
+	// ModelCount How many models this channel offers, i.e. has enabled.
+	ModelCount int `json:"modelCount"`
 
-	// ProviderId A models.dev provider id (`openai`, `anthropic`, …). It selects the
-	// catalogue entry and the brand icon, so it is an identifier rather
-	// than a label.
-	ProviderId string `json:"providerId"`
-	SortOrder  int    `json:"sortOrder"`
+	// Name What the operator calls this connection.
+	Name      string `json:"name"`
+	SortOrder int    `json:"sortOrder"`
+
+	// Type The vendor an operator picks. Most of these speak the OpenAI wire
+	// protocol and differ only in endpoint and branding — which is the point:
+	// choosing a protocol is a question the operator should not have to
+	// answer, so the type answers it for them. `GET /admin/channel-types`
+	// carries the full table.
+	Type ChannelType `json:"type"`
+
+	// WireApi The protocol a channel type speaks. Three adapters, fifteen types.
+	WireApi WireApi `json:"wireApi"`
+}
+
+// ChannelModel defines model for ChannelModel.
+type ChannelModel struct {
+	// Catalog What models.dev knows about this model, when it knows anything.
+	// Absent is ordinary: the endpoint is the authority on which models
+	// exist, and the catalogue only decorates them.
+	Catalog     *CatalogModel `json:"catalog,omitempty"`
+	DisplayName string        `json:"displayName"`
+
+	// Enabled Whether this installation offers the model. Ours to decide, never the refresh's.
+	Enabled   bool       `json:"enabled"`
+	FetchedAt *time.Time `json:"fetchedAt,omitempty"`
+
+	// ModelId As the endpoint spells it, which is what gets sent back to it.
+	ModelId string `json:"modelId"`
+
+	// Source `fetched` came from the endpoint's own model list; `manual` was
+	// typed in, for an endpoint that does not publish one or omits a
+	// model it actually serves.
+	Source ChannelModelSource `json:"source"`
+}
+
+// ChannelModelSource `fetched` came from the endpoint's own model list; `manual` was
+// typed in, for an endpoint that does not publish one or omits a
+// model it actually serves.
+type ChannelModelSource string
+
+// ChannelModelRefresh defines model for ChannelModelRefresh.
+type ChannelModelRefresh struct {
+	Added int `json:"added"`
+
+	// Removed Models the endpoint no longer lists. Their enabled state goes with them.
+	Removed int `json:"removed"`
+	Total   int `json:"total"`
+}
+
+// ChannelType The vendor an operator picks. Most of these speak the OpenAI wire
+// protocol and differ only in endpoint and branding — which is the point:
+// choosing a protocol is a question the operator should not have to
+// answer, so the type answers it for them. `GET /admin/channel-types`
+// carries the full table.
+type ChannelType string
+
+// ChannelTypeInfo defines model for ChannelTypeInfo.
+type ChannelTypeInfo struct {
+	Doc *string `json:"doc,omitempty"`
+
+	// Endpoint The default base URL, empty for a type that has none to offer.
+	Endpoint string `json:"endpoint"`
+
+	// IconId The brand mark, which is not always the type id: `anthropic` is
+	// drawn with the Claude mark. Empty when there is no brand to draw.
+	IconId string `json:"iconId"`
+
+	// Id The vendor an operator picks. Most of these speak the OpenAI wire
+	// protocol and differ only in endpoint and branding — which is the point:
+	// choosing a protocol is a question the operator should not have to
+	// answer, so the type answers it for them. `GET /admin/channel-types`
+	// carries the full table.
+	Id      ChannelType `json:"id"`
+	KeyHint string      `json:"keyHint"`
+
+	// Label A brand name, deliberately not translated — it reads the same in both locales.
+	Label string `json:"label"`
+
+	// WireApi The protocol a channel type speaks. Three adapters, fifteen types.
+	WireApi WireApi `json:"wireApi"`
 }
 
 // Conversation defines model for Conversation.
@@ -404,11 +576,21 @@ type ConversationPage struct {
 
 // CreateChannelRequest defines model for CreateChannelRequest.
 type CreateChannelRequest struct {
-	ApiKey     *string `json:"apiKey,omitempty"`
-	BaseUrl    *string `json:"baseUrl,omitempty"`
-	Enabled    *bool   `json:"enabled,omitempty"`
-	Name       string  `json:"name"`
-	ProviderId string  `json:"providerId"`
+	REMOVEProviderId *string `json:"REMOVE_providerId,omitempty"`
+	ApiKey           *string `json:"apiKey,omitempty"`
+	BaseUrl          *string `json:"baseUrl,omitempty"`
+	Enabled          *bool   `json:"enabled,omitempty"`
+	Name             string  `json:"name"`
+
+	// Type The vendor an operator picks. Most of these speak the OpenAI wire
+	// protocol and differ only in endpoint and branding — which is the point:
+	// choosing a protocol is a question the operator should not have to
+	// answer, so the type answers it for them. `GET /admin/channel-types`
+	// carries the full table.
+	Type ChannelType `json:"type"`
+
+	// WireApi The protocol a channel type speaks. Three adapters, fifteen types.
+	WireApi *WireApi `json:"wireApi,omitempty"`
 }
 
 // CreateConversationRequest defines model for CreateConversationRequest.
@@ -592,12 +774,18 @@ type TrendPoint struct {
 // stored one; an empty string clears it. There is no way to read a key
 // back, so a form that wants to leave it alone must omit the field.
 type UpdateChannelRequest struct {
-	ApiKey     *string `json:"apiKey,omitempty"`
-	BaseUrl    *string `json:"baseUrl,omitempty"`
-	Enabled    *bool   `json:"enabled,omitempty"`
-	Name       *string `json:"name,omitempty"`
-	ProviderId *string `json:"providerId,omitempty"`
-	SortOrder  *int    `json:"sortOrder,omitempty"`
+	ApiKey    *string `json:"apiKey,omitempty"`
+	BaseUrl   *string `json:"baseUrl,omitempty"`
+	Enabled   *bool   `json:"enabled,omitempty"`
+	Name      *string `json:"name,omitempty"`
+	SortOrder *int    `json:"sortOrder,omitempty"`
+
+	// Type The vendor an operator picks. Most of these speak the OpenAI wire
+	// protocol and differ only in endpoint and branding — which is the point:
+	// choosing a protocol is a question the operator should not have to
+	// answer, so the type answers it for them. `GET /admin/channel-types`
+	// carries the full table.
+	Type *ChannelType `json:"type,omitempty"`
 }
 
 // UpdateConversationRequest defines model for UpdateConversationRequest.
@@ -678,6 +866,9 @@ type UserRole string
 // collide, one account's username would shadow another's address.
 type Username = string
 
+// WireApi The protocol a channel type speaks. Three adapters, fifteen types.
+type WireApi string
+
 // ConversationId defines model for ConversationId.
 type ConversationId = openapi_types.UUID
 
@@ -715,8 +906,13 @@ type ListCatalogModelsParamsCapability string
 // ListCatalogModelsParamsScope defines parameters for ListCatalogModels.
 type ListCatalogModelsParamsScope string
 
-// UpdateCatalogModelJSONBody defines parameters for UpdateCatalogModel.
-type UpdateCatalogModelJSONBody struct {
+// AddChannelModelJSONBody defines parameters for AddChannelModel.
+type AddChannelModelJSONBody struct {
+	ModelId string `json:"modelId"`
+}
+
+// UpdateChannelModelJSONBody defines parameters for UpdateChannelModel.
+type UpdateChannelModelJSONBody struct {
 	Enabled *bool `json:"enabled,omitempty"`
 }
 
@@ -747,14 +943,17 @@ type ListMessagesParams struct {
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
-// UpdateCatalogModelJSONRequestBody defines body for UpdateCatalogModel for application/json ContentType.
-type UpdateCatalogModelJSONRequestBody UpdateCatalogModelJSONBody
-
 // CreateChannelJSONRequestBody defines body for CreateChannel for application/json ContentType.
 type CreateChannelJSONRequestBody = CreateChannelRequest
 
 // UpdateChannelJSONRequestBody defines body for UpdateChannel for application/json ContentType.
 type UpdateChannelJSONRequestBody = UpdateChannelRequest
+
+// AddChannelModelJSONRequestBody defines body for AddChannelModel for application/json ContentType.
+type AddChannelModelJSONRequestBody AddChannelModelJSONBody
+
+// UpdateChannelModelJSONRequestBody defines body for UpdateChannelModel for application/json ContentType.
+type UpdateChannelModelJSONRequestBody UpdateChannelModelJSONBody
 
 // UpdateSystemSettingsJSONRequestBody defines body for UpdateSystemSettings for application/json ContentType.
 type UpdateSystemSettingsJSONRequestBody = UpdateSystemSettingsRequest
@@ -976,12 +1175,12 @@ type ServerInterface interface {
 	// ListCatalogModels Browse the model catalogue
 	// (GET /admin/catalog/models)
 	ListCatalogModels(w http.ResponseWriter, r *http.Request, params ListCatalogModelsParams)
-	// UpdateCatalogModel Switch a model on or off for this installation
-	// (PATCH /admin/catalog/models/{providerId}/{modelId})
-	UpdateCatalogModel(w http.ResponseWriter, r *http.Request, providerId string, modelId string)
 	// ListCatalogProviders Providers in the catalogue
 	// (GET /admin/catalog/providers)
 	ListCatalogProviders(w http.ResponseWriter, r *http.Request)
+	// ListChannelTypes The vendors a channel can be
+	// (GET /admin/channel-types)
+	ListChannelTypes(w http.ResponseWriter, r *http.Request)
 	// ListChannels List channels
 	// (GET /admin/channels)
 	ListChannels(w http.ResponseWriter, r *http.Request)
@@ -994,6 +1193,21 @@ type ServerInterface interface {
 	// UpdateChannel Change a channel
 	// (PATCH /admin/channels/{channelId})
 	UpdateChannel(w http.ResponseWriter, r *http.Request, channelId openapi_types.UUID)
+	// ListChannelModels The models this channel offers
+	// (GET /admin/channels/{channelId}/models)
+	ListChannelModels(w http.ResponseWriter, r *http.Request, channelId openapi_types.UUID)
+	// AddChannelModel Add a model by hand
+	// (POST /admin/channels/{channelId}/models)
+	AddChannelModel(w http.ResponseWriter, r *http.Request, channelId openapi_types.UUID)
+	// RefreshChannelModels Ask the endpoint what models it serves
+	// (POST /admin/channels/{channelId}/models/refresh)
+	RefreshChannelModels(w http.ResponseWriter, r *http.Request, channelId openapi_types.UUID)
+	// DeleteChannelModel Remove a manually added model
+	// (DELETE /admin/channels/{channelId}/models/{modelId})
+	DeleteChannelModel(w http.ResponseWriter, r *http.Request, channelId openapi_types.UUID, modelId string)
+	// UpdateChannelModel Offer this model, or stop offering it
+	// (PATCH /admin/channels/{channelId}/models/{modelId})
+	UpdateChannelModel(w http.ResponseWriter, r *http.Request, channelId openapi_types.UUID, modelId string)
 	// GetAdminStats Dashboard totals and activity trend
 	// (GET /admin/stats)
 	GetAdminStats(w http.ResponseWriter, r *http.Request, params GetAdminStatsParams)
@@ -1084,15 +1298,15 @@ func (_ Unimplemented) ListCatalogModels(w http.ResponseWriter, r *http.Request,
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// UpdateCatalogModel Switch a model on or off for this installation
-// (PATCH /admin/catalog/models/{providerId}/{modelId})
-func (_ Unimplemented) UpdateCatalogModel(w http.ResponseWriter, r *http.Request, providerId string, modelId string) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
 // ListCatalogProviders Providers in the catalogue
 // (GET /admin/catalog/providers)
 func (_ Unimplemented) ListCatalogProviders(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListChannelTypes The vendors a channel can be
+// (GET /admin/channel-types)
+func (_ Unimplemented) ListChannelTypes(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1117,6 +1331,36 @@ func (_ Unimplemented) DeleteChannel(w http.ResponseWriter, r *http.Request, cha
 // UpdateChannel Change a channel
 // (PATCH /admin/channels/{channelId})
 func (_ Unimplemented) UpdateChannel(w http.ResponseWriter, r *http.Request, channelId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListChannelModels The models this channel offers
+// (GET /admin/channels/{channelId}/models)
+func (_ Unimplemented) ListChannelModels(w http.ResponseWriter, r *http.Request, channelId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AddChannelModel Add a model by hand
+// (POST /admin/channels/{channelId}/models)
+func (_ Unimplemented) AddChannelModel(w http.ResponseWriter, r *http.Request, channelId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RefreshChannelModels Ask the endpoint what models it serves
+// (POST /admin/channels/{channelId}/models/refresh)
+func (_ Unimplemented) RefreshChannelModels(w http.ResponseWriter, r *http.Request, channelId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteChannelModel Remove a manually added model
+// (DELETE /admin/channels/{channelId}/models/{modelId})
+func (_ Unimplemented) DeleteChannelModel(w http.ResponseWriter, r *http.Request, channelId openapi_types.UUID, modelId string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateChannelModel Offer this model, or stop offering it
+// (PATCH /admin/channels/{channelId}/models/{modelId})
+func (_ Unimplemented) UpdateChannelModel(w http.ResponseWriter, r *http.Request, channelId openapi_types.UUID, modelId string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1400,32 +1644,11 @@ func (siw *ServerInterfaceWrapper) ListCatalogModels(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
-// UpdateCatalogModel operation middleware
-func (siw *ServerInterfaceWrapper) UpdateCatalogModel(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "providerId" -------------
-	var providerId string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "providerId", chi.URLParam(r, "providerId"), &providerId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "providerId", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "modelId" -------------
-	var modelId string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "modelId", chi.URLParam(r, "modelId"), &modelId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "modelId", Err: err})
-		return
-	}
+// ListCatalogProviders operation middleware
+func (siw *ServerInterfaceWrapper) ListCatalogProviders(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateCatalogModel(w, r, providerId, modelId)
+		siw.Handler.ListCatalogProviders(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1435,11 +1658,11 @@ func (siw *ServerInterfaceWrapper) UpdateCatalogModel(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
-// ListCatalogProviders operation middleware
-func (siw *ServerInterfaceWrapper) ListCatalogProviders(w http.ResponseWriter, r *http.Request) {
+// ListChannelTypes operation middleware
+func (siw *ServerInterfaceWrapper) ListChannelTypes(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListCatalogProviders(w, r)
+		siw.Handler.ListChannelTypes(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1520,6 +1743,154 @@ func (siw *ServerInterfaceWrapper) UpdateChannel(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateChannel(w, r, channelId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListChannelModels operation middleware
+func (siw *ServerInterfaceWrapper) ListChannelModels(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "channelId" -------------
+	var channelId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "channelId", chi.URLParam(r, "channelId"), &channelId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "channelId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListChannelModels(w, r, channelId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddChannelModel operation middleware
+func (siw *ServerInterfaceWrapper) AddChannelModel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "channelId" -------------
+	var channelId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "channelId", chi.URLParam(r, "channelId"), &channelId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "channelId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddChannelModel(w, r, channelId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RefreshChannelModels operation middleware
+func (siw *ServerInterfaceWrapper) RefreshChannelModels(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "channelId" -------------
+	var channelId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "channelId", chi.URLParam(r, "channelId"), &channelId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "channelId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RefreshChannelModels(w, r, channelId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteChannelModel operation middleware
+func (siw *ServerInterfaceWrapper) DeleteChannelModel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "channelId" -------------
+	var channelId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "channelId", chi.URLParam(r, "channelId"), &channelId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "channelId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "modelId" -------------
+	var modelId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "modelId", chi.URLParam(r, "modelId"), &modelId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "modelId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteChannelModel(w, r, channelId, modelId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateChannelModel operation middleware
+func (siw *ServerInterfaceWrapper) UpdateChannelModel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "channelId" -------------
+	var channelId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "channelId", chi.URLParam(r, "channelId"), &channelId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "channelId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "modelId" -------------
+	var modelId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "modelId", chi.URLParam(r, "modelId"), &modelId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "modelId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateChannelModel(w, r, channelId, modelId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2178,6 +2549,24 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/admin/users", wrapper.CreateUser)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/channel-types", wrapper.ListChannelTypes)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/channels/{channelId}/models", wrapper.ListChannelModels)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/channels/{channelId}/models", wrapper.AddChannelModel)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/channels/{channelId}/models/refresh", wrapper.RefreshChannelModels)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/admin/channels/{channelId}/models/{modelId}", wrapper.DeleteChannelModel)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/admin/channels/{channelId}/models/{modelId}", wrapper.UpdateChannelModel)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/catalog", wrapper.GetCatalogStatus)
 	})
 	r.Group(func(r chi.Router) {
@@ -2188,9 +2577,6 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/catalog/models", wrapper.ListCatalogModels)
-	})
-	r.Group(func(r chi.Router) {
-		r.Patch(options.BaseURL+"/admin/catalog/models/{providerId}/{modelId}", wrapper.UpdateCatalogModel)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/system", wrapper.GetSystemSettings)
@@ -2249,107 +2635,127 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

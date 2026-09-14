@@ -2,6 +2,7 @@ import type { components, paths } from '@openchat/api-client'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/lib/api'
+import { useAdminChannels } from '@/features/admin/use-admin'
 
 type Schemas = components['schemas']
 
@@ -108,17 +109,37 @@ export function useCatalogModels(filters: CatalogFilters) {
 }
 
 /**
- * Whether anything configured here reaches a model at all.
+ * Whether any channel has been configured at all.
  *
- * The grid has to tell "no channels have been added" apart from "no model
- * matched these filters", and the filtered query cannot answer that — an empty
- * page means both. So this asks the one unfiltered question instead: with no
- * search, no provider and no enabled constraint, does the channel scope return
- * anything? `limit: 1` because only `total` is read; the page itself is thrown
- * away, and asking for fewer rows than that is not allowed.
+ * Asked of the channel list rather than of this endpoint, because the two
+ * questions have come apart: a channel whose model list has not been fetched
+ * yet serves nothing, and answering "no channels" to an operator who has just
+ * added one would send them to add a second.
  *
- * It sits under the `models` key prefix, so a catalogue refresh invalidates it
- * along with the pages.
+ * It shares the channel list's own key, so the answer is whatever that page
+ * last read and the channel mutations already invalidate it.
+ */
+export function useHasChannels() {
+  const { data, isPending } = useAdminChannels()
+  // `undefined` while the question is still open, so the grid can wait rather
+  // than flash the wrong empty state for a frame.
+  return { hasChannels: data === undefined ? undefined : data.length > 0, isPending }
+}
+
+/**
+ * Whether the configured channels serve any model at all.
+ *
+ * The grid has to tell three things apart that all arrive as an empty page:
+ * nothing configured, nothing fetched yet, and nothing matching the filters.
+ * The filtered query cannot answer any of them, so this asks the one unfiltered
+ * question — with no search, no provider and no enabled constraint, does the
+ * channel scope return anything? `limit: 1` because only `total` is read; the
+ * page itself is thrown away, and asking for fewer rows than that is not
+ * allowed.
+ *
+ * It sits under the `models` key prefix, so a catalogue refresh — and the
+ * channel-model mutations, which invalidate that prefix — sweep it along with
+ * the pages.
  */
 export function useChannelReach() {
   return useQuery({
@@ -132,8 +153,9 @@ export function useChannelReach() {
       ),
     select: (page) => page.total > 0,
     // Same reason as the page query, and it matters more here: this one decides
-    // between "add a channel" and "no results", and getting that wrong right
-    // after a channel was added is the worst moment to get it wrong.
+    // between "go and fetch a channel's models" and "no results", and getting
+    // that wrong right after a list was fetched is the worst moment to get it
+    // wrong.
     staleTime: 0,
   })
 }
@@ -163,32 +185,13 @@ export function useRefreshCatalog() {
   })
 }
 
-/**
- * Switching one model on or off. Invalidating by prefix refreshes whichever
- * pages are cached; because `placeholderData` holds the current page on screen
- * while that happens, the grid does not blink.
+/*
+ * There is deliberately no mutation here for switching a model on.
+ *
+ * Offering a model is a fact about a channel's model, not about the catalogue
+ * entry: the same model id can arrive through three channels, and "enable it"
+ * would have to pick one of them on the operator's behalf. The channel panel
+ * owns that switch — `features/admin/channels/use-channel-models.ts` — and it
+ * invalidates this feature's keys when it moves, so the marketplace follows
+ * along without ever writing.
  */
-export function useUpdateCatalogModel() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async ({
-      providerId,
-      modelId,
-      enabled,
-    }: {
-      providerId: string
-      modelId: string
-      enabled: boolean
-    }) =>
-      unwrap(
-        await api.PATCH('/admin/catalog/models/{providerId}/{modelId}', {
-          params: { path: { providerId, modelId } },
-          body: { enabled },
-        }),
-      ),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: catalogKeys.models() })
-    },
-  })
-}

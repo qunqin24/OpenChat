@@ -33,8 +33,8 @@ func TestSyncQueriesLeaveModelSettingsAlone(t *testing.T) {
 			t.Errorf("%s is missing from %s", name, queriesPath)
 			continue
 		}
-		if strings.Contains(body, "model_settings") {
-			t.Errorf("%s touches model_settings; a refresh must not switch models on or off", name)
+		if strings.Contains(body, "channel_models") {
+			t.Errorf("%s touches channel_models; a catalogue refresh must not reach a channel's model list", name)
 		}
 	}
 }
@@ -43,12 +43,12 @@ func TestSyncQueriesLeaveModelSettingsAlone(t *testing.T) {
 // somebody has to make deliberately rather than by pasting a statement.
 func TestOnlyOneQueryWritesModelSettings(t *testing.T) {
 	for name, body := range namedQueries(t) {
-		writes := strings.Contains(body, "INSERT INTO model_settings") ||
-			strings.Contains(body, "UPDATE model_settings") ||
-			strings.Contains(body, "DELETE\nFROM model_settings") ||
-			strings.Contains(body, "DELETE FROM model_settings")
+		writes := strings.Contains(body, "INSERT INTO channel_models") ||
+			strings.Contains(body, "UPDATE channel_models") ||
+			strings.Contains(body, "DELETE\nFROM channel_models") ||
+			strings.Contains(body, "DELETE FROM channel_models")
 		if writes && name != "SetModelEnabled" {
-			t.Errorf("%s writes model_settings; SetModelEnabled is meant to be the only one", name)
+			t.Errorf("%s writes channel_models; SetModelEnabled is meant to be the only one", name)
 		}
 	}
 }

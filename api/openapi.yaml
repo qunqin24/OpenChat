@@ -209,6 +209,119 @@ paths:
               schema: { $ref: "#/components/schemas/User" }
         default: { $ref: "#/components/responses/Error" }
 
+  /admin/channel-types:
+    get:
+      tags: [admin]
+      summary: The vendors a channel can be
+      description: |
+        Served rather than hardcoded in the form, so the table that fills in a
+        default endpoint is the same one the server later reads to decide which
+        protocol to speak. Two copies of it would drift, and the failure would
+        be a channel talking the wrong protocol to a real endpoint.
+      operationId: listChannelTypes
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ChannelTypeInfo" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/channels/{channelId}/models:
+    parameters:
+      - { name: channelId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [admin]
+      summary: The models this channel offers
+      operationId: listChannelModels
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ChannelModel" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [admin]
+      summary: Add a model by hand
+      description: |
+        For an endpoint that publishes no model list, or omits one it serves.
+        Marked `manual`, so a later refresh does not remove it.
+      operationId: addChannelModel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [modelId]
+              properties:
+                modelId: { type: string, minLength: 1, maxLength: 200 }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChannelModel" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/channels/{channelId}/models/refresh:
+    parameters:
+      - { name: channelId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [admin]
+      summary: Ask the endpoint what models it serves
+      description: |
+        Calls the endpoint's own model list with the stored credential — the
+        first time this server makes an outbound request on an operator's
+        behalf. Requires a stored key.
+
+        Models already present keep their enabled state; models the endpoint
+        stopped listing are removed, and `manual` entries are left alone.
+      operationId: refreshChannelModels
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChannelModelRefresh" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/channels/{channelId}/models/{modelId}:
+    parameters:
+      - { name: channelId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: modelId, in: path, required: true, schema: { type: string } }
+    patch:
+      tags: [admin]
+      summary: Offer this model, or stop offering it
+      operationId: updateChannelModel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled: { type: boolean }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChannelModel" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [admin]
+      summary: Remove a manually added model
+      operationId: deleteChannelModel
+      responses:
+        "204": { description: removed }
+        default: { $ref: "#/components/responses/Error" }
+
   /admin/catalog:
     get:
       tags: [admin]
@@ -303,30 +416,6 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CatalogModelPage" }
-        default: { $ref: "#/components/responses/Error" }
-
-  /admin/catalog/models/{providerId}/{modelId}:
-    parameters:
-      - { name: providerId, in: path, required: true, schema: { type: string } }
-      - { name: modelId, in: path, required: true, schema: { type: string } }
-    patch:
-      tags: [admin]
-      summary: Switch a model on or off for this installation
-      operationId: updateCatalogModel
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                enabled: { type: boolean }
-      responses:
-        "200":
-          description: ok
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/CatalogModel" }
         default: { $ref: "#/components/responses/Error" }
 
   /admin/system:
@@ -1012,22 +1101,92 @@ components:
       properties:
         debugLogging: { type: boolean }
 
+    ChannelType:
+      type: string
+      description: |
+        The vendor an operator picks. Most of these speak the OpenAI wire
+        protocol and differ only in endpoint and branding — which is the point:
+        choosing a protocol is a question the operator should not have to
+        answer, so the type answers it for them. `GET /admin/channel-types`
+        carries the full table.
+      enum: [openai, anthropic, gemini, openrouter, deepseek, siliconflow, moonshot, zhipu, dashscope, volcengine, minimax, xai, groq, ollama, openai-compatible]
+
+    WireApi:
+      type: string
+      description: The protocol a channel type speaks. Three adapters, fifteen types.
+      enum: [openai, anthropic, gemini]
+
+    ChannelTypeInfo:
+      type: object
+      required: [id, label, wireApi, endpoint, keyHint, iconId]
+      properties:
+        id: { $ref: "#/components/schemas/ChannelType" }
+        label:
+          type: string
+          description: A brand name, deliberately not translated — it reads the same in both locales.
+        wireApi: { $ref: "#/components/schemas/WireApi" }
+        endpoint:
+          type: string
+          description: The default base URL, empty for a type that has none to offer.
+        keyHint: { type: string }
+        iconId:
+          type: string
+          description: |
+            The brand mark, which is not always the type id: `anthropic` is
+            drawn with the Claude mark. Empty when there is no brand to draw.
+        doc: { type: string, format: uri }
+
+    ChannelModel:
+      type: object
+      required: [modelId, displayName, enabled, source]
+      properties:
+        modelId:
+          type: string
+          description: As the endpoint spells it, which is what gets sent back to it.
+        displayName: { type: string }
+        enabled:
+          type: boolean
+          description: Whether this installation offers the model. Ours to decide, never the refresh's.
+        source:
+          type: string
+          description: |
+            `fetched` came from the endpoint's own model list; `manual` was
+            typed in, for an endpoint that does not publish one or omits a
+            model it actually serves.
+          enum: [fetched, manual]
+        catalog:
+          allOf: [{ $ref: "#/components/schemas/CatalogModel" }]
+          description: |
+            What models.dev knows about this model, when it knows anything.
+            Absent is ordinary: the endpoint is the authority on which models
+            exist, and the catalogue only decorates them.
+        fetchedAt: { type: string, format: date-time }
+
+    ChannelModelRefresh:
+      type: object
+      required: [total, added, removed]
+      properties:
+        total: { type: integer }
+        added: { type: integer }
+        removed:
+          type: integer
+          description: Models the endpoint no longer lists. Their enabled state goes with them.
+
     Channel:
       type: object
-      required: [id, name, providerId, enabled, hasKey, sortOrder, createdAt]
+      required: [id, name, type, wireApi, enabled, hasKey, sortOrder, createdAt, modelCount]
       properties:
         id: { type: string, format: uuid }
         name: { type: string, description: What the operator calls this connection. }
-        providerId:
-          type: string
-          description: |
-            A models.dev provider id (`openai`, `anthropic`, …). It selects the
-            catalogue entry and the brand icon, so it is an identifier rather
-            than a label.
+        type: { $ref: "#/components/schemas/ChannelType" }
+        wireApi: { $ref: "#/components/schemas/WireApi" }
         baseUrl:
           type: string
           description: Overrides the provider's default endpoint. Empty means use the default.
         enabled: { type: boolean }
+        modelCount:
+          type: integer
+          description: How many models this channel offers, i.e. has enabled.
         hasKey:
           type: boolean
           description: Whether a credential is stored. The credential itself is never returned.
@@ -1041,10 +1200,12 @@ components:
 
     CreateChannelRequest:
       type: object
-      required: [name, providerId]
+      required: [name, type]
       properties:
         name: { type: string, minLength: 1, maxLength: 80 }
-        providerId: { type: string, minLength: 1, maxLength: 80 }
+        type: { $ref: "#/components/schemas/ChannelType" }
+        wireApi: { $ref: "#/components/schemas/WireApi" }
+        REMOVE_providerId: { type: string, maxLength: 80 }
         baseUrl: { type: string, maxLength: 500 }
         apiKey: { type: string, maxLength: 500 }
         enabled: { type: boolean, default: true }
@@ -1056,8 +1217,8 @@ components:
         stored one; an empty string clears it. There is no way to read a key
         back, so a form that wants to leave it alone must omit the field.
       properties:
+        type: { $ref: "#/components/schemas/ChannelType" }
         name: { type: string, minLength: 1, maxLength: 80 }
-        providerId: { type: string, minLength: 1, maxLength: 80 }
         baseUrl: { type: string, maxLength: 500 }
         apiKey: { type: string, maxLength: 500 }
         enabled: { type: boolean }

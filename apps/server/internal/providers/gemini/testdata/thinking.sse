@@ -1,0 +1,10 @@
+data: {"candidates":[{"content":{"parts":[{"text":"The user asks ","thought":true}],"role":"model"},"index":0}],"modelVersion":"gemini-2.5-pro","responseId":"resp-think"}
+
+data: {"candidates":[{"content":{"parts":[{"text":"about apertures.","thought":true,"thoughtSignature":"CvUBAdHtim8="}],"role":"model"},"index":0}],"modelVersion":"gemini-2.5-pro","responseId":"resp-think"}
+
+data: {"candidates":[{"content":{"parts":[{"text":"An aperture is an opening."}],"role":"model"},"index":0}],"modelVersion":"gemini-2.5-pro","responseId":"resp-think"}
+
+data: {"candidates":[{"content":{"parts":[{"text":"Should I add the f-number?","thought":true}],"role":"model"},"index":0}],"modelVersion":"gemini-2.5-pro","responseId":"resp-think"}
+
+data: {"candidates":[{"content":{"parts":[{"text":" Its size is the f-number."}],"role":"model"},"finishReason":"STOP","index":0}],"usageMetadata":{"promptTokenCount":31,"candidatesTokenCount":24,"thoughtsTokenCount":40,"totalTokenCount":95},"modelVersion":"gemini-2.5-pro","responseId":"resp-think"}
+

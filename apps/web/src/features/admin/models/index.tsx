@@ -15,6 +15,7 @@ import {
   useCatalogModels,
   useCatalogStatus,
   useChannelReach,
+  useHasChannels,
   type CatalogScope,
 } from './use-catalog'
 
@@ -49,9 +50,11 @@ export function Models() {
   const { data, isPending, isError } = useCatalogModels(filters)
   const { data: status } = useCatalogStatus()
   // Asked once, unfiltered, so an empty grid can be attributed: no channels at
-  // all, or no model matching what was typed. The query above cannot tell them
-  // apart — both come back as zero items.
-  const { data: hasChannels, isPending: isReachPending } = useChannelReach()
+  // all, a channel whose model list nobody has fetched, or no model matching
+  // what was typed. The query above cannot tell the three apart — all of them
+  // come back as zero items.
+  const { hasChannels, isPending: isChannelsPending } = useHasChannels()
+  const { data: hasModels, isPending: isReachPending } = useChannelReach()
 
   // A narrowed filter can leave the cursor past the last page, so every filter
   // change rewinds it. Done in the handlers rather than an effect: the reset is
@@ -118,7 +121,8 @@ export function Models() {
                 isCatalogueEmpty={status?.modelCount === 0}
                 scope={value}
                 hasChannels={hasChannels}
-                isReachPending={isReachPending}
+                hasModels={hasModels}
+                isReachPending={isChannelsPending || isReachPending}
                 onBrowseAll={() => changeScope('all')}
               />
             </TabsContent>

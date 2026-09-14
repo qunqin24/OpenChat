@@ -12,23 +12,23 @@ import (
 )
 
 const createChannel = `-- name: CreateChannel :one
-INSERT INTO channels (name, provider_id, base_url, api_key, enabled)
+INSERT INTO channels (name, type, base_url, api_key, enabled)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, name, provider_id, base_url, api_key, enabled, sort_order, created_at, updated_at
+RETURNING id, name, base_url, api_key, enabled, sort_order, created_at, updated_at, type
 `
 
 type CreateChannelParams struct {
-	Name       string `json:"name"`
-	ProviderID string `json:"provider_id"`
-	BaseUrl    string `json:"base_url"`
-	ApiKey     string `json:"api_key"`
-	Enabled    bool   `json:"enabled"`
+	Name    string      `json:"name"`
+	Type    ChannelType `json:"type"`
+	BaseUrl string      `json:"base_url"`
+	ApiKey  string      `json:"api_key"`
+	Enabled bool        `json:"enabled"`
 }
 
 func (q *Queries) CreateChannel(ctx context.Context, arg CreateChannelParams) (Channel, error) {
 	row := q.db.QueryRow(ctx, createChannel,
 		arg.Name,
-		arg.ProviderID,
+		arg.Type,
 		arg.BaseUrl,
 		arg.ApiKey,
 		arg.Enabled,
@@ -37,13 +37,13 @@ func (q *Queries) CreateChannel(ctx context.Context, arg CreateChannelParams) (C
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
-		&i.ProviderID,
 		&i.BaseUrl,
 		&i.ApiKey,
 		&i.Enabled,
 		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Type,
 	)
 	return i, err
 }
@@ -63,7 +63,7 @@ func (q *Queries) DeleteChannel(ctx context.Context, id uuid.UUID) (int64, error
 }
 
 const getChannel = `-- name: GetChannel :one
-SELECT id, name, provider_id, base_url, api_key, enabled, sort_order, created_at, updated_at
+SELECT id, name, base_url, api_key, enabled, sort_order, created_at, updated_at, type
 FROM channels
 WHERE id = $1
 `
@@ -74,19 +74,19 @@ func (q *Queries) GetChannel(ctx context.Context, id uuid.UUID) (Channel, error)
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
-		&i.ProviderID,
 		&i.BaseUrl,
 		&i.ApiKey,
 		&i.Enabled,
 		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Type,
 	)
 	return i, err
 }
 
 const listChannels = `-- name: ListChannels :many
-SELECT id, name, provider_id, base_url, api_key, enabled, sort_order, created_at, updated_at
+SELECT id, name, base_url, api_key, enabled, sort_order, created_at, updated_at, type
 FROM channels
 ORDER BY sort_order, created_at
 `
@@ -103,13 +103,13 @@ func (q *Queries) ListChannels(ctx context.Context) ([]Channel, error) {
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
-			&i.ProviderID,
 			&i.BaseUrl,
 			&i.ApiKey,
 			&i.Enabled,
 			&i.SortOrder,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Type,
 		); err != nil {
 			return nil, err
 		}
@@ -124,24 +124,24 @@ func (q *Queries) ListChannels(ctx context.Context) ([]Channel, error) {
 const updateChannel = `-- name: UpdateChannel :one
 UPDATE channels
 SET name       = COALESCE($1::text, name),
-    provider_id = COALESCE($2::text, provider_id),
+    type       = COALESCE($2::channel_type, type),
     base_url   = COALESCE($3::text, base_url),
     api_key    = COALESCE($4::text, api_key),
     enabled    = COALESCE($5::boolean, enabled),
     sort_order = COALESCE($6::integer, sort_order),
     updated_at = now()
 WHERE id = $7
-RETURNING id, name, provider_id, base_url, api_key, enabled, sort_order, created_at, updated_at
+RETURNING id, name, base_url, api_key, enabled, sort_order, created_at, updated_at, type
 `
 
 type UpdateChannelParams struct {
-	Name       *string   `json:"name"`
-	ProviderID *string   `json:"provider_id"`
-	BaseUrl    *string   `json:"base_url"`
-	ApiKey     *string   `json:"api_key"`
-	Enabled    *bool     `json:"enabled"`
-	SortOrder  *int32    `json:"sort_order"`
-	ID         uuid.UUID `json:"id"`
+	Name      *string      `json:"name"`
+	Type      *ChannelType `json:"type"`
+	BaseUrl   *string      `json:"base_url"`
+	ApiKey    *string      `json:"api_key"`
+	Enabled   *bool        `json:"enabled"`
+	SortOrder *int32       `json:"sort_order"`
+	ID        uuid.UUID    `json:"id"`
 }
 
 // Every editable field in one statement, so a partial edit cannot half-apply.
@@ -152,7 +152,7 @@ type UpdateChannelParams struct {
 func (q *Queries) UpdateChannel(ctx context.Context, arg UpdateChannelParams) (Channel, error) {
 	row := q.db.QueryRow(ctx, updateChannel,
 		arg.Name,
-		arg.ProviderID,
+		arg.Type,
 		arg.BaseUrl,
 		arg.ApiKey,
 		arg.Enabled,
@@ -163,13 +163,13 @@ func (q *Queries) UpdateChannel(ctx context.Context, arg UpdateChannelParams) (C
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
-		&i.ProviderID,
 		&i.BaseUrl,
 		&i.ApiKey,
 		&i.Enabled,
 		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Type,
 	)
 	return i, err
 }

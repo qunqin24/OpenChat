@@ -37,7 +37,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	if err := db.Migrate(ctx, pool); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	for _, table := range []string{"catalog_models", "catalog_providers", "model_settings"} {
+	for _, table := range []string{"catalog_models", "catalog_providers", "channel_models", "channels"} {
 		if _, err := pool.Exec(ctx, "DELETE FROM "+table); err != nil {
 			t.Fatalf("clear %s: %v", table, err)
 		}
@@ -53,13 +53,21 @@ func TestPgStoreReplace(t *testing.T) {
 	ctx := context.Background()
 	q := sqlc.New(pool)
 
-	// Two switched-on models: one the incoming snapshot still has, one it does
-	// not. A sync has no business with either.
-	for _, model := range [][2]string{{"openai", "gpt-4o"}, {"legacy", "model-gone"}} {
+	// A channel serving two models, both switched on: one the incoming snapshot
+	// still lists, one it does not. A catalogue sync has no business with either
+	// — which models a channel offers is the channel's answer, not the
+	// catalogue's, and the sync cannot even reach this table.
+	var channelID string
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO channels (name, kind) VALUES ('seed', 'openai') RETURNING id`,
+	).Scan(&channelID); err != nil {
+		t.Fatalf("seed channel: %v", err)
+	}
+	for _, model := range []string{"gpt-4o", "model-gone"} {
 		if _, err := pool.Exec(ctx,
-			"INSERT INTO model_settings (provider_id, model_id, enabled) VALUES ($1, $2, true)",
-			model[0], model[1]); err != nil {
-			t.Fatalf("seed model_settings: %v", err)
+			`INSERT INTO channel_models (channel_id, model_id, enabled) VALUES ($1, $2, true)`,
+			channelID, model); err != nil {
+			t.Fatalf("seed channel_models: %v", err)
 		}
 	}
 
@@ -95,8 +103,8 @@ func TestPgStoreReplace(t *testing.T) {
 
 	var settings int
 	if err := pool.QueryRow(ctx,
-		"SELECT count(*) FROM model_settings WHERE enabled").Scan(&settings); err != nil {
-		t.Fatalf("count settings: %v", err)
+		"SELECT count(*) FROM channel_models WHERE enabled").Scan(&settings); err != nil {
+		t.Fatalf("count enabled: %v", err)
 	}
 	if settings != 2 {
 		t.Errorf("enabled models = %d, want the two the sync was told nothing about", settings)
@@ -140,9 +148,15 @@ func TestPgListCatalogModelsFilters(t *testing.T) {
 		t.Fatalf("replace: %v", err)
 	}
 
-	if _, err := q.SetModelEnabled(ctx, sqlc.SetModelEnabledParams{
-		ProviderID: "anthropic", ModelID: "claude-sonnet-4-5", Enabled: true,
-	}); err != nil {
+	var channelID string
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO channels (name, kind) VALUES ('filters', 'openai') RETURNING id`,
+	).Scan(&channelID); err != nil {
+		t.Fatalf("seed channel: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO channel_models (channel_id, model_id, enabled) VALUES ($1, $2, true)`,
+		channelID, "claude-sonnet-4-5"); err != nil {
 		t.Fatalf("enable: %v", err)
 	}
 
@@ -195,23 +209,6 @@ func TestPgListCatalogModelsFilters(t *testing.T) {
 				t.Errorf("total = %d, want %d", total, tc.want)
 			}
 		})
-	}
-}
-
-// Switching on a model the catalogue does not have writes nothing, which is
-// what the handler turns into a 404.
-func TestPgSetModelEnabledRejectsUnknownModels(t *testing.T) {
-	pool := testPool(t)
-	ctx := context.Background()
-
-	affected, err := sqlc.New(pool).SetModelEnabled(ctx, sqlc.SetModelEnabledParams{
-		ProviderID: "nobody", ModelID: "nothing", Enabled: true,
-	})
-	if err != nil {
-		t.Fatalf("enable: %v", err)
-	}
-	if affected != 0 {
-		t.Errorf("rows = %d, want a model nobody offers to be left unwritten", affected)
 	}
 }
 
