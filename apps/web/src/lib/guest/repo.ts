@@ -21,6 +21,7 @@ import { GuestError, notFound } from './errors'
 import { isBranched, pruneBranches } from './legacy'
 import {
   addMemory,
+  applyModelChanges,
   MAX_CONTENT,
   MAX_INSTRUCTIONS,
   MAX_MEMORIES,
@@ -36,6 +37,9 @@ import type { ConversationData, StoredBlob, StoredConversation, StoredMessage, S
 
 /** What a new conversation is called until it is titled; the server's default too. */
 export const DEFAULT_TITLE = 'New chat'
+
+/** The key of the memory list's line of work (`serial`); no conversation has an id like it. */
+const MEMORIES = 'memories'
 /** How long a temporary chat lives, from its creation. */
 export const TEMPORARY_LIFETIME_MS = 24 * 3600 * 1000
 /** A run whose page has said nothing for this long has no page any more. */
@@ -54,6 +58,8 @@ export interface RepoOptions {
   newId?: () => string
   /** An address the page can load a stored file from. */
   urlFor?: (blob: Blob, id: string) => string
+  /** Lets go of an address `urlFor` made. */
+  revokeUrl?: (url: string) => void
   limits?: () => PersonalizationLimits
 }
 
@@ -86,6 +92,7 @@ export class GuestRepo {
   private readonly now: () => Date
   private readonly newId: () => string
   private readonly urlFor: (blob: Blob, id: string) => string
+  private readonly revokeUrl: (url: string) => void
   private readonly limits: () => PersonalizationLimits
   private chains = new Map<string, Promise<unknown>>()
   private swept = 0
@@ -97,6 +104,7 @@ export class GuestRepo {
     this.now = options.now ?? (() => new Date())
     this.newId = options.newId ?? (() => crypto.randomUUID())
     this.urlFor = options.urlFor ?? ((blob) => URL.createObjectURL(blob))
+    this.revokeUrl = options.revokeUrl ?? ((url) => URL.revokeObjectURL(url))
     this.limits = options.limits ?? (() => fallbackLimits)
   }
 
@@ -148,7 +156,7 @@ export class GuestRepo {
       await this.storage.putRuns(pruned.runs)
       await this.storage.deleteMessages(pruned.deletedMessages)
       await this.storage.deleteRuns(pruned.deletedRuns)
-      for (const id of pruned.deletedFiles) await this.storage.deleteBlob(id)
+      for (const id of pruned.deletedFiles) await this.dropBlob(id)
       // Last: until then the conversation still reads as branched, and a page
       // that died half way through is pruned again, to the same result.
       await this.storage.putConversation(pruned.conversation)
@@ -162,12 +170,36 @@ export class GuestRepo {
     if (at - this.swept < 60_000) return
     this.swept = at
     for (const c of await this.storage.conversations()) {
-      if (c.temporary && at - Date.parse(c.createdAt) > TEMPORARY_LIFETIME_MS) await this.storage.deleteConversation(c.id)
+      if (c.temporary && at - Date.parse(c.createdAt) > TEMPORARY_LIFETIME_MS) await this.dropConversation(c.id)
     }
     // Files picked and never sent.
     for (const blob of await this.storage.blobsOf('')) {
-      if (at - (blob.at ?? 0) > TEMPORARY_LIFETIME_MS) await this.storage.deleteBlob(blob.id)
+      if (at - (blob.at ?? 0) > TEMPORARY_LIFETIME_MS) await this.dropBlob(blob.id)
     }
+  }
+
+  // ------------------------------------------------- files and their addresses
+
+  /** Lets go of the address made for a file (it holds the file's bytes in memory until revoked). */
+  private forgetUrl(fileId: string) {
+    const url = this.urls.get(fileId)
+    if (url === undefined) return
+    this.urls.delete(fileId)
+    this.revokeUrl(url)
+  }
+
+  /** Deletes a stored file and the address made for it. */
+  private async dropBlob(id: string) {
+    await this.storage.deleteBlob(id)
+    this.forgetUrl(id)
+  }
+
+  /** Deletes a conversation, and the addresses made for the files it held. */
+  private async dropConversation(id: string) {
+    const [messages, blobs] = await Promise.all([this.storage.messages(id), this.storage.blobsOf(id)])
+    await this.storage.deleteConversation(id)
+    for (const message of messages) for (const file of message.attachments ?? []) this.forgetUrl(file.id)
+    for (const blob of blobs) this.forgetUrl(blob.id)
   }
 
   // ---------------------------------------------------------- the DTOs
@@ -306,15 +338,15 @@ export class GuestRepo {
   async deleteConversation(id: string): Promise<void> {
     return this.serial(id, async () => {
       await this.load(id)
-      await this.storage.deleteConversation(id)
+      await this.dropConversation(id)
     })
   }
 
   /** Every conversation, temporary ones included. */
   async deleteAll(): Promise<number> {
     const all = await this.storage.conversations()
-    for (const c of all) await this.storage.deleteConversation(c.id)
-    for (const blob of await this.storage.blobsOf('')) await this.storage.deleteBlob(blob.id)
+    for (const c of all) await this.dropConversation(c.id)
+    for (const blob of await this.storage.blobsOf('')) await this.dropBlob(blob.id)
     return all.length
   }
 
@@ -420,7 +452,7 @@ export class GuestRepo {
         // The files of the questions that went, except those the new question carries.
         const carried = new Set(question?.attachments?.map((f) => f.id))
         for (const message of gone) {
-          for (const file of message.attachments ?? []) if (!carried.has(file.id)) await this.storage.deleteBlob(file.id)
+          for (const file of message.attachments ?? []) if (!carried.has(file.id)) await this.dropBlob(file.id)
         }
       }
     })
@@ -476,12 +508,15 @@ export class GuestRepo {
       if (held) await this.storage.putRuns([{ ...held, ...end.run }])
     })
     // The memory list is the guest's, not the conversation's: the tool may have
-    // changed it, and the server's list is the one that knows how.
-    const known = new Map((await this.storage.memories()).map((m) => [m.id, m]))
-    const kept = new Set(end.memories.map((m) => m.id))
-    for (const id of known.keys()) if (!kept.has(id)) await this.storage.deleteMemory(id)
-    for (const memory of end.memories) await this.storage.putMemory({ ...memory, conversationId: memory.conversationId ?? null })
-    for (const event of end.memoryEvents) await this.storage.putMemoryEvent(event)
+    // changed it. What the model changed is applied to the list as it is now -
+    // not the server's whole list, which is the list as the run began and would
+    // undo what the person did while the answer streamed.
+    await this.serial(MEMORIES, async () => {
+      const { put, remove, events } = applyModelChanges(await this.storage.memories(), end.memoryEvents, end.memories)
+      for (const id of remove) await this.storage.deleteMemory(id)
+      for (const memory of put) await this.storage.putMemory({ ...memory, conversationId: memory.conversationId ?? null })
+      for (const event of events) await this.storage.putMemoryEvent(event)
+    })
   }
 
   /**
@@ -597,29 +632,41 @@ export class GuestRepo {
     return sortMemories(await this.storage.memories())
   }
 
+  // The list is one line of work, apart from the conversations': a person's edit
+  // and the end of a run (which merges what the model changed) must not
+  // interleave their reads and writes.
+
   async createMemory(content: string): Promise<Memory> {
-    const { memory } = addMemory(await this.storage.memories(), content, this.newId(), this.now())
-    await this.storage.putMemory(memory)
-    return memory
+    return this.serial(MEMORIES, async () => {
+      const { memory } = addMemory(await this.storage.memories(), content, this.newId(), this.now())
+      await this.storage.putMemory(memory)
+      return memory
+    })
   }
 
   async updateMemory(id: string, content: string): Promise<Memory> {
-    const next = rewriteMemory(await this.storage.memories(), id, content, this.now())
-    await this.storage.putMemory(next)
-    // A person's own edit: what the log holds about the note goes.
-    await this.storage.deleteMemoryEvents((e) => e.memoryId === id)
-    return next
+    return this.serial(MEMORIES, async () => {
+      const next = rewriteMemory(await this.storage.memories(), id, content, this.now())
+      await this.storage.putMemory(next)
+      // A person's own edit: what the log holds about the note goes.
+      await this.storage.deleteMemoryEvents((e) => e.memoryId === id)
+      return next
+    })
   }
 
   async deleteMemory(id: string): Promise<void> {
-    if (!(await this.storage.memories()).some((m) => m.id === id)) throw notFound()
-    await this.storage.deleteMemory(id)
-    await this.storage.deleteMemoryEvents((e) => e.memoryId === id)
+    return this.serial(MEMORIES, async () => {
+      if (!(await this.storage.memories()).some((m) => m.id === id)) throw notFound()
+      await this.storage.deleteMemory(id)
+      await this.storage.deleteMemoryEvents((e) => e.memoryId === id)
+    })
   }
 
   async clearMemories(): Promise<void> {
-    await this.storage.clearMemories()
-    await this.storage.deleteMemoryEvents(() => true)
+    return this.serial(MEMORIES, async () => {
+      await this.storage.clearMemories()
+      await this.storage.deleteMemoryEvents(() => true)
+    })
   }
 
   async memoryEvents(): Promise<MemoryEvent[]> {
@@ -627,13 +674,15 @@ export class GuestRepo {
   }
 
   async undoMemoryEvent(eventId: string): Promise<MemoryEvent> {
-    const events = await this.storage.memoryEvents()
-    const { list, event } = undoEvent(await this.storage.memories(), events, eventId, this.now())
-    const before = new Map((await this.storage.memories()).map((m) => [m.id, m]))
-    for (const memory of list) if (before.get(memory.id) !== memory) await this.storage.putMemory(memory)
-    for (const id of before.keys()) if (!list.some((m) => m.id === id)) await this.storage.deleteMemory(id)
-    await this.storage.putMemoryEvent(event)
-    return event
+    return this.serial(MEMORIES, async () => {
+      const events = await this.storage.memoryEvents()
+      const { list, event } = undoEvent(await this.storage.memories(), events, eventId, this.now())
+      const before = new Map((await this.storage.memories()).map((m) => [m.id, m]))
+      for (const memory of list) if (before.get(memory.id) !== memory) await this.storage.putMemory(memory)
+      for (const id of before.keys()) if (!list.some((m) => m.id === id)) await this.storage.deleteMemory(id)
+      await this.storage.putMemoryEvent(event)
+      return event
+    })
   }
 
   // ------------------------------------------------------------ the data page

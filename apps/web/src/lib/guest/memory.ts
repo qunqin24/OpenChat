@@ -122,3 +122,100 @@ export function undoEvent(list: Memory[], events: MemoryEvent[], eventId: string
   }
   return { list: next, event: { ...event, undoneAt: now.toISOString() } }
 }
+
+export interface ModelChanges {
+  /** The notes to write: the model's additions and rewrites. */
+  put: Memory[]
+  /** The notes to remove: the ones the model deleted. */
+  remove: string[]
+  /** The log entries of the changes that were made, for the undo list. */
+  events: MemoryEvent[]
+}
+
+/**
+ * Applies what the model changed during a run to the list as it is *now*.
+ *
+ * The server's list at the end of a run is the list the run began with, plus
+ * the model's changes. The guest's own list may have moved since - a note
+ * written, rewritten or deleted in the settings while the answer streamed - and
+ * replacing it with the server's would delete the new note and bring back the
+ * deleted one. So only the model's changes (the events) are applied, each only
+ * if the note is still as the model found it: a note the person has rewritten
+ * or removed since is theirs and stays so, and the change is dropped along with
+ * its log entry (there is nothing to undo).
+ *
+ * `theirs` is the server's list, for the notes' details (when, from where).
+ */
+export function applyModelChanges(list: Memory[], events: MemoryEvent[], theirs: Memory[]): ModelChanges {
+  const working = new Map(list.map((m) => [m.id, m]))
+  const put = new Map<string, Memory>()
+  const remove = new Set<string>()
+  const applied: MemoryEvent[] = []
+  const server = new Map(theirs.map((m) => [m.id, m]))
+  const ordered = [...events].sort((a, b) =>
+    a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : 1,
+  )
+  const taken = (content: string, except: string) =>
+    [...working.values()].some((m) => m.id !== except && same(m.content, content))
+
+  for (const event of ordered) {
+    const current = working.get(event.memoryId)
+    const wrote = server.get(event.memoryId)
+    switch (event.op) {
+      case 'add': {
+        const content = wrote?.content ?? event.after
+        if (current) {
+          // Delivered before: already there as the model left it.
+          if (event.after != null && current.content === event.after) applied.push(event)
+          break
+        }
+        if (content == null || working.size >= MAX_MEMORIES || taken(content, event.memoryId)) break
+        const at = event.createdAt
+        const memory: Memory = wrote
+          ? { ...wrote, conversationId: wrote.conversationId ?? null }
+          : {
+              id: event.memoryId,
+              content,
+              source: 'model',
+              conversationId: event.conversationId ?? null,
+              createdAt: at,
+              updatedAt: at,
+            }
+        working.set(memory.id, memory)
+        put.set(memory.id, memory)
+        remove.delete(memory.id)
+        applied.push(event)
+        break
+      }
+      case 'update': {
+        // Gone, or rewritten by the person since: theirs.
+        if (!current || event.after == null) break
+        if (event.before != null && current.content !== event.before) {
+          if (current.content === event.after) applied.push(event)
+          break
+        }
+        if (taken(event.after, current.id)) break
+        const memory: Memory = {
+          ...current,
+          content: event.after,
+          updatedAt: wrote?.updatedAt ?? event.createdAt,
+          ...(wrote ? { source: wrote.source } : {}),
+        }
+        working.set(memory.id, memory)
+        put.set(memory.id, memory)
+        applied.push(event)
+        break
+      }
+      case 'delete': {
+        if (!current) break
+        if (event.before != null && current.content !== event.before) break
+        working.delete(current.id)
+        put.delete(current.id)
+        remove.add(current.id)
+        applied.push(event)
+        break
+      }
+    }
+  }
+  return { put: [...put.values()], remove: [...remove], events: applied }
+}

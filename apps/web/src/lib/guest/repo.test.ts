@@ -1,8 +1,9 @@
-import type { Memory, MemoryEvent } from '@openchat/api-client'
+import type { Memory, MemoryEvent, Message, Run } from '@openchat/api-client'
 import { describe, expect, it } from 'vitest'
 
 import { MAX_CONTENT, MAX_MEMORIES } from './memory'
-import { excerpt, RUN_STALE_MS, TEMPORARY_LIFETIME_MS } from './repo'
+import { excerpt, GuestRepo, RUN_STALE_MS, TEMPORARY_LIFETIME_MS } from './repo'
+import { memoryStorage } from './storage'
 import { harness } from './testing'
 
 describe('the conversation list', () => {
@@ -195,6 +196,9 @@ describe('personalization and memory', () => {
     // The model added a note, rewrote another, deleted a third.
     const added = memory('m-add', 'Likes jazz.', at)
     const rewritten = memory('m-upd', 'Lives in Porto.', at)
+    // The two it found, as the run was asked with them.
+    await h.repo.storage.putMemory(memory('m-upd', 'Lives in Lisbon.', at))
+    await h.repo.storage.putMemory(memory('m-del', 'Has a cat.', at))
     await h.repo.runEnded(c, {
       run: turn.run,
       memorySnapshot: null,
@@ -218,6 +222,80 @@ describe('personalization and memory', () => {
     await expect(h.repo.undoMemoryEvent('nope')).rejects.toMatchObject({ status: 404 })
   })
 
+  describe('at the end of a run', () => {
+    /** A run that began with notes m1 and m2, in which the model rewrote m1, deleted m2 and added m3. */
+    async function setup() {
+      const h = harness()
+      const c = await h.conversation()
+      const turn = await h.turn(c, { ask: 'q', answer: 'a' })
+      const began = h.tick()
+      await h.repo.storage.putMemory(memory('m1', 'Lives in Lisbon.', began))
+      await h.repo.storage.putMemory(memory('m2', 'Has a cat.', began))
+      const at = h.tick()
+      const end = {
+        run: turn.run,
+        memorySnapshot: null,
+        // The server's list: the one the run began with, with the model's changes.
+        memories: [memory('m1', 'Lives in Porto.', at), memory('m3', 'Likes jazz.', at)],
+        memoryEvents: [
+          memoryEvent('e1', 'm1', 'update', { before: 'Lives in Lisbon.', after: 'Lives in Porto.' }, at),
+          memoryEvent('e2', 'm2', 'delete', { before: 'Has a cat.' }, at),
+          memoryEvent('e3', 'm3', 'add', { after: 'Likes jazz.' }, at),
+        ],
+      }
+      return { h, c, end }
+    }
+    const contents = async (h: Awaited<ReturnType<typeof setup>>['h']) => (await h.repo.memories()).map((m) => m.content).sort()
+
+    it('applies the model\'s changes when the list was not touched meanwhile', async () => {
+      const { h, c, end } = await setup()
+      await h.repo.runEnded(c, end)
+      expect(await contents(h)).toEqual(['Likes jazz.', 'Lives in Porto.'])
+      expect((await h.repo.memoryEvents()).map((e) => e.id).sort()).toEqual(['e1', 'e2', 'e3'])
+    })
+
+    it('keeps a note the person wrote while the answer streamed', async () => {
+      const { h, c, end } = await setup()
+      await h.repo.createMemory('Drinks tea.')
+      await h.repo.runEnded(c, end)
+      expect(await contents(h)).toEqual(['Drinks tea.', 'Likes jazz.', 'Lives in Porto.'])
+    })
+
+    it('does not bring back a note the person deleted meanwhile, nor apply the model\'s change to it', async () => {
+      const { h, c, end } = await setup()
+      await h.repo.deleteMemory('m1')
+      await h.repo.runEnded(c, end)
+      expect(await contents(h)).toEqual(['Likes jazz.'])
+      // The change that was not made is not in the undo list.
+      expect((await h.repo.memoryEvents()).map((e) => e.id).sort()).toEqual(['e2', 'e3'])
+    })
+
+    it('leaves a note the person rewrote meanwhile as they wrote it, and keeps one the model deleted if they changed it', async () => {
+      const { h, c, end } = await setup()
+      await h.repo.updateMemory('m1', 'Lives in Faro.')
+      await h.repo.updateMemory('m2', 'Has two cats.')
+      await h.repo.runEnded(c, end)
+      expect(await contents(h)).toEqual(['Has two cats.', 'Likes jazz.', 'Lives in Faro.'])
+      expect((await h.repo.memoryEvents()).map((e) => e.id)).toEqual(['e3'])
+    })
+
+    it('is the same when the frame is delivered twice', async () => {
+      const { h, c, end } = await setup()
+      await h.repo.runEnded(c, end)
+      await h.repo.runEnded(c, end)
+      expect(await contents(h)).toEqual(['Likes jazz.', 'Lives in Porto.'])
+      expect(await h.repo.memoryEvents()).toHaveLength(3)
+    })
+
+    it('does not run over a person\'s edit that is still being written', async () => {
+      const { h, c, end } = await setup()
+      // Both are queued at once: the edit first, then the end of the run.
+      const [, ended] = await Promise.all([h.repo.updateMemory('m1', 'Lives in Faro.'), h.repo.runEnded(c, end)])
+      expect(ended).toBeUndefined()
+      expect(await contents(h)).toEqual(['Likes jazz.', 'Lives in Faro.'])
+    })
+  })
+
   it('lets a person\'s own edit win over an undo, and forgets the log of a note they change', async () => {
     const h = harness()
     const c = await h.conversation()
@@ -237,6 +315,56 @@ describe('personalization and memory', () => {
     // The log keeps thirty days.
     await h.repo.storage.putMemoryEvent(memoryEvent('old', 'm9', 'add', {}, new Date(h.clock.now - 31 * 24 * 3600 * 1000).toISOString()))
     expect(await h.repo.memoryEvents()).toEqual([])
+  })
+})
+
+describe('the addresses made for files', () => {
+  /** A repository that counts the addresses it makes and lets go of, with one conversation holding a file. */
+  async function withFile() {
+    const made: string[] = []
+    const revoked: string[] = []
+    const repo = new GuestRepo(memoryStorage(), {
+      urlFor: (_blob, id) => {
+        made.push(id)
+        return `blob:${id}`
+      },
+      revokeUrl: (url) => void revoked.push(url),
+    })
+    const c = (await repo.createConversation({})).id
+    const at = new Date().toISOString()
+    const input: Message = { id: 'q1', conversationId: c, role: 'user', content: 'see', parts: [{ type: 'text', text: 'see' }], status: 'complete', createdAt: at }
+    const run: Run = { id: 'r1', conversationId: c, status: 'running', model: 'm', version: 1, createdAt: at }
+    const file = { id: 'f1', conversationId: '', blob: new Blob(['x']), filename: 'a.png', contentType: 'image/png', size: 1 }
+    await repo.runStarted(c, { run, input, action: 'send', attachments: [file], choice: {} }, 'tab')
+    return { repo, c, made, revoked }
+  }
+
+  it('makes one address per file and lets go of it when the conversation is deleted', async () => {
+    const { repo, c, made, revoked } = await withFile()
+    await repo.listMessages(c, {})
+    await repo.listMessages(c, {})
+    expect(made).toEqual(['f1'])
+    expect(revoked).toEqual([])
+
+    await repo.deleteConversation(c)
+    expect(revoked).toEqual(['blob:f1'])
+  })
+
+  it('lets go of them all when everything is deleted', async () => {
+    const { repo, c, revoked } = await withFile()
+    await repo.listMessages(c, {})
+    await repo.deleteAll()
+    expect(revoked).toEqual(['blob:f1'])
+  })
+
+  it('lets go of the address of a file that is deleted on its own, as when its question is edited away', async () => {
+    const { repo, c, revoked } = await withFile()
+    await repo.listMessages(c, {})
+    const at = new Date(Date.now() + 1000).toISOString()
+    const input: Message = { id: 'q2', conversationId: c, role: 'user', content: 'again', parts: [{ type: 'text', text: 'again' }], status: 'complete', createdAt: at }
+    const run: Run = { id: 'r2', conversationId: c, status: 'running', model: 'm', version: 1, createdAt: at }
+    await repo.runStarted(c, { run, input, action: 'send', replaces: 'q1', choice: {} }, 'tab')
+    expect(revoked).toEqual(['blob:f1'])
   })
 })
 
