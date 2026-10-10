@@ -178,7 +178,13 @@
   display: inline-flex;
   width: 16px;
   flex-shrink: 0;
+  align-items: center;
   justify-content: center;
+}
+/* A box of its own, not an inline span: inline, the orb sat on the text's
+   baseline and hung below the middle of the line. */
+.prism-next .n-activity-orb {
+  display: flex;
 }
 .prism-next .n-activity-icon svg,
 .prism-next .n-activity-chevron,

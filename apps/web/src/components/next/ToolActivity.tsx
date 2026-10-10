@@ -102,7 +102,7 @@ export function ToolActivity({ items, thinking = false }: { items: ActivityItem[
             <span className="n-activity-pulse" data-motion="essential" role="status" aria-label={t('chat.tool.running')} />
           ) : thinking ? (
             // The same mark as thinking anywhere else, between rounds too.
-            <span role="status" aria-label={t('chat.reasoning.live')}><ThinkingOrb /></span>
+            <span className="n-activity-orb" role="status" aria-label={t('chat.reasoning.live')}><ThinkingOrb /></span>
           ) : (
             stepIcon(steps[steps.length - 1]!.call.name)
           )}
