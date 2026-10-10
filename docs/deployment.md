@@ -87,7 +87,7 @@ OPENCHAT_IMAGE=ghcr.io/qunqin24/openchat:1.0.0
 docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
 ```
 
-镜像会从 GitHub Container Registry 拉取。想用当前检出的代码自己构建，就在命令末尾加 `--build`。
+镜像会从 GitHub Container Registry 拉取。想用当前检出的代码自己构建，叠加构建文件：`docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.build.yml --env-file deploy/.env up -d --build`（构建需要几 GB 内存，小机器上建议还是拉取）。
 
 看一眼状态：
 

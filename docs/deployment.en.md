@@ -87,7 +87,7 @@ From the repository root:
 docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
 ```
 
-The image is pulled from the GitHub Container Registry. To build it from the code you checked out instead, add `--build` to the command.
+The image is pulled from the GitHub Container Registry. To build it from the code you checked out instead, add the build file: `docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.build.yml --env-file deploy/.env up -d --build` (building needs a few GB of memory; on a small server, pull instead).
 
 Check on it:
 
