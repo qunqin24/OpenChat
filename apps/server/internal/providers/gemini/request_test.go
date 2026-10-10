@@ -367,3 +367,73 @@ func TestBuildBodyRefusesWhatItCannotFaithfullySend(t *testing.T) {
 		})
 	}
 }
+
+// toolLoop is a user question, a model step made of the given calls, and the
+// results — the second request of a tool loop.
+func toolLoop(model string, calls ...llm.ToolCallPart) llm.Request {
+	assistant := llm.Message{Role: llm.RoleAssistant}
+	results := llm.Message{Role: llm.RoleTool}
+	for _, call := range calls {
+		assistant.Parts = append(assistant.Parts, call)
+		results.Parts = append(results.Parts, llm.ToolResultPart{CallID: call.ID, Name: call.Name, Content: "ok", Status: llm.ToolSucceeded})
+	}
+	return llm.Request{Model: model, Messages: []llm.Message{llm.TextMessage(llm.RoleUser, "go"), assistant, results}}
+}
+
+func callPart(id, signature string) llm.ToolCallPart {
+	return llm.ToolCallPart{ID: id, Name: "read", Arguments: json.RawMessage(`{}`), RawArguments: `{}`, Signature: signature}
+}
+
+func signaturesOf(t *testing.T, body map[string]any) []any {
+	t.Helper()
+	var out []any
+	for _, part := range contents(t, body)[1]["parts"].([]any) {
+		out = append(out, part.(map[string]any)["thoughtSignature"])
+	}
+	return out
+}
+
+func TestBuildBodyReturnsTheSignatureOnTheCallItCameOn(t *testing.T) {
+	// Gemini 3 answers 400 to a step whose first functionCall lacks it.
+	body := build(t, toolLoop("gemini-3-pro-preview",
+		callPart("a", llm.SignatureGemini+"CvUBsig="),
+		callPart("b", ""),
+	))
+
+	got := signaturesOf(t, body)
+	if got[0] != "CvUBsig=" {
+		t.Errorf("first call signature = %v, want the one the model issued, unprefixed", got[0])
+	}
+	if got[1] != nil {
+		t.Errorf("second parallel call signature = %v, only the first carries one", got[1])
+	}
+}
+
+func TestBuildBodySendsTheDocumentedDummyWhenGemini3HasNoSignature(t *testing.T) {
+	tests := map[string]llm.ToolCallPart{
+		"history from before signatures were kept": callPart("a", ""),
+		"another vendor's signature":               callPart("a", llm.SignatureOpenAIResponses+"gpt-5"),
+		"a bare prefix with nothing after it":      callPart("a", llm.SignatureGemini),
+	}
+	for name, call := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := signaturesOf(t, build(t, toolLoop("gemini-3.1-pro-preview", call, callPart("b", ""))))
+			if got[0] != skipSignatureValidation {
+				t.Errorf("first call signature = %v, want the dummy that skips validation", got[0])
+			}
+			if got[1] != nil {
+				t.Errorf("second call signature = %v, the dummy belongs on the first call of a step only", got[1])
+			}
+		})
+	}
+}
+
+func TestBuildBodyNeverSendsAForeignSignatureOrADummyToOlderModels(t *testing.T) {
+	foreign := build(t, toolLoop("gemini-2.5-flash", callPart("a", llm.SignatureOpenAIResponses+"gpt-5")))
+	if got := signaturesOf(t, foreign); got[0] != nil {
+		t.Errorf("signature = %v, another vendor's signature must not be replayed here", got[0])
+	}
+	if validatesSignatures("gemini-2.5-flash") || validatesSignatures("gpt-5") || !validatesSignatures("models/gemini-3-flash-preview") || !validatesSignatures("gemini-10-pro") {
+		t.Error("model generations are misread")
+	}
+}

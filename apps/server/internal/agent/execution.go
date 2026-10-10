@@ -13,6 +13,7 @@ import (
 
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin/openchat/apps/server/internal/llm"
+	ledger "github.com/qunqin/openchat/apps/server/internal/usage"
 )
 
 // Error codes a run or a failed response can end with. They are machine codes
@@ -36,6 +37,7 @@ const (
 	resultBudget      = "This tool call was not executed: the tool call limit for this reply has been reached. Answer with what you have."
 	resultToolFailed  = "The tool failed unexpectedly."
 	resultUnavailable = "This tool is no longer available."
+	resultOneAsk      = "This tool call was not executed: only one ask_user call can wait for the user at a time. Put every question in a single call."
 )
 
 // commitTimeout bounds one transaction. Commits use their own context, not the
@@ -123,6 +125,9 @@ func (ex *execution) commit(fn change) error {
 	// and the next request — still bumps the version, but sends nothing.
 	if len(events) > 0 {
 		ex.r.hub.Publish(run.ConversationID, Batch{RunID: run.ID, Version: run.Version, Events: events})
+	}
+	if fn := ex.r.afterRun.Load(); done && fn != nil {
+		(*fn)(run)
 	}
 	return nil
 }
@@ -290,9 +295,6 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 	}
 
 	offered := r.tools(ctx)
-	if ex.cp.Round >= r.opts.MaxToolRounds {
-		offered = nil
-	}
 	if capable, ok := client.(ToolCapable); ok && !capable.CallsTools() {
 		offered = nil
 	}
@@ -307,20 +309,45 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 	if effort := ex.run.ReasoningEffort; effort != nil {
 		options.Reasoning = &llm.ReasoningOptions{Effort: llm.ReasoningEffort(*effort)}
 	}
+	// The request after the last tool round must answer, and says so with a
+	// tool choice rather than by leaving the tools out. The tools and the system
+	// prompt are part of what a provider's cache and a replayed thinking block
+	// are checked against, and a history full of tool calls with no tool list
+	// is itself refused by some providers; forbidding the call changes nothing
+	// that came before it.
+	final := ex.cp.Round >= r.opts.MaxToolRounds
+	if final && len(offered) > 0 {
+		options.ToolChoice = llm.ToolChoiceNone
+	}
 
 	stream := newPartialStream(ex, ex.cp.Attempt, r.opts.PartialInterval)
+	meter := r.usage.Begin(ledger.Call{
+		Kind:           ledger.KindChat,
+		UserID:         ex.run.UserID,
+		ConversationID: &ex.run.ConversationID,
+		RunID:          &ex.run.ID,
+		ChannelID:      ex.run.ChannelID,
+		ModelID:        ex.run.ModelID,
+	}, r.now)
 	resp, streamErr := client.Stream(ctx, llm.Request{
 		Model:    ex.run.ModelID,
 		Messages: messages,
 		Tools:    definitions(offered),
 		Options:  options,
-	}, stream.emit)
+		Session:  ex.run.ConversationID.String(),
+	}, meter.Wrap(stream.emit))
 	stream.close()
 	resp.Message.Parts = stream.stampAll(resp.Message.Parts)
 
 	if errors.Is(context.Cause(ctx), errShutdown) {
+		// Not an outcome: the next process makes this request again, and an
+		// attempt cut off by the process going away has no usage to record.
 		return false, nil
 	}
+	// Every other ending is a request that was made, and goes in the ledger
+	// before the commit that classifies it: a crash between the two leaves the
+	// row of a request that really was sent, which is the honest outcome.
+	meter.End(ctx, resp, streamErr)
 	if ctx.Err() != nil {
 		// Stopped by the user. The returned response is authoritative — it
 		// holds everything generated, including what the throttle had not
@@ -333,7 +360,7 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 	if streamErr != nil {
 		return ex.requestFailed(resp, streamErr)
 	}
-	return ex.responded(resp, offered)
+	return ex.responded(resp, offered, final)
 }
 
 // requestFailed records a failed attempt and either schedules the next one or
@@ -376,7 +403,7 @@ func (ex *execution) requestFailed(resp llm.ModelResponse, streamErr error) (boo
 
 // responded classifies a completed response: an answer ends the run, tool
 // calls start a round.
-func (ex *execution) responded(resp llm.ModelResponse, offered []Tool) (bool, error) {
+func (ex *execution) responded(resp llm.ModelResponse, offered []Tool, final bool) (bool, error) {
 	parts := resp.Message.Parts
 	calls := resp.Message.ToolCalls()
 	stop := stopReason(resp.FinishReason, len(calls) > 0)
@@ -396,10 +423,14 @@ func (ex *execution) responded(resp llm.ModelResponse, offered []Tool) (bool, er
 	// longer than one commit.
 	byName := toolsByName(offered)
 	truncated := resp.FinishReason == llm.FinishLength
-	exhausted := len(offered) == 0
+	// Out of rounds, or nothing was on offer. A model that calls a tool
+	// regardless of the choice it was given (some gateways ignore it) gets the
+	// refusal below instead of a round.
+	exhausted := final || len(offered) == 0
 
 	var slots []ToolSlot
 	var immediate []llm.ToolResultPart
+	asking := false // a call to a UserTool stands, and the run ends on it
 	for _, call := range calls {
 		switch {
 		case truncated:
@@ -413,11 +444,37 @@ func (ex *execution) responded(resp llm.ModelResponse, offered []Tool) (bool, er
 		case !call.Parsed():
 			immediate = append(immediate, failedResult(call.ID, call.Name, resultBadArgs, llm.ToolFailed))
 		default:
-			slots = append(slots, ToolSlot{CallID: call.ID, Name: call.Name, Status: SlotPending, Arguments: call.Arguments})
+			user, ok := byName[call.Name].(UserTool)
+			if !ok {
+				slots = append(slots, ToolSlot{CallID: call.ID, Name: call.Name, Status: SlotPending, Arguments: call.Arguments})
+				break
+			}
+			// The person's tool is not run: it waits, once, if what it asks is askable.
+			if err := user.Check(call.Arguments); err != nil {
+				var toolErr *ToolError
+				message := resultToolFailed
+				if errors.As(err, &toolErr) {
+					message = toolErr.Message
+				}
+				immediate = append(immediate, failedResult(call.ID, call.Name, message, llm.ToolFailed))
+			} else if asking {
+				immediate = append(immediate, failedResult(call.ID, call.Name, resultOneAsk, llm.ToolFailed))
+			} else {
+				asking = true
+				slots = append(slots, ToolSlot{CallID: call.ID, Name: call.Name, Status: SlotAwaiting, Arguments: call.Arguments})
+			}
 		}
 	}
+	pending := 0
+	for _, slot := range slots {
+		if slot.Status == SlotPending {
+			pending++
+		}
+	}
+	// Nothing left to run and a question to put: the response is the run's last.
+	awaiting := asking && pending == 0
 
-	return exhausted, ex.commit(func(ctx context.Context, q *sqlc.Queries) ([]Event, *finish, error) {
+	return exhausted || awaiting, ex.commit(func(ctx context.Context, q *sqlc.Queries) ([]Event, *finish, error) {
 		msg, err := ex.appendMessage(ctx, q, newRow{role: sqlc.MessageRoleAssistant, parts: parts, stop: stop, resp: &resp})
 		if err != nil {
 			return nil, nil, err
@@ -433,9 +490,12 @@ func (ex *execution) responded(resp llm.ModelResponse, offered []Tool) (bool, er
 
 		ex.live = Live{}
 		if exhausted {
-			// The model was offered no tools and called one anyway. Asking
+			// The model was not allowed a tool and called one anyway. Asking
 			// again invites the same; the run ends on what it has.
 			return events, &finish{status: sqlc.RunStatusCompleted}, nil
+		}
+		if awaiting {
+			return events, &finish{status: sqlc.RunStatusAwaitingInput}, nil
 		}
 		if len(slots) == 0 {
 			// Every call was answered above; the model reads the errors next.
@@ -515,6 +575,15 @@ func (ex *execution) runTools(ctx context.Context) (bool, error) {
 	}
 	if ctx.Err() != nil {
 		return false, nil // the loop finishes a cancel, and leaves a shutdown alone
+	}
+
+	// The round's other calls are in; a question among them is the run's end.
+	for _, slot := range slots {
+		if slot.Status == SlotAwaiting {
+			return true, ex.commit(func(context.Context, *sqlc.Queries) ([]Event, *finish, error) {
+				return nil, &finish{status: sqlc.RunStatusAwaitingInput}, nil
+			})
+		}
 	}
 
 	return false, ex.commit(func(context.Context, *sqlc.Queries) ([]Event, *finish, error) {
@@ -610,19 +679,16 @@ func (ex *execution) setSlot(callID string, edit func(*ToolSlot)) {
 
 // ---------------------------------------------------------------- endings
 
-// finishCancelled ends a run the user stopped. What was generated stays, as a
-// cancelled row; calls that never got a result are answered as cancelled, so
-// the transcript is complete for the next run.
+// finishCancelled ends a run the user stopped. Calls that never got a result
+// are answered as cancelled, so the transcript is complete for the next run;
+// then what was generated stays, as a cancelled row — an empty one when
+// nothing was. A reply stopped before its first token still leaves a turn on
+// the screen, saying it was stopped and offering to answer again; without
+// the row the question would stand alone with nothing to act on. The context
+// builder never sends cancelled rows to a model.
 func (ex *execution) finishCancelled() error {
 	return ex.commit(func(ctx context.Context, q *sqlc.Queries) ([]Event, *finish, error) {
 		var events []Event
-		if g := ex.live.Generation; g != nil && len(g.Parts) > 0 {
-			msg, err := ex.appendMessage(ctx, q, newRow{role: sqlc.MessageRoleAssistant, parts: g.Parts, stop: StopCancelled})
-			if err != nil {
-				return nil, nil, err
-			}
-			events = append(events, MessageAppended{Message: msg})
-		}
 		for _, slot := range ex.live.Tools {
 			if slot.Status == SlotDone {
 				continue
@@ -633,6 +699,15 @@ func (ex *execution) finishCancelled() error {
 			}
 			events = append(events, MessageAppended{Message: msg}, ToolFinished{CallID: slot.CallID, Message: msg.ID})
 		}
+		parts := []llm.Part{}
+		if g := ex.live.Generation; g != nil {
+			parts = g.Parts
+		}
+		msg, err := ex.appendMessage(ctx, q, newRow{role: sqlc.MessageRoleAssistant, parts: parts, stop: StopCancelled})
+		if err != nil {
+			return nil, nil, err
+		}
+		events = append(events, MessageAppended{Message: msg})
 		return events, &finish{status: sqlc.RunStatusCancelled}, nil
 	})
 }

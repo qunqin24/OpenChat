@@ -309,6 +309,8 @@ func TestStreamMapsEveryStopReasonItAccepts(t *testing.T) {
 		{"max_tokens", llm.FinishLength},
 		{"tool_use", llm.FinishToolCalls},
 		{"refusal", llm.FinishContentFilter},
+		{"model_context_window_exceeded", llm.FinishLength},
+		{"pause_turn", llm.FinishLength},
 	}
 
 	for _, tc := range tests {
@@ -325,9 +327,12 @@ func TestStreamMapsEveryStopReasonItAccepts(t *testing.T) {
 	}
 
 	t.Run("a stop reason nobody has seen before", func(t *testing.T) {
-		a := &assembler{rawFinish: "pause_turn"}
-		if _, err := a.finishReason(); !llm.IsKind(err, llm.ErrorProtocol) {
-			t.Fatalf("error = %v, want a protocol error rather than a guess", err)
+		// The content arrived; a label this code has not learned is not a
+		// reason to throw it away.
+		a := &assembler{rawFinish: "some_future_reason"}
+		got, err := a.finishReason()
+		if err != nil || got != llm.FinishStop {
+			t.Fatalf("finish reason = %q, %v, want a plain stop", got, err)
 		}
 	})
 }
@@ -775,4 +780,54 @@ func (r *blockingReader) Read(p []byte) (int, error) {
 	n := copy(p, r.data[r.off:])
 	r.off += n
 	return n, nil
+}
+
+func TestStreamKeepsASignatureOnlyThinkingBlock(t *testing.T) {
+	// The current models omit the thinking text: the block opens empty, gets
+	// only a signature_delta and closes. It has no text to show, but it is
+	// still the model's thought and must survive to be replayed.
+	stream := strings.Join([]string{
+		`event: message_start`,
+		`data: {"type":"message_start","message":{"id":"msg_x","role":"assistant","model":"claude-opus-5-5","usage":{"input_tokens":5}}}`,
+		``,
+		`event: content_block_start`,
+		`data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"","signature":""}}`,
+		``,
+		`event: content_block_delta`,
+		`data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"EqQBsig"}}`,
+		``,
+		`event: content_block_stop`,
+		`data: {"type":"content_block_stop","index":0}`,
+		``,
+		`event: content_block_start`,
+		`data: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}`,
+		``,
+		`event: content_block_delta`,
+		`data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"hi"}}`,
+		``,
+		`event: content_block_stop`,
+		`data: {"type":"content_block_stop","index":1}`,
+		``,
+		`event: message_delta`,
+		`data: {"type":"message_delta","delta":{"stop_reason":"model_context_window_exceeded"},"usage":{"output_tokens":4}}`,
+		``,
+		`event: message_stop`,
+		`data: {"type":"message_stop"}`,
+		``,
+	}, "\n")
+
+	rec := &llmtest.Recorder{}
+	resp, err := decode(context.Background(), strings.NewReader(stream), Config{Provider: "anthropic"}, "m", rec.Emit)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	rec.CheckProviderInvariants(t)
+
+	reasoning, ok := resp.Message.Parts[0].(llm.ReasoningPart)
+	if !ok || reasoning.Text != "" || reasoning.Signature != "EqQBsig" {
+		t.Fatalf("first part = %#v, want an empty reasoning part carrying its signature", resp.Message.Parts[0])
+	}
+	if resp.FinishReason != llm.FinishLength || resp.RawFinishReason != "model_context_window_exceeded" {
+		t.Errorf("finish = %q / raw %q, want length with the raw reason kept", resp.FinishReason, resp.RawFinishReason)
+	}
 }

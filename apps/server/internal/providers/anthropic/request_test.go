@@ -8,9 +8,15 @@ import (
 	"github.com/qunqin/openchat/apps/server/internal/llm"
 )
 
+type systemBlock struct {
+	Type         string         `json:"type"`
+	Text         string         `json:"text"`
+	CacheControl map[string]any `json:"cache_control"`
+}
+
 type sentBody struct {
 	Model     string           `json:"model"`
-	System    string           `json:"system"`
+	System    []systemBlock    `json:"system"`
 	MaxTokens int              `json:"max_tokens"`
 	Stream    bool             `json:"stream"`
 	Messages  []map[string]any `json:"messages"`
@@ -47,8 +53,8 @@ func TestBuildBodyLiftsTheSystemPromptOutOfTheHistory(t *testing.T) {
 		},
 	}, Config{})
 
-	if body.System != "be brief\n\nanswer in English" {
-		t.Errorf("system = %q, want both system turns joined", body.System)
+	if len(body.System) != 1 || body.System[0].Text != "be brief\n\nanswer in English" {
+		t.Errorf("system = %+v, want both system turns joined", body.System)
 	}
 	if len(body.Messages) != 1 || body.Messages[0]["role"] != "user" {
 		t.Fatalf("messages = %v, want only the user turn", body.Messages)
@@ -213,8 +219,8 @@ func TestBuildBodyAsksForThinkingTheWayTheModelTakesIt(t *testing.T) {
 		if config, _ := body["output_config"].(map[string]any); config["effort"] != "xhigh" {
 			t.Errorf("output_config = %v", body["output_config"])
 		}
-		if body["max_tokens"] != float64(adaptiveMaxTokens) {
-			t.Errorf("max_tokens = %v, want the adaptive default", body["max_tokens"])
+		if body["max_tokens"] != float64(deepMaxTokens) {
+			t.Errorf("max_tokens = %v, want the xhigh default", body["max_tokens"])
 		}
 		if _, sent := body["temperature"]; sent {
 			t.Error("temperature was sent alongside thinking, which this API refuses")
@@ -437,4 +443,213 @@ func TestBuildBodyPassesVendorKnobsThrough(t *testing.T) {
 	if !ok || len(stop) != 1 || stop[0] != "END" {
 		t.Errorf("stop_sequences = %v", body.Extra["stop_sequences"])
 	}
+}
+
+func TestBuildBodyLeavesOutAnotherAPIsEncryptedReasoning(t *testing.T) {
+	// A conversation that began on a GPT model over the Responses API and
+	// switched to Claude carries that API's encrypted reasoning. Claude cannot
+	// read it and would reject the request, signed text and blob alike.
+	body := build(t, llm.Request{
+		Model: "claude-haiku-5-5",
+		Messages: []llm.Message{
+			llm.TextMessage(llm.RoleUser, "hello"),
+			{Role: llm.RoleAssistant, Parts: []llm.Part{
+				llm.ReasoningPart{Text: "summary", Signature: llm.SignatureOpenAIResponses + "gpt-5.6-luna", Redacted: []byte("gpt-blob")},
+				llm.TextPart{Text: "the answer"},
+			}},
+		},
+	}, Config{})
+
+	blocks := body.Messages[1]["content"].([]any)
+	if len(blocks) != 1 || blocks[0].(map[string]any)["type"] != "text" {
+		t.Fatalf("blocks = %v, want only the text", blocks)
+	}
+}
+
+func TestBuildBodyReplaysSignatureOnlyThinking(t *testing.T) {
+	// The current models omit the thinking text by default: the block arrives
+	// with an empty `thinking` and a signature, and has to go back as it came.
+	// Both the empty field and the signature must be on the wire.
+	raw, err := buildBody(llm.Request{
+		Model: "claude-opus-5-5",
+		Messages: []llm.Message{
+			llm.TextMessage(llm.RoleUser, "hello"),
+			{Role: llm.RoleAssistant, Parts: []llm.Part{
+				llm.ReasoningPart{Signature: "sig-only"},
+				llm.TextPart{Text: "the answer"},
+			}},
+		},
+	}, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `{"type":"thinking","thinking":"","signature":"sig-only"}`) {
+		t.Errorf("body = %s, want the signed block with an empty thinking field", raw)
+	}
+}
+
+func TestBuildBodyLeavesOutAnotherVendorsSignatures(t *testing.T) {
+	// A Gemini signature on a reasoning part is not ours to replay, however
+	// empty the text: it would be sent as a signed Claude block and rejected.
+	// Nor does a tool call carry one over; tool_use has no such field.
+	body := build(t, llm.Request{
+		Model: "claude-sonnet-5-5",
+		Messages: []llm.Message{
+			llm.TextMessage(llm.RoleUser, "hello"),
+			{Role: llm.RoleAssistant, Parts: []llm.Part{
+				llm.ReasoningPart{Signature: llm.SignatureGemini + "abc"},
+				llm.ToolCallPart{ID: "toolu_1", Name: "search", Arguments: json.RawMessage(`{}`), RawArguments: `{}`,
+					Signature: llm.SignatureGemini + "def"},
+			}},
+			{Role: llm.RoleTool, Parts: []llm.Part{
+				llm.ToolResultPart{CallID: "toolu_1", Name: "search", Content: "ok", Status: llm.ToolSucceeded},
+			}},
+		},
+	}, Config{})
+
+	blocks := body.Messages[1]["content"].([]any)
+	if len(blocks) != 1 || blocks[0].(map[string]any)["type"] != "tool_use" {
+		t.Fatalf("blocks = %v, want only the tool_use", blocks)
+	}
+	if _, sent := blocks[0].(map[string]any)["signature"]; sent {
+		t.Error("a Gemini tool-call signature was sent to Anthropic")
+	}
+}
+
+func TestBuildBodyAsksForVisibleThinkingFromModelsThatThinkUnasked(t *testing.T) {
+	messages := []llm.Message{llm.TextMessage(llm.RoleUser, "hi")}
+	raw := func(model string, reasoning *llm.ReasoningOptions) map[string]any {
+		t.Helper()
+		out, err := buildBody(llm.Request{Model: model, Messages: messages, Options: llm.Options{Reasoning: reasoning}}, Config{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var body map[string]any
+		if err := json.Unmarshal(out, &body); err != nil {
+			t.Fatal(err)
+		}
+		return body
+	}
+
+	for _, model := range []string{"claude-fable-5-1", "claude-opus-5", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5",
+		"anthropic/claude-opus-5.5", "us.anthropic.claude-sonnet-5-v1:0"} {
+		for _, reasoning := range []*llm.ReasoningOptions{nil, {}} {
+			body := raw(model, reasoning)
+			thinking, _ := body["thinking"].(map[string]any)
+			if thinking["type"] != "adaptive" || thinking["display"] != "summarized" {
+				t.Errorf("%s: thinking = %v, want adaptive and summarized", model, body["thinking"])
+			}
+			if _, sent := body["output_config"]; sent {
+				t.Errorf("%s: output_config = %v, want none: no effort was chosen", model, body["output_config"])
+			}
+			if body["max_tokens"] != float64(adaptiveMaxTokens) {
+				t.Errorf("%s: max_tokens = %v, want room for the thinking", model, body["max_tokens"])
+			}
+		}
+	}
+
+	// Sending a thinking field to these would turn thinking on.
+	for _, model := range []string{"claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-sonnet-4-6",
+		"claude-sonnet-4-5", "claude-3-7-sonnet-20250219", "gpt-5.6", "some-relay-model"} {
+		if body := raw(model, nil); body["thinking"] != nil {
+			t.Errorf("%s: thinking = %v, want absent", model, body["thinking"])
+		}
+	}
+
+	t.Run("a chosen effort is not overridden", func(t *testing.T) {
+		body := raw("claude-opus-5-5", &llm.ReasoningOptions{Effort: llm.EffortLow})
+		if config, _ := body["output_config"].(map[string]any); config["effort"] != "low" {
+			t.Errorf("output_config = %v", body["output_config"])
+		}
+	})
+}
+
+func TestThinkingMaxTokensFollowsEffort(t *testing.T) {
+	messages := []llm.Message{llm.TextMessage(llm.RoleUser, "hi")}
+	for effort, want := range map[llm.ReasoningEffort]int{
+		llm.EffortLow: adaptiveMaxTokens, llm.EffortMedium: adaptiveMaxTokens, llm.EffortHigh: adaptiveMaxTokens,
+		llm.EffortXHigh: deepMaxTokens, llm.EffortMax: deepMaxTokens,
+	} {
+		body := build(t, llm.Request{Model: "claude-opus-5-5", Messages: messages,
+			Options: llm.Options{Reasoning: &llm.ReasoningOptions{Effort: effort}}}, Config{})
+		if body.MaxTokens != want {
+			t.Errorf("effort %s: max_tokens = %d, want %d", effort, body.MaxTokens, want)
+		}
+	}
+
+	t.Run("a ceiling somebody chose wins", func(t *testing.T) {
+		chosen := 9000
+		body := build(t, llm.Request{Model: "claude-opus-5-5", Messages: messages,
+			Options: llm.Options{MaxTokens: &chosen, Reasoning: &llm.ReasoningOptions{Effort: llm.EffortMax}}}, Config{})
+		if body.MaxTokens != chosen {
+			t.Errorf("max_tokens = %d, want the request's %d", body.MaxTokens, chosen)
+		}
+		body = build(t, llm.Request{Model: "claude-opus-5-5", Messages: messages,
+			Options: llm.Options{Reasoning: &llm.ReasoningOptions{Effort: llm.EffortMax}}}, Config{MaxTokens: 12000})
+		if body.MaxTokens != 12000 {
+			t.Errorf("max_tokens = %d, want the configured 12000", body.MaxTokens)
+		}
+	})
+}
+
+func TestExtendedThinkingOnlyByModelGeneration(t *testing.T) {
+	for model, want := range map[string]bool{
+		"claude-opus-4-5":                           true,
+		"claude-opus-4-5-20251101":                  true,
+		"claude-sonnet-4-5-20250929":                true,
+		"claude-haiku-4-5":                          true,
+		"claude-opus-4-1-20250805":                  true,
+		"claude-opus-4-20250514":                    true,
+		"claude-sonnet-4-20250514":                  true,
+		"claude-3-7-sonnet-20250219":                true,
+		"anthropic/claude-opus-4.5":                 true,
+		"anthropic.claude-sonnet-4-5-20250929-v1:0": true,
+		"claude-sonnet-4-5@20250929":                true,
+		"claude-opus-4-6":                           false,
+		"claude-sonnet-4-6":                         false,
+		"claude-opus-4-8":                           false,
+		"claude-opus-5":                             false,
+		"claude-fable-5-1":                          false,
+		"claude-haiku-5-5":                          false,
+		"claude-latest":                             false,
+		"gpt-5.6":                                   false,
+	} {
+		if got := ExtendedThinkingOnly(model); got != want {
+			t.Errorf("ExtendedThinkingOnly(%q) = %v, want %v", model, got, want)
+		}
+	}
+}
+
+func TestBuildBodyMarksTheCacheableParts(t *testing.T) {
+	messages := []llm.Message{
+		llm.TextMessage(llm.RoleSystem, "be brief"),
+		llm.TextMessage(llm.RoleUser, "hi"),
+	}
+
+	t.Run("a marker on the system prompt and one on the request", func(t *testing.T) {
+		body := build(t, llm.Request{Model: "claude-opus-5-5", Messages: messages}, Config{})
+		if len(body.System) != 1 || body.System[0].CacheControl["type"] != "ephemeral" {
+			t.Errorf("system = %+v, want one block carrying an ephemeral marker", body.System)
+		}
+		if cc, _ := body.Extra["cache_control"].(map[string]any); cc["type"] != "ephemeral" {
+			t.Errorf("cache_control = %v, want the request-level automatic marker", body.Extra["cache_control"])
+		}
+	})
+
+	t.Run("explicit only leaves out the request-level field", func(t *testing.T) {
+		body := build(t, llm.Request{Model: "claude-opus-4-6", Messages: messages}, Config{ExplicitCachingOnly: true})
+		if _, sent := body.Extra["cache_control"]; sent {
+			t.Error("top-level cache_control was sent; the legacy Bedrock integration answers it with a 400")
+		}
+		if len(body.System) != 1 || body.System[0].CacheControl["type"] != "ephemeral" {
+			t.Errorf("system = %+v, want the explicit marker kept", body.System)
+		}
+	})
+
+	t.Run("no system prompt means no system field to mark", func(t *testing.T) {
+		body := build(t, llm.Request{Model: "m", Messages: messages[1:]}, Config{})
+		if body.System != nil {
+			t.Errorf("system = %+v, want absent", body.System)
+		}
+	})
 }

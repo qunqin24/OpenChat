@@ -22,13 +22,6 @@ import (
 // deployment actually sent, so that only the second kind is echoed.
 const syntheticIDPrefix = "gemini:"
 
-// metadataThoughtSignatures is where a thoughtSignature goes when the block it
-// belongs to has nowhere to put it. llm.ReasoningPart has a Signature field;
-// llm.ToolCallPart does not, and this API attaches signatures to function calls
-// too. Metadata is documented as exactly this: provider-native leftovers worth
-// keeping, owned by the adapter that wrote them.
-const metadataThoughtSignatures = "gemini.thought_signatures"
-
 // block is one content block being assembled. Text, reasoning and tool calls
 // share a struct because the difference between them is which fields are used.
 type block struct {
@@ -41,12 +34,19 @@ type block struct {
 	callID string
 	name   string
 	args   string
+
+	// callSignature is the thoughtSignature that came on the functionCall part.
+	// It is kept apart from signature because that one is a reasoning block's
+	// attestation, which this adapter never replays.
+	callSignature string
 }
 
 func (b *block) part() llm.Part {
 	switch b.kind {
 	case llm.PartReasoning:
-		return llm.ReasoningPart{Text: b.text.String(), Signature: b.signature.String()}
+		// Prefixed like a call's, so the Anthropic adapter, which replays any
+		// signature it does not recognise as its own, can tell this one is not.
+		return llm.ReasoningPart{Text: b.text.String(), Signature: callSignature(b.signature.String())}
 	case llm.PartToolCall:
 		// Arguments and RawArguments are the same bytes on this protocol, and
 		// that is the honest answer rather than a shortcut: the two fields
@@ -58,19 +58,22 @@ func (b *block) part() llm.Part {
 			Name:         b.name,
 			Arguments:    json.RawMessage(b.args),
 			RawArguments: b.args,
+			Signature:    callSignature(b.callSignature),
 		}
 	default:
 		return llm.TextPart{Text: b.text.String()}
 	}
 }
 
-// key names the block for the metadata map: a tool call by its id, anything
-// else by its position.
-func (b *block) key() string {
-	if b.kind == llm.PartToolCall {
-		return b.callID
+// callSignature namespaces a thoughtSignature for storage, on a tool call or a
+// reasoning block. The prefix is what stops another adapter replaying it, and
+// what lets request.go tell a signature this API issued from one it did not.
+// Reasoning is never read back here, so only a call's is ever stripped.
+func callSignature(raw string) string {
+	if raw == "" {
+		return ""
 	}
-	return strconv.Itoa(b.index)
+	return llm.SignatureGemini + raw
 }
 
 // emitFailure marks an error as the run layer's rather than the stream's, so
@@ -100,8 +103,6 @@ type assembler struct {
 	// within this turn, which is the only scope a call and its result are ever
 	// matched in.
 	toolCount int
-
-	signatures map[string]string
 
 	rawFinish string
 	started   bool
@@ -277,12 +278,11 @@ func (a *assembler) textPart(kind llm.PartKind, text, signature string) error {
 		a.active = b
 	}
 
-	if signature != "" {
-		if kind == llm.PartReasoning {
-			a.active.signature.WriteString(signature)
-		} else {
-			a.recordSignature(a.active.key(), signature)
-		}
+	if signature != "" && kind == llm.PartReasoning {
+		// A signature on answer text is the model's optional bookkeeping for
+		// quality (the API validates only the ones on function calls), and
+		// llm.TextPart has nowhere to keep it, so it is not replayed.
+		a.active.signature.WriteString(signature)
 	}
 	if text == "" {
 		return nil
@@ -339,9 +339,7 @@ func (a *assembler) functionCall(call wireFunctionCall, signature string) error 
 	if err := a.send(ev); err != nil {
 		return err
 	}
-	if signature != "" {
-		a.recordSignature(b.key(), signature)
-	}
+	b.callSignature = signature
 	return a.send(llm.PartEndEvent(b.index, b.part()))
 }
 
@@ -355,26 +353,18 @@ func syntheticID(ordinal int, name string) string {
 	return syntheticIDPrefix + strconv.Itoa(ordinal) + ":" + name
 }
 
-func (a *assembler) recordSignature(key, signature string) {
-	if a.signatures == nil {
-		a.signatures = map[string]string{}
-	}
-	a.signatures[key] += signature
-}
-
 // attachSignature files a signature that arrived on its own. It belongs to
 // whatever block the model was in the middle of; with no block at all there is
-// nothing it attests to, and keeping it would mean inventing one.
+// nothing it attests to, and keeping it would mean inventing one. Only a
+// reasoning block has a place for one: a function call's arrives on the call's
+// own part, and one trailing after answer text is the optional kind.
 func (a *assembler) attachSignature(signature string) {
 	if len(a.blocks) == 0 {
 		return
 	}
-	b := a.blocks[len(a.blocks)-1]
-	if b.kind == llm.PartReasoning {
+	if b := a.blocks[len(a.blocks)-1]; b.kind == llm.PartReasoning {
 		b.signature.WriteString(signature)
-		return
 	}
-	a.recordSignature(b.key(), signature)
 }
 
 func (a *assembler) closeActive() error {
@@ -394,9 +384,6 @@ func (a *assembler) response() llm.ModelResponse {
 		parts = append(parts, b.part())
 	}
 	resp.Message = llm.Message{Role: llm.RoleAssistant, Parts: parts}
-	if len(a.signatures) > 0 {
-		resp.Metadata = map[string]any{metadataThoughtSignatures: a.signatures}
-	}
 	return resp
 }
 
@@ -460,7 +447,8 @@ func (a *assembler) finishReason() (llm.FinishReason, error) {
 	case "MAX_TOKENS":
 		return llm.FinishLength, nil
 
-	case "SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "IMAGE_SAFETY":
+	case "SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII",
+		"IMAGE_SAFETY", "IMAGE_PROHIBITED_CONTENT", "IMAGE_RECITATION", "ESCALATION":
 		// The provider stopped the turn over what was being said, which is
 		// exactly what FinishContentFilter means. Calling any of these a
 		// "stop" would present withheld content as a finished answer, and they
@@ -468,14 +456,21 @@ func (a *assembler) finishReason() (llm.FinishReason, error) {
 		// between a safety hit and a recitation hit survives.
 		return llm.FinishContentFilter, nil
 
-	case "MALFORMED_FUNCTION_CALL":
-		// The model produced a call this API could not parse. There is no
-		// FinishReason for "the turn ended in something unusable", and the
-		// nearest ones are both lies: FinishStop would show a broken turn as a
-		// complete answer, FinishToolCalls would send the runner looking for a
-		// call that does not exist. The stream itself was well formed, so this
-		// is the provider failing rather than a protocol violation.
-		return "", llm.Errorf(llm.ErrorProvider, nil, "the model produced a function call the provider could not parse")
+	case "MALFORMED_FUNCTION_CALL", "MALFORMED_RESPONSE", "UNEXPECTED_TOOL_CALL", "TOO_MANY_TOOL_CALLS",
+		"MISSING_THOUGHT_SIGNATURE", "LANGUAGE", "OTHER", "PUP_LIMITED_DISABLED":
+		// The turn ended in something unusable. There is no FinishReason for
+		// that, and the nearest ones are both lies: FinishStop would show a
+		// broken turn as a complete answer, FinishToolCalls would send the
+		// runner looking for a call that does not exist. The stream itself was
+		// well formed, so this is the provider failing rather than a protocol
+		// violation, and the raw word goes in Code because it is what tells an
+		// operator a rejected history (MISSING_THOUGHT_SIGNATURE) from a model
+		// that merely mangled a call.
+		return "", &llm.Error{
+			Kind:    llm.ErrorProvider,
+			Code:    a.rawFinish,
+			Message: "the provider ended the turn without a usable answer",
+		}
 
 	case "":
 		// A stream that simply stops is indistinguishable from one that was cut

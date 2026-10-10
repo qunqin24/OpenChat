@@ -97,12 +97,16 @@ func run() error {
 	}
 
 	server := api.NewServer(cfg, pool, store, runner)
+	// A conversation's first answer gets it a title, in the background.
+	runner.AfterRun(server.TitleAfterRun)
 	// Before the listener opens, so a server started with debug logging on logs
 	// its own startup in detail — which is when you want it most.
 	server.LoadSettings(ctx)
 	// Deliberately not waited on: the model catalogue comes from a third party,
 	// and a boot that blocked on it would be a boot somebody else can hold up.
 	server.StartCatalogRefresh(ctx)
+	// Temporary chats are deleted a day after they were made.
+	server.StartCleanup(ctx)
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

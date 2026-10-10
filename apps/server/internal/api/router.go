@@ -73,15 +73,33 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 			r.Patch("/auth/me", wrapper.UpdateMe)
 			r.Post("/auth/password", wrapper.ChangePassword)
 
+			// Personal memory: always the caller's own, from the session.
+			r.Get("/me/personalization", wrapper.GetPersonalization)
+			r.Patch("/me/personalization", wrapper.UpdatePersonalization)
+			r.Get("/me/memories", wrapper.ListMemories)
+			r.Post("/me/memories", wrapper.CreateMemory)
+			r.Delete("/me/memories", wrapper.ClearMemories)
+			r.Patch("/me/memories/{memoryId}", wrapper.UpdateMemory)
+			r.Delete("/me/memories/{memoryId}", wrapper.DeleteMemory)
+			r.Get("/me/memory-events", wrapper.ListMemoryEvents)
+			r.Post("/me/memory-events/{eventId}/undo", wrapper.UndoMemoryEvent)
+
 			r.Get("/conversations", wrapper.ListConversations)
 			r.Post("/conversations", wrapper.CreateConversation)
 			r.Get("/conversations/{conversationId}", wrapper.GetConversation)
 			r.Patch("/conversations/{conversationId}", wrapper.UpdateConversation)
 			r.Delete("/conversations/{conversationId}", wrapper.DeleteConversation)
+			r.Post("/conversations/{conversationId}/title", wrapper.GenerateConversationTitle)
+			r.Get("/conversations/{conversationId}/context", wrapper.GetConversationContext)
 			r.Get("/conversations/{conversationId}/messages", wrapper.ListMessages)
 			r.Post("/conversations/{conversationId}/messages", wrapper.CreateMessage)
 			r.Get("/conversations/{conversationId}/events", wrapper.StreamConversationEvents)
+			r.Post("/conversations/{conversationId}/messages/{messageId}/edit", wrapper.EditMessage)
+			r.Post("/conversations/{conversationId}/messages/{messageId}/switch", wrapper.SwitchVersion)
+			r.Post("/conversations/{conversationId}/regenerate", wrapper.RegenerateAnswer)
+			r.Post("/conversations/{conversationId}/tool-calls/{callId}/answer", wrapper.AnswerQuestion)
 			r.Post("/conversations/{conversationId}/runs/{runId}/cancel", wrapper.CancelRun)
+			r.Post("/conversations/{conversationId}/runs/{runId}/choose", wrapper.ChooseAnswer)
 			r.Get("/conversations/{conversationId}/images", wrapper.GetConversationImage)
 
 			// Any signed-in user: these are the models a conversation can use,
@@ -96,7 +114,7 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 			r.Group(func(r chi.Router) {
 				r.Use(mw.RequireAdmin)
 
-				r.Get("/admin/stats", wrapper.GetAdminStats)
+				r.Get("/admin/dashboard", wrapper.GetAdminDashboard)
 				r.Get("/admin/system", wrapper.GetSystemSettings)
 				r.Get("/admin/web-search", wrapper.GetWebSearchSettings)
 				r.Patch("/admin/web-search", wrapper.UpdateWebSearchSettings)
@@ -130,6 +148,7 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 				r.Put("/admin/models/{modelId}/settings", wrapper.UpdateModelSettings)
 				r.Delete("/admin/models/{modelId}/settings", wrapper.ResetModelSettings)
 
+				r.Get("/admin/usage-logs", wrapper.ListUsageLogs)
 				r.Get("/admin/users", wrapper.ListUsers)
 				r.Post("/admin/users", wrapper.CreateUser)
 				r.Post("/admin/users/bulk", wrapper.BulkUpdateUsers)

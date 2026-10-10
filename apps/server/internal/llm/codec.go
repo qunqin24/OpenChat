@@ -27,7 +27,10 @@ type partJSON struct {
 	// text, reasoning
 	Text string `json:"text,omitempty"`
 
-	// reasoning
+	// text
+	Phase string `json:"phase,omitempty"`
+
+	// reasoning, tool_call
 	Signature string `json:"signature,omitempty"`
 	Redacted  []byte `json:"redacted,omitempty"`
 
@@ -69,11 +72,11 @@ func UnmarshalPart(data []byte) (Part, error) {
 func toPartJSON(part Part) partJSON {
 	switch p := part.(type) {
 	case TextPart:
-		return partJSON{Type: PartText, Text: p.Text}
+		return partJSON{Type: PartText, Text: p.Text, Phase: p.Phase}
 	case ReasoningPart:
 		return partJSON{Type: PartReasoning, Text: p.Text, Signature: p.Signature, Redacted: p.Redacted, DurationMS: p.DurationMS}
 	case ToolCallPart:
-		return partJSON{Type: PartToolCall, ID: p.ID, Name: p.Name, Arguments: p.Arguments, RawArguments: p.RawArguments}
+		return partJSON{Type: PartToolCall, ID: p.ID, Name: p.Name, Arguments: p.Arguments, RawArguments: p.RawArguments, Signature: p.Signature}
 	case ToolResultPart:
 		return partJSON{Type: PartToolResult, CallID: p.CallID, Name: p.Name, Content: p.Content,
 			Status: p.Status, Error: p.Error, Details: p.Details, DurationMS: p.DurationMS}
@@ -87,11 +90,11 @@ func toPartJSON(part Part) partJSON {
 func (raw partJSON) part() (Part, error) {
 	switch raw.Type {
 	case PartText:
-		return TextPart{Text: raw.Text}, nil
+		return TextPart{Text: raw.Text, Phase: raw.Phase}, nil
 	case PartReasoning:
 		return ReasoningPart{Text: raw.Text, Signature: raw.Signature, Redacted: raw.Redacted, DurationMS: raw.DurationMS}, nil
 	case PartToolCall:
-		return ToolCallPart{ID: raw.ID, Name: raw.Name, Arguments: raw.Arguments, RawArguments: raw.RawArguments}, nil
+		return ToolCallPart{ID: raw.ID, Name: raw.Name, Arguments: raw.Arguments, RawArguments: raw.RawArguments, Signature: raw.Signature}, nil
 	case PartToolResult:
 		return ToolResultPart{CallID: raw.CallID, Name: raw.Name, Content: raw.Content, Status: raw.Status,
 			Error: raw.Error, Details: raw.Details, DurationMS: raw.DurationMS}, nil

@@ -15,6 +15,7 @@ func toConversation(row sqlc.Conversation) Conversation {
 		Model:           row.Model,
 		ReasoningEffort: &effort,
 		WebSearch:       row.WebSearch,
+		Temporary:       row.Temporary,
 		CreatedAt:       row.CreatedAt.Time,
 		UpdatedAt:       row.UpdatedAt.Time,
 	}
@@ -47,11 +48,10 @@ var errInvalidEffort = httpx.NewFieldError("reasoningEffort", "invalid_reasoning
 
 func toSessionUser(row sqlc.User) SessionUser {
 	return SessionUser{
-		Id:        row.ID,
-		Email:     openapi_types.Email(row.Email),
-		Name:      row.Name,
-		Role:      UserRole(row.Role),
-		AvatarUrl: avatarURL(row.Email),
+		Id:    row.ID,
+		Email: openapi_types.Email(row.Email),
+		Name:  row.Name,
+		Role:  UserRole(row.Role),
 	}
 }
 
@@ -63,7 +63,6 @@ func toUser(row sqlc.User) User {
 		Role:      UserRole(row.Role),
 		Disabled:  row.DisabledAt.Valid,
 		CreatedAt: row.CreatedAt.Time,
-		AvatarUrl: avatarURL(row.Email),
 	}
 	if row.LastSeenAt.Valid {
 		seen := row.LastSeenAt.Time

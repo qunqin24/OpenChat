@@ -1,6 +1,6 @@
 -- name: CreateConversation :one
-INSERT INTO conversations (user_id, title, model)
-VALUES ($1, $2, $3)
+INSERT INTO conversations (user_id, title, model, temporary)
+VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: GetConversation :one
@@ -18,6 +18,8 @@ SELECT *
 FROM conversations
 WHERE user_id = sqlc.arg('user_id')
   AND deleted_at IS NULL
+  -- A temporary conversation is not history: it is reached by its link, once.
+  AND NOT temporary
   AND (sqlc.narg('cursor_updated_at')::timestamptz IS NULL
     OR (updated_at, id) < (sqlc.narg('cursor_updated_at')::timestamptz, sqlc.narg('cursor_id')::uuid))
 ORDER BY updated_at DESC, id DESC
@@ -70,3 +72,35 @@ WHERE id = sqlc.arg('id')
   AND user_id = sqlc.arg('user_id')
   AND deleted_at IS NULL
 RETURNING *;
+
+-- name: SetGeneratedTitle :one
+-- A generated title, only over the default one: a conversation the user has
+-- renamed in the meantime keeps their name. Not a change of activity, so the
+-- conversation keeps its place in the list.
+UPDATE conversations
+SET title = sqlc.arg('title')
+WHERE id = sqlc.arg('id')
+  AND title = sqlc.arg('default_title')
+  AND deleted_at IS NULL
+RETURNING *;
+
+-- name: LockConversation :one
+-- Held until the transaction ends: whatever moves the conversation's current
+-- leaf — a message, an edit, a switch of branch — queues here, and reads the
+-- leaf the one before it left.
+SELECT *
+FROM conversations
+WHERE id = $1
+FOR UPDATE;
+
+-- name: SetCurrentInput :exec
+-- Moves the reader to this user message, a leaf of the conversation, and notes
+-- that it was the branch shown just now (see PickBranchLeaf).
+WITH shown AS (
+    UPDATE messages
+        SET shown_at = clock_timestamp()
+        WHERE messages.id = sqlc.arg('input_id')
+            AND messages.conversation_id = sqlc.arg('conversation_id'))
+UPDATE conversations
+SET current_input_id = sqlc.arg('input_id')
+WHERE conversations.id = sqlc.arg('conversation_id');

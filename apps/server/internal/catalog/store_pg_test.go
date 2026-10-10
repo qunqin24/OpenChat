@@ -42,6 +42,11 @@ func testPool(t *testing.T) *pgxpool.Pool {
 			t.Fatalf("clear %s: %v", table, err)
 		}
 	}
+	// The refresh's bookkeeping too: a server ever started against this
+	// database has written it, and the state test starts from nothing.
+	if _, err := pool.Exec(ctx, "DELETE FROM app_settings WHERE key = $1", stateKey); err != nil {
+		t.Fatalf("clear %s: %v", stateKey, err)
+	}
 	return pool
 }
 

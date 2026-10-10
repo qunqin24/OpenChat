@@ -136,15 +136,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/admin/stats": {
+    "/admin/dashboard": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Dashboard totals and activity trend */
-        get: operations["getAdminStats"];
+        /**
+         * Operating figures from the usage ledger
+         * @description What the model requests of a window look like: volume, spend, errors,
+         *     latency and cache use, next to the equal-length window before it, plus
+         *     the trend and the busiest models, channels and users. Buckets are hours
+         *     for `24h` and calendar days otherwise; the window runs up to now and
+         *     starts at the beginning of its first bucket.
+         */
+        get: operations["getAdminDashboard"];
         put?: never;
         post?: never;
         delete?: never;
@@ -170,6 +177,29 @@ export interface paths {
          *     than derived from whether the table is empty.
          */
         post: operations["createUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/usage-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List model requests
+         * @description One row per request made to a model -- every attempt of a run (a retry
+         *     is its own row, and so is a failure) and every background title -- newest
+         *     first. Cost and prices are those of the moment the request was made.
+         *     The summary covers the whole filtered range, not just this page.
+         */
+        get: operations["listUsageLogs"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -622,6 +652,57 @@ export interface paths {
         patch: operations["updateConversation"];
         trace?: never;
     };
+    "/conversations/{conversationId}/title": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Name a conversation from what it is about
+         * @description Has the task model (System settings), else the conversation's own
+         *     model, read the conversation's latest exchanges and title it, then
+         *     renames the conversation to that title, replacing whatever it was
+         *     called. Waits for the model. 409 `nothing_to_title` for a conversation
+         *     with no messages; 502 `title_failed` when the model gave no title.
+         */
+        post: operations["generateConversationTitle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/conversations/{conversationId}/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * How much of the model's context window the conversation fills
+         * @description Read from the conversation's latest answered request: everything it
+         *     was sent, cached or not, plus what it wrote. `usedTokens` is null for a
+         *     conversation nothing has been answered in yet. The window it is
+         *     measured against is the model's `contextLimit` (ChatModel).
+         */
+        get: operations["getConversationContext"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/conversations/{conversationId}/messages": {
         parameters: {
             query?: never;
@@ -631,7 +712,15 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** List messages in a conversation */
+        /**
+         * List messages in a conversation
+         * @description The transcript is paged from its end: with no `before` the page is the
+         *     conversation's newest rows, and `before` (the previous page's
+         *     `olderCursor`) fetches the page of rows older than it. Within a page
+         *     the items stay in chronological order, oldest first, so a client
+         *     prepends each older page to what it holds. A page without
+         *     `olderCursor` reaches the start of the conversation.
+         */
         get: operations["listMessages"];
         put?: never;
         /**
@@ -656,6 +745,136 @@ export interface paths {
          *     caller's).
          */
         post: operations["createMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/conversations/{conversationId}/messages/{messageId}/edit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask a question again, reworded
+         * @description Starts a new branch from any question on the branch shown. The new
+         *     wording is written as a new user message with the same parent as the
+         *     one edited — a sibling, `editOf` the first version of the question —
+         *     and becomes the conversation's current leaf; a run answers it, with the
+         *     model, effort and web choice given, as sending does, and sees only the
+         *     messages before it. What followed the edited question is not deleted:
+         *     it is off the branch shown and comes back when the question's
+         *     `branches` pager is switched back (`switchVersion`). The new message
+         *     carries the edited one's files. 409 `not_on_path` when the message is
+         *     not on the branch shown, `conversation_busy` while a run is going.
+         */
+        post: operations["editMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/conversations/{conversationId}/messages/{messageId}/switch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Show another version of a question, and the branch under it
+         * @description Moves the conversation to another version of a question (a message of
+         *     the branch shown's `branches`, see `Message.branches`): the shown
+         *     branch then runs through that version and on to the end of the branch
+         *     under it that was last worked on, so the turns that followed it come
+         *     back, and the ones that followed the version just left are set aside.
+         *     Every later request is built from, and every page of messages is read
+         *     along, the new branch.
+         *
+         *     Responds with the newest page of the new branch (as `listMessages`
+         *     without `before`), which replaces the transcript the client holds.
+         *     409 `not_on_path` when the message is not a version of a question on
+         *     the branch shown, `conversation_busy` while a run is going.
+         */
+        post: operations["switchVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/conversations/{conversationId}/regenerate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer the last message again
+         * @description Starts another run on the last user message of the branch shown, with the
+         *     model, effort and web choice given (else the conversation's, which it
+         *     then remembers, as sending does). The answer it replaces is kept as a
+         *     version (`Message.versions`, `chooseAnswer`) but is no longer shown or
+         *     sent to a model. Followed on the events stream like any run; 409
+         *     `conversation_busy` while one is going, 404 `nothing_to_answer` in a
+         *     conversation with no message.
+         */
+        post: operations["regenerateAnswer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/conversations/{conversationId}/tool-calls/{callId}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                callId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer the model's question
+         * @description The model called `ask_user` and its run stopped there, finished as
+         *     `awaiting_input`, with the call on the transcript and no result. This
+         *     writes the answers as the call's result and starts the run that goes
+         *     on from it, with the model, effort and web choice given, as sending
+         *     does. The new run is part of the same answer: it continues the run
+         *     that asked (`Run.continues`), shares its input and shows under the same
+         *     reply, and is followed on the events stream like any run. The result
+         *     row is announced in the same batch as the run starting.
+         *
+         *     Only the question at the end of the transcript can be answered: 409
+         *     `not_pending` for one already answered, one the user wrote past, one
+         *     whose answer was redone, or a call that is not an `ask_user` waiting
+         *     for its answer. 409 `conversation_busy` while a run is going; 400
+         *     `invalid_answers` when the answers do not fit the questions.
+         */
+        post: operations["answerQuestion"];
         delete?: never;
         options?: never;
         head?: never;
@@ -712,6 +931,154 @@ export interface paths {
          *     Stopping a run that already finished is a no-op.
          */
         post: operations["cancelRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/conversations/{conversationId}/runs/{runId}/choose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                runId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Show another version of the last answer
+         * @description Makes this run the answer shown — and the one a later message builds
+         *     on — in place of the other versions of the same input (see
+         *     `Message.versions`). Only the last turn of the branch shown can
+         *     switch: an earlier one has later turns built on the version it shows,
+         *     so it answers 409 `not_latest`, as it does while a run is going
+         *     (`conversation_busy`). Responds with the run's input, then the run's
+         *     rows: together they replace the turn the client holds.
+         */
+        post: operations["chooseAnswer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/personalization": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your custom instructions and memory switch */
+        get: operations["getPersonalization"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change your custom instructions or memory switch
+         * @description Only the fields present are changed. New conversations take the change;
+         *     one already running keeps what it began with.
+         */
+        patch: operations["updatePersonalization"];
+        trace?: never;
+    };
+    "/me/memories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Your memories, oldest first
+         * @description Always your own: no endpoint, the administrator's included, returns
+         *     anyone else's. The list is capped (`Personalization.memoryLimit`), so it
+         *     is not paged.
+         */
+        get: operations["listMemories"];
+        put?: never;
+        /**
+         * Write a memory yourself
+         * @description 409 `memory_full` at the cap and `memory_duplicate` for one already there.
+         */
+        post: operations["createMemory"];
+        /**
+         * Delete every memory
+         * @description Also forgets what the memory log holds about them.
+         */
+        delete: operations["clearMemories"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/memories/{memoryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                memoryId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a memory */
+        delete: operations["deleteMemory"];
+        options?: never;
+        head?: never;
+        /** Rewrite a memory */
+        patch: operations["updateMemory"];
+        trace?: never;
+    };
+    "/me/memory-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What the model recently changed in your memories
+         * @description The last thirty days, newest first: the "recently learned" list, and
+         *     what the chat looks up to know whether a change can still be undone.
+         *     Your own edits are not logged.
+         */
+        get: operations["listMemoryEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/memory-events/{eventId}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo a change the model made
+         * @description An added memory is removed, an edited one put back, a deleted one
+         *     restored. 409 `memory_changed` when the memory was edited since (the
+         *     edit wins), `already_undone`, `memory_full` or `memory_duplicate` when a
+         *     restore cannot be made.
+         */
+        post: operations["undoMemoryEvent"];
         delete?: never;
         options?: never;
         head?: never;
@@ -863,10 +1230,26 @@ export interface components {
         Role: "system" | "user" | "assistant" | "tool";
         /** @enum {string} */
         MessageStatus: "pending" | "streaming" | "complete" | "failed";
+        /** @description Both fields are left out when nothing has been answered yet. */
+        ContextUsage: {
+            /**
+             * Format: int64
+             * @description Tokens the latest answered request took, in and out.
+             */
+            usedTokens?: number | null;
+            /** @description The model that request went to. */
+            model?: string | null;
+        };
         Conversation: {
             /** Format: uuid */
             id: string;
             title: string;
+            /**
+             * @description A temporary chat: left out of the history, given no memories (custom
+             *     instructions still apply) and no memory tool, never titled, and
+             *     deleted a day after it was made. Set when it is created.
+             */
+            temporary: boolean;
             model?: string | null;
             reasoningEffort?: components["schemas"]["ReasoningEffort"];
             /**
@@ -898,6 +1281,7 @@ export interface components {
             model?: string;
             reasoningEffort?: components["schemas"]["ReasoningEffort"];
             webSearch?: boolean;
+            temporary?: boolean;
         };
         UpdateConversationRequest: {
             title?: string;
@@ -944,6 +1328,27 @@ export interface components {
             errorCode?: string;
             usage?: components["schemas"]["Usage"];
             attachments?: components["schemas"]["Attachment"][];
+            /**
+             * @description User messages whose question was answered more than once, by
+             *     regenerating: every run that answered it, oldest first. One of them
+             *     is shown — the `runId` of the rows that follow — and the others are
+             *     kept to switch back to (`chooseAnswer`).
+             */
+            versions?: string[];
+            /**
+             * @description User messages whose question has other versions (it was asked
+             *     again in new words, `editMessage`): the message and its siblings —
+             *     the messages that follow the same parent — oldest first. One of
+             *     them is on the branch shown and the others are kept, with what
+             *     followed them, to switch to (`switchVersion`). Absent when the
+             *     question has only one version.
+             */
+            branches?: string[];
+            /**
+             * Format: uuid
+             * @description User messages only. The first version of the question this one rewords.
+             */
+            editOf?: string;
             /** Format: date-time */
             createdAt: string;
         };
@@ -1017,7 +1422,11 @@ export interface components {
         };
         MessagePage: {
             items: components["schemas"]["Message"][];
-            nextCursor?: string | null;
+            /**
+             * @description Pass as `before` to fetch the page of rows older than this one.
+             *     Absent when this page reaches the start of the conversation.
+             */
+            olderCursor?: string | null;
         };
         CreateMessageRequest: {
             content: string;
@@ -1034,6 +1443,47 @@ export interface components {
             requestId?: string;
             attachmentIds?: string[];
         };
+        EditMessageRequest: {
+            content: string;
+            model?: string;
+            reasoningEffort?: components["schemas"]["ReasoningEffort"];
+            webSearch?: boolean;
+            /** @description Chosen by the client; a retry with the same id finds the same run. */
+            requestId?: string;
+        };
+        RegenerateRequest: {
+            model?: string;
+            reasoningEffort?: components["schemas"]["ReasoningEffort"];
+            webSearch?: boolean;
+            /** @description Chosen by the client; a retry with the same id finds the same run. */
+            requestId?: string;
+        };
+        AnswerQuestionRequest: {
+            /**
+             * @description One entry per question, in the order asked. Each takes the options
+             *     chosen (by label) and/or text the user wrote instead; a question
+             *     that is not `multiSelect` takes one of the two, not both.
+             */
+            answers: {
+                selected: string[];
+                other?: string;
+            }[];
+            model?: string;
+            reasoningEffort?: components["schemas"]["ReasoningEffort"];
+            webSearch?: boolean;
+            /** @description Chosen by the client; a retry with the same id finds the same run. */
+            requestId?: string;
+        };
+        AnswerQuestionResponse: {
+            /** @description The user message the answer is to, which the new run shares with the one that asked. */
+            message: components["schemas"]["Message"];
+            /**
+             * @description The tool row written for the call. Its result's `details.answers`
+             *     holds the answers by question position, as `{selected, other}`.
+             */
+            result: components["schemas"]["Message"];
+            run: components["schemas"]["Run"];
+        };
         CreateMessageResponse: {
             message: components["schemas"]["Message"];
             run: components["schemas"]["Run"];
@@ -1044,11 +1494,23 @@ export interface components {
             id: string;
             /** Format: uuid */
             conversationId: string;
-            /** @enum {string} */
-            status: "running" | "completed" | "failed" | "cancelled";
+            /**
+             * @description `awaiting_input` is a run that stopped to ask the user something
+             *     (`ask_user`): finished, with the call unanswered on the transcript.
+             *     Answering starts a run that continues it.
+             * @enum {string}
+             */
+            status: "running" | "completed" | "failed" | "cancelled" | "awaiting_input";
             model: string;
             reasoningEffort?: components["schemas"]["ReasoningEffort"];
             errorCode?: string;
+            /**
+             * Format: uuid
+             * @description Set on the run that goes on after a question was answered: the run
+             *     that began the answer (never a middle one). Its rows show in the
+             *     same reply, and the two are one version of the turn.
+             */
+            continues?: string;
             /**
              * Format: int64
              * @description Bumped by every change; see the events stream.
@@ -1076,8 +1538,11 @@ export interface components {
         ToolSlot: {
             callId: string;
             name: string;
-            /** @enum {string} */
-            status: "pending" | "running" | "done";
+            /**
+             * @description `awaiting` is a question for the user: nothing runs, and the run ends on it.
+             * @enum {string}
+             */
+            status: "pending" | "running" | "done" | "awaiting";
             /** Format: uuid */
             messageId?: string;
         };
@@ -1109,7 +1574,7 @@ export interface components {
             version: number;
             events: components["schemas"]["RunEvent"][];
         };
-        RunEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["RunFinishedEvent"] | components["schemas"]["GenerationStartedEvent"] | components["schemas"]["PartStartedEvent"] | components["schemas"]["PartDeltaEvent"] | components["schemas"]["PartEndedEvent"] | components["schemas"]["MessageAppendedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"] | components["schemas"]["RetryScheduledEvent"];
+        RunEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["RunFinishedEvent"] | components["schemas"]["GenerationStartedEvent"] | components["schemas"]["PartStartedEvent"] | components["schemas"]["PartDeltaEvent"] | components["schemas"]["PartEndedEvent"] | components["schemas"]["MessageAppendedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"] | components["schemas"]["RetryScheduledEvent"] | components["schemas"]["TitleChangedEvent"];
         RunStartedEvent: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -1204,6 +1669,99 @@ export interface components {
             at: string;
             errorCode: string;
         };
+        /**
+         * @description The conversation was given a title, generated from its first exchange
+         *     after the run that answered it finished. Sent in a batch of its own,
+         *     under that run's id and last version — so it is not a step of the run
+         *     and a client applies it whatever run state it holds.
+         */
+        TitleChangedEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "title_changed";
+            title: string;
+        };
+        Personalization: {
+            /** @description Custom instructions about the user. Part of every conversation's system prompt, temporary ones included. */
+            aboutYou: string;
+            /** @description Custom instructions about how answers should be written. */
+            responseStyle: string;
+            /**
+             * @description Your own switch. Off, no conversation of yours reads or writes
+             *     memories and the model is not offered the memory tool.
+             */
+            memoryEnabled: boolean;
+            /**
+             * @description The administrator's switch (`SystemSettings.memory`). Off, memory is
+             *     off for everyone whatever `memoryEnabled` says.
+             */
+            memoryAllowed: boolean;
+            /** @description Characters allowed in each instructions field. */
+            instructionLimit: number;
+            /** @description Memories allowed per person. */
+            memoryLimit: number;
+            /** @description Characters allowed in one memory. */
+            memoryLength: number;
+        };
+        /** @description Only the fields present are changed. */
+        UpdatePersonalizationRequest: {
+            aboutYou?: string;
+            responseStyle?: string;
+            memoryEnabled?: boolean;
+        };
+        /**
+         * @description Who wrote it: `user` by hand, `model` with its memory tool, `auto` is
+         *     reserved for learning from conversations (not offered yet).
+         * @enum {string}
+         */
+        MemorySource: "user" | "model" | "auto";
+        Memory: {
+            /** Format: uuid */
+            id: string;
+            content: string;
+            source: components["schemas"]["MemorySource"];
+            /**
+             * Format: uuid
+             * @description The conversation it was learned in, while that still exists.
+             */
+            conversationId?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        MemoryList: {
+            items: components["schemas"]["Memory"][];
+        };
+        MemoryRequest: {
+            /**
+             * @description One sentence. Whitespace is collapsed; 400 `memory_empty` or
+             *     `memory_too_long` (see `Personalization.memoryLength`).
+             */
+            content: string;
+        };
+        MemoryEvent: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            memoryId: string;
+            /** @enum {string} */
+            op: "add" | "update" | "delete";
+            before?: string | null;
+            after?: string | null;
+            source: components["schemas"]["MemorySource"];
+            /** Format: uuid */
+            conversationId?: string | null;
+            /** Format: date-time */
+            undoneAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        MemoryEventList: {
+            items: components["schemas"]["MemoryEvent"][];
+        };
         ChatFeatures: {
             webSearch: boolean;
         };
@@ -1260,17 +1818,15 @@ export interface components {
             email: string;
             name: string;
             role: components["schemas"]["UserRole"];
-            avatarUrl: components["schemas"]["AvatarUrl"];
+            avatarUrl?: components["schemas"]["AvatarUrl"];
         };
         /**
          * Format: uri
-         * @description Where to fetch this account's picture. Derived from the address rather
-         *     than stored, so it is the server's answer to "what does this person
-         *     look like" and not a column — when uploads exist, this field points at
-         *     them instead and no caller changes.
-         *
-         *     It resolves to 404 when the address has no picture registered, which is
-         *     the signal to fall back to initials.
+         * @description An uploaded picture of the account, once accounts can have one. Absent
+         *     today: every client draws an account as the first letter of its name
+         *     on a colour derived from its id. No third-party avatar service is
+         *     asked — that would tell it who is being looked at, from every page
+         *     that shows a name.
          */
         AvatarUrl: string;
         User: {
@@ -1280,7 +1836,7 @@ export interface components {
             email: string;
             name: string;
             role: components["schemas"]["UserRole"];
-            avatarUrl: components["schemas"]["AvatarUrl"];
+            avatarUrl?: components["schemas"]["AvatarUrl"];
             disabled: boolean;
             /** Format: date-time */
             createdAt: string;
@@ -1293,6 +1849,133 @@ export interface components {
             total: number;
             page: number;
             limit: number;
+        };
+        /**
+         * @description `chat` is a model request of a run; `title` is the background request
+         *     that names a conversation.
+         * @enum {string}
+         */
+        UsageKind: "chat" | "title";
+        /**
+         * @description A user stopping a reply is `ok`; only a failed request is `error`.
+         * @enum {string}
+         */
+        UsageStatus: "ok" | "error";
+        UsageLog: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: date-time
+             * @description When the request started.
+             */
+            createdAt: string;
+            kind: components["schemas"]["UsageKind"];
+            status: components["schemas"]["UsageStatus"];
+            /** @description The code the chat localises (model_auth, model_rate_limited, ...). */
+            errorCode?: string | null;
+            /** @description Short, scrubbed and truncated; for operators. */
+            errorMessage?: string | null;
+            /** Format: uuid */
+            userId?: string | null;
+            userName?: string | null;
+            userEmail?: string | null;
+            /** Format: uuid */
+            conversationId?: string | null;
+            /** Format: uuid */
+            runId?: string | null;
+            /** Format: uuid */
+            channelId?: string | null;
+            /** @description The channel's name when the request was made. */
+            channelName: string;
+            /** @description The model id the request asked for. */
+            model: string;
+            /** @description The model the provider says it served; empty when it did not say. */
+            servedModel: string;
+            /**
+             * Format: int64
+             * @description Excludes the cached part.
+             */
+            inputTokens: number;
+            /**
+             * Format: int64
+             * @description Includes reasoning.
+             */
+            outputTokens: number;
+            /** Format: int64 */
+            reasoningTokens: number;
+            /** Format: int64 */
+            cacheReadTokens: number;
+            /** Format: int64 */
+            cacheWriteTokens: number;
+            /**
+             * Format: double
+             * @description USD per million tokens.
+             */
+            inputPrice?: number | null;
+            /** Format: double */
+            outputPrice?: number | null;
+            /** Format: double */
+            cacheReadPrice?: number | null;
+            /** Format: double */
+            cacheWritePrice?: number | null;
+            /**
+             * Format: double
+             * @description USD. Null when the price is unknown or the provider reported no usage.
+             */
+            cost?: number | null;
+            streamed: boolean;
+            /**
+             * Format: int64
+             * @description Request start to the first content, reasoning or tool-call delta.
+             */
+            firstTokenMs?: number | null;
+            /** Format: int64 */
+            durationMs: number;
+        };
+        UsageSummary: {
+            /** Format: int64 */
+            requests: number;
+            /** Format: int64 */
+            errors: number;
+            /** Format: int64 */
+            inputTokens: number;
+            /** Format: int64 */
+            outputTokens: number;
+            /**
+             * Format: double
+             * @description USD; unpriced requests add nothing.
+             */
+            cost: number;
+            /**
+             * Format: int64
+             * @description Of the successful requests.
+             */
+            cacheReadTokens: number;
+            /**
+             * Format: int64
+             * @description Of the successful requests.
+             */
+            cacheWriteTokens: number;
+            /**
+             * Format: double
+             * @description Token-weighted: cacheReadTokens / (inputTokens + cacheReadTokens +
+             *     cacheWriteTokens), over successful requests. Null when none sent a token.
+             */
+            cacheHitRate?: number | null;
+            /**
+             * Format: double
+             * @description USD the cached reads saved against the full input price, over the
+             *     requests priced for both. Null when none were.
+             */
+            cacheSavings?: number | null;
+        };
+        UsageLogPage: {
+            items: components["schemas"]["UsageLog"][];
+            /** Format: int64 */
+            total: number;
+            page: number;
+            limit: number;
+            summary: components["schemas"]["UsageSummary"];
         };
         /**
          * @description A username. `@` is excluded so that a username can never be spelled
@@ -1492,11 +2175,30 @@ export interface components {
         };
         SystemSettings: {
             /**
+             * @description The model background tasks use — for now, titling a conversation
+             *     after its first answer. Empty: each conversation's own model.
+             */
+            taskModel: string;
+            /**
              * @description Whether models are taught to answer with interface components
              *     (`openchat-ui` blocks). Off by default: the catalogue adds a few
              *     thousand tokens to every request's system prompt.
              */
             generativeUi: boolean;
+            /**
+             * @description Whether models are offered the `ask_user` tool, with which they put
+             *     multiple-choice questions to the user and wait for the answers.
+             *     On by default. Takes effect at the next model request, including
+             *     for runs in progress.
+             */
+            askUser: boolean;
+            /**
+             * @description The kill switch for personal memory. Off, no conversation reads or
+             *     writes memories and the memory tool is not offered; people can still
+             *     see and delete theirs, and their custom instructions still apply.
+             *     On by default. Administrators cannot read anyone's memories either way.
+             */
+            memory: boolean;
             /**
              * @description Whether the server logs at debug level. Takes effect immediately —
              *     no restart — and persists across one, because the fault worth
@@ -1508,6 +2210,13 @@ export interface components {
         UpdateSystemSettingsRequest: {
             debugLogging?: boolean;
             generativeUi?: boolean;
+            askUser?: boolean;
+            memory?: boolean;
+            /**
+             * @description A model an enabled channel offers (400 `model_unavailable`
+             *     otherwise), or empty for each conversation's own.
+             */
+            taskModel?: string;
         };
         /**
          * @description The search service. `free` takes the keyless public tiers of Exa,
@@ -1657,7 +2366,7 @@ export interface components {
          *     carries the full table.
          * @enum {string}
          */
-        ChannelType: "openai" | "anthropic" | "gemini" | "openrouter" | "deepseek" | "siliconflow" | "moonshot" | "zhipu" | "dashscope" | "volcengine" | "minimax" | "xai" | "groq" | "ollama" | "mistral" | "stepfun" | "hunyuan" | "qianfan" | "mimo" | "together" | "fireworks" | "nvidia" | "modelscope" | "cerebras" | "lmstudio" | "openai-compatible";
+        ChannelType: "openai" | "anthropic" | "gemini" | "openrouter" | "deepseek" | "siliconflow" | "moonshot" | "zhipu" | "dashscope" | "volcengine" | "minimax" | "xai" | "groq" | "ollama" | "mistral" | "stepfun" | "hunyuan" | "qianfan" | "mimo" | "together" | "fireworks" | "nvidia" | "modelscope" | "cerebras" | "opencode-go" | "lmstudio" | "openai-compatible";
         /**
          * @description The protocol a channel type speaks. Three adapters serve every type.
          * @enum {string}
@@ -1670,6 +2379,14 @@ export interface components {
          * @enum {string}
          */
         ChannelTypeGroup: "vendor" | "platform" | "custom";
+        /**
+         * @description Which of OpenAI's request formats a channel on the OpenAI protocol
+         *     sends: Chat Completions (`chat`, served by nearly every compatible
+         *     endpoint) or the Responses API (`responses`). Ignored on other
+         *     protocols, and on a type that routes each model itself.
+         * @enum {string}
+         */
+        ApiFormat: "chat" | "responses";
         ChannelTypeInfo: {
             id: components["schemas"]["ChannelType"];
             /** @description A brand name, deliberately not translated — it reads the same in both locales. */
@@ -1692,6 +2409,12 @@ export interface components {
              *     list be fetched with the key left blank.
              */
             keyOptional: boolean;
+            /**
+             * @description Whether the operator chooses the request format (`ApiFormat`) for a
+             *     channel of this type: true for the OpenAI protocol, false where the
+             *     protocol has one format or the type routes each model itself.
+             */
+            apiFormatChoice: boolean;
         };
         ChannelModel: {
             /** @description As the endpoint spells it, which is what gets sent back to it. */
@@ -1728,6 +2451,7 @@ export interface components {
             name: string;
             type: components["schemas"]["ChannelType"];
             wireApi: components["schemas"]["WireApi"];
+            apiFormat: components["schemas"]["ApiFormat"];
             /** @description Overrides the provider's default endpoint. Empty means use the default. */
             baseUrl?: string;
             enabled: boolean;
@@ -1765,6 +2489,7 @@ export interface components {
             apiKey?: string;
             /** @default true */
             enabled: boolean;
+            apiFormat?: components["schemas"]["ApiFormat"];
             /** @description Selected models, created enabled in the same transaction as the channel. */
             models?: components["schemas"]["ChannelModelInput"][];
         };
@@ -1780,34 +2505,159 @@ export interface components {
             apiKey?: string;
             enabled?: boolean;
             sortOrder?: number;
+            apiFormat?: components["schemas"]["ApiFormat"];
         };
-        AdminStats: {
-            totals: components["schemas"]["AdminTotals"];
-            trend: components["schemas"]["TrendPoint"][];
-        };
-        AdminTotals: {
+        /**
+         * @default 7d
+         * @enum {string}
+         */
+        DashboardRange: "24h" | "7d" | "30d" | "90d";
+        DashboardKpis: {
             /** Format: int64 */
-            totalUsers: number;
+            requests: number;
             /** Format: int64 */
+            errors: number;
+            /**
+             * Format: int64
+             * @description Excluding the cached part.
+             */
+            inputTokens: number;
+            /** Format: int64 */
+            outputTokens: number;
+            /** Format: int64 */
+            cacheReadTokens: number;
+            /** Format: int64 */
+            cacheWriteTokens: number;
+            /**
+             * Format: double
+             * @description As in UsageSummary; null when no successful request sent a token.
+             */
+            cacheHitRate?: number | null;
+            /**
+             * Format: double
+             * @description As in UsageSummary.
+             */
+            cacheSavings?: number | null;
+            /**
+             * Format: double
+             * @description USD; unpriced requests add nothing.
+             */
+            cost: number;
+            /**
+             * Format: int64
+             * @description Distinct accounts that made a request.
+             */
             activeUsers: number;
-            /** Format: int64 */
-            totalConversations: number;
-            /** Format: int64 */
-            totalMessages: number;
-            /** Format: int64 */
-            newUsers7d: number;
-            /** Format: int64 */
-            messages7d: number;
+            /**
+             * Format: double
+             * @description Of successful requests that have one.
+             */
+            firstTokenP50Ms?: number | null;
+            /** Format: double */
+            firstTokenP95Ms?: number | null;
         };
-        TrendPoint: {
-            /** Format: date */
-            day: string;
+        DashboardTrendPoint: {
+            /**
+             * Format: date-time
+             * @description Start of the hour or day.
+             */
+            at: string;
             /** Format: int64 */
-            messages: number;
+            requests: number;
             /** Format: int64 */
-            conversations: number;
+            errors: number;
+            /** Format: double */
+            cost: number;
+        };
+        DashboardModel: {
+            model: string;
             /** Format: int64 */
-            users: number;
+            requests: number;
+            /** Format: int64 */
+            errors: number;
+            /** Format: int64 */
+            inputTokens: number;
+            /** Format: int64 */
+            outputTokens: number;
+            /** Format: int64 */
+            cacheReadTokens: number;
+            /** Format: double */
+            cacheHitRate?: number | null;
+            /** Format: double */
+            cost: number;
+            /** Format: double */
+            firstTokenP50Ms?: number | null;
+        };
+        DashboardChannel: {
+            /**
+             * Format: uuid
+             * @description Null once the channel was deleted; its history keeps the name.
+             */
+            channelId?: string | null;
+            channelName: string;
+            /** Format: int64 */
+            requests: number;
+            /** Format: int64 */
+            errors: number;
+            /** Format: double */
+            firstTokenP50Ms?: number | null;
+            /** Format: double */
+            firstTokenP95Ms?: number | null;
+            /** Format: double */
+            durationP50Ms?: number | null;
+            /** Format: double */
+            durationP95Ms?: number | null;
+            /** Format: date-time */
+            lastErrorAt?: string | null;
+        };
+        DashboardUser: {
+            /** Format: uuid */
+            userId?: string | null;
+            userName?: string | null;
+            userEmail?: string | null;
+            /** Format: int64 */
+            requests: number;
+            /** Format: double */
+            cost: number;
+        };
+        DashboardError: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+            model: string;
+            channelName: string;
+            errorCode?: string | null;
+            errorMessage?: string | null;
+        };
+        AdminDashboard: {
+            range: components["schemas"]["DashboardRange"];
+            /**
+             * Format: date-time
+             * @description Start of the window.
+             */
+            since: string;
+            /**
+             * @description What one trend point spans.
+             * @enum {string}
+             */
+            bucket: "hour" | "day";
+            /**
+             * Format: int64
+             * @description Enabled accounts.
+             */
+            totalUsers: number;
+            current: components["schemas"]["DashboardKpis"];
+            previous: components["schemas"]["DashboardKpis"];
+            trend: components["schemas"]["DashboardTrendPoint"][];
+            /** @description Busiest first, at most 8. */
+            models: components["schemas"]["DashboardModel"][];
+            /** @description Busiest first, at most 8. */
+            channels: components["schemas"]["DashboardChannel"][];
+            /** @description Highest spend first, at most 8. */
+            users: components["schemas"]["DashboardUser"][];
+            /** @description Latest failures first, at most 8. */
+            errors: components["schemas"]["DashboardError"][];
         };
         /** @description Exactly one of `role` or `disabled` must be given. */
         BulkUpdateUsersRequest: {
@@ -2022,11 +2872,10 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    getAdminStats: {
+    getAdminDashboard: {
         parameters: {
             query?: {
-                /** @description Length of the trend window. */
-                days?: number;
+                range?: components["schemas"]["DashboardRange"];
             };
             header?: never;
             path?: never;
@@ -2040,9 +2889,10 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminStats"];
+                    "application/json": components["schemas"]["AdminDashboard"];
                 };
             };
+            400: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };
@@ -2092,6 +2942,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["User"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listUsageLogs: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                page?: number;
+                userId?: string;
+                /** @description The model id the request asked for. */
+                model?: string;
+                channelId?: string;
+                status?: components["schemas"]["UsageStatus"];
+                kind?: components["schemas"]["UsageKind"];
+                /** @description Requests started at or after this time. */
+                from?: string;
+                /** @description Requests started before this time (exclusive). */
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageLogPage"];
                 };
             };
             default: components["responses"]["Error"];
@@ -2866,11 +3750,58 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    generateConversationTitle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the renamed conversation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Conversation"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getConversationContext: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the context the latest request used */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContextUsage"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     listMessages: {
         parameters: {
             query?: {
                 limit?: components["parameters"]["Limit"];
-                cursor?: components["parameters"]["Cursor"];
+                /** @description The `olderCursor` of the page just newer than the one wanted. */
+                before?: string;
             };
             header?: never;
             path: {
@@ -2880,7 +3811,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description a page of messages */
+            /** @description a page of messages, oldest first */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2914,6 +3845,115 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CreateMessageResponse"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    editMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description the new message was written and its run started */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateMessageResponse"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    switchVersion: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the newest page of the branch now shown, oldest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessagePage"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    regenerateAnswer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description the run started; `message` is the input it answers */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateMessageResponse"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    answerQuestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                callId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerQuestionRequest"];
+            };
+        };
+        responses: {
+            /** @description the answers were recorded and the run started */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnswerQuestionResponse"];
                 };
             };
             default: components["responses"]["Error"];
@@ -2960,6 +4000,233 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    chooseAnswer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the run's question, then its rows, oldest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessagePage"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getPersonalization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Personalization"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updatePersonalization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePersonalizationRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Personalization"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listMemories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryRequest"];
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Memory"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    clearMemories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                memoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                memoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Memory"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listMemoryEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryEventList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    undoMemoryEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description undone */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryEvent"];
+                };
             };
             default: components["responses"]["Error"];
         };

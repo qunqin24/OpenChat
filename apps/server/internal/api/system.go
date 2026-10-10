@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin/openchat/apps/server/internal/httpx"
 	"github.com/qunqin/openchat/apps/server/internal/logging"
+	"github.com/qunqin/openchat/apps/server/internal/memory"
 )
 
 // settingDebugLogging is the app_settings key holding the log-level switch.
@@ -39,12 +41,18 @@ func (s *Server) boolSetting(ctx context.Context, key string) (bool, error) {
 }
 
 func boolSetting(ctx context.Context, q *sqlc.Queries, key string) (bool, error) {
+	return boolSettingOr(ctx, q, key, false)
+}
+
+// boolSettingOr is a switch that has not been set to what it should be: a
+// feature that is on until an administrator turns it off.
+func boolSettingOr(ctx context.Context, q *sqlc.Queries, key string, unset bool) (bool, error) {
 	raw, err := q.GetSetting(ctx, key)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return false, nil
+			return unset, nil
 		}
-		return false, err
+		return unset, err
 	}
 	var value bool
 	if err := json.Unmarshal(raw, &value); err != nil {
@@ -71,6 +79,15 @@ func (s *Server) systemSettings(ctx context.Context) (SystemSettings, error) {
 		return settings, err
 	}
 	settings.GenerativeUi = generativeUI
+	if settings.AskUser, err = boolSettingOr(ctx, s.q, settingAskUser, true); err != nil {
+		return settings, err
+	}
+	if settings.Memory, err = boolSettingOr(ctx, s.q, memory.SettingEnabled, true); err != nil {
+		return settings, err
+	}
+	if settings.TaskModel, err = stringSetting(ctx, s.q, settingTaskModel); err != nil {
+		return settings, err
+	}
 	return settings, nil
 }
 
@@ -111,6 +128,44 @@ func (s *Server) UpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 			"enabled", *body.GenerativeUi, "actor", auth.MustUser(r.Context()).Email)
 	}
 
+	if body.AskUser != nil {
+		value, _ := json.Marshal(*body.AskUser)
+		if err := s.q.SetSetting(r.Context(), sqlc.SetSettingParams{Key: settingAskUser, Value: value}); err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+		slog.InfoContext(r.Context(), "ask_user changed",
+			"enabled", *body.AskUser, "actor", auth.MustUser(r.Context()).Email)
+	}
+
+	if body.Memory != nil {
+		value, _ := json.Marshal(*body.Memory)
+		if err := s.q.SetSetting(r.Context(), sqlc.SetSettingParams{Key: memory.SettingEnabled, Value: value}); err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+		slog.InfoContext(r.Context(), "memory changed",
+			"enabled", *body.Memory, "actor", auth.MustUser(r.Context()).Email)
+	}
+
+	if body.TaskModel != nil {
+		task := strings.TrimSpace(*body.TaskModel)
+		// Only a model something can answer with; empty is each
+		// conversation's own, and always available.
+		if task != "" {
+			if _, _, err := s.pickChannel(r.Context(), task); err != nil {
+				httpx.Fail(w, r, err)
+				return
+			}
+		}
+		value, _ := json.Marshal(task)
+		if err := s.q.SetSetting(r.Context(), sqlc.SetSettingParams{Key: settingTaskModel, Value: value}); err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+		slog.InfoContext(r.Context(), "task model changed", "model", task, "actor", auth.MustUser(r.Context()).Email)
+	}
+
 	settings, err := s.systemSettings(r.Context())
 	if err != nil {
 		httpx.Fail(w, r, err)
@@ -123,6 +178,11 @@ func (s *Server) UpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 // system prompt teaches the openchat-ui block. Off by default — it costs a few
 // thousand prompt tokens on every request whether or not a reply uses it.
 const settingGenerativeUI = "generative_ui"
+
+// settingAskUser offers models the ask_user tool. On unless an administrator
+// has turned it off: it costs a short tool definition per request and nothing
+// when a model has no question to ask.
+const settingAskUser = "ask_user"
 
 func stringSetting(ctx context.Context, q *sqlc.Queries, key string) (string, error) {
 	raw, err := q.GetSetting(ctx, key)

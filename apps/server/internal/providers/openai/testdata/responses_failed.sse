@@ -1,0 +1,15 @@
+event: response.created
+data: {"type":"response.created","response":{"id":"resp_fail","object":"response","created_at":1760000000,"status":"in_progress","model":"gpt-5-2025-08-07","output":[],"store":false,"parallel_tool_calls":true},"sequence_number":0}
+
+event: response.in_progress
+data: {"type":"response.in_progress","response":{"id":"resp_fail","object":"response","created_at":1760000000,"status":"in_progress","model":"gpt-5-2025-08-07","output":[],"store":false,"parallel_tool_calls":true},"sequence_number":1}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","output_index":0,"item":{"id":"msg_f","type":"message","status":"in_progress","content":[],"role":"assistant"},"sequence_number":2}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","item_id":"msg_f","output_index":0,"content_index":0,"delta":"Partial","sequence_number":3}
+
+event: response.failed
+data: {"type":"response.failed","response":{"id":"resp_fail","object":"response","created_at":1760000000,"status":"failed","model":"gpt-5-2025-08-07","output":[],"store":false,"parallel_tool_calls":true,"error":{"code":"server_error","message":"The model had an internal error. Request id sk-secret-key-123"}},"sequence_number":4}
+

@@ -33,9 +33,10 @@ func toChannel(row sqlc.Channel, modelCount int64) Channel {
 		// protocol is a property of that choice. Storing both would let them
 		// disagree, and the disagreement would be a channel speaking the wrong
 		// protocol to a real endpoint.
-		WireApi: wireApi,
-		Enabled: row.Enabled,
-		HasKey:  row.ApiKey != "",
+		WireApi:   wireApi,
+		ApiFormat: ApiFormat(row.ApiFormat),
+		Enabled:   row.Enabled,
+		HasKey:    row.ApiKey != "",
 		// How many models this channel offers, which is how many are switched
 		// on — a channel that lists two hundred models and offers none is
 		// configured but not yet useful, and the number is what says so.
@@ -116,6 +117,15 @@ func (s *Server) CreateChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	format := Chat
+	if body.ApiFormat != nil {
+		if !body.ApiFormat.Valid() {
+			httpx.Fail(w, r, httpx.NewFieldError("apiFormat", "api_format_invalid", "the format is chat or responses"))
+			return
+		}
+		format = *body.ApiFormat
+	}
+
 	models := derefOr(body.Models, []ChannelModelInput{})
 	if err := validateChannelModels(models); err != nil {
 		httpx.Fail(w, r, err)
@@ -132,11 +142,12 @@ func (s *Server) CreateChannel(w http.ResponseWriter, r *http.Request) {
 	defer func() { _ = tx.Rollback(r.Context()) }()
 	q := s.q.WithTx(tx)
 	row, err := q.CreateChannel(r.Context(), sqlc.CreateChannelParams{
-		Name:    name,
-		Type:    sqlc.ChannelType(body.Type),
-		BaseUrl: strings.TrimSpace(derefOr(body.BaseUrl, "")),
-		ApiKey:  strings.TrimSpace(derefOr(body.ApiKey, "")),
-		Enabled: derefOr(body.Enabled, true),
+		Name:      name,
+		Type:      sqlc.ChannelType(body.Type),
+		BaseUrl:   strings.TrimSpace(derefOr(body.BaseUrl, "")),
+		ApiKey:    strings.TrimSpace(derefOr(body.ApiKey, "")),
+		Enabled:   derefOr(body.Enabled, true),
+		ApiFormat: string(format),
 	})
 	if err != nil {
 		httpx.Fail(w, r, err)
@@ -222,6 +233,14 @@ func (s *Server) UpdateChannel(w http.ResponseWriter, r *http.Request, channelId
 		params.ApiKey = &trimmed
 	}
 	params.Enabled = body.Enabled
+	if body.ApiFormat != nil {
+		if !body.ApiFormat.Valid() {
+			httpx.Fail(w, r, httpx.NewFieldError("apiFormat", "api_format_invalid", "the format is chat or responses"))
+			return
+		}
+		format := string(*body.ApiFormat)
+		params.ApiFormat = &format
+	}
 	if body.SortOrder != nil {
 		order := int32(*body.SortOrder)
 		params.SortOrder = &order

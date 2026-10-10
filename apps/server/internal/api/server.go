@@ -20,6 +20,7 @@ import (
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin/openchat/apps/server/internal/httpx"
 	"github.com/qunqin/openchat/apps/server/internal/storage"
+	"github.com/qunqin/openchat/apps/server/internal/usage"
 )
 
 // Server wires the handlers to their dependencies.
@@ -37,6 +38,9 @@ type Server struct {
 	// storageMu serializes changes to the storage settings.
 	storageMu sync.Mutex
 	runner    *agent.Runner
+	// usage is the ledger of model requests, for the ones the server makes
+	// itself (titles). Runs write theirs through the runner.
+	usage *usage.Recorder
 }
 
 var _ ServerInterface = (*Server)(nil)
@@ -49,6 +53,7 @@ func NewServer(cfg *config.Config, pool *pgxpool.Pool, store storage.Backend, ru
 		store:  store,
 		local:  func() *storage.Local { return nil },
 		runner: runner,
+		usage:  usage.NewRecorder(sqlc.New(pool)),
 	}
 	switch store := store.(type) {
 	case *storage.Switch:

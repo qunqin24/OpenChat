@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -57,6 +58,7 @@ type scripted struct {
 	steps   []func() (llm.ModelClient, error)
 	calls   atomic.Int32
 	lastReq llm.Request
+	reqs    []llm.Request
 }
 
 func (s *scripted) Client(context.Context, *uuid.UUID, string) (llm.ModelClient, error) {
@@ -66,6 +68,7 @@ func (s *scripted) Client(context.Context, *uuid.UUID, string) (llm.ModelClient,
 func (s *scripted) Stream(ctx context.Context, req llm.Request, emit func(llm.Event) error) (llm.ModelResponse, error) {
 	s.mu.Lock()
 	s.lastReq = req
+	s.reqs = append(s.reqs, req)
 	if len(s.steps) == 0 {
 		s.mu.Unlock()
 		return llm.ModelResponse{}, errors.New("scripted: no more responses")
@@ -99,6 +102,19 @@ func answer(t *testing.T, chunks ...string) func() (llm.ModelClient, error) {
 func toolCall(t *testing.T, id, name, args string) func() (llm.ModelClient, error) {
 	return script(t, fake.Script{Model: "m", FinishReason: "tool_calls",
 		Steps: []fake.Step{{Kind: fake.StepToolCall, ToolCallID: id, ToolName: name, Chunks: []string{args}}}})
+}
+
+// hang is a model that has not said a word by the time it is stopped.
+func hang(t *testing.T) func() (llm.ModelClient, error) {
+	t.Helper()
+	return func() (llm.ModelClient, error) { return hangingClient{}, nil }
+}
+
+type hangingClient struct{}
+
+func (hangingClient) Stream(ctx context.Context, _ llm.Request, _ func(llm.Event) error) (llm.ModelResponse, error) {
+	<-ctx.Done()
+	return llm.ModelResponse{}, ctx.Err()
 }
 
 // echoTool returns its arguments, counting calls.
@@ -176,16 +192,7 @@ func (f *fixture) newRunner(tools []Tool) *Runner {
 func (f *fixture) admit(text string) sqlc.Run {
 	f.t.Helper()
 	ctx := context.Background()
-	input, err := f.q.AppendEntry(ctx, sqlc.AppendEntryParams{
-		ConversationID: f.conv,
-		Role:           sqlc.MessageRoleUser,
-		Content:        text,
-		Parts:          EncodeParts([]llm.Part{llm.TextPart{Text: text}}),
-		Status:         sqlc.MessageStatusComplete,
-	})
-	if err != nil {
-		f.t.Fatal(err)
-	}
+	input := f.appendInput(text)
 	run, err := f.q.CreateRun(ctx, sqlc.CreateRunParams{
 		ConversationID: f.conv, UserID: f.user, InputMessageID: input.ID, ModelID: "m", WebSearch: true,
 	})
@@ -193,6 +200,32 @@ func (f *fixture) admit(text string) sqlc.Run {
 		f.t.Fatal(err)
 	}
 	return run
+}
+
+// appendInput writes a user message after the conversation's current leaf and
+// becomes the new one, as the handlers do.
+func (f *fixture) appendInput(text string) sqlc.Message {
+	f.t.Helper()
+	ctx := context.Background()
+	var parent *uuid.UUID
+	if leaf, err := f.q.GetCurrentInput(ctx, f.conv); err == nil {
+		parent = &leaf.ID
+	}
+	input, err := f.q.AppendEntry(ctx, sqlc.AppendEntryParams{
+		ConversationID: f.conv,
+		Role:           sqlc.MessageRoleUser,
+		Content:        text,
+		Parts:          EncodeParts([]llm.Part{llm.TextPart{Text: text}}),
+		Status:         sqlc.MessageStatusComplete,
+		ParentInputID:  parent,
+	})
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	if err := f.q.SetCurrentInput(ctx, sqlc.SetCurrentInputParams{ConversationID: f.conv, InputID: &input.ID}); err != nil {
+		f.t.Fatal(err)
+	}
+	return input
 }
 
 func (f *fixture) waitFor(runID uuid.UUID, status sqlc.RunStatus) sqlc.Run {
@@ -414,7 +447,20 @@ func TestRunCancelDuringTool(t *testing.T) {
 	}
 	f.runner.Cancel(run.ID)
 	f.waitFor(run.ID, sqlc.RunStatusCancelled)
-	f.assertTranscript("user go", "assistant:tool_calls call:echo", "tool result:cancelled")
+	// The turn ends saying it was stopped: an empty cancelled reply.
+	f.assertTranscript("user go", "assistant:tool_calls call:echo", "tool result:cancelled", "assistant:cancelled")
+}
+
+// Stopped before the model said anything, a run still leaves a reply — an
+// empty cancelled one — so the turn shows it was stopped and can be redone.
+func TestRunCancelBeforeFirstToken(t *testing.T) {
+	f := newFixture(t, nil, hang(t))
+	run := f.admit("go")
+	f.runner.Start(run.ID)
+	time.Sleep(50 * time.Millisecond)
+	f.runner.Cancel(run.ID)
+	f.waitFor(run.ID, sqlc.RunStatusCancelled)
+	f.assertTranscript("user go", "assistant:cancelled")
 }
 
 // A process that dies while a tool runs leaves the slot `running`. The next
@@ -501,13 +547,7 @@ func TestOneActiveRunPerConversation(t *testing.T) {
 	f := newFixture(t, nil)
 	f.admit("first")
 	ctx := context.Background()
-	input, err := f.q.AppendEntry(ctx, sqlc.AppendEntryParams{
-		ConversationID: f.conv, Role: sqlc.MessageRoleUser, Content: "second",
-		Parts: EncodeParts(nil), Status: sqlc.MessageStatusComplete,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	input := f.appendInput("second")
 	if _, err := f.q.CreateRun(ctx, sqlc.CreateRunParams{
 		ConversationID: f.conv, UserID: f.user, InputMessageID: input.ID, ModelID: "m",
 	}); err == nil {
@@ -555,4 +595,63 @@ func TestRunWithoutWebIsOfferedNoWebTools(t *testing.T) {
 	if tools := f.models.lastReq.Tools; len(tools) != 1 || tools[0].Name != "calc" {
 		t.Fatalf("web off: offered %+v, want only calc", tools)
 	}
+}
+
+// The request after the last tool round forbids a tool call; it does not take
+// the tools away. The tool list and the system prompt are what a provider's
+// cache and a replayed thinking block are checked against, so they must be the
+// ones every earlier request of the run carried.
+func TestRunLastRoundKeepsTheToolsAndForbidsCalling(t *testing.T) {
+	echo := &echoTool{name: "echo", replay: true}
+	f := newFixture(t, []Tool{echo},
+		toolCall(t, "c1", "echo", `{}`),
+		answer(t, "done"))
+	runner := NewRunner(f.pool, f.runner.hub, f.models, func(context.Context) []Tool { return []Tool{echo} },
+		Options{PartialInterval: 5 * time.Millisecond, MaxToolRounds: 1,
+			SystemPrompt: func(_ context.Context, _ time.Time, tools []Tool) string {
+				return fmt.Sprintf("prompt with %d tools", len(tools))
+			}})
+	t.Cleanup(func() { _ = runner.Shutdown(context.Background()) })
+
+	run := f.admit("go")
+	runner.Start(run.ID)
+	f.waitFor(run.ID, sqlc.RunStatusCompleted)
+
+	if len(f.models.reqs) != 2 {
+		t.Fatalf("%d requests, want 2", len(f.models.reqs))
+	}
+	first, last := f.models.reqs[0], f.models.reqs[1]
+	if first.Options.ToolChoice != llm.ToolChoiceAuto {
+		t.Errorf("first request tool choice = %q, want the default", first.Options.ToolChoice)
+	}
+	if last.Options.ToolChoice != llm.ToolChoiceNone {
+		t.Errorf("last request tool choice = %q, want none", last.Options.ToolChoice)
+	}
+	if len(last.Tools) != 1 || last.Tools[0].Name != "echo" {
+		t.Errorf("last request tools = %+v, want the same list as the first", last.Tools)
+	}
+	if first.Messages[0].Text() != last.Messages[0].Text() {
+		t.Errorf("system prompt changed between rounds: %q then %q", first.Messages[0].Text(), last.Messages[0].Text())
+	}
+}
+
+// A model that calls a tool on the last round regardless of the choice it was
+// given is answered with a refusal, and the run ends.
+func TestRunLastRoundCallIsRefused(t *testing.T) {
+	echo := &echoTool{name: "echo"}
+	f := newFixture(t, []Tool{echo},
+		toolCall(t, "c1", "echo", `{}`),
+		toolCall(t, "c2", "echo", `{}`))
+	runner := NewRunner(f.pool, f.runner.hub, f.models, func(context.Context) []Tool { return []Tool{echo} },
+		Options{PartialInterval: 5 * time.Millisecond, MaxToolRounds: 1})
+	t.Cleanup(func() { _ = runner.Shutdown(context.Background()) })
+
+	run := f.admit("go")
+	runner.Start(run.ID)
+	f.waitFor(run.ID, sqlc.RunStatusCompleted)
+	if echo.calls.Load() != 1 {
+		t.Fatalf("tool ran %d times, want only the first round's", echo.calls.Load())
+	}
+	f.assertTranscript("user go", "assistant:tool_calls call:echo", "tool result:succeeded",
+		"assistant:tool_calls call:echo", "tool result:failed")
 }

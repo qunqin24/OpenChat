@@ -15,7 +15,7 @@ const adminCreateUser = `-- name: AdminCreateUser :one
 INSERT INTO users (email, name, password_hash, role, disabled_at)
 VALUES ($1, $2, $3, $4,
         CASE WHEN $5::boolean THEN now() ELSE NULL END)
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn
 `
 
 type AdminCreateUserParams struct {
@@ -47,6 +47,10 @@ func (q *Queries) AdminCreateUser(ctx context.Context, arg AdminCreateUserParams
 		&i.Role,
 		&i.DisabledAt,
 		&i.LastSeenAt,
+		&i.InstructionsAbout,
+		&i.InstructionsStyle,
+		&i.MemoryEnabled,
+		&i.MemoryLearn,
 	)
 	return i, err
 }
@@ -64,7 +68,7 @@ SET name          = COALESCE($1::text, name),
                         END,
     updated_at    = now()
 WHERE id = $6
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn
 `
 
 type AdminUpdateUserParams struct {
@@ -101,6 +105,10 @@ func (q *Queries) AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams
 		&i.Role,
 		&i.DisabledAt,
 		&i.LastSeenAt,
+		&i.InstructionsAbout,
+		&i.InstructionsStyle,
+		&i.MemoryEnabled,
+		&i.MemoryLearn,
 	)
 	return i, err
 }
@@ -187,7 +195,7 @@ func (q *Queries) CountUsersFiltered(ctx context.Context, search *string) (int64
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn
 FROM users
 WHERE id = $1
 `
@@ -205,12 +213,16 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.Role,
 		&i.DisabledAt,
 		&i.LastSeenAt,
+		&i.InstructionsAbout,
+		&i.InstructionsStyle,
+		&i.MemoryEnabled,
+		&i.MemoryLearn,
 	)
 	return i, err
 }
 
 const getUserByLogin = `-- name: GetUserByLogin :one
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn
 FROM users
 WHERE lower(email) = lower($1::text)
    OR lower(name) = lower($1::text)
@@ -239,12 +251,16 @@ func (q *Queries) GetUserByLogin(ctx context.Context, identifier string) (User, 
 		&i.Role,
 		&i.DisabledAt,
 		&i.LastSeenAt,
+		&i.InstructionsAbout,
+		&i.InstructionsStyle,
+		&i.MemoryEnabled,
+		&i.MemoryLearn,
 	)
 	return i, err
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn
 FROM users
 WHERE ($1::text IS NULL
     OR email ILIKE '%' || $1::text || '%'
@@ -280,6 +296,10 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.Role,
 			&i.DisabledAt,
 			&i.LastSeenAt,
+			&i.InstructionsAbout,
+			&i.InstructionsStyle,
+			&i.MemoryEnabled,
+			&i.MemoryLearn,
 		); err != nil {
 			return nil, err
 		}
@@ -292,7 +312,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 }
 
 const listUsersByIDs = `-- name: ListUsersByIDs :many
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn
 FROM users
 WHERE id = ANY ($1::uuid[])
 `
@@ -316,6 +336,10 @@ func (q *Queries) ListUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]User, 
 			&i.Role,
 			&i.DisabledAt,
 			&i.LastSeenAt,
+			&i.InstructionsAbout,
+			&i.InstructionsStyle,
+			&i.MemoryEnabled,
+			&i.MemoryLearn,
 		); err != nil {
 			return nil, err
 		}
@@ -333,7 +357,7 @@ VALUES ($1, $2, $3,
         CASE WHEN (SELECT count(*) FROM users) = 0
                  THEN 'admin'::user_role
              ELSE 'user'::user_role END)
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn
 `
 
 type RegisterUserParams struct {
@@ -359,6 +383,10 @@ func (q *Queries) RegisterUser(ctx context.Context, arg RegisterUserParams) (Use
 		&i.Role,
 		&i.DisabledAt,
 		&i.LastSeenAt,
+		&i.InstructionsAbout,
+		&i.InstructionsStyle,
+		&i.MemoryEnabled,
+		&i.MemoryLearn,
 	)
 	return i, err
 }
@@ -380,7 +408,7 @@ SET name       = COALESCE($1::text, name),
     email      = COALESCE($2::text, email),
     updated_at = now()
 WHERE id = $3
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn
 `
 
 type UpdateOwnProfileParams struct {
@@ -405,6 +433,10 @@ func (q *Queries) UpdateOwnProfile(ctx context.Context, arg UpdateOwnProfilePara
 		&i.Role,
 		&i.DisabledAt,
 		&i.LastSeenAt,
+		&i.InstructionsAbout,
+		&i.InstructionsStyle,
+		&i.MemoryEnabled,
+		&i.MemoryLearn,
 	)
 	return i, err
 }

@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"time"
+
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin/openchat/apps/server/internal/llm"
 )
@@ -18,6 +20,11 @@ const (
 // interruptedResult stands in for a tool call that has no result row.
 const interruptedResult = "The tool call was interrupted before it returned a result."
 
+// skippedResult stands in for a question the user never answered: they wrote
+// something else, and the next run is built with that message after it.
+const skippedResult = "The user did not answer this question and sent a new message instead. " +
+	"Take that message as their reply and carry on; ask again only if you still need the answer."
+
 // BuildContext turns transcript rows into a model request's messages.
 //
 // The transcript is what happened, in the order it was committed. A model
@@ -31,13 +38,18 @@ const interruptedResult = "The tool call was interrupted before it returned a re
 //     providers reject anything else. Results are committed in the order the
 //     tools finished, so they are moved here rather than at write time.
 //   - A call with no result gets a synthesized error result. That happens at an
-//     interrupted tail or where the history window cut between the two.
+//     interrupted tail or where the history window cut between the two. For
+//     ask_user it is not an error: the question is still unanswered because the
+//     user wrote something else, and the result says so.
 //   - A result whose call is not in the window is dropped: sent alone it is a
 //     protocol error, and the window starting mid-round is the normal way to
 //     get one.
+//   - A user message that begins a new day is dated (see dateStamp), which is
+//     how the model knows the date without the system prompt saying it.
 func BuildContext(rows []sqlc.Message) ([]llm.Message, error) {
 	var out []llm.Message
 	var round *toolRound
+	var stamped string // the day of the last dated user message
 
 	// flush closes the open tool round: the results go directly after the
 	// assistant message that asked for them, before anything that came later.
@@ -50,12 +62,7 @@ func BuildContext(rows []sqlc.Message) ([]llm.Message, error) {
 		for _, call := range round.calls {
 			result, ok := round.results[call.ID]
 			if !ok {
-				result = llm.ToolResultPart{
-					CallID:  call.ID,
-					Name:    call.Name,
-					Content: interruptedResult,
-					Status:  llm.ToolInterrupted,
-				}
+				result = missingResult(call)
 			}
 			results = append(results, llm.Message{Role: llm.RoleTool, Parts: []llm.Part{result}})
 		}
@@ -105,6 +112,12 @@ func BuildContext(rows []sqlc.Message) ([]llm.Message, error) {
 				}
 				msg = llm.TextMessage(llm.Role(row.Role), row.Content)
 			}
+			if row.Role == sqlc.MessageRoleUser && row.CreatedAt.Valid {
+				if day := row.CreatedAt.Time.UTC().Format(time.DateOnly); day != stamped {
+					stamped = day
+					msg.Parts = append([]llm.Part{llm.TextPart{Text: dateStamp(day)}}, msg.Parts...)
+				}
+			}
 			if round != nil {
 				// Something arrived between a call and its result. It goes after
 				// the results, which must stay adjacent to the call.
@@ -116,6 +129,14 @@ func BuildContext(rows []sqlc.Message) ([]llm.Message, error) {
 	}
 	flush()
 	return out, nil
+}
+
+// missingResult is what a call without a result row is answered with.
+func missingResult(call llm.ToolCallPart) llm.ToolResultPart {
+	if call.Name == ToolAskUser {
+		return llm.ToolResultPart{CallID: call.ID, Name: call.Name, Content: skippedResult, Status: llm.ToolSucceeded}
+	}
+	return llm.ToolResultPart{CallID: call.ID, Name: call.Name, Content: interruptedResult, Status: llm.ToolInterrupted}
 }
 
 // toolRound is an assistant message's calls, waiting for their results.
@@ -138,4 +159,15 @@ func (p *toolRound) hasCall(id string) bool {
 // and how much fits (attachmentResolver).
 func toLLMMessage(role llm.Role, parts llm.Parts) llm.Message {
 	return llm.Message{Role: role, Parts: parts}
+}
+
+// dateStamp is the line that tells the model what day a message was sent. The
+// date lives in the history instead of the system prompt: a system prompt that
+// changes at midnight changes the bytes in front of every cached prefix and
+// every thinking block a provider checks the history against, so the first
+// request of the day would be rejected or paid for in full. A stamp on the
+// message it belongs to never changes once written, and only the first message
+// of each day carries one, so the history stays a stable prefix.
+func dateStamp(day string) string {
+	return "[Date: " + day + "]"
 }

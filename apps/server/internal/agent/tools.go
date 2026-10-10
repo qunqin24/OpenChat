@@ -68,6 +68,24 @@ func DecodeArgs(raw json.RawMessage, into any) error {
 	return nil
 }
 
+// ToolAskUser is the tool that puts a question to the person. The runner
+// knows it by name where it must: a call left without a result is read as a
+// question that was skipped, not as a tool that was interrupted (BuildContext).
+const ToolAskUser = "ask_user"
+
+// UserTool is implemented by a tool the person answers, not the server: its
+// calls are not executed. The run runs the other calls of the response, then
+// stops with status `awaiting_input` and the call on the transcript with no
+// result; the answer arrives as a request of its own, which writes the result
+// and starts the run that goes on.
+type UserTool interface {
+	Tool
+	// Check reports, in words the model can act on, why a call's arguments are
+	// not a question that can be put. The call is then answered with that error
+	// at once and the run goes on.
+	Check(args json.RawMessage) error
+}
+
 // toolsByName indexes the tools offered to one request.
 func toolsByName(tools []Tool) map[string]Tool {
 	byName := make(map[string]Tool, len(tools))

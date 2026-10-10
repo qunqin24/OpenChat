@@ -78,6 +78,10 @@ type RetryScheduled struct {
 	ErrorCode string
 }
 
+// TitleChanged is the conversation's generated title, published after the run
+// whose exchange it was made from has finished.
+type TitleChanged struct{ Title string }
+
 func (RunStarted) isEvent()        {}
 func (RunFinished) isEvent()       {}
 func (GenerationStarted) isEvent() {}
@@ -88,6 +92,7 @@ func (MessageAppended) isEvent()   {}
 func (ToolStarted) isEvent()       {}
 func (ToolFinished) isEvent()      {}
 func (RetryScheduled) isEvent()    {}
+func (TitleChanged) isEvent()      {}
 
 // Batch is the events of one commit. Version is the run's version after it, so
 // a subscriber whose snapshot already reflects that commit can drop it.

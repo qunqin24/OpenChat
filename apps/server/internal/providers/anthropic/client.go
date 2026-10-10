@@ -67,12 +67,23 @@ type Config struct {
 	// Version overrides the anthropic-version header. Empty uses defaultVersion.
 	Version string
 
+	// SessionHeader names the header a gateway reads the request's Session
+	// from (OpenCode Go: x-opencode-session). Empty sends no session.
+	SessionHeader string
+
 	// Headers are extra headers a gateway requires. They are set after ours, so
 	// a deployment that must override anthropic-version can.
 	Headers map[string]string
 
 	// HTTPClient overrides the default, mainly so tests can serve fixtures.
 	HTTPClient *http.Client
+
+	// ExplicitCachingOnly leaves out the request-level cache_control and keeps
+	// only the marker on the system prompt. Some Messages deployments (the
+	// legacy Amazon Bedrock integration for Opus 4.6 and earlier) reject the
+	// top-level field with a 400, and a gateway that is not known to forward it
+	// is safer without.
+	ExplicitCachingOnly bool
 
 	// MaxTokens is the ceiling to send when the request does not name one. Zero
 	// uses defaultMaxTokens.
@@ -136,6 +147,9 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, emit func(llm.Even
 	}
 	for name, value := range c.cfg.Headers {
 		httpReq.Header.Set(name, value)
+	}
+	if c.cfg.SessionHeader != "" && req.Session != "" {
+		httpReq.Header.Set(c.cfg.SessionHeader, req.Session)
 	}
 
 	resp, err := c.http.Do(httpReq)

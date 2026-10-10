@@ -1,0 +1,30 @@
+event: response.created
+data: {"type":"response.created","response":{"id":"resp_text","object":"response","created_at":1760000000,"status":"in_progress","model":"gpt-5-2025-08-07","output":[],"store":false,"parallel_tool_calls":true},"sequence_number":0}
+
+event: response.in_progress
+data: {"type":"response.in_progress","response":{"id":"resp_text","object":"response","created_at":1760000000,"status":"in_progress","model":"gpt-5-2025-08-07","output":[],"store":false,"parallel_tool_calls":true},"sequence_number":1}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","output_index":0,"item":{"id":"msg_text","type":"message","status":"in_progress","content":[],"role":"assistant"},"sequence_number":2}
+
+event: response.content_part.added
+data: {"type":"response.content_part.added","item_id":"msg_text","output_index":0,"content_index":0,"part":{"type":"output_text","annotations":[],"text":""},"sequence_number":3}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","item_id":"msg_text","output_index":0,"content_index":0,"delta":"The aperture","logprobs":[],"sequence_number":4}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","item_id":"msg_text","output_index":0,"content_index":0,"delta":" is open.","logprobs":[],"sequence_number":5}
+
+event: response.output_text.done
+data: {"type":"response.output_text.done","item_id":"msg_text","output_index":0,"content_index":0,"text":"The aperture is open.","logprobs":[],"sequence_number":6}
+
+event: response.content_part.done
+data: {"type":"response.content_part.done","item_id":"msg_text","output_index":0,"content_index":0,"part":{"type":"output_text","annotations":[],"text":"The aperture is open."},"sequence_number":7}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","output_index":0,"item":{"id":"msg_text","type":"message","status":"completed","content":[{"type":"output_text","annotations":[],"text":"The aperture is open."}],"role":"assistant"},"sequence_number":8}
+
+event: response.completed
+data: {"type":"response.completed","response":{"id":"resp_text","object":"response","created_at":1760000000,"status":"completed","model":"gpt-5-2025-08-07","output":[],"store":false,"parallel_tool_calls":true,"usage":{"input_tokens":14,"input_tokens_details":{"cached_tokens":0},"output_tokens":6,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":20}},"sequence_number":9}
+

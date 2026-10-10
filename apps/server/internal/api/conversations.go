@@ -51,7 +51,7 @@ func (s *Server) CreateConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	title := "New chat"
+	title := defaultTitle
 	if body.Title != nil && strings.TrimSpace(*body.Title) != "" {
 		title = strings.TrimSpace(*body.Title)
 	}
@@ -67,9 +67,10 @@ func (s *Server) CreateConversation(w http.ResponseWriter, r *http.Request) {
 
 	user := auth.MustUser(r.Context())
 	row, err := s.q.CreateConversation(r.Context(), sqlc.CreateConversationParams{
-		UserID: &user.ID,
-		Title:  title,
-		Model:  body.Model,
+		UserID:    &user.ID,
+		Title:     title,
+		Model:     body.Model,
+		Temporary: body.Temporary != nil && *body.Temporary,
 	})
 	if err != nil {
 		httpx.Fail(w, r, err)

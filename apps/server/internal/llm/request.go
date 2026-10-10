@@ -13,6 +13,11 @@ type Request struct {
 	Messages []Message
 	Tools    []Tool
 	Options  Options
+
+	// Session is a stable id for the conversation the request belongs to.
+	// Adapters send it only where a gateway asks for one (Config.SessionHeader)
+	// to route a conversation's requests together and keep its prompt cache.
+	Session string
 }
 
 // Tool is a definition the model may ask for. Being listed here is visibility,

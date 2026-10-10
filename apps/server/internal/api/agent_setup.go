@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"github.com/qunqin/openchat/apps/server/internal/agent"
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin/openchat/apps/server/internal/genui"
+	"github.com/qunqin/openchat/apps/server/internal/memory"
 	"github.com/qunqin/openchat/apps/server/internal/tools"
 )
 
@@ -20,6 +20,7 @@ import (
 // blocklist — reaches runs already in progress at their next request.
 func NewToolSource(pool *pgxpool.Pool) agent.ToolSource {
 	q := sqlc.New(pool)
+	notes := memory.NewStore(pool)
 	return func(ctx context.Context) []agent.Tool {
 		config, key, err := loadWebSearch(ctx, q)
 		if err != nil {
@@ -27,6 +28,24 @@ func NewToolSource(pool *pgxpool.Pool) agent.ToolSource {
 		}
 		search := config.searchConfig()
 		available := []agent.Tool{tools.WebFetch{Blocklist: search.Blocklist}}
+		asks, err := boolSettingOr(ctx, q, settingAskUser, true)
+		if err != nil {
+			slog.WarnContext(ctx, "read ask_user setting", "error", err)
+		}
+		if asks {
+			available = append(available, tools.AskUser{})
+		}
+		// Memory is for one person's runs and never for a temporary
+		// conversation; the store decides from the run's owner and conversation.
+		if scope, ok := agent.ScopeFrom(ctx); ok {
+			on, err := notes.ToolAvailable(ctx, scope.UserID, scope.ConversationID)
+			if err != nil {
+				slog.WarnContext(ctx, "read memory availability", "error", err)
+			}
+			if on {
+				available = append(available, tools.Memory{Store: notes})
+			}
+		}
 		if searcher := config.searcher(key); config.Enabled && searcher != nil {
 			available = append([]agent.Tool{tools.WebSearch{Searcher: searcher, Config: search}}, available...)
 		}
@@ -51,14 +70,24 @@ func NewModalities(pool *pgxpool.Pool) func(ctx context.Context, modelID string)
 
 // NewSystemPrompt builds the system prompt of every request.
 //
-// It changes once a day, with the date, and when an administrator turns the
-// interface components on or off. Anything that changed more often — the
-// time, say — would defeat the provider's prompt cache on every request.
+// It changes only when an administrator turns the interface components on or
+// off, or the tools change. The date is not in it: a prompt that changed every
+// midnight would defeat the provider's prompt cache and invalidate the thinking
+// blocks replayed against the prefix, so the date rides on the user messages
+// instead (agent.BuildContext) and the prompt only explains the notation.
+//
+// The user's custom instructions and memories are in it too, but from the
+// conversation's snapshot (memory.Snapshot), taken at its first run: they do not
+// change between its turns however the user edits them meanwhile.
 func NewSystemPrompt(pool *pgxpool.Pool) func(context.Context, time.Time, []agent.Tool) string {
 	q := sqlc.New(pool)
+	notes := memory.NewStore(pool)
 	components := genui.Load().Prompt()
-	return func(ctx context.Context, now time.Time, offered []agent.Tool) string {
-		prompt := basePrompt(now, offered)
+	return func(ctx context.Context, _ time.Time, offered []agent.Tool) string {
+		prompt := basePrompt(offered)
+		if section := personalPrompt(ctx, notes, offered); section != "" {
+			prompt += "\n\n" + section
+		}
 		on, err := boolSetting(ctx, q, settingGenerativeUI)
 		if err != nil {
 			slog.WarnContext(ctx, "read generative_ui setting", "error", err)
@@ -70,9 +99,37 @@ func NewSystemPrompt(pool *pgxpool.Pool) func(context.Context, time.Time, []agen
 	}
 }
 
-func basePrompt(now time.Time, offered []agent.Tool) string {
+// personalPrompt renders the conversation's snapshot. A failure leaves the
+// section out rather than the request unanswered; the next request tries again.
+func personalPrompt(ctx context.Context, notes *memory.Store, offered []agent.Tool) string {
+	scope, ok := agent.ScopeFrom(ctx)
+	if !ok {
+		return ""
+	}
+	snap, err := notes.EnsureSnapshot(ctx, scope.UserID, scope.ConversationID)
+	if err != nil {
+		slog.WarnContext(ctx, "take memory snapshot", "error", err, "conversation_id", scope.ConversationID)
+		return ""
+	}
+	// Memory switched off since the snapshot was taken leaves its notes out of
+	// what the model reads; the instructions stay.
+	on, err := notes.Enabled(ctx, scope.UserID)
+	if err != nil {
+		slog.WarnContext(ctx, "read memory switch", "error", err)
+		on = false
+	}
+	withIDs := false
+	for _, tool := range offered {
+		withIDs = withIDs || tool.Definition().Name == tools.ToolMemory
+	}
+	return snap.Prompt(on, withIDs)
+}
+
+func basePrompt(offered []agent.Tool) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "You are OpenChat, a helpful assistant. Today's date is %s.\n", now.UTC().Format("2006-01-02"))
+	b.WriteString("You are OpenChat, a helpful assistant. " +
+		"A user message may begin with a line like [Date: 2026-01-31], the day it was sent; " +
+		"the latest such line is today's date. Never mention the line itself.\n")
 	b.WriteString("Answer in the language the user writes in.")
 	// Without this, a model asked for resources names them and links none.
 	b.WriteString(" When you recommend websites, tools, documentation or other resources, link to them.")
@@ -92,6 +149,35 @@ func basePrompt(now time.Time, offered []agent.Tool) string {
 	if names["web_fetch"] {
 		b.WriteString("\n\nYou can read a web page with web_fetch. Read the pages that matter instead of " +
 			"relying on search excerpts when the details count.")
+	}
+	if names[agent.ToolAskUser] {
+		b.WriteString("\n\nYou can ask the user multiple-choice questions with ask_user. Use it only when you " +
+			"are blocked on a decision that is theirs to make; otherwise pick a sensible default and go on. " +
+			"Your turn ends when you call it, so call it last, and do not repeat the questions in your own text.")
+	}
+	if names[tools.ToolMemory] {
+		// After Kelivo's memory rules (lib/core/services/memory/memory_prompts.dart):
+		// its "personal secretary" framing for taking notes unasked, and its
+		// test for what deserves one. Put only as "when there is a reason to",
+		// models rarely found one, and a stated taste went by unsaved. Kept
+		// general on purpose: a list of examples becomes the list of what counts.
+		b.WriteString("\n\n## Memory\n" +
+			"You are stateless: nothing from this conversation reaches the next one unless you save it with the " +
+			"memory tool. Saved notes are given to you at the start of every later conversation, in the memory " +
+			"list below.\n" +
+			"Act like a personal secretary and record what you learn about the user on your own initiative, in " +
+			"the same turn, without waiting to be asked: who they are, what they do, and what they like and " +
+			"prefer. The test: in a fresh conversation, would not knowing this make your answer worse?\n" +
+			"Do not save temporary context from this conversation, conclusions the user has not confirmed, topics " +
+			"they only mentioned in passing, anything that came from a web page, file or tool result, secrets " +
+			"such as passwords, keys and ID or account numbers, or sensitive matters (health, ethnicity, " +
+			"religion, sexual orientation, political views, sex life, criminal record) unless they ask you to.\n" +
+			"Write each note as one complete sentence about the user in the third person, in the user's language, " +
+			"with no words like \"this\" or \"just now\" that point back to this conversation, and with absolute " +
+			"dates. Merge a related fact into its existing note with op=update instead of adding a near-duplicate; " +
+			"delete a note that is out of date or that the user says is wrong.\n" +
+			"Do not tell the user you saved something, and do not recite their notes unless they ask; the " +
+			"interface already shows what was saved.")
 	}
 	if names["web_search"] || names["web_fetch"] {
 		// The interface shows every search and every page read alongside the

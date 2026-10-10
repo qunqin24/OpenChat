@@ -1,5 +1,7 @@
 package openai
 
+import "encoding/json"
+
 // The structs here mirror the Chat Completions streaming payload. They are
 // decoded leniently on purpose: providers add fields constantly, and rejecting
 // a chunk because it carries one we have never heard of would break a working
@@ -69,17 +71,45 @@ type wireUsage struct {
 }
 
 type wireError struct {
-	Message string `json:"message"`
-	Type    string `json:"type"`
-	Code    string `json:"code"`
+	Message string   `json:"message"`
+	Type    string   `json:"type"`
+	Code    wireCode `json:"code"`
+}
+
+// wireCode is an error code as a string, whichever way it was sent. OpenAI
+// sends "rate_limit_exceeded"; OpenRouter sends the HTTP status as a number
+// (429) inside a mid-stream error frame, and a field that cannot be decoded
+// would take the whole frame — and the message beside it — down with it.
+type wireCode string
+
+func (c *wireCode) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		*c = wireCode(s)
+		return nil
+	}
+	var n json.Number
+	if err := json.Unmarshal(data, &n); err == nil {
+		*c = wireCode(n.String())
+		return nil
+	}
+	// null, or a shape nobody documented: no code is better than no message.
+	*c = ""
+	return nil
 }
 
 // wireMessage is the request-side message. Content is `any` because the
 // protocol accepts either a string or a list of typed blocks, and sending the
 // list form for plain text upsets older gateways.
 type wireMessage struct {
-	Role       string         `json:"role"`
-	Content    any            `json:"content,omitempty"`
+	Role    string `json:"role"`
+	Content any    `json:"content,omitempty"`
+
+	// ReasoningContent is the model's earlier thinking handed back, in the
+	// field the vendors that want it read it from. Never folded into Content:
+	// that would present the thinking as something the model said.
+	ReasoningContent string `json:"reasoning_content,omitempty"`
+
 	ToolCalls  []wireToolCall `json:"tool_calls,omitempty"`
 	ToolCallID string         `json:"tool_call_id,omitempty"`
 }

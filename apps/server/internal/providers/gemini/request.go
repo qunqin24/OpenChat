@@ -3,6 +3,7 @@ package gemini
 import (
 	"encoding/base64"
 	"encoding/json"
+	"strconv"
 	"strings"
 
 	"github.com/qunqin/openchat/apps/server/internal/llm"
@@ -27,8 +28,10 @@ var reservedKeys = map[string]bool{
 // levels are the thinking levels this API accepts. Gemini 3 models take a
 // level; Gemini 2.5 models take a budget instead, and which one a model takes
 // is the catalogue's to say — the caller sends one or the other. A budget is
-// not clamped against maxOutputTokens: on this protocol thoughts are counted
-// separately, unlike the Messages API.
+// not clamped against maxOutputTokens: this API takes any pair, but thoughts
+// are generated inside maxOutputTokens as on the Messages API, so a small cap
+// can be spent on thinking and end the turn MAX_TOKENS with little or no
+// visible answer. That is the caller's cap to size, not something to hide here.
 var levels = map[llm.ReasoningEffort]bool{
 	llm.EffortMinimal: true, llm.EffortLow: true, llm.EffortMedium: true, llm.EffortHigh: true,
 }
@@ -38,7 +41,7 @@ func buildBody(req llm.Request) ([]byte, error) {
 		return nil, llm.Errorf(llm.ErrorProvider, nil, "gemini: the request names no model")
 	}
 
-	system, contents, err := convertMessages(req.Messages)
+	system, contents, err := convertMessages(req.Messages, req.Model)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +143,7 @@ func toolMode(choice llm.ToolChoice) string {
 // turns in a row; adjacent same-role turns are merged for the same reason as on
 // the Messages API. Unlike there, this API does not insist the history open
 // with the user, so nothing is refused on that ground.
-func convertMessages(messages []llm.Message) ([]wireRequestPart, []wireContent, error) {
+func convertMessages(messages []llm.Message, model string) ([]wireRequestPart, []wireContent, error) {
 	var (
 		system   []wireRequestPart
 		contents []wireContent
@@ -166,7 +169,7 @@ func convertMessages(messages []llm.Message) ([]wireRequestPart, []wireContent, 
 			// Not "assistant". This protocol has never used that word, and a
 			// role it does not know is a 400.
 			role = "model"
-			parts, err = convertAssistant(message)
+			parts, err = convertAssistant(message, model)
 		case llm.RoleTool:
 			role = "user"
 			parts, err = convertToolResults(message)
@@ -220,8 +223,9 @@ func convertPrompt(message llm.Message) ([]wireRequestPart, error) {
 // worst a rejected request. Dropping it costs the model its own deliberation
 // from earlier turns, which is the same trade the Chat Completions adapter
 // makes by default.
-func convertAssistant(message llm.Message) ([]wireRequestPart, error) {
+func convertAssistant(message llm.Message, model string) ([]wireRequestPart, error) {
 	parts := make([]wireRequestPart, 0, len(message.Parts))
+	sawCall := false
 	for _, part := range message.Parts {
 		switch p := part.(type) {
 		case llm.TextPart:
@@ -246,7 +250,14 @@ func convertAssistant(message llm.Message) ([]wireRequestPart, error) {
 				// bookkeeping for the run layer and means nothing here.
 				call.ID = p.ID
 			}
-			parts = append(parts, wireRequestPart{FunctionCall: call})
+			part := wireRequestPart{FunctionCall: call}
+			if !sawCall {
+				// Only the first call of a step is validated, and only that
+				// one carries a signature when the model made several at once.
+				part.ThoughtSignature = callThoughtSignature(p, model)
+				sawCall = true
+			}
+			parts = append(parts, part)
 		default:
 			return nil, llm.Errorf(llm.ErrorProvider, nil, "gemini: an assistant message cannot carry a %s block", part.Kind())
 		}
@@ -256,6 +267,46 @@ func convertAssistant(message llm.Message) ([]wireRequestPart, error) {
 		return nil, llm.Errorf(llm.ErrorProvider, nil, "gemini: assistant message has no content and no tool calls")
 	}
 	return parts, nil
+}
+
+// skipSignatureValidation is the value the API documents for a function call
+// that has no signature of its own: history that predates this adapter keeping
+// them, a trace from another vendor, or a call a client made up. It switches
+// the check off for that call; it does not claim the model reasoned anything.
+const skipSignatureValidation = "skip_thought_signature_validator"
+
+// callThoughtSignature is what goes on the first functionCall of a replayed
+// step. Gemini 3 answers 400 to a step in the current turn whose first call
+// lacks one, so a call with no usable signature gets the documented dummy
+// there. Earlier models do not validate, and a signature they never issued is
+// better left off than guessed at.
+func callThoughtSignature(call llm.ToolCallPart, model string) string {
+	if raw, ok := strings.CutPrefix(call.Signature, llm.SignatureGemini); ok && raw != "" {
+		// A signature another adapter wrote has a different prefix and falls
+		// through: it would only be rejected here.
+		return raw
+	}
+	if validatesSignatures(model) {
+		return skipSignatureValidation
+	}
+	return ""
+}
+
+// validatesSignatures reports whether a model refuses function-call history
+// without signatures, which is true from Gemini 3 on. The generation is read
+// out of the name ("gemini-3-pro-preview", "models/gemini-3.1-flash") because
+// a relay can serve any model and nothing else here says which one it is.
+func validatesSignatures(model string) bool {
+	_, rest, ok := strings.Cut(strings.ToLower(model), "gemini-")
+	if !ok {
+		return false
+	}
+	end := 0
+	for end < len(rest) && rest[end] >= '0' && rest[end] <= '9' {
+		end++
+	}
+	generation, err := strconv.Atoi(rest[:end])
+	return err == nil && generation >= 3
 }
 
 // convertToolResults answers calls by NAME. This protocol has no id to match

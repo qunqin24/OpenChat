@@ -35,6 +35,9 @@ const (
 	SlotPending = "pending"
 	SlotRunning = "running"
 	SlotDone    = "done"
+	// SlotAwaiting is a call to a UserTool: nothing runs, and the person's
+	// answer is its result. It ends the run once the round's other calls have.
+	SlotAwaiting = "awaiting"
 )
 
 // Live is `runs.live`: the work in flight, which is not a message yet.

@@ -19,6 +19,7 @@ tags:
   - name: conversations
   - name: messages
   - name: files
+  - name: memory
 
 paths:
   /healthz:
@@ -148,22 +149,28 @@ paths:
         "204": { description: changed, other sessions revoked }
         default: { $ref: "#/components/responses/Error" }
 
-  /admin/stats:
+  /admin/dashboard:
     get:
       tags: [admin]
-      summary: Dashboard totals and activity trend
-      operationId: getAdminStats
+      summary: Operating figures from the usage ledger
+      description: |
+        What the model requests of a window look like: volume, spend, errors,
+        latency and cache use, next to the equal-length window before it, plus
+        the trend and the busiest models, channels and users. Buckets are hours
+        for `24h` and calendar days otherwise; the window runs up to now and
+        starts at the beginning of its first bucket.
+      operationId: getAdminDashboard
       parameters:
-        - name: days
+        - name: range
           in: query
-          description: Length of the trend window.
-          schema: { type: integer, minimum: 7, maximum: 90, default: 30 }
+          schema: { $ref: "#/components/schemas/DashboardRange" }
       responses:
         "200":
           description: ok
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/AdminStats" }
+              schema: { $ref: "#/components/schemas/AdminDashboard" }
+        "400": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
   /admin/users:
@@ -207,6 +214,53 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/User" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/usage-logs:
+    get:
+      tags: [admin]
+      summary: List model requests
+      description: |
+        One row per request made to a model -- every attempt of a run (a retry
+        is its own row, and so is a failure) and every background title -- newest
+        first. Cost and prices are those of the moment the request was made.
+        The summary covers the whole filtered range, not just this page.
+      operationId: listUsageLogs
+      parameters:
+        - { $ref: "#/components/parameters/Limit" }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: userId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: model
+          in: query
+          description: The model id the request asked for.
+          schema: { type: string }
+        - name: channelId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/UsageStatus" }
+        - name: kind
+          in: query
+          schema: { $ref: "#/components/schemas/UsageKind" }
+        - name: from
+          in: query
+          description: Requests started at or after this time.
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          description: Requests started before this time (exclusive).
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UsageLogPage" }
         default: { $ref: "#/components/responses/Error" }
 
   /admin/channel-types:
@@ -791,19 +845,70 @@ paths:
         "204": { description: deleted }
         default: { $ref: "#/components/responses/Error" }
 
+  /conversations/{conversationId}/title:
+    parameters:
+      - { $ref: "#/components/parameters/ConversationId" }
+    post:
+      tags: [conversations]
+      summary: Name a conversation from what it is about
+      description: |
+        Has the task model (System settings), else the conversation's own
+        model, read the conversation's latest exchanges and title it, then
+        renames the conversation to that title, replacing whatever it was
+        called. Waits for the model. 409 `nothing_to_title` for a conversation
+        with no messages; 502 `title_failed` when the model gave no title.
+      operationId: generateConversationTitle
+      responses:
+        "200":
+          description: the renamed conversation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Conversation" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /conversations/{conversationId}/context:
+    parameters:
+      - { $ref: "#/components/parameters/ConversationId" }
+    get:
+      tags: [conversations]
+      summary: How much of the model's context window the conversation fills
+      description: |
+        Read from the conversation's latest answered request: everything it
+        was sent, cached or not, plus what it wrote. `usedTokens` is null for a
+        conversation nothing has been answered in yet. The window it is
+        measured against is the model's `contextLimit` (ChatModel).
+      operationId: getConversationContext
+      responses:
+        "200":
+          description: the context the latest request used
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContextUsage" }
+        default: { $ref: "#/components/responses/Error" }
+
   /conversations/{conversationId}/messages:
     parameters:
       - { $ref: "#/components/parameters/ConversationId" }
     get:
       tags: [messages]
       summary: List messages in a conversation
+      description: |
+        The transcript is paged from its end: with no `before` the page is the
+        conversation's newest rows, and `before` (the previous page's
+        `olderCursor`) fetches the page of rows older than it. Within a page
+        the items stay in chronological order, oldest first, so a client
+        prepends each older page to what it holds. A page without
+        `olderCursor` reaches the start of the conversation.
       operationId: listMessages
       parameters:
         - { $ref: "#/components/parameters/Limit" }
-        - { $ref: "#/components/parameters/Cursor" }
+        - name: before
+          in: query
+          description: The `olderCursor` of the page just newer than the one wanted.
+          schema: { type: string }
       responses:
         "200":
-          description: a page of messages
+          description: a page of messages, oldest first
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MessagePage" }
@@ -842,6 +947,142 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CreateMessageResponse" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /conversations/{conversationId}/messages/{messageId}/edit:
+    parameters:
+      - { $ref: "#/components/parameters/ConversationId" }
+      - name: messageId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [messages]
+      summary: Ask a question again, reworded
+      description: |
+        Starts a new branch from any question on the branch shown. The new
+        wording is written as a new user message with the same parent as the
+        one edited — a sibling, `editOf` the first version of the question —
+        and becomes the conversation's current leaf; a run answers it, with the
+        model, effort and web choice given, as sending does, and sees only the
+        messages before it. What followed the edited question is not deleted:
+        it is off the branch shown and comes back when the question's
+        `branches` pager is switched back (`switchVersion`). The new message
+        carries the edited one's files. 409 `not_on_path` when the message is
+        not on the branch shown, `conversation_busy` while a run is going.
+      operationId: editMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EditMessageRequest" }
+      responses:
+        "202":
+          description: the new message was written and its run started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreateMessageResponse" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /conversations/{conversationId}/messages/{messageId}/switch:
+    parameters:
+      - { $ref: "#/components/parameters/ConversationId" }
+      - name: messageId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [messages]
+      summary: Show another version of a question, and the branch under it
+      description: |
+        Moves the conversation to another version of a question (a message of
+        the branch shown's `branches`, see `Message.branches`): the shown
+        branch then runs through that version and on to the end of the branch
+        under it that was last worked on, so the turns that followed it come
+        back, and the ones that followed the version just left are set aside.
+        Every later request is built from, and every page of messages is read
+        along, the new branch.
+
+        Responds with the newest page of the new branch (as `listMessages`
+        without `before`), which replaces the transcript the client holds.
+        409 `not_on_path` when the message is not a version of a question on
+        the branch shown, `conversation_busy` while a run is going.
+      operationId: switchVersion
+      parameters:
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200":
+          description: the newest page of the branch now shown, oldest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessagePage" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /conversations/{conversationId}/regenerate:
+    parameters:
+      - { $ref: "#/components/parameters/ConversationId" }
+    post:
+      tags: [messages]
+      summary: Answer the last message again
+      description: |
+        Starts another run on the last user message of the branch shown, with the
+        model, effort and web choice given (else the conversation's, which it
+        then remembers, as sending does). The answer it replaces is kept as a
+        version (`Message.versions`, `chooseAnswer`) but is no longer shown or
+        sent to a model. Followed on the events stream like any run; 409
+        `conversation_busy` while one is going, 404 `nothing_to_answer` in a
+        conversation with no message.
+      operationId: regenerateAnswer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegenerateRequest" }
+      responses:
+        "202":
+          description: the run started; `message` is the input it answers
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreateMessageResponse" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /conversations/{conversationId}/tool-calls/{callId}/answer:
+    parameters:
+      - { $ref: "#/components/parameters/ConversationId" }
+      - name: callId
+        in: path
+        required: true
+        schema: { type: string, maxLength: 200 }
+    post:
+      tags: [messages]
+      summary: Answer the model's question
+      description: |
+        The model called `ask_user` and its run stopped there, finished as
+        `awaiting_input`, with the call on the transcript and no result. This
+        writes the answers as the call's result and starts the run that goes
+        on from it, with the model, effort and web choice given, as sending
+        does. The new run is part of the same answer: it continues the run
+        that asked (`Run.continues`), shares its input and shows under the same
+        reply, and is followed on the events stream like any run. The result
+        row is announced in the same batch as the run starting.
+
+        Only the question at the end of the transcript can be answered: 409
+        `not_pending` for one already answered, one the user wrote past, one
+        whose answer was redone, or a call that is not an `ask_user` waiting
+        for its answer. 409 `conversation_busy` while a run is going; 400
+        `invalid_answers` when the answers do not fit the questions.
+      operationId: answerQuestion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnswerQuestionRequest" }
+      responses:
+        "202":
+          description: the answers were recorded and the run started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnswerQuestionResponse" }
         default: { $ref: "#/components/responses/Error" }
 
   /conversations/{conversationId}/events:
@@ -887,6 +1128,177 @@ paths:
       operationId: cancelRun
       responses:
         "202": { description: the run was asked to stop }
+        default: { $ref: "#/components/responses/Error" }
+
+  /conversations/{conversationId}/runs/{runId}/choose:
+    parameters:
+      - { $ref: "#/components/parameters/ConversationId" }
+      - name: runId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [messages]
+      summary: Show another version of the last answer
+      description: |
+        Makes this run the answer shown — and the one a later message builds
+        on — in place of the other versions of the same input (see
+        `Message.versions`). Only the last turn of the branch shown can
+        switch: an earlier one has later turns built on the version it shows,
+        so it answers 409 `not_latest`, as it does while a run is going
+        (`conversation_busy`). Responds with the run's input, then the run's
+        rows: together they replace the turn the client holds.
+      operationId: chooseAnswer
+      responses:
+        "200":
+          description: the run's question, then its rows, oldest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessagePage" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /me/personalization:
+    get:
+      tags: [memory]
+      summary: Your custom instructions and memory switch
+      operationId: getPersonalization
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Personalization" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [memory]
+      summary: Change your custom instructions or memory switch
+      description: |
+        Only the fields present are changed. New conversations take the change;
+        one already running keeps what it began with.
+      operationId: updatePersonalization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdatePersonalizationRequest" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Personalization" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /me/memories:
+    get:
+      tags: [memory]
+      summary: Your memories, oldest first
+      description: |
+        Always your own: no endpoint, the administrator's included, returns
+        anyone else's. The list is capped (`Personalization.memoryLimit`), so it
+        is not paged.
+      operationId: listMemories
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MemoryList" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [memory]
+      summary: Write a memory yourself
+      description: 409 `memory_full` at the cap and `memory_duplicate` for one already there.
+      operationId: createMemory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MemoryRequest" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Memory" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [memory]
+      summary: Delete every memory
+      description: Also forgets what the memory log holds about them.
+      operationId: clearMemories
+      responses:
+        "204": { description: cleared }
+        default: { $ref: "#/components/responses/Error" }
+
+  /me/memories/{memoryId}:
+    parameters:
+      - name: memoryId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [memory]
+      summary: Rewrite a memory
+      operationId: updateMemory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MemoryRequest" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Memory" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [memory]
+      summary: Delete a memory
+      operationId: deleteMemory
+      responses:
+        "204": { description: deleted }
+        default: { $ref: "#/components/responses/Error" }
+
+  /me/memory-events:
+    get:
+      tags: [memory]
+      summary: What the model recently changed in your memories
+      description: |
+        The last thirty days, newest first: the "recently learned" list, and
+        what the chat looks up to know whether a change can still be undone.
+        Your own edits are not logged.
+      operationId: listMemoryEvents
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MemoryEventList" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /me/memory-events/{eventId}/undo:
+    parameters:
+      - name: eventId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [memory]
+      summary: Undo a change the model made
+      description: |
+        An added memory is removed, an edited one put back, a deleted one
+        restored. 409 `memory_changed` when the memory was edited since (the
+        edit wins), `already_undone`, `memory_full` or `memory_duplicate` when a
+        restore cannot be made.
+      operationId: undoMemoryEvent
+      responses:
+        "200":
+          description: undone
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MemoryEvent" }
         default: { $ref: "#/components/responses/Error" }
 
   /features:
@@ -1063,12 +1475,33 @@ components:
       type: string
       enum: [pending, streaming, complete, failed]
 
+    ContextUsage:
+      type: object
+      additionalProperties: false
+      description: Both fields are left out when nothing has been answered yet.
+      properties:
+        usedTokens:
+          type: integer
+          format: int64
+          nullable: true
+          description: Tokens the latest answered request took, in and out.
+        model:
+          type: string
+          nullable: true
+          description: The model that request went to.
+
     Conversation:
       type: object
-      required: [id, title, webSearch, createdAt, updatedAt]
+      required: [id, title, webSearch, temporary, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
         title: { type: string }
+        temporary:
+          type: boolean
+          description: |
+            A temporary chat: left out of the history, given no memories (custom
+            instructions still apply) and no memory tool, never titled, and
+            deleted a day after it was made. Set when it is created.
         model: { type: string, nullable: true }
         reasoningEffort:
           $ref: "#/components/schemas/ReasoningEffort"
@@ -1107,6 +1540,7 @@ components:
         model: { type: string }
         reasoningEffort: { $ref: "#/components/schemas/ReasoningEffort" }
         webSearch: { type: boolean }
+        temporary: { type: boolean }
 
     UpdateConversationRequest:
       type: object
@@ -1161,6 +1595,28 @@ components:
         attachments:
           type: array
           items: { $ref: "#/components/schemas/Attachment" }
+        versions:
+          type: array
+          description: |
+            User messages whose question was answered more than once, by
+            regenerating: every run that answered it, oldest first. One of them
+            is shown — the `runId` of the rows that follow — and the others are
+            kept to switch back to (`chooseAnswer`).
+          items: { type: string, format: uuid }
+        branches:
+          type: array
+          description: |
+            User messages whose question has other versions (it was asked
+            again in new words, `editMessage`): the message and its siblings —
+            the messages that follow the same parent — oldest first. One of
+            them is on the branch shown and the others are kept, with what
+            followed them, to switch to (`switchVersion`). Absent when the
+            question has only one version.
+          items: { type: string, format: uuid }
+        editOf:
+          type: string
+          format: uuid
+          description: User messages only. The first version of the question this one rewords.
         createdAt: { type: string, format: date-time }
 
     MessagePart:
@@ -1251,7 +1707,12 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/Message" }
-        nextCursor: { type: string, nullable: true }
+        olderCursor:
+          type: string
+          nullable: true
+          description: |
+            Pass as `before` to fetch the page of rows older than this one.
+            Absent when this page reaches the start of the conversation.
 
     CreateMessageRequest:
       type: object
@@ -1277,6 +1738,72 @@ components:
           type: array
           items: { type: string, format: uuid }
 
+    EditMessageRequest:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string, minLength: 1 }
+        model: { type: string }
+        reasoningEffort: { $ref: "#/components/schemas/ReasoningEffort" }
+        webSearch: { type: boolean }
+        requestId:
+          type: string
+          maxLength: 100
+          description: Chosen by the client; a retry with the same id finds the same run.
+
+    RegenerateRequest:
+      type: object
+      properties:
+        model: { type: string }
+        reasoningEffort: { $ref: "#/components/schemas/ReasoningEffort" }
+        webSearch: { type: boolean }
+        requestId:
+          type: string
+          maxLength: 100
+          description: Chosen by the client; a retry with the same id finds the same run.
+
+    AnswerQuestionRequest:
+      type: object
+      required: [answers]
+      properties:
+        answers:
+          type: array
+          description: |
+            One entry per question, in the order asked. Each takes the options
+            chosen (by label) and/or text the user wrote instead; a question
+            that is not `multiSelect` takes one of the two, not both.
+          items:
+            type: object
+            required: [selected]
+            properties:
+              selected:
+                type: array
+                items: { type: string }
+              other:
+                type: string
+                maxLength: 2000
+        model: { type: string }
+        reasoningEffort: { $ref: "#/components/schemas/ReasoningEffort" }
+        webSearch: { type: boolean }
+        requestId:
+          type: string
+          maxLength: 100
+          description: Chosen by the client; a retry with the same id finds the same run.
+
+    AnswerQuestionResponse:
+      type: object
+      required: [message, result, run]
+      properties:
+        message:
+          $ref: "#/components/schemas/Message"
+          description: The user message the answer is to, which the new run shares with the one that asked.
+        result:
+          $ref: "#/components/schemas/Message"
+          description: |
+            The tool row written for the call. Its result's `details.answers`
+            holds the answers by question position, as `{selected, other}`.
+        run: { $ref: "#/components/schemas/Run" }
+
     CreateMessageResponse:
       type: object
       required: [message, run]
@@ -1291,10 +1818,23 @@ components:
       properties:
         id: { type: string, format: uuid }
         conversationId: { type: string, format: uuid }
-        status: { type: string, enum: [running, completed, failed, cancelled] }
+        status:
+          type: string
+          enum: [running, completed, failed, cancelled, awaiting_input]
+          description: |
+            `awaiting_input` is a run that stopped to ask the user something
+            (`ask_user`): finished, with the call unanswered on the transcript.
+            Answering starts a run that continues it.
         model: { type: string }
         reasoningEffort: { $ref: "#/components/schemas/ReasoningEffort" }
         errorCode: { type: string }
+        continues:
+          type: string
+          format: uuid
+          description: |
+            Set on the run that goes on after a question was answered: the run
+            that began the answer (never a middle one). Its rows show in the
+            same reply, and the two are one version of the turn.
         version:
           type: integer
           format: int64
@@ -1332,7 +1872,10 @@ components:
       properties:
         callId: { type: string }
         name: { type: string }
-        status: { type: string, enum: [pending, running, done] }
+        status:
+          type: string
+          enum: [pending, running, done, awaiting]
+          description: '`awaiting` is a question for the user: nothing runs, and the run ends on it.'
         messageId: { type: string, format: uuid }
 
     ConversationEvent:
@@ -1385,6 +1928,7 @@ components:
         - $ref: "#/components/schemas/ToolStartedEvent"
         - $ref: "#/components/schemas/ToolFinishedEvent"
         - $ref: "#/components/schemas/RetryScheduledEvent"
+        - $ref: "#/components/schemas/TitleChangedEvent"
       discriminator:
         propertyName: type
         mapping:
@@ -1398,6 +1942,7 @@ components:
           tool_started: "#/components/schemas/ToolStartedEvent"
           tool_finished: "#/components/schemas/ToolFinishedEvent"
           retry_scheduled: "#/components/schemas/RetryScheduledEvent"
+          title_changed: "#/components/schemas/TitleChangedEvent"
 
     RunStartedEvent:
       type: object
@@ -1482,6 +2027,112 @@ components:
         at: { type: string, format: date-time }
         errorCode: { type: string }
 
+    TitleChangedEvent:
+      type: object
+      description: |
+        The conversation was given a title, generated from its first exchange
+        after the run that answered it finished. Sent in a batch of its own,
+        under that run's id and last version — so it is not a step of the run
+        and a client applies it whatever run state it holds.
+      required: [type, title]
+      properties:
+        type: { type: string, const: title_changed }
+        title: { type: string }
+
+    Personalization:
+      type: object
+      required: [aboutYou, responseStyle, memoryEnabled, memoryAllowed, instructionLimit, memoryLimit, memoryLength]
+      properties:
+        aboutYou:
+          type: string
+          description: Custom instructions about the user. Part of every conversation's system prompt, temporary ones included.
+        responseStyle:
+          type: string
+          description: Custom instructions about how answers should be written.
+        memoryEnabled:
+          type: boolean
+          description: |
+            Your own switch. Off, no conversation of yours reads or writes
+            memories and the model is not offered the memory tool.
+        memoryAllowed:
+          type: boolean
+          description: |
+            The administrator's switch (`SystemSettings.memory`). Off, memory is
+            off for everyone whatever `memoryEnabled` says.
+        instructionLimit: { type: integer, description: Characters allowed in each instructions field. }
+        memoryLimit: { type: integer, description: Memories allowed per person. }
+        memoryLength: { type: integer, description: Characters allowed in one memory. }
+
+    UpdatePersonalizationRequest:
+      type: object
+      description: Only the fields present are changed.
+      properties:
+        aboutYou: { type: string }
+        responseStyle: { type: string }
+        memoryEnabled: { type: boolean }
+
+    MemorySource:
+      type: string
+      description: |
+        Who wrote it: `user` by hand, `model` with its memory tool, `auto` is
+        reserved for learning from conversations (not offered yet).
+      enum: [user, model, auto]
+
+    Memory:
+      type: object
+      required: [id, content, source, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        content: { type: string }
+        source: { $ref: "#/components/schemas/MemorySource" }
+        conversationId:
+          type: string
+          format: uuid
+          nullable: true
+          description: The conversation it was learned in, while that still exists.
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    MemoryList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Memory" }
+
+    MemoryRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          description: |
+            One sentence. Whitespace is collapsed; 400 `memory_empty` or
+            `memory_too_long` (see `Personalization.memoryLength`).
+
+    MemoryEvent:
+      type: object
+      required: [id, memoryId, op, source, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        memoryId: { type: string, format: uuid }
+        op: { type: string, enum: [add, update, delete] }
+        before: { type: string, nullable: true }
+        after: { type: string, nullable: true }
+        source: { $ref: "#/components/schemas/MemorySource" }
+        conversationId: { type: string, format: uuid, nullable: true }
+        undoneAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    MemoryEventList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MemoryEvent" }
+
     ChatFeatures:
       type: object
       required: [webSearch]
@@ -1547,7 +2198,7 @@ components:
 
     SessionUser:
       type: object
-      required: [id, email, name, role, avatarUrl]
+      required: [id, email, name, role]
       properties:
         id: { type: string, format: uuid }
         email: { type: string, format: email }
@@ -1559,17 +2210,15 @@ components:
       type: string
       format: uri
       description: |
-        Where to fetch this account's picture. Derived from the address rather
-        than stored, so it is the server's answer to "what does this person
-        look like" and not a column — when uploads exist, this field points at
-        them instead and no caller changes.
-
-        It resolves to 404 when the address has no picture registered, which is
-        the signal to fall back to initials.
+        An uploaded picture of the account, once accounts can have one. Absent
+        today: every client draws an account as the first letter of its name
+        on a colour derived from its id. No third-party avatar service is
+        asked — that would tell it who is being looked at, from every page
+        that shows a name.
 
     User:
       type: object
-      required: [id, email, name, role, disabled, createdAt, avatarUrl]
+      required: [id, email, name, role, disabled, createdAt]
       properties:
         id: { type: string, format: uuid }
         email: { type: string, format: email }
@@ -1590,6 +2239,112 @@ components:
         total: { type: integer, format: int64 }
         page: { type: integer }
         limit: { type: integer }
+
+    UsageKind:
+      type: string
+      description: |
+        `chat` is a model request of a run; `title` is the background request
+        that names a conversation.
+      enum: [chat, title]
+      # Named explicitly: bare `Chat` would collide with ApiFormat's `chat` and
+      # make the generator rename both enums' constants.
+      x-enum-varnames: [UsageKindChat, UsageKindTitle]
+
+    UsageStatus:
+      type: string
+      description: A user stopping a reply is `ok`; only a failed request is `error`.
+      enum: [ok, error]
+
+    UsageLog:
+      type: object
+      required: [id, createdAt, kind, status, channelName, model, servedModel,
+                 inputTokens, outputTokens, reasoningTokens, cacheReadTokens, cacheWriteTokens,
+                 streamed, durationMs]
+      properties:
+        id: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time, description: When the request started. }
+        kind: { $ref: "#/components/schemas/UsageKind" }
+        status: { $ref: "#/components/schemas/UsageStatus" }
+        errorCode:
+          type: string
+          nullable: true
+          description: The code the chat localises (model_auth, model_rate_limited, ...).
+        errorMessage:
+          type: string
+          nullable: true
+          description: Short, scrubbed and truncated; for operators.
+        userId: { type: string, format: uuid, nullable: true }
+        userName: { type: string, nullable: true }
+        userEmail: { type: string, nullable: true }
+        conversationId: { type: string, format: uuid, nullable: true }
+        runId: { type: string, format: uuid, nullable: true }
+        channelId: { type: string, format: uuid, nullable: true }
+        channelName:
+          type: string
+          description: The channel's name when the request was made.
+        model: { type: string, description: The model id the request asked for. }
+        servedModel:
+          type: string
+          description: The model the provider says it served; empty when it did not say.
+        inputTokens: { type: integer, format: int64, description: Excludes the cached part. }
+        outputTokens: { type: integer, format: int64, description: Includes reasoning. }
+        reasoningTokens: { type: integer, format: int64 }
+        cacheReadTokens: { type: integer, format: int64 }
+        cacheWriteTokens: { type: integer, format: int64 }
+        inputPrice: { type: number, format: double, nullable: true, description: USD per million tokens. }
+        outputPrice: { type: number, format: double, nullable: true }
+        cacheReadPrice: { type: number, format: double, nullable: true }
+        cacheWritePrice: { type: number, format: double, nullable: true }
+        cost:
+          type: number
+          format: double
+          nullable: true
+          description: USD. Null when the price is unknown or the provider reported no usage.
+        streamed: { type: boolean }
+        firstTokenMs:
+          type: integer
+          format: int64
+          nullable: true
+          description: Request start to the first content, reasoning or tool-call delta.
+        durationMs: { type: integer, format: int64 }
+
+    UsageSummary:
+      type: object
+      required: [requests, errors, inputTokens, outputTokens, cost, cacheReadTokens, cacheWriteTokens]
+      properties:
+        requests: { type: integer, format: int64 }
+        errors: { type: integer, format: int64 }
+        inputTokens: { type: integer, format: int64 }
+        outputTokens: { type: integer, format: int64 }
+        cost: { type: number, format: double, description: USD; unpriced requests add nothing. }
+        cacheReadTokens: { type: integer, format: int64, description: Of the successful requests. }
+        cacheWriteTokens: { type: integer, format: int64, description: Of the successful requests. }
+        cacheHitRate:
+          type: number
+          format: double
+          nullable: true
+          description: |
+            Token-weighted: cacheReadTokens / (inputTokens + cacheReadTokens +
+            cacheWriteTokens), over successful requests. Null when none sent a token.
+        cacheSavings:
+          type: number
+          format: double
+          nullable: true
+          description: |
+            USD the cached reads saved against the full input price, over the
+            requests priced for both. Null when none were.
+
+    UsageLogPage:
+      type: object
+      required: [items, total, page, limit, summary]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/UsageLog" }
+        total: { type: integer, format: int64 }
+        page: { type: integer }
+        limit: { type: integer }
+        summary: { $ref: "#/components/schemas/UsageSummary" }
 
     Username:
       type: string
@@ -1820,14 +2575,33 @@ components:
 
     SystemSettings:
       type: object
-      required: [debugLogging, generativeUi]
+      required: [debugLogging, generativeUi, askUser, memory, taskModel]
       properties:
+        taskModel:
+          type: string
+          description: |
+            The model background tasks use — for now, titling a conversation
+            after its first answer. Empty: each conversation's own model.
         generativeUi:
           type: boolean
           description: |
             Whether models are taught to answer with interface components
             (`openchat-ui` blocks). Off by default: the catalogue adds a few
             thousand tokens to every request's system prompt.
+        askUser:
+          type: boolean
+          description: |
+            Whether models are offered the `ask_user` tool, with which they put
+            multiple-choice questions to the user and wait for the answers.
+            On by default. Takes effect at the next model request, including
+            for runs in progress.
+        memory:
+          type: boolean
+          description: |
+            The kill switch for personal memory. Off, no conversation reads or
+            writes memories and the memory tool is not offered; people can still
+            see and delete theirs, and their custom instructions still apply.
+            On by default. Administrators cannot read anyone's memories either way.
         debugLogging:
           type: boolean
           description: |
@@ -1841,6 +2615,13 @@ components:
       properties:
         debugLogging: { type: boolean }
         generativeUi: { type: boolean }
+        askUser: { type: boolean }
+        memory: { type: boolean }
+        taskModel:
+          type: string
+          description: |
+            A model an enabled channel offers (400 `model_unavailable`
+            otherwise), or empty for each conversation's own.
 
     WebSearchProvider:
       type: string
@@ -2053,7 +2834,7 @@ components:
         choosing a protocol is a question the operator should not have to
         answer, so the type answers it for them. `GET /admin/channel-types`
         carries the full table.
-      enum: [openai, anthropic, gemini, openrouter, deepseek, siliconflow, moonshot, zhipu, dashscope, volcengine, minimax, xai, groq, ollama, mistral, stepfun, hunyuan, qianfan, mimo, together, fireworks, nvidia, modelscope, cerebras, lmstudio, openai-compatible]
+      enum: [openai, anthropic, gemini, openrouter, deepseek, siliconflow, moonshot, zhipu, dashscope, volcengine, minimax, xai, groq, ollama, mistral, stepfun, hunyuan, qianfan, mimo, together, fireworks, nvidia, modelscope, cerebras, opencode-go, lmstudio, openai-compatible]
 
     WireApi:
       type: string
@@ -2068,9 +2849,18 @@ components:
         servers the operator runs (plus the generic relay).
       enum: [vendor, platform, custom]
 
+    ApiFormat:
+      type: string
+      description: |
+        Which of OpenAI's request formats a channel on the OpenAI protocol
+        sends: Chat Completions (`chat`, served by nearly every compatible
+        endpoint) or the Responses API (`responses`). Ignored on other
+        protocols, and on a type that routes each model itself.
+      enum: [chat, responses]
+
     ChannelTypeInfo:
       type: object
-      required: [id, label, wireApi, endpoint, keyHint, iconId, group, keyOptional]
+      required: [id, label, wireApi, endpoint, keyHint, iconId, group, keyOptional, apiFormatChoice]
       properties:
         id: { $ref: "#/components/schemas/ChannelType" }
         label:
@@ -2094,6 +2884,12 @@ components:
             Whether the endpoint is normally reached without a credential — a
             service on the operator's own machine. The form then lets a model
             list be fetched with the key left blank.
+        apiFormatChoice:
+          type: boolean
+          description: |
+            Whether the operator chooses the request format (`ApiFormat`) for a
+            channel of this type: true for the OpenAI protocol, false where the
+            protocol has one format or the type routes each model itself.
 
     ChannelModel:
       type: object
@@ -2133,12 +2929,13 @@ components:
 
     Channel:
       type: object
-      required: [id, name, type, wireApi, enabled, hasKey, sortOrder, createdAt, modelCount]
+      required: [id, name, type, wireApi, apiFormat, enabled, hasKey, sortOrder, createdAt, modelCount]
       properties:
         id: { type: string, format: uuid }
         name: { type: string, description: What the operator calls this connection. }
         type: { $ref: "#/components/schemas/ChannelType" }
         wireApi: { $ref: "#/components/schemas/WireApi" }
+        apiFormat: { $ref: "#/components/schemas/ApiFormat" }
         baseUrl:
           type: string
           description: Overrides the provider's default endpoint. Empty means use the default.
@@ -2185,6 +2982,7 @@ components:
         baseUrl: { type: string, maxLength: 500 }
         apiKey: { type: string, maxLength: 500 }
         enabled: { type: boolean, default: true }
+        apiFormat: { $ref: "#/components/schemas/ApiFormat" }
         models:
           type: array
           maxItems: 2000
@@ -2204,36 +3002,130 @@ components:
         apiKey: { type: string, maxLength: 500 }
         enabled: { type: boolean }
         sortOrder: { type: integer }
+        apiFormat: { $ref: "#/components/schemas/ApiFormat" }
 
-    AdminStats:
-      type: object
-      required: [totals, trend]
-      properties:
-        totals: { $ref: "#/components/schemas/AdminTotals" }
-        trend:
-          type: array
-          items: { $ref: "#/components/schemas/TrendPoint" }
+    DashboardRange:
+      type: string
+      enum: ["24h", "7d", "30d", "90d"]
+      default: "7d"
 
-    AdminTotals:
+    DashboardKpis:
       type: object
       required:
-        [totalUsers, activeUsers, totalConversations, totalMessages, newUsers7d, messages7d]
+        [requests, errors, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, cost, activeUsers]
       properties:
-        totalUsers: { type: integer, format: int64 }
-        activeUsers: { type: integer, format: int64 }
-        totalConversations: { type: integer, format: int64 }
-        totalMessages: { type: integer, format: int64 }
-        newUsers7d: { type: integer, format: int64 }
-        messages7d: { type: integer, format: int64 }
+        requests: { type: integer, format: int64 }
+        errors: { type: integer, format: int64 }
+        inputTokens: { type: integer, format: int64, description: Excluding the cached part. }
+        outputTokens: { type: integer, format: int64 }
+        cacheReadTokens: { type: integer, format: int64 }
+        cacheWriteTokens: { type: integer, format: int64 }
+        cacheHitRate:
+          type: number
+          format: double
+          nullable: true
+          description: As in UsageSummary; null when no successful request sent a token.
+        cacheSavings:
+          type: number
+          format: double
+          nullable: true
+          description: As in UsageSummary.
+        cost: { type: number, format: double, description: USD; unpriced requests add nothing. }
+        activeUsers: { type: integer, format: int64, description: Distinct accounts that made a request. }
+        firstTokenP50Ms: { type: number, format: double, nullable: true, description: Of successful requests that have one. }
+        firstTokenP95Ms: { type: number, format: double, nullable: true }
 
-    TrendPoint:
+    DashboardTrendPoint:
       type: object
-      required: [day, messages, conversations, users]
+      required: [at, requests, errors, cost]
       properties:
-        day: { type: string, format: date }
-        messages: { type: integer, format: int64 }
-        conversations: { type: integer, format: int64 }
-        users: { type: integer, format: int64 }
+        at: { type: string, format: date-time, description: Start of the hour or day. }
+        requests: { type: integer, format: int64 }
+        errors: { type: integer, format: int64 }
+        cost: { type: number, format: double }
+
+    DashboardModel:
+      type: object
+      required: [model, requests, errors, inputTokens, outputTokens, cacheReadTokens, cost]
+      properties:
+        model: { type: string }
+        requests: { type: integer, format: int64 }
+        errors: { type: integer, format: int64 }
+        inputTokens: { type: integer, format: int64 }
+        outputTokens: { type: integer, format: int64 }
+        cacheReadTokens: { type: integer, format: int64 }
+        cacheHitRate: { type: number, format: double, nullable: true }
+        cost: { type: number, format: double }
+        firstTokenP50Ms: { type: number, format: double, nullable: true }
+
+    DashboardChannel:
+      type: object
+      required: [channelName, requests, errors]
+      properties:
+        channelId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Null once the channel was deleted; its history keeps the name.
+        channelName: { type: string }
+        requests: { type: integer, format: int64 }
+        errors: { type: integer, format: int64 }
+        firstTokenP50Ms: { type: number, format: double, nullable: true }
+        firstTokenP95Ms: { type: number, format: double, nullable: true }
+        durationP50Ms: { type: number, format: double, nullable: true }
+        durationP95Ms: { type: number, format: double, nullable: true }
+        lastErrorAt: { type: string, format: date-time, nullable: true }
+
+    DashboardUser:
+      type: object
+      required: [requests, cost]
+      properties:
+        userId: { type: string, format: uuid, nullable: true }
+        userName: { type: string, nullable: true }
+        userEmail: { type: string, nullable: true }
+        requests: { type: integer, format: int64 }
+        cost: { type: number, format: double }
+
+    DashboardError:
+      type: object
+      required: [id, createdAt, model, channelName]
+      properties:
+        id: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        model: { type: string }
+        channelName: { type: string }
+        errorCode: { type: string, nullable: true }
+        errorMessage: { type: string, nullable: true }
+
+    AdminDashboard:
+      type: object
+      required: [range, since, bucket, totalUsers, current, previous, trend, models, channels, users, errors]
+      properties:
+        range: { $ref: "#/components/schemas/DashboardRange" }
+        since: { type: string, format: date-time, description: Start of the window. }
+        bucket: { type: string, enum: [hour, day], description: What one trend point spans. }
+        totalUsers: { type: integer, format: int64, description: Enabled accounts. }
+        current: { $ref: "#/components/schemas/DashboardKpis" }
+        previous: { $ref: "#/components/schemas/DashboardKpis" }
+        trend:
+          type: array
+          items: { $ref: "#/components/schemas/DashboardTrendPoint" }
+        models:
+          type: array
+          description: Busiest first, at most 8.
+          items: { $ref: "#/components/schemas/DashboardModel" }
+        channels:
+          type: array
+          description: Busiest first, at most 8.
+          items: { $ref: "#/components/schemas/DashboardChannel" }
+        users:
+          type: array
+          description: Highest spend first, at most 8.
+          items: { $ref: "#/components/schemas/DashboardUser" }
+        errors:
+          type: array
+          description: Latest failures first, at most 8.
+          items: { $ref: "#/components/schemas/DashboardError" }
 
     BulkUpdateUsersRequest:
       type: object

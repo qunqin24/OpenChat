@@ -85,6 +85,22 @@ func ParseReasoningOptions(raw []byte) ReasoningProfile {
 	return profile
 }
 
+// BudgetOnly is the profile of a model that takes thinking only as a token
+// budget although the catalogue lists effort levels for it too. Claude Opus 4.5
+// is the case: models.dev gives it low, medium and high beside its budget, but
+// the Messages API takes it only as `enabled` with a budget (the effort there
+// scales the answer's thoroughness, not whether adaptive thinking is allowed),
+// so asking for an effort as thinking is a rejected request. The levels offered
+// stay the three a budget stands for. With no budget range of its own the
+// API's floor is used.
+func (p ReasoningProfile) BudgetOnly() ReasoningProfile {
+	p.Efforts = nil
+	if p.Budget == nil {
+		p.Budget = &BudgetRange{Min: 1024}
+	}
+	return p
+}
+
 // Levels are what a person may choose for this model, beyond leaving it to
 // the model: its own effort levels, or three budgets standing in for them.
 func (p ReasoningProfile) Levels() []llm.ReasoningEffort {

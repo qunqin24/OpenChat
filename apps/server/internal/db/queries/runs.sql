@@ -1,10 +1,18 @@
 -- name: CreateRun :one
 INSERT INTO runs (conversation_id, user_id, input_message_id, request_id, model_id, channel_id, reasoning_effort,
-                  web_search)
+                  web_search, continues)
 VALUES (sqlc.arg('conversation_id'), sqlc.arg('user_id'), sqlc.arg('input_message_id'),
         sqlc.narg('request_id'), sqlc.arg('model_id'), sqlc.narg('channel_id'), sqlc.narg('reasoning_effort'),
-        sqlc.arg('web_search'))
+        sqlc.arg('web_search'), sqlc.narg('continues'))
 RETURNING *;
+
+-- name: LockRun :one
+-- Held until the transaction ends, so two answers to one question queue up and
+-- the second finds the first's.
+SELECT *
+FROM runs
+WHERE id = $1
+FOR UPDATE;
 
 -- name: GetRun :one
 SELECT *
@@ -64,3 +72,21 @@ WHERE id = sqlc.arg('id')
   AND conversation_id = sqlc.arg('conversation_id')
   AND status = 'running'
 RETURNING *;
+
+-- name: ChooseAnswer :exec
+-- Shows one of an input's answers and hides the rest; with no run to keep,
+-- hides them all, ahead of a new one. A run that continues another is part of
+-- that answer and goes or stays with it.
+UPDATE runs
+SET superseded = (COALESCE(continues, id) IS DISTINCT FROM sqlc.narg('keep')::uuid)
+WHERE input_message_id = sqlc.arg('input_id');
+
+-- name: ListAnswers :many
+-- Every run that answered each of these inputs, oldest first: their versions.
+-- An answer that stopped to ask a question and went on is one version, named by
+-- the run that began it.
+SELECT r.input_message_id AS input, r.id
+FROM runs r
+WHERE r.input_message_id = ANY (sqlc.arg('inputs')::uuid[])
+  AND r.continues IS NULL
+ORDER BY r.created_at, r.id;

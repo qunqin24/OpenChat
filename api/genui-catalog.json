@@ -4,7 +4,7 @@
   "components": [
     {
       "name": "Card",
-      "description": "A raised container for a few closely related things, such as a price with its breakdown, or a small panel: an icon, a title and subtitle and a status Badge in its header, its content, a footer line. Most blocks need no Card; never wrap a whole answer in one. A Grid of Cards with an icon, a title and a subtitle and no children introduces a set of topics, options or features at a glance. With an image, the picture is the card's cover and the title and subtitle sit beneath it; several such Cards in a Carousel scroll sideways. The image follows the Image rule: src must be an image address listed in a web_fetch or web_search result in this conversation (a page lists its images under \"Images on this page\"); never invent or guess one. With none listed, leave pictures out.",
+      "description": "A raised container for a few closely related things, such as a price with its breakdown, or a small panel: an icon, a title and subtitle and a status Badge in its header, its content, a footer line. Most blocks need no Card; never wrap a whole answer in one. A Grid of Cards with an icon, a title and a subtitle and no children introduces a set of topics, options or features at a glance. With an image, the picture is the card's cover and the title and subtitle sit beneath it; several such Cards in a Carousel scroll sideways. The image follows the Image rule: src must be an image address listed in a web_fetch or web_search result in this conversation (a page lists its images under \"Images on this page\"); never invent or guess one. With none listed, leave pictures out. Cards side by side in a Grid are peers: give them the same tone (plain), and use accent only to mark the one you recommend; muted is for a quieter card on its own.",
       "params": [
         {
           "name": "children",
@@ -361,7 +361,7 @@
     },
     {
       "name": "Steps",
-      "description": "An ordered procedure or plan. Its items are Step components.",
+      "description": "An ordered procedure or plan, drawn numbered. Its items are Step components.",
       "params": [
         {
           "name": "items",
@@ -375,7 +375,7 @@
     },
     {
       "name": "Step",
-      "description": "One step of a Steps list.",
+      "description": "One step of a Steps list. Give status only for a plan whose progress is being tracked; leave it out for an ordinary procedure.",
       "params": [
         {
           "name": "title",
@@ -393,8 +393,7 @@
             "done",
             "current",
             "todo"
-          ],
-          "default": "todo"
+          ]
         }
       ]
     },

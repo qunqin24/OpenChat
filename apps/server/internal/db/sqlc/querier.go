@@ -8,6 +8,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
@@ -36,6 +37,10 @@ type Querier interface {
 	// created_at is the wall clock, not now(): now() is the transaction's start, so
 	// two rows written by one commit would tie and fall back to ordering by a
 	// random uuid.
+	//
+	// A user message is written with the input it follows (`parent_input_id`, null
+	// for a conversation's first) and then made the conversation's current leaf
+	// with SetCurrentInput; no other row has a parent.
 	AppendEntry(ctx context.Context, arg AppendEntryParams) (Message, error)
 	AppendMessageContent(ctx context.Context, arg AppendMessageContentParams) (Message, error)
 	// Claims uploads for a message. Only the caller's own, only unclaimed ones: the
@@ -43,6 +48,10 @@ type Querier interface {
 	AttachToMessage(ctx context.Context, arg AttachToMessageParams) (int64, error)
 	BulkSetUserDisabled(ctx context.Context, arg BulkSetUserDisabledParams) (int64, error)
 	BulkUpdateUserRole(ctx context.Context, arg BulkUpdateUserRoleParams) (int64, error)
+	// Shows one of an input's answers and hides the rest; with no run to keep,
+	// hides them all, ahead of a new one. A run that continues another is part of
+	// that answer and goes or stays with it.
+	ChooseAnswer(ctx context.Context, arg ChooseAnswerParams) error
 	CountAdmins(ctx context.Context) (int64, error)
 	CountCatalogModels(ctx context.Context) (int64, error)
 	CountCatalogProviders(ctx context.Context) (int64, error)
@@ -51,6 +60,7 @@ type Querier interface {
 	// answer a caller reading a map gets for free.
 	CountEnabledChannelModels(ctx context.Context) ([]CountEnabledChannelModelsRow, error)
 	CountEnabledChannelModelsFor(ctx context.Context, channelID uuid.UUID) (int64, error)
+	CountMemories(ctx context.Context, userID uuid.UUID) (int64, error)
 	// The total behind ListServedModels; see the comments there. Counting `served`
 	// rather than channel_models is what keeps a model served by three channels
 	// from counting three times.
@@ -58,6 +68,8 @@ type Querier interface {
 	CountUsers(ctx context.Context) (int64, error)
 	CountUsersFiltered(ctx context.Context, search *string) (int64, error)
 	CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (Attachment, error)
+	// An empty format is the default, so a caller that has no opinion — tests,
+	// older code — gets Chat Completions rather than a constraint violation.
 	CreateChannel(ctx context.Context, arg CreateChannelParams) (Channel, error)
 	CreateConversation(ctx context.Context, arg CreateConversationParams) (Conversation, error)
 	CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error)
@@ -66,15 +78,26 @@ type Querier interface {
 	// list. Insert them together with the channel in one transaction.
 	CreateSelectedChannelModels(ctx context.Context, arg CreateSelectedChannelModelsParams) error
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
+	DeleteAllMemories(ctx context.Context, userID uuid.UUID) error
+	DeleteAllMemoryEvents(ctx context.Context, userID uuid.UUID) error
 	DeleteCatalogModels(ctx context.Context) error
 	DeleteCatalogProviders(ctx context.Context) error
 	DeleteChannel(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteExpiredSessions(ctx context.Context) (int64, error)
+	// One statement, so any number of servers can run it: whichever gets a row
+	// deletes it, the others find it gone. Soft-deleted ones go too — a day is a day.
+	// Messages, runs and attachments follow by cascade; usage rows are kept (their
+	// conversation reference is SET NULL).
+	DeleteExpiredTemporaryConversations(ctx context.Context, before pgtype.Timestamptz) (int64, error)
 	// Only a manual row can be deleted by hand. A fetched row is removed by the
 	// endpoint no longer listing it; deleting one here would just bring it back on
 	// the next refresh, which reads as the button not working.
 	DeleteManualChannelModel(ctx context.Context, arg DeleteManualChannelModelParams) (int64, error)
+	DeleteMemory(ctx context.Context, arg DeleteMemoryParams) (int64, error)
+	// What the log holds about a memory goes when the person deletes the memory.
+	DeleteMemoryEventsFor(ctx context.Context, arg DeleteMemoryEventsForParams) error
 	DeleteModelOverride(ctx context.Context, modelID string) error
+	DeleteOldMemoryEvents(ctx context.Context, before pgtype.Timestamptz) (int64, error)
 	// Used when someone changes their own password: every session issued under the
 	// old credential goes, except the one asking, so the change does not sign the
 	// person out of the tab they are standing in.
@@ -93,9 +116,6 @@ type Querier interface {
 	// What a conversation that never picked a model is answered with.
 	FirstServedModel(ctx context.Context) (string, error)
 	GetActiveRun(ctx context.Context, conversationID uuid.UUID) (Run, error)
-	// One row per day for the requested window, including days with no activity —
-	// a gap in the series would otherwise draw as a straight line across the chart.
-	GetActivityTrend(ctx context.Context, days int32) ([]GetActivityTrendRow, error)
 	// What the local storage driver's handlers know a file by. The signature in
 	// the URL is what authorises the request, so there is no owner to check.
 	GetAttachmentByStorageKey(ctx context.Context, storageKey string) (Attachment, error)
@@ -106,9 +126,51 @@ type Querier interface {
 	// belonging to someone else must read as "not found", never as "forbidden",
 	// or the response tells a stranger the id exists.
 	GetConversation(ctx context.Context, arg GetConversationParams) (Conversation, error)
-	GetDashboardTotals(ctx context.Context) (GetDashboardTotalsRow, error)
+	// Whether the conversation exists for this user, is temporary, and its snapshot.
+	GetConversationMemoryState(ctx context.Context, arg GetConversationMemoryStateParams) (GetConversationMemoryStateRow, error)
+	// The snapshot, with the row locked: the tool adds to it as memories are saved.
+	GetConversationSnapshotForUpdate(ctx context.Context, arg GetConversationSnapshotForUpdateParams) (GetConversationSnapshotForUpdateRow, error)
+	// The conversation's last user message on the branch shown: the one a
+	// regenerated answer answers, and where a new message is appended.
+	GetCurrentInput(ctx context.Context, id uuid.UUID) (Message, error)
+	// Per upstream, to show which one is failing or slow. A channel is its id and
+	// the name it had: deleting one keeps its history under the name, with no id.
+	GetDashboardChannels(ctx context.Context, arg GetDashboardChannelsParams) ([]GetDashboardChannelsRow, error)
+	// The latest failures; the partial index on errors serves it.
+	GetDashboardErrors(ctx context.Context, arg GetDashboardErrorsParams) ([]GetDashboardErrorsRow, error)
+	// The headline figures for [from_time, to_time); an open `to_time` runs up to now.
+	GetDashboardKpis(ctx context.Context, arg GetDashboardKpisParams) (GetDashboardKpisRow, error)
+	// The busiest models. Ties break on the name so the order does not shuffle
+	// between two refreshes.
+	GetDashboardModels(ctx context.Context, arg GetDashboardModelsParams) ([]GetDashboardModelsRow, error)
+	// One row per bucket from `since` to now, empty ones included: a gap in the
+	// series would draw as a straight line across the chart.
+	GetDashboardTrend(ctx context.Context, arg GetDashboardTrendParams) ([]GetDashboardTrendRow, error)
+	// Who spends the most. Requests with no owner (a deleted account) group as one.
+	GetDashboardUsers(ctx context.Context, arg GetDashboardUsersParams) ([]GetDashboardUsersRow, error)
+	// The dashboard: operational figures from the usage ledger over a window, each
+	// a single pass over the rows from `since` on.
+	//
+	// Shared definitions. Errors are status = 'error'. The cache hit rate is
+	// token-weighted, cache_read / (input + cache_read + cache_write) -- input
+	// excludes the cached part, see llm.Usage -- over successful requests only; the
+	// query returns the two sums (cache_read_tokens, cache_prompt_tokens) and the
+	// caller divides, so "nothing was sent" stays a missing rate rather than a 0%.
+	// Latency percentiles look at successful requests that have the time, and are
+	// -1 where none did (sqlc cannot return a NULL double).
+	// Where a window starts. `bucket` is 'hour' or 'day' and `buckets` how many of
+	// them the window spans, counting the current, partial one -- so a 7-day window
+	// is today and the six days before it. `prev_since` opens the equal-length
+	// window before, the one the figures are compared with. Worked out here, in
+	// the database's time zone, so the buckets of the trend line up with it.
+	GetDashboardWindow(ctx context.Context, arg GetDashboardWindowParams) (GetDashboardWindowRow, error)
+	// A user message of the conversation, wherever it is in the tree.
+	GetInput(ctx context.Context, arg GetInputParams) (Message, error)
+	GetMemory(ctx context.Context, arg GetMemoryParams) (UserMemory, error)
+	GetMemoryEventForUpdate(ctx context.Context, arg GetMemoryEventForUpdateParams) (MemoryEvent, error)
 	GetMessage(ctx context.Context, id uuid.UUID) (Message, error)
 	GetModelOverride(ctx context.Context, modelID string) (ModelOverride, error)
+	GetPersonalization(ctx context.Context, id uuid.UUID) (GetPersonalizationRow, error)
 	GetRun(ctx context.Context, id uuid.UUID) (Run, error)
 	GetRunByRequestID(ctx context.Context, arg GetRunByRequestIDParams) (Run, error)
 	// A run's pinned channel, as long as it still serves the model. Anything else
@@ -129,11 +191,26 @@ type Querier interface {
 	// row the planner returned first, which is the wrong account rather than an
 	// error. Addresses win, so nobody's username can shadow somebody's email.
 	GetUserByLogin(ctx context.Context, identifier string) (User, error)
+	InputOnPath(ctx context.Context, arg InputOnPathParams) (bool, error)
 	InsertCatalogModels(ctx context.Context, arg []InsertCatalogModelsParams) (int64, error)
 	InsertCatalogProviders(ctx context.Context, arg []InsertCatalogProvidersParams) (int64, error)
+	InsertMemory(ctx context.Context, arg InsertMemoryParams) (UserMemory, error)
+	InsertMemoryEvent(ctx context.Context, arg InsertMemoryEventParams) (MemoryEvent, error)
 	// Writes a setting only when there is none yet, so two processes that both find
 	// it missing cannot overwrite each other's value. Read it back afterwards.
 	InsertSettingIfMissing(ctx context.Context, arg InsertSettingIfMissingParams) error
+	// Prices and cost arrive as double precision and are stored as numeric rounded
+	// to ten places, so a float's tail (0.30000000000000004) never reaches the
+	// ledger.
+	InsertUsageLog(ctx context.Context, arg InsertUsageLogParams) error
+	// How much of the model's window the conversation's latest answered request
+	// took: everything it was sent, cached or not, plus what it wrote, which the
+	// next request carries back.
+	LatestContextTokens(ctx context.Context, conversationID *uuid.UUID) (LatestContextTokensRow, error)
+	// Every run that answered each of these inputs, oldest first: their versions.
+	// An answer that stopped to ask a question and went on is one version, named by
+	// the run that began it.
+	ListAnswers(ctx context.Context, inputs []uuid.UUID) ([]ListAnswersRow, error)
 	ListAttachmentsByMessages(ctx context.Context, messageIds []uuid.UUID) ([]Attachment, error)
 	// Attachments by id, within one user's scope: what the context builder resolves
 	// a reference through, so a reference to someone else's file reads as missing.
@@ -171,15 +248,25 @@ type Querier interface {
 	// the paging and the count.
 	ListChannelsServingModels(ctx context.Context, modelIds []string) ([]ListChannelsServingModelsRow, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
+	// Oldest first, so a memory keeps its place in the list (and in the prompt).
+	ListMemories(ctx context.Context, userID uuid.UUID) ([]UserMemory, error)
+	ListMemoryEvents(ctx context.Context, arg ListMemoryEventsParams) ([]MemoryEvent, error)
+	// A page of the transcript from its end: the newest rows, or with a cursor the
+	// rows older than it. Newest first, so the limit keeps the end; the caller
+	// turns the page around. The transcript is the branch shown (see
+	// conversation_transcript), so the cursor walks back along it.
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
 	ListModelOverrides(ctx context.Context, modelIds []string) ([]ModelOverride, error)
 	// The caller's own uploads that no message has claimed yet.
 	ListPendingAttachments(ctx context.Context, arg ListPendingAttachmentsParams) ([]Attachment, error)
-	// The newest rows of a conversation, oldest first: the raw material of a model
-	// request. Newest, not oldest — a long conversation is answered from its end.
+	// The newest rows of the branch shown, oldest first: the raw material of a
+	// model request. Newest, not oldest — a long conversation is answered from its
+	// end. Only the path counts as history: what followed a version set aside by an
+	// edit is not, and neither is an answer that was regenerated.
 	ListRecentMessages(ctx context.Context, arg ListRecentMessagesParams) ([]Message, error)
 	// Every row a run wrote, its input included: what a subscriber's snapshot
-	// carries alongside the run's live state.
+	// carries alongside the run's live state. The runs that continue it (the answer
+	// after a question) are its rows too.
 	ListRunMessages(ctx context.Context, arg ListRunMessagesParams) ([]Message, error)
 	// What a process that just started has to pick up.
 	ListRunningRuns(ctx context.Context) ([]Run, error)
@@ -220,16 +307,44 @@ type Querier interface {
 	// under, and sorting on an empty one would herd every uncatalogued model into a
 	// block at the top that looks like a fault.
 	ListServedModels(ctx context.Context, arg ListServedModelsParams) ([]ListServedModelsRow, error)
+	// Newest first. Offset paging, like the other admin tables: the page numbers
+	// and the total are the point.
+	//
+	// `to` is exclusive, so a day's end is the next day's start and nothing falls
+	// between two ranges.
+	ListUsageLogs(ctx context.Context, arg ListUsageLogsParams) ([]ListUsageLogsRow, error)
 	// Offset paging rather than keyset: the admin table needs page numbers and a
 	// total, and the row count here stays small enough that the scan is cheap.
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
 	ListUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]User, error)
+	// For each of these user messages, the versions of its question: every user
+	// message with the same parent (itself included), oldest first. Roots have no
+	// parent, so a conversation's first questions are found among its own.
+	ListVersions(ctx context.Context, ids []uuid.UUID) ([]ListVersionsRow, error)
+	// Held until the transaction ends: whatever moves the conversation's current
+	// leaf — a message, an edit, a switch of branch — queues here, and reads the
+	// leaf the one before it left.
+	LockConversation(ctx context.Context, id uuid.UUID) (Conversation, error)
+	// Serialises writers of one person's list for the length of the transaction, so
+	// two adds at the cap cannot both pass the count.
+	LockMemoryList(ctx context.Context, userID string) error
+	// Held until the transaction ends, so two answers to one question queue up and
+	// the second finds the first's.
+	LockRun(ctx context.Context, id uuid.UUID) (Run, error)
+	MarkMemoryEventUndone(ctx context.Context, arg MarkMemoryEventUndoneParams) (MemoryEvent, error)
 	// What a run needs to know about its model: how its thinking is controlled,
 	// how much it may read and write, and what it can do. The catalogue row is
 	// chosen the way ListServedModels chooses it — a provider one of the serving
 	// channels names wins — so the levels a run accepts are the levels the picker
 	// showed. No rows when the catalogue does not know the model.
 	ModelProfile(ctx context.Context, modelID string) (ModelProfileRow, error)
+	// Whether the branch shown passes through a version of this question: a
+	// message with the same parent, itself included. Those are the only messages
+	// the reader can switch to.
+	PathHasVersionOf(ctx context.Context, arg PathHasVersionOfParams) (bool, error)
+	// Where the reader lands when switching to this question: the end of the
+	// branch below it that was last the one shown.
+	PickBranchLeaf(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	// The channel a new run of this model is answered from: the first enabled one
 	// that offers it, in the operator's order. Pinned on the run, so a later change
 	// here affects the next run, never one already going.
@@ -257,10 +372,32 @@ type Querier interface {
 	SetConversationModel(ctx context.Context, arg SetConversationModelParams) (Conversation, error)
 	// NULL is automatic: the model's own default.
 	SetConversationReasoning(ctx context.Context, arg SetConversationReasoningParams) (Conversation, error)
+	// Only the first one is kept: two requests that both found none cannot
+	// overwrite each other, and the loser reads the winner's.
+	SetConversationSnapshot(ctx context.Context, arg SetConversationSnapshotParams) ([]byte, error)
 	SetConversationWebSearch(ctx context.Context, arg SetConversationWebSearchParams) (Conversation, error)
+	// Moves the reader to this user message, a leaf of the conversation, and notes
+	// that it was the branch shown just now (see PickBranchLeaf).
+	SetCurrentInput(ctx context.Context, arg SetCurrentInputParams) error
+	// A generated title, only over the default one: a conversation the user has
+	// renamed in the meantime keeps their name. Not a change of activity, so the
+	// conversation keeps its place in the list.
+	SetGeneratedTitle(ctx context.Context, arg SetGeneratedTitleParams) (Conversation, error)
 	// Upsert, so a setting added after this database was created still writes.
 	SetSetting(ctx context.Context, arg SetSettingParams) error
 	SoftDeleteConversation(ctx context.Context, arg SoftDeleteConversationParams) (int64, error)
+	// The total behind ListUsageLogs, with what an operator wants above the table:
+	// how many requests, how many failed, how many tokens and how much money. The
+	// same filters, in the same words -- if they drift the total stops matching
+	// the rows.
+	//
+	// The cache figures count the successful requests only. The hit rate is
+	// token-weighted: cache_read / (input + cache_read + cache_write), where input
+	// excludes the cached part (see llm.Usage); the two sums are returned and the
+	// caller divides. The saving is what the cached reads would have cost at the
+	// full input price, less what they did cost, over the requests priced with
+	// both -- 0 when none were.
+	SummarizeUsageLogs(ctx context.Context, arg SummarizeUsageLogsParams) (SummarizeUsageLogsRow, error)
 	// Whether any tool result in the conversation contains the text, for the
 	// image proxy: it serves only addresses a page or search put in front of the
 	// model. jsonb renders strings with only quotes and backslashes escaped, so
@@ -276,10 +413,14 @@ type Querier interface {
 	// therefore "leave it", which COALESCE gives us for free.
 	UpdateChannel(ctx context.Context, arg UpdateChannelParams) (Channel, error)
 	UpdateConversationTitle(ctx context.Context, arg UpdateConversationTitleParams) (Conversation, error)
+	UpdateMemoryContent(ctx context.Context, arg UpdateMemoryContentParams) (UserMemory, error)
 	// Deliberately narrower than AdminUpdateUser: role and disabled_at are not
 	// reachable from here, so the self-service form cannot touch them even if the
 	// handler above it were wrong.
 	UpdateOwnProfile(ctx context.Context, arg UpdateOwnProfileParams) (User, error)
+	// Its own statement, apart from UpdateOwnProfile, for the same reason that one
+	// is apart from AdminUpdateUser: nothing here reaches the role or the password.
+	UpdatePersonalization(ctx context.Context, arg UpdatePersonalizationParams) (UpdatePersonalizationRow, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	// One statement for the whole list, so a refresh cannot half-apply.
 	//
@@ -297,6 +438,17 @@ type Querier interface {
 	// `unnest(ids, names)`, which says the same thing in one line but which sqlc's
 	// analyser cannot type.
 	UpsertFetchedChannelModels(ctx context.Context, arg UpsertFetchedChannelModelsParams) error
+	// What a request needs to be priced and labelled: the channel's current name,
+	// and the catalogue's per-million-token prices for the model.
+	//
+	// The catalogue row is chosen like ModelProfile chooses it, except that the
+	// request's own channel decides which provider's entry wins -- the same model
+	// id is priced differently by different providers -- and an entry that
+	// actually carries a price beats one that does not. An operator's overrides
+	// (model_overrides) have no price columns, so the catalogue is the only source.
+	// Always one row: a request whose channel or model is unknown gets NULLs.
+	UsagePricing(ctx context.Context, arg UsagePricingParams) (UsagePricingRow, error)
+	WriteConversationSnapshot(ctx context.Context, arg WriteConversationSnapshotParams) error
 }
 
 var _ Querier = (*Queries)(nil)

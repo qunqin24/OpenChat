@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	"github.com/qunqin/openchat/apps/server/internal/agent"
@@ -31,41 +32,50 @@ func (s *Server) ListMessages(w http.ResponseWriter, r *http.Request, conversati
 		return
 	}
 
-	cursorAt, cursorID, err := decodeCursor(params.Cursor)
+	cursorAt, cursorID, err := decodeCursor(params.Before)
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
+	page, err := s.transcriptPage(r.Context(), conversationId, cursorAt, cursorID, clampLimit(params.Limit))
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, page)
+}
 
-	limit := clampLimit(params.Limit)
-	rows, err := s.q.ListMessages(r.Context(), sqlc.ListMessagesParams{
-		ConversationID:  conversationId,
+// transcriptPage is a page of the branch shown, from its end: the newest rows,
+// or with a cursor the rows older than it.
+func (s *Server) transcriptPage(ctx context.Context, conversationID uuid.UUID, cursorAt pgtype.Timestamptz, cursorID *uuid.UUID, limit int32) (MessagePage, error) {
+	rows, err := s.q.ListMessages(ctx, sqlc.ListMessagesParams{
+		ConversationID:  conversationID,
 		CursorCreatedAt: cursorAt,
 		CursorID:        cursorID,
 		RowLimit:        limit + 1,
 	})
 	if err != nil {
-		httpx.Fail(w, r, err)
-		return
+		return MessagePage{}, err
 	}
 
-	page := MessagePage{Items: make([]Message, 0, limit)}
+	// rows are newest first and one longer than the page when older ones exist:
+	// the cursor is the page's oldest row, and the page itself is turned around
+	// so that it reads oldest first.
+	var older *string
 	if int32(len(rows)) > limit {
-		last := rows[limit-1]
-		next := encodeCursor(last.CreatedAt, last.ID)
-		page.NextCursor = &next
 		rows = rows[:limit]
+		oldest := rows[limit-1]
+		cursor := encodeCursor(oldest.CreatedAt, oldest.ID)
+		older = &cursor
 	}
+	slices.Reverse(rows)
 
-	byMessage, err := s.attachmentsFor(r.Context(), rows)
+	page, err := s.messagePage(ctx, rows)
 	if err != nil {
-		httpx.Fail(w, r, err)
-		return
+		return MessagePage{}, err
 	}
-	for _, row := range rows {
-		page.Items = append(page.Items, toMessage(row, byMessage[row.ID]))
-	}
-	httpx.JSON(w, http.StatusOK, page)
+	page.OlderCursor = older
+	return page, nil
 }
 
 // Errors a new run can be refused with.
@@ -112,35 +122,22 @@ func (s *Server) CreateMessage(w http.ResponseWriter, r *http.Request, conversat
 	}
 
 	// A retry of a request that already got through finds what it started.
-	requestID := ""
-	if body.RequestId != nil {
-		requestID = strings.TrimSpace(*body.RequestId)
-	}
-	if requestID != "" {
-		if found, ok := s.existingRun(ctx, conversationId, requestID); ok {
-			httpx.JSON(w, http.StatusAccepted, found)
-			return
-		}
+	requestID := trimmed(body.RequestId)
+	if found, ok := s.existingRun(ctx, conversationId, requestID); ok {
+		httpx.JSON(w, http.StatusAccepted, found)
+		return
 	}
 
-	modelID := ""
-	if body.Model != nil {
-		modelID = strings.TrimSpace(*body.Model)
-	}
-	if modelID == "" && conv.Model != nil {
-		modelID = *conv.Model
-	}
-	modelID, channelID, err := s.pickChannel(ctx, modelID)
+	choice, err := s.chooseRun(ctx, conv, body.Model, body.ReasoningEffort, body.WebSearch)
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
-
 	var ids []uuid.UUID
 	if body.AttachmentIds != nil {
 		ids = *body.AttachmentIds
 	}
-	files, err := s.admitAttachments(ctx, user.ID, modelID, ids)
+	files, err := s.admitAttachments(ctx, user.ID, choice.modelID, ids)
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
@@ -151,55 +148,19 @@ func (s *Server) CreateMessage(w http.ResponseWriter, r *http.Request, conversat
 		return
 	}
 
-	// The effort asked for, else the conversation's. Only a level the model's
-	// settings offer is sent: some endpoints reject the parameter outright, and
-	// an operator may have withheld the level.
-	effort := conv.ReasoningEffort
-	rememberEffort := false
-	if body.ReasoningEffort != nil {
-		requested, ok := effortColumn(*body.ReasoningEffort)
-		if !ok {
-			httpx.Fail(w, r, errInvalidEffort)
-			return
-		}
-		rememberEffort = !sameEffort(requested, conv.ReasoningEffort)
-		effort = requested
-	}
-	runEffort := effort
-	if effort != nil {
-		// A level this model does not offer — or the operator does not allow —
-		// is dropped rather than sent: the conversation may remember it from a
-		// model that had it.
-		settings, err := loadModelSettings(ctx, s.q, modelID)
-		if err != nil {
-			httpx.Fail(w, r, err)
-			return
-		}
-		if !settings.Profile.Offers(llm.ReasoningEffort(*effort)) {
-			runEffort = nil
-		}
-	}
-
-	// Web access, asked for or else the conversation's.
-	webSearch := conv.WebSearch
-	if body.WebSearch != nil {
-		webSearch = *body.WebSearch
-	}
-
 	var (
 		input sqlc.Message
 		run   sqlc.Run
 	)
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
-		var err error
-		input, err = q.AppendEntry(ctx, sqlc.AppendEntryParams{
-			ConversationID: conversationId,
-			Role:           sqlc.MessageRoleUser,
-			Content:        content,
-			Parts:          agent.EncodeParts(inputParts(content, files)),
-			Status:         sqlc.MessageStatusComplete,
-		})
+		// The message follows the leaf as it is now, not as it was read above:
+		// a switch of branch may have been queued ahead of this.
+		locked, err := q.LockConversation(ctx, conversationId)
+		if err != nil {
+			return err
+		}
+		input, err = appendInput(ctx, q, locked.ID, locked.CurrentInputID, content, inputParts(content, files), nil)
 		if err != nil {
 			return err
 		}
@@ -216,71 +177,156 @@ func (s *Server) CreateMessage(w http.ResponseWriter, r *http.Request, conversat
 				return errAttachmentUnavailable
 			}
 		}
-		params := sqlc.CreateRunParams{
-			ConversationID:  conversationId,
-			UserID:          user.ID,
-			InputMessageID:  input.ID,
-			ModelID:         modelID,
-			ChannelID:       &channelID,
-			ReasoningEffort: runEffort,
-			WebSearch:       webSearch,
-		}
-		if requestID != "" {
-			params.RequestID = &requestID
-		}
-		if run, err = q.CreateRun(ctx, params); err != nil {
-			return err
-		}
-		if conv.Model == nil || *conv.Model != modelID {
-			if _, err := q.SetConversationModel(ctx, sqlc.SetConversationModelParams{
-				ID: conversationId, UserID: &user.ID, Model: &modelID,
-			}); err != nil {
-				return err
-			}
-		}
-		if rememberEffort {
-			if _, err := q.SetConversationReasoning(ctx, sqlc.SetConversationReasoningParams{
-				ID: conversationId, UserID: &user.ID, ReasoningEffort: effort,
-			}); err != nil {
-				return err
-			}
-		}
-		if webSearch != conv.WebSearch {
-			if _, err := q.SetConversationWebSearch(ctx, sqlc.SetConversationWebSearchParams{
-				ID: conversationId, UserID: &user.ID, WebSearch: webSearch,
-			}); err != nil {
-				return err
-			}
-		}
-		return q.TouchConversation(ctx, conversationId)
+		run, err = createRun(ctx, q, conv, user.ID, input.ID, requestID, choice)
+		return err
 	})
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation {
-			switch pgErr.ConstraintName {
-			case "runs_one_active_per_conversation":
-				httpx.Fail(w, r, errConversationBusy)
-				return
-			case "runs_request_id":
-				// The same request raced itself; the winner's run is the answer.
-				if found, ok := s.existingRun(ctx, conversationId, requestID); ok {
-					httpx.JSON(w, http.StatusAccepted, found)
-					return
-				}
-			}
-		}
-		httpx.Fail(w, r, err)
+		s.failRun(w, r, conversationId, requestID, err)
 		return
 	}
+	s.startRun(conversationId, run, input)
+	httpx.JSON(w, http.StatusAccepted, CreateMessageResponse{Message: toMessage(input, signed), Run: toRun(run)})
+}
 
-	s.runner.Hub().Publish(conversationId, agent.Batch{
+// runChoice is what a new run answers with: the model and where it is served
+// from, the effort and the web switch — and what of that the conversation
+// should remember.
+type runChoice struct {
+	modelID   string
+	channelID uuid.UUID
+	// effort is what the conversation remembers; runEffort what this run sends.
+	effort, runEffort *string
+	rememberEffort    bool
+	webSearch         bool
+	// continues is set when the run answers a question the model asked: the
+	// first run of the answer it carries on (see ask_user.go).
+	continues *uuid.UUID
+}
+
+// chooseRun settles a run's model, effort and web access from what the request
+// asked for, else the conversation's.
+func (s *Server) chooseRun(ctx context.Context, conv sqlc.Conversation, model *string, askedEffort *ReasoningEffort, askedWeb *bool) (runChoice, error) {
+	var c runChoice
+	modelID := ""
+	if model != nil {
+		modelID = strings.TrimSpace(*model)
+	}
+	if modelID == "" && conv.Model != nil {
+		modelID = *conv.Model
+	}
+	modelID, channelID, err := s.pickChannel(ctx, modelID)
+	if err != nil {
+		return c, err
+	}
+	c.modelID, c.channelID = modelID, channelID
+
+	// The effort asked for, else the conversation's. Only a level the model's
+	// settings offer is sent: some endpoints reject the parameter outright, and
+	// an operator may have withheld the level.
+	c.effort = conv.ReasoningEffort
+	if askedEffort != nil {
+		requested, ok := effortColumn(*askedEffort)
+		if !ok {
+			return c, errInvalidEffort
+		}
+		c.rememberEffort = !sameEffort(requested, conv.ReasoningEffort)
+		c.effort = requested
+	}
+	c.runEffort = c.effort
+	if c.effort != nil {
+		// A level this model does not offer — or the operator does not allow —
+		// is dropped rather than sent: the conversation may remember it from a
+		// model that had it.
+		settings, err := loadModelSettings(ctx, s.q, modelID)
+		if err != nil {
+			return c, err
+		}
+		if !settings.Profile.Offers(llm.ReasoningEffort(*c.effort)) {
+			c.runEffort = nil
+		}
+	}
+
+	// Web access, asked for or else the conversation's.
+	c.webSearch = conv.WebSearch
+	if askedWeb != nil {
+		c.webSearch = *askedWeb
+	}
+	return c, nil
+}
+
+// createRun starts a run on an input inside the caller's transaction, and has
+// the conversation remember the choices it was started with.
+func createRun(ctx context.Context, q *sqlc.Queries, conv sqlc.Conversation, userID, inputID uuid.UUID, requestID string, c runChoice) (sqlc.Run, error) {
+	params := sqlc.CreateRunParams{
+		ConversationID:  conv.ID,
+		UserID:          userID,
+		InputMessageID:  inputID,
+		ModelID:         c.modelID,
+		ChannelID:       &c.channelID,
+		ReasoningEffort: c.runEffort,
+		WebSearch:       c.webSearch,
+		Continues:       c.continues,
+	}
+	if requestID != "" {
+		params.RequestID = &requestID
+	}
+	run, err := q.CreateRun(ctx, params)
+	if err != nil {
+		return run, err
+	}
+	if conv.Model == nil || *conv.Model != c.modelID {
+		if _, err := q.SetConversationModel(ctx, sqlc.SetConversationModelParams{
+			ID: conv.ID, UserID: &userID, Model: &c.modelID,
+		}); err != nil {
+			return run, err
+		}
+	}
+	if c.rememberEffort {
+		if _, err := q.SetConversationReasoning(ctx, sqlc.SetConversationReasoningParams{
+			ID: conv.ID, UserID: &userID, ReasoningEffort: c.effort,
+		}); err != nil {
+			return run, err
+		}
+	}
+	if c.webSearch != conv.WebSearch {
+		if _, err := q.SetConversationWebSearch(ctx, sqlc.SetConversationWebSearchParams{
+			ID: conv.ID, UserID: &userID, WebSearch: c.webSearch,
+		}); err != nil {
+			return run, err
+		}
+	}
+	return run, q.TouchConversation(ctx, conv.ID)
+}
+
+// failRun answers a transaction that could not start a run: busy, a request
+// that raced itself (whose winner is the answer), or anything else.
+func (s *Server) failRun(w http.ResponseWriter, r *http.Request, conversationID uuid.UUID, requestID string, err error) {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation {
+		switch pgErr.ConstraintName {
+		case "runs_one_active_per_conversation":
+			httpx.Fail(w, r, errConversationBusy)
+			return
+		case "runs_request_id":
+			// The same request raced itself; the winner's run is the answer.
+			if found, ok := s.existingRun(r.Context(), conversationID, requestID); ok {
+				httpx.JSON(w, http.StatusAccepted, found)
+				return
+			}
+		}
+	}
+	httpx.Fail(w, r, err)
+}
+
+// startRun announces a committed run to the conversation's followers and sets
+// it going. `also` are rows the same commit wrote, announced with it.
+func (s *Server) startRun(conversationID uuid.UUID, run sqlc.Run, input sqlc.Message, also ...agent.Event) {
+	s.runner.Hub().Publish(conversationID, agent.Batch{
 		RunID:   run.ID,
 		Version: run.Version,
-		Events:  []agent.Event{agent.RunStarted{Run: run, Input: input}},
+		Events:  append([]agent.Event{agent.RunStarted{Run: run, Input: input}}, also...),
 	})
 	s.runner.Start(run.ID)
-
-	httpx.JSON(w, http.StatusAccepted, CreateMessageResponse{Message: toMessage(input, signed), Run: toRun(run)})
 }
 
 // inputParts is a user message: its text, then the files it carries as
@@ -371,6 +417,9 @@ func sameEffort(a, b *string) bool {
 }
 
 func (s *Server) existingRun(ctx context.Context, conversationID uuid.UUID, requestID string) (CreateMessageResponse, bool) {
+	if requestID == "" {
+		return CreateMessageResponse{}, false
+	}
 	run, err := s.q.GetRunByRequestID(ctx, sqlc.GetRunByRequestIDParams{ConversationID: conversationID, RequestID: &requestID})
 	if err != nil {
 		return CreateMessageResponse{}, false
@@ -557,9 +606,14 @@ func (s *Server) attachmentsFor(ctx context.Context, rows []sqlc.Message) (map[u
 	if len(rows) == 0 {
 		return nil, nil
 	}
+	// An edited question shows the files of the question it rewords, which
+	// still holds them.
 	ids := make([]uuid.UUID, 0, len(rows))
 	for _, row := range rows {
 		ids = append(ids, row.ID)
+		if row.EditOf != nil {
+			ids = append(ids, *row.EditOf)
+		}
 	}
 
 	found, err := s.q.ListAttachmentsByMessages(ctx, ids)
@@ -580,6 +634,11 @@ func (s *Server) attachmentsFor(ctx context.Context, rows []sqlc.Message) (map[u
 			return nil, err
 		}
 		out[*a.MessageID] = append(out[*a.MessageID], signed...)
+	}
+	for _, row := range rows {
+		if row.EditOf != nil {
+			out[row.ID] = out[*row.EditOf]
+		}
 	}
 	return out, nil
 }

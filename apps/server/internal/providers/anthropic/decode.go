@@ -538,7 +538,16 @@ func (a *assembler) finishReason() (llm.FinishReason, error) {
 		// A stop sequence is a stop the caller asked for. RawFinishReason keeps
 		// which of the two it was, because our mapping cannot.
 		return llm.FinishStop, nil
-	case "max_tokens":
+	case "max_tokens", "model_context_window_exceeded":
+		// The second is the context window running out before max_tokens does.
+		// Either way the answer stopped short of finished, and the raw reason
+		// says which.
+		return llm.FinishLength, nil
+	case "pause_turn":
+		// The model paused a long turn and expects to be continued. We offer no
+		// server tools, which is what produces it, so it is rare; when it comes
+		// the answer is unfinished, and "length" is the finish reason that says
+		// so without ending the run as a failure.
 		return llm.FinishLength, nil
 	case "tool_use":
 		return llm.FinishToolCalls, nil
@@ -550,6 +559,9 @@ func (a *assembler) finishReason() (llm.FinishReason, error) {
 		// presented as a complete one.
 		return "", llm.Errorf(llm.ErrorProtocol, nil, "stream ended without a stop reason")
 	default:
-		return "", llm.Errorf(llm.ErrorProtocol, nil, "unknown stop reason %q", a.rawFinish)
+		// New stop reasons are added over time. The content has arrived intact,
+		// so failing the turn would discard an answer over a label; it is kept
+		// as a plain stop, with the provider's own word in RawFinishReason.
+		return llm.FinishStop, nil
 	}
 }

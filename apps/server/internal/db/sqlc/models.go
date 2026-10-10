@@ -40,6 +40,7 @@ const (
 	ChannelTypeModelscope       ChannelType = "modelscope"
 	ChannelTypeCerebras         ChannelType = "cerebras"
 	ChannelTypeLmstudio         ChannelType = "lmstudio"
+	ChannelTypeOpencodeGo       ChannelType = "opencode-go"
 	ChannelTypeOpenaiCompatible ChannelType = "openai-compatible"
 )
 
@@ -76,6 +77,92 @@ func (ns NullChannelType) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.ChannelType), nil
+}
+
+type MemoryOp string
+
+const (
+	MemoryOpAdd    MemoryOp = "add"
+	MemoryOpUpdate MemoryOp = "update"
+	MemoryOpDelete MemoryOp = "delete"
+)
+
+func (e *MemoryOp) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = MemoryOp(s)
+	case string:
+		*e = MemoryOp(s)
+	default:
+		return fmt.Errorf("unsupported scan type for MemoryOp: %T", src)
+	}
+	return nil
+}
+
+type NullMemoryOp struct {
+	MemoryOp MemoryOp `json:"memory_op"`
+	Valid    bool     `json:"valid"` // Valid is true if MemoryOp is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullMemoryOp) Scan(value interface{}) error {
+	if value == nil {
+		ns.MemoryOp, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.MemoryOp.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullMemoryOp) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.MemoryOp), nil
+}
+
+type MemorySource string
+
+const (
+	MemorySourceUser  MemorySource = "user"
+	MemorySourceModel MemorySource = "model"
+	MemorySourceAuto  MemorySource = "auto"
+)
+
+func (e *MemorySource) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = MemorySource(s)
+	case string:
+		*e = MemorySource(s)
+	default:
+		return fmt.Errorf("unsupported scan type for MemorySource: %T", src)
+	}
+	return nil
+}
+
+type NullMemorySource struct {
+	MemorySource MemorySource `json:"memory_source"`
+	Valid        bool         `json:"valid"` // Valid is true if MemorySource is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullMemorySource) Scan(value interface{}) error {
+	if value == nil {
+		ns.MemorySource, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.MemorySource.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullMemorySource) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.MemorySource), nil
 }
 
 type MessageRole string
@@ -169,10 +256,11 @@ func (ns NullMessageStatus) Value() (driver.Value, error) {
 type RunStatus string
 
 const (
-	RunStatusRunning   RunStatus = "running"
-	RunStatusCompleted RunStatus = "completed"
-	RunStatusFailed    RunStatus = "failed"
-	RunStatusCancelled RunStatus = "cancelled"
+	RunStatusRunning       RunStatus = "running"
+	RunStatusCompleted     RunStatus = "completed"
+	RunStatusFailed        RunStatus = "failed"
+	RunStatusCancelled     RunStatus = "cancelled"
+	RunStatusAwaitingInput RunStatus = "awaiting_input"
 )
 
 func (e *RunStatus) Scan(src interface{}) error {
@@ -269,6 +357,14 @@ type Attachment struct {
 	UserID      *uuid.UUID         `json:"user_id"`
 }
 
+type BranchBackfill struct {
+	ConversationID uuid.UUID   `json:"conversation_id"`
+	Root           uuid.UUID   `json:"root"`
+	ShownID        uuid.UUID   `json:"shown_id"`
+	ParentID       interface{} `json:"parent_id"`
+	Newest         int64       `json:"newest"`
+}
+
 type CatalogModel struct {
 	ProviderID       string             `json:"provider_id"`
 	ModelID          string             `json:"model_id"`
@@ -309,6 +405,7 @@ type Channel struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 	Type      ChannelType        `json:"type"`
+	ApiFormat string             `json:"api_format"`
 }
 
 type ChannelModel struct {
@@ -331,6 +428,22 @@ type Conversation struct {
 	DeletedAt       pgtype.Timestamptz `json:"deleted_at"`
 	ReasoningEffort *string            `json:"reasoning_effort"`
 	WebSearch       bool               `json:"web_search"`
+	MemorySnapshot  []byte             `json:"memory_snapshot"`
+	Temporary       bool               `json:"temporary"`
+	CurrentInputID  *uuid.UUID         `json:"current_input_id"`
+}
+
+type MemoryEvent struct {
+	ID             uuid.UUID          `json:"id"`
+	UserID         uuid.UUID          `json:"user_id"`
+	MemoryID       uuid.UUID          `json:"memory_id"`
+	Op             MemoryOp           `json:"op"`
+	Before         *string            `json:"before"`
+	After          *string            `json:"after"`
+	Source         MemorySource       `json:"source"`
+	ConversationID *uuid.UUID         `json:"conversation_id"`
+	UndoneAt       pgtype.Timestamptz `json:"undone_at"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 type Message struct {
@@ -349,6 +462,9 @@ type Message struct {
 	Usage          []byte             `json:"usage"`
 	ErrorCode      *string            `json:"error_code"`
 	RunID          *uuid.UUID         `json:"run_id"`
+	EditOf         *uuid.UUID         `json:"edit_of"`
+	ParentInputID  *uuid.UUID         `json:"parent_input_id"`
+	ShownAt        pgtype.Timestamptz `json:"shown_at"`
 }
 
 type ModelOverride struct {
@@ -383,6 +499,8 @@ type Run struct {
 	FinishedAt      pgtype.Timestamptz `json:"finished_at"`
 	ReasoningEffort *string            `json:"reasoning_effort"`
 	WebSearch       bool               `json:"web_search"`
+	Superseded      bool               `json:"superseded"`
+	Continues       *uuid.UUID         `json:"continues"`
 }
 
 type Session struct {
@@ -395,14 +513,57 @@ type Session struct {
 	UserAgent  string             `json:"user_agent"`
 }
 
+type UsageLog struct {
+	ID               uuid.UUID          `json:"id"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	Kind             string             `json:"kind"`
+	Status           string             `json:"status"`
+	ErrorCode        *string            `json:"error_code"`
+	ErrorMessage     *string            `json:"error_message"`
+	UserID           *uuid.UUID         `json:"user_id"`
+	ConversationID   *uuid.UUID         `json:"conversation_id"`
+	RunID            *uuid.UUID         `json:"run_id"`
+	ChannelID        *uuid.UUID         `json:"channel_id"`
+	ChannelName      string             `json:"channel_name"`
+	ModelID          string             `json:"model_id"`
+	ServedModel      string             `json:"served_model"`
+	InputTokens      int32              `json:"input_tokens"`
+	OutputTokens     int32              `json:"output_tokens"`
+	ReasoningTokens  int32              `json:"reasoning_tokens"`
+	CacheReadTokens  int32              `json:"cache_read_tokens"`
+	CacheWriteTokens int32              `json:"cache_write_tokens"`
+	InputPrice       pgtype.Numeric     `json:"input_price"`
+	OutputPrice      pgtype.Numeric     `json:"output_price"`
+	CacheReadPrice   pgtype.Numeric     `json:"cache_read_price"`
+	CacheWritePrice  pgtype.Numeric     `json:"cache_write_price"`
+	Cost             pgtype.Numeric     `json:"cost"`
+	Streamed         bool               `json:"streamed"`
+	FirstTokenMs     *int32             `json:"first_token_ms"`
+	DurationMs       int32              `json:"duration_ms"`
+}
+
 type User struct {
-	ID           uuid.UUID          `json:"id"`
-	Email        string             `json:"email"`
-	Name         string             `json:"name"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-	PasswordHash string             `json:"password_hash"`
-	Role         UserRole           `json:"role"`
-	DisabledAt   pgtype.Timestamptz `json:"disabled_at"`
-	LastSeenAt   pgtype.Timestamptz `json:"last_seen_at"`
+	ID                uuid.UUID          `json:"id"`
+	Email             string             `json:"email"`
+	Name              string             `json:"name"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	PasswordHash      string             `json:"password_hash"`
+	Role              UserRole           `json:"role"`
+	DisabledAt        pgtype.Timestamptz `json:"disabled_at"`
+	LastSeenAt        pgtype.Timestamptz `json:"last_seen_at"`
+	InstructionsAbout string             `json:"instructions_about"`
+	InstructionsStyle string             `json:"instructions_style"`
+	MemoryEnabled     bool               `json:"memory_enabled"`
+	MemoryLearn       bool               `json:"memory_learn"`
+}
+
+type UserMemory struct {
+	ID             uuid.UUID          `json:"id"`
+	UserID         uuid.UUID          `json:"user_id"`
+	Content        string             `json:"content"`
+	Source         MemorySource       `json:"source"`
+	ConversationID *uuid.UUID         `json:"conversation_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }

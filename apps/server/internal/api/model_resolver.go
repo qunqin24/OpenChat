@@ -46,26 +46,25 @@ func (m *ModelResolver) Client(ctx context.Context, channelID *uuid.UUID, modelI
 		}
 		return nil, err
 	}
-	client, err := clientFor(channel)
-	if err != nil {
-		return nil, err
-	}
-
 	// The model's settings — the catalogue's figures with the operator's
-	// decisions over them — shape every request.
+	// decisions over them — shape every request, and say whether it thinks.
 	settings, err := loadModelSettings(ctx, m.q, modelID)
 	if err != nil {
 		return nil, err
 	}
-	wire, _ := wireApiFor(ChannelType(channel.Type))
-	return &catalogShaped{inner: client, settings: settings, anthropic: wire == "anthropic"}, nil
+	client, err := clientFor(channel, modelID, settings.Reasoning)
+	if err != nil {
+		return nil, err
+	}
+	wire, _ := wireForModel(ChannelType(channel.Type), channel.ApiFormat, modelID)
+	return &catalogShaped{inner: client, settings: settings, anthropic: wire == wireAnthropic}, nil
 }
 
-// anthropicMaxTokens caps the max_tokens a Messages API request is given from
-// the catalogue. The API requires the field, and the adapter's own default
-// (4096) is too little for a current model, which thinks by default and spends
-// the thinking from the same allowance.
-const anthropicMaxTokens = 32000
+// A Messages API request is given max_tokens from the catalogue's output limit,
+// capped at anthropic.ThinkingMaxTokens for the effort asked for (32000, and
+// 64000 at xhigh and max). The API requires the field, and the adapter's own
+// default (4096) is too little for a current model, which thinks by default and
+// spends the thinking from the same allowance.
 
 // catalogShaped fits each request to its model before the adapter sees it.
 //
@@ -90,7 +89,13 @@ func (c *catalogShaped) CallsTools() bool { return c.settings.ToolCall }
 
 func (c *catalogShaped) Stream(ctx context.Context, req llm.Request, emit func(llm.Event) error) (llm.ModelResponse, error) {
 	if r := req.Options.Reasoning; r != nil && r.Effort != "" {
-		req.Options.Reasoning = c.settings.Profile.Options(r.Effort)
+		profile := c.settings.Profile
+		if c.anthropic && anthropic.ExtendedThinkingOnly(req.Model) {
+			// Claude 4.5 and earlier reject adaptive thinking, whatever effort
+			// levels the catalogue lists for them.
+			profile = profile.BudgetOnly()
+		}
+		req.Options.Reasoning = profile.Options(r.Effort)
 	}
 	if !c.settings.ToolCall {
 		req.Tools = nil
@@ -104,17 +109,26 @@ func (c *catalogShaped) Stream(ctx context.Context, req llm.Request, emit func(l
 			req.Options.MaxTokens = &capped
 		}
 	case c.anthropic && req.Options.MaxTokens == nil:
-		capped := int(min(limit, anthropicMaxTokens))
+		var effort llm.ReasoningEffort
+		if r := req.Options.Reasoning; r != nil {
+			effort = r.Effort
+		}
+		capped := int(min(limit, int64(anthropic.ThinkingMaxTokens(effort))))
 		req.Options.MaxTokens = &capped
 	}
 	return c.inner.Stream(ctx, req, emit)
 }
 
-// clientFor builds the adapter for a channel. A new protocol is one more case
-// here and one more adapter package; nothing above the llm interface changes.
-func clientFor(channel sqlc.Channel) (llm.ModelClient, error) {
+// clientFor builds the adapter for a channel's requests for modelID. A new
+// protocol is one more case here and one more adapter package; nothing above
+// the llm interface changes. Most channel types speak one protocol for every
+// model; a gateway's type can route each model to the API that serves it.
+//
+// thinks is whether the model reasons, which the Responses API needs to know
+// before it is sent the parameters that only a reasoning model accepts.
+func clientFor(channel sqlc.Channel, modelID string, thinks bool) (llm.ModelClient, error) {
 	kind := ChannelType(channel.Type)
-	wire, ok := wireApiFor(kind)
+	wire, ok := wireForModel(kind, channel.ApiFormat, modelID)
 	if !ok {
 		return nil, fmt.Errorf("api: channel %s has unknown type %q", channel.ID, channel.Type)
 	}
@@ -128,14 +142,25 @@ func clientFor(channel sqlc.Channel) (llm.ModelClient, error) {
 		return nil, agent.ErrNoModel
 	}
 	provider := string(channel.Type)
+	var headers map[string]string
+	var sessionHeader string
+	if gateway := gatewayFor(kind); gateway != nil {
+		headers = map[string]string{"User-Agent": gateway.UserAgent}
+		sessionHeader = gateway.SessionHeader
+	}
 
 	switch wire {
-	case "anthropic":
-		return anthropic.New(anthropic.Config{Provider: provider, BaseURL: baseURL, APIKey: channel.ApiKey})
-	case "gemini":
+	case wireAnthropic:
+		return anthropic.New(anthropic.Config{Provider: provider, BaseURL: baseURL, APIKey: channel.ApiKey,
+			Headers: headers, SessionHeader: sessionHeader})
+	case wireGemini:
 		return gemini.New(gemini.Config{Provider: provider, BaseURL: baseURL, APIKey: channel.ApiKey})
+	case wireResponses:
+		return openai.NewResponses(openai.Config{Provider: provider, BaseURL: baseURL, APIKey: channel.ApiKey,
+			Headers: headers, SessionHeader: sessionHeader, Reasoning: thinks})
 	default:
-		return openai.New(openai.Config{Provider: provider, BaseURL: baseURL, APIKey: channel.ApiKey})
+		return openai.New(openai.Config{Provider: provider, BaseURL: baseURL, APIKey: channel.ApiKey,
+			Headers: headers, SessionHeader: sessionHeader, Compat: compatFor(kind)})
 	}
 }
 

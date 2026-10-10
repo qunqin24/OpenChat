@@ -8,55 +8,69 @@ package sqlc
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const getActivityTrend = `-- name: GetActivityTrend :many
-SELECT d::date                                          AS day,
-       coalesce(m.messages, 0)::bigint                  AS messages,
-       coalesce(c.conversations, 0)::bigint             AS conversations,
-       coalesce(u.users, 0)::bigint                     AS users
-FROM generate_series(
-             (current_date - ($1::int - 1)),
-             current_date,
-             interval '1 day'
-     ) AS d
-         LEFT JOIN (SELECT created_at::date AS day, count(*) AS messages
-                    FROM messages
-                    GROUP BY 1) m ON m.day = d::date
-         LEFT JOIN (SELECT created_at::date AS day, count(*) AS conversations
-                    FROM conversations
-                    WHERE deleted_at IS NULL
-                    GROUP BY 1) c ON c.day = d::date
-         LEFT JOIN (SELECT created_at::date AS day, count(*) AS users
-                    FROM users
-                    GROUP BY 1) u ON u.day = d::date
-ORDER BY d
+const getDashboardChannels = `-- name: GetDashboardChannels :many
+SELECT channel_id,
+       channel_name,
+       count(*)::bigint                                          AS requests,
+       count(*) FILTER (WHERE status = 'error')::bigint          AS errors,
+       coalesce(percentile_cont(0.5) WITHIN GROUP (ORDER BY first_token_ms)
+           FILTER (WHERE status = 'ok' AND first_token_ms IS NOT NULL), -1)::double precision  AS first_token_p50_ms,
+       coalesce(percentile_cont(0.95) WITHIN GROUP (ORDER BY first_token_ms)
+           FILTER (WHERE status = 'ok' AND first_token_ms IS NOT NULL), -1)::double precision  AS first_token_p95_ms,
+       coalesce(percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms)
+           FILTER (WHERE status = 'ok'), -1)::double precision       AS duration_p50_ms,
+       coalesce(percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms)
+           FILTER (WHERE status = 'ok'), -1)::double precision       AS duration_p95_ms,
+       max(created_at) FILTER (WHERE status = 'error')::timestamptz AS last_error_at
+FROM usage_logs
+WHERE created_at >= $1::timestamptz
+GROUP BY channel_id, channel_name
+ORDER BY count(*) DESC, channel_name
+LIMIT $2
 `
 
-type GetActivityTrendRow struct {
-	Day           pgtype.Date `json:"day"`
-	Messages      int64       `json:"messages"`
-	Conversations int64       `json:"conversations"`
-	Users         int64       `json:"users"`
+type GetDashboardChannelsParams struct {
+	Since    pgtype.Timestamptz `json:"since"`
+	RowLimit int32              `json:"row_limit"`
 }
 
-// One row per day for the requested window, including days with no activity —
-// a gap in the series would otherwise draw as a straight line across the chart.
-func (q *Queries) GetActivityTrend(ctx context.Context, days int32) ([]GetActivityTrendRow, error) {
-	rows, err := q.db.Query(ctx, getActivityTrend, days)
+type GetDashboardChannelsRow struct {
+	ChannelID       *uuid.UUID         `json:"channel_id"`
+	ChannelName     string             `json:"channel_name"`
+	Requests        int64              `json:"requests"`
+	Errors          int64              `json:"errors"`
+	FirstTokenP50Ms float64            `json:"first_token_p50_ms"`
+	FirstTokenP95Ms float64            `json:"first_token_p95_ms"`
+	DurationP50Ms   float64            `json:"duration_p50_ms"`
+	DurationP95Ms   float64            `json:"duration_p95_ms"`
+	LastErrorAt     pgtype.Timestamptz `json:"last_error_at"`
+}
+
+// Per upstream, to show which one is failing or slow. A channel is its id and
+// the name it had: deleting one keeps its history under the name, with no id.
+func (q *Queries) GetDashboardChannels(ctx context.Context, arg GetDashboardChannelsParams) ([]GetDashboardChannelsRow, error) {
+	rows, err := q.db.Query(ctx, getDashboardChannels, arg.Since, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []GetActivityTrendRow{}
+	items := []GetDashboardChannelsRow{}
 	for rows.Next() {
-		var i GetActivityTrendRow
+		var i GetDashboardChannelsRow
 		if err := rows.Scan(
-			&i.Day,
-			&i.Messages,
-			&i.Conversations,
-			&i.Users,
+			&i.ChannelID,
+			&i.ChannelName,
+			&i.Requests,
+			&i.Errors,
+			&i.FirstTokenP50Ms,
+			&i.FirstTokenP95Ms,
+			&i.DurationP50Ms,
+			&i.DurationP95Ms,
+			&i.LastErrorAt,
 		); err != nil {
 			return nil, err
 		}
@@ -68,34 +82,338 @@ func (q *Queries) GetActivityTrend(ctx context.Context, days int32) ([]GetActivi
 	return items, nil
 }
 
-const getDashboardTotals = `-- name: GetDashboardTotals :one
-SELECT (SELECT count(*) FROM users)                                  AS total_users,
-       (SELECT count(*) FROM users WHERE disabled_at IS NULL)        AS active_users,
-       (SELECT count(*) FROM conversations WHERE deleted_at IS NULL) AS total_conversations,
-       (SELECT count(*) FROM messages)                               AS total_messages,
-       (SELECT count(*) FROM users WHERE created_at >= now() - interval '7 days')         AS new_users_7d,
-       (SELECT count(*) FROM messages WHERE created_at >= now() - interval '7 days')      AS messages_7d
+const getDashboardErrors = `-- name: GetDashboardErrors :many
+SELECT id, created_at, model_id, channel_name, error_code, error_message
+FROM usage_logs
+WHERE status = 'error' AND created_at >= $1::timestamptz
+ORDER BY created_at DESC, id DESC
+LIMIT $2
 `
 
-type GetDashboardTotalsRow struct {
-	TotalUsers         int64 `json:"total_users"`
-	ActiveUsers        int64 `json:"active_users"`
-	TotalConversations int64 `json:"total_conversations"`
-	TotalMessages      int64 `json:"total_messages"`
-	NewUsers7d         int64 `json:"new_users_7d"`
-	Messages7d         int64 `json:"messages_7d"`
+type GetDashboardErrorsParams struct {
+	Since    pgtype.Timestamptz `json:"since"`
+	RowLimit int32              `json:"row_limit"`
 }
 
-func (q *Queries) GetDashboardTotals(ctx context.Context) (GetDashboardTotalsRow, error) {
-	row := q.db.QueryRow(ctx, getDashboardTotals)
-	var i GetDashboardTotalsRow
+type GetDashboardErrorsRow struct {
+	ID           uuid.UUID          `json:"id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ModelID      string             `json:"model_id"`
+	ChannelName  string             `json:"channel_name"`
+	ErrorCode    *string            `json:"error_code"`
+	ErrorMessage *string            `json:"error_message"`
+}
+
+// The latest failures; the partial index on errors serves it.
+func (q *Queries) GetDashboardErrors(ctx context.Context, arg GetDashboardErrorsParams) ([]GetDashboardErrorsRow, error) {
+	rows, err := q.db.Query(ctx, getDashboardErrors, arg.Since, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetDashboardErrorsRow{}
+	for rows.Next() {
+		var i GetDashboardErrorsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.ModelID,
+			&i.ChannelName,
+			&i.ErrorCode,
+			&i.ErrorMessage,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getDashboardKpis = `-- name: GetDashboardKpis :one
+SELECT count(*)::bigint                                          AS requests,
+       count(*) FILTER (WHERE status = 'error')::bigint          AS errors,
+       coalesce(sum(input_tokens), 0)::bigint                    AS input_tokens,
+       coalesce(sum(output_tokens), 0)::bigint                   AS output_tokens,
+       coalesce(sum(cache_read_tokens) FILTER (WHERE status = 'ok'), 0)::bigint  AS cache_read_tokens,
+       coalesce(sum(cache_write_tokens) FILTER (WHERE status = 'ok'), 0)::bigint AS cache_write_tokens,
+       coalesce(sum(input_tokens + cache_read_tokens + cache_write_tokens) FILTER (WHERE status = 'ok'), 0)::bigint AS cache_prompt_tokens,
+       (coalesce(sum(cache_read_tokens * (input_price - cache_read_price)) FILTER (WHERE status = 'ok'), 0)
+           / 1000000)::double precision                          AS cache_savings,
+       coalesce(sum(cost), 0)::double precision                  AS cost,
+       count(DISTINCT user_id)::bigint                           AS active_users,
+       coalesce(percentile_cont(0.5) WITHIN GROUP (ORDER BY first_token_ms)
+           FILTER (WHERE status = 'ok' AND first_token_ms IS NOT NULL), -1)::double precision  AS first_token_p50_ms,
+       coalesce(percentile_cont(0.95) WITHIN GROUP (ORDER BY first_token_ms)
+           FILTER (WHERE status = 'ok' AND first_token_ms IS NOT NULL), -1)::double precision  AS first_token_p95_ms
+FROM usage_logs
+WHERE created_at >= $1::timestamptz
+  AND ($2::timestamptz IS NULL OR created_at < $2::timestamptz)
+`
+
+type GetDashboardKpisParams struct {
+	FromTime pgtype.Timestamptz `json:"from_time"`
+	ToTime   pgtype.Timestamptz `json:"to_time"`
+}
+
+type GetDashboardKpisRow struct {
+	Requests          int64   `json:"requests"`
+	Errors            int64   `json:"errors"`
+	InputTokens       int64   `json:"input_tokens"`
+	OutputTokens      int64   `json:"output_tokens"`
+	CacheReadTokens   int64   `json:"cache_read_tokens"`
+	CacheWriteTokens  int64   `json:"cache_write_tokens"`
+	CachePromptTokens int64   `json:"cache_prompt_tokens"`
+	CacheSavings      float64 `json:"cache_savings"`
+	Cost              float64 `json:"cost"`
+	ActiveUsers       int64   `json:"active_users"`
+	FirstTokenP50Ms   float64 `json:"first_token_p50_ms"`
+	FirstTokenP95Ms   float64 `json:"first_token_p95_ms"`
+}
+
+// The headline figures for [from_time, to_time); an open `to_time` runs up to now.
+func (q *Queries) GetDashboardKpis(ctx context.Context, arg GetDashboardKpisParams) (GetDashboardKpisRow, error) {
+	row := q.db.QueryRow(ctx, getDashboardKpis, arg.FromTime, arg.ToTime)
+	var i GetDashboardKpisRow
 	err := row.Scan(
-		&i.TotalUsers,
+		&i.Requests,
+		&i.Errors,
+		&i.InputTokens,
+		&i.OutputTokens,
+		&i.CacheReadTokens,
+		&i.CacheWriteTokens,
+		&i.CachePromptTokens,
+		&i.CacheSavings,
+		&i.Cost,
 		&i.ActiveUsers,
-		&i.TotalConversations,
-		&i.TotalMessages,
-		&i.NewUsers7d,
-		&i.Messages7d,
+		&i.FirstTokenP50Ms,
+		&i.FirstTokenP95Ms,
 	)
+	return i, err
+}
+
+const getDashboardModels = `-- name: GetDashboardModels :many
+SELECT model_id,
+       count(*)::bigint                                          AS requests,
+       count(*) FILTER (WHERE status = 'error')::bigint          AS errors,
+       coalesce(sum(input_tokens), 0)::bigint                    AS input_tokens,
+       coalesce(sum(output_tokens), 0)::bigint                   AS output_tokens,
+       coalesce(sum(cache_read_tokens) FILTER (WHERE status = 'ok'), 0)::bigint  AS cache_read_tokens,
+       coalesce(sum(input_tokens + cache_read_tokens + cache_write_tokens) FILTER (WHERE status = 'ok'), 0)::bigint AS cache_prompt_tokens,
+       coalesce(sum(cost), 0)::double precision                  AS cost,
+       coalesce(percentile_cont(0.5) WITHIN GROUP (ORDER BY first_token_ms)
+           FILTER (WHERE status = 'ok' AND first_token_ms IS NOT NULL), -1)::double precision  AS first_token_p50_ms
+FROM usage_logs
+WHERE created_at >= $1::timestamptz
+GROUP BY model_id
+ORDER BY count(*) DESC, model_id
+LIMIT $2
+`
+
+type GetDashboardModelsParams struct {
+	Since    pgtype.Timestamptz `json:"since"`
+	RowLimit int32              `json:"row_limit"`
+}
+
+type GetDashboardModelsRow struct {
+	ModelID           string  `json:"model_id"`
+	Requests          int64   `json:"requests"`
+	Errors            int64   `json:"errors"`
+	InputTokens       int64   `json:"input_tokens"`
+	OutputTokens      int64   `json:"output_tokens"`
+	CacheReadTokens   int64   `json:"cache_read_tokens"`
+	CachePromptTokens int64   `json:"cache_prompt_tokens"`
+	Cost              float64 `json:"cost"`
+	FirstTokenP50Ms   float64 `json:"first_token_p50_ms"`
+}
+
+// The busiest models. Ties break on the name so the order does not shuffle
+// between two refreshes.
+func (q *Queries) GetDashboardModels(ctx context.Context, arg GetDashboardModelsParams) ([]GetDashboardModelsRow, error) {
+	rows, err := q.db.Query(ctx, getDashboardModels, arg.Since, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetDashboardModelsRow{}
+	for rows.Next() {
+		var i GetDashboardModelsRow
+		if err := rows.Scan(
+			&i.ModelID,
+			&i.Requests,
+			&i.Errors,
+			&i.InputTokens,
+			&i.OutputTokens,
+			&i.CacheReadTokens,
+			&i.CachePromptTokens,
+			&i.Cost,
+			&i.FirstTokenP50Ms,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getDashboardTrend = `-- name: GetDashboardTrend :many
+SELECT b.at::timestamptz                                         AS at,
+       coalesce(u.requests, 0)::bigint                           AS requests,
+       coalesce(u.errors, 0)::bigint                             AS errors,
+       coalesce(u.cost, 0)::double precision                     AS cost
+FROM generate_series(
+             date_trunc($1::text, $2::timestamptz),
+             now(),
+             CASE $1::text WHEN 'hour' THEN interval '1 hour' ELSE interval '1 day' END
+     ) AS b(at)
+         LEFT JOIN (SELECT date_trunc($1::text, created_at)  AS at,
+                           count(*)                                          AS requests,
+                           count(*) FILTER (WHERE status = 'error')          AS errors,
+                           sum(cost)                                         AS cost
+                    FROM usage_logs
+                    WHERE created_at >= $2::timestamptz
+                    GROUP BY 1) u ON u.at = b.at
+ORDER BY b.at
+`
+
+type GetDashboardTrendParams struct {
+	Bucket string             `json:"bucket"`
+	Since  pgtype.Timestamptz `json:"since"`
+}
+
+type GetDashboardTrendRow struct {
+	At       pgtype.Timestamptz `json:"at"`
+	Requests int64              `json:"requests"`
+	Errors   int64              `json:"errors"`
+	Cost     float64            `json:"cost"`
+}
+
+// One row per bucket from `since` to now, empty ones included: a gap in the
+// series would draw as a straight line across the chart.
+func (q *Queries) GetDashboardTrend(ctx context.Context, arg GetDashboardTrendParams) ([]GetDashboardTrendRow, error) {
+	rows, err := q.db.Query(ctx, getDashboardTrend, arg.Bucket, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetDashboardTrendRow{}
+	for rows.Next() {
+		var i GetDashboardTrendRow
+		if err := rows.Scan(
+			&i.At,
+			&i.Requests,
+			&i.Errors,
+			&i.Cost,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getDashboardUsers = `-- name: GetDashboardUsers :many
+SELECT l.user_id,
+       u.name                                                    AS user_name,
+       u.email                                                   AS user_email,
+       count(*)::bigint                                          AS requests,
+       coalesce(sum(l.cost), 0)::double precision                AS cost
+FROM usage_logs l
+         LEFT JOIN users u ON u.id = l.user_id
+WHERE l.created_at >= $1::timestamptz
+GROUP BY l.user_id, u.name, u.email
+ORDER BY coalesce(sum(l.cost), 0) DESC, count(*) DESC, l.user_id
+LIMIT $2
+`
+
+type GetDashboardUsersParams struct {
+	Since    pgtype.Timestamptz `json:"since"`
+	RowLimit int32              `json:"row_limit"`
+}
+
+type GetDashboardUsersRow struct {
+	UserID    *uuid.UUID `json:"user_id"`
+	UserName  *string    `json:"user_name"`
+	UserEmail *string    `json:"user_email"`
+	Requests  int64      `json:"requests"`
+	Cost      float64    `json:"cost"`
+}
+
+// Who spends the most. Requests with no owner (a deleted account) group as one.
+func (q *Queries) GetDashboardUsers(ctx context.Context, arg GetDashboardUsersParams) ([]GetDashboardUsersRow, error) {
+	rows, err := q.db.Query(ctx, getDashboardUsers, arg.Since, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetDashboardUsersRow{}
+	for rows.Next() {
+		var i GetDashboardUsersRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.UserName,
+			&i.UserEmail,
+			&i.Requests,
+			&i.Cost,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getDashboardWindow = `-- name: GetDashboardWindow :one
+
+SELECT (date_trunc($1::text, now())
+        - ($2::int - 1) * CASE $1::text WHEN 'hour' THEN interval '1 hour' ELSE interval '1 day' END
+       )::timestamptz AS since,
+       (date_trunc($1::text, now())
+        - (2 * $2::int - 1) * CASE $1::text WHEN 'hour' THEN interval '1 hour' ELSE interval '1 day' END
+       )::timestamptz AS prev_since,
+       (SELECT count(*) FROM users WHERE disabled_at IS NULL)::bigint AS total_users
+`
+
+type GetDashboardWindowParams struct {
+	Bucket  string `json:"bucket"`
+	Buckets int32  `json:"buckets"`
+}
+
+type GetDashboardWindowRow struct {
+	Since      pgtype.Timestamptz `json:"since"`
+	PrevSince  pgtype.Timestamptz `json:"prev_since"`
+	TotalUsers int64              `json:"total_users"`
+}
+
+// The dashboard: operational figures from the usage ledger over a window, each
+// a single pass over the rows from `since` on.
+//
+// Shared definitions. Errors are status = 'error'. The cache hit rate is
+// token-weighted, cache_read / (input + cache_read + cache_write) -- input
+// excludes the cached part, see llm.Usage -- over successful requests only; the
+// query returns the two sums (cache_read_tokens, cache_prompt_tokens) and the
+// caller divides, so "nothing was sent" stays a missing rate rather than a 0%.
+// Latency percentiles look at successful requests that have the time, and are
+// -1 where none did (sqlc cannot return a NULL double).
+// Where a window starts. `bucket` is 'hour' or 'day' and `buckets` how many of
+// them the window spans, counting the current, partial one -- so a 7-day window
+// is today and the six days before it. `prev_since` opens the equal-length
+// window before, the one the figures are compared with. Worked out here, in
+// the database's time zone, so the buckets of the trend line up with it.
+func (q *Queries) GetDashboardWindow(ctx context.Context, arg GetDashboardWindowParams) (GetDashboardWindowRow, error) {
+	row := q.db.QueryRow(ctx, getDashboardWindow, arg.Bucket, arg.Buckets)
+	var i GetDashboardWindowRow
+	err := row.Scan(&i.Since, &i.PrevSince, &i.TotalUsers)
 	return i, err
 }

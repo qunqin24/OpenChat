@@ -117,12 +117,118 @@ func TestBuildBodyDropsReasoningFromHistoryUnlessTheEndpointWantsIt(t *testing.T
 		}
 	})
 
-	t.Run("echoed when compat says so", func(t *testing.T) {
+	t.Run("echoed in its own field when compat says so", func(t *testing.T) {
+		// DeepSeek, GLM and Kimi read reasoning_content; folding it into
+		// content would hand the model its thinking as if it had said it.
 		got := buildMessages(t, Config{Compat: Compat{EchoReasoning: true}}, message)
-		if content := got[0]["content"]; content != "thinking out loudthe answer" {
-			t.Errorf("content = %q", content)
+		if content := got[0]["content"]; content != "the answer" {
+			t.Errorf("content = %q, reasoning must not be concatenated into it", content)
+		}
+		if reasoning := got[0]["reasoning_content"]; reasoning != "thinking out loud" {
+			t.Errorf("reasoning_content = %q", reasoning)
 		}
 	})
+
+	t.Run("a tool-call turn with no text still carries its reasoning", func(t *testing.T) {
+		got := buildMessages(t, Config{Compat: Compat{EchoReasoning: true}}, llm.Message{Role: llm.RoleAssistant, Parts: []llm.Part{
+			llm.ReasoningPart{Text: "need the date"},
+			llm.ToolCallPart{ID: "c1", Name: "date", Arguments: json.RawMessage(`{}`), RawArguments: `{}`},
+		}})
+		if _, has := got[0]["content"]; has {
+			t.Errorf("content = %v, want it omitted", got[0]["content"])
+		}
+		if got[0]["reasoning_content"] != "need the date" || got[0]["tool_calls"] == nil {
+			t.Errorf("message = %v", got[0])
+		}
+	})
+
+	t.Run("another provider's signed or encrypted reasoning is not replayed", func(t *testing.T) {
+		got := buildMessages(t, Config{Compat: Compat{EchoReasoning: true}}, llm.Message{Role: llm.RoleAssistant, Parts: []llm.Part{
+			llm.ReasoningPart{Text: "claude thinking", Signature: "sig"},
+			llm.ReasoningPart{Redacted: []byte("blob"), Signature: llm.SignatureOpenAIResponses + "gpt-5"},
+			llm.TextPart{Text: "the answer"},
+		}})
+		if _, has := got[0]["reasoning_content"]; has {
+			t.Errorf("reasoning_content = %v", got[0]["reasoning_content"])
+		}
+	})
+}
+
+func buildRequest(t *testing.T, cfg Config, req llm.Request) map[string]any {
+	t.Helper()
+	if req.Model == "" {
+		req.Model = "m"
+	}
+	req.Messages = []llm.Message{llm.TextMessage(llm.RoleUser, "hi")}
+	body, err := buildBody(req, cfg)
+	if err != nil {
+		t.Fatalf("buildBody: %v", err)
+	}
+	var sent map[string]any
+	if err := json.Unmarshal(body, &sent); err != nil {
+		t.Fatalf("unmarshal body: %v", err)
+	}
+	return sent
+}
+
+func TestBuildBodyNamesTheOutputLimitPerVendor(t *testing.T) {
+	limit := 1234
+	req := llm.Request{Options: llm.Options{MaxTokens: &limit}}
+
+	sent := buildRequest(t, Config{}, req)
+	if sent["max_tokens"] != float64(1234) || sent["max_completion_tokens"] != nil {
+		t.Errorf("default body = %v, want the max_tokens every relay understands", sent)
+	}
+
+	sent = buildRequest(t, Config{Compat: Compat{MaxCompletionTokens: true}}, req)
+	if sent["max_completion_tokens"] != float64(1234) || sent["max_tokens"] != nil {
+		t.Errorf("body = %v, want max_completion_tokens only", sent)
+	}
+}
+
+func TestBuildBodyAsksForThinkingTheWayEachVendorTakesIt(t *testing.T) {
+	effort := func(level llm.ReasoningEffort) *llm.ReasoningOptions { return &llm.ReasoningOptions{Effort: level} }
+	budget := func(n int) *llm.ReasoningOptions { return &llm.ReasoningOptions{Budget: n} }
+
+	tests := []struct {
+		name      string
+		style     ThinkingStyle
+		model     string
+		reasoning *llm.ReasoningOptions
+		want      string // the thinking-related fields of the body, as JSON
+	}{
+		{"default sends reasoning_effort", ThinkingEffort, "gpt-5.5", effort(llm.EffortHigh), `{"reasoning_effort":"high"}`},
+		{"default sends none as an effort", ThinkingEffort, "gpt-5.5", effort(llm.EffortNone), `{"reasoning_effort":"none"}`},
+		{"default has no use for a budget", ThinkingEffort, "m", budget(2000), `{}`},
+		{"no opinion sends nothing", ThinkingEffort, "m", nil, `{}`},
+
+		{"dashscope turns thinking on with the level", ThinkingDashScope, "qwen3.8-max", effort(llm.EffortHigh), `{"enable_thinking":true,"reasoning_effort":"high"}`},
+		{"dashscope turns thinking off", ThinkingDashScope, "qwen3.8-max", effort(llm.EffortNone), `{"enable_thinking":false}`},
+		{"dashscope takes a budget", ThinkingDashScope, "qwen3.7-plus", budget(4096), `{"enable_thinking":true,"thinking_budget":4096}`},
+
+		{"switch passes the level through", ThinkingSwitch, "glm-5.2", effort(llm.EffortMax), `{"reasoning_effort":"max"}`},
+		{"switch turns thinking off", ThinkingSwitch, "glm-5.2", effort(llm.EffortNone), `{"thinking":{"type":"disabled"}}`},
+
+		{"kimi k3 takes an effort", ThinkingMoonshot, "kimi-k3", effort(llm.EffortLow), `{"reasoning_effort":"low"}`},
+		{"kimi k2.6 takes no effort, only the switch", ThinkingMoonshot, "kimi-k2.6", effort(llm.EffortHigh), `{"thinking":{"type":"enabled"}}`},
+		{"kimi k2.6 can be turned off", ThinkingMoonshot, "kimi-k2.6", effort(llm.EffortNone), `{"thinking":{"type":"disabled"}}`},
+
+		{"openrouter nests the effort, which has max", ThinkingOpenRouter, "anthropic/claude-x", effort(llm.EffortMax), `{"reasoning":{"effort":"max"}}`},
+		{"openrouter takes a budget", ThinkingOpenRouter, "anthropic/claude-x", budget(8000), `{"reasoning":{"max_tokens":8000}}`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			sent := buildRequest(t, Config{Compat: Compat{Thinking: tc.style}},
+				llm.Request{Model: tc.model, Options: llm.Options{Reasoning: tc.reasoning}})
+			got := map[string]any{}
+			for _, key := range []string{"reasoning_effort", "enable_thinking", "thinking_budget", "thinking", "reasoning"} {
+				if v, ok := sent[key]; ok {
+					got[key] = v
+				}
+			}
+			jsonEq(t, tc.name, got, tc.want)
+		})
+	}
 }
 
 func TestBuildBodyInlinesAResolvedImageAttachment(t *testing.T) {

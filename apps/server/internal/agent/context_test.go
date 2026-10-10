@@ -3,6 +3,9 @@ package agent
 import (
 	"encoding/json"
 	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin/openchat/apps/server/internal/llm"
@@ -152,5 +155,113 @@ func TestPartsRoundTrip(t *testing.T) {
 	}
 	if _, err := DecodeParts([]byte(`[{"type":"hologram"}]`)); err == nil {
 		t.Fatal("an unknown part type decoded")
+	}
+}
+
+func TestBuildContextKeepsAToolCallsSignature(t *testing.T) {
+	// Gemini 3 wants the signature back on the call it came on, from the
+	// stored row all the way into the next request.
+	signed := call("a", "x")
+	signed.Signature = llm.SignatureGemini + "CvUBsig="
+	got, err := BuildContext([]sqlc.Message{
+		row(sqlc.MessageRoleUser, "", llm.TextPart{Text: "q"}),
+		row(sqlc.MessageRoleAssistant, StopToolCalls, signed),
+		row(sqlc.MessageRoleTool, "", result("a", "x", "A")),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := got[1].ToolCalls()
+	if len(calls) != 1 || calls[0].Signature != signed.Signature {
+		t.Fatalf("calls = %+v, want the signature to survive the stored row", calls)
+	}
+}
+
+func TestBuildContextDatesTheFirstUserMessageOfEachDay(t *testing.T) {
+	at := func(day string) pgtype.Timestamptz {
+		ts, err := time.Parse(time.RFC3339, day)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return pgtype.Timestamptz{Time: ts, Valid: true}
+	}
+	user := func(text, when string) sqlc.Message {
+		m := row(sqlc.MessageRoleUser, "", llm.TextPart{Text: text})
+		m.CreatedAt = at(when)
+		return m
+	}
+	rows := []sqlc.Message{
+		user("one", "2026-10-09T23:00:00Z"),
+		row(sqlc.MessageRoleAssistant, StopStop, llm.TextPart{Text: "a"}),
+		user("two", "2026-10-09T23:30:00Z"),
+		row(sqlc.MessageRoleAssistant, StopStop, llm.TextPart{Text: "b"}),
+		user("three", "2026-10-10T00:05:00Z"),
+	}
+	got, err := BuildContext(rows)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertShape(t, got, "user [Date: 2026-10-09] one", "assistant a", "user two", "assistant b", "user [Date: 2026-10-10] three")
+
+	// Appending a turn leaves everything before it byte-identical, which is the
+	// property a cached prefix and a replayed thinking block depend on.
+	more, err := BuildContext(append(rows, row(sqlc.MessageRoleAssistant, StopStop, llm.TextPart{Text: "c"}),
+		user("four", "2026-10-10T09:00:00Z")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, _ := json.Marshal(got)
+	prefix, _ := json.Marshal(more[:len(got)])
+	if string(before) != string(prefix) {
+		t.Errorf("history prefix changed:\n%s\n%s", before, prefix)
+	}
+}
+
+// A question the user did not answer — they wrote something else — is closed
+// off with a result saying so, which is not an error, so every provider gets a
+// call with a result and the new message after it.
+func TestBuildContextClosesASkippedQuestion(t *testing.T) {
+	got, err := BuildContext([]sqlc.Message{
+		row(sqlc.MessageRoleUser, "", llm.TextPart{Text: "q"}),
+		row(sqlc.MessageRoleAssistant, StopToolCalls, call("a", ToolAskUser)),
+		row(sqlc.MessageRoleUser, "", llm.TextPart{Text: "never mind"}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertShape(t, got,
+		"user q",
+		"assistant call:a",
+		"tool result:a:succeeded",
+		"user never mind")
+	if text := got[2].Parts[0].(llm.ToolResultPart).Content; text != skippedResult {
+		t.Fatalf("skipped result = %q", text)
+	}
+}
+
+// An answered question is an ordinary result, and one still open at the tail
+// (nothing came after it) is closed the same way.
+func TestBuildContextKeepsAnAnswerAndClosesAnOpenQuestion(t *testing.T) {
+	got, err := BuildContext([]sqlc.Message{
+		row(sqlc.MessageRoleUser, "", llm.TextPart{Text: "q"}),
+		row(sqlc.MessageRoleAssistant, StopToolCalls, call("a", ToolAskUser)),
+		row(sqlc.MessageRoleTool, "", result("a", ToolAskUser, "The user chose A")),
+		row(sqlc.MessageRoleAssistant, StopStop, llm.TextPart{Text: "ok"}),
+		row(sqlc.MessageRoleUser, "", llm.TextPart{Text: "again"}),
+		row(sqlc.MessageRoleAssistant, StopToolCalls, call("b", ToolAskUser)),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertShape(t, got,
+		"user q",
+		"assistant call:a",
+		"tool result:a:succeeded",
+		"assistant ok",
+		"user again",
+		"assistant call:b",
+		"tool result:b:succeeded")
+	if text := got[2].Parts[0].(llm.ToolResultPart).Content; text != "The user chose A" {
+		t.Fatalf("answer = %q", text)
 	}
 }

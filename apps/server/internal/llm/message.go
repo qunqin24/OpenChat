@@ -52,6 +52,13 @@ type Part interface {
 // show and always safe to replay.
 type TextPart struct {
 	Text string
+
+	// Phase labels an assistant message the way the OpenAI Responses API does,
+	// `commentary` (said while working) or `final_answer`; empty where the
+	// provider has no such notion. It is kept so the next request can resend
+	// it: OpenAI asks for it back on every assistant message of gpt-5.3-codex
+	// and later, and says dropping it degrades the model. Never shown.
+	Phase string
 }
 
 // ReasoningPart is the model thinking out loud. Signature and Redacted are kept
@@ -78,6 +85,17 @@ type ReasoningPart struct {
 	DurationMS *int64
 }
 
+// SignatureOpenAIResponses prefixes the Signature of reasoning that came from
+// OpenAI's Responses API, followed by the model that wrote it. Its Redacted
+// blob is that API's encrypted reasoning, which only that model can read
+// back: every other adapter leaves such a part out rather than replay a blob
+// its own API would reject.
+const SignatureOpenAIResponses = "openai-responses:"
+
+// SignatureGemini prefixes a ToolCallPart.Signature that is a Gemini
+// thoughtSignature, so no other adapter mistakes it for its own.
+const SignatureGemini = "gemini:"
+
 // ToolCallPart is the model asking for a tool. Arguments and RawArguments are
 // separate because they answer different questions: may this be executed, and
 // what exactly did the model send.
@@ -96,6 +114,13 @@ type ToolCallPart struct {
 	// nil this is what lets the runner tell the model what was wrong instead of
 	// executing a guess.
 	RawArguments string
+
+	// Signature is the provider's attestation that rides on the call itself,
+	// opaque and prefixed with the adapter that issued it (SignatureGemini).
+	// Gemini 3 rejects the next request of a tool loop unless it comes back on
+	// this very call. Every other adapter ignores it, and one that sees a
+	// prefix it did not write must not replay it. Never sent to a browser.
+	Signature string
 }
 
 // Parsed reports whether the arguments are complete and valid JSON. Nothing may

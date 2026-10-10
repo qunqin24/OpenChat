@@ -13,19 +13,25 @@ import (
 )
 
 const createConversation = `-- name: CreateConversation :one
-INSERT INTO conversations (user_id, title, model)
-VALUES ($1, $2, $3)
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search
+INSERT INTO conversations (user_id, title, model, temporary)
+VALUES ($1, $2, $3, $4)
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, current_input_id
 `
 
 type CreateConversationParams struct {
-	UserID *uuid.UUID `json:"user_id"`
-	Title  string     `json:"title"`
-	Model  *string    `json:"model"`
+	UserID    *uuid.UUID `json:"user_id"`
+	Title     string     `json:"title"`
+	Model     *string    `json:"model"`
+	Temporary bool       `json:"temporary"`
 }
 
 func (q *Queries) CreateConversation(ctx context.Context, arg CreateConversationParams) (Conversation, error) {
-	row := q.db.QueryRow(ctx, createConversation, arg.UserID, arg.Title, arg.Model)
+	row := q.db.QueryRow(ctx, createConversation,
+		arg.UserID,
+		arg.Title,
+		arg.Model,
+		arg.Temporary,
+	)
 	var i Conversation
 	err := row.Scan(
 		&i.ID,
@@ -37,12 +43,15 @@ func (q *Queries) CreateConversation(ctx context.Context, arg CreateConversation
 		&i.DeletedAt,
 		&i.ReasoningEffort,
 		&i.WebSearch,
+		&i.MemorySnapshot,
+		&i.Temporary,
+		&i.CurrentInputID,
 	)
 	return i, err
 }
 
 const getConversation = `-- name: GetConversation :one
-SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search
+SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, current_input_id
 FROM conversations
 WHERE id = $1
   AND user_id = $2
@@ -70,15 +79,20 @@ func (q *Queries) GetConversation(ctx context.Context, arg GetConversationParams
 		&i.DeletedAt,
 		&i.ReasoningEffort,
 		&i.WebSearch,
+		&i.MemorySnapshot,
+		&i.Temporary,
+		&i.CurrentInputID,
 	)
 	return i, err
 }
 
 const listConversations = `-- name: ListConversations :many
-SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search
+SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, current_input_id
 FROM conversations
 WHERE user_id = $1
   AND deleted_at IS NULL
+  -- A temporary conversation is not history: it is reached by its link, once.
+  AND NOT temporary
   AND ($2::timestamptz IS NULL
     OR (updated_at, id) < ($2::timestamptz, $3::uuid))
 ORDER BY updated_at DESC, id DESC
@@ -116,6 +130,9 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 			&i.DeletedAt,
 			&i.ReasoningEffort,
 			&i.WebSearch,
+			&i.MemorySnapshot,
+			&i.Temporary,
+			&i.CurrentInputID,
 		); err != nil {
 			return nil, err
 		}
@@ -127,13 +144,43 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 	return items, nil
 }
 
+const lockConversation = `-- name: LockConversation :one
+SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, current_input_id
+FROM conversations
+WHERE id = $1
+FOR UPDATE
+`
+
+// Held until the transaction ends: whatever moves the conversation's current
+// leaf — a message, an edit, a switch of branch — queues here, and reads the
+// leaf the one before it left.
+func (q *Queries) LockConversation(ctx context.Context, id uuid.UUID) (Conversation, error) {
+	row := q.db.QueryRow(ctx, lockConversation, id)
+	var i Conversation
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Title,
+		&i.Model,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.ReasoningEffort,
+		&i.WebSearch,
+		&i.MemorySnapshot,
+		&i.Temporary,
+		&i.CurrentInputID,
+	)
+	return i, err
+}
+
 const setConversationModel = `-- name: SetConversationModel :one
 UPDATE conversations
 SET model = $1
 WHERE id = $2
   AND user_id = $3
   AND deleted_at IS NULL
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, current_input_id
 `
 
 type SetConversationModelParams struct {
@@ -157,6 +204,9 @@ func (q *Queries) SetConversationModel(ctx context.Context, arg SetConversationM
 		&i.DeletedAt,
 		&i.ReasoningEffort,
 		&i.WebSearch,
+		&i.MemorySnapshot,
+		&i.Temporary,
+		&i.CurrentInputID,
 	)
 	return i, err
 }
@@ -167,7 +217,7 @@ SET reasoning_effort = $1
 WHERE id = $2
   AND user_id = $3
   AND deleted_at IS NULL
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, current_input_id
 `
 
 type SetConversationReasoningParams struct {
@@ -190,6 +240,9 @@ func (q *Queries) SetConversationReasoning(ctx context.Context, arg SetConversat
 		&i.DeletedAt,
 		&i.ReasoningEffort,
 		&i.WebSearch,
+		&i.MemorySnapshot,
+		&i.Temporary,
+		&i.CurrentInputID,
 	)
 	return i, err
 }
@@ -200,7 +253,7 @@ SET web_search = $1
 WHERE id = $2
   AND user_id = $3
   AND deleted_at IS NULL
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, current_input_id
 `
 
 type SetConversationWebSearchParams struct {
@@ -222,6 +275,70 @@ func (q *Queries) SetConversationWebSearch(ctx context.Context, arg SetConversat
 		&i.DeletedAt,
 		&i.ReasoningEffort,
 		&i.WebSearch,
+		&i.MemorySnapshot,
+		&i.Temporary,
+		&i.CurrentInputID,
+	)
+	return i, err
+}
+
+const setCurrentInput = `-- name: SetCurrentInput :exec
+WITH shown AS (
+    UPDATE messages
+        SET shown_at = clock_timestamp()
+        WHERE messages.id = $1
+            AND messages.conversation_id = $2)
+UPDATE conversations
+SET current_input_id = $1
+WHERE conversations.id = $2
+`
+
+type SetCurrentInputParams struct {
+	InputID        *uuid.UUID `json:"input_id"`
+	ConversationID uuid.UUID  `json:"conversation_id"`
+}
+
+// Moves the reader to this user message, a leaf of the conversation, and notes
+// that it was the branch shown just now (see PickBranchLeaf).
+func (q *Queries) SetCurrentInput(ctx context.Context, arg SetCurrentInputParams) error {
+	_, err := q.db.Exec(ctx, setCurrentInput, arg.InputID, arg.ConversationID)
+	return err
+}
+
+const setGeneratedTitle = `-- name: SetGeneratedTitle :one
+UPDATE conversations
+SET title = $1
+WHERE id = $2
+  AND title = $3
+  AND deleted_at IS NULL
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, current_input_id
+`
+
+type SetGeneratedTitleParams struct {
+	Title        string    `json:"title"`
+	ID           uuid.UUID `json:"id"`
+	DefaultTitle string    `json:"default_title"`
+}
+
+// A generated title, only over the default one: a conversation the user has
+// renamed in the meantime keeps their name. Not a change of activity, so the
+// conversation keeps its place in the list.
+func (q *Queries) SetGeneratedTitle(ctx context.Context, arg SetGeneratedTitleParams) (Conversation, error) {
+	row := q.db.QueryRow(ctx, setGeneratedTitle, arg.Title, arg.ID, arg.DefaultTitle)
+	var i Conversation
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Title,
+		&i.Model,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.ReasoningEffort,
+		&i.WebSearch,
+		&i.MemorySnapshot,
+		&i.Temporary,
+		&i.CurrentInputID,
 	)
 	return i, err
 }
@@ -265,7 +382,7 @@ SET title      = $1,
 WHERE id = $2
   AND user_id = $3
   AND deleted_at IS NULL
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, current_input_id
 `
 
 type UpdateConversationTitleParams struct {
@@ -287,6 +404,9 @@ func (q *Queries) UpdateConversationTitle(ctx context.Context, arg UpdateConvers
 		&i.DeletedAt,
 		&i.ReasoningEffort,
 		&i.WebSearch,
+		&i.MemorySnapshot,
+		&i.Temporary,
+		&i.CurrentInputID,
 	)
 	return i, err
 }

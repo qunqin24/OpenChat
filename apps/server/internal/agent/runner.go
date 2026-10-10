@@ -21,6 +21,7 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin/openchat/apps/server/internal/llm"
+	ledger "github.com/qunqin/openchat/apps/server/internal/usage"
 )
 
 // ErrNoModel is a run whose pinned model can no longer be answered: the channel
@@ -56,7 +58,8 @@ type Options struct {
 	// SystemPrompt renders the system prompt for a request made at now.
 	SystemPrompt func(ctx context.Context, now time.Time, tools []Tool) string
 	// MaxToolRounds bounds the tool rounds of one run. The request after the
-	// last round offers no tools, so the model has to answer.
+	// last round forbids tool calls (tool choice none, same tool list), so the
+	// model has to answer.
 	MaxToolRounds int
 	// MaxRetries is how many times a failed request is retried.
 	MaxRetries int
@@ -118,6 +121,8 @@ type Runner struct {
 	tools  ToolSource
 	opts   Options
 	now    func() time.Time
+	// usage is the ledger of model requests.
+	usage *ledger.Recorder
 
 	base context.Context
 	stop context.CancelCauseFunc
@@ -125,6 +130,17 @@ type Runner struct {
 	mu     sync.Mutex
 	active map[uuid.UUID]context.CancelCauseFunc
 	wg     sync.WaitGroup
+
+	// afterRun is told about every run that finishes, once its end is
+	// committed and published. Atomic because runs resumed at boot can finish
+	// before the caller has set it.
+	afterRun atomic.Pointer[func(sqlc.Run)]
+}
+
+// AfterRun registers what to do once a run has finished — titling its
+// conversation, say. It is called on the run's goroutine and must not block.
+func (r *Runner) AfterRun(fn func(sqlc.Run)) {
+	r.afterRun.Store(&fn)
 }
 
 func NewRunner(pool *pgxpool.Pool, hub *Hub, models ModelResolver, tools ToolSource, opts Options) *Runner {
@@ -140,6 +156,7 @@ func NewRunner(pool *pgxpool.Pool, hub *Hub, models ModelResolver, tools ToolSou
 		tools:  tools,
 		opts:   opts.withDefaults(),
 		now:    time.Now,
+		usage:  ledger.NewRecorder(sqlc.New(pool)),
 		base:   base,
 		stop:   stop,
 		active: map[uuid.UUID]context.CancelCauseFunc{},
@@ -232,6 +249,7 @@ func (r *Runner) execute(ctx context.Context, runID uuid.UUID) {
 	if ex == nil {
 		return // already terminal
 	}
+	ctx = WithScope(ctx, Scope{RunID: runID, UserID: ex.run.UserID, ConversationID: ex.run.ConversationID})
 
 	for {
 		if errors.Is(context.Cause(ctx), errShutdown) {

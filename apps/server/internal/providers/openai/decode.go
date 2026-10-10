@@ -161,7 +161,7 @@ func (a *assembler) chunk(data []byte) error {
 		return llm.Errorf(llm.ErrorProtocol, err, "frame is not valid JSON")
 	}
 	if c.Error != nil {
-		return &llm.Error{Kind: llm.ErrorProvider, Code: c.Error.Code, Message: c.Error.Message}
+		return eventError(*c.Error)
 	}
 
 	if !a.started {

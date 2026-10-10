@@ -113,9 +113,11 @@ type wireContentBlock struct {
 
 	Text string `json:"text,omitempty"`
 
-	Thinking  string `json:"thinking,omitempty"`
-	Signature string `json:"signature,omitempty"`
-	Data      string `json:"data,omitempty"`
+	// Thinking is a pointer so that a signed block with no text still sends the
+	// field: omitempty would drop an empty string, and the API requires it.
+	Thinking  *string `json:"thinking,omitempty"`
+	Signature string  `json:"signature,omitempty"`
+	Data      string  `json:"data,omitempty"`
 
 	ID    string          `json:"id,omitempty"`
 	Name  string          `json:"name,omitempty"`

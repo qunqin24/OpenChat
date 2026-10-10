@@ -466,3 +466,38 @@ func (r *blockingReader) Read(p []byte) (int, error) {
 	r.off += n
 	return n, nil
 }
+
+func TestStreamErrorFrameAcceptsANumericCode(t *testing.T) {
+	// OpenRouter reports the HTTP status as a number inside the frame. A code
+	// that cannot be decoded used to take the whole frame, message included.
+	stream := "data: {\"error\":{\"message\":\"Provider returned error\",\"code\":429}}\n\n"
+
+	rec := &llmtest.Recorder{}
+	_, err := decode(context.Background(), strings.NewReader(stream), Config{Provider: "openrouter"}, "m", rec.Emit)
+
+	var modelErr *llm.Error
+	if !errors.As(err, &modelErr) {
+		t.Fatalf("error = %v, want an *llm.Error", err)
+	}
+	if modelErr.Message != "Provider returned error" || modelErr.Code != "429" {
+		t.Errorf("error = %+v", modelErr)
+	}
+	if modelErr.Kind != llm.ErrorRateLimit || !modelErr.Retryable {
+		t.Errorf("kind = %s retryable = %v, want a retryable rate limit", modelErr.Kind, modelErr.Retryable)
+	}
+}
+
+func TestWireErrorCodeIsReadWhicheverWayItIsSent(t *testing.T) {
+	for in, want := range map[string]wireCode{
+		`{"code":"rate_limit_exceeded"}`: "rate_limit_exceeded",
+		`{"code":429}`:                   "429",
+		`{"code":null}`:                  "",
+		`{"message":"no code"}`:          "",
+		`{"code":{"odd":true}}`:          "",
+	} {
+		var e wireError
+		if err := json.Unmarshal([]byte(in), &e); err != nil || e.Code != want {
+			t.Errorf("%s: code = %q err = %v, want %q", in, e.Code, err, want)
+		}
+	}
+}

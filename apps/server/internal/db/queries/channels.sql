@@ -9,8 +9,10 @@ FROM channels
 WHERE id = $1;
 
 -- name: CreateChannel :one
-INSERT INTO channels (name, type, base_url, api_key, enabled)
-VALUES ($1, $2, $3, $4, $5)
+-- An empty format is the default, so a caller that has no opinion — tests,
+-- older code — gets Chat Completions rather than a constraint violation.
+INSERT INTO channels (name, type, base_url, api_key, enabled, api_format)
+VALUES ($1, $2, $3, $4, $5, COALESCE(NULLIF(sqlc.arg('api_format')::text, ''), 'chat'))
 RETURNING *;
 
 -- name: UpdateChannel :one
@@ -26,6 +28,7 @@ SET name       = COALESCE(sqlc.narg('name')::text, name),
     api_key    = COALESCE(sqlc.narg('api_key')::text, api_key),
     enabled    = COALESCE(sqlc.narg('enabled')::boolean, enabled),
     sort_order = COALESCE(sqlc.narg('sort_order')::integer, sort_order),
+    api_format = COALESCE(sqlc.narg('api_format')::text, api_format),
     updated_at = now()
 WHERE id = sqlc.arg('id')
 RETURNING *;

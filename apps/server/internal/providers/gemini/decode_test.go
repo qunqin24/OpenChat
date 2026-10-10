@@ -106,7 +106,7 @@ func TestStreamReadsAThoughtPartAsReasoningNotAsTheAnswer(t *testing.T) {
 	if !ok {
 		t.Fatalf("first part is %T", resp.Message.Parts[0])
 	}
-	if first.Signature != "CvUBAdHtim8=" {
+	if first.Signature != llm.SignatureGemini+"CvUBAdHtim8=" {
 		t.Errorf("signature = %q", first.Signature)
 	}
 	if strings.Contains(rec.Deltas(llm.PartReasoning), "CvUB") {
@@ -224,11 +224,10 @@ func TestStreamKeepsAProviderSuppliedCallID(t *testing.T) {
 	}
 }
 
-func TestStreamPutsAFunctionCallSignatureWhereItCanSurvive(t *testing.T) {
-	// llm.ToolCallPart has no Signature field, and this API attaches
-	// thoughtSignature to function calls too. Metadata is where a
-	// provider-native leftover belongs rather than being dropped.
-	stream := `data: {"candidates":[{"content":{"parts":[{"functionCall":{"name":"read_note","args":{"id":"n-1"}},"thoughtSignature":"CvUBsig="}],"role":"model"},"finishReason":"STOP","index":0}]}` + "\n\n"
+func TestStreamPutsAFunctionCallSignatureOnTheCallItself(t *testing.T) {
+	// Gemini 3 400s the next request of a tool loop unless the signature comes
+	// back on this very call, so it has to travel with the ToolCallPart.
+	stream := `data: {"candidates":[{"content":{"parts":[{"functionCall":{"name":"read_note","args":{"id":"n-1"}},"thoughtSignature":"CvUBsig="},{"functionCall":{"name":"read_note","args":{"id":"n-2"}}}],"role":"model"},"finishReason":"STOP","index":0}]}` + "\n\n"
 
 	rec := &llmtest.Recorder{}
 	resp, err := decode(context.Background(), strings.NewReader(stream), Config{Provider: "google"}, "m", rec.Emit)
@@ -237,12 +236,28 @@ func TestStreamPutsAFunctionCallSignatureWhereItCanSurvive(t *testing.T) {
 	}
 	rec.CheckProviderInvariants(t)
 
-	signatures, ok := resp.Metadata[metadataThoughtSignatures].(map[string]string)
-	if !ok {
-		t.Fatalf("metadata = %v, want the signatures kept somewhere", resp.Metadata)
+	calls := resp.Message.ToolCalls()
+	if len(calls) != 2 {
+		t.Fatalf("calls = %v", calls)
 	}
-	if got := signatures["gemini:0:read_note"]; got != "CvUBsig=" {
-		t.Errorf("signature for the call = %q", got)
+	if want := llm.SignatureGemini + "CvUBsig="; calls[0].Signature != want {
+		t.Errorf("signature = %q, want %q", calls[0].Signature, want)
+	}
+	if calls[1].Signature != "" {
+		t.Errorf("second parallel call signature = %q, only the first carries one", calls[1].Signature)
+	}
+	// The part_end event is what the run layer stores, so it must carry it too.
+	var ended llm.ToolCallPart
+	for _, ev := range rec.OfType(llm.EventPartEnd) {
+		if call, ok := ev.Part.(llm.ToolCallPart); ok && call.Signature != "" {
+			ended = call
+		}
+	}
+	if ended.Signature != calls[0].Signature {
+		t.Errorf("part_end signature = %q", ended.Signature)
+	}
+	if resp.Metadata != nil {
+		t.Errorf("metadata = %v, signatures no longer live there", resp.Metadata)
 	}
 }
 
@@ -305,6 +320,8 @@ func TestStreamMapsEveryFinishReasonItAccepts(t *testing.T) {
 		{raw: "SAFETY", want: llm.FinishContentFilter},
 		{raw: "RECITATION", want: llm.FinishContentFilter},
 		{raw: "PROHIBITED_CONTENT", want: llm.FinishContentFilter},
+		{raw: "IMAGE_RECITATION", want: llm.FinishContentFilter},
+		{raw: "ESCALATION", want: llm.FinishContentFilter},
 	}
 
 	for _, tc := range tests {
@@ -320,18 +337,27 @@ func TestStreamMapsEveryFinishReasonItAccepts(t *testing.T) {
 		})
 	}
 
-	t.Run("a call the provider itself could not parse", func(t *testing.T) {
-		// There is no FinishReason for "the turn ended in something unusable",
-		// and both nearby ones would lie about it.
-		a := &assembler{rawFinish: "MALFORMED_FUNCTION_CALL"}
-		_, err := a.finishReason()
-		if !llm.IsKind(err, llm.ErrorProvider) {
-			t.Fatalf("error = %v, want a provider error: the stream was fine, the turn was not", err)
-		}
-	})
+	for _, raw := range []string{
+		"MALFORMED_FUNCTION_CALL", "MALFORMED_RESPONSE", "UNEXPECTED_TOOL_CALL", "TOO_MANY_TOOL_CALLS",
+		"MISSING_THOUGHT_SIGNATURE", "LANGUAGE", "OTHER", "PUP_LIMITED_DISABLED",
+	} {
+		t.Run(raw+" is the provider failing", func(t *testing.T) {
+			// There is no FinishReason for "the turn ended in something
+			// unusable", and both nearby ones would lie about it.
+			a := &assembler{rawFinish: raw}
+			_, err := a.finishReason()
+			if !llm.IsKind(err, llm.ErrorProvider) {
+				t.Fatalf("error = %v, want a provider error: the stream was fine, the turn was not", err)
+			}
+			var failure *llm.Error
+			if !errors.As(err, &failure) || failure.Code != raw {
+				t.Errorf("error = %v, want the raw reason %q in its code", err, raw)
+			}
+		})
+	}
 
 	t.Run("a finish reason nobody has seen before", func(t *testing.T) {
-		a := &assembler{rawFinish: "OTHER"}
+		a := &assembler{rawFinish: "SOMETHING_NEW"}
 		if _, err := a.finishReason(); !llm.IsKind(err, llm.ErrorProtocol) {
 			t.Fatalf("error = %v, want a protocol error rather than a guess", err)
 		}

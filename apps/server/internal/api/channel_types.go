@@ -2,8 +2,10 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/qunqin/openchat/apps/server/internal/httpx"
+	"github.com/qunqin/openchat/apps/server/internal/providers/openai"
 )
 
 // channelTypeDef is what an operator picks when adding a channel: a vendor,
@@ -41,6 +43,28 @@ type channelTypeDef struct {
 	// than named in the front end so that the model discovery here and the
 	// "needs a key" checks there cannot disagree about which vendors those are.
 	KeyOptional bool `json:"keyOptional"`
+	// Route picks the protocol per model, for a gateway that serves different
+	// models on different APIs behind one key. Nil means every model speaks
+	// WireApi, which is then also what model discovery and the catalogue use.
+	Route func(modelID string) string `json:"-"`
+	// Compat is what this vendor's Chat Completions endpoint does differently
+	// from the OpenAI baseline: whether it wants earlier thinking handed back,
+	// what it calls the output limit, how it takes a thinking level. It is the
+	// zero value for a vendor that follows the baseline, which includes every
+	// custom endpoint — a flag here is a claim about a named vendor, never a
+	// guess about an operator's relay.
+	Compat openai.Compat `json:"-"`
+	// Gateway is what a gateway asks every client to send: its own user agent,
+	// and the conversation's id in a session header. Nil sends neither.
+	Gateway *gatewayIdentity `json:"-"`
+}
+
+// gatewayIdentity is how requests to a gateway identify their client and their
+// conversation. OpenCode Go refuses a request without a session header, and
+// asks clients to name themselves rather than send a generic library's agent.
+type gatewayIdentity struct {
+	UserAgent     string
+	SessionHeader string
 }
 
 // Labels are brand names and stay untranslated: "SiliconFlow" is what it is
@@ -50,7 +74,8 @@ var channelTypes = []channelTypeDef{
 	// The model makers themselves: the key is theirs and the models are theirs.
 	{ID: "openai", Label: "OpenAI", WireApi: "openai", Group: Vendor,
 		Endpoint: "https://api.openai.com/v1", KeyHint: "sk-…", IconID: "openai",
-		Doc: "https://platform.openai.com/api-keys"},
+		Doc:    "https://platform.openai.com/api-keys",
+		Compat: openai.Compat{MaxCompletionTokens: true}},
 	{ID: "anthropic", Label: "Anthropic Claude", WireApi: "anthropic", Group: Vendor,
 		Endpoint: "https://api.anthropic.com/v1", KeyHint: "sk-ant-…", IconID: "claude",
 		Doc: "https://console.anthropic.com/settings/keys"},
@@ -62,13 +87,19 @@ var channelTypes = []channelTypeDef{
 	// because the endpoint and the key format differ, and because an operator
 	// looks for the name on their invoice.
 	{ID: "deepseek", Label: "深度求索 DeepSeek", WireApi: "openai", Group: Vendor,
-		Endpoint: "https://api.deepseek.com/v1", KeyHint: "sk-…", IconID: "deepseek"},
+		Endpoint: "https://api.deepseek.com/v1", KeyHint: "sk-…", IconID: "deepseek",
+		// With tools on the request, DeepSeek wants every earlier turn's
+		// reasoning_content back; without them it ignores it.
+		Compat: openai.Compat{EchoReasoning: true, Thinking: openai.ThinkingSwitch}},
 	{ID: "moonshot", Label: "月之暗面 Moonshot", WireApi: "openai", Group: Vendor,
-		Endpoint: "https://api.moonshot.cn/v1", KeyHint: "sk-…", IconID: "moonshot"},
+		Endpoint: "https://api.moonshot.cn/v1", KeyHint: "sk-…", IconID: "moonshot",
+		Compat: openai.Compat{EchoReasoning: true, Thinking: openai.ThinkingMoonshot}},
 	{ID: "zhipu", Label: "智谱 GLM", WireApi: "openai", Group: Vendor,
-		Endpoint: "https://open.bigmodel.cn/api/paas/v4", KeyHint: "…", IconID: "zhipu"},
+		Endpoint: "https://open.bigmodel.cn/api/paas/v4", KeyHint: "…", IconID: "zhipu",
+		Compat: openai.Compat{EchoReasoning: true, Thinking: openai.ThinkingSwitch}},
 	{ID: "dashscope", Label: "阿里云百炼 DashScope", WireApi: "openai", Group: Vendor,
-		Endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1", KeyHint: "sk-…", IconID: "qwen"},
+		Endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1", KeyHint: "sk-…", IconID: "qwen",
+		Compat: openai.Compat{EchoReasoning: true, MaxCompletionTokens: true, Thinking: openai.ThinkingDashScope}},
 	{ID: "volcengine", Label: "火山方舟 Volcengine", WireApi: "openai", Group: Vendor,
 		Endpoint: "https://ark.cn-beijing.volces.com/api/v3", KeyHint: "…", IconID: "volcengine"},
 	{ID: "minimax", Label: "MiniMax", WireApi: "openai", Group: Vendor,
@@ -90,7 +121,8 @@ var channelTypes = []channelTypeDef{
 	// of them. Same protocol; the difference an operator cares about is whose
 	// invoice it lands on.
 	{ID: "openrouter", Label: "OpenRouter", WireApi: "openai", Group: Platform,
-		Endpoint: "https://openrouter.ai/api/v1", KeyHint: "sk-or-…", IconID: "openrouter"},
+		Endpoint: "https://openrouter.ai/api/v1", KeyHint: "sk-or-…", IconID: "openrouter",
+		Compat: openai.Compat{Thinking: openai.ThinkingOpenRouter}},
 	{ID: "siliconflow", Label: "硅基流动 SiliconFlow", WireApi: "openai", Group: Platform,
 		Endpoint: "https://api.siliconflow.cn/v1", KeyHint: "sk-…", IconID: "siliconcloud"},
 	{ID: "groq", Label: "Groq", WireApi: "openai", Group: Platform,
@@ -105,6 +137,17 @@ var channelTypes = []channelTypeDef{
 		Endpoint: "https://api-inference.modelscope.cn/v1", KeyHint: "…", IconID: "modelscope"},
 	{ID: "cerebras", Label: "Cerebras", WireApi: "openai", Group: Platform,
 		Endpoint: "https://api.cerebras.ai/v1", KeyHint: "csk-…", IconID: "cerebras"},
+	// A subscription gateway that serves each model on the API its table
+	// names: Claude, MiniMax and Qwen on Messages, GPT, Grok and Muse Spark on
+	// Responses, the other open models on Chat Completions — all under one base URL and one key. Its model list is
+	// OpenAI-style, which is what WireApi says. The open models it serves on
+	// Chat Completions (GLM, Kimi, DeepSeek) are the ones that want their
+	// reasoning handed back.
+	{ID: "opencode-go", Label: "OpenCode Go", WireApi: "openai", Group: Platform,
+		Endpoint: "https://opencode.ai/zen/go/v1", KeyHint: "sk-…", IconID: "opencode",
+		Doc: "https://opencode.ai/auth", Route: openCodeRoute,
+		Compat:  openai.Compat{EchoReasoning: true},
+		Gateway: &gatewayIdentity{UserAgent: "OpenChat/1.0", SessionHeader: "x-opencode-session"}},
 
 	// Servers the operator runs. A local one answers without a credential, which
 	// is what `KeyOptional` records.
@@ -119,6 +162,59 @@ var channelTypes = []channelTypeDef{
 		Endpoint: "", KeyHint: "sk-…", IconID: ""},
 }
 
+// openCodeRoute is OpenCode Go's table of which API serves which model
+// (opencode.ai/docs/go, "Endpoints"), by the family prefixes it uses: Claude,
+// MiniMax and Qwen3 are on Messages (the table lists Qwen as @ai-sdk/anthropic),
+// GPT, Grok and Muse Spark on Responses, and the rest on Chat Completions.
+func openCodeRoute(modelID string) string {
+	id := strings.ToLower(modelID)
+	switch {
+	case strings.HasPrefix(id, "claude-"), strings.HasPrefix(id, "minimax-"), strings.HasPrefix(id, "qwen3."):
+		return wireAnthropic
+	case strings.HasPrefix(id, "gpt-"), strings.HasPrefix(id, "grok-"), strings.HasPrefix(id, "muse-spark-"):
+		return wireResponses
+	default:
+		return wireOpenAI
+	}
+}
+
+// The protocols a channel's requests can go out on. `responses` is not a
+// WireApi a channel type declares: only a Route chooses it, per model.
+const (
+	wireOpenAI    = "openai"
+	wireAnthropic = "anthropic"
+	wireGemini    = "gemini"
+	wireResponses = "responses"
+)
+
+// gatewayFor is the identity a channel type's requests carry, or nil.
+func gatewayFor(t ChannelType) *gatewayIdentity {
+	for _, def := range channelTypes {
+		if def.ID == t {
+			return def.Gateway
+		}
+	}
+	return nil
+}
+
+// wireForModel is the protocol a channel's request for modelID goes out on:
+// the type's own route if it has one, else its protocol — on the OpenAI
+// protocol, in the request format the operator chose for the channel.
+func wireForModel(t ChannelType, format, modelID string) (string, bool) {
+	for _, def := range channelTypes {
+		if def.ID == t {
+			if def.Route != nil {
+				return def.Route(modelID), true
+			}
+			if def.WireApi == wireOpenAI && format == string(Responses) {
+				return wireResponses, true
+			}
+			return string(def.WireApi), true
+		}
+	}
+	return "", false
+}
+
 // ListChannelTypes serves the table above.
 //
 // It is an endpoint rather than a constant in the front end so that the two
@@ -131,6 +227,9 @@ func (s *Server) ListChannelTypes(w http.ResponseWriter, r *http.Request) {
 			Id: t.ID, Label: t.Label, WireApi: t.WireApi,
 			Endpoint: t.Endpoint, KeyHint: t.KeyHint, IconId: t.IconID,
 			Group: t.Group, KeyOptional: t.KeyOptional,
+			// The OpenAI protocol has two request formats to choose between;
+			// the others have one, and a routing type chooses per model.
+			ApiFormatChoice: t.WireApi == wireOpenAI && t.Route == nil,
 		}
 		if t.Doc != "" {
 			doc := t.Doc
@@ -139,6 +238,17 @@ func (s *Server) ListChannelTypes(w http.ResponseWriter, r *http.Request) {
 		out = append(out, info)
 	}
 	httpx.JSON(w, http.StatusOK, out)
+}
+
+// compatFor is how a channel type's Chat Completions requests differ from the
+// baseline; the zero value for a type that follows it.
+func compatFor(t ChannelType) openai.Compat {
+	for _, def := range channelTypes {
+		if def.ID == t {
+			return def.Compat
+		}
+	}
+	return openai.Compat{}
 }
 
 // wireApiFor returns the protocol a channel type speaks.

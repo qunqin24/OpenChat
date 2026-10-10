@@ -56,13 +56,17 @@ func buildBody(req llm.Request, cfg Config) ([]byte, error) {
 		body["top_p"] = *opts.TopP
 	}
 	if opts.MaxTokens != nil {
-		body["max_tokens"] = *opts.MaxTokens
+		if cfg.Compat.MaxCompletionTokens {
+			body["max_completion_tokens"] = *opts.MaxTokens
+		} else {
+			body["max_tokens"] = *opts.MaxTokens
+		}
 	}
 	if len(opts.Stop) > 0 {
 		body["stop"] = opts.Stop
 	}
-	if opts.Reasoning != nil && opts.Reasoning.Effort != "" {
-		body["reasoning_effort"] = string(opts.Reasoning.Effort)
+	for key, value := range thinkingFields(req.Model, opts.Reasoning, cfg.Compat.Thinking) {
+		body[key] = value
 	}
 
 	for key, value := range opts.Extra {
@@ -166,7 +170,7 @@ func toolResultContent(result llm.ToolResultPart) string {
 func convertAssistant(message llm.Message, cfg Config) (wireMessage, error) {
 	out := wireMessage{Role: "assistant"}
 
-	var text strings.Builder
+	var text, reasoning strings.Builder
 	for _, part := range message.Parts {
 		switch p := part.(type) {
 		case llm.TextPart:
@@ -174,9 +178,10 @@ func convertAssistant(message llm.Message, cfg Config) (wireMessage, error) {
 		case llm.ReasoningPart:
 			// Dropped unless the endpoint is known to want it back: most
 			// implementations of this protocol reject their own
-			// reasoning_content on the way in.
-			if cfg.Compat.EchoReasoning {
-				text.WriteString(p.Text)
+			// reasoning_content on the way in. A signed or encrypted block is
+			// another provider's, in a form this protocol has no field for.
+			if cfg.Compat.EchoReasoning && p.Signature == "" && len(p.Redacted) == 0 {
+				reasoning.WriteString(p.Text)
 			}
 		case llm.ToolCallPart:
 			if p.ID == "" {
@@ -202,6 +207,7 @@ func convertAssistant(message llm.Message, cfg Config) (wireMessage, error) {
 	if text.Len() > 0 {
 		out.Content = text.String()
 	}
+	out.ReasoningContent = reasoning.String()
 	if out.Content == nil && len(out.ToolCalls) == 0 {
 		// An assistant turn with neither is not a turn; sending it produces a
 		// confusing 400 far from here.

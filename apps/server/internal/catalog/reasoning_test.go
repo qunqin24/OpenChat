@@ -48,3 +48,27 @@ func TestReasoningProfiles(t *testing.T) {
 		t.Error("unreadable options were offered a level")
 	}
 }
+
+func TestBudgetOnlyProfile(t *testing.T) {
+	// Opus 4.5 as models.dev lists it: effort levels beside a budget.
+	opus45 := ParseReasoningOptions([]byte(`[{"type":"effort","values":["low","medium","high"]},{"type":"budget_tokens","min":1024}]`)).BudgetOnly()
+	if got := opus45.Options("medium"); got == nil || got.Effort != "" || got.Budget != 4096 {
+		t.Errorf("opus 4.5 medium = %+v, want a budget and no effort", got)
+	}
+	if got := opus45.Levels(); !reflect.DeepEqual(got, []llm.ReasoningEffort{"low", "medium", "high"}) {
+		t.Errorf("opus 4.5 levels = %v", got)
+	}
+
+	// Effort levels only, no range of its own: the API's floor stands in.
+	bare := ParseReasoningOptions([]byte(`[{"type":"effort","values":["low","high"]}]`)).BudgetOnly()
+	if got := bare.Options("low"); got == nil || got.Budget != 1024 || got.Effort != "" {
+		t.Errorf("bare low = %+v", got)
+	}
+
+	// An operator's restriction survives the change of form.
+	restricted := ParseReasoningOptions([]byte(`[{"type":"effort","values":["low","medium","high"]},{"type":"budget_tokens","min":1024}]`)).
+		Restrict([]llm.ReasoningEffort{"low"}).BudgetOnly()
+	if restricted.Options("high") != nil || restricted.Options("low") == nil {
+		t.Errorf("restricted profile offers %v", restricted.Levels())
+	}
+}

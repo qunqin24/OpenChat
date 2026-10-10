@@ -41,7 +41,28 @@ const (
 	// The thinking and the answer share it, and the 4096 that serves a plain
 	// turn is gone before a hard question has been thought through.
 	adaptiveMaxTokens = 32000
+
+	// deepMaxTokens is the same for the two deepest efforts, which the docs
+	// size at 64K or more: at xhigh and max the thinking alone can use the
+	// 32000 above, and the turn stops before the answer has begun.
+	deepMaxTokens = 64000
 )
+
+// ThinkingMaxTokens is the ceiling to ask for when nobody chose one and the
+// turn thinks adaptively at effort (empty is the model's own default). The
+// catalogue-driven cap in the api package uses it too, so the adapter's
+// invented ceiling and the one derived from a model's limits cannot disagree.
+func ThinkingMaxTokens(effort llm.ReasoningEffort) int {
+	switch effort {
+	case llm.EffortXHigh, llm.EffortMax:
+		return deepMaxTokens
+	}
+	return adaptiveMaxTokens
+}
+
+// cacheControl is the ephemeral (5-minute) cache marker. Every request carries
+// two: one on the end of the system prompt, and one on the request itself.
+var cacheControl = map[string]any{"type": "ephemeral"}
 
 // efforts are the levels this API accepts.
 var efforts = map[llm.ReasoningEffort]bool{
@@ -69,12 +90,14 @@ func buildBody(req llm.Request, cfg Config) ([]byte, error) {
 		// Nobody chose a ceiling, so the invented one makes room for the
 		// thinking: carved out of the default instead, it would leave the
 		// answer next to nothing.
-		if r := req.Options.Reasoning; r != nil && req.Options.MaxTokens == nil {
+		if r := req.Options.Reasoning; req.Options.MaxTokens == nil {
 			switch {
-			case r.Effort != "":
-				maxTokens = adaptiveMaxTokens
-			case r.Budget > 0:
+			case r != nil && r.Effort != "":
+				maxTokens = ThinkingMaxTokens(r.Effort)
+			case r != nil && r.Budget > 0:
 				maxTokens += r.Budget
+			case thinksUnasked(r, req.Model):
+				maxTokens = ThinkingMaxTokens("")
 			}
 		}
 	}
@@ -92,7 +115,14 @@ func buildBody(req llm.Request, cfg Config) ([]byte, error) {
 		"stream":     true,
 	}
 	if system != "" {
-		body["system"] = system
+		// A block list rather than a string, because only a block can carry a
+		// cache marker. The marker is the guaranteed read point for the part of
+		// the prompt that rarely changes; the request-level one below covers the
+		// conversation that grows behind it.
+		body["system"] = []map[string]any{{"type": "text", "text": system, "cache_control": cacheControl}}
+	}
+	if !cfg.ExplicitCachingOnly {
+		body["cache_control"] = cacheControl
 	}
 	if len(req.Tools) > 0 {
 		body["tools"] = convertTools(req.Tools)
@@ -102,7 +132,7 @@ func buildBody(req llm.Request, cfg Config) ([]byte, error) {
 	}
 
 	opts := req.Options
-	thinking, outputConfig, err := convertThinking(opts.Reasoning, maxTokens)
+	thinking, outputConfig, err := convertThinking(opts.Reasoning, maxTokens, req.Model)
 	if err != nil {
 		return nil, err
 	}
@@ -144,11 +174,19 @@ func buildBody(req llm.Request, cfg Config) ([]byte, error) {
 // streams thinking blocks with no text — a long silence in a UI built to show
 // the reasoning.
 //
+// With no choice at all, a model that thinks on its own (the Claude 5 family)
+// is asked for the same adaptive thinking with only the display set: left to
+// itself it omits the text, and the thinking arrives as empty blocks. A model
+// that does not think unasked (Opus 4.6 to 4.8, Sonnet 4.6) is left alone,
+// because any thinking field would turn thinking on.
+//
 // A budget becomes the older extended-thinking form. It is clamped to fit under
 // max_tokens rather than rejected against it: an operator who capped
 // max_tokens meant to cap the turn, not to turn thinking off.
-func convertThinking(reasoning *llm.ReasoningOptions, maxTokens int) (thinking, outputConfig map[string]any, err error) {
+func convertThinking(reasoning *llm.ReasoningOptions, maxTokens int, model string) (thinking, outputConfig map[string]any, err error) {
 	switch {
+	case thinksUnasked(reasoning, model):
+		return map[string]any{"type": "adaptive", "display": "summarized"}, nil, nil
 	case reasoning == nil:
 		return nil, nil, nil
 	case reasoning.Effort != "":
@@ -301,7 +339,8 @@ func convertPrompt(message llm.Message) ([]wireContentBlock, error) {
 // opt-in: this API requires a thinking block and its signature to be replayed
 // verbatim when the turn that follows continues a tool loop, and it verifies
 // the signature. Unsigned thinking is dropped rather than sent, because a
-// thinking block without one is rejected.
+// thinking block without one is rejected. A signed block with no text is
+// sent with its empty text: that is how the current models return it.
 func convertAssistant(message llm.Message) ([]wireContentBlock, error) {
 	blocks := make([]wireContentBlock, 0, len(message.Parts))
 	for _, part := range message.Parts {
@@ -313,10 +352,19 @@ func convertAssistant(message llm.Message) ([]wireContentBlock, error) {
 			blocks = append(blocks, wireContentBlock{Type: "text", Text: p.Text})
 		case llm.ReasoningPart:
 			switch {
+			// Another API's reasoning, left from before the conversation
+			// switched to Claude: replaying it would be rejected. This matters
+			// more now that a signed block needs no text to be sent.
+			case strings.HasPrefix(p.Signature, llm.SignatureOpenAIResponses),
+				strings.HasPrefix(p.Signature, llm.SignatureGemini):
 			case len(p.Redacted) > 0:
 				blocks = append(blocks, wireContentBlock{Type: "redacted_thinking", Data: string(p.Redacted)})
-			case p.Signature != "" && p.Text != "":
-				blocks = append(blocks, wireContentBlock{Type: "thinking", Thinking: p.Text, Signature: p.Signature})
+			case p.Signature != "":
+				// Replayed whenever it is signed, text or not: the current
+				// models omit the text by default and send the signature alone,
+				// and a block in the history must come back exactly as it left.
+				// Dropping it is a 400 in a tool loop and a changed prefix after.
+				blocks = append(blocks, wireContentBlock{Type: "thinking", Thinking: &p.Text, Signature: p.Signature})
 			}
 		case llm.ToolCallPart:
 			if p.ID == "" {

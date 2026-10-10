@@ -14,53 +14,6 @@ import (
 	"github.com/qunqin/openchat/apps/server/internal/httpx"
 )
 
-const (
-	defaultTrendDays = 30
-	minTrendDays     = 7
-	maxTrendDays     = 90
-)
-
-func (s *Server) GetAdminStats(w http.ResponseWriter, r *http.Request, params GetAdminStatsParams) {
-	days := int32(defaultTrendDays)
-	if params.Days != nil {
-		days = int32(min(max(*params.Days, minTrendDays), maxTrendDays))
-	}
-
-	totals, err := s.q.GetDashboardTotals(r.Context())
-	if err != nil {
-		httpx.Fail(w, r, err)
-		return
-	}
-
-	rows, err := s.q.GetActivityTrend(r.Context(), days)
-	if err != nil {
-		httpx.Fail(w, r, err)
-		return
-	}
-
-	trend := make([]TrendPoint, 0, len(rows))
-	for _, row := range rows {
-		trend = append(trend, TrendPoint{
-			Day:           openapi_types.Date{Time: row.Day.Time},
-			Messages:      row.Messages,
-			Conversations: row.Conversations,
-			Users:         row.Users,
-		})
-	}
-
-	httpx.JSON(w, http.StatusOK, AdminStats{
-		Totals: AdminTotals{
-			TotalUsers:         totals.TotalUsers,
-			ActiveUsers:        totals.ActiveUsers,
-			TotalConversations: totals.TotalConversations,
-			TotalMessages:      totals.TotalMessages,
-			NewUsers7d:         totals.NewUsers7d,
-			Messages7d:         totals.Messages7d,
-		},
-		Trend: trend,
-	})
-}
-
 func (s *Server) ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams) {
 	limit := clampLimit(params.Limit)
 
