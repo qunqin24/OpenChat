@@ -73,6 +73,30 @@ grep -rn -- "--n-\|prism-next" apps/web/src/features/admin apps/web/src/componen
 - 动效：全局遵守 `prefers-reduced-motion`，加载指示器标 `data-motion="essential"`，用透明度脉动代替位移。
 - 设置对话框（通用/个性化/账户/数据）是 `?settings=<tab>` 搜索参数（`lib/settings.ts`），挂在 `_authed` 布局上，渲染进 `.prism-next` 里；样式照搬 Open WebUI 经典设置弹窗，在 `styles/settings.css`。记忆列表是它里面的第二层弹窗（`MemoryManager`）。记忆相关查询键在 `queryKeys.memory`，不写入本地缓存（`query-persist` 只存白名单），临时对话的转录同样不落本地缓存。
 
+## 游客模式
+
+管理员在 后台 → 系统 打开「游客模式」（`app_settings.guest_mode`，默认关）后，登录页多一个「以游客身份使用」按钮（读公开的 `GET /guest/status`，它永远在；其余 `/guest/*` 在开关关着时 404，由路由里的 `requireGuestMode` 分组保证）。游客没有账号、没有会话，服务器**不保存**他们的任何东西：对话、记忆、自定义指令全在浏览器的 IndexedDB 里。限额也在系统设置里：每个 IP 每小时、全体游客每天（最近 24 小时）的请求数，0 为不限，服务端校验范围（`invalid_guest_limit`）。
+
+### 服务端（`api/guest.go`、`api/guest_run.go`）
+
+- 唯一要模型的请求是 `POST /guest/runs`（公开，SSE）。它不 fork agent：请求体带当前分支的整条路径、新问题（或「重答」/「回答 ask_user」）、模型和开关、自定义指令、记忆、对话已有的记忆快照；服务端在**一个事务**里建临时用户（`users.guest = true`，无密码无会话）、对话、按客户端给的 id 写下转录、写附件文件和行、塞记忆、建 run，再用和账号完全相同的 `chooseRun`/`createRun`/`startRun`（回答走抽出来的 `answerPart`/`startAnswerRun`）跑，把 hub 里的批次原样流回，最后发一帧 `guest_end`（本次用的记忆快照、跑完后的全部记忆、记忆事件、标题），**然后删掉这个用户**（级联带走一切；存储键先收集，事后删文件）。所有错误（429 两种限额、`no_models`、`model_unavailable`、附件错误、`invalid_answers`、`not_pending`）都在写任何行之前以 JSON 返回。
+- 转录用「旧形状」写入（`branches` 迁移里 `conversation_transcript` 的第三支）：user 行靠 `parent_input_id` 串起来，assistant/tool 行 `run_id` 为空、按 `created_at` 排。时间用客户端的（日期戳是模型看到的日期，轮与轮之间不能变），但保证严格递增且早于现在。回答（`answer`）时会塞一个 `awaiting_input` 的占位 run 当 `continues` 的头，它从不执行。
+- 提供方私有数据（推理签名、被遮蔽的推理）账号的浏览器从来拿不到，游客的服务器又不留，所以游客流里 assistant 行带 `providerState`（`messages.parts` 原样 base64），客户端存着、下次请求原样带回；`guestParts` 优先用它。其余行按契约里的块还原。
+- 限额计数在 `guest_requests(ip, created_at)`，一条 advisory lock 下「数 + 记」是一步，多实例共享；清理循环删一天前的行。IP 取 `RealIP` 中间件处理过的 `RemoteAddr`（IPv6 按 /64），所以得部署在会设 `X-Forwarded-For` 的代理后面，否则可以伪造。标题请求（`/guest/title`）也计一次。游客的图片代理（`/guest/images`）没有对话可对照「地址出现在工具结果里」，靠受保护的客户端（只拉公网、只认图片）加每客户端每分钟限速。
+- 游客必须在这些地方被排除：登录（`GetUserByLogin`）、管理员用户列表和计数、仪表盘总用户数/活跃用户、「第一个注册的成为管理员」的计数、启动时恢复 run（`ListRunningRuns`）、事后标题（`TitleAfterRun`）。新写查全体用户的查询时都要想想 `NOT guest`。
+- 用量日志保留游客的请求：用户删除后 `user_id` 变 NULL，而账号从不删除，所以没有主人的行就是游客的，界面标「游客」。游客的 run 进行中，查询的 JOIN 排除 guest 行，同样读作无主人。
+- 断开连接就取消 run（`stopGuestRun`）并清理；清理循环里 `sweepGuests` 删超过 2 小时的游客用户（进程中途死掉的残留），文件一并收走。`POST /guest/runs/{id}/cancel` 以 run id 为凭据（只有发起的页面知道）。
+- `storage.Backend` 有 `PutObject`（服务器自己持有的字节），游客附件走它，key 在 `uploads/guest/…`；孤儿清扫只看没有行的文件，游客的行在 run 期间一直在。
+
+### 前端（`lib/guest/`）
+
+- 游客页面在 `/guest`、`/guest/chat/$conversationId`（`routes/guest*.tsx`，不在 `_authed` 下，只检查 `GET /guest/status`）。是否游客模式由根路由 `beforeLoad` 里的 `syncMode(pathname)` 决定（`lib/guest/mode.ts`），**不要**读 `window.location`，因为从登录页跳 `/guest` 时 loader 先于地址变化执行。两种模式共用查询键，所以切换时 `queryClient.clear()` 并清 chat store，进游客时还清 `query-persist`；游客数据从不写 localStorage。
+- 接缝是 `lib/api.ts` 的 `appFetch`：账号走网络；游客动态加载 `lib/guest` 并由它本地回答契约里的路由（`router.ts`：对话、消息、事件流、记忆、个性化、导出/删除全部、`/files`、`/models`、`/features`），不认识的转发网络。所以 hooks 和组件**不知道**自己在跟谁说话；`streamConversationEvents` 也接受 `fetch`。新增一个聊天用到的端点，要决定游客怎么答：本地服务（加到 `router.ts`），还是只在服务端（`/guest/*`）。
+- 树的语义是纯函数（`tree.ts`：路径、转录、`versions`/`branches`、`pickBranchLeaf`、`chooseAnswer`、分页游标），和服务端 SQL 一一对应并有 vitest；记忆规则在 `memory.ts`（上限 100 条/200 字、重复、撤销只在没被改过时）。`repo.ts` 是读写，`storage.ts` 是接口（IndexedDB 实现 `idb.ts`，测试用内存实现）。**改了树的规则，两边一起改**。
+- 运行：`runner.ts` 建请求（`request.ts`，只带最近 300 行，文件按「最新优先、总共 20 MB」带字节，更早的只带名字和大小）、发 `/guest/runs`、**先落库再发布**每一批（所以前端收到 `run_finished` 去重取最新页时一定取得到），`guest_end` 之后才写记忆/快照/标题，下一次发送会等上一次的 `guest_end`（记忆快照要带上）。连接断了没有 `guest_end` 就记一条 `connection_lost` 的失败回复。事件由 `hub.ts` 本地造，页面重连时拿到和服务端一样的 snapshot。停止是 `POST /guest/runs/{id}/cancel`，流继续读到结束，保留已生成的部分。
+- 本地数据没有服务端的权威时钟：消息行的 `createdAt` 全是服务端给的，不要在本地给消息盖客户端时间（`runInterrupted` 例外且取「最新一行之后」）。临时对话 24 小时过期在读取时本地执行；上传了没发的文件 24 小时后清。多个标签页靠 BroadcastChannel 互相通知 `branch_changed`。
+- 游客界面：`GuestNotice`（「游客模式：对话只保存在这个浏览器里」+ 登录）、侧栏账号菜单没有管理后台和退出、设置里没有「账户」页。共用组件里的链接一律用 `useChatPaths()`（`/` 还是 `/guest`），头像上传不适用。
+
 ## 认证
 
 HttpOnly Cookie 会话，库里只存 token 的 SHA-256；前端从不接触 token，靠 `/auth/session` 判断登录状态，API 客户端必须 `credentials: 'include'`。用户名不能含 `@`（数据库约束保证，登录框同时接受用户名和邮箱）。第一个注册的账号成为管理员；最后一个启用的管理员不能被降级或停用。停用账号或改密码会清掉其会话。自助接口（`PATCH /auth/me`、`POST /auth/password`）刻意不带角色和停用字段。不做账号删除，停用即可。
