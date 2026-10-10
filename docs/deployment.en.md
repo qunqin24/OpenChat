@@ -51,7 +51,6 @@ Edit `deploy/.env`. It contains a password, so never commit it; the repository a
 | `DOMAIN` | yes | `localhost` | The site's domain, without `https://`. Caddy uses it for the certificate and the app uses it to set `CORS_ORIGINS` |
 | `POSTGRES_PASSWORD` | yes | none | The database password. Use random characters, for example `openssl rand -hex 24`. Compose refuses to start without it |
 | `APP_ENV` | no | `production` | In `production` the session cookie is `Secure`, so the site must be reached over HTTPS. Change to `development` only for a trial without a domain |
-| `APP_VERSION` | no | `dev` | Only the version shown in logs and the health check; it changes no behaviour. Keep it equal to the image version you run |
 | `OPENCHAT_IMAGE` | no | `ghcr.io/qunqin24/openchat:latest` | The app image. To pin a version, write `ghcr.io/qunqin24/openchat:1.0.0` |
 
 > **About `POSTGRES_PASSWORD`**: the password is written into the data volume when the database is first initialised. Changing the value in `.env` later does not change it in the database, and the app can no longer connect. To change it, run `ALTER USER` in the database and then update `.env`.
@@ -62,7 +61,6 @@ Edit `deploy/.env`. It contains a password, so never commit it; the repository a
 
 ```bash
 OPENCHAT_IMAGE=ghcr.io/qunqin24/openchat:1.0.0
-APP_VERSION=1.0.0
 ```
 
 An image tag is the version without the `v` (Git tag `v1.0.0` becomes image `1.0.0`). Pre-releases such as `1.1.0-rc.1` get their own tag and never move `latest`.
@@ -160,7 +158,7 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
 
 `git pull` brings in new deployment files; skip it if only the image changed.
 
-**With a pinned version:** change `OPENCHAT_IMAGE` (and `APP_VERSION`) in `deploy/.env` to the new version, then run the last two commands above.
+**With a pinned version:** change `OPENCHAT_IMAGE` in `deploy/.env` to the new version, then run the last two commands above.
 
 Check that the new version is up:
 

@@ -51,7 +51,6 @@ cp deploy/.env.example deploy/.env
 | `DOMAIN` | 是 | `localhost` | 站点的域名，不带 `https://`。Caddy 用它签证书，应用用它设置 `CORS_ORIGINS` |
 | `POSTGRES_PASSWORD` | 是 | 无 | 数据库密码，用一串随机字符，例如 `openssl rand -hex 24`。留空时 Compose 会拒绝启动 |
 | `APP_ENV` | 否 | `production` | `production` 时登录 Cookie 带 `Secure`，必须走 HTTPS。仅在无域名试用时才改成 `development` |
-| `APP_VERSION` | 否 | `dev` | 只用于日志和健康检查里显示的版本号，不影响行为。建议和你使用的镜像版本保持一致 |
 | `OPENCHAT_IMAGE` | 否 | `ghcr.io/qunqin24/openchat:latest` | 应用镜像。想固定版本就写成 `ghcr.io/qunqin24/openchat:1.0.0` |
 
 > **关于 `POSTGRES_PASSWORD`**：数据库第一次初始化时就把密码写进了数据卷。之后再改 `.env` 里的值，数据库里的密码不会跟着变，应用会连不上。要改密码请在数据库里执行 `ALTER USER`，再同步 `.env`。
@@ -62,7 +61,6 @@ cp deploy/.env.example deploy/.env
 
 ```bash
 OPENCHAT_IMAGE=ghcr.io/qunqin24/openchat:1.0.0
-APP_VERSION=1.0.0
 ```
 
 镜像标签是版本号去掉 `v`（Git 标签 `v1.0.0` 对应镜像 `1.0.0`）。预发布版本（例如 `1.1.0-rc.1`）只有自己的标签，不会动 `latest`。
@@ -160,7 +158,7 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
 
 `git pull` 是为了拿到新的部署文件；只有镜像变了，可以省略。
 
-**固定了版本：** 先把 `deploy/.env` 里的 `OPENCHAT_IMAGE`（以及 `APP_VERSION`）改成新版本，再执行上面的后两条命令。
+**固定了版本：** 先把 `deploy/.env` 里的 `OPENCHAT_IMAGE`改成新版本，再执行上面的后两条命令。
 
 确认新版本起来了：
 
