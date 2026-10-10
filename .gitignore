@@ -13,3 +13,11 @@ coverage/
 
 # what the local storage driver keeps under its default directory (set in the admin panel)
 **/data/uploads/
+
+# The web build the server embeds (scripts/embed-web.mjs copies it here). Only the
+# placeholder is tracked, so `go build` works before any web build has run.
+# The dist/ rule above ignores the directory itself; re-include it, then ignore
+# its contents again except the placeholder.
+!apps/server/internal/webui/dist/
+apps/server/internal/webui/dist/*
+!apps/server/internal/webui/dist/.gitkeep

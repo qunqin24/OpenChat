@@ -11,6 +11,7 @@ import (
 	"github.com/qunqin/openchat/apps/server/internal/auth"
 	"github.com/qunqin/openchat/apps/server/internal/config"
 	"github.com/qunqin/openchat/apps/server/internal/httpx"
+	"github.com/qunqin/openchat/apps/server/internal/webui"
 )
 
 // NewRouter mounts the generated handlers under /api/v1 behind the standard
@@ -139,6 +140,16 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 
 	// Unversioned probe for load balancers and container health checks.
 	r.Get("/healthz", s.GetHealth)
+
+	// ---- the web app --------------------------------------------------------
+	// The catch-all, and deliberately last: it is what answers when nothing
+	// above matched, so every API route has already had its say. It serves the
+	// SPA embedded in the binary (a placeholder note if there is none), falls
+	// back to index.html for client-side routes, and never answers /api/* with
+	// anything but a 404. The Compress middleware above leaves it alone: it
+	// only compresses application/json, and skips any response that already
+	// carries a Content-Encoding, which the precompressed files do.
+	r.NotFound(webui.Handler().ServeHTTP)
 
 	return r
 }

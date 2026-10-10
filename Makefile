@@ -96,9 +96,13 @@ test: ## Run Go tests
 	cd $(SERVER) && go test ./...
 
 .PHONY: build
-build: ## Build the server binary and the web bundle
+build: build-web ## Build the single binary: server with the web app embedded (bin/openchat)
 	cd $(SERVER) && go build -o ../../bin/openchat ./cmd/openchat
+
+.PHONY: build-web
+build-web: ## Build the web bundle (precompressed) and copy it into the server package for embedding
 	pnpm --filter @openchat/web build
+	node scripts/embed-web.mjs
 
 .PHONY: typecheck
 typecheck: ## Typecheck every TS package

@@ -106,6 +106,22 @@ JSON 格式的 `StreamEvent`（`start` → `delta`… → `done` | `error`）。
 `internal/chat.Provider` 是一个两方法的接口。实现它，然后替换
 `cmd/openchat/main.go` 里 `chat.Echo{}` 那一行即可，HTTP 层一行都不用改。
 
+## 部署
+
+生产环境是**一个二进制**：Go 服务把 web 构建嵌在自己里面，API 和前端同源，不需要单独的静态站点。
+
+```bash
+make build        # 先建 web（含 .br/.gz 预压缩），拷进 apps/server/internal/webui/dist，再编译 bin/openchat
+./bin/openchat    # :8080 同时提供 / 和 /api/v1
+```
+
+- `/assets/*` 是带内容哈希的文件，响应 `Cache-Control: public, max-age=31536000, immutable`，回访几乎不产生请求；`index.html` 是 `no-cache`，靠 ETag 重新验证，所以发版后用户下次打开就拿到新入口。
+- 构建时就压好 brotli 和 gzip，服务端按 `Accept-Encoding` 直接挑一份发出，不在请求路径上压缩。
+- 没跑过 web 构建时（`go build` / `go test` 照常可用）服务端只提供 API，`/` 返回一行说明。
+- 开发不受影响：仍然是 `make web`（Vite :5173，代理 `/api`）。
+- Docker：`docker build -f apps/server/Dockerfile -t openchat .`（在仓库根目录执行；多阶段构建，先 node/pnpm 建 web，再嵌入 Go 二进制，运行在 distroless nonroot 上）。
+- 高延迟线路上建议前面放 Caddy 拿到 HTTPS 和 HTTP/2/3，见 [docs/deploy-caddy.md](docs/deploy-caddy.md)。
+
 ## 命令
 
 `make help` 列出全部命令。常用的几个：
