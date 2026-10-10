@@ -37,7 +37,7 @@ const (
 	resultBudget      = "This tool call was not executed: the tool call limit for this reply has been reached. Answer with what you have."
 	resultToolFailed  = "The tool failed unexpectedly."
 	resultUnavailable = "This tool is no longer available."
-	resultOneAsk      = "This tool call was not executed: only one ask_user call can wait for the user at a time. Put every question in a single call."
+	resultOneAsk      = "This ask_user call was not executed and the user never saw it: a reply can carry only one ask_user call, and an earlier call in this reply is the one the user is answering. Do not call ask_user again for this. Next time, put all of your questions (up to four) together in a single ask_user call."
 )
 
 // commitTimeout bounds one transaction. Commits use their own context, not the

@@ -103,6 +103,19 @@ func TestAskUserSecondCallInOneResponseIsRefused(t *testing.T) {
 	f.runner.Start(run.ID)
 	f.waitFor(run.ID, sqlc.RunStatusAwaitingInput)
 	f.assertTranscript("user go", "assistant:tool_calls call:ask_user call:ask_user", "tool result:failed")
+
+	// And what it is told says plainly what to do instead, and that the user
+	// never saw the refused call.
+	var refusal string
+	if err := f.pool.QueryRow(context.Background(),
+		`SELECT parts::text FROM messages WHERE conversation_id = $1 AND role = 'tool'`, f.conv).Scan(&refusal); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"never saw it", "single ask_user call", "all of your questions"} {
+		if !strings.Contains(refusal, want) {
+			t.Errorf("the refusal does not say %q: %s", want, refusal)
+		}
+	}
 }
 
 // Stopping while the response's other calls run drops the question too: the

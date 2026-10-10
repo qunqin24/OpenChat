@@ -9,7 +9,33 @@ const SHOW_AFTER_MS = 300
 const SETTLE_MS = 220
 
 /**
- * The admin panel's progress bar (mounted by routes/admin.tsx, not the chat):
+ * Whether the admin panel is where the router is going, or already is. The
+ * router's `location` is the address being navigated to from the moment the
+ * navigation starts (`resolvedLocation` is the last one that finished loading),
+ * so it answers for a pending navigation and a settled one alike.
+ */
+function useTargetsAdmin(): boolean {
+  return useRouterState({
+    select: (state) => state.location.pathname === '/admin' || state.location.pathname.startsWith('/admin/'),
+  })
+}
+
+/**
+ * The bar of the admin panel, and only of the panel (mounted at the root, which
+ * is why it is a component of its own rather than a line in routes/admin.tsx):
+ * the admin layout is not on screen yet on the very first navigation into it
+ * from the chat — it renders once that navigation has finished — so a bar mounted
+ * there starts too late to show the wait it is for. Here it is mounted as soon as
+ * the route being navigated to is an admin one, and not for a navigation to
+ * anywhere else, so the chat, which shows its own progress in place, never
+ * gets one.
+ */
+export function AdminProgress() {
+  return useTargetsAdmin() ? <GlobalProgress /> : null
+}
+
+/**
+ * The admin panel's progress bar (mounted by AdminProgress, not by the chat):
  * route transitions, first loads and actions without an indicator of their own
  * feed it.
  *

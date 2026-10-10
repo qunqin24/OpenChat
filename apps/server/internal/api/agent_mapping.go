@@ -188,6 +188,8 @@ func toRunEvent(event agent.Event) (RunEvent, bool) {
 		err = out.FromRetryScheduledEvent(RetryScheduledEvent{Type: RetryScheduled, Attempt: e.Attempt, At: e.At, ErrorCode: e.ErrorCode})
 	case agent.TitleChanged:
 		err = out.FromTitleChangedEvent(TitleChangedEvent{Type: TitleChanged, Title: e.Title})
+	case agent.BranchChanged:
+		err = out.FromBranchChangedEvent(BranchChangedEvent{Type: BranchChanged})
 	default:
 		return out, false
 	}

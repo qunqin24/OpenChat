@@ -519,6 +519,56 @@ func (q *Queries) ListRunMessages(ctx context.Context, arg ListRunMessagesParams
 	return items, nil
 }
 
+const listTranscript = `-- name: ListTranscript :many
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, edit_of, parent_input_id, shown_at
+FROM messages
+WHERE messages.conversation_id = $1
+  AND messages.id IN (SELECT conversation_transcript($1))
+  AND messages.role <> 'tool'
+ORDER BY created_at, id
+`
+
+// The branch shown, oldest first and whole, for an export. Tool results are
+// left out: they are the model's working, and some are whole web pages.
+func (q *Queries) ListTranscript(ctx context.Context, conversationID uuid.UUID) ([]Message, error) {
+	rows, err := q.db.Query(ctx, listTranscript, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Message{}
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConversationID,
+			&i.Role,
+			&i.Content,
+			&i.Status,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Parts,
+			&i.StopReason,
+			&i.Model,
+			&i.Provider,
+			&i.Usage,
+			&i.ErrorCode,
+			&i.RunID,
+			&i.EditOf,
+			&i.ParentInputID,
+			&i.ShownAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listVersions = `-- name: ListVersions :many
 SELECT m.id AS message_id, s.id AS version_id
 FROM messages m

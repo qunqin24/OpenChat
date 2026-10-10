@@ -27,3 +27,29 @@ func TestToolCallSignatureNeverReachesTheBrowser(t *testing.T) {
 		t.Errorf("wire form leaks the signature: %s", data)
 	}
 }
+
+func TestTextAndReasoningSignaturesNeverReachTheBrowser(t *testing.T) {
+	// Gemini's signature on answer text and OpenRouter's reasoning_details on a
+	// reasoning block are replayed by the server only. Both are opaque blobs
+	// that encode the model's own reasoning state.
+	for _, part := range []llm.Part{
+		llm.TextPart{Text: "answer", Signature: llm.SignatureGemini + "CxsecretText="},
+		llm.ReasoningPart{
+			Text: "thinking", Signature: llm.SignatureOpenRouter + "anthropic/claude-sonnet-4.5",
+			Redacted: []byte(`[{"type":"reasoning.encrypted","data":"CxsecretBlob="}]`),
+		},
+	} {
+		mapped, ok := toMessagePart(part)
+		if !ok {
+			t.Fatalf("%T was hidden", part)
+		}
+		data, err := json.Marshal(mapped)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lowered := strings.ToLower(string(data))
+		if strings.Contains(string(data), "Cxsecret") || strings.Contains(lowered, "signature") || strings.Contains(lowered, "redacted") {
+			t.Errorf("%T wire form leaks the signature: %s", part, data)
+		}
+	}
+}

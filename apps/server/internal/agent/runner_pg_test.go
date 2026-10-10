@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -14,33 +13,23 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/qunqin/openchat/apps/server/internal/db"
+	"github.com/qunqin/openchat/apps/server/internal/db/dbtest"
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin/openchat/apps/server/internal/llm"
 	"github.com/qunqin/openchat/apps/server/internal/providers/fake"
 )
 
-// These tests need a database and skip without one:
+// These tests need a Postgres server and skip without one:
 //
-//	AGENT_TEST_DATABASE_URL=postgres://... go test ./internal/agent/
+//	TEST_DATABASE_URL=postgres://... go test ./internal/agent/
 //
-// Point it at a scratch database: each test creates its own user and
-// conversation, and nothing is cleaned up between runs.
+// They run in a database of their own, <name in the URL>_agent, so they never
+// meet another package's rows. Each test creates its own user and conversation,
+// and nothing is cleaned up between runs.
 func testPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	dsn := os.Getenv("AGENT_TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("set AGENT_TEST_DATABASE_URL to run the database-backed agent tests")
-	}
 	ctx := context.Background()
-	pool, err := db.Connect(ctx, dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := db.Migrate(ctx, pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := dbtest.Pool(t, "agent")
 	// Resume picks up every running run in the database, so one left behind by
 	// another test — or a previous, interrupted `go test` — would be executed
 	// against this test's scripted model.

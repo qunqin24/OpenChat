@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
@@ -46,21 +48,25 @@ func effortColumn(effort ReasoningEffort) (*string, bool) {
 var errInvalidEffort = httpx.NewFieldError("reasoningEffort", "invalid_reasoning_effort",
 	"reasoningEffort must be auto or a reasoning level")
 
-func toSessionUser(row sqlc.User) SessionUser {
+// sessionUser is an account as its owner sees it.
+func (s *Server) sessionUser(ctx context.Context, row sqlc.User) SessionUser {
 	return SessionUser{
-		Id:    row.ID,
-		Email: openapi_types.Email(row.Email),
-		Name:  row.Name,
-		Role:  UserRole(row.Role),
+		Id:        row.ID,
+		Email:     openapi_types.Email(row.Email),
+		Name:      row.Name,
+		Role:      UserRole(row.Role),
+		AvatarUrl: s.avatarURL(ctx, row.AvatarKey),
 	}
 }
 
-func toUser(row sqlc.User) User {
+// user is an account as an administrator sees it.
+func (s *Server) user(ctx context.Context, row sqlc.User) User {
 	user := User{
 		Id:        row.ID,
 		Email:     openapi_types.Email(row.Email),
 		Name:      row.Name,
 		Role:      UserRole(row.Role),
+		AvatarUrl: s.avatarURL(ctx, row.AvatarKey),
 		Disabled:  row.DisabledAt.Valid,
 		CreatedAt: row.CreatedAt.Time,
 	}

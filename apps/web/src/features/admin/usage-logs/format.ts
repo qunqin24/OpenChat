@@ -73,6 +73,15 @@ export function outputSpeed(log: UsageLog): number | undefined {
   return log.outputTokens / (generating / 1000)
 }
 
+/**
+ * A failed request the provider turned down before any time was spent on it
+ * (a bad key, a malformed request) is recorded with a duration of 0. That is
+ * not a fast request, and "0ms" in the column would read as one.
+ */
+export function rejectedAtOnce(log: Pick<UsageLog, 'status' | 'durationMs'>): boolean {
+  return log.status === 'error' && log.durationMs <= 0
+}
+
 export type Tone = 'fast' | 'medium' | 'slow'
 
 /**

@@ -207,3 +207,22 @@ func (sw *Switch) Size(ctx context.Context, key string) (int64, error) {
 func (sw *Switch) Read(ctx context.Context, key string, limit int64) ([]byte, error) {
 	return sw.holding(key).Read(ctx, key, limit)
 }
+
+// Delete removes the object from every store that might hold it. Reads look in
+// the disk and then the bucket, so a file can be in either (or, after a switch
+// back and forth, both); deleting from only the current driver would strand
+// the other copy. Both are tried even if one fails, and the errors are joined.
+func (sw *Switch) Delete(ctx context.Context, key string) error {
+	sw.mu.RLock()
+	local, s3 := sw.local, sw.s3
+	sw.mu.RUnlock()
+
+	var errs []error
+	if local != nil {
+		errs = append(errs, local.Delete(ctx, key))
+	}
+	if s3 != nil {
+		errs = append(errs, s3.Delete(ctx, key))
+	}
+	return errors.Join(errs...)
+}

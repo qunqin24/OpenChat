@@ -26,7 +26,7 @@ import (
 
 // Personal memory end to end: a scripted OpenAI-compatible model behind the
 // real tool source, system prompt and handlers. Needs the scratch database of
-// the other agent tests (AGENT_TEST_DATABASE_URL).
+// the other agent tests (TEST_DATABASE_URL).
 
 func openAICall(callID, name, args string) string {
 	quoted, _ := json.Marshal(args)

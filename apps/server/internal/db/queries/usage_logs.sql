@@ -44,8 +44,10 @@ FROM (SELECT 1) one
                             LIMIT 1) m ON true;
 
 -- name: ListUsageLogs :many
--- Newest first. Offset paging, like the other admin tables: the page numbers
--- and the total are the point.
+-- Newest first, by keyset on (created_at, id): the order of usage_logs_created_idx,
+-- so a page deep into a ledger of millions of rows costs what the first one
+-- does, and a row written meanwhile cannot shift the pages. The total is the
+-- summary's, not a count of this query.
 --
 -- `to` is exclusive, so a day's end is the next day's start and nothing falls
 -- between two ranges.
@@ -58,6 +60,7 @@ SELECT l.id,
        l.user_id,
        u.name                          AS user_name,
        u.email                         AS user_email,
+       u.avatar_key                    AS user_avatar_key,
        l.conversation_id,
        l.run_id,
        l.channel_id,
@@ -74,12 +77,13 @@ SELECT l.id,
        l.cache_read_price,
        l.cache_write_price,
        l.cost,
-       l.streamed,
        l.first_token_ms,
        l.duration_ms
 FROM usage_logs l
          LEFT JOIN users u ON u.id = l.user_id
-WHERE (sqlc.narg('user_id')::uuid IS NULL OR l.user_id = sqlc.narg('user_id')::uuid)
+WHERE (sqlc.narg('cursor_created_at')::timestamptz IS NULL
+    OR (l.created_at, l.id) < (sqlc.narg('cursor_created_at')::timestamptz, sqlc.narg('cursor_id')::uuid))
+  AND (sqlc.narg('user_id')::uuid IS NULL OR l.user_id = sqlc.narg('user_id')::uuid)
   AND (sqlc.narg('model_id')::text IS NULL OR l.model_id = sqlc.narg('model_id')::text)
   AND (sqlc.narg('channel_id')::uuid IS NULL OR l.channel_id = sqlc.narg('channel_id')::uuid)
   AND (sqlc.narg('status')::text IS NULL OR l.status = sqlc.narg('status')::text)
@@ -87,7 +91,7 @@ WHERE (sqlc.narg('user_id')::uuid IS NULL OR l.user_id = sqlc.narg('user_id')::u
   AND (sqlc.narg('from_time')::timestamptz IS NULL OR l.created_at >= sqlc.narg('from_time')::timestamptz)
   AND (sqlc.narg('to_time')::timestamptz IS NULL OR l.created_at < sqlc.narg('to_time')::timestamptz)
 ORDER BY l.created_at DESC, l.id DESC
-LIMIT sqlc.arg('row_limit') OFFSET sqlc.arg('row_offset');
+LIMIT sqlc.arg('row_limit');
 
 -- name: SummarizeUsageLogs :one
 -- The total behind ListUsageLogs, with what an operator wants above the table:

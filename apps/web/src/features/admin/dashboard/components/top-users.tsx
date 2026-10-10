@@ -14,7 +14,7 @@ export function TopUsers({ users }: { users: AdminDashboard['users'] }) {
     <ul className="space-y-4">
       {users.map((u, index) => (
         <li key={u.userId ?? `none-${index}`} className="flex items-center gap-3">
-          <UserAvatar id={u.userId ?? undefined} name={u.userName ?? undefined} email={u.userEmail ?? undefined} className="size-8 text-xs" />
+          <UserAvatar id={u.userId ?? undefined} name={u.userName ?? undefined} email={u.userEmail ?? undefined} src={u.userAvatarUrl} className="size-8 text-xs" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm leading-none font-medium">
               {u.userName ?? u.userEmail ?? t('admin.dashboard.users.anonymous')}

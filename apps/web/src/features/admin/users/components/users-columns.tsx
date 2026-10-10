@@ -8,6 +8,7 @@ import { LongText } from '@/components/shadcn/long-text'
 import { Badge } from '@/components/shadcn/ui/badge'
 import { Checkbox } from '@/components/shadcn/ui/checkbox'
 import { DataTableColumnHeader } from '@/components/shadcn/data-table'
+import { UserAvatar } from '@/components/user-avatar'
 import { UsersRowActions } from './users-row-actions'
 
 /**
@@ -47,9 +48,18 @@ export function usersColumns(t: TFunction<'common'>, currentUserId?: string): Co
         <DataTableColumnHeader column={column} title={t('admin.users.account')} />
       ),
       cell: ({ row }) => (
-        <div className={cn('flex flex-col', row.original.disabled && 'opacity-60')}>
-          <LongText className="max-w-48 font-medium">{row.original.name}</LongText>
-          <span className="text-muted-foreground text-xs">{row.original.email}</span>
+        <div className={cn('flex items-center gap-2.5', row.original.disabled && 'opacity-60')}>
+          <UserAvatar
+            id={row.original.id}
+            name={row.original.name}
+            email={row.original.email}
+            src={row.original.avatarUrl}
+            className="size-8 text-sm"
+          />
+          <div className="flex min-w-0 flex-col">
+            <LongText className="max-w-48 font-medium">{row.original.name}</LongText>
+            <span className="text-muted-foreground text-xs">{row.original.email}</span>
+          </div>
         </div>
       ),
       enableHiding: false,

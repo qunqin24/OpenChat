@@ -5,13 +5,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/qunqin/openchat/apps/server/internal/db"
+	"github.com/qunqin/openchat/apps/server/internal/db/dbtest"
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin/openchat/apps/server/internal/providers/modellist"
 )
@@ -20,30 +19,17 @@ import (
 // developer may not have running, so it asks for one by name and skips when it
 // is not given it:
 //
-//	CHANNEL_TEST_DATABASE_URL=postgres://... go test ./internal/api/
+//	TEST_DATABASE_URL=postgres://... go test ./internal/api/
 //
-// Point it at a scratch database: this test empties the channel tables. Its
+// It shares the api package's own database, and empties the channel tables. Its
 // offline counterparts in channel_models_test.go check the same rules by
 // reading the SQL; this one checks that Postgres agrees, which is where a
 // clause that parses but does not mean what it says gets caught.
 func channelTestPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 
-	dsn := os.Getenv("CHANNEL_TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("set CHANNEL_TEST_DATABASE_URL to run the database-backed channel tests")
-	}
-
 	ctx := context.Background()
-	pool, err := db.Connect(ctx, dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-
-	if err := db.Migrate(ctx, pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := dbtest.Pool(t, "api")
 	// channel_models goes with its channel, so one delete clears both.
 	if _, err := pool.Exec(ctx, "DELETE FROM channels"); err != nil {
 		t.Fatalf("clear channels: %v", err)

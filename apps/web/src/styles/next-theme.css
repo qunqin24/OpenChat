@@ -284,13 +284,19 @@
 .prism-next .n-actions {
   display: flex;
   gap: 2px;
+}
+/* The pager of a message's versions stays in view, so there is always a sign
+   that the message has others; the buttons beside it (copy, edit, regenerate)
+   come with the pointer or with keyboard focus. The same on a question and on
+   an answer. */
+.prism-next .n-actions > :not(.n-pager) {
   opacity: 0;
   transition: opacity 150ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.prism-next .n-msg-user:hover .n-actions,
-.prism-next .n-msg-assistant:hover .n-actions,
-.prism-next .n-actions:focus-within,
-.prism-next .n-actions.always {
+.prism-next .n-msg-user:hover .n-actions > *,
+.prism-next .n-msg-assistant:hover .n-actions > *,
+.prism-next .n-actions:focus-within > *,
+.prism-next .n-actions.always > * {
   opacity: 1;
 }
 .prism-next .n-pager {
@@ -732,7 +738,7 @@
     padding-left: 38px;
   }
   /* Touch has no hover, so keep actions visible. */
-  .prism-next .n-actions {
+  .prism-next .n-actions > * {
     opacity: 1;
   }
 }

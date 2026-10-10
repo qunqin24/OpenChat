@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { api, unwrap } from '@/lib/api'
+import { putAvatar, squareAvatar } from '@/lib/avatar'
 import { forgetQueryCache } from '@/lib/query-persist'
 import {
   authApi,
@@ -70,6 +72,25 @@ export function useUpdateProfile() {
     onSuccess: (user: SessionUser) => {
       queryClient.setQueryData(sessionQueryOptions.queryKey, user)
       // The admin user list shows the same row under a different key.
+      void queryClient.invalidateQueries({ queryKey: ['admin'] })
+    },
+  })
+}
+
+/** Sets the account's picture from an image file (cut to a square first), or removes it with `null`. */
+export function useSetAvatar() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    // The picture shows its own progress where it is.
+    meta: { silent: true },
+    mutationFn: async (file: File | null): Promise<SessionUser> => {
+      if (file === null) return unwrap(await api.DELETE('/me/avatar')) as SessionUser
+      return (await putAvatar(await squareAvatar(file))) as SessionUser
+    },
+    onSuccess: (user: SessionUser) => {
+      queryClient.setQueryData(sessionQueryOptions.queryKey, user)
+      // The admin lists show the same account's picture under their own keys.
       void queryClient.invalidateQueries({ queryKey: ['admin'] })
     },
   })

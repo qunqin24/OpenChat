@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"math"
 	"net/http"
 	"strings"
@@ -12,16 +13,19 @@ import (
 )
 
 // ListUsageLogs pages the ledger of model requests, newest first, with totals
-// for everything the filters match.
+// for everything the filters match. Paged by cursor over (created_at, id), the
+// order of the ledger's index: a request logged while an operator is reading
+// cannot shift the pages, and the thousandth page costs what the first does.
 func (s *Server) ListUsageLogs(w http.ResponseWriter, r *http.Request, params ListUsageLogsParams) {
 	invalid := func(code, message string) {
 		httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, code, message))
 	}
 
 	limit := clampLimit(params.Limit)
-	page := int32(1)
-	if params.Page != nil && *params.Page > 1 {
-		page = int32(min(*params.Page, math.MaxInt32/int(limit)))
+	cursorAt, cursorID, err := decodeCursor(params.Cursor)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
 	}
 
 	var (
@@ -60,7 +64,9 @@ func (s *Server) ListUsageLogs(w http.ResponseWriter, r *http.Request, params Li
 	rows, err := s.q.ListUsageLogs(r.Context(), sqlc.ListUsageLogsParams{
 		UserID: userID, ModelID: model, ChannelID: channelID, Status: status, Kind: kind,
 		FromTime: from, ToTime: to,
-		RowLimit: limit, RowOffset: (page - 1) * limit,
+		CursorCreatedAt: cursorAt, CursorID: cursorID,
+		// One more than the page, to learn whether another follows.
+		RowLimit: limit + 1,
 	})
 	if err != nil {
 		httpx.Fail(w, r, err)
@@ -75,15 +81,21 @@ func (s *Server) ListUsageLogs(w http.ResponseWriter, r *http.Request, params Li
 		return
 	}
 
+	var next *string
+	if int32(len(rows)) > limit {
+		rows = rows[:limit]
+		last := rows[limit-1]
+		cursor := encodeCursor(last.CreatedAt, last.ID)
+		next = &cursor
+	}
 	items := make([]UsageLog, 0, len(rows))
 	for _, row := range rows {
-		items = append(items, toUsageLog(row))
+		items = append(items, s.toUsageLog(r.Context(), row))
 	}
 	httpx.JSON(w, http.StatusOK, UsageLogPage{
-		Items: items,
-		Total: sum.Requests,
-		Page:  int(page),
-		Limit: int(limit),
+		Items:      items,
+		NextCursor: next,
+		Limit:      int(limit),
 		Summary: UsageSummary{
 			Requests:         sum.Requests,
 			Errors:           sum.Errors,
@@ -98,7 +110,7 @@ func (s *Server) ListUsageLogs(w http.ResponseWriter, r *http.Request, params Li
 	})
 }
 
-func toUsageLog(row sqlc.ListUsageLogsRow) UsageLog {
+func (s *Server) toUsageLog(ctx context.Context, row sqlc.ListUsageLogsRow) UsageLog {
 	out := UsageLog{
 		Id:               row.ID,
 		CreatedAt:        row.CreatedAt.Time,
@@ -109,6 +121,7 @@ func toUsageLog(row sqlc.ListUsageLogsRow) UsageLog {
 		UserId:           row.UserID,
 		UserName:         row.UserName,
 		UserEmail:        row.UserEmail,
+		UserAvatarUrl:    s.avatarURL(ctx, row.UserAvatarKey),
 		ConversationId:   row.ConversationID,
 		RunId:            row.RunID,
 		ChannelId:        row.ChannelID,
@@ -125,7 +138,6 @@ func toUsageLog(row sqlc.ListUsageLogsRow) UsageLog {
 		CacheReadPrice:   numberPtr(row.CacheReadPrice),
 		CacheWritePrice:  numberPtr(row.CacheWritePrice),
 		Cost:             numberPtr(row.Cost),
-		Streamed:         row.Streamed,
 		DurationMs:       int64(row.DurationMs),
 	}
 	if row.FirstTokenMs != nil {

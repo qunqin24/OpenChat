@@ -195,7 +195,10 @@ export interface paths {
          * @description One row per request made to a model -- every attempt of a run (a retry
          *     is its own row, and so is a failure) and every background title -- newest
          *     first. Cost and prices are those of the moment the request was made.
-         *     The summary covers the whole filtered range, not just this page.
+         *     Paged by cursor over (created time, id): `nextCursor` of a page is the
+         *     `cursor` of the one after it, and the filters must stay the same from
+         *     one page to the next. The summary covers the whole filtered range, not
+         *     just this page.
          */
         get: operations["listUsageLogs"];
         put?: never;
@@ -966,6 +969,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set your picture
+         * @description The image itself is the body, with its own `Content-Type`: PNG, JPEG or
+         *     WebP, at most 1 MiB and 4096 pixels on a side. It is decoded here, cut
+         *     to the square at its centre, scaled down to 256 pixels and stored as a
+         *     PNG, so nothing the file carried beyond its picture (metadata, a
+         *     second payload) is kept. 415 `unsupported_file_type` for another type
+         *     or a body that is not the image it says, 413 `file_too_large` over the
+         *     size, 400 `invalid_image` for an image that cannot be read.
+         */
+        put: operations["updateMyAvatar"];
+        post?: never;
+        /** Go back to the initial */
+        delete: operations["deleteMyAvatar"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download your conversations
+         * @description Every conversation of yours that is kept (not deleted, not temporary)
+         *     with the messages of the branch it shows — the text of what was asked
+         *     and answered, with the names of the files sent, not tool traces or
+         *     other branches. Written as it is read, one conversation at a time, so
+         *     the size of the history does not decide the memory this takes. Always
+         *     the caller's own; there is no way to name another account.
+         */
+        get: operations["exportMyConversations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete all your conversations
+         * @description Deletes (as `deleteConversation` does) every conversation of yours,
+         *     temporary ones included. Only yours: the account is the session's.
+         */
+        delete: operations["deleteAllMyConversations"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/personalization": {
         parameters: {
             query?: never;
@@ -1574,7 +1650,7 @@ export interface components {
             version: number;
             events: components["schemas"]["RunEvent"][];
         };
-        RunEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["RunFinishedEvent"] | components["schemas"]["GenerationStartedEvent"] | components["schemas"]["PartStartedEvent"] | components["schemas"]["PartDeltaEvent"] | components["schemas"]["PartEndedEvent"] | components["schemas"]["MessageAppendedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"] | components["schemas"]["RetryScheduledEvent"] | components["schemas"]["TitleChangedEvent"];
+        RunEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["RunFinishedEvent"] | components["schemas"]["GenerationStartedEvent"] | components["schemas"]["PartStartedEvent"] | components["schemas"]["PartDeltaEvent"] | components["schemas"]["PartEndedEvent"] | components["schemas"]["MessageAppendedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"] | components["schemas"]["RetryScheduledEvent"] | components["schemas"]["TitleChangedEvent"] | components["schemas"]["BranchChangedEvent"];
         RunStartedEvent: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -1682,6 +1758,70 @@ export interface components {
              */
             type: "title_changed";
             title: string;
+        };
+        /**
+         * @description The transcript the conversation shows changed without a run having
+         *     written it: another version of a question was switched to
+         *     (`switchVersion`), another answer to the last question was chosen
+         *     (`chooseAnswer`), or a question was edited (`editMessage`, which also
+         *     starts a run, announced in the same batch). A client that holds a
+         *     transcript of the conversation — another tab, say — fetches its newest
+         *     page again; nothing in the event says what changed, because what the
+         *     transcript now is lives in `listMessages`. For a switch or a choice it
+         *     comes in a batch of its own, under the nil run id and version 0, so it
+         *     is no step of any run.
+         */
+        BranchChangedEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "branch_changed";
+        };
+        ConversationExport: {
+            /** @description The shape of this document; 1. */
+            version: number;
+            /** Format: date-time */
+            exportedAt: string;
+            /** @description Most recently active first. */
+            conversations: components["schemas"]["ExportedConversation"][];
+        };
+        ExportedConversation: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            model?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** @description The branch shown, oldest first. */
+            messages: components["schemas"]["ExportedMessage"][];
+        };
+        ExportedMessage: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            role: "user" | "assistant";
+            content: string;
+            /** @description Assistant messages only. */
+            model?: string;
+            /** @description The names of the files a user message carried; the files are not in the export. */
+            attachments?: {
+                filename: string;
+                contentType: string;
+                /** Format: int64 */
+                size: number;
+            }[];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        DeletedConversations: {
+            /**
+             * Format: int64
+             * @description How many conversations were deleted.
+             */
+            deleted: number;
         };
         Personalization: {
             /** @description Custom instructions about the user. Part of every conversation's system prompt, temporary ones included. */
@@ -1822,11 +1962,13 @@ export interface components {
         };
         /**
          * Format: uri
-         * @description An uploaded picture of the account, once accounts can have one. Absent
-         *     today: every client draws an account as the first letter of its name
-         *     on a colour derived from its id. No third-party avatar service is
-         *     asked — that would tell it who is being looked at, from every page
-         *     that shows a name.
+         * @description A signed read URL of the account's uploaded picture (`updateMyAvatar`),
+         *     valid for an hour; the same URL is issued for as long as it has more
+         *     than half of that left, so a page that asks again keeps its picture.
+         *     Absent when the account has none: every client then draws it as the
+         *     first letter of its name on a colour derived from its id. No
+         *     third-party avatar service is asked — that would tell it who is being
+         *     looked at, from every page that shows a name.
          */
         AvatarUrl: string;
         User: {
@@ -1879,6 +2021,7 @@ export interface components {
             userId?: string | null;
             userName?: string | null;
             userEmail?: string | null;
+            userAvatarUrl?: components["schemas"]["AvatarUrl"];
             /** Format: uuid */
             conversationId?: string | null;
             /** Format: uuid */
@@ -1923,13 +2066,16 @@ export interface components {
              * @description USD. Null when the price is unknown or the provider reported no usage.
              */
             cost?: number | null;
-            streamed: boolean;
             /**
              * Format: int64
              * @description Request start to the first content, reasoning or tool-call delta.
              */
             firstTokenMs?: number | null;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Request start to its end. 0 when the provider turned the request
+             *     down before any time was spent on it.
+             */
             durationMs: number;
         };
         UsageSummary: {
@@ -1971,10 +2117,10 @@ export interface components {
         };
         UsageLogPage: {
             items: components["schemas"]["UsageLog"][];
-            /** Format: int64 */
-            total: number;
-            page: number;
+            /** @description Absent on the last page. */
+            nextCursor?: string;
             limit: number;
+            /** @description Of every request the filters match, `requests` being their number. */
             summary: components["schemas"]["UsageSummary"];
         };
         /**
@@ -2615,6 +2761,7 @@ export interface components {
             userId?: string | null;
             userName?: string | null;
             userEmail?: string | null;
+            userAvatarUrl?: components["schemas"]["AvatarUrl"];
             /** Format: int64 */
             requests: number;
             /** Format: double */
@@ -2951,7 +3098,7 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: components["parameters"]["Limit"];
-                page?: number;
+                cursor?: components["parameters"]["Cursor"];
                 userId?: string;
                 /** @description The model id the request asked for. */
                 model?: string;
@@ -4023,6 +4170,97 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MessagePage"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateMyAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "image/png": string;
+                "image/jpeg": string;
+                "image/webp": string;
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionUser"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteMyAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionUser"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    exportMyConversations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description a JSON document, offered as a download */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationExport"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteAllMyConversations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletedConversations"];
                 };
             };
             default: components["responses"]["Error"];

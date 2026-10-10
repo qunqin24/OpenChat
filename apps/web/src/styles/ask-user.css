@@ -66,6 +66,14 @@
 .prism-next .n-ask.is-open .n-ask-chevron {
   transform: rotate(90deg);
 }
+/* Still being written: not a button, and quiet — the label breathes in opacity
+   like the activity line's status. */
+.prism-next .n-ask.is-preparing .n-ask-fold {
+  cursor: default;
+}
+.prism-next .n-ask-pulse {
+  animation: n-agent-pulse 1.6s ease-in-out infinite;
+}
 .prism-next .n-ask.is-waiting .n-ask-label {
   color: var(--n-text);
 }

@@ -58,6 +58,13 @@ func (m *memoryStore) Read(_ context.Context, key string, limit int64) ([]byte, 
 	return data, nil
 }
 
+func (m *memoryStore) Delete(_ context.Context, key string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.blobs, key)
+	return nil
+}
+
 func (m *memoryStore) put(key string, data []byte) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

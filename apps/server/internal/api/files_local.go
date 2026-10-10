@@ -23,7 +23,10 @@ import (
 // still sends only what the signed URL says.
 
 // signedKey checks the request's signature for method and returns the object
-// key it is for, with the attachment that owns the key.
+// key it is for, with the attachment that owns the key. A key under avatars/
+// belongs to an account instead, and is answered as the picture it is: the
+// attachment returned for it names its type and nothing else, and only for
+// reading.
 func (s *Server) signedKey(r *http.Request, local *storage.Local, method string) (string, sqlc.Attachment, error) {
 	key := strings.TrimPrefix(r.URL.Path, storage.ContentPath)
 	query := r.URL.Query()
@@ -32,6 +35,16 @@ func (s *Server) signedKey(r *http.Request, local *storage.Local, method string)
 			return "", sqlc.Attachment{}, httpx.NewError(http.StatusForbidden, "url_expired", "this link has expired")
 		}
 		return "", sqlc.Attachment{}, httpx.NewError(http.StatusForbidden, "invalid_signature", "this link is not valid")
+	}
+	if strings.HasPrefix(key, avatarPrefix) {
+		// Pictures are written by the server, never through a signed URL.
+		if method != http.MethodGet {
+			return "", sqlc.Attachment{}, httpx.ErrNotFound
+		}
+		if _, err := s.avatarOwner(r.Context(), key); err != nil {
+			return "", sqlc.Attachment{}, err
+		}
+		return key, sqlc.Attachment{StorageKey: key, Filename: "avatar.png", ContentType: "image/png"}, nil
 	}
 	row, err := s.q.GetAttachmentByStorageKey(r.Context(), key)
 	if err != nil {

@@ -131,12 +131,3 @@ UPDATE conversations
 SET memory_snapshot = sqlc.arg('snapshot')::jsonb
 WHERE id = sqlc.arg('id')
   AND user_id = sqlc.arg('user_id');
-
--- name: DeleteExpiredTemporaryConversations :execrows
--- One statement, so any number of servers can run it: whichever gets a row
--- deletes it, the others find it gone. Soft-deleted ones go too — a day is a day.
--- Messages, runs and attachments follow by cascade; usage rows are kept (their
--- conversation reference is SET NULL).
-DELETE FROM conversations
-WHERE temporary
-  AND created_at < sqlc.arg('before');

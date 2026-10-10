@@ -343,6 +343,23 @@ func (q *Queries) SetGeneratedTitle(ctx context.Context, arg SetGeneratedTitlePa
 	return i, err
 }
 
+const softDeleteAllConversations = `-- name: SoftDeleteAllConversations :execrows
+UPDATE conversations
+SET deleted_at = now()
+WHERE user_id = $1
+  AND deleted_at IS NULL
+`
+
+// Everything the user has, temporary chats included, in one statement. The
+// owner is the only filter there is: nobody else's rows can be reached from here.
+func (q *Queries) SoftDeleteAllConversations(ctx context.Context, userID *uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, softDeleteAllConversations, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const softDeleteConversation = `-- name: SoftDeleteConversation :execrows
 UPDATE conversations
 SET deleted_at = now()

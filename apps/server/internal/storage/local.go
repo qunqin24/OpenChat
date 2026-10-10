@@ -174,7 +174,7 @@ func (l *Local) Put(key string, r io.Reader, limit int64) (int64, error) {
 	if _, err := rand.Read(nonce[:]); err != nil {
 		return 0, err
 	}
-	tmp := path.Join(dir, ".tmp-"+hex.EncodeToString(nonce[:]))
+	tmp := path.Join(dir, tempPrefix+hex.EncodeToString(nonce[:]))
 	f, err := l.root.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o640)
 	if err != nil {
 		return 0, fmt.Errorf("storage: create temporary file for %q: %w", key, err)
@@ -271,7 +271,7 @@ func (l *Local) Has(key string) bool {
 }
 
 // Delete removes an object. One that is not there is not an error.
-func (l *Local) Delete(key string) error {
+func (l *Local) Delete(_ context.Context, key string) error {
 	if err := checkKey(key); err != nil {
 		return err
 	}
@@ -279,6 +279,75 @@ func (l *Local) Delete(key string) error {
 		return fmt.Errorf("storage: delete %q: %w", key, err)
 	}
 	return nil
+}
+
+// Object is a stored file as Walk reports it.
+type Object struct {
+	Key     string
+	Size    int64
+	ModTime time.Time
+}
+
+// tempPrefix starts the name of a file Put is still writing.
+const tempPrefix = ".tmp-"
+
+// Walk calls fn for every regular file under the directory prefix, in key
+// order. Files Put is still writing are left out, being no object yet, and so
+// is a prefix that does not exist. An error from fn stops the walk and is
+// returned.
+func (l *Local) Walk(prefix string, fn func(Object) error) error {
+	if err := checkKey(prefix); err != nil {
+		return err
+	}
+	return fs.WalkDir(l.root.FS(), prefix, func(p string, d fs.DirEntry, err error) error {
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
+			// Gone since it was listed, or never there.
+			return nil
+		case err != nil:
+			return err
+		case d.IsDir() || !d.Type().IsRegular() || strings.HasPrefix(d.Name(), ".") || checkKey(p) != nil:
+			return nil
+		}
+		info, err := d.Info()
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		} else if err != nil {
+			return err
+		}
+		return fn(Object{Key: p, Size: info.Size(), ModTime: info.ModTime()})
+	})
+}
+
+// RemoveStaleTemp removes the temporary files under prefix that were last
+// written before the given time: what an upload leaves behind when the process
+// dies in the middle of it. Put cleans up after every failure it survives, so
+// anything old enough is not coming back to be renamed into place.
+func (l *Local) RemoveStaleTemp(prefix string, before time.Time) (int, error) {
+	if err := checkKey(prefix); err != nil {
+		return 0, err
+	}
+	removed := 0
+	err := fs.WalkDir(l.root.FS(), prefix, func(p string, d fs.DirEntry, err error) error {
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
+			return nil
+		case err != nil:
+			return err
+		case d.IsDir() || !d.Type().IsRegular() || !strings.HasPrefix(d.Name(), tempPrefix):
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil || !info.ModTime().Before(before) {
+			return nil
+		}
+		if err := l.root.Remove(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("storage: remove %q: %w", p, err)
+		}
+		removed++
+		return nil
+	})
+	return removed, err
 }
 
 // Probe checks that the directory can be written, read and deleted from, by
@@ -289,7 +358,7 @@ func (l *Local) Probe(ctx context.Context) error {
 	if _, err := l.Put(key, bytes.NewReader(payload), int64(len(payload))); err != nil {
 		return fmt.Errorf("write failed: %s", describeFileError(err))
 	}
-	defer func() { _ = l.Delete(key) }()
+	defer func() { _ = l.Delete(ctx, key) }()
 	got, err := l.Read(ctx, key, int64(len(payload)))
 	if err != nil {
 		return fmt.Errorf("read failed: %s", describeFileError(err))
@@ -297,7 +366,7 @@ func (l *Local) Probe(ctx context.Context) error {
 	if !bytes.Equal(got, payload) {
 		return errors.New("read back different bytes than were written")
 	}
-	if err := l.Delete(key); err != nil {
+	if err := l.Delete(ctx, key); err != nil {
 		return fmt.Errorf("delete failed: %s", describeFileError(err))
 	}
 	return nil

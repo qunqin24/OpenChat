@@ -38,6 +38,8 @@ type Server struct {
 	// storageMu serializes changes to the storage settings.
 	storageMu sync.Mutex
 	runner    *agent.Runner
+	// avatars holds the read URLs issued for account pictures.
+	avatars avatarCache
 	// usage is the ledger of model requests, for the ones the server makes
 	// itself (titles). Runs write theirs through the runner.
 	usage *usage.Recorder

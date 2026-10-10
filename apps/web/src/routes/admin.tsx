@@ -1,6 +1,5 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
-import { GlobalProgress } from '@/components/GlobalProgress'
 import { AuthenticatedLayout } from '@/components/shadcn/layout/authenticated-layout'
 import { sessionQueryOptions } from '@/features/auth/use-auth'
 
@@ -26,15 +25,11 @@ export const Route = createFileRoute('/admin')({
 })
 
 /**
- * The admin panel's frame, with its page-load bar. The bar is the admin
- * side's way of showing work; the chat shows its own in place (a waiting
- * reply, a spinner where the transcript will be) and has no bar.
+ * The admin panel's frame. Its page-load bar is the admin side's way of showing
+ * work (the chat shows its own in place and has no bar), but it is not drawn
+ * here: this layout is not mounted yet during the first navigation into the
+ * panel, so the bar lives at the root (AdminProgress) and watches for admin routes.
  */
 function AdminLayout() {
-  return (
-    <>
-      <GlobalProgress />
-      <AuthenticatedLayout />
-    </>
-  )
+  return <AuthenticatedLayout />
 }

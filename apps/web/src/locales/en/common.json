@@ -133,7 +133,8 @@
       "previous": "Previous question",
       "step": "{{n}} / {{total}}",
       "write": "Or write your own reply",
-      "open": "Answer"
+      "open": "Answer",
+      "preparing": "Preparing questions…"
     },
     "preview": {
       "show": "Preview",
@@ -510,7 +511,8 @@
         "reset": "Reset",
         "no-results": "No results found.",
         "clear-filters": "Clear filters",
-        "selected": "Selected"
+        "selected": "Selected",
+        "page": "Page {{page}}"
       },
       "menu": {
         "settings": "Settings",
@@ -905,7 +907,6 @@
       "channel": "Channel",
       "user": "User",
       "model": "Model",
-      "stream": "Stream",
       "tokens": "In / out tokens",
       "cost": "Cost",
       "timing": "First / total time",
@@ -922,8 +923,6 @@
       "from": "From date",
       "to": "To date",
       "search-model": "Search models…",
-      "streamed": "Stream",
-      "not-streamed": "Whole",
       "speed": "{{n}} t/s",
       "first-token": "Time to first token",
       "duration": "Total time",
@@ -951,7 +950,9 @@
         "model_rate_limited": "Rate limited",
         "context_too_long": "Context too long",
         "internal": "Server error"
-      }
+      },
+      "speed-title": "Output speed",
+      "no-duration": "The provider rejected the request at once; no time was spent"
     }
   },
   "settings": {
@@ -1044,12 +1045,33 @@
       "show": "Show",
       "hide": "Hide",
       "new-placeholder": "Enter a new password (8 characters or more)",
-      "confirm-placeholder": "Enter the new password again"
+      "confirm-placeholder": "Enter the new password again",
+      "avatar": "Profile picture",
+      "avatar-hint": "PNG, JPEG or WebP; the middle of the image is cut to a square. Without one, the first letter of your name is shown.",
+      "avatar-upload": "Upload a picture",
+      "avatar-change": "Change picture",
+      "avatar-remove": "Remove picture",
+      "avatar-saved": "Picture updated",
+      "avatar-removed": "Picture removed",
+      "avatar-type": "Choose a PNG, JPEG or WebP image.",
+      "avatar-too-large": "That image is too large. Choose one under 10 MB.",
+      "avatar-failed": "The picture could not be saved. Try another image."
     },
     "data": {
-      "soon": "Coming soon",
-      "hint": "Exporting and deleting your data will be available later.",
-      "temporary": "Temporary chats are deleted 24 hours after they start."
+      "temporary": "Temporary chats are deleted 24 hours after they start.",
+      "export-title": "Export all chats",
+      "export-desc": "Downloads a JSON file with every chat you keep and, for each, the messages on the branch it shows. Temporary chats and the tool calls behind answers are not in it.",
+      "export-button": "Export",
+      "exporting": "Exporting…",
+      "export-done": "Export ready",
+      "export-failed": "The export failed. Please try again.",
+      "delete-title": "Delete all chats",
+      "delete-desc": "Deletes all of your chats, temporary ones included. This cannot be undone.",
+      "delete-button": "Delete all",
+      "delete-confirm": "Delete all your chats? This cannot be undone.",
+      "delete-yes": "Yes, delete",
+      "deleted": "Deleted {{count}} chats",
+      "delete-failed": "Deleting failed. Please try again."
     },
     "search": "Search",
     "no-results": "No results found",

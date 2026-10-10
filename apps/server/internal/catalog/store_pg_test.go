@@ -3,12 +3,11 @@ package catalog
 import (
 	"context"
 	"net/http"
-	"os"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/qunqin/openchat/apps/server/internal/db"
+	"github.com/qunqin/openchat/apps/server/internal/db/dbtest"
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 )
 
@@ -16,27 +15,15 @@ import (
 // developer may not have running, so they ask for one by name and skip when
 // they are not given it:
 //
-//	CATALOG_TEST_DATABASE_URL=postgres://... go test ./internal/catalog/
+//	TEST_DATABASE_URL=postgres://... go test ./internal/catalog/
 //
-// Point it at a scratch database: these tests empty the catalogue tables.
+// They run in a database of their own (<name in the URL>_catalog), because they
+// empty the catalogue tables.
 func testPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 
-	dsn := os.Getenv("CATALOG_TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("set CATALOG_TEST_DATABASE_URL to run the database-backed catalogue tests")
-	}
-
 	ctx := context.Background()
-	pool, err := db.Connect(ctx, dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-
-	if err := db.Migrate(ctx, pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	pool := dbtest.Pool(t, "catalog")
 	for _, table := range []string{"catalog_models", "catalog_providers", "channel_models", "channels"} {
 		if _, err := pool.Exec(ctx, "DELETE FROM "+table); err != nil {
 			t.Fatalf("clear %s: %v", table, err)

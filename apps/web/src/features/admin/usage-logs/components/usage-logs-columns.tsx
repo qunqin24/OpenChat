@@ -20,6 +20,7 @@ import {
   formatUsd,
   knownErrorCode,
   outputSpeed,
+  rejectedAtOnce,
   toneClass,
 } from '../format'
 import type { UsageLog } from '../use-usage-logs'
@@ -107,6 +108,7 @@ export function usageLogsColumns(t: TFunction<'common'>): ColumnDef<UsageLog>[] 
               id={log.userId}
               name={log.userName ?? undefined}
               email={log.userEmail ?? undefined}
+              src={log.userAvatarUrl}
               className="size-6 text-xs"
             />
             <LongText className="max-w-32">{log.userName || log.userEmail}</LongText>
@@ -141,21 +143,15 @@ export function usageLogsColumns(t: TFunction<'common'>): ColumnDef<UsageLog>[] 
       enableSorting: false,
     },
     {
-      id: 'stream',
-      meta: { title: t('admin.usage.stream') },
-      header: header(t('admin.usage.stream')),
+      id: 'speed',
+      meta: { title: t('admin.usage.speed-title') },
+      header: header(t('admin.usage.speed-title')),
       cell: ({ row }) => {
-        const log = row.original
-        const speed = outputSpeed(log)
+        const speed = outputSpeed(row.original)
         return (
-          <div className="flex flex-col items-start gap-1">
-            <Badge variant={log.streamed ? 'secondary' : 'outline'} className="px-1.5 py-0 text-[11px]">
-              {log.streamed ? t('admin.usage.streamed') : t('admin.usage.not-streamed')}
-            </Badge>
-            <span className="text-muted-foreground text-xs whitespace-nowrap tabular-nums">
-              {speed === undefined ? DASH : t('admin.usage.speed', { n: speed.toFixed(speed < 100 ? 1 : 0) })}
-            </span>
-          </div>
+          <span className="text-muted-foreground text-sm whitespace-nowrap tabular-nums">
+            {speed === undefined ? DASH : t('admin.usage.speed', { n: speed.toFixed(speed < 100 ? 1 : 0) })}
+          </span>
         )
       },
       enableSorting: false,
@@ -217,9 +213,20 @@ export function usageLogsColumns(t: TFunction<'common'>): ColumnDef<UsageLog>[] 
             ) : (
               <span className="text-muted-foreground text-xs">{DASH}</span>
             )}
-            <Pill tone={durationTone(log.durationMs)} label={t('admin.usage.duration')}>
-              {formatDuration(log.durationMs)}
-            </Pill>
+            {rejectedAtOnce(log) ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-muted-foreground text-xs" tabIndex={0}>
+                    {DASH}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{t('admin.usage.no-duration')}</TooltipContent>
+              </Tooltip>
+            ) : (
+              <Pill tone={durationTone(log.durationMs)} label={t('admin.usage.duration')}>
+                {formatDuration(log.durationMs)}
+              </Pill>
+            )}
           </div>
         )
       },

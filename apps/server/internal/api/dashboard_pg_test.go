@@ -15,17 +15,25 @@ import (
 
 	"github.com/qunqin/openchat/apps/server/internal/auth"
 	"github.com/qunqin/openchat/apps/server/internal/config"
+	"github.com/qunqin/openchat/apps/server/internal/db/dbtest"
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 )
 
 // The dashboard reads the usage ledger, so the rows here are written straight
 // into it: known tokens, prices and latencies, from which every figure of the
-// page can be worked out by hand. Other rows may be in the table, so the
-// headline figures are compared before and after, and the ranked lists are
-// searched for this test's own models and channels.
+// page can be worked out by hand.
+//
+// The page sums the whole ledger, and the other tests' runs write to it from
+// background goroutines that can outlive them, so this test has a database of
+// its own with an empty ledger. Counting what it inserted is then exact; the
+// before/after differences and the lookups by this run's models and channels
+// remain as a second line of defence for a ledger somebody wrote to anyway.
 func TestAdminDashboardFigures(t *testing.T) {
-	pool := agentTestPool(t)
+	pool := dbtest.Pool(t, "api_dashboard")
 	ctx := context.Background()
+	if _, err := pool.Exec(ctx, "DELETE FROM usage_logs"); err != nil {
+		t.Fatalf("empty the ledger: %v", err)
+	}
 	q := sqlc.New(pool)
 	tag := uuid.NewString()[:8]
 	modelA, modelB, modelC := "dash-a-"+tag, "dash-b-"+tag, "dash-c-"+tag

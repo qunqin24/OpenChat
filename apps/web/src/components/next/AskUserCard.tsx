@@ -29,6 +29,28 @@ export default function AskUserCard({ questions, state, answers, onOpen }: AskUs
   return <WaitingLine questions={questions} onOpen={onOpen} />
 }
 
+/**
+ * While the model is still writing the question there is nothing to put to the
+ * person yet, and a reply that stops dead looks stuck. This is the one quiet
+ * line that says what is coming: the question mark and a few words, pulsing in
+ * opacity (no movement, so it also runs under reduced motion — a frozen
+ * indicator cannot be told from a stuck one). It is replaced by the waiting
+ * line the moment the call is complete.
+ */
+export function PreparingLine() {
+  const { t } = useTranslation()
+  return (
+    <section className="n-ask is-preparing" aria-label={t('chat.ask.label')}>
+      <div className="n-ask-fold" role="status">
+        <MessageCircleQuestion className="n-ask-icon" aria-hidden="true" />
+        <span className="n-ask-label n-ask-pulse" data-motion="essential">
+          {t('chat.ask.preparing')}
+        </span>
+      </div>
+    </section>
+  )
+}
+
 function WaitingLine({ questions, onOpen }: { questions: AskQuestion[]; onOpen?: () => void }) {
   const { t } = useTranslation()
   const summary = questions.map((q) => q.header || q.question).join(' · ')

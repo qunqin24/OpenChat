@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -18,7 +17,7 @@ import (
 
 	"github.com/qunqin/openchat/apps/server/internal/agent"
 	"github.com/qunqin/openchat/apps/server/internal/auth"
-	"github.com/qunqin/openchat/apps/server/internal/db"
+	"github.com/qunqin/openchat/apps/server/internal/db/dbtest"
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin/openchat/apps/server/internal/tools"
 )
@@ -27,23 +26,13 @@ import (
 // message is admitted, a run calls a tool and answers in the background, and
 // the events stream reports it. Needs a scratch database:
 //
-//	AGENT_TEST_DATABASE_URL=postgres://... go test ./internal/api/
+//	TEST_DATABASE_URL=postgres://... go test ./internal/api/
+//
+// The package runs in a database of its own (<name in the URL>_api). It is
+// reused between runs, so a test must not assume the tables are empty.
 func agentTestPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	dsn := os.Getenv("AGENT_TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("set AGENT_TEST_DATABASE_URL to run the end-to-end agent test")
-	}
-	ctx := context.Background()
-	pool, err := db.Connect(ctx, dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := db.Migrate(ctx, pool); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	return pool
+	return dbtest.Pool(t, "api")
 }
 
 // fakeOpenAI streams a web_fetch call on the first request and an answer on

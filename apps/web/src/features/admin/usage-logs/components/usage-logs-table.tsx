@@ -2,13 +2,12 @@ import {
   flexRender,
   getCoreRowModel,
   useReactTable,
-  type PaginationState,
   type VisibilityState,
 } from '@tanstack/react-table'
 import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { DataTablePagination } from '@/components/shadcn/data-table'
+import { DataTableCursorPagination } from '@/components/shadcn/data-table'
 import { Skeleton } from '@/components/shadcn/ui/skeleton'
 import {
   Table,
@@ -29,6 +28,11 @@ import { UsageSummary } from './usage-summary'
  * and renders exactly the page it is handed -- the toolbar is this page's own
  * because its filters are single choices and a date range, not the stock
  * faceted multi-selects. A link can open it already narrowed (`initialFilters`).
+ *
+ * The ledger is paged by cursor, which only goes forward: each page says where
+ * the next begins. Going back is going to a cursor already seen, so the ones
+ * visited are kept (`trail`, the first page having none). A change of filters
+ * or of page size makes them meaningless and starts the trail again.
  */
 export function UsageLogsTable({ initialFilters }: { initialFilters?: UsageFilters }) {
   const { t } = useTranslation()
@@ -36,19 +40,39 @@ export function UsageLogsTable({ initialFilters }: { initialFilters?: UsageFilte
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [filters, setFilters] = useState<UsageFilters>(initialFilters ?? {})
   const [pickedUser, setPickedUser] = useState<PickedUser>()
-  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 20 })
+  const [pageSize, setPageSize] = useState(20)
+  const [trail, setTrail] = useState<{ cursors: (string | undefined)[]; index: number }>({
+    cursors: [undefined],
+    index: 0,
+  })
 
   const { data, isPending, isError, refetch, isFetching } = useUsageLogs({
-    page: pagination.pageIndex + 1,
-    limit: pagination.pageSize,
+    cursor: trail.cursors[trail.index],
+    limit: pageSize,
     filters,
   })
 
-  // A changed filter starts again from the first page: the old position may be
-  // past the end of the new, shorter list.
-  const backToStart = useCallback(
-    () => setPagination((current) => (current.pageIndex === 0 ? current : { ...current, pageIndex: 0 })),
+  // A changed filter starts again from the first page: a cursor is only good
+  // for the filters it was issued under.
+  const backToStart = useCallback(() => setTrail({ cursors: [undefined], index: 0 }), [])
+  const goNext = useCallback(() => {
+    const next = data?.nextCursor
+    if (!next) return
+    setTrail((current) => ({
+      cursors: [...current.cursors.slice(0, current.index + 1), next],
+      index: current.index + 1,
+    }))
+  }, [data?.nextCursor])
+  const goPrevious = useCallback(
+    () => setTrail((current) => ({ ...current, index: Math.max(0, current.index - 1) })),
     [],
+  )
+  const changePageSize = useCallback(
+    (size: number) => {
+      setPageSize(size)
+      backToStart()
+    },
+    [backToStart],
   )
   const change = useCallback(
     (patch: Partial<UsageFilters>) => {
@@ -72,20 +96,17 @@ export function UsageLogsTable({ initialFilters }: { initialFilters?: UsageFilte
 
   const rows = useMemo(() => data?.items ?? [], [data])
   const columns = useMemo(() => usageLogsColumns(t), [t])
-  const pageCount = Math.max(1, Math.ceil((data?.total ?? 0) / pagination.pageSize))
 
   const table = useReactTable<UsageLog>({
     data: rows,
     columns,
-    state: { columnVisibility, pagination },
+    state: { columnVisibility },
     // Keyed by the record's id so React reuses rows across a refetch.
     getRowId: (row) => row.id,
     onColumnVisibilityChange: setColumnVisibility,
-    onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
     manualPagination: true,
     manualFiltering: true,
-    pageCount,
   })
 
   return (
@@ -177,7 +198,16 @@ export function UsageLogsTable({ initialFilters }: { initialFilters?: UsageFilte
         </Table>
       </div>
 
-      <DataTablePagination table={table} />
+      <DataTableCursorPagination
+        page={trail.index + 1}
+        pageSize={pageSize}
+        onPageSizeChange={changePageSize}
+        canPrevious={trail.index > 0}
+        canNext={Boolean(data?.nextCursor) && !isFetching}
+        onFirst={backToStart}
+        onPrevious={goPrevious}
+        onNext={goNext}
+      />
     </div>
   )
 }

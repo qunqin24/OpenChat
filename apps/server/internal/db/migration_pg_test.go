@@ -3,24 +3,23 @@ package db_test
 import (
 	"context"
 	"database/sql"
-	"os"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 
+	"github.com/qunqin/openchat/apps/server/internal/db/dbtest"
 	"github.com/qunqin/openchat/apps/server/internal/db/migrations"
 )
 
 // The branches migration (20261015000001) against data shaped the way the
 // versions before it left it. Needs a server that lets the test make a
-// database of its own (AGENT_TEST_DATABASE_URL names where; the database in it
+// database of its own (TEST_DATABASE_URL names where; the database in it
 // is only connected to in order to create the other).
 
 const (
@@ -55,16 +54,16 @@ type scratch struct {
 
 func newScratch(t *testing.T) *scratch {
 	t.Helper()
-	dsn := os.Getenv("AGENT_TEST_DATABASE_URL")
+	dsn := dbtest.URL()
 	if dsn == "" {
-		t.Skip("set AGENT_TEST_DATABASE_URL to run the migration tests")
+		t.Skip("set TEST_DATABASE_URL to run the migration tests")
 	}
 	ctx := context.Background()
 	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		t.Fatal(err)
 	}
-	admin, err := pgx.ConnectConfig(ctx, cfg.ConnConfig)
+	admin, err := dbtest.ConnectServer(ctx, cfg.ConnConfig)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}

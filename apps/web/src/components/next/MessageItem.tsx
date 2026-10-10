@@ -12,7 +12,7 @@ import { answersOf, ASK_USER, parseQuestions } from '@/lib/ask-user'
 import { copyClipboard } from '@/lib/clipboard'
 import { splitSegments } from '@/lib/genui/segments'
 import { turnText, type Turn } from '@/lib/transcript'
-import AskUserCard from './AskUserCard'
+import AskUserCard, { PreparingLine } from './AskUserCard'
 import { MEMORY_TOOL, memoryChangeOf } from '@/lib/memory-tool'
 import GenUIBlock from './genui/GenUIBlock'
 import MemoryChip from './MemoryChip'
@@ -89,7 +89,7 @@ export function UserMessage({
     <div className="n-msg-user">
       {files}
       <div className="n-bubble">{message.content}</div>
-      <div className={versions ? 'n-actions always' : 'n-actions'}>
+      <div className="n-actions">
         {versions && <VersionPager {...versions} scope="question-version" />}
         <CopyButton content={message.content} />
         {onEdit && (
@@ -383,13 +383,18 @@ export function AssistantTurn({
         case 'tool_call': {
           if (part.name === ASK_USER) {
             // The model's question is a card in the reply, not a step of the
-            // activity line. Still streaming, it has nothing to draw yet; one
-            // the server refused is a failed step like any other.
+            // activity line.
             const questions = parseQuestions(part.arguments)
             const result = turn.results[part.id]
+            // One the server refused (a second call in a reply, or arguments
+            // it could not put) never reached the person, and the model has
+            // been told what to do instead: it is not a failure of theirs to
+            // look at, so it is left out rather than drawn as an error step.
+            if (result?.status === 'failed') return null
             if (!questions) {
-              if (streaming) return null
-            } else if (result?.status !== 'failed') {
+              // Still being written: nothing to ask yet, but not nothing to say.
+              if (streaming) return <PreparingLine key={key} />
+            } else {
               const answers = answersOf(result)
               // Unanswered is only "skipped" once the reply is over and the
               // question is not the one waiting: while the run goes on it may

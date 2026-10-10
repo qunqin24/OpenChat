@@ -1,4 +1,5 @@
 export { DataTablePagination } from './pagination'
+export { DataTableCursorPagination } from './cursor-pagination'
 export { DataTableColumnHeader } from './column-header'
 export { DataTableToolbar } from './toolbar'
 export { DataTableBulkActions } from './bulk-actions'

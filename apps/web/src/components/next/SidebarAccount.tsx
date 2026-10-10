@@ -37,13 +37,13 @@ export function SidebarAccount({ collapsed, onNavigate }: { collapsed: boolean; 
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button type="button" className="n-row n-account-trigger" aria-label={name} title={collapsed ? name : undefined}>
-          <UserAvatar id={session.id} name={session.name} email={session.email} className="size-[22px] text-[11px]" />
+          <UserAvatar id={session.id} name={session.name} email={session.email} src={session.avatarUrl} className="size-[22px] text-[11px]" />
           <span className="n-row-label">{name}</span>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className={collapsed ? 'n-account-menu-rail' : 'n-account-menu'} align="end" side="top">
         <DropdownMenuLabel>
-          <UserAvatar id={session.id} name={session.name} email={session.email} className="size-[18px] text-[9px]" />
+          <UserAvatar id={session.id} name={session.name} email={session.email} src={session.avatarUrl} className="size-[18px] text-[9px]" />
           <span className="n-menu-label-text">{name}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />

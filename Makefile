@@ -91,9 +91,25 @@ lint: ## Vet Go and lint the web app
 	cd $(SERVER) && go vet ./...
 	pnpm --filter @openchat/web lint
 
+# The database-backed Go tests run on the Postgres server and account that
+# DATABASE_URL in .env points at, under the name openchat_test (override by
+# setting TEST_DATABASE_URL): every test package makes and migrates a database
+# of its own named openchat_test_<package>, so packages can run in parallel and
+# nothing is named like the dev database. Without a URL those tests skip.
+TEST_DATABASE_URL ?= $(shell sed -n 's/^DATABASE_URL=//p' .env 2>/dev/null | sed -E 's,/[^/?]+(\?|$$),/openchat_test\1,')
+export TEST_DATABASE_URL
+
 .PHONY: test
-test: ## Run Go tests
+test: test-server test-web ## Run the Go and web tests
+
+.PHONY: test-server
+test-server: ## Run Go tests (database-backed ones need TEST_DATABASE_URL, see above)
+	@[ -n "$(TEST_DATABASE_URL)" ] || echo "note: no TEST_DATABASE_URL (or DATABASE_URL in .env): database-backed tests will be skipped"
 	cd $(SERVER) && go test ./...
+
+.PHONY: test-web
+test-web: ## Run the web unit tests (vitest)
+	pnpm --filter @openchat/web test
 
 .PHONY: build
 build: build-web ## Build the single binary: server with the web app embedded (bin/openchat)

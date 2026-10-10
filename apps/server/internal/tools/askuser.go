@@ -64,7 +64,8 @@ func (AskUser) Definition() llm.Tool {
 			"default — pick the default and say so. Do not use it for small talk, to confirm what you can " +
 			"see for yourself, or to ask whether you may continue. Each question has two to four options, " +
 			"most likely first; the user can always write their own answer as well, so do not add an " +
-			"\"other\" option. The call ends your turn: the answers arrive as its result.",
+			"\"other\" option. Call it at most once per response and put every question in that one call: a " +
+			"second call in the same response is refused. The call ends your turn: the answers arrive as its result.",
 		Parameters: json.RawMessage(`{
   "type": "object",
   "properties": {

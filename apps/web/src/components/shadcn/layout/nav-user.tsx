@@ -31,6 +31,7 @@ type NavUserProps = {
     id: string
     name: string
     email: string
+    avatarUrl?: string
   }
 }
 
@@ -51,7 +52,7 @@ export function NavUser({ user }: NavUserProps) {
               >
                 {/* Deviation from upstream: shadcn's Avatar with a hardcoded "SN"
                     fallback; here the coloured initial shared with the chat. */}
-                <UserAvatar id={user.id} name={user.name} email={user.email} className='size-8 text-sm' />
+                <UserAvatar id={user.id} name={user.name} email={user.email} src={user.avatarUrl} className='size-8 text-sm' />
                 <div className='grid flex-1 text-start text-sm leading-tight'>
                   <span className='truncate font-semibold'>{user.name}</span>
                   <span className='truncate text-xs'>{user.email}</span>
@@ -67,7 +68,7 @@ export function NavUser({ user }: NavUserProps) {
             >
               <DropdownMenuLabel className='p-0 font-normal'>
                 <div className='flex items-center gap-2 px-1 py-1.5 text-start text-sm'>
-                  <UserAvatar id={user.id} name={user.name} email={user.email} className='size-8 text-sm' />
+                  <UserAvatar id={user.id} name={user.name} email={user.email} src={user.avatarUrl} className='size-8 text-sm' />
                   <div className='grid flex-1 text-start text-sm leading-tight'>
                     <span className='truncate font-semibold'>{user.name}</span>
                     <span className='truncate text-xs'>{user.email}</span>

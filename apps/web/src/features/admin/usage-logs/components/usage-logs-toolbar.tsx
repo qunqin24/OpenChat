@@ -210,7 +210,7 @@ function UserFilter({
                     setOpen(false)
                   }}
                 >
-                  <UserAvatar id={user.id} name={user.name} email={user.email} className="size-5 text-[10px]" />
+                  <UserAvatar id={user.id} name={user.name} email={user.email} src={user.avatarUrl} className="size-5 text-[10px]" />
                   <span className="flex min-w-0 flex-col">
                     <span className="truncate">{user.name}</span>
                     <span className="text-muted-foreground truncate text-xs">{user.email}</span>

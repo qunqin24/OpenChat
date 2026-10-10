@@ -93,7 +93,7 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, err)
 		return
 	}
-	httpx.JSON(w, http.StatusCreated, toSessionUser(user))
+	httpx.JSON(w, http.StatusCreated, s.sessionUser(r.Context(), user))
 }
 
 func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
@@ -138,7 +138,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, err)
 		return
 	}
-	httpx.JSON(w, http.StatusOK, toSessionUser(user))
+	httpx.JSON(w, http.StatusOK, s.sessionUser(r.Context(), user))
 }
 
 func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
@@ -163,7 +163,7 @@ func (s *Server) GetSession(w http.ResponseWriter, r *http.Request) {
 		logWarn(r, "touch last_seen_at", err)
 	}
 
-	httpx.JSON(w, http.StatusOK, toSessionUser(user))
+	httpx.JSON(w, http.StatusOK, s.sessionUser(r.Context(), user))
 }
 
 // UpdateMe changes the signed-in account's own name or email.
@@ -217,7 +217,7 @@ func (s *Server) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.JSON(w, http.StatusOK, toSessionUser(updated))
+	httpx.JSON(w, http.StatusOK, s.sessionUser(r.Context(), updated))
 }
 
 // ChangePassword replaces the signed-in account's own password.

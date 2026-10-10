@@ -84,11 +84,16 @@ type Querier interface {
 	DeleteCatalogProviders(ctx context.Context) error
 	DeleteChannel(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteExpiredSessions(ctx context.Context) (int64, error)
-	// One statement, so any number of servers can run it: whichever gets a row
-	// deletes it, the others find it gone. Soft-deleted ones go too — a day is a day.
-	// Messages, runs and attachments follow by cascade; usage rows are kept (their
-	// conversation reference is SET NULL).
-	DeleteExpiredTemporaryConversations(ctx context.Context, before pgtype.Timestamptz) (int64, error)
+	// Deletions that take files with them. An attachment row is the only thing
+	// that says a stored file is wanted, so each statement hands back the storage
+	// keys of the rows it removed, in the same statement: the caller deletes the
+	// files once the rows are gone, and no other server can be handed the same
+	// keys, because only the one whose DELETE removed a row gets it back.
+	// Soft-deleted ones go too — a day is a day. Messages, runs and attachments
+	// follow by cascade; usage rows are kept (their conversation reference is SET
+	// NULL). SKIP LOCKED lets servers run this at once without waiting on each
+	// other, and a batch keeps one pass from holding a million rows.
+	DeleteExpiredTemporaryConversations(ctx context.Context, arg DeleteExpiredTemporaryConversationsParams) ([]DeleteExpiredTemporaryConversationsRow, error)
 	// Only a manual row can be deleted by hand. A fetched row is removed by the
 	// endpoint no longer listing it; deleting one here would just bring it back on
 	// the next refresh, which reads as the button not working.
@@ -108,6 +113,10 @@ type Querier interface {
 	// row was never the endpoint's to mention, so its absence says nothing about
 	// it.
 	DeleteStaleChannelModels(ctx context.Context, arg DeleteStaleChannelModelsParams) (int64, error)
+	// Uploads no message ever claimed: the user attached a file and never sent, or
+	// the send failed. Anything this old has no request in flight that could still
+	// claim it.
+	DeleteStaleUploads(ctx context.Context, arg DeleteStaleUploadsParams) ([]string, error)
 	DeleteUserSessions(ctx context.Context, userID uuid.UUID) error
 	FinishMessage(ctx context.Context, arg FinishMessageParams) (Message, error)
 	// Terminal. Live state is cleared in the same statement: whatever it held has
@@ -182,6 +191,9 @@ type Querier interface {
 	GetSessionUser(ctx context.Context, tokenHash []byte) (GetSessionUserRow, error)
 	GetSetting(ctx context.Context, key string) ([]byte, error)
 	GetUser(ctx context.Context, id uuid.UUID) (User, error)
+	// Who a stored picture belongs to: the signed read URL of a locally kept file
+	// is served to anyone holding it, and this is what says the key is a picture.
+	GetUserByAvatarKey(ctx context.Context, avatarKey *string) (User, error)
 	// Sign-in accepts either identifier, so one lookup covers both.
 	//
 	// The `users_name_no_at` constraint keeps usernames and addresses in disjoint
@@ -248,6 +260,9 @@ type Querier interface {
 	// the paging and the count.
 	ListChannelsServingModels(ctx context.Context, modelIds []string) ([]ListChannelsServingModelsRow, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
+	// Which of these keys an attachment row still wants: what the orphan sweep
+	// asks before it removes a file from the disk.
+	ListKnownStorageKeys(ctx context.Context, keys []string) ([]string, error)
 	// Oldest first, so a memory keeps its place in the list (and in the prompt).
 	ListMemories(ctx context.Context, userID uuid.UUID) ([]UserMemory, error)
 	ListMemoryEvents(ctx context.Context, arg ListMemoryEventsParams) ([]MemoryEvent, error)
@@ -307,8 +322,13 @@ type Querier interface {
 	// under, and sorting on an empty one would herd every uncatalogued model into a
 	// block at the top that looks like a fault.
 	ListServedModels(ctx context.Context, arg ListServedModelsParams) ([]ListServedModelsRow, error)
-	// Newest first. Offset paging, like the other admin tables: the page numbers
-	// and the total are the point.
+	// The branch shown, oldest first and whole, for an export. Tool results are
+	// left out: they are the model's working, and some are whole web pages.
+	ListTranscript(ctx context.Context, conversationID uuid.UUID) ([]Message, error)
+	// Newest first, by keyset on (created_at, id): the order of usage_logs_created_idx,
+	// so a page deep into a ledger of millions of rows costs what the first one
+	// does, and a row written meanwhile cannot shift the pages. The total is the
+	// summary's, not a count of this query.
 	//
 	// `to` is exclusive, so a day's end is the next day's start and nothing falls
 	// between two ranges.
@@ -349,6 +369,10 @@ type Querier interface {
 	// that offers it, in the operator's order. Pinned on the run, so a later change
 	// here affects the next run, never one already going.
 	PickServingChannel(ctx context.Context, modelID string) (uuid.UUID, error)
+	// The hard delete behind a user's delete: a conversation they deleted stays
+	// recoverable by an operator for the retention period, then goes with its
+	// messages, runs and attachments. Same shape as the temporary-chat statement.
+	PurgeDeletedConversations(ctx context.Context, arg PurgeDeletedConversationsParams) ([]PurgeDeletedConversationsRow, error)
 	// The first account created becomes the admin: someone has to be able to reach
 	// the admin panel, and there is no other bootstrap path. The decision is made
 	// inside the INSERT so two concurrent registrations cannot both see an empty
@@ -385,6 +409,13 @@ type Querier interface {
 	SetGeneratedTitle(ctx context.Context, arg SetGeneratedTitleParams) (Conversation, error)
 	// Upsert, so a setting added after this database was created still writes.
 	SetSetting(ctx context.Context, arg SetSettingParams) error
+	// The account's picture, or NULL to go back to the initial. Narrower than
+	// UpdateOwnProfile on purpose: the picture is its own endpoint, with its own
+	// checks, and the profile form has no business with it.
+	SetUserAvatar(ctx context.Context, arg SetUserAvatarParams) (User, error)
+	// Everything the user has, temporary chats included, in one statement. The
+	// owner is the only filter there is: nobody else's rows can be reached from here.
+	SoftDeleteAllConversations(ctx context.Context, userID *uuid.UUID) (int64, error)
 	SoftDeleteConversation(ctx context.Context, arg SoftDeleteConversationParams) (int64, error)
 	// The total behind ListUsageLogs, with what an operator wants above the table:
 	// how many requests, how many failed, how many tokens and how much money. The

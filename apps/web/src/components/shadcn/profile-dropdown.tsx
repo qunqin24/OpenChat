@@ -26,7 +26,7 @@ export function ProfileDropdown() {
           <Button variant='ghost' className='relative h-8 w-8 rounded-full'>
             {/* Deviation from upstream: a coloured initial (UserAvatar) shared with
                 the chat, instead of shadcn's Avatar over a fetched picture. */}
-            <UserAvatar id={session?.id} name={session?.name} email={session?.email} className='size-8 text-sm' />
+            <UserAvatar id={session?.id} name={session?.name} email={session?.email} src={session?.avatarUrl} className='size-8 text-sm' />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className='w-56' align='end' forceMount>

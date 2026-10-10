@@ -133,7 +133,8 @@
       "previous": "上一题",
       "step": "{{n}} / {{total}}",
       "write": "或自行撰写回复",
-      "open": "回答"
+      "open": "回答",
+      "preparing": "正在准备问题…"
     },
     "preview": {
       "show": "预览",
@@ -510,7 +511,8 @@
         "reset": "重置",
         "no-results": "没有匹配结果",
         "clear-filters": "清除筛选",
-        "selected": "已选"
+        "selected": "已选",
+        "page": "第 {{page}} 页"
       },
       "menu": {
         "settings": "设置",
@@ -905,7 +907,6 @@
       "channel": "渠道",
       "user": "用户",
       "model": "模型",
-      "stream": "流式",
       "tokens": "输入/输出 Token",
       "cost": "费用",
       "timing": "首字/总耗时",
@@ -922,8 +923,6 @@
       "from": "开始日期",
       "to": "结束日期",
       "search-model": "搜索模型…",
-      "streamed": "流式",
-      "not-streamed": "整段",
       "speed": "{{n}} t/s",
       "first-token": "首字耗时",
       "duration": "总耗时",
@@ -951,7 +950,9 @@
         "model_rate_limited": "被限流",
         "context_too_long": "上下文过长",
         "internal": "服务器错误"
-      }
+      },
+      "speed-title": "输出速度",
+      "no-duration": "服务商一收到请求就拒绝了，没有耗时"
     }
   },
   "settings": {
@@ -1044,12 +1045,33 @@
       "show": "显示",
       "hide": "隐藏",
       "new-placeholder": "输入新密码（至少 8 位）",
-      "confirm-placeholder": "再输入一次新密码"
+      "confirm-placeholder": "再输入一次新密码",
+      "avatar": "头像",
+      "avatar-hint": "PNG、JPEG 或 WebP，会取中间一块裁成正方形。不设置时显示名字的首字。",
+      "avatar-upload": "上传头像",
+      "avatar-change": "更换头像",
+      "avatar-remove": "移除头像",
+      "avatar-saved": "头像已更新",
+      "avatar-removed": "头像已移除",
+      "avatar-type": "请选择 PNG、JPEG 或 WebP 图片。",
+      "avatar-too-large": "这张图片太大了，请选 10 MB 以内的。",
+      "avatar-failed": "头像没能保存，请换一张图片再试。"
     },
     "data": {
-      "soon": "敬请期待",
-      "hint": "导出和删除个人数据的功能会在之后提供。",
-      "temporary": "临时聊天在创建 24 小时后自动删除。"
+      "temporary": "临时聊天在创建 24 小时后自动删除。",
+      "export-title": "导出所有对话",
+      "export-desc": "下载一份 JSON 文件，包含你保留的所有对话，以及每个对话当前所在分支上的消息。临时聊天、工具调用的过程不在其中。",
+      "export-button": "导出",
+      "exporting": "正在导出…",
+      "export-done": "导出完成",
+      "export-failed": "导出失败，请重试",
+      "delete-title": "删除所有对话",
+      "delete-desc": "删除你的全部对话，包括临时聊天。删除后无法恢复。",
+      "delete-button": "删除全部",
+      "delete-confirm": "确定要删除所有对话吗？此操作无法撤销。",
+      "delete-yes": "确认删除",
+      "deleted": "已删除 {{count}} 个对话",
+      "delete-failed": "删除失败，请重试"
     },
     "search": "搜索",
     "no-results": "没有结果",

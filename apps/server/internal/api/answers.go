@@ -173,6 +173,8 @@ func (s *Server) ChooseAnswer(w http.ResponseWriter, r *http.Request, conversati
 		return
 	}
 
+	s.announceBranch(conversationId)
+
 	rows, err := s.q.ListRunMessages(ctx, sqlc.ListRunMessagesParams{RunID: &run.ID, InputMessageID: run.InputMessageID})
 	if err != nil {
 		httpx.Fail(w, r, err)
@@ -184,6 +186,14 @@ func (s *Server) ChooseAnswer(w http.ResponseWriter, r *http.Request, conversati
 		return
 	}
 	httpx.JSON(w, http.StatusOK, page)
+}
+
+// announceBranch tells the conversation's other followers (another tab, say)
+// that the transcript they hold is no longer the one shown. Sent after the
+// change committed, in a batch of its own under no run: it is no step of any,
+// and a client applies it whatever run state it holds.
+func (s *Server) announceBranch(conversationID uuid.UUID) {
+	s.runner.Hub().Publish(conversationID, agent.Batch{Events: []agent.Event{agent.BranchChanged{}}})
 }
 
 // stillCurrent is the check that an input is still the end of the branch shown,
@@ -279,7 +289,9 @@ func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversatio
 		s.failRun(w, r, conversationId, requestID, err)
 		return
 	}
-	s.startRun(conversationId, run, input)
+	// The edit moves the leaf onto the new wording; other tabs showing this
+	// conversation are told in the same batch that starts the run.
+	s.startRun(conversationId, run, input, agent.BranchChanged{})
 
 	page, err := s.messagePage(ctx, []sqlc.Message{input})
 	if err != nil {
@@ -331,6 +343,7 @@ func (s *Server) SwitchVersion(w http.ResponseWriter, r *http.Request, conversat
 		return
 	}
 
+	moved := false
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
 		// Nothing is running while the branch moves: a run writes under the
@@ -363,11 +376,15 @@ func (s *Server) SwitchVersion(w http.ResponseWriter, r *http.Request, conversat
 		if err != nil {
 			return err
 		}
+		moved = true
 		return q.SetCurrentInput(ctx, sqlc.SetCurrentInputParams{ConversationID: conversationId, InputID: &leaf})
 	})
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
+	}
+	if moved {
+		s.announceBranch(conversationId)
 	}
 
 	page, err := s.transcriptPage(ctx, conversationId, pgtype.Timestamptz{}, nil, clampLimit(params.Limit))

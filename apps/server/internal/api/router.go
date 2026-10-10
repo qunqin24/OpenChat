@@ -73,6 +73,12 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 			r.Patch("/auth/me", wrapper.UpdateMe)
 			r.Post("/auth/password", wrapper.ChangePassword)
 
+			// The caller's own picture, and their data as a whole.
+			r.Put("/me/avatar", wrapper.UpdateMyAvatar)
+			r.Delete("/me/avatar", wrapper.DeleteMyAvatar)
+			r.Get("/me/export", wrapper.ExportMyConversations)
+			r.Delete("/me/conversations", wrapper.DeleteAllMyConversations)
+
 			// Personal memory: always the caller's own, from the session.
 			r.Get("/me/personalization", wrapper.GetPersonalization)
 			r.Patch("/me/personalization", wrapper.UpdatePersonalization)

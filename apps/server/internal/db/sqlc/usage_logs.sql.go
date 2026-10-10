@@ -130,6 +130,7 @@ SELECT l.id,
        l.user_id,
        u.name                          AS user_name,
        u.email                         AS user_email,
+       u.avatar_key                    AS user_avatar_key,
        l.conversation_id,
        l.run_id,
        l.channel_id,
@@ -146,32 +147,34 @@ SELECT l.id,
        l.cache_read_price,
        l.cache_write_price,
        l.cost,
-       l.streamed,
        l.first_token_ms,
        l.duration_ms
 FROM usage_logs l
          LEFT JOIN users u ON u.id = l.user_id
-WHERE ($1::uuid IS NULL OR l.user_id = $1::uuid)
-  AND ($2::text IS NULL OR l.model_id = $2::text)
-  AND ($3::uuid IS NULL OR l.channel_id = $3::uuid)
-  AND ($4::text IS NULL OR l.status = $4::text)
-  AND ($5::text IS NULL OR l.kind = $5::text)
-  AND ($6::timestamptz IS NULL OR l.created_at >= $6::timestamptz)
-  AND ($7::timestamptz IS NULL OR l.created_at < $7::timestamptz)
+WHERE ($1::timestamptz IS NULL
+    OR (l.created_at, l.id) < ($1::timestamptz, $2::uuid))
+  AND ($3::uuid IS NULL OR l.user_id = $3::uuid)
+  AND ($4::text IS NULL OR l.model_id = $4::text)
+  AND ($5::uuid IS NULL OR l.channel_id = $5::uuid)
+  AND ($6::text IS NULL OR l.status = $6::text)
+  AND ($7::text IS NULL OR l.kind = $7::text)
+  AND ($8::timestamptz IS NULL OR l.created_at >= $8::timestamptz)
+  AND ($9::timestamptz IS NULL OR l.created_at < $9::timestamptz)
 ORDER BY l.created_at DESC, l.id DESC
-LIMIT $9 OFFSET $8
+LIMIT $10
 `
 
 type ListUsageLogsParams struct {
-	UserID    *uuid.UUID         `json:"user_id"`
-	ModelID   *string            `json:"model_id"`
-	ChannelID *uuid.UUID         `json:"channel_id"`
-	Status    *string            `json:"status"`
-	Kind      *string            `json:"kind"`
-	FromTime  pgtype.Timestamptz `json:"from_time"`
-	ToTime    pgtype.Timestamptz `json:"to_time"`
-	RowOffset int32              `json:"row_offset"`
-	RowLimit  int32              `json:"row_limit"`
+	CursorCreatedAt pgtype.Timestamptz `json:"cursor_created_at"`
+	CursorID        *uuid.UUID         `json:"cursor_id"`
+	UserID          *uuid.UUID         `json:"user_id"`
+	ModelID         *string            `json:"model_id"`
+	ChannelID       *uuid.UUID         `json:"channel_id"`
+	Status          *string            `json:"status"`
+	Kind            *string            `json:"kind"`
+	FromTime        pgtype.Timestamptz `json:"from_time"`
+	ToTime          pgtype.Timestamptz `json:"to_time"`
+	RowLimit        int32              `json:"row_limit"`
 }
 
 type ListUsageLogsRow struct {
@@ -184,6 +187,7 @@ type ListUsageLogsRow struct {
 	UserID           *uuid.UUID         `json:"user_id"`
 	UserName         *string            `json:"user_name"`
 	UserEmail        *string            `json:"user_email"`
+	UserAvatarKey    *string            `json:"user_avatar_key"`
 	ConversationID   *uuid.UUID         `json:"conversation_id"`
 	RunID            *uuid.UUID         `json:"run_id"`
 	ChannelID        *uuid.UUID         `json:"channel_id"`
@@ -200,18 +204,21 @@ type ListUsageLogsRow struct {
 	CacheReadPrice   pgtype.Numeric     `json:"cache_read_price"`
 	CacheWritePrice  pgtype.Numeric     `json:"cache_write_price"`
 	Cost             pgtype.Numeric     `json:"cost"`
-	Streamed         bool               `json:"streamed"`
 	FirstTokenMs     *int32             `json:"first_token_ms"`
 	DurationMs       int32              `json:"duration_ms"`
 }
 
-// Newest first. Offset paging, like the other admin tables: the page numbers
-// and the total are the point.
+// Newest first, by keyset on (created_at, id): the order of usage_logs_created_idx,
+// so a page deep into a ledger of millions of rows costs what the first one
+// does, and a row written meanwhile cannot shift the pages. The total is the
+// summary's, not a count of this query.
 //
 // `to` is exclusive, so a day's end is the next day's start and nothing falls
 // between two ranges.
 func (q *Queries) ListUsageLogs(ctx context.Context, arg ListUsageLogsParams) ([]ListUsageLogsRow, error) {
 	rows, err := q.db.Query(ctx, listUsageLogs,
+		arg.CursorCreatedAt,
+		arg.CursorID,
 		arg.UserID,
 		arg.ModelID,
 		arg.ChannelID,
@@ -219,7 +226,6 @@ func (q *Queries) ListUsageLogs(ctx context.Context, arg ListUsageLogsParams) ([
 		arg.Kind,
 		arg.FromTime,
 		arg.ToTime,
-		arg.RowOffset,
 		arg.RowLimit,
 	)
 	if err != nil {
@@ -239,6 +245,7 @@ func (q *Queries) ListUsageLogs(ctx context.Context, arg ListUsageLogsParams) ([
 			&i.UserID,
 			&i.UserName,
 			&i.UserEmail,
+			&i.UserAvatarKey,
 			&i.ConversationID,
 			&i.RunID,
 			&i.ChannelID,
@@ -255,7 +262,6 @@ func (q *Queries) ListUsageLogs(ctx context.Context, arg ListUsageLogsParams) ([
 			&i.CacheReadPrice,
 			&i.CacheWritePrice,
 			&i.Cost,
-			&i.Streamed,
 			&i.FirstTokenMs,
 			&i.DurationMs,
 		); err != nil {

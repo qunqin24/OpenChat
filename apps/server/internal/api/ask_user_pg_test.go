@@ -24,7 +24,7 @@ import (
 // The ask_user tool end to end, over HTTP handlers and a scripted model that
 // speaks each wire format: the model asks, the run stops awaiting input, and
 // the user answers, writes something else, or redoes the turn. Needs the same
-// scratch database as the other agent tests (AGENT_TEST_DATABASE_URL).
+// scratch database as the other agent tests (TEST_DATABASE_URL).
 
 const questionsJSON = `{"questions":[` +
 	`{"question":"Where to?","header":"Place","options":[{"label":"Beach","description":"sand"},{"label":"City"}],"multiSelect":false},` +

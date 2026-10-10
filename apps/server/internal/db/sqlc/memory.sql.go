@@ -45,24 +45,6 @@ func (q *Queries) DeleteAllMemoryEvents(ctx context.Context, userID uuid.UUID) e
 	return err
 }
 
-const deleteExpiredTemporaryConversations = `-- name: DeleteExpiredTemporaryConversations :execrows
-DELETE FROM conversations
-WHERE temporary
-  AND created_at < $1
-`
-
-// One statement, so any number of servers can run it: whichever gets a row
-// deletes it, the others find it gone. Soft-deleted ones go too — a day is a day.
-// Messages, runs and attachments follow by cascade; usage rows are kept (their
-// conversation reference is SET NULL).
-func (q *Queries) DeleteExpiredTemporaryConversations(ctx context.Context, before pgtype.Timestamptz) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteExpiredTemporaryConversations, before)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const deleteMemory = `-- name: DeleteMemory :execrows
 DELETE FROM user_memories
 WHERE id = $1

@@ -82,6 +82,13 @@ type RetryScheduled struct {
 // whose exchange it was made from has finished.
 type TitleChanged struct{ Title string }
 
+// BranchChanged: what the conversation shows moved without a run having written
+// it — a version of a question was switched to, a question was edited (which
+// starts a run, announced in the same batch), or another answer to the last
+// question was chosen. The row that is the new end of the transcript is already
+// committed; a subscriber that holds the transcript fetches it again.
+type BranchChanged struct{}
+
 func (RunStarted) isEvent()        {}
 func (RunFinished) isEvent()       {}
 func (GenerationStarted) isEvent() {}
@@ -93,6 +100,7 @@ func (ToolStarted) isEvent()       {}
 func (ToolFinished) isEvent()      {}
 func (RetryScheduled) isEvent()    {}
 func (TitleChanged) isEvent()      {}
+func (BranchChanged) isEvent()     {}
 
 // Batch is the events of one commit. Version is the run's version after it, so
 // a subscriber whose snapshot already reflects that commit can drop it.

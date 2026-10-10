@@ -111,12 +111,13 @@ LIMIT sqlc.arg('row_limit');
 SELECT l.user_id,
        u.name                                                    AS user_name,
        u.email                                                   AS user_email,
+       u.avatar_key                                              AS user_avatar_key,
        count(*)::bigint                                          AS requests,
        coalesce(sum(l.cost), 0)::double precision                AS cost
 FROM usage_logs l
          LEFT JOIN users u ON u.id = l.user_id
 WHERE l.created_at >= sqlc.arg('since')::timestamptz
-GROUP BY l.user_id, u.name, u.email
+GROUP BY l.user_id, u.name, u.email, u.avatar_key
 ORDER BY coalesce(sum(l.cost), 0) DESC, count(*) DESC, l.user_id
 LIMIT sqlc.arg('row_limit');
 

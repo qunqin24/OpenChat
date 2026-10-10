@@ -224,13 +224,14 @@ paths:
         One row per request made to a model -- every attempt of a run (a retry
         is its own row, and so is a failure) and every background title -- newest
         first. Cost and prices are those of the moment the request was made.
-        The summary covers the whole filtered range, not just this page.
+        Paged by cursor over (created time, id): `nextCursor` of a page is the
+        `cursor` of the one after it, and the filters must stay the same from
+        one page to the next. The summary covers the whole filtered range, not
+        just this page.
       operationId: listUsageLogs
       parameters:
         - { $ref: "#/components/parameters/Limit" }
-        - name: page
-          in: query
-          schema: { type: integer, minimum: 1, default: 1 }
+        - { $ref: "#/components/parameters/Cursor" }
         - name: userId
           in: query
           schema: { type: string, format: uuid }
@@ -1157,6 +1158,86 @@ paths:
               schema: { $ref: "#/components/schemas/MessagePage" }
         default: { $ref: "#/components/responses/Error" }
 
+  /me/avatar:
+    put:
+      tags: [auth]
+      summary: Set your picture
+      description: |
+        The image itself is the body, with its own `Content-Type`: PNG, JPEG or
+        WebP, at most 1 MiB and 4096 pixels on a side. It is decoded here, cut
+        to the square at its centre, scaled down to 256 pixels and stored as a
+        PNG, so nothing the file carried beyond its picture (metadata, a
+        second payload) is kept. 415 `unsupported_file_type` for another type
+        or a body that is not the image it says, 413 `file_too_large` over the
+        size, 400 `invalid_image` for an image that cannot be read.
+      operationId: updateMyAvatar
+      requestBody:
+        required: true
+        content:
+          image/png:
+            schema: { type: string, format: binary }
+          image/jpeg:
+            schema: { type: string, format: binary }
+          image/webp:
+            schema: { type: string, format: binary }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SessionUser" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [auth]
+      summary: Go back to the initial
+      operationId: deleteMyAvatar
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SessionUser" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /me/export:
+    get:
+      tags: [conversations]
+      summary: Download your conversations
+      description: |
+        Every conversation of yours that is kept (not deleted, not temporary)
+        with the messages of the branch it shows — the text of what was asked
+        and answered, with the names of the files sent, not tool traces or
+        other branches. Written as it is read, one conversation at a time, so
+        the size of the history does not decide the memory this takes. Always
+        the caller's own; there is no way to name another account.
+      operationId: exportMyConversations
+      responses:
+        "200":
+          description: a JSON document, offered as a download
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConversationExport" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /me/conversations:
+    delete:
+      tags: [conversations]
+      summary: Delete all your conversations
+      description: |
+        Deletes (as `deleteConversation` does) every conversation of yours,
+        temporary ones included. Only yours: the account is the session's.
+      operationId: deleteAllMyConversations
+      responses:
+        "200":
+          description: deleted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeletedConversations" }
+        default: { $ref: "#/components/responses/Error" }
+
   /me/personalization:
     get:
       tags: [memory]
@@ -1929,6 +2010,7 @@ components:
         - $ref: "#/components/schemas/ToolFinishedEvent"
         - $ref: "#/components/schemas/RetryScheduledEvent"
         - $ref: "#/components/schemas/TitleChangedEvent"
+        - $ref: "#/components/schemas/BranchChangedEvent"
       discriminator:
         propertyName: type
         mapping:
@@ -1943,6 +2025,7 @@ components:
           tool_finished: "#/components/schemas/ToolFinishedEvent"
           retry_scheduled: "#/components/schemas/RetryScheduledEvent"
           title_changed: "#/components/schemas/TitleChangedEvent"
+          branch_changed: "#/components/schemas/BranchChangedEvent"
 
     RunStartedEvent:
       type: object
@@ -2038,6 +2121,76 @@ components:
       properties:
         type: { type: string, const: title_changed }
         title: { type: string }
+
+    BranchChangedEvent:
+      type: object
+      description: |
+        The transcript the conversation shows changed without a run having
+        written it: another version of a question was switched to
+        (`switchVersion`), another answer to the last question was chosen
+        (`chooseAnswer`), or a question was edited (`editMessage`, which also
+        starts a run, announced in the same batch). A client that holds a
+        transcript of the conversation — another tab, say — fetches its newest
+        page again; nothing in the event says what changed, because what the
+        transcript now is lives in `listMessages`. For a switch or a choice it
+        comes in a batch of its own, under the nil run id and version 0, so it
+        is no step of any run.
+      required: [type]
+      properties:
+        type: { type: string, const: branch_changed }
+
+    ConversationExport:
+      type: object
+      required: [version, exportedAt, conversations]
+      properties:
+        version: { type: integer, description: The shape of this document; 1. }
+        exportedAt: { type: string, format: date-time }
+        conversations:
+          type: array
+          description: Most recently active first.
+          items: { $ref: "#/components/schemas/ExportedConversation" }
+
+    ExportedConversation:
+      type: object
+      required: [id, title, createdAt, updatedAt, messages]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        model: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        messages:
+          type: array
+          description: The branch shown, oldest first.
+          items: { $ref: "#/components/schemas/ExportedMessage" }
+
+    ExportedMessage:
+      type: object
+      required: [id, role, content, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        role:
+          type: string
+          enum: [user, assistant]
+        content: { type: string }
+        model: { type: string, description: Assistant messages only. }
+        attachments:
+          type: array
+          description: The names of the files a user message carried; the files are not in the export.
+          items:
+            type: object
+            required: [filename, contentType, size]
+            properties:
+              filename: { type: string }
+              contentType: { type: string }
+              size: { type: integer, format: int64 }
+        createdAt: { type: string, format: date-time }
+
+    DeletedConversations:
+      type: object
+      required: [deleted]
+      properties:
+        deleted: { type: integer, format: int64, description: How many conversations were deleted. }
 
     Personalization:
       type: object
@@ -2210,11 +2363,13 @@ components:
       type: string
       format: uri
       description: |
-        An uploaded picture of the account, once accounts can have one. Absent
-        today: every client draws an account as the first letter of its name
-        on a colour derived from its id. No third-party avatar service is
-        asked — that would tell it who is being looked at, from every page
-        that shows a name.
+        A signed read URL of the account's uploaded picture (`updateMyAvatar`),
+        valid for an hour; the same URL is issued for as long as it has more
+        than half of that left, so a page that asks again keeps its picture.
+        Absent when the account has none: every client then draws it as the
+        first letter of its name on a colour derived from its id. No
+        third-party avatar service is asked — that would tell it who is being
+        looked at, from every page that shows a name.
 
     User:
       type: object
@@ -2259,7 +2414,7 @@ components:
       type: object
       required: [id, createdAt, kind, status, channelName, model, servedModel,
                  inputTokens, outputTokens, reasoningTokens, cacheReadTokens, cacheWriteTokens,
-                 streamed, durationMs]
+                 durationMs]
       properties:
         id: { type: string, format: uuid }
         createdAt: { type: string, format: date-time, description: When the request started. }
@@ -2276,6 +2431,9 @@ components:
         userId: { type: string, format: uuid, nullable: true }
         userName: { type: string, nullable: true }
         userEmail: { type: string, nullable: true }
+        userAvatarUrl:
+          $ref: "#/components/schemas/AvatarUrl"
+          nullable: true
         conversationId: { type: string, format: uuid, nullable: true }
         runId: { type: string, format: uuid, nullable: true }
         channelId: { type: string, format: uuid, nullable: true }
@@ -2300,13 +2458,17 @@ components:
           format: double
           nullable: true
           description: USD. Null when the price is unknown or the provider reported no usage.
-        streamed: { type: boolean }
         firstTokenMs:
           type: integer
           format: int64
           nullable: true
           description: Request start to the first content, reasoning or tool-call delta.
-        durationMs: { type: integer, format: int64 }
+        durationMs:
+          type: integer
+          format: int64
+          description: |
+            Request start to its end. 0 when the provider turned the request
+            down before any time was spent on it.
 
     UsageSummary:
       type: object
@@ -2336,15 +2498,18 @@ components:
 
     UsageLogPage:
       type: object
-      required: [items, total, page, limit, summary]
+      required: [items, limit, summary]
       properties:
         items:
           type: array
           items: { $ref: "#/components/schemas/UsageLog" }
-        total: { type: integer, format: int64 }
-        page: { type: integer }
+        nextCursor:
+          type: string
+          description: Absent on the last page.
         limit: { type: integer }
-        summary: { $ref: "#/components/schemas/UsageSummary" }
+        summary:
+          $ref: "#/components/schemas/UsageSummary"
+          description: Of every request the filters match, `requests` being their number.
 
     Username:
       type: string
@@ -3083,6 +3248,9 @@ components:
         userId: { type: string, format: uuid, nullable: true }
         userName: { type: string, nullable: true }
         userEmail: { type: string, nullable: true }
+        userAvatarUrl:
+          $ref: "#/components/schemas/AvatarUrl"
+          nullable: true
         requests: { type: integer, format: int64 }
         cost: { type: number, format: double }
 

@@ -324,12 +324,13 @@ const getDashboardUsers = `-- name: GetDashboardUsers :many
 SELECT l.user_id,
        u.name                                                    AS user_name,
        u.email                                                   AS user_email,
+       u.avatar_key                                              AS user_avatar_key,
        count(*)::bigint                                          AS requests,
        coalesce(sum(l.cost), 0)::double precision                AS cost
 FROM usage_logs l
          LEFT JOIN users u ON u.id = l.user_id
 WHERE l.created_at >= $1::timestamptz
-GROUP BY l.user_id, u.name, u.email
+GROUP BY l.user_id, u.name, u.email, u.avatar_key
 ORDER BY coalesce(sum(l.cost), 0) DESC, count(*) DESC, l.user_id
 LIMIT $2
 `
@@ -340,11 +341,12 @@ type GetDashboardUsersParams struct {
 }
 
 type GetDashboardUsersRow struct {
-	UserID    *uuid.UUID `json:"user_id"`
-	UserName  *string    `json:"user_name"`
-	UserEmail *string    `json:"user_email"`
-	Requests  int64      `json:"requests"`
-	Cost      float64    `json:"cost"`
+	UserID        *uuid.UUID `json:"user_id"`
+	UserName      *string    `json:"user_name"`
+	UserEmail     *string    `json:"user_email"`
+	UserAvatarKey *string    `json:"user_avatar_key"`
+	Requests      int64      `json:"requests"`
+	Cost          float64    `json:"cost"`
 }
 
 // Who spends the most. Requests with no owner (a deleted account) group as one.
@@ -361,6 +363,7 @@ func (q *Queries) GetDashboardUsers(ctx context.Context, arg GetDashboardUsersPa
 			&i.UserID,
 			&i.UserName,
 			&i.UserEmail,
+			&i.UserAvatarKey,
 			&i.Requests,
 			&i.Cost,
 		); err != nil {

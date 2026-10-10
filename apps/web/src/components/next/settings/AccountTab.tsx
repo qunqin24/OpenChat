@@ -1,11 +1,12 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { MIN_PASSWORD_LENGTH, validateEmail, validateName } from '@/components/auth/validation'
 import { UserAvatar } from '@/components/user-avatar'
 import { isAuthFieldError, type AuthErrorKey } from '@/features/auth'
-import { useChangePassword, useSession, useUpdateProfile } from '@/features/auth/use-auth'
+import { useChangePassword, useSession, useSetAvatar, useUpdateProfile } from '@/features/auth/use-auth'
+import { AVATAR_TYPES, AvatarFailed } from '@/lib/avatar'
 import { Field } from './Field'
 
 /**
@@ -13,16 +14,17 @@ import { Field } from './Field'
  * POST /auth/password) — the ones that cannot reach the role. As in Open WebUI
  * the account is a block of avatar and fields with one Save at the foot, and
  * the password is a section that folds away. Validation is written by hand, as
- * on the sign-in pages. There are no pictures to upload: the avatar is the
- * first letter of the name.
+ * on the sign-in pages. The avatar is the first letter of the name until a
+ * picture is uploaded; the picture has its own endpoint and takes effect at
+ * once, so it is not one of the things Save below is for.
  */
 export function AccountTab() {
   const { data: session } = useSession()
   if (!session) return null
-  return <Profile key={session.id} id={session.id} name={session.name} email={session.email} />
+  return <Profile key={session.id} id={session.id} name={session.name} email={session.email} avatarUrl={session.avatarUrl} />
 }
 
-function Profile({ id, name, email }: { id: string; name: string; email: string }) {
+function Profile({ id, name, email, avatarUrl }: { id: string; name: string; email: string; avatarUrl?: string }) {
   const { t } = useTranslation()
   const update = useUpdateProfile()
   const [draft, setDraft] = useState({ name, email })
@@ -61,7 +63,7 @@ function Profile({ id, name, email }: { id: string; name: string; email: string 
         </div>
 
         <div className="n-settings-profile">
-          <UserAvatar id={id} name={name} email={email} className="size-16 text-2xl" />
+          <Avatar id={id} name={name} email={email} src={avatarUrl} />
           <div className="n-settings-profile-fields">
             <Field
               label={t('settings.account.name')}
@@ -82,6 +84,8 @@ function Profile({ id, name, email }: { id: string; name: string; email: string 
           </div>
         </div>
 
+        <p className="n-settings-help">{t('settings.account.avatar-hint')}</p>
+
         <hr className="n-settings-rule" />
         <Password />
       </div>
@@ -92,6 +96,63 @@ function Profile({ id, name, email }: { id: string; name: string; email: string 
         </button>
       </div>
     </form>
+  )
+}
+
+/**
+ * The account's picture with the two things to do to it. Choosing a file
+ * sends it at once (cut to a square first, lib/avatar.ts); the account then has
+ * the new picture everywhere it is shown.
+ */
+function Avatar({ id, name, email, src }: { id: string; name: string; email: string; src?: string }) {
+  const { t } = useTranslation()
+  const set = useSetAvatar()
+  const input = useRef<HTMLInputElement>(null)
+
+  const choose = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    // Reset, so choosing the same file again (after removing it) still fires.
+    event.target.value = ''
+    if (!file) return
+    set.mutate(file, {
+      onSuccess: () => toast.success(t('settings.account.avatar-saved')),
+      onError: (error) => {
+        const reason = error instanceof AvatarFailed ? error.reason : 'failed'
+        toast.error(t(`settings.account.avatar-${reason}`))
+      },
+    })
+  }
+
+  return (
+    <div className="n-settings-avatar">
+      <UserAvatar id={id} name={name} email={email} src={src} className="size-16 text-2xl" />
+      <input
+        ref={input}
+        type="file"
+        hidden
+        accept={AVATAR_TYPES.join(',')}
+        aria-label={t('settings.account.avatar')}
+        onChange={choose}
+      />
+      <button type="button" className="n-settings-soft is-small" disabled={set.isPending} onClick={() => input.current?.click()}>
+        {t(src ? 'settings.account.avatar-change' : 'settings.account.avatar-upload')}
+      </button>
+      {src && (
+        <button
+          type="button"
+          className="n-settings-toggle"
+          disabled={set.isPending}
+          onClick={() =>
+            set.mutate(null, {
+              onSuccess: () => toast.success(t('settings.account.avatar-removed')),
+              onError: () => toast.error(t('settings.account.avatar-failed')),
+            })
+          }
+        >
+          {t('settings.account.avatar-remove')}
+        </button>
+      )}
+    </div>
   )
 }
 

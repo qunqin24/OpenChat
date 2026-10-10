@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/qunqin/openchat/apps/server/internal/agent"
 	"github.com/qunqin/openchat/apps/server/internal/auth"
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 )
@@ -267,7 +268,11 @@ func TestListMessagesFollowsTheBranchShown(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := &Server{pool: pool, q: q}
+	// Switching announces itself to the conversation's followers, so the
+	// server has a runner (that never starts one here).
+	runner := agent.NewRunner(pool, agent.NewHub(), NewModelResolver(pool), nil, agent.Options{})
+	t.Cleanup(func() { _ = runner.Shutdown(context.Background()) })
+	server := &Server{pool: pool, q: q, runner: runner}
 	page := func(before *string, limit int) MessagePage {
 		t.Helper()
 		req := httptest.NewRequest(http.MethodGet, "/", nil)

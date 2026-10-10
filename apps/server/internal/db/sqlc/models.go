@@ -556,6 +556,7 @@ type User struct {
 	InstructionsStyle string             `json:"instructions_style"`
 	MemoryEnabled     bool               `json:"memory_enabled"`
 	MemoryLearn       bool               `json:"memory_learn"`
+	AvatarKey         *string            `json:"avatar_key"`
 }
 
 type UserMemory struct {

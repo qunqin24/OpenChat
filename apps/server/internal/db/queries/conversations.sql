@@ -46,6 +46,14 @@ WHERE id = sqlc.arg('id')
   AND user_id = sqlc.arg('user_id')
   AND deleted_at IS NULL;
 
+-- name: SoftDeleteAllConversations :execrows
+-- Everything the user has, temporary chats included, in one statement. The
+-- owner is the only filter there is: nobody else's rows can be reached from here.
+UPDATE conversations
+SET deleted_at = now()
+WHERE user_id = sqlc.arg('user_id')
+  AND deleted_at IS NULL;
+
 -- name: SetConversationModel :one
 -- The model a conversation's next run uses. Remembered per conversation so a
 -- reload, or another device, continues with the same one.

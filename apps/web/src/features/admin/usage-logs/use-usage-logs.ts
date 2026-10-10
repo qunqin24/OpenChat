@@ -40,28 +40,34 @@ function dayStart(day: string, plusDays = 0): string | undefined {
  */
 export const usageLogKeys = {
   all: ['admin', 'usage-logs'] as const,
-  page: (page: number, limit: number, filters: UsageFilters) =>
-    [...usageLogKeys.all, page, limit, filters] as const,
+  page: (cursor: string | undefined, limit: number, filters: UsageFilters) =>
+    [...usageLogKeys.all, cursor ?? null, limit, filters] as const,
 }
 
+/**
+ * One page of the ledger, newest first. Pages are reached by cursor: the first
+ * has none, and each page says where the next begins (`nextCursor`). The cursor
+ * only means something with the filters it was issued under, so they are in
+ * the key beside it.
+ */
 export function useUsageLogs({
-  page,
+  cursor,
   limit,
   filters,
 }: {
-  page: number
+  cursor: string | undefined
   limit: number
   filters: UsageFilters
 }) {
   return useQuery({
-    queryKey: usageLogKeys.page(page, limit, filters),
+    queryKey: usageLogKeys.page(cursor, limit, filters),
     queryFn: async ({ signal }) =>
       unwrap(
         await api.GET('/admin/usage-logs', {
           params: {
             query: {
-              page,
               limit,
+              ...(cursor ? { cursor } : {}),
               ...(filters.userId ? { userId: filters.userId } : {}),
               ...(filters.model ? { model: filters.model } : {}),
               ...(filters.channelId ? { channelId: filters.channelId } : {}),

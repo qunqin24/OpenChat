@@ -28,6 +28,8 @@ type Backend interface {
 	ObjectURL(key string) string
 	Size(ctx context.Context, key string) (int64, error)
 	Read(ctx context.Context, key string, limit int64) ([]byte, error)
+	// Delete removes an object. One that is not there is not an error.
+	Delete(ctx context.Context, key string) error
 }
 
 var (

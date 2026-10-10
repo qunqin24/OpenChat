@@ -125,3 +125,20 @@ UPDATE users
 SET password_hash = sqlc.arg('password_hash'),
     updated_at    = now()
 WHERE id = sqlc.arg('id');
+
+-- name: SetUserAvatar :one
+-- The account's picture, or NULL to go back to the initial. Narrower than
+-- UpdateOwnProfile on purpose: the picture is its own endpoint, with its own
+-- checks, and the profile form has no business with it.
+UPDATE users
+SET avatar_key = sqlc.narg('avatar_key')::text,
+    updated_at = now()
+WHERE id = sqlc.arg('id')
+RETURNING *;
+
+-- name: GetUserByAvatarKey :one
+-- Who a stored picture belongs to: the signed read URL of a locally kept file
+-- is served to anyone holding it, and this is what says the key is a picture.
+SELECT *
+FROM users
+WHERE avatar_key = $1;

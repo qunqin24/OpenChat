@@ -18,6 +18,8 @@ type fakeS3 struct {
 	name  string
 	mu    sync.Mutex
 	blobs map[string][]byte
+	// deleteErr, when set, is what Delete fails with.
+	deleteErr error
 }
 
 func newFakeS3(name string) *fakeS3 { return &fakeS3{name: name, blobs: map[string][]byte{}} }
@@ -50,6 +52,16 @@ func (f *fakeS3) Read(_ context.Context, key string, _ int64) ([]byte, error) {
 		return nil, errors.New("no such key")
 	}
 	return data, nil
+}
+
+func (f *fakeS3) Delete(_ context.Context, key string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.deleteErr != nil {
+		return f.deleteErr
+	}
+	delete(f.blobs, key)
+	return nil
 }
 
 // newTestSwitch is a Switch whose S3 side is the returned fake; a bucket named
@@ -286,10 +298,10 @@ func TestLocalHasAndDelete(t *testing.T) {
 	if !l.Has("uploads/a.png") || l.Has("uploads") {
 		t.Error("Has is wrong for a file or a directory")
 	}
-	if err := l.Delete("uploads/a.png"); err != nil || l.Has("uploads/a.png") {
+	if err := l.Delete(context.Background(), "uploads/a.png"); err != nil || l.Has("uploads/a.png") {
 		t.Errorf("Delete = %v", err)
 	}
-	if err := l.Delete("uploads/a.png"); err != nil {
+	if err := l.Delete(context.Background(), "uploads/a.png"); err != nil {
 		t.Errorf("Delete of a missing object = %v", err)
 	}
 }

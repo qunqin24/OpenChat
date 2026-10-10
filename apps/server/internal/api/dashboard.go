@@ -126,7 +126,8 @@ func (s *Server) GetAdminDashboard(w http.ResponseWriter, r *http.Request, param
 	}
 	for _, u := range users {
 		out.Users = append(out.Users, DashboardUser{
-			UserId: u.UserID, UserName: u.UserName, UserEmail: u.UserEmail, Requests: u.Requests, Cost: u.Cost,
+			UserId: u.UserID, UserName: u.UserName, UserEmail: u.UserEmail, UserAvatarUrl: s.avatarURL(ctx, u.UserAvatarKey),
+			Requests: u.Requests, Cost: u.Cost,
 		})
 	}
 	for _, e := range errs {

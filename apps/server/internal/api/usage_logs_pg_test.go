@@ -182,8 +182,8 @@ func TestUsageLedgerEndToEnd(t *testing.T) {
 	// The chat request: priced from the catalogue, with the owner's name and
 	// the channel's, the model the provider served, and a first-token time.
 	code, page := get(adminCookie, url.Values{"model": {chatModel}, "kind": {"chat"}})
-	if code != http.StatusOK || len(page.Items) != 1 || page.Total != 1 {
-		t.Fatalf("chat rows: %d, %d items, total %d", code, len(page.Items), page.Total)
+	if code != http.StatusOK || len(page.Items) != 1 || page.Summary.Requests != 1 {
+		t.Fatalf("chat rows: %d, %d items, total %d", code, len(page.Items), page.Summary.Requests)
 	}
 	row := page.Items[0]
 	if row.Status != UsageStatus("ok") || row.Kind != UsageKind("chat") || row.Model != chatModel || row.ServedModel != chatModel+"-served" {
@@ -249,28 +249,31 @@ func TestUsageLedgerEndToEnd(t *testing.T) {
 
 	// Filters combine and are scoped by the other columns.
 	_, byUser := get(adminCookie, url.Values{"userId": {member.ID.String()}})
-	if byUser.Total != 1 || byUser.Items[0].Model != badModel {
+	if byUser.Summary.Requests != 1 || byUser.Items[0].Model != badModel {
 		t.Errorf("by user: %+v", byUser)
 	}
 	_, byChannel := get(adminCookie, url.Values{"channelId": {channel.ID.String()}, "status": {"ok"}})
-	if byChannel.Total != 2 {
-		t.Errorf("by channel and status: %d, want 2", byChannel.Total)
+	if byChannel.Summary.Requests != 2 {
+		t.Errorf("by channel and status: %d, want 2", byChannel.Summary.Requests)
 	}
 	_, byTime := get(adminCookie, url.Values{"channelId": {channel.ID.String()}, "to": {time.Now().Add(-time.Hour).Format(time.RFC3339)}})
-	if byTime.Total != 0 || len(byTime.Items) != 0 {
+	if byTime.Summary.Requests != 0 || len(byTime.Items) != 0 {
 		t.Errorf("before it all: %+v", byTime)
 	}
 	_, inRange := get(adminCookie, url.Values{"channelId": {channel.ID.String()},
 		"from": {time.Now().Add(-time.Hour).Format(time.RFC3339)}, "to": {time.Now().Add(time.Hour).Format(time.RFC3339)}})
-	if inRange.Total != 3 {
-		t.Errorf("in range: %d, want 3", inRange.Total)
+	if inRange.Summary.Requests != 3 {
+		t.Errorf("in range: %d, want 3", inRange.Summary.Requests)
 	}
 
-	// Paging: newest first, the total and summary cover every page.
-	_, first := get(adminCookie, url.Values{"channelId": {channel.ID.String()}, "limit": {"2"}, "page": {"1"}})
-	_, second := get(adminCookie, url.Values{"channelId": {channel.ID.String()}, "limit": {"2"}, "page": {"2"}})
-	if first.Total != 3 || len(first.Items) != 2 || len(second.Items) != 1 || second.Page != 2 || second.Summary.Requests != 3 {
-		t.Fatalf("paging: %d + %d items, total %d, page %d", len(first.Items), len(second.Items), first.Total, second.Page)
+	// Paging: newest first, by cursor, and the summary covers every page.
+	_, first := get(adminCookie, url.Values{"channelId": {channel.ID.String()}, "limit": {"2"}})
+	if first.NextCursor == nil {
+		t.Fatalf("a first page of 2 of 3 has no next cursor: %+v", first)
+	}
+	_, second := get(adminCookie, url.Values{"channelId": {channel.ID.String()}, "limit": {"2"}, "cursor": {*first.NextCursor}})
+	if first.Summary.Requests != 3 || len(first.Items) != 2 || len(second.Items) != 1 || second.NextCursor != nil || second.Summary.Requests != 3 {
+		t.Fatalf("paging: %d + %d items, totals %d and %d", len(first.Items), len(second.Items), first.Summary.Requests, second.Summary.Requests)
 	}
 	all := append(append([]UsageLog{}, first.Items...), second.Items...)
 	for i := 1; i < len(all); i++ {

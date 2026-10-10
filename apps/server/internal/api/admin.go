@@ -47,7 +47,7 @@ func (s *Server) ListUsers(w http.ResponseWriter, r *http.Request, params ListUs
 
 	items := make([]User, 0, len(rows))
 	for _, row := range rows {
-		items = append(items, toUser(row))
+		items = append(items, s.user(r.Context(), row))
 	}
 
 	httpx.JSON(w, http.StatusOK, UserPage{
@@ -109,7 +109,7 @@ func (s *Server) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.JSON(w, http.StatusCreated, toUser(user))
+	httpx.JSON(w, http.StatusCreated, s.user(r.Context(), user))
 }
 
 func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, userId openapi_types.UUID) {
@@ -229,7 +229,7 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, userId opena
 		}
 	}
 
-	httpx.JSON(w, http.StatusOK, toUser(updated))
+	httpx.JSON(w, http.StatusOK, s.user(r.Context(), updated))
 }
 
 // maxBulkUsers mirrors the contract's cap on one request.

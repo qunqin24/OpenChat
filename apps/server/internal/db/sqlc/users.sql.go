@@ -15,7 +15,7 @@ const adminCreateUser = `-- name: AdminCreateUser :one
 INSERT INTO users (email, name, password_hash, role, disabled_at)
 VALUES ($1, $2, $3, $4,
         CASE WHEN $5::boolean THEN now() ELSE NULL END)
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key
 `
 
 type AdminCreateUserParams struct {
@@ -51,6 +51,7 @@ func (q *Queries) AdminCreateUser(ctx context.Context, arg AdminCreateUserParams
 		&i.InstructionsStyle,
 		&i.MemoryEnabled,
 		&i.MemoryLearn,
+		&i.AvatarKey,
 	)
 	return i, err
 }
@@ -68,7 +69,7 @@ SET name          = COALESCE($1::text, name),
                         END,
     updated_at    = now()
 WHERE id = $6
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key
 `
 
 type AdminUpdateUserParams struct {
@@ -109,6 +110,7 @@ func (q *Queries) AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams
 		&i.InstructionsStyle,
 		&i.MemoryEnabled,
 		&i.MemoryLearn,
+		&i.AvatarKey,
 	)
 	return i, err
 }
@@ -195,7 +197,7 @@ func (q *Queries) CountUsersFiltered(ctx context.Context, search *string) (int64
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key
 FROM users
 WHERE id = $1
 `
@@ -217,12 +219,43 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.InstructionsStyle,
 		&i.MemoryEnabled,
 		&i.MemoryLearn,
+		&i.AvatarKey,
+	)
+	return i, err
+}
+
+const getUserByAvatarKey = `-- name: GetUserByAvatarKey :one
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key
+FROM users
+WHERE avatar_key = $1
+`
+
+// Who a stored picture belongs to: the signed read URL of a locally kept file
+// is served to anyone holding it, and this is what says the key is a picture.
+func (q *Queries) GetUserByAvatarKey(ctx context.Context, avatarKey *string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByAvatarKey, avatarKey)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PasswordHash,
+		&i.Role,
+		&i.DisabledAt,
+		&i.LastSeenAt,
+		&i.InstructionsAbout,
+		&i.InstructionsStyle,
+		&i.MemoryEnabled,
+		&i.MemoryLearn,
+		&i.AvatarKey,
 	)
 	return i, err
 }
 
 const getUserByLogin = `-- name: GetUserByLogin :one
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key
 FROM users
 WHERE lower(email) = lower($1::text)
    OR lower(name) = lower($1::text)
@@ -255,12 +288,13 @@ func (q *Queries) GetUserByLogin(ctx context.Context, identifier string) (User, 
 		&i.InstructionsStyle,
 		&i.MemoryEnabled,
 		&i.MemoryLearn,
+		&i.AvatarKey,
 	)
 	return i, err
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key
 FROM users
 WHERE ($1::text IS NULL
     OR email ILIKE '%' || $1::text || '%'
@@ -300,6 +334,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.InstructionsStyle,
 			&i.MemoryEnabled,
 			&i.MemoryLearn,
+			&i.AvatarKey,
 		); err != nil {
 			return nil, err
 		}
@@ -312,7 +347,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 }
 
 const listUsersByIDs = `-- name: ListUsersByIDs :many
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key
 FROM users
 WHERE id = ANY ($1::uuid[])
 `
@@ -340,6 +375,7 @@ func (q *Queries) ListUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]User, 
 			&i.InstructionsStyle,
 			&i.MemoryEnabled,
 			&i.MemoryLearn,
+			&i.AvatarKey,
 		); err != nil {
 			return nil, err
 		}
@@ -357,7 +393,7 @@ VALUES ($1, $2, $3,
         CASE WHEN (SELECT count(*) FROM users) = 0
                  THEN 'admin'::user_role
              ELSE 'user'::user_role END)
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key
 `
 
 type RegisterUserParams struct {
@@ -387,6 +423,45 @@ func (q *Queries) RegisterUser(ctx context.Context, arg RegisterUserParams) (Use
 		&i.InstructionsStyle,
 		&i.MemoryEnabled,
 		&i.MemoryLearn,
+		&i.AvatarKey,
+	)
+	return i, err
+}
+
+const setUserAvatar = `-- name: SetUserAvatar :one
+UPDATE users
+SET avatar_key = $1::text,
+    updated_at = now()
+WHERE id = $2
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key
+`
+
+type SetUserAvatarParams struct {
+	AvatarKey *string   `json:"avatar_key"`
+	ID        uuid.UUID `json:"id"`
+}
+
+// The account's picture, or NULL to go back to the initial. Narrower than
+// UpdateOwnProfile on purpose: the picture is its own endpoint, with its own
+// checks, and the profile form has no business with it.
+func (q *Queries) SetUserAvatar(ctx context.Context, arg SetUserAvatarParams) (User, error) {
+	row := q.db.QueryRow(ctx, setUserAvatar, arg.AvatarKey, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PasswordHash,
+		&i.Role,
+		&i.DisabledAt,
+		&i.LastSeenAt,
+		&i.InstructionsAbout,
+		&i.InstructionsStyle,
+		&i.MemoryEnabled,
+		&i.MemoryLearn,
+		&i.AvatarKey,
 	)
 	return i, err
 }
@@ -408,7 +483,7 @@ SET name       = COALESCE($1::text, name),
     email      = COALESCE($2::text, email),
     updated_at = now()
 WHERE id = $3
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key
 `
 
 type UpdateOwnProfileParams struct {
@@ -437,6 +512,7 @@ func (q *Queries) UpdateOwnProfile(ctx context.Context, arg UpdateOwnProfilePara
 		&i.InstructionsStyle,
 		&i.MemoryEnabled,
 		&i.MemoryLearn,
+		&i.AvatarKey,
 	)
 	return i, err
 }

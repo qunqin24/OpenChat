@@ -79,6 +79,16 @@ FROM (SELECT *
       LIMIT sqlc.arg('row_limit')) recent
 ORDER BY created_at, id;
 
+-- name: ListTranscript :many
+-- The branch shown, oldest first and whole, for an export. Tool results are
+-- left out: they are the model's working, and some are whole web pages.
+SELECT *
+FROM messages
+WHERE messages.conversation_id = sqlc.arg('conversation_id')
+  AND messages.id IN (SELECT conversation_transcript(sqlc.arg('conversation_id')))
+  AND messages.role <> 'tool'
+ORDER BY created_at, id;
+
 -- name: GetCurrentInput :one
 -- The conversation's last user message on the branch shown: the one a
 -- regenerated answer answers, and where a new message is appended.
