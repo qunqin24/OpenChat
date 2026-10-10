@@ -66,6 +66,7 @@ const (
 	resultBudget      = "This tool call was not executed: the tool call limit for this reply has been reached. Answer with what you have."
 	resultToolFailed  = "The tool failed unexpectedly."
 	resultUnavailable = "This tool is no longer available."
+	finalRoundNote    = "The tool call limit for this reply has been reached, and tools are now disabled. Do not call any tools. Answer the user now in text, using what you have already found; if something could not be done, say what is missing."
 	resultOneAsk      = "This ask_user call was not executed and the user never saw it: a reply can carry only one ask_user call, and an earlier call in this reply is the one the user is answering. Do not call ask_user again for this. Next time, put all of your questions (up to four) together in a single ask_user call."
 )
 
@@ -347,6 +348,11 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 	final := ex.cp.Round >= r.opts.MaxToolRounds
 	if final && len(offered) > 0 {
 		options.ToolChoice = llm.ToolChoiceNone
+		// Said in words too, as OpenCode does at its step limit. A model told
+		// only by the tool choice may still write a call — as text, which is
+		// how DeepSeek's markup ended up in an answer — where one told plainly
+		// answers. A note on this request alone, never stored.
+		messages = append(messages, llm.TextMessage(llm.RoleUser, finalRoundNote))
 	}
 
 	stream := newPartialStream(ex, ex.cp.Attempt, r.opts.PartialInterval)

@@ -622,6 +622,15 @@ func TestRunLastRoundKeepsTheToolsAndForbidsCalling(t *testing.T) {
 	if first.Messages[0].Text() != last.Messages[0].Text() {
 		t.Errorf("system prompt changed between rounds: %q then %q", first.Messages[0].Text(), last.Messages[0].Text())
 	}
+	// And it is told so in words, after everything that came before.
+	if note := last.Messages[len(last.Messages)-1]; note.Role != llm.RoleUser || note.Text() != finalRoundNote {
+		t.Errorf("last request ends with %s %q, want the final-round note", note.Role, note.Text())
+	}
+	for _, m := range first.Messages {
+		if m.Text() == finalRoundNote {
+			t.Error("the note was sent before the last round")
+		}
+	}
 }
 
 // A model that calls a tool on the last round regardless of the choice it was

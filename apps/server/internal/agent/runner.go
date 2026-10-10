@@ -58,8 +58,10 @@ type Options struct {
 	// SystemPrompt renders the system prompt for a request made at now.
 	SystemPrompt func(ctx context.Context, now time.Time, tools []Tool) string
 	// MaxToolRounds bounds the tool rounds of one run. The request after the
-	// last round forbids tool calls (tool choice none, same tool list), so the
-	// model has to answer.
+	// last round forbids tool calls (tool choice none, same tool list) and
+	// tells the model so, and it has to answer. Generous by default: a search
+	// that needs a dozen pages read should not be cut short, and the bound is
+	// there for a model stuck in a loop.
 	MaxToolRounds int
 	// MaxRetries is how many times a failed request is retried.
 	MaxRetries int
@@ -85,7 +87,7 @@ func (o Options) withDefaults() Options {
 		o.SystemPrompt = func(context.Context, time.Time, []Tool) string { return "" }
 	}
 	if o.MaxToolRounds <= 0 {
-		o.MaxToolRounds = 8
+		o.MaxToolRounds = 100
 	}
 	if o.MaxRetries < 0 {
 		o.MaxRetries = 0
