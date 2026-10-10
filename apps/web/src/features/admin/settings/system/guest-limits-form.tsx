@@ -4,21 +4,19 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { z } from 'zod'
+import type { z } from 'zod'
 
 import { Button } from '@/components/shadcn/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/shadcn/ui/form'
 import { Input } from '@/components/shadcn/ui/input'
 import { adminKeys } from '@/features/admin/use-admin'
 import { api, unwrap } from '@/lib/api'
-
-/** The most the limits can be set to; the server's (internal/api/guest.go) checks them too. */
-const MAX_HOURLY = 100_000
-const MAX_DAILY = 10_000_000
+import { guestLimitsSchema } from './guest-limits-schema'
 
 /**
  * What a guest may ask of the model: requests per network address per hour, and
- * in all per day. Zero is no limit - the default - for both. A guest has no
+ * in all per day. Zero is no limit - the default - for both, and has to be typed:
+ * an empty box is an error, not a 0 (guest-limits-schema.ts). A guest has no
  * account to count the requests against, so the address and the total are what
  * there is.
  */
@@ -26,13 +24,11 @@ export function GuestLimitsForm({ settings }: { settings: SystemSettings }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
-  const whole = (max: number) =>
-    z.coerce
-      .number({ error: t('admin.settings.system.guest-limits.whole') })
-      .int(t('admin.settings.system.guest-limits.whole'))
-      .min(0, t('admin.settings.system.guest-limits.range', { min: 0, max }))
-      .max(max, t('admin.settings.system.guest-limits.range', { min: 0, max }))
-  const schema = z.object({ guestHourlyLimit: whole(MAX_HOURLY), guestDailyLimit: whole(MAX_DAILY) })
+  const schema = guestLimitsSchema({
+    required: t('admin.settings.system.guest-limits.required'),
+    whole: t('admin.settings.system.guest-limits.whole'),
+    range: (max) => t('admin.settings.system.guest-limits.range', { min: 0, max }),
+  })
   type Values = z.infer<typeof schema>
 
   const form = useForm<z.input<typeof schema>, unknown, Values>({

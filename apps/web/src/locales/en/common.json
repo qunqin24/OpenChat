@@ -722,6 +722,7 @@
           "unit": "requests",
           "save": "Save",
           "saved": "Guest limits saved",
+          "required": "Enter a number; 0 means no limit",
           "whole": "Enter a whole number",
           "range": "Between {{min}} and {{max}}; 0 is unlimited"
         }
