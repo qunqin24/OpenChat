@@ -265,3 +265,18 @@ func TestBuildContextKeepsAnAnswerAndClosesAnOpenQuestion(t *testing.T) {
 		t.Fatalf("answer = %q", text)
 	}
 }
+
+// An answer written before leaked tool-call markup was hidden as it streamed is
+// sent back without it: the model would learn to write more of it.
+func TestContextDropsLeakedToolMarkup(t *testing.T) {
+	got, err := BuildContext([]sqlc.Message{
+		row(sqlc.MessageRoleUser, "", llm.TextPart{Text: "today's paper?"}),
+		row(sqlc.MessageRoleAssistant, "stop", llm.TextPart{Text: "Here is what I found.\n\n<｜DSML｜ calls>\n<｜DSML｜ invoke name=\"web_search\"></｜DSML｜ invoke>\n</｜DSML｜ calls>"}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[1].Text() != "Here is what I found." {
+		t.Fatalf("context: %+v", got)
+	}
+}

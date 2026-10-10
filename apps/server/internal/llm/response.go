@@ -63,6 +63,11 @@ type ModelResponse struct {
 
 	FinishReason FinishReason
 
+	// LeakedToolCalls is set when tool-call markup the model meant as calls
+	// came back as text and was cut from it (HideToolMarkup): the answer did
+	// not finish.
+	LeakedToolCalls bool
+
 	// RawFinishReason is the provider's own spelling. Our mapping is lossy on
 	// purpose; the original is cheap to keep and impossible to reconstruct.
 	RawFinishReason string

@@ -95,6 +95,8 @@ func BuildContext(rows []sqlc.Message) ([]llm.Message, error) {
 				continue
 			}
 			flush()
+			// Markup a model leaked as text would teach it to write more.
+			parts, _ = HideLeakedMarkup(parts)
 			msg := toLLMMessage(llm.RoleAssistant, parts)
 			if len(msg.Parts) == 0 {
 				continue

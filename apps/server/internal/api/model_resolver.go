@@ -57,7 +57,9 @@ func (m *ModelResolver) Client(ctx context.Context, channelID *uuid.UUID, modelI
 		return nil, err
 	}
 	wire, _ := wireForModel(ChannelType(channel.Type), channel.ApiFormat, modelID)
-	return &catalogShaped{inner: client, settings: settings, anthropic: wire == wireAnthropic}, nil
+	// Any model can leak its tool-call markup as text; DeepSeek's do (see
+	// llm.HideToolMarkup). It is hidden, never executed.
+	return &catalogShaped{inner: llm.HideToolMarkup(client), settings: settings, anthropic: wire == wireAnthropic}, nil
 }
 
 // A Messages API request is given max_tokens from the catalogue's output limit,

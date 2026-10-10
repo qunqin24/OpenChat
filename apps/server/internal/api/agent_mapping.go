@@ -33,6 +33,18 @@ func toMessage(row sqlc.Message, attachments []Attachment) Message {
 		// its plain text still shows.
 		slog.Error("decode message parts", "message_id", row.ID, "error", err)
 	} else {
+		if row.Role == sqlc.MessageRoleAssistant {
+			// An answer written before leaked markup was hidden as it streamed
+			// reads the way one written since does.
+			var leaked bool
+			if parts, leaked = agent.HideLeakedMarkup(parts); leaked {
+				m.Content = agent.PlainText(parts)
+				if row.StopReason == nil || *row.StopReason != agent.StopError {
+					stop, code := agent.StopError, agent.CodeToolMarkup
+					row.StopReason, m.ErrorCode = &stop, &code
+				}
+			}
+		}
 		m.Parts = toMessageParts(parts)
 	}
 	if row.StopReason != nil {

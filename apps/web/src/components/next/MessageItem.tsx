@@ -270,6 +270,7 @@ const ERROR_CODES = [
   'model_rate_limited',
   'context_too_long',
   'internal',
+  'tool_markup',
 ] as const
 
 function errorText(t: TFunction<'common'>, code?: string | null) {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,7 +26,35 @@ const (
 	CodeRateLimited    = "model_rate_limited"
 	CodeContextTooLong = "context_too_long"
 	CodeInternal       = "internal"
+	// CodeToolMarkup is an answer that wrote its tool calls out as text
+	// (llm.HideToolMarkup), which were cut from it: it did not finish.
+	CodeToolMarkup = "tool_markup"
 )
+
+// HideLeakedMarkup cuts leaked tool-call markup from an assistant row's text
+// parts, dropping any it empties, for rows written before the stream hid it.
+// leaked says whether there was any.
+func HideLeakedMarkup(parts []llm.Part) (out []llm.Part, leaked bool) {
+	out = make([]llm.Part, 0, len(parts))
+	for _, part := range parts {
+		text, ok := part.(llm.TextPart)
+		if !ok {
+			out = append(out, part)
+			continue
+		}
+		clean, found := llm.StripToolMarkup(text.Text)
+		if !found {
+			out = append(out, part)
+			continue
+		}
+		leaked = true
+		if strings.TrimSpace(clean) != "" {
+			text.Text = clean
+			out = append(out, text)
+		}
+	}
+	return out, leaked
+}
 
 // Texts a model reads in place of a result. English, because they are context
 // for a model, not text for a person.
@@ -409,8 +438,14 @@ func (ex *execution) responded(resp llm.ModelResponse, offered []Tool, final boo
 	stop := stopReason(resp.FinishReason, len(calls) > 0)
 
 	if len(calls) == 0 {
+		row := newRow{role: sqlc.MessageRoleAssistant, parts: parts, stop: stop, resp: &resp}
+		if resp.LeakedToolCalls {
+			// What the model meant to do next never happened: shown as an
+			// answer that did not finish, and kept out of the next request.
+			row.stop, row.code = StopError, CodeToolMarkup
+		}
 		return true, ex.commit(func(ctx context.Context, q *sqlc.Queries) ([]Event, *finish, error) {
-			msg, err := ex.appendMessage(ctx, q, newRow{role: sqlc.MessageRoleAssistant, parts: parts, stop: stop, resp: &resp})
+			msg, err := ex.appendMessage(ctx, q, row)
 			if err != nil {
 				return nil, nil, err
 			}
