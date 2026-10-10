@@ -2,7 +2,6 @@ import { Link } from '@tanstack/react-router'
 import {
   Braces,
   Brain,
-  ChevronRight,
   Paperclip,
   PlugZap,
   PowerOff,
@@ -16,6 +15,7 @@ import { ModelIcon } from '@/components/model-icon'
 import { Badge } from '@/components/shadcn/ui/badge'
 import { Button } from '@/components/shadcn/ui/button'
 import { Card } from '@/components/shadcn/ui/card'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/shadcn/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { formatCost, formatTokenLimit } from '../format'
 import { type CatalogModel } from '../use-catalog'
@@ -115,6 +115,26 @@ export function ModelCard({ model }: { model: CatalogModel }) {
             {model.modelId}
           </p>
         </div>
+        {/* A state, deliberately not a switch: offering a model is a fact about
+            a *channel's* model, so a control here would have to guess which of
+            the channels below it meant. The channel panel is where it changes. */}
+        <span
+          className={cn(
+            'inline-flex shrink-0 items-center gap-1.5 text-xs',
+            model.enabled ? 'text-foreground' : 'text-muted-foreground',
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className={cn(
+              'size-1.5 rounded-full',
+              model.enabled ? 'bg-emerald-500' : 'bg-muted-foreground/40',
+            )}
+          />
+          {/* No "not enabled" string exists in either language file, and the
+              users table's "Disabled" is the same word for the same state. */}
+          {model.enabled ? t('admin.models.enabled') : t('admin.users.disabled')}
+        </span>
       </div>
 
       {model.description && (
@@ -159,85 +179,65 @@ export function ModelCard({ model }: { model: CatalogModel }) {
         </dl>
       )}
 
-      {/* The channels are the caveat on the status below: a model whose only
+      {/* The channels are the caveat on the status above: a model whose only
           channel is switched off is not something this site can answer with,
-          however green its own switch looks in the channel panel. */}
-      <div className="mt-auto flex flex-wrap items-center gap-1.5 px-4 pt-4 text-xs">
-        {unserved ? (
-          <span className="text-muted-foreground inline-flex items-center gap-1.5">
-            <PlugZap className="size-3.5 shrink-0" aria-hidden="true" />
-            {t('admin.models.unreachable')}
-          </span>
-        ) : (
-          <>
-            <span className="text-muted-foreground shrink-0">{t('admin.models.via')}</span>
-            {channels.map((channel) => (
-              <Badge
-                key={channel.id}
-                variant={channel.enabled ? 'secondary' : 'outline'}
-                className={cn(
-                  'max-w-full font-normal',
-                  !channel.enabled && 'text-muted-foreground border-dashed',
-                )}
-                title={
-                  channel.enabled
-                    ? channel.name
-                    : `${channel.name} · ${t('admin.models.channel-disabled')}`
-                }
-              >
-                {!channel.enabled && <PowerOff aria-hidden="true" />}
-                <span className="truncate">{channel.name}</span>
-                {!channel.enabled && (
-                  <span className="shrink-0">· {t('admin.models.channel-disabled')}</span>
-                )}
-              </Badge>
-            ))}
-          </>
-        )}
-      </div>
-
-      {/* Where the switch used to be, and deliberately not a switch any more.
-          Offering a model is a fact about a *channel's* model, so a control here
-          would have to guess which of the channels above it meant — and would
-          mean something different on a card with one channel than on a card with
-          three. The state is stated, and the channel panel is where it changes.
-          The colours are the panel's own tokens, so this reads the same in both
-          themes without inventing a palette. */}
-      <div className="mt-4 flex items-center justify-between gap-2 border-t px-4 py-3">
-        <span className="inline-flex items-center gap-2 text-xs">
-          <span
-            aria-hidden="true"
-            className={cn(
-              'size-1.5 shrink-0 rounded-full',
-              model.enabled ? 'bg-primary' : 'bg-muted-foreground/40',
-            )}
-          />
-          <span className={cn(!model.enabled && 'text-muted-foreground')}>
-            {/* No "not enabled" string exists in either language file, and the
-                users table's "Disabled" is the same word for the same state. */}
-            {model.enabled ? t('admin.models.enabled') : t('admin.users.disabled')}
-          </span>
-        </span>
-
-        <div className="-me-2 flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <SlidersHorizontal aria-hidden="true" />
-            {t('admin.models.settings.open')}
-          </Button>
-          {!unserved && (
-            <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs">
-              <Link to="/admin/channels">
-                {t('admin.nav.channels')}
-                <ChevronRight aria-hidden="true" />
-              </Link>
-            </Button>
+          however green its own switch looks in the channel panel. Each one
+          leads to the channel panel, which is where offering a model changes —
+          so the card needs no separate link there. */}
+      <div className="mt-auto flex items-end justify-between gap-2 px-4 pt-4 pb-4">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs">
+          {unserved ? (
+            <span className="text-muted-foreground inline-flex items-center gap-1.5">
+              <PlugZap className="size-3.5 shrink-0" aria-hidden="true" />
+              {t('admin.models.unreachable')}
+            </span>
+          ) : (
+            <>
+              <span className="text-muted-foreground shrink-0">{t('admin.models.via')}</span>
+              {channels.map((channel) => (
+                <Badge
+                  key={channel.id}
+                  asChild
+                  variant={channel.enabled ? 'secondary' : 'outline'}
+                  className={cn(
+                    'max-w-full font-normal',
+                    !channel.enabled && 'text-muted-foreground border-dashed',
+                  )}
+                >
+                  <Link
+                    to="/admin/channels"
+                    title={
+                      channel.enabled
+                        ? channel.name
+                        : `${channel.name} · ${t('admin.models.channel-disabled')}`
+                    }
+                  >
+                    {!channel.enabled && <PowerOff aria-hidden="true" />}
+                    <span className="truncate">{channel.name}</span>
+                    {!channel.enabled && (
+                      <span className="shrink-0">· {t('admin.models.channel-disabled')}</span>
+                    )}
+                  </Link>
+                </Badge>
+              ))}
+            </>
           )}
         </div>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground -me-1.5 -mb-1 size-7 shrink-0"
+              aria-label={t('admin.models.settings.open')}
+              onClick={() => setSettingsOpen(true)}
+            >
+              <SlidersHorizontal aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{t('admin.models.settings.open')}</TooltipContent>
+        </Tooltip>
       </div>
 
       <ModelSettingsPanel model={model} open={settingsOpen} onOpenChange={setSettingsOpen} />
