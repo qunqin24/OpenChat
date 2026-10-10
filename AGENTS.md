@@ -71,9 +71,14 @@ grep -rn -- "--n-\|prism-next" apps/web/src/features/admin apps/web/src/componen
 ## 前端约定
 
 - 服务端数据用 TanStack Query（键在 `lib/query-keys.ts`、`features/admin/use-admin.ts`）；流式中间态和 UI 状态用 Zustand。流结束后让查询失效，重新拉取。查询键含筛选条件时加 `placeholderData: (previous) => previous`。
-- 路由守卫挂在无路径布局的 `beforeLoad`：`_authed.tsx` 要求登录，`admin.tsx` 要求管理员。
+- 路由守卫挂在无路径布局的 `beforeLoad`：`_authed.tsx` 要求登录，`admin.tsx` 要求管理员。会话用 `currentSession(queryClient)`（`features/auth/use-auth.ts`）取：5 分钟内查过的直接用，更老的重新问服务端（别用 `ensureQueryData`，它不管多旧都返回缓存，被停用的账号会一直半死不活）；重新问失败（断网）时退回上次的答案。
+- 会话在页面开着时失效（被停用、改了密码）靠 401 发现：`lib/query.ts` 的 `QueryCache`/`MutationCache` 把每个失败交给 `setErrorListener` 登记的监听者（`main.tsx` 里是 `leaveIfSessionExpired`，`lib/session-expired.ts`），不走缓存的调用（事件流）自己调 `reportError`。账号模式下的 401（`invalid_credentials` 除外——那是登录表单自己的错，而且认证接口抛的是 `AuthFieldError`）且页面此前认为已登录，就清缓存、清 chat store、清本地存的缓存，`replace` 到 `/login?redirect=…`；已在 `/login`、`/register` 不动，游客模式不管。事件流收到 401 就停止重连（重连永远是 401）。新写的不经查询缓存的网络调用，遇到 401 也要 `reportError`。
+- 换人要清干净：登录、注册成功和退出都 `queryClient.clear()` + `resetChatStore()` + `forgetQueryCache()`；`adoptQueryCache` 发现缓存属于别人（本页内存里的或上次存的）时，除会话外的查询全部移除（记忆、个性化、后台的也算）并重置 chat store。
 - 没有版本翻页器。改写和重新生成从点击起就把要删的行藏起来（store 的 `replacing`：`{from}` 是被改的提问及其后，`{after}` 是最后一条提问之后；`buildTurns` 用它），服务端接受后用 `truncateTranscript` 把这些行从缓存里去掉，再让 `replacing` 结束；run 的输入已在列表里（重新生成）时 `buildTurns` 也会藏掉它后面不属于这个 run 的行。
-- 对话记录从尾部分页：`GET .../messages` 首页是最新的一页（页内仍是旧→新），`before` 取更早的页；`hooks/use-messages.ts` 是 `useInfiniteQuery`（`pages[0]` 最新），`NextChat` 只渲染最后 20 个 turn，滚到顶部再多画 20 个，画到已加载的最旧处才请求更早一页。run 结束只用 `refreshNewestMessages` 重取最新一页并拼接，不要对该键 `invalidateQueries`（会按游标重下所有已展开的页）。
+- 对话记录从尾部分页：`GET .../messages` 首页是最新的一页（页内仍是旧→新），`before` 取更早的页；`hooks/use-messages.ts` 是 `useInfiniteQuery`（`pages[0]` 最新），`NextChat` 只渲染最后 20 个 turn，滚到顶部再多画 20 个，画到已加载的最旧处才请求更早一页。run 结束只用 `refreshNewestMessages` 重取最新一页并拼接（交接逻辑在 `lib/hand-over.ts`，有测试：只有刷新**确认成功**——`refreshConfirmed`，兜底的 `refetchQueries` 也要 `throwOnError`——之后才 `settle` 本地的 live 副本；失败时答案留在屏幕上，隔几秒重试，之后任何一次成功的刷新、重连后的 snapshot 都会放手），不要对该键 `invalidateQueries`（会按游标重下所有已展开的页）。
+- 发送：`outbox` 里的气泡由 `useSendMessage` 的 hook 级 `onError` 撤掉（调用级的 `mutate(…, { onError })` 在组件卸载后不执行，发完立刻切对话就会留下永远等回复的气泡）；空白页带过去的 `pendingPrompt` 走同一条路。运行中（`working`、`outbox`、`live` 在跑）不能再发：输入框的回车、`handleSend` 都挡掉，游客的 `runner.start` 对同一对话已有未结束的 run 直接 409 `conversation_busy`，不排队。
+- 对话标题：服务端和游客仓库都把没起名的对话叫 `New chat`（英文，不随语言），显示时一律经 `lib/titles.ts` 的 `displayTitle`/`useDisplayTitle`（侧栏、搜索、对话页顶、删除确认），它把空标题和 `New chat` 换成 `chat.untitled`；重命名框也以显示出来的名字起头。别直接渲染 `conversation.title`。
+- 脚本触发的滚动（`scrollTo`/`scrollBy` 的 `behavior`）用 `lib/motion.ts` 的 `smoothScrollBehavior()`，CSS 的 reduced-motion 管不到它。工具结果里来的链接（`ToolActivity`）只允许 `isHttpUrl`（`lib/urls.ts`）通过，和 GenUI 的链接一样。
 - 表格是服务端分页/筛选；`getRowId` 用记录 id；列译名同时放进 `meta.title`。
 - 游标分页的表格（使用日志）用 `DataTableCursorPagination`：游标只会往前，往回就是回到走过的游标，所以组件里留着已访问的游标栈，换筛选或每页行数就清空重来。
 - 管理后台的进度条挂在根（`AdminProgress`），只在目标路径在 `/admin` 下时才渲染——admin 布局在第一次从聊天进入时还没挂载，挂在布局里就晚了；聊天侧用自己就地的加载提示，不要给它加条。
@@ -104,17 +109,18 @@ grep -rn -- "--n-\|prism-next" apps/web/src/features/admin apps/web/src/componen
 
 ### 前端（`lib/guest/`）
 
-- 游客页面在 `/guest`、`/guest/chat/$conversationId`（`routes/guest*.tsx`，不在 `_authed` 下，只检查 `GET /guest/status`）。是否游客模式由根路由 `beforeLoad` 里的 `syncMode(pathname)` 决定（`lib/guest/mode.ts`），**不要**读 `window.location`，因为从登录页跳 `/guest` 时 loader 先于地址变化执行。两种模式共用查询键，所以切换时 `queryClient.clear()` 并清 chat store，进游客时还清 `query-persist`；游客数据从不写 localStorage。
+- 游客页面在 `/guest`、`/guest/chat/$conversationId`（`routes/guest*.tsx`，不在 `_authed` 下，只检查 `GET /guest/status`）。是否游客模式由根路由 `beforeLoad` 里的 `enterPath(pathname, preload)` 决定（`lib/guest/mode.ts`，有测试），**不要**读 `window.location`，因为从登录页跳 `/guest` 时 loader 先于地址变化执行。**预加载（`defaultPreload: 'intent'`，悬停链接）绝不改模式**：它不是导航，翻转会清掉游客的缓存和会话；另一种模式的页面干脆不预加载（`enterPath` 返回 false，根路由抛 `notFound()`），否则它的 loader 会把另一种模式的答案写进共用的缓存。两种模式共用查询键，所以切换时 `queryClient.clear()` 并清 chat store，进游客时还清 `query-persist`；游客数据从不写 localStorage。
 - 接缝是 `lib/api.ts` 的 `appFetch`：账号走网络；游客动态加载 `lib/guest` 并由它本地回答契约里的路由（`router.ts`：对话、消息、事件流、记忆、个性化、导出/删除全部、`/files`、`/models`、`/features`），不认识的转发网络。所以 hooks 和组件**不知道**自己在跟谁说话；`streamConversationEvents` 也接受 `fetch`。新增一个聊天用到的端点，要决定游客怎么答：本地服务（加到 `router.ts`），还是只在服务端（`/guest/*`）。
 - 对话规则是纯函数（`transcript.ts`：转录就是全部行按时间排、`deletedBy` 选出改写/重新生成要删的行、分页游标），和服务端 SQL 一一对应并有 vitest；记忆规则在 `memory.ts`（上限 100 条/200 字、重复、撤销只在没被改过时）。`repo.ts` 是读写，`storage.ts` 是接口（IndexedDB 实现 `idb.ts`，测试用内存实现）。**改了对话的规则，两边一起改**。改写和重新生成要等服务端接受了新 run（第一批到了）才在 `repo.runStarted` 里删旧行、旧 run 和不再被引用的文件，先写新的再删旧的；被拒绝则什么都不动。有分支的时代留下的数据（对话带 `currentInputId`）在第一次读取时由 `legacy.ts` 清成一条线，规则和服务端迁移一样：只留当时看得到的行，其余连文件删掉，最后才去掉标记，所以中途被打断会重来且结果相同。
-- 运行：`runner.ts` 建请求（`request.ts`，只带最近 300 行（有摘要时见下），文件按「最新优先、总共 20 MB」带字节，更早的只带名字和大小）、发 `/guest/runs`、**先落库再发布**每一批（所以前端收到 `run_finished` 去重取最新页时一定取得到），`guest_end` 之后才写记忆/快照/标题，下一次发送会等上一次的 `guest_end`（记忆快照要带上）。连接断了没有 `guest_end` 就记一条 `connection_lost` 的失败回复。事件由 `hub.ts` 本地造，页面重连时拿到和服务端一样的 snapshot。停止是 `POST /guest/runs/{id}/cancel`，流继续读到结束，保留已生成的部分。
+- 运行：`runner.ts` 建请求（`request.ts`，只带最近 300 行（有摘要时见下），文件按「最新优先、总共 20 MB」带字节，更早的只带名字和大小）、发 `/guest/runs`、**先落库再发布**每一批（所以前端收到 `run_finished` 去重取最新页时一定取得到），`guest_end` 之后才写记忆/快照/标题（记忆只应用 `memoryEvents`，即模型这次改的，且仅当那条记忆还是模型看到的样子——`before` 对得上；不要用服务端那份整表覆盖，它是 run 开始时的表，会删掉用户在回答期间新写的、复活刚删的。记忆的读写和这一步在仓库里串行，见 `MEMORIES`），同一对话一次只跑一个 run：上一个还没收到 `run_finished` 时再发是 409 `conversation_busy`（和服务端一样，不排队；`start` 里还有个 `starting` 集合挡住同一瞬间的两次），已经 finished 的只等它的 `guest_end`（记忆快照要带上）。连接断了没有 `guest_end` 就记一条 `connection_lost` 的失败回复；连失败都写不进（存储坏了）也要发一条合成的、版本更新的失败 `run_finished`，否则输入框永远是「停止」。服务端已接受 run 而浏览器存不下（`runStarted` 抛错）、或读流途中存储出错，都要 abort 请求，让服务端的 run 被取消。事件由 `hub.ts` 本地造，页面重连时拿到和服务端一样的 snapshot。停止是 `POST /guest/runs/{id}/cancel`，流继续读到结束，保留已生成的部分。
 - 游客的摘要跟着对话记录存（`StoredConversation.summary`），规则是纯函数 `summary.ts`（有 vitest）：`survivingSummary` 就是服务端外键级联的本地版——终点或保留的提问不在剩下的行里，摘要就没了，**每个删行的地方（`repo.runStarted`）和每次读取都要过它**；`rowsToSend` 决定请求带哪些行；`planCompaction` 是手动压缩覆盖什么（和 Go 的 `ModeManual` 一对一，改一边改两边）。`runner.ts` 收到 `compaction_finished` 就先存摘要再发布事件，`guest_end` 的摘要也存。手动压缩和撤销是 `compaction.ts`，由 `router.ts` 里的 `/conversations/{id}/compaction` 三个路由答，POST 调 `/guest/compaction`；run 在跑时 409，等模型写的时候被改写删掉了终点就不存。
 - 本地数据没有服务端的权威时钟：消息行的 `createdAt` 全是服务端给的，不要在本地给消息盖客户端时间（`runInterrupted` 例外且取「最新一行之后」）。临时对话 24 小时过期在读取时本地执行；上传了没发的文件 24 小时后清。多个标签页靠 BroadcastChannel 互相通知，收到的页用 `hub.announceChanged` 发 `transcript_changed`（改写时带 `from`）。
+- 游客存储：进入 `/guest` 时 `startGuest()` 就探测 IndexedDB（`open-storage.ts`，4 秒超时）；能开就用，开不了（某些隐私模式、站点数据被禁）退回内存存储，`GuestNotice` 改说「刷新后对话会丢失」（`lib/guest/kept.ts`）。`idb.ts` 的 `connect()` 不缓存失败的 open。仓库给文件造的 object URL 在文件、对话删除时 revoke（`dropBlob`/`dropConversation`）。
 - 游客界面：`GuestNotice`（「游客模式：对话只保存在这个浏览器里」+ 登录）、侧栏账号菜单没有管理后台和退出、设置里没有「账户」页。共用组件里的链接一律用 `useChatPaths()`（`/` 还是 `/guest`），头像上传不适用。
 
 ## 认证
 
-HttpOnly Cookie 会话，库里只存 token 的 SHA-256；前端从不接触 token，靠 `/auth/session` 判断登录状态，API 客户端必须 `credentials: 'include'`。用户名不能含 `@`（数据库约束保证，登录框同时接受用户名和邮箱）。第一个注册的账号成为管理员（见下「注册」）；最后一个启用的管理员不能被降级或停用。停用账号或改密码会清掉其会话。自助接口（`PATCH /auth/me`、`POST /auth/password`）刻意不带角色和停用字段。不做账号删除，停用即可。
+HttpOnly Cookie 会话，库里只存 token 的 SHA-256；前端从不接触 token，靠 `/auth/session` 判断登录状态，API 客户端必须 `credentials: 'include'`。用户名不能含 `@`（数据库约束保证，登录框同时接受用户名和邮箱）。第一个注册的账号成为管理员（见下「注册」）；最后一个启用的管理员不能被降级或停用。停用账号或改密码会清掉其会话，已开着的页面下一次请求得到 401 就被带去登录页（见前端约定）。自助接口（`PATCH /auth/me`、`POST /auth/password`）刻意不带角色和停用字段。不做账号删除，停用即可。
 
 ### 注册与审批
 
