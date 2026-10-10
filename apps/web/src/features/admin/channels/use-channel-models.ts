@@ -2,6 +2,7 @@ import { OpenChatError, type components } from '@openchat/api-client'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/lib/api'
+import { queryKeys } from '@/lib/query-keys'
 import { catalogKeys } from '@/features/admin/models/use-catalog'
 import { adminKeys } from '@/features/admin/use-admin'
 
@@ -86,6 +87,8 @@ function useInvalidateChannelModels(channelId: string) {
     // the channels' model lists, so it moved too. It lives under its own key
     // and would otherwise go on reporting the reach this change just altered.
     void queryClient.invalidateQueries({ queryKey: catalogKeys.models() })
+    // And the chat's own model picker lists what the channels offer.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.models.all })
   }
 }
 
@@ -166,6 +169,7 @@ export function useUpdateChannelModel(channelId: string) {
       )
       void queryClient.invalidateQueries({ queryKey: adminKeys.channels(), exact: true })
       void queryClient.invalidateQueries({ queryKey: catalogKeys.models() })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.models.all })
     },
   })
 }

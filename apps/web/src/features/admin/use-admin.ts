@@ -10,6 +10,7 @@ import type {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/lib/api'
+import { queryKeys } from '@/lib/query-keys'
 
 export const adminKeys = {
   all: ['admin'] as const,
@@ -142,6 +143,7 @@ export function useCreateChannel() {
       // answer changed as well — it lives under a different key and would
       // otherwise go on reporting the reach this channel just altered.
       void queryClient.invalidateQueries({ queryKey: adminKeys.catalog() })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.models.all }) // the chat's model picker
     },
   })
 }
@@ -171,6 +173,7 @@ export function useUpdateChannel() {
       // answer changed as well — it lives under a different key and would
       // otherwise go on reporting the reach this channel just altered.
       void queryClient.invalidateQueries({ queryKey: adminKeys.catalog() })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.models.all }) // the chat's model picker
     },
   })
 }
@@ -191,6 +194,7 @@ export function useDeleteChannel() {
       // answer changed as well — it lives under a different key and would
       // otherwise go on reporting the reach this channel just altered.
       void queryClient.invalidateQueries({ queryKey: adminKeys.catalog() })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.models.all }) // the chat's model picker
     },
   })
 }
@@ -225,6 +229,7 @@ export function useBulkChannels() {
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.channels() })
       void queryClient.invalidateQueries({ queryKey: adminKeys.catalog() })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.models.all }) // the chat's model picker
     },
   })
 }
