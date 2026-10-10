@@ -39,7 +39,7 @@ func (s *Server) UpdateModelSettings(w http.ResponseWriter, r *http.Request, mod
 	// the model follows the catalogue the way an untouched one does.
 	if params.Kind == nil && params.Reasoning == nil && params.ToolCall == nil &&
 		params.InputModalities == nil && params.ContextLimit == nil && params.InputLimit == nil &&
-		params.OutputLimit == nil && params.ReasoningEfforts == nil && !params.AdminOnly {
+		params.OutputLimit == nil && params.ReasoningEfforts == nil && !params.AdminOnly && !params.Capacity.Valid {
 		if err := s.q.DeleteModelOverride(r.Context(), modelId); err != nil {
 			httpx.Fail(w, r, err)
 			return
@@ -78,6 +78,11 @@ func overrideParams(modelID string, body ModelOverride) (sqlc.SaveModelOverrideP
 		OutputLimit:  body.OutputLimit,
 		AdminOnly:    body.AdminOnly != nil && *body.AdminOnly,
 	}
+	limit, period, exempt, err := capacityParams(body)
+	if err != nil {
+		return params, err
+	}
+	params.Capacity, params.CapacityPeriod, params.CapacityAdminExempt = limit, &period, &exempt
 	if body.Kind != nil {
 		if !body.Kind.Valid() {
 			return params, invalid("invalid_kind", "unknown model kind: "+string(*body.Kind))
@@ -127,6 +132,10 @@ func toModelOverride(row sqlc.ModelOverride) ModelOverride {
 	}
 	if row.AdminOnly {
 		out.AdminOnly = &row.AdminOnly
+	}
+	if rule, ok := capacityOf(row); ok {
+		limit, period, exempt := numberOf(rule.limit), rule.period, rule.exempt
+		out.Capacity, out.CapacityPeriod, out.CapacityAdminExempt = &limit, &period, &exempt
 	}
 	if row.Kind != nil {
 		kind := ModelKind(*row.Kind)
@@ -289,9 +298,11 @@ func withSettings(model *CatalogModel, row sqlc.ListServedModelsRow, override *s
 }
 
 // chatModels are what people may pick in chat: served by an enabled channel,
-// and text models by their settings. staff includes the models kept for
-// administrators, for an administrator or the server's own tasks.
-func (s *Server) chatModels(ctx context.Context, staff bool) ([]ChatModel, error) {
+// and text models by their settings. who.staff includes the models kept for
+// administrators, for an administrator or the server's own tasks. A model at
+// its spending cap is listed all the same, marked AtCapacity for a requester
+// the cap applies to, so the picker can say why it cannot be used.
+func (s *Server) chatModels(ctx context.Context, who asker) ([]ChatModel, error) {
 	enabled := true
 	rows, err := s.q.ListServedModels(ctx, sqlc.ListServedModelsParams{
 		Enabled:   &enabled,
@@ -309,6 +320,15 @@ func (s *Server) chatModels(ctx context.Context, staff bool) ([]ChatModel, error
 	if err != nil {
 		return nil, err
 	}
+	// One query for the spend of every capped model, whatever they are for.
+	capped := capacityRules(overrides)
+	if who.ignoreCap {
+		capped = nil
+	}
+	spend, err := s.capacity().states(ctx, capped)
+	if err != nil {
+		return nil, err
+	}
 
 	out := make([]ChatModel, 0, len(rows))
 	for _, row := range rows {
@@ -317,7 +337,7 @@ func (s *Server) chatModels(ctx context.Context, staff bool) ([]ChatModel, error
 			o = fromOverrideRow(override)
 		}
 		settings := catalog.Resolve(servedDefaults(row), o)
-		if settings.Kind != catalog.KindText || (settings.AdminOnly && !staff) {
+		if settings.Kind != catalog.KindText || (settings.AdminOnly && !who.staff) {
 			continue
 		}
 		view := toModelSettings(settings, settings.Profile.Levels())
@@ -333,6 +353,7 @@ func (s *Server) chatModels(ctx context.Context, staff bool) ([]ChatModel, error
 			OutputLimit:      settings.OutputLimit,
 			InputModalities:  view.InputModalities,
 			ReasoningEfforts: view.ReasoningEfforts,
+			AtCapacity:       capped[row.ModelID].appliesTo(who.admin) && spend[row.ModelID].reached,
 		})
 	}
 	return out, nil

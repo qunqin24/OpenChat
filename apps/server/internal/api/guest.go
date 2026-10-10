@@ -85,7 +85,7 @@ func (s *Server) GetGuestStatus(w http.ResponseWriter, r *http.Request) {
 func (s *Server) GetGuestConfig(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	// Not staff: models kept for administrators stay hidden.
-	models, err := s.chatModels(ctx, false)
+	models, err := s.chatModels(ctx, asker{})
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return

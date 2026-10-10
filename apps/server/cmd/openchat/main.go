@@ -17,6 +17,10 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	// The zone database, inside the binary. The production image is distroless
+	// and has none, and without it TZ=Asia/Shanghai is silently read as UTC -
+	// which would move the day and month a model's spending cap starts over at.
+	_ "time/tzdata"
 
 	"github.com/joho/godotenv"
 
@@ -49,6 +53,7 @@ func run() error {
 		return err
 	}
 	setupLogging(cfg)
+	logTimeZone()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -91,7 +96,8 @@ func run() error {
 	// requests that start them.
 	runner := agent.NewRunner(pool, agent.NewHub(), api.NewModelResolver(pool), api.NewToolSource(pool),
 		agent.Options{SystemPrompt: api.NewSystemPrompt(pool), Blobs: store, Modalities: api.NewModalities(pool),
-			Compression: api.NewCompression(pool)})
+			Compression: api.NewCompression(pool),
+			Capacity:    api.NewCapacityCheck(pool)})
 	// Runs a previous process left unfinished pick up from their checkpoints.
 	if err := runner.Resume(ctx); err != nil {
 		return err
@@ -164,4 +170,19 @@ func setupLogging(cfg *config.Config) {
 		MaxBytes: int64(cfg.LogFileMB) << 20,
 		Keep:     cfg.LogFileKeep,
 	})
+}
+
+// logTimeZone says which zone the day and month boundaries are in. A model's
+// daily and monthly spending caps start over at the server's local midnight,
+// and Go reads an unknown TZ as UTC without a word.
+func logTimeZone() {
+	_, offset := time.Now().Zone()
+	tz := os.Getenv("TZ")
+	if tz != "" {
+		if _, err := time.LoadLocation(tz); err != nil {
+			slog.Warn("TZ is not a known time zone; days and months (spending caps) are counted in UTC", "tz", tz, "error", err)
+			return
+		}
+	}
+	slog.Info("time zone", "tz", tz, "utc_offset_hours", float64(offset)/3600)
 }

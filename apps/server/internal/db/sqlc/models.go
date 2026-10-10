@@ -492,17 +492,21 @@ type Message struct {
 }
 
 type ModelOverride struct {
-	ModelID          string             `json:"model_id"`
-	Kind             *string            `json:"kind"`
-	Reasoning        *bool              `json:"reasoning"`
-	ToolCall         *bool              `json:"tool_call"`
-	InputModalities  []string           `json:"input_modalities"`
-	ContextLimit     *int64             `json:"context_limit"`
-	InputLimit       *int64             `json:"input_limit"`
-	OutputLimit      *int64             `json:"output_limit"`
-	ReasoningEfforts []string           `json:"reasoning_efforts"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
-	AdminOnly        bool               `json:"admin_only"`
+	ModelID             string             `json:"model_id"`
+	Kind                *string            `json:"kind"`
+	Reasoning           *bool              `json:"reasoning"`
+	ToolCall            *bool              `json:"tool_call"`
+	InputModalities     []string           `json:"input_modalities"`
+	ContextLimit        *int64             `json:"context_limit"`
+	InputLimit          *int64             `json:"input_limit"`
+	OutputLimit         *int64             `json:"output_limit"`
+	ReasoningEfforts    []string           `json:"reasoning_efforts"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	AdminOnly           bool               `json:"admin_only"`
+	Capacity            pgtype.Numeric     `json:"capacity"`
+	CapacityPeriod      string             `json:"capacity_period"`
+	CapacityAdminExempt bool               `json:"capacity_admin_exempt"`
+	CapacitySince       pgtype.Timestamptz `json:"capacity_since"`
 }
 
 type Run struct {

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -43,6 +44,9 @@ type Server struct {
 	// usage is the ledger of model requests, for the ones the server makes
 	// itself (titles). Runs write theirs through the runner.
 	usage *usage.Recorder
+	// now is the clock the spending caps' periods are read from; time.Now
+	// unless a test has set another.
+	now func() time.Time
 }
 
 var _ ServerInterface = (*Server)(nil)

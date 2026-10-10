@@ -52,7 +52,10 @@ type scratch struct {
 	user uuid.UUID
 }
 
-func newScratch(t *testing.T) *scratch {
+func newScratch(t *testing.T) *scratch { return newScratchAt(t, beforeBranches) }
+
+// newScratchAt is a scratch database migrated to a version and no further.
+func newScratchAt(t *testing.T, version int64) *scratch {
 	t.Helper()
 	dsn := dbtest.URL()
 	if dsn == "" {
@@ -92,7 +95,7 @@ func newScratch(t *testing.T) *scratch {
 		t.Fatal(err)
 	}
 	goose.SetLogger(goose.NopLogger())
-	if err := goose.UpToContext(ctx, s.sql, ".", beforeBranches); err != nil {
+	if err := goose.UpToContext(ctx, s.sql, ".", version); err != nil {
 		t.Fatalf("migrate to the version before: %v", err)
 	}
 	s.user = uuid.New()

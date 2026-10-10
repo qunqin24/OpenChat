@@ -80,14 +80,14 @@ func TestAdminOnlyModel(t *testing.T) {
 	}
 
 	memberCtx, adminCtx := auth.WithUser(ctx, member), auth.WithUser(ctx, admin)
-	if _, _, err := server.pickChannel(memberCtx, modelID, isStaff(memberCtx)); !errors.Is(err, errModelUnavailable) {
+	if _, _, err := server.pickChannel(memberCtx, modelID, askerFrom(memberCtx)); !errors.Is(err, errModelUnavailable) {
 		t.Errorf("a member asking for it by id: %v, want unavailable", err)
 	}
-	if _, _, err := server.pickChannel(adminCtx, modelID, isStaff(adminCtx)); err != nil {
+	if _, _, err := server.pickChannel(adminCtx, modelID, askerFrom(adminCtx)); err != nil {
 		t.Errorf("an administrator asking for it: %v", err)
 	}
 	// A title for a member's conversation is the server's task, not the member's.
-	if got, _, err := server.taskModel(memberCtx, modelID, nil); err != nil || got != modelID {
+	if got, _, err := server.taskModel(memberCtx, modelID, nil, false); err != nil || got != modelID {
 		t.Errorf("the task model for a member's conversation: %q %v", got, err)
 	}
 

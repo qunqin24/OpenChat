@@ -209,6 +209,14 @@ func (s *Server) ListCatalogModels(w http.ResponseWriter, r *http.Request, param
 		return
 	}
 
+	// The operator's view of each cap: what is spent against it, whoever it
+	// applies to.
+	spend, err := s.capacity().states(r.Context(), capacityRules(overrides))
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+
 	items := make([]CatalogModel, 0, len(rows))
 	for _, row := range rows {
 		model := toCatalogModel(row)
@@ -217,6 +225,10 @@ func (s *Server) ListCatalogModels(w http.ResponseWriter, r *http.Request, param
 			override = &o
 		}
 		withSettings(&model, row, override)
+		if state, ok := spend[row.ModelID]; ok {
+			capacity := toModelCapacity(state)
+			model.Capacity = &capacity
+		}
 		// Always a list, never absent: "no channel serves this" is an answer,
 		// and a missing field would read as "not asked".
 		channels := byModel[row.ModelID]

@@ -7,6 +7,8 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const deleteModelOverride = `-- name: DeleteModelOverride :exec
@@ -21,7 +23,7 @@ func (q *Queries) DeleteModelOverride(ctx context.Context, modelID string) error
 }
 
 const getModelOverride = `-- name: GetModelOverride :one
-SELECT model_id, kind, reasoning, tool_call, input_modalities, context_limit, input_limit, output_limit, reasoning_efforts, updated_at, admin_only
+SELECT model_id, kind, reasoning, tool_call, input_modalities, context_limit, input_limit, output_limit, reasoning_efforts, updated_at, admin_only, capacity, capacity_period, capacity_admin_exempt, capacity_since
 FROM model_overrides
 WHERE model_id = $1
 `
@@ -41,12 +43,16 @@ func (q *Queries) GetModelOverride(ctx context.Context, modelID string) (ModelOv
 		&i.ReasoningEfforts,
 		&i.UpdatedAt,
 		&i.AdminOnly,
+		&i.Capacity,
+		&i.CapacityPeriod,
+		&i.CapacityAdminExempt,
+		&i.CapacitySince,
 	)
 	return i, err
 }
 
 const listModelOverrides = `-- name: ListModelOverrides :many
-SELECT model_id, kind, reasoning, tool_call, input_modalities, context_limit, input_limit, output_limit, reasoning_efforts, updated_at, admin_only
+SELECT model_id, kind, reasoning, tool_call, input_modalities, context_limit, input_limit, output_limit, reasoning_efforts, updated_at, admin_only, capacity, capacity_period, capacity_admin_exempt, capacity_since
 FROM model_overrides
 WHERE model_id = ANY ($1::text[])
 `
@@ -72,6 +78,10 @@ func (q *Queries) ListModelOverrides(ctx context.Context, modelIds []string) ([]
 			&i.ReasoningEfforts,
 			&i.UpdatedAt,
 			&i.AdminOnly,
+			&i.Capacity,
+			&i.CapacityPeriod,
+			&i.CapacityAdminExempt,
+			&i.CapacitySince,
 		); err != nil {
 			return nil, err
 		}
@@ -83,12 +93,109 @@ func (q *Queries) ListModelOverrides(ctx context.Context, modelIds []string) ([]
 	return items, nil
 }
 
+const modelSpends = `-- name: ModelSpends :many
+SELECT m.model_id::text                       AS model_id,
+       coalesce(sum(l.cost), 0)::numeric      AS spent,
+       coalesce(sum(l.cost), 0) >= c.capacity AS reached
+FROM unnest($1::text[]) WITH ORDINALITY AS m(model_id, n)
+         JOIN unnest($2::timestamptz[]) WITH ORDINALITY AS s(since, n) USING (n)
+         JOIN unnest($3::numeric[]) WITH ORDINALITY AS c(capacity, n) USING (n)
+         LEFT JOIN usage_logs l ON l.model_id = m.model_id AND l.created_at >= coalesce(s.since, '-infinity'::timestamptz)
+GROUP BY m.n, m.model_id, c.capacity
+`
+
+type ModelSpendsParams struct {
+	ModelIds []string             `json:"model_ids"`
+	Since    []pgtype.Timestamptz `json:"since"`
+	Capacity []pgtype.Numeric     `json:"capacity"`
+}
+
+type ModelSpendsRow struct {
+	ModelID string         `json:"model_id"`
+	Spent   pgtype.Numeric `json:"spent"`
+	Reached bool           `json:"reached"`
+}
+
+// What each model has cost since the start of its window, and whether that has
+// reached its capacity, for a set of models at once. The three arrays go
+// together by position. A NULL `since` counts from the beginning (a total cap
+// never recalculated). Requests that were not priced have no cost (NULL) and
+// add nothing, so an unpriced model reads 0 forever.
+//
+// The comparison is in numeric, in the database, so the sum and the capacity
+// are never rounded through a float on the way. The join is a range scan of
+// usage_logs_model_idx, which carries the cost: no table pages are read.
+//
+// (sqlc cannot read a multi-argument unnest, hence the three joined by their
+// position.)
+func (q *Queries) ModelSpends(ctx context.Context, arg ModelSpendsParams) ([]ModelSpendsRow, error) {
+	rows, err := q.db.Query(ctx, modelSpends, arg.ModelIds, arg.Since, arg.Capacity)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ModelSpendsRow{}
+	for rows.Next() {
+		var i ModelSpendsRow
+		if err := rows.Scan(&i.ModelID, &i.Spent, &i.Reached); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const resetModelCapacity = `-- name: ResetModelCapacity :one
+INSERT INTO model_overrides (model_id, capacity_since)
+VALUES ($1, $2)
+ON CONFLICT (model_id) DO UPDATE
+    SET capacity_since = excluded.capacity_since,
+        updated_at     = now()
+RETURNING model_id, kind, reasoning, tool_call, input_modalities, context_limit, input_limit, output_limit, reasoning_efforts, updated_at, admin_only, capacity, capacity_period, capacity_admin_exempt, capacity_since
+`
+
+type ResetModelCapacityParams struct {
+	ModelID string             `json:"model_id"`
+	Since   pgtype.Timestamptz `json:"since"`
+}
+
+// Starts a total cap's count again from `since`. Makes the row if the model
+// has none (every other column then at its default: no cap, nothing changed).
+func (q *Queries) ResetModelCapacity(ctx context.Context, arg ResetModelCapacityParams) (ModelOverride, error) {
+	row := q.db.QueryRow(ctx, resetModelCapacity, arg.ModelID, arg.Since)
+	var i ModelOverride
+	err := row.Scan(
+		&i.ModelID,
+		&i.Kind,
+		&i.Reasoning,
+		&i.ToolCall,
+		&i.InputModalities,
+		&i.ContextLimit,
+		&i.InputLimit,
+		&i.OutputLimit,
+		&i.ReasoningEfforts,
+		&i.UpdatedAt,
+		&i.AdminOnly,
+		&i.Capacity,
+		&i.CapacityPeriod,
+		&i.CapacityAdminExempt,
+		&i.CapacitySince,
+	)
+	return i, err
+}
+
 const saveModelOverride = `-- name: SaveModelOverride :one
 INSERT INTO model_overrides (model_id, kind, reasoning, tool_call, input_modalities,
-                             context_limit, input_limit, output_limit, reasoning_efforts, admin_only)
+                             context_limit, input_limit, output_limit, reasoning_efforts, admin_only,
+                             capacity, capacity_period, capacity_admin_exempt)
 VALUES ($1, $2, $3, $4,
         $5::text[], $6, $7,
-        $8, $9::text[], $10)
+        $8, $9::text[], $10,
+        $11::numeric, coalesce($12::text, 'total'),
+        coalesce($13::boolean, true))
 ON CONFLICT (model_id) DO UPDATE
     SET kind              = excluded.kind,
         reasoning         = excluded.reasoning,
@@ -99,25 +206,34 @@ ON CONFLICT (model_id) DO UPDATE
         output_limit      = excluded.output_limit,
         reasoning_efforts = excluded.reasoning_efforts,
         admin_only        = excluded.admin_only,
+        -- capacity_since is not here on purpose: it is the operator's
+        -- "recalculate", has its own endpoint, and survives saving the rest.
+        capacity              = excluded.capacity,
+        capacity_period       = excluded.capacity_period,
+        capacity_admin_exempt = excluded.capacity_admin_exempt,
         updated_at        = now()
-RETURNING model_id, kind, reasoning, tool_call, input_modalities, context_limit, input_limit, output_limit, reasoning_efforts, updated_at, admin_only
+RETURNING model_id, kind, reasoning, tool_call, input_modalities, context_limit, input_limit, output_limit, reasoning_efforts, updated_at, admin_only, capacity, capacity_period, capacity_admin_exempt, capacity_since
 `
 
 type SaveModelOverrideParams struct {
-	ModelID          string   `json:"model_id"`
-	Kind             *string  `json:"kind"`
-	Reasoning        *bool    `json:"reasoning"`
-	ToolCall         *bool    `json:"tool_call"`
-	InputModalities  []string `json:"input_modalities"`
-	ContextLimit     *int64   `json:"context_limit"`
-	InputLimit       *int64   `json:"input_limit"`
-	OutputLimit      *int64   `json:"output_limit"`
-	ReasoningEfforts []string `json:"reasoning_efforts"`
-	AdminOnly        bool     `json:"admin_only"`
+	ModelID             string         `json:"model_id"`
+	Kind                *string        `json:"kind"`
+	Reasoning           *bool          `json:"reasoning"`
+	ToolCall            *bool          `json:"tool_call"`
+	InputModalities     []string       `json:"input_modalities"`
+	ContextLimit        *int64         `json:"context_limit"`
+	InputLimit          *int64         `json:"input_limit"`
+	OutputLimit         *int64         `json:"output_limit"`
+	ReasoningEfforts    []string       `json:"reasoning_efforts"`
+	AdminOnly           bool           `json:"admin_only"`
+	Capacity            pgtype.Numeric `json:"capacity"`
+	CapacityPeriod      *string        `json:"capacity_period"`
+	CapacityAdminExempt *bool          `json:"capacity_admin_exempt"`
 }
 
 // Replaces the whole override: the settings panel always sends every field,
-// and a field it sends as null goes back to following the catalogue.
+// and a field it sends as null goes back to following the catalogue. A cap's
+// period and exemption left out (NULL) are their defaults, total and exempt.
 func (q *Queries) SaveModelOverride(ctx context.Context, arg SaveModelOverrideParams) (ModelOverride, error) {
 	row := q.db.QueryRow(ctx, saveModelOverride,
 		arg.ModelID,
@@ -130,6 +246,9 @@ func (q *Queries) SaveModelOverride(ctx context.Context, arg SaveModelOverridePa
 		arg.OutputLimit,
 		arg.ReasoningEfforts,
 		arg.AdminOnly,
+		arg.Capacity,
+		arg.CapacityPeriod,
+		arg.CapacityAdminExempt,
 	)
 	var i ModelOverride
 	err := row.Scan(
@@ -144,6 +263,10 @@ func (q *Queries) SaveModelOverride(ctx context.Context, arg SaveModelOverridePa
 		&i.ReasoningEfforts,
 		&i.UpdatedAt,
 		&i.AdminOnly,
+		&i.Capacity,
+		&i.CapacityPeriod,
+		&i.CapacityAdminExempt,
+		&i.CapacitySince,
 	)
 	return i, err
 }

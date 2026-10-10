@@ -174,6 +174,7 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 				r.Delete("/admin/channels/{channelId}/models/{modelId}", wrapper.DeleteChannelModel)
 				r.Put("/admin/models/{modelId}/settings", wrapper.UpdateModelSettings)
 				r.Delete("/admin/models/{modelId}/settings", wrapper.ResetModelSettings)
+				r.Post("/admin/models/{modelId}/capacity/reset", wrapper.ResetModelCapacity)
 
 				r.Get("/admin/usage-logs", wrapper.ListUsageLogs)
 				r.Get("/admin/users", wrapper.ListUsers)

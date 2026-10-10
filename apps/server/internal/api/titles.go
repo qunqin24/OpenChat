@@ -85,6 +85,11 @@ func (s *Server) titleConversation(run sqlc.Run) {
 		return
 	}
 	title, err := s.generateTitle(ctx, run.UserID, run.ConversationID, run.ModelID, run.ChannelID, exchange)
+	if errors.Is(err, errModelCapacity) {
+		// Not a failure: the model's spending cap spares the request.
+		log.Info("title: skipped, the model has reached its spending cap", "model", run.ModelID)
+		return
+	}
 	if err != nil {
 		log.Warn("title: generate", "error", err)
 		return
@@ -138,7 +143,11 @@ var errNoTitle = errors.New("the model gave no title")
 // `title`: it is spent on their behalf, and an operator reading the log should
 // be able to tell it from the answer it follows.
 func (s *Server) generateTitle(ctx context.Context, userID, conversationID uuid.UUID, ownModel string, ownChannel *uuid.UUID, transcript string) (string, error) {
-	modelID, channelID, err := s.taskModel(ctx, ownModel, ownChannel)
+	admin, err := s.capacity().isAdmin(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	modelID, channelID, err := s.taskModel(ctx, ownModel, ownChannel, admin)
 	if err != nil {
 		return "", err
 	}
@@ -184,22 +193,34 @@ func (s *Server) generateTitle(ctx context.Context, userID, conversationID uuid.
 // taskModel is the configured task model where an enabled channel still
 // offers it, else the conversation's own model: on its pinned channel when
 // one is given, else wherever it is offered.
-func (s *Server) taskModel(ctx context.Context, ownModel string, ownChannel *uuid.UUID) (string, uuid.UUID, error) {
+//
+// A model at its spending cap is not used for a task, which would spend the
+// money the cap is there to keep: the configured task model falls back to the
+// conversation's own, and if that is at its cap too the task has no model
+// (errModelCapacity) and is skipped. admin is whether the person the task is
+// for is an administrator, whom a cap's exemption lets through exactly as for
+// their own requests. The server's tasks are otherwise staff: no person asked
+// for them, so a model kept for administrators is not held back.
+func (s *Server) taskModel(ctx context.Context, ownModel string, ownChannel *uuid.UUID, admin bool) (string, uuid.UUID, error) {
+	who := asker{staff: true, admin: admin}
 	configured, err := stringSetting(ctx, s.q, settingTaskModel)
 	if err != nil {
 		return "", uuid.Nil, err
 	}
 	if configured != "" {
-		modelID, channelID, err := s.pickChannel(ctx, configured, true)
+		modelID, channelID, err := s.pickChannel(ctx, configured, who)
 		if err == nil {
 			return modelID, channelID, nil
 		}
 		slog.Warn("title: the task model is not available; using the conversation's", "model", configured, "error", err)
 	}
 	if ownChannel != nil {
+		if err := s.refusedForCapacity(ctx, ownModel, who); err != nil {
+			return "", uuid.Nil, err
+		}
 		return ownModel, *ownChannel, nil
 	}
-	return s.pickChannel(ctx, ownModel, true)
+	return s.pickChannel(ctx, ownModel, who)
 }
 
 // leastThinking asks a reasoning model to think as little as it allows: a
@@ -293,6 +314,11 @@ func (s *Server) GenerateConversationTitle(w http.ResponseWriter, r *http.Reques
 		ownModel = *conv.Model
 	}
 	title, err := s.generateTitle(ctx, user.ID, conversationId, ownModel, nil, transcript.String())
+	if errors.Is(err, errModelCapacity) {
+		// Nothing was asked of the model, and the reason is not a failure of it.
+		httpx.Fail(w, r, errModelCapacity)
+		return
+	}
 	if err != nil {
 		slog.WarnContext(ctx, "title on request", "conversation_id", conversationId, "error", err)
 		httpx.Fail(w, r, httpx.NewError(http.StatusBadGateway, "title_failed", "the model gave no title"))

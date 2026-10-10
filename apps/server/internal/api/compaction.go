@@ -124,7 +124,7 @@ func (s *Server) CompactConversation(w http.ResponseWriter, r *http.Request, con
 	if conv.Model != nil {
 		modelID = *conv.Model
 	}
-	modelID, channelID, err := s.pickChannel(ctx, modelID, isStaff(ctx))
+	modelID, channelID, err := s.pickChannel(ctx, modelID, askerFrom(ctx))
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
@@ -261,7 +261,7 @@ func (s *Server) GuestCompact(w http.ResponseWriter, r *http.Request) {
 		model = strings.TrimSpace(*body.Model)
 	}
 	// As an ordinary user's: models kept for administrators are not offered.
-	modelID, channelID, err := s.pickChannel(ctx, model, false)
+	modelID, channelID, err := s.pickChannel(ctx, model, asker{})
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return

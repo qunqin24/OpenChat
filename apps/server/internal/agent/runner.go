@@ -86,6 +86,12 @@ type Options struct {
 	// Modalities lists what the model can be sent besides text. Without it
 	// every kind of file is sent.
 	Modalities func(ctx context.Context, modelID string) ([]string, error)
+	// Capacity says whether modelID has reached its spending cap for the user
+	// whose run this is (an administrator the cap exempts is let through, which
+	// is the hook's to decide). Asked before every model request of a run; a
+	// run that is refused ends with CodeModelCapacity. Without it there are no
+	// caps.
+	Capacity func(ctx context.Context, userID uuid.UUID, modelID string) (bool, error)
 }
 
 func (o Options) withDefaults() Options {

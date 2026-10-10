@@ -451,6 +451,19 @@ type Querier interface {
 	// channels names wins — so the levels a run accepts are the levels the picker
 	// showed. No rows when the catalogue does not know the model.
 	ModelProfile(ctx context.Context, modelID string) (ModelProfileRow, error)
+	// What each model has cost since the start of its window, and whether that has
+	// reached its capacity, for a set of models at once. The three arrays go
+	// together by position. A NULL `since` counts from the beginning (a total cap
+	// never recalculated). Requests that were not priced have no cost (NULL) and
+	// add nothing, so an unpriced model reads 0 forever.
+	//
+	// The comparison is in numeric, in the database, so the sum and the capacity
+	// are never rounded through a float on the way. The join is a range scan of
+	// usage_logs_model_idx, which carries the cost: no table pages are read.
+	//
+	// (sqlc cannot read a multi-argument unnest, hence the three joined by their
+	// position.)
+	ModelSpends(ctx context.Context, arg ModelSpendsParams) ([]ModelSpendsRow, error)
 	// Hands the files of one message to another: an edited question's files go to
 	// the question that replaces it.
 	MoveAttachments(ctx context.Context, arg MoveAttachmentsParams) error
@@ -480,8 +493,12 @@ type Querier interface {
 	// reached this way.
 	RequestGuestRunCancel(ctx context.Context, id uuid.UUID) (Run, error)
 	RequestRunCancel(ctx context.Context, arg RequestRunCancelParams) (Run, error)
+	// Starts a total cap's count again from `since`. Makes the row if the model
+	// has none (every other column then at its default: no cap, nothing changed).
+	ResetModelCapacity(ctx context.Context, arg ResetModelCapacityParams) (ModelOverride, error)
 	// Replaces the whole override: the settings panel always sends every field,
-	// and a field it sends as null goes back to following the catalogue.
+	// and a field it sends as null goes back to following the catalogue. A cap's
+	// period and exemption left out (NULL) are their defaults, total and exempt.
 	SaveModelOverride(ctx context.Context, arg SaveModelOverrideParams) (ModelOverride, error)
 	// One step of a run: a new checkpoint, new live state, or both. Guarded on
 	// `running` so nothing can resurrect a run that already finished.

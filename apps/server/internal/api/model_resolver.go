@@ -170,24 +170,37 @@ func clientFor(channel sqlc.Channel, modelID string, thinks bool) (llm.ModelClie
 // modelID means "whatever is available": the conversation never chose. Only a
 // model offered in chat may be picked — one an operator has marked as an
 // embedding model, say, is unavailable however it is asked for, and one kept
-// for administrators is unavailable unless staff: an administrator's request,
-// or the server's own task that no person asked for.
-func (s *Server) pickChannel(ctx context.Context, modelID string, staff bool) (string, uuid.UUID, error) {
+// for administrators is unavailable unless who.staff: an administrator's
+// request, or the server's own task that no person asked for.
+//
+// A model that has reached its spending cap is refused with errModelCapacity
+// unless who is exempt from it (see capacityRule.appliesTo). Left to choose
+// ("whatever is available"), it skips the models at their cap, and refuses only
+// when nothing else is left.
+func (s *Server) pickChannel(ctx context.Context, modelID string, who asker) (string, uuid.UUID, error) {
 	if modelID == "" {
-		models, err := s.chatModels(ctx, staff)
+		models, err := s.chatModels(ctx, who)
 		if err != nil {
 			return "", uuid.Nil, err
 		}
 		if len(models) == 0 {
 			return "", uuid.Nil, errNoModels
 		}
-		modelID = models[0].Id
+		for _, model := range models {
+			if !model.AtCapacity {
+				modelID = model.Id
+				break
+			}
+		}
+		if modelID == "" {
+			return "", uuid.Nil, errModelCapacity
+		}
 	} else {
 		settings, err := loadModelSettings(ctx, s.q, modelID)
 		if err != nil {
 			return "", uuid.Nil, err
 		}
-		if settings.Kind != catalog.KindText || (settings.AdminOnly && !staff) {
+		if settings.Kind != catalog.KindText || (settings.AdminOnly && !who.staff) {
 			return "", uuid.Nil, errModelUnavailable
 		}
 	}
@@ -196,6 +209,9 @@ func (s *Server) pickChannel(ctx context.Context, modelID string, staff bool) (s
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", uuid.Nil, errModelUnavailable
 		}
+		return "", uuid.Nil, err
+	}
+	if err := s.refusedForCapacity(ctx, modelID, who); err != nil {
 		return "", uuid.Nil, err
 	}
 	return modelID, channelID, nil

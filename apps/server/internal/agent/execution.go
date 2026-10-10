@@ -26,6 +26,9 @@ const (
 	CodeRateLimited    = "model_rate_limited"
 	CodeContextTooLong = "context_too_long"
 	CodeInternal       = "internal"
+	// CodeModelCapacity is a run stopped before a request because its model
+	// has reached its spending cap (Options.Capacity).
+	CodeModelCapacity = "model_capacity_reached"
 	// CodeToolMarkup is an answer that wrote its tool calls out as text
 	// (llm.HideToolMarkup), which were cut from it: it did not finish.
 	CodeToolMarkup = "tool_markup"
@@ -310,6 +313,27 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 				return false, nil // the loop decides between cancel and shutdown
 			case <-timer.C:
 			}
+		}
+	}
+
+	// The model's spending cap, asked before every request - not only the
+	// run's first - so a long tool loop stops at the cap. A run stopped here
+	// ends with an empty failed response carrying the code, as for a model
+	// that is gone. What it costs to go on is not known until the request ends
+	// (the ledger is written then), so the overshoot is the requests already
+	// in flight when this passed, not the rest of the loop.
+	if check := r.opts.Capacity; check != nil {
+		reached, err := check(ctx, ex.run.UserID, ex.run.ModelID)
+		if err != nil && ctx.Err() != nil {
+			return false, nil // stopped meanwhile; the loop ends the run as it should
+		}
+		if err != nil {
+			// Not being able to tell is not permission to spend: the run fails as internal.
+			return false, fmt.Errorf("agent: checking the capacity of %s: %w", ex.run.ModelID, err)
+		}
+		if reached {
+			slog.Info("run stopped: the model has reached its spending cap", "run_id", ex.run.ID, "model", ex.run.ModelID)
+			return true, ex.failWithRow(CodeModelCapacity)
 		}
 	}
 
