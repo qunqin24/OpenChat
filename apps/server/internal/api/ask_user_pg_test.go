@@ -674,3 +674,33 @@ func TestAskUserToggle(t *testing.T) {
 		t.Fatal("ask_user is not offered after being turned back on")
 	}
 }
+
+// A reply that asks and also calls another tool ends with that tool's result,
+// not with the question; the question is still the one waiting, and answering
+// it carries the reply on.
+func TestAskUserAnswerAfterASiblingCallsResult(t *testing.T) {
+	quoted, _ := json.Marshal(questionsJSON)
+	both := `data: {"id":"r","model":"fake","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[` +
+		`{"index":0,"id":"call_other","type":"function","function":{"name":"no_such_tool","arguments":"{}"}},` +
+		`{"index":1,"id":"call_ask_1","type":"function","function":{"name":"ask_user","arguments":` + string(quoted) + `}}]},"finish_reason":null}]}` + "\n\n" +
+		`data: {"id":"r","model":"fake","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}` + "\n\n" + "data: [DONE]\n\n"
+	h := newAskHarness(t, openAIWire, func(n int) string {
+		if n == 1 {
+			return both
+		}
+		return openAIWire.text("Here is the plan.")
+	})
+	_, status := h.send("plan my trip")
+	if status != sqlc.RunStatusAwaitingInput {
+		t.Fatalf("run ended %s, want awaiting_input", status)
+	}
+	equal(t, "transcript", shape(t, h.transcript()), []string{"user:text", "assistant:call+call", "tool:result"})
+
+	if _, status := h.answered("call_ask_1", answersJSON); status != sqlc.RunStatusCompleted {
+		t.Fatalf("continuation ended %s", status)
+	}
+	equal(t, "transcript", shape(t, h.transcript()), []string{"user:text", "assistant:call+call", "tool:result", "tool:result", "assistant:text"})
+	if rec := h.answer("call_ask_1", answersJSON); rec.Code != http.StatusConflict {
+		t.Fatalf("answering twice: %d %s", rec.Code, rec.Body)
+	}
+}

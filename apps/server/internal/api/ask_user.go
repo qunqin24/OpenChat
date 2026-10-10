@@ -178,15 +178,67 @@ type asking struct {
 
 // pendingQuestion finds the ask_user call with this id if it is the one the
 // conversation is waiting on (see the note at the top of the file).
+var errQuestionWaiting = httpx.NewError(http.StatusConflict, "question_pending",
+	"the model is waiting for an answer to its question; answer or skip it first")
+
+// questionWaiting is whether the conversation's newest reply ends on a question
+// the model is still waiting to have answered.
+func questionWaiting(ctx context.Context, q *sqlc.Queries, conversationID uuid.UUID) (bool, error) {
+	rows, err := q.ListRecentMessages(ctx, sqlc.ListRecentMessagesParams{ConversationID: conversationID, RowLimit: pendingLookback})
+	if err != nil {
+		return false, err
+	}
+	at := len(rows) - 1
+	for at >= 0 && rows[at].Role == sqlc.MessageRoleTool {
+		at--
+	}
+	if at < 0 || rows[at].Role != sqlc.MessageRoleAssistant || rows[at].RunID == nil {
+		return false, nil
+	}
+	run, err := q.GetRun(ctx, *rows[at].RunID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil && run.Status == sqlc.RunStatusAwaitingInput, err
+}
+
+// pendingLookback is how far back the question is looked for: the asking row
+// and the results of the calls it made beside the question, of which a reply
+// has at most a round's worth.
+const pendingLookback = 64
+
 func pendingQuestion(ctx context.Context, q *sqlc.Queries, conversationID uuid.UUID, callID string) (asking, error) {
 	var out asking
-	rows, err := q.ListRecentMessages(ctx, sqlc.ListRecentMessagesParams{ConversationID: conversationID, RowLimit: 1})
+	// The question is in the newest assistant row. Only the results of the
+	// other calls that row made may come after it: those run first, and the
+	// run then waits on the question — a reply that both searched and asked
+	// ends with the search's result, not with the question.
+	rows, err := q.ListRecentMessages(ctx, sqlc.ListRecentMessagesParams{ConversationID: conversationID, RowLimit: pendingLookback})
 	if err != nil {
 		return out, err
 	}
-	if len(rows) == 0 || rows[0].Role != sqlc.MessageRoleAssistant || rows[0].RunID == nil {
+	at := len(rows) - 1
+	for at >= 0 && rows[at].Role == sqlc.MessageRoleTool {
+		at--
+	}
+	if at < 0 || rows[at].Role != sqlc.MessageRoleAssistant || rows[at].RunID == nil {
 		return out, errNotPending
 	}
+	for _, after := range rows[at+1:] {
+		if after.RunID == nil || *after.RunID != *rows[at].RunID {
+			return out, errNotPending
+		}
+		results, err := agent.DecodeParts(after.Parts)
+		if err != nil {
+			return out, err
+		}
+		for _, part := range results {
+			if result, ok := part.(llm.ToolResultPart); ok && result.CallID == callID {
+				return out, errNotPending // answered already
+			}
+		}
+	}
+	rows = rows[at : at+1]
 	out.run, err = q.GetRun(ctx, *rows[0].RunID)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && out.run.Status != sqlc.RunStatusAwaitingInput) {
 		return out, errNotPending

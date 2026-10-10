@@ -82,6 +82,7 @@
       "error-nothing_to_compact": "There is nothing new to compress.",
       "error-conversation_busy": "The conversation is answering. Wait for it or stop it first.",
       "error-compaction_busy": "This conversation is being compressed already. Wait a moment.",
+      "error-question_pending": "The model is waiting for an answer to its question. Answer or skip it, then compress.",
       "error-compaction_failed": "The model did not write a summary. Try again later.",
       "error-generic": "Compressing did not work. Try again later."
     },

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"runtime/debug"
 	"strings"
 	"time"
 	"unicode"
@@ -65,6 +66,12 @@ func (s *Server) titleConversation(run sqlc.Run) {
 	ctx, cancel := context.WithTimeout(context.Background(), titleTimeout)
 	defer cancel()
 	log := slog.With("conversation_id", run.ConversationID, "run_id", run.ID)
+	// Its own goroutine: a panic here would otherwise end the process.
+	defer func() {
+		if p := recover(); p != nil {
+			log.Error("titling panicked", "panic", p, "stack", string(debug.Stack()))
+		}
+	}()
 
 	// A guest's conversation is named by the request that ran it (guest_run.go),
 	// which hands the title to the browser that keeps the conversation.

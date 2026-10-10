@@ -7,7 +7,13 @@ import { api, unwrap } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
 
 /** Codes a compression can be refused with that have their own wording. */
-const COMPACTION_ERRORS = ['nothing_to_compact', 'conversation_busy', 'compaction_busy', 'compaction_failed'] as const
+const COMPACTION_ERRORS = [
+  'nothing_to_compact',
+  'conversation_busy',
+  'compaction_busy',
+  'compaction_failed',
+  'question_pending',
+] as const
 
 /**
  * The conversation's compressed context: the summary that stands in, for the

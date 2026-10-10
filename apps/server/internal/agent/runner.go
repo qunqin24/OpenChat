@@ -19,7 +19,9 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -272,6 +274,16 @@ func (r *Runner) execute(ctx context.Context, runID uuid.UUID) {
 		return // already terminal
 	}
 	ctx = WithScope(ctx, Scope{RunID: runID, UserID: ex.run.UserID, ConversationID: ex.run.ConversationID})
+	// A panic in a provider adapter, the summariser or anything else on this
+	// goroutine would otherwise take the whole process down — and, the run
+	// still `running`, take it down again on every restart that resumes it.
+	// It ends this run as failed instead.
+	defer func() {
+		if p := recover(); p != nil {
+			ex.logger().Error("run panicked", "panic", p, "stack", string(debug.Stack()))
+			ex.fail(fmt.Errorf("panic: %v", p))
+		}
+	}()
 
 	for {
 		if errors.Is(context.Cause(ctx), errShutdown) {
@@ -291,6 +303,13 @@ func (r *Runner) execute(ctx context.Context, runID uuid.UUID) {
 		}
 		if err != nil {
 			if errors.Is(context.Cause(ctx), errShutdown) {
+				return
+			}
+			// A stop that lands between two steps fails whatever database call
+			// or lookup comes next with "context canceled"; that is the stop,
+			// not a fault, and the run ends cancelled like any other.
+			if ctx.Err() != nil {
+				ex.fail(ex.finishCancelled())
 				return
 			}
 			ex.fail(err)

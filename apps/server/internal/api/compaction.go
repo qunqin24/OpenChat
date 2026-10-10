@@ -118,6 +118,16 @@ func (s *Server) CompactConversation(w http.ResponseWriter, r *http.Request, con
 		httpx.Fail(w, r, err)
 		return
 	}
+	// Nor while the model waits on a question: the summary would fold the
+	// question in as skipped, and the answer, written after it, would then
+	// reach the model as a result whose call it never sees.
+	if waiting, err := questionWaiting(ctx, s.q, conversationId); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	} else if waiting {
+		httpx.Fail(w, r, errQuestionWaiting)
+		return
+	}
 
 	// The model that answers the conversation: its own, as a run would choose.
 	modelID := ""

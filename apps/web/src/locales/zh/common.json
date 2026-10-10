@@ -82,6 +82,7 @@
       "error-nothing_to_compact": "没有需要压缩的新内容。",
       "error-conversation_busy": "对话正在回答，等它结束或先停止。",
       "error-compaction_busy": "这个对话正在压缩，请稍等。",
+      "error-question_pending": "模型还在等你回答它的问题，回答或跳过之后再压缩。",
       "error-compaction_failed": "模型没能写出摘要，请稍后再试。",
       "error-generic": "压缩没有成功，请稍后再试。"
     },

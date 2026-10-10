@@ -608,7 +608,19 @@ type runCompression struct {
 	// summary cannot shrink, and compressing would be paying for nothing.
 	grownFrom int
 	compacted bool
+	// failures counts this run's failed compressions, and failedAt is the
+	// estimate the last one failed at. A summariser that keeps failing (one
+	// that spends its whole allowance thinking, say) would otherwise be paid
+	// to read half the window again before every one of up to 100 rounds:
+	// after a failure it is tried again only once the request has grown by a
+	// tenth of the window, and not at all after maxCompressionFailures.
+	failures int
+	failedAt int
 }
+
+// maxCompressionFailures is how many failed compressions a run pays for
+// before it stops trying; the run goes on uncompressed either way.
+const maxCompressionFailures = 2
 
 // compress compresses the request about to be made when it is too large for
 // the window, and says whether it wrote a new summary (the caller reads the
@@ -643,6 +655,10 @@ func (ex *execution) compress(ctx context.Context, client llm.ModelClient, syste
 	if ex.compression.failedRound == ex.cp.Round+1 {
 		return false, false, nil
 	}
+	if ex.compression.failures >= maxCompressionFailures ||
+		(ex.compression.failures > 0 && estimate-ex.compression.failedAt < int(window)/10) {
+		return false, false, nil
+	}
 
 	if err := ex.commit(func(context.Context, *sqlc.Queries) ([]Event, *finish, error) {
 		ex.live.Compacting = true
@@ -672,6 +688,10 @@ func (ex *execution) compress(ctx context.Context, client llm.ModelClient, syste
 	}
 	if cerr != nil {
 		ex.compression.failedRound = ex.cp.Round + 1
+		if !errors.Is(cerr, ErrNothingToCompact) {
+			ex.compression.failures++
+			ex.compression.failedAt = estimate
+		}
 		made = nil
 	}
 

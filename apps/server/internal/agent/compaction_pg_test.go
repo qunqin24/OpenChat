@@ -252,8 +252,8 @@ func TestRunSendsUncompressedWhenTheSummaryFails(t *testing.T) {
 	f := newFixtureWith(t, compressing(3000), []Tool{echo},
 		toolCall(t, "c1", "echo", bigArgs(600)),
 		failing, // before the second request
-		toolCall(t, "c2", "echo", bigArgs(10)),
-		failing, // and again before the third: tried at every request
+		toolCall(t, "c2", "echo", bigArgs(600)),
+		failing, // and again before the third, the request having grown since
 		answer(t, "done anyway"))
 	run := f.admit("question")
 	f.runner.Start(run.ID)
@@ -537,4 +537,23 @@ func (f *fixture) count(query string, args ...any) int {
 		f.t.Fatalf("%s: %v", query, err)
 	}
 	return n
+}
+
+// A failed compression is not paid for again before every round: only once
+// the request has grown by a tenth of the window.
+func TestRunDoesNotRetryAFailedCompressionUntilItGrows(t *testing.T) {
+	echo := &echoTool{name: "echo", replay: true}
+	failing := func() (llm.ModelClient, error) { return nil, errors.New("summariser is down") }
+	f := newFixtureWith(t, compressing(3000), []Tool{echo},
+		toolCall(t, "c1", "echo", bigArgs(600)),
+		failing, // before the second request
+		toolCall(t, "c2", "echo", bigArgs(10)),
+		// no attempt before the third: it has barely grown
+		answer(t, "done anyway"))
+	run := f.admit("question")
+	f.runner.Start(run.ID)
+	f.waitFor(run.ID, sqlc.RunStatusCompleted)
+	if n := len(f.models.reqs); n != 4 {
+		t.Fatalf("%d requests, want 4 (call, failed summary, call, answer)", n)
+	}
 }

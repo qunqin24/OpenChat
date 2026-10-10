@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -204,6 +205,19 @@ func (ex *execution) logger() *slog.Logger {
 		attrs = append(attrs, "channel_id", *ex.run.ChannelID)
 	}
 	return slog.With(attrs...)
+}
+
+// executeTool runs a tool, turning a panic in it into an error: a tool runs on
+// a goroutine of its own, where nothing else would catch it before it took the
+// process down.
+func executeTool(ctx context.Context, tool Tool, args json.RawMessage) (out ToolResult, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			slog.ErrorContext(ctx, "tool panicked", "panic", p, "stack", string(debug.Stack()))
+			err = fmt.Errorf("tool panicked: %v", p)
+		}
+	}()
+	return tool.Execute(ctx, args)
 }
 
 // appendMessage writes one transcript row of this run.
@@ -715,7 +729,7 @@ func (ex *execution) runCall(ctx context.Context, slot ToolSlot, tool Tool) erro
 	}
 
 	started := time.Now()
-	out, execErr := tool.Execute(ctx, slot.Arguments)
+	out, execErr := executeTool(ctx, tool, slot.Arguments)
 	elapsed := time.Since(started).Milliseconds()
 
 	if errors.Is(context.Cause(ctx), errShutdown) {
