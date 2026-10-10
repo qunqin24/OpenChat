@@ -51,6 +51,7 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 	r.Route("/api/v1", func(r chi.Router) {
 		// ---- public -----------------------------------------------------
 		r.Get("/healthz", wrapper.GetHealth)
+		r.Get("/auth/options", wrapper.GetAuthOptions)
 		r.Post("/auth/register", wrapper.Register)
 		r.Post("/auth/login", wrapper.Login)
 

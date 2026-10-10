@@ -29,6 +29,10 @@ type Querier interface {
 	//
 	// `disabled_at` keeps its original value when the account is already disabled,
 	// so re-saving the form does not reset when access was cut off.
+	//
+	// `approved` can only let a pending account in (true); there is no way back to
+	// pending. It is independent of `disabled`: enabling an account does not
+	// approve it, and approving one does not enable it.
 	AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams) (User, error)
 	// The only way a transcript row is written by the agent layer. Rows are never
 	// updated afterwards: a reply still being generated lives in runs.live, and
@@ -46,6 +50,14 @@ type Querier interface {
 	// Claims uploads for a message. Only the caller's own, only unclaimed ones: the
 	// row count is how the caller notices that an id did not qualify.
 	AttachToMessage(ctx context.Context, arg AttachToMessageParams) (int64, error)
+	// Whether this address (and, when a subject is given, this subject from it) has
+	// used up `row_limit` attempts of this kind in the window - and if so, in how
+	// many seconds the count falls below the limit again: when the row_limit-th
+	// most recent attempt leaves the window. No row: not at the limit.
+	AuthAttemptsFull(ctx context.Context, arg AuthAttemptsFullParams) (int32, error)
+	// Only accounts that are waiting count, so the number reported is the number
+	// let in.
+	BulkApproveUsers(ctx context.Context, ids []uuid.UUID) (int64, error)
 	BulkSetUserDisabled(ctx context.Context, arg BulkSetUserDisabledParams) (int64, error)
 	BulkUpdateUserRole(ctx context.Context, arg BulkUpdateUserRoleParams) (int64, error)
 	CountAdmins(ctx context.Context) (int64, error)
@@ -65,7 +77,7 @@ type Querier interface {
 	// from counting three times.
 	CountServedModels(ctx context.Context, arg CountServedModelsParams) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
-	CountUsersFiltered(ctx context.Context, search *string) (int64, error)
+	CountUsersFiltered(ctx context.Context, arg CountUsersFilteredParams) (int64, error)
 	CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (Attachment, error)
 	// An empty format is the default, so a caller that has no opinion — tests,
 	// older code — gets Chat Completions rather than a constraint violation.
@@ -104,6 +116,9 @@ type Querier interface {
 	// is its answer. Files hang on user messages only, so there are none to hand
 	// back.
 	DeleteAnswerTo(ctx context.Context, arg DeleteAnswerToParams) error
+	// A sign-in whose password turned out right gives its slot back: only failures
+	// count.
+	DeleteAuthAttempt(ctx context.Context, id int64) error
 	DeleteCatalogModels(ctx context.Context) error
 	DeleteCatalogProviders(ctx context.Context) error
 	DeleteChannel(ctx context.Context, id uuid.UUID) (int64, error)
@@ -232,7 +247,9 @@ type Querier interface {
 	// the run's `no_model`.
 	GetServingChannel(ctx context.Context, arg GetServingChannelParams) (Channel, error)
 	// One round trip for the whole auth check: the session must be unexpired and
-	// the account still enabled.
+	// the account still enabled and not waiting for approval. A pending account is
+	// never given a session; this is the second lock on that door, for the day a
+	// code path forgets the first.
 	GetSessionUser(ctx context.Context, tokenHash []byte) (GetSessionUserRow, error)
 	GetSetting(ctx context.Context, key string) ([]byte, error)
 	GetUser(ctx context.Context, id uuid.UUID) (User, error)
@@ -248,6 +265,10 @@ type Querier interface {
 	// row the planner returned first, which is the wrong account rather than an
 	// error. Addresses win, so nobody's username can shadow somebody's email.
 	GetUserByLogin(ctx context.Context, identifier string) (User, error)
+	// Whether anyone has registered yet. While nobody has, registration is open to
+	// the one account that becomes the administrator, however the switch is set.
+	HasAccounts(ctx context.Context) (bool, error)
+	InsertAuthAttempt(ctx context.Context, arg InsertAuthAttemptParams) (int64, error)
 	InsertCatalogModels(ctx context.Context, arg []InsertCatalogModelsParams) (int64, error)
 	InsertCatalogProviders(ctx context.Context, arg []InsertCatalogProvidersParams) (int64, error)
 	InsertGuestRequest(ctx context.Context, ip string) error
@@ -383,6 +404,12 @@ type Querier interface {
 	// total, and the row count here stays small enough that the scan is cheap.
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
 	ListUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]User, error)
+	// Limits on signing in and signing up (api/auth_limits.go). One row per attempt
+	// that counts; see the migration for the columns.
+	// Held until the transaction ends, so that counting and then recording an
+	// attempt is one step: concurrent attempts at the limit cannot all be let
+	// through, and servers sharing the database share the count.
+	LockAuthAttempts(ctx context.Context) error
 	// Held until the transaction ends: whatever changes what the conversation
 	// holds - a message, an edit, a regeneration - queues here, and reads the
 	// conversation as the one before it left it.
@@ -393,6 +420,10 @@ type Querier interface {
 	// Serialises writers of one person's list for the length of the transaction, so
 	// two adds at the cap cannot both pass the count.
 	LockMemoryList(ctx context.Context, userID string) error
+	// Registrations take this before RegisterUser, so that "is the table empty?" is
+	// answered one registration at a time: two people registering on a fresh
+	// install cannot both be made the administrator.
+	LockRegistration(ctx context.Context) error
 	// Held until the transaction ends, so two answers to one question queue up and
 	// the second finds the first's.
 	LockRun(ctx context.Context, id uuid.UUID) (Run, error)
@@ -410,6 +441,8 @@ type Querier interface {
 	// that offers it, in the operator's order. Pinned on the run, so a later change
 	// here affects the next run, never one already going.
 	PickServingChannel(ctx context.Context, modelID string) (uuid.UUID, error)
+	// Nothing counts an attempt for longer than the longest window.
+	PurgeAuthAttempts(ctx context.Context, before pgtype.Timestamptz) (int64, error)
 	// The hard delete behind a user's delete: a conversation they deleted stays
 	// recoverable by an operator for the retention period, then goes with its
 	// messages, runs and attachments. Same shape as the temporary-chat statement.
@@ -417,10 +450,13 @@ type Querier interface {
 	// Nothing counts a request for more than a day.
 	PurgeGuestRequests(ctx context.Context, before pgtype.Timestamptz) (int64, error)
 	// The first account created becomes the admin: someone has to be able to reach
-	// the admin panel, and there is no other bootstrap path. The decision is made
-	// inside the INSERT so two concurrent registrations cannot both see an empty
-	// table and both claim it. A guest (a user row that exists for one run, see
-	// guest.sql) is not an account and does not count.
+	// the admin panel, and there is no other bootstrap path. It is never pending
+	// and never refused, whatever the switches say - a fresh install must not be
+	// able to lock itself out. Everyone after it gets no row back while
+	// registration is closed, and is pending while approval is required. A guest
+	// (a user row that exists for one run, see guest.sql) is not an account and
+	// does not count. The decision is made inside the INSERT, under the lock
+	// LockRegistration takes.
 	RegisterUser(ctx context.Context, arg RegisterUserParams) (User, error)
 	// Stop pressed in the guest's page. A guest's run is named by its id alone,
 	// which only the page that started it was told, and only a guest's run can be

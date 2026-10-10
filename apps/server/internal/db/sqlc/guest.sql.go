@@ -180,7 +180,7 @@ const createGuestUser = `-- name: CreateGuestUser :one
 INSERT INTO users (email, name, password_hash, role, guest, instructions_about, instructions_style, memory_enabled)
 VALUES ($1, $2, '', 'user', true,
         $3, $4, $5)
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending
 `
 
 type CreateGuestUserParams struct {
@@ -224,6 +224,7 @@ func (q *Queries) CreateGuestUser(ctx context.Context, arg CreateGuestUserParams
 		&i.MemoryLearn,
 		&i.AvatarKey,
 		&i.Guest,
+		&i.Pending,
 	)
 	return i, err
 }

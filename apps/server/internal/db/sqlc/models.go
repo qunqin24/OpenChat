@@ -357,6 +357,14 @@ type Attachment struct {
 	UserID      *uuid.UUID         `json:"user_id"`
 }
 
+type AuthAttempt struct {
+	ID        int64              `json:"id"`
+	Kind      string             `json:"kind"`
+	Ip        string             `json:"ip"`
+	Subject   string             `json:"subject"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type BranchBackfill struct {
 	ConversationID uuid.UUID   `json:"conversation_id"`
 	Root           uuid.UUID   `json:"root"`
@@ -563,6 +571,7 @@ type User struct {
 	MemoryLearn       bool               `json:"memory_learn"`
 	AvatarKey         *string            `json:"avatar_key"`
 	Guest             bool               `json:"guest"`
+	Pending           bool               `json:"pending"`
 }
 
 type UserMemory struct {

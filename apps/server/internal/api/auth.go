@@ -46,11 +46,35 @@ func (s *Server) issueSession(w http.ResponseWriter, r *http.Request, userID uui
 	return nil
 }
 
+// Register creates an account. Whether it may, and whether the account can be
+// used at once, is signup.go's three modes; the sign-up limit (5 attempts per
+// address per hour) is auth_limits.go's.
 func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	var body RegisterRequest
 	if err := httpx.DecodeJSON(r, &body); err != nil {
 		httpx.Fail(w, r, err)
 		return
+	}
+
+	switches, err := s.signupSwitches(ctx)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	// Refused before anything is spent on it. The first account is let in
+	// whatever the switch says; RegisterUser makes the same decision again,
+	// under a lock, for the ones that race for it.
+	if !switches.open {
+		has, err := s.q.HasAccounts(ctx)
+		if err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+		if has {
+			httpx.Fail(w, r, errRegistrationClosed)
+			return
+		}
 	}
 
 	email := strings.TrimSpace(string(body.Email))
@@ -69,18 +93,45 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Counted before the password is hashed, which is the expensive part.
+	if _, err := s.takeAttempt(ctx, registerLimit, clientIP(r), ""); err != nil {
+		var limited *rateLimited
+		if errors.As(err, &limited) {
+			failRateLimited(w, r, limited)
+			return
+		}
+		httpx.Fail(w, r, err)
+		return
+	}
+
 	hash, err := auth.HashPassword(body.Password)
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
 
-	user, err := s.q.RegisterUser(r.Context(), sqlc.RegisterUserParams{
-		Email:        email,
-		Name:         name,
-		PasswordHash: hash,
+	var user sqlc.User
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		q := s.q.WithTx(tx)
+		if err := q.LockRegistration(ctx); err != nil {
+			return err
+		}
+		var err error
+		user, err = q.RegisterUser(ctx, sqlc.RegisterUserParams{
+			Email:            email,
+			Name:             name,
+			PasswordHash:     hash,
+			NeedsApproval:    switches.approval,
+			RegistrationOpen: switches.open,
+		})
+		return err
 	})
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Not the first account, and registration is closed.
+			httpx.Fail(w, r, errRegistrationClosed)
+			return
+		}
 		if dup := duplicateError(err); dup != nil {
 			httpx.Fail(w, r, dup)
 			return
@@ -89,14 +140,21 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Waiting for an administrator: nothing to sign in to, so no session.
+	if user.Pending {
+		httpx.JSON(w, http.StatusAccepted, RegisterPending{Status: PendingApproval})
+		return
+	}
+
 	if err := s.issueSession(w, r, user.ID); err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
-	httpx.JSON(w, http.StatusCreated, s.sessionUser(r.Context(), user))
+	httpx.JSON(w, http.StatusCreated, s.sessionUser(ctx, user))
 }
 
 func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	var body LoginRequest
 	if err := httpx.DecodeJSON(r, &body); err != nil {
 		httpx.Fail(w, r, err)
@@ -107,7 +165,25 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	// from "wrong password" would let anyone probe for registered accounts.
 	invalid := httpx.NewError(http.StatusUnauthorized, "invalid_credentials", "those credentials are incorrect")
 
-	user, err := s.q.GetUserByLogin(r.Context(), strings.TrimSpace(body.Identifier))
+	// The attempt is counted before the password is looked at and given back if
+	// it turns out right, so that a flood of guesses in flight at once is
+	// counted as it arrives rather than after the slow hash of each. An
+	// address at its limit is turned away without its password being checked:
+	// the right one gets no further than a wrong one. The count is of the
+	// address (and of the address with this identifier), never of the account.
+	identifier := strings.TrimSpace(body.Identifier)
+	slot, err := s.takeAttempt(ctx, loginLimit, clientIP(r), subjectOf(identifier))
+	if err != nil {
+		var limited *rateLimited
+		if errors.As(err, &limited) {
+			failRateLimited(w, r, limited)
+			return
+		}
+		httpx.Fail(w, r, err)
+		return
+	}
+
+	user, err := s.q.GetUserByLogin(ctx, identifier)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Spend the same time as a real verification, so the response
@@ -129,8 +205,17 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The right password: not a failed attempt, whatever comes next.
+	s.releaseAttempt(r, slot)
+
+	// Only now is the state of the account told: someone who does not know the
+	// password learns nothing about it. A rejected sign-up is disabled, and says so.
 	if user.DisabledAt.Valid {
 		httpx.Fail(w, r, httpx.NewError(http.StatusForbidden, "account_disabled", "this account has been disabled"))
+		return
+	}
+	if user.Pending {
+		httpx.Fail(w, r, errPendingApproval)
 		return
 	}
 
@@ -138,7 +223,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, err)
 		return
 	}
-	httpx.JSON(w, http.StatusOK, s.sessionUser(r.Context(), user))
+	httpx.JSON(w, http.StatusOK, s.sessionUser(ctx, user))
 }
 
 func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {

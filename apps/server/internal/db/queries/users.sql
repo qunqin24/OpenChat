@@ -1,15 +1,33 @@
+-- name: LockRegistration :exec
+-- Registrations take this before RegisterUser, so that "is the table empty?" is
+-- answered one registration at a time: two people registering on a fresh
+-- install cannot both be made the administrator.
+SELECT pg_advisory_xact_lock(hashtextextended('registration', 13));
+
 -- name: RegisterUser :one
 -- The first account created becomes the admin: someone has to be able to reach
--- the admin panel, and there is no other bootstrap path. The decision is made
--- inside the INSERT so two concurrent registrations cannot both see an empty
--- table and both claim it. A guest (a user row that exists for one run, see
--- guest.sql) is not an account and does not count.
-INSERT INTO users (email, name, password_hash, role)
-VALUES ($1, $2, $3,
-        CASE WHEN (SELECT count(*) FROM users WHERE NOT guest) = 0
-                 THEN 'admin'::user_role
-             ELSE 'user'::user_role END)
+-- the admin panel, and there is no other bootstrap path. It is never pending
+-- and never refused, whatever the switches say - a fresh install must not be
+-- able to lock itself out. Everyone after it gets no row back while
+-- registration is closed, and is pending while approval is required. A guest
+-- (a user row that exists for one run, see guest.sql) is not an account and
+-- does not count. The decision is made inside the INSERT, under the lock
+-- LockRegistration takes.
+INSERT INTO users (email, name, password_hash, role, pending)
+SELECT sqlc.arg('email')::text,
+       sqlc.arg('name')::text,
+       sqlc.arg('password_hash')::text,
+       CASE WHEN c.n = 0 THEN 'admin'::user_role ELSE 'user'::user_role END,
+       c.n > 0 AND sqlc.arg('needs_approval')::boolean
+FROM (SELECT count(*) AS n FROM users WHERE NOT guest) c
+WHERE c.n = 0
+   OR sqlc.arg('registration_open')::boolean
 RETURNING *;
+
+-- name: HasAccounts :one
+-- Whether anyone has registered yet. While nobody has, registration is open to
+-- the one account that becomes the administrator, however the switch is set.
+SELECT EXISTS (SELECT 1 FROM users WHERE NOT guest) AS has_accounts;
 
 -- name: GetUser :one
 SELECT *
@@ -52,6 +70,12 @@ WHERE NOT guest
   AND (sqlc.narg('search')::text IS NULL
     OR email ILIKE '%' || sqlc.narg('search')::text || '%'
     OR name ILIKE '%' || sqlc.narg('search')::text || '%')
+  AND (sqlc.narg('statuses')::text[] IS NULL
+    OR (CASE
+            WHEN disabled_at IS NOT NULL THEN 'disabled'
+            WHEN pending THEN 'pending'
+            ELSE 'enabled'
+        END) = ANY (sqlc.narg('statuses')::text[]))
 ORDER BY created_at DESC, id DESC
 LIMIT sqlc.arg('row_limit') OFFSET sqlc.arg('row_offset');
 
@@ -61,7 +85,13 @@ FROM users
 WHERE NOT guest
   AND (sqlc.narg('search')::text IS NULL
     OR email ILIKE '%' || sqlc.narg('search')::text || '%'
-    OR name ILIKE '%' || sqlc.narg('search')::text || '%');
+    OR name ILIKE '%' || sqlc.narg('search')::text || '%')
+  AND (sqlc.narg('statuses')::text[] IS NULL
+    OR (CASE
+            WHEN disabled_at IS NOT NULL THEN 'disabled'
+            WHEN pending THEN 'pending'
+            ELSE 'enabled'
+        END) = ANY (sqlc.narg('statuses')::text[]));
 
 -- name: AdminCreateUser :one
 -- Registration derives the role from an empty table; here the caller picks it,
@@ -77,6 +107,10 @@ RETURNING *;
 --
 -- `disabled_at` keeps its original value when the account is already disabled,
 -- so re-saving the form does not reset when access was cut off.
+--
+-- `approved` can only let a pending account in (true); there is no way back to
+-- pending. It is independent of `disabled`: enabling an account does not
+-- approve it, and approving one does not enable it.
 UPDATE users
 SET name          = COALESCE(sqlc.narg('name')::text, name),
     email         = COALESCE(sqlc.narg('email')::text, email),
@@ -87,6 +121,7 @@ SET name          = COALESCE(sqlc.narg('name')::text, name),
                         WHEN sqlc.narg('disabled')::boolean THEN COALESCE(disabled_at, now())
                         ELSE NULL
                         END,
+    pending       = CASE WHEN sqlc.narg('approved')::boolean IS TRUE THEN false ELSE pending END,
     updated_at    = now()
 WHERE id = sqlc.arg('id')
 RETURNING *;
@@ -113,6 +148,15 @@ UPDATE users
 SET disabled_at = CASE WHEN sqlc.arg('disabled')::boolean THEN now() ELSE NULL END,
     updated_at  = now()
 WHERE id = ANY (sqlc.arg('ids')::uuid[]);
+
+-- name: BulkApproveUsers :execrows
+-- Only accounts that are waiting count, so the number reported is the number
+-- let in.
+UPDATE users
+SET pending    = false,
+    updated_at = now()
+WHERE id = ANY (sqlc.arg('ids')::uuid[])
+  AND pending;
 
 -- name: UpdateOwnProfile :one
 -- Deliberately narrower than AdminUpdateUser: role and disabled_at are not

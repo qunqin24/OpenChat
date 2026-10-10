@@ -792,7 +792,7 @@ func TestGuestIsNotAnAccount(t *testing.T) {
 	if n, err := q.CountUsers(ctx); err != nil || n != before {
 		t.Errorf("CountUsers %d (%v), want %d without the guest", n, err, before)
 	}
-	filtered, err := q.CountUsersFiltered(ctx, nil)
+	filtered, err := q.CountUsersFiltered(ctx, sqlc.CountUsersFilteredParams{})
 	if err != nil || filtered != before {
 		t.Errorf("CountUsersFiltered %d (%v), want %d", filtered, err, before)
 	}

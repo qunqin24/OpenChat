@@ -15,7 +15,7 @@ const adminCreateUser = `-- name: AdminCreateUser :one
 INSERT INTO users (email, name, password_hash, role, disabled_at)
 VALUES ($1, $2, $3, $4,
         CASE WHEN $5::boolean THEN now() ELSE NULL END)
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending
 `
 
 type AdminCreateUserParams struct {
@@ -53,6 +53,7 @@ func (q *Queries) AdminCreateUser(ctx context.Context, arg AdminCreateUserParams
 		&i.MemoryLearn,
 		&i.AvatarKey,
 		&i.Guest,
+		&i.Pending,
 	)
 	return i, err
 }
@@ -68,9 +69,10 @@ SET name          = COALESCE($1::text, name),
                         WHEN $5::boolean THEN COALESCE(disabled_at, now())
                         ELSE NULL
                         END,
+    pending       = CASE WHEN $6::boolean IS TRUE THEN false ELSE pending END,
     updated_at    = now()
-WHERE id = $6
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest
+WHERE id = $7
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending
 `
 
 type AdminUpdateUserParams struct {
@@ -79,6 +81,7 @@ type AdminUpdateUserParams struct {
 	PasswordHash *string   `json:"password_hash"`
 	Role         *UserRole `json:"role"`
 	Disabled     *bool     `json:"disabled"`
+	Approved     *bool     `json:"approved"`
 	ID           uuid.UUID `json:"id"`
 }
 
@@ -87,6 +90,10 @@ type AdminUpdateUserParams struct {
 //
 // `disabled_at` keeps its original value when the account is already disabled,
 // so re-saving the form does not reset when access was cut off.
+//
+// `approved` can only let a pending account in (true); there is no way back to
+// pending. It is independent of `disabled`: enabling an account does not
+// approve it, and approving one does not enable it.
 func (q *Queries) AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams) (User, error) {
 	row := q.db.QueryRow(ctx, adminUpdateUser,
 		arg.Name,
@@ -94,6 +101,7 @@ func (q *Queries) AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams
 		arg.PasswordHash,
 		arg.Role,
 		arg.Disabled,
+		arg.Approved,
 		arg.ID,
 	)
 	var i User
@@ -113,8 +121,27 @@ func (q *Queries) AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams
 		&i.MemoryLearn,
 		&i.AvatarKey,
 		&i.Guest,
+		&i.Pending,
 	)
 	return i, err
+}
+
+const bulkApproveUsers = `-- name: BulkApproveUsers :execrows
+UPDATE users
+SET pending    = false,
+    updated_at = now()
+WHERE id = ANY ($1::uuid[])
+  AND pending
+`
+
+// Only accounts that are waiting count, so the number reported is the number
+// let in.
+func (q *Queries) BulkApproveUsers(ctx context.Context, ids []uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, bulkApproveUsers, ids)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const bulkSetUserDisabled = `-- name: BulkSetUserDisabled :execrows
@@ -191,17 +218,28 @@ WHERE NOT guest
   AND ($1::text IS NULL
     OR email ILIKE '%' || $1::text || '%'
     OR name ILIKE '%' || $1::text || '%')
+  AND ($2::text[] IS NULL
+    OR (CASE
+            WHEN disabled_at IS NOT NULL THEN 'disabled'
+            WHEN pending THEN 'pending'
+            ELSE 'enabled'
+        END) = ANY ($2::text[]))
 `
 
-func (q *Queries) CountUsersFiltered(ctx context.Context, search *string) (int64, error) {
-	row := q.db.QueryRow(ctx, countUsersFiltered, search)
+type CountUsersFilteredParams struct {
+	Search   *string  `json:"search"`
+	Statuses []string `json:"statuses"`
+}
+
+func (q *Queries) CountUsersFiltered(ctx context.Context, arg CountUsersFilteredParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countUsersFiltered, arg.Search, arg.Statuses)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending
 FROM users
 WHERE id = $1
 `
@@ -225,12 +263,13 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.MemoryLearn,
 		&i.AvatarKey,
 		&i.Guest,
+		&i.Pending,
 	)
 	return i, err
 }
 
 const getUserByAvatarKey = `-- name: GetUserByAvatarKey :one
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending
 FROM users
 WHERE avatar_key = $1
 `
@@ -256,12 +295,13 @@ func (q *Queries) GetUserByAvatarKey(ctx context.Context, avatarKey *string) (Us
 		&i.MemoryLearn,
 		&i.AvatarKey,
 		&i.Guest,
+		&i.Pending,
 	)
 	return i, err
 }
 
 const getUserByLogin = `-- name: GetUserByLogin :one
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending
 FROM users
 WHERE NOT guest
   AND (lower(email) = lower($1::text)
@@ -297,31 +337,57 @@ func (q *Queries) GetUserByLogin(ctx context.Context, identifier string) (User, 
 		&i.MemoryLearn,
 		&i.AvatarKey,
 		&i.Guest,
+		&i.Pending,
 	)
 	return i, err
 }
 
+const hasAccounts = `-- name: HasAccounts :one
+SELECT EXISTS (SELECT 1 FROM users WHERE NOT guest) AS has_accounts
+`
+
+// Whether anyone has registered yet. While nobody has, registration is open to
+// the one account that becomes the administrator, however the switch is set.
+func (q *Queries) HasAccounts(ctx context.Context) (bool, error) {
+	row := q.db.QueryRow(ctx, hasAccounts)
+	var has_accounts bool
+	err := row.Scan(&has_accounts)
+	return has_accounts, err
+}
+
 const listUsers = `-- name: ListUsers :many
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending
 FROM users
 WHERE NOT guest
   AND ($1::text IS NULL
     OR email ILIKE '%' || $1::text || '%'
     OR name ILIKE '%' || $1::text || '%')
+  AND ($2::text[] IS NULL
+    OR (CASE
+            WHEN disabled_at IS NOT NULL THEN 'disabled'
+            WHEN pending THEN 'pending'
+            ELSE 'enabled'
+        END) = ANY ($2::text[]))
 ORDER BY created_at DESC, id DESC
-LIMIT $3 OFFSET $2
+LIMIT $4 OFFSET $3
 `
 
 type ListUsersParams struct {
-	Search    *string `json:"search"`
-	RowOffset int32   `json:"row_offset"`
-	RowLimit  int32   `json:"row_limit"`
+	Search    *string  `json:"search"`
+	Statuses  []string `json:"statuses"`
+	RowOffset int32    `json:"row_offset"`
+	RowLimit  int32    `json:"row_limit"`
 }
 
 // Offset paging rather than keyset: the admin table needs page numbers and a
 // total, and the row count here stays small enough that the scan is cheap.
 func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error) {
-	rows, err := q.db.Query(ctx, listUsers, arg.Search, arg.RowOffset, arg.RowLimit)
+	rows, err := q.db.Query(ctx, listUsers,
+		arg.Search,
+		arg.Statuses,
+		arg.RowOffset,
+		arg.RowLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -345,6 +411,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.MemoryLearn,
 			&i.AvatarKey,
 			&i.Guest,
+			&i.Pending,
 		); err != nil {
 			return nil, err
 		}
@@ -357,7 +424,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 }
 
 const listUsersByIDs = `-- name: ListUsersByIDs :many
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending
 FROM users
 WHERE id = ANY ($1::uuid[])
 `
@@ -387,6 +454,7 @@ func (q *Queries) ListUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]User, 
 			&i.MemoryLearn,
 			&i.AvatarKey,
 			&i.Guest,
+			&i.Pending,
 		); err != nil {
 			return nil, err
 		}
@@ -398,28 +466,55 @@ func (q *Queries) ListUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]User, 
 	return items, nil
 }
 
+const lockRegistration = `-- name: LockRegistration :exec
+SELECT pg_advisory_xact_lock(hashtextextended('registration', 13))
+`
+
+// Registrations take this before RegisterUser, so that "is the table empty?" is
+// answered one registration at a time: two people registering on a fresh
+// install cannot both be made the administrator.
+func (q *Queries) LockRegistration(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, lockRegistration)
+	return err
+}
+
 const registerUser = `-- name: RegisterUser :one
-INSERT INTO users (email, name, password_hash, role)
-VALUES ($1, $2, $3,
-        CASE WHEN (SELECT count(*) FROM users WHERE NOT guest) = 0
-                 THEN 'admin'::user_role
-             ELSE 'user'::user_role END)
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest
+INSERT INTO users (email, name, password_hash, role, pending)
+SELECT $1::text,
+       $2::text,
+       $3::text,
+       CASE WHEN c.n = 0 THEN 'admin'::user_role ELSE 'user'::user_role END,
+       c.n > 0 AND $4::boolean
+FROM (SELECT count(*) AS n FROM users WHERE NOT guest) c
+WHERE c.n = 0
+   OR $5::boolean
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending
 `
 
 type RegisterUserParams struct {
-	Email        string `json:"email"`
-	Name         string `json:"name"`
-	PasswordHash string `json:"password_hash"`
+	Email            string `json:"email"`
+	Name             string `json:"name"`
+	PasswordHash     string `json:"password_hash"`
+	NeedsApproval    bool   `json:"needs_approval"`
+	RegistrationOpen bool   `json:"registration_open"`
 }
 
 // The first account created becomes the admin: someone has to be able to reach
-// the admin panel, and there is no other bootstrap path. The decision is made
-// inside the INSERT so two concurrent registrations cannot both see an empty
-// table and both claim it. A guest (a user row that exists for one run, see
-// guest.sql) is not an account and does not count.
+// the admin panel, and there is no other bootstrap path. It is never pending
+// and never refused, whatever the switches say - a fresh install must not be
+// able to lock itself out. Everyone after it gets no row back while
+// registration is closed, and is pending while approval is required. A guest
+// (a user row that exists for one run, see guest.sql) is not an account and
+// does not count. The decision is made inside the INSERT, under the lock
+// LockRegistration takes.
 func (q *Queries) RegisterUser(ctx context.Context, arg RegisterUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, registerUser, arg.Email, arg.Name, arg.PasswordHash)
+	row := q.db.QueryRow(ctx, registerUser,
+		arg.Email,
+		arg.Name,
+		arg.PasswordHash,
+		arg.NeedsApproval,
+		arg.RegistrationOpen,
+	)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -437,6 +532,7 @@ func (q *Queries) RegisterUser(ctx context.Context, arg RegisterUserParams) (Use
 		&i.MemoryLearn,
 		&i.AvatarKey,
 		&i.Guest,
+		&i.Pending,
 	)
 	return i, err
 }
@@ -446,7 +542,7 @@ UPDATE users
 SET avatar_key = $1::text,
     updated_at = now()
 WHERE id = $2
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending
 `
 
 type SetUserAvatarParams struct {
@@ -476,6 +572,7 @@ func (q *Queries) SetUserAvatar(ctx context.Context, arg SetUserAvatarParams) (U
 		&i.MemoryLearn,
 		&i.AvatarKey,
 		&i.Guest,
+		&i.Pending,
 	)
 	return i, err
 }
@@ -497,7 +594,7 @@ SET name       = COALESCE($1::text, name),
     email      = COALESCE($2::text, email),
     updated_at = now()
 WHERE id = $3
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending
 `
 
 type UpdateOwnProfileParams struct {
@@ -528,6 +625,7 @@ func (q *Queries) UpdateOwnProfile(ctx context.Context, arg UpdateOwnProfilePara
 		&i.MemoryLearn,
 		&i.AvatarKey,
 		&i.Guest,
+		&i.Pending,
 	)
 	return i, err
 }

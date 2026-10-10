@@ -29,7 +29,21 @@ func (s *Server) ListUsers(w http.ResponseWriter, r *http.Request, params ListUs
 		}
 	}
 
-	total, err := s.q.CountUsersFiltered(r.Context(), search)
+	var statuses []string
+	if params.Status != nil {
+		for _, status := range *params.Status {
+			if !status.Valid() {
+				httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "invalid_request", "unknown status"))
+				return
+			}
+			statuses = append(statuses, string(status))
+		}
+	}
+
+	total, err := s.q.CountUsersFiltered(r.Context(), sqlc.CountUsersFilteredParams{
+		Search:   search,
+		Statuses: statuses,
+	})
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
@@ -37,6 +51,7 @@ func (s *Server) ListUsers(w http.ResponseWriter, r *http.Request, params ListUs
 
 	rows, err := s.q.ListUsers(r.Context(), sqlc.ListUsersParams{
 		Search:    search,
+		Statuses:  statuses,
 		RowLimit:  limit,
 		RowOffset: (page - 1) * limit,
 	})
@@ -119,8 +134,12 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, userId opena
 		return
 	}
 	if body.Role == nil && body.Disabled == nil && body.Name == nil &&
-		body.Email == nil && body.Password == nil {
+		body.Email == nil && body.Password == nil && body.Approved == nil {
 		httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "nothing_to_update", "no changes were given"))
+		return
+	}
+	if body.Approved != nil && !*body.Approved {
+		httpx.Fail(w, r, errInvalidApproval)
 		return
 	}
 
@@ -205,6 +224,7 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, userId opena
 		PasswordHash: passwordHash,
 		Role:         role,
 		Disabled:     body.Disabled,
+		Approved:     body.Approved,
 	})
 	if err != nil {
 		if dup := duplicateError(err); dup != nil {
@@ -235,6 +255,21 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, userId opena
 // maxBulkUsers mirrors the contract's cap on one request.
 const maxBulkUsers = 200
 
+// errInvalidApproval: approving is the only direction. A pending account is
+// made by registering; nothing sends an account back to it.
+var errInvalidApproval = httpx.NewError(http.StatusBadRequest, "invalid_approval",
+	"approved can only be true")
+
+func countSet(flags ...bool) int {
+	n := 0
+	for _, f := range flags {
+		if f {
+			n++
+		}
+	}
+	return n
+}
+
 // BulkUpdateUsers applies one change across several accounts in a single
 // transaction.
 //
@@ -258,9 +293,12 @@ func (s *Server) BulkUpdateUsers(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "too_many_users",
 			fmt.Sprintf("at most %d accounts can be changed at once", maxBulkUsers)))
 		return
-	case (body.Role == nil) == (body.Disabled == nil):
+	case body.Approved != nil && !*body.Approved:
+		httpx.Fail(w, r, errInvalidApproval)
+		return
+	case countSet(body.Role != nil, body.Disabled != nil, body.Approved != nil) != 1:
 		httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "one_change_required",
-			"give exactly one of role or disabled"))
+			"give exactly one of role, disabled or approved"))
 		return
 	}
 
@@ -307,12 +345,15 @@ func (s *Server) BulkUpdateUsers(w http.ResponseWriter, r *http.Request) {
 
 	var updated int64
 	if len(targets) > 0 {
-		if body.Role != nil {
+		switch {
+		case body.Role != nil:
 			updated, err = q.BulkUpdateUserRole(r.Context(), sqlc.BulkUpdateUserRoleParams{
 				Ids:  targets,
 				Role: sqlc.UserRole(*body.Role),
 			})
-		} else {
+		case body.Approved != nil:
+			updated, err = q.BulkApproveUsers(r.Context(), targets)
+		default:
 			updated, err = q.BulkSetUserDisabled(r.Context(), sqlc.BulkSetUserDisabledParams{
 				Ids:      targets,
 				Disabled: *body.Disabled,

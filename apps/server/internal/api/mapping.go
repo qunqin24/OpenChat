@@ -68,6 +68,7 @@ func (s *Server) user(ctx context.Context, row sqlc.User) User {
 		Role:      UserRole(row.Role),
 		AvatarUrl: s.avatarURL(ctx, row.AvatarKey),
 		Disabled:  row.DisabledAt.Valid,
+		Pending:   row.Pending,
 		CreatedAt: row.CreatedAt.Time,
 	}
 	if row.LastSeenAt.Valid {

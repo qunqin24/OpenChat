@@ -21,6 +21,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What the sign-in pages offer
+         * @description Public and always there, so the login and register pages know what to
+         *     show before anyone has typed anything: whether to link to registration,
+         *     and whether to offer "continue as guest".
+         */
+        get: operations["getAuthOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/register": {
         parameters: {
             query?: never;
@@ -30,7 +52,22 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create an account and start a session */
+        /**
+         * Create an account
+         * @description Which of three things happens depends on the administrator's switches
+         *     (`SystemSettings.allowRegistration` and `registrationApproval`), except
+         *     for the very first account ever created, which is always an
+         *     administrator, is never pending and is never refused:
+         *
+         *     - registration closed: 403 `registration_closed`;
+         *     - open: 201, the account works at once and the session cookie is set;
+         *     - open with approval: 202, the account is pending - it cannot sign in
+         *       until an administrator approves it - and no session is created.
+         *
+         *     At most 5 attempts per client address per hour; beyond that, 429
+         *     `register_rate_limited` with a `Retry-After` header (seconds). Every
+         *     attempt counts, successful or not.
+         */
         post: operations["register"];
         delete?: never;
         options?: never;
@@ -47,7 +84,20 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Start a session */
+        /**
+         * Start a session
+         * @description Wrong credentials of every kind (no such account included) are one
+         *     401 `invalid_credentials`. Once the password is right, an account
+         *     waiting for approval is 403 `pending_approval` and a disabled one 403
+         *     `account_disabled`; neither gets a session.
+         *
+         *     Failed attempts are counted: 10 per client address per 15 minutes, and
+         *     5 per client address and identifier per 15 minutes. Beyond either, 429
+         *     `login_rate_limited` with a `Retry-After` header (seconds), before the
+         *     password is looked at. An account is never locked as a whole - only the
+         *     address that failed is slowed down - so no one can lock another person
+         *     out from elsewhere.
+         */
         post: operations["login"];
         delete?: never;
         options?: never;
@@ -173,8 +223,10 @@ export interface paths {
         /**
          * Create an account
          * @description The account is usable immediately; no invitation or verification step
-         *     exists. Unlike registration, the role is chosen by the caller rather
-         *     than derived from whether the table is empty.
+         *     exists, and it is never pending, whatever the approval switch says.
+         *     Unlike registration, the role is chosen by the caller rather than
+         *     derived from whether the table is empty, and this works while
+         *     registration is closed - it is how accounts are made then.
          */
         post: operations["createUser"];
         delete?: never;
@@ -589,7 +641,8 @@ export interface paths {
          * Apply one change to several accounts
          * @description Applied in a single transaction. Accounts the caller may not change are
          *     reported in `skipped` rather than failing the whole request; a change
-         *     that would leave no enabled admin is refused outright.
+         *     that would leave no enabled admin is refused outright. `updated` of an
+         *     approval counts the accounts that were waiting.
          */
         post: operations["bulkUpdateUsers"];
         delete?: never;
@@ -2120,6 +2173,33 @@ export interface components {
          *     looked at, from every page that shows a name.
          */
         AvatarUrl: string;
+        AuthOptions: {
+            /**
+             * @description Whether `POST /auth/register` is open. True too while no account
+             *     exists yet, whatever the administrator's switch says: the first
+             *     account is always let in.
+             */
+            registration: boolean;
+            /**
+             * @description Whether an account made by registering must be approved before it
+             *     can sign in. Only meaningful while `registration` is true; false
+             *     while no account exists yet, since the first one is never pending.
+             */
+            approval: boolean;
+            /** @description The same as `GuestStatus.enabled`. */
+            guest: boolean;
+        };
+        RegisterPending: {
+            /** @enum {string} */
+            status: "pending_approval";
+        };
+        /**
+         * @description `pending` is a registered account waiting for an administrator;
+         *     `disabled` wins over it, so rejecting a sign-up (disabling it) moves it
+         *     out of the pending list.
+         * @enum {string}
+         */
+        UserStatus: "pending" | "enabled" | "disabled";
         User: {
             /** Format: uuid */
             id: string;
@@ -2129,6 +2209,11 @@ export interface components {
             role: components["schemas"]["UserRole"];
             avatarUrl?: components["schemas"]["AvatarUrl"];
             disabled: boolean;
+            /**
+             * @description Registered while approval was required and not yet approved. Such
+             *     an account cannot sign in. It can also be `disabled` (rejected).
+             */
+            pending: boolean;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -2324,6 +2409,11 @@ export interface components {
             password?: string;
             role?: components["schemas"]["UserRole"];
             disabled?: boolean;
+            /**
+             * @description `true` lets a pending account in; `false` is 400 `invalid_approval`
+             *     (there is no way back to pending). Independent of `disabled`.
+             */
+            approved?: boolean;
         };
         CatalogStatus: {
             /**
@@ -2619,6 +2709,19 @@ export interface components {
         };
         SystemSettings: {
             /**
+             * @description Whether anyone may create an account by registering. Off, only
+             *     administrators create accounts (`POST /admin/users`); the very
+             *     first account on a fresh install can still register. On by default.
+             */
+            allowRegistration: boolean;
+            /**
+             * @description Whether an account made by registering is pending until an
+             *     administrator approves it. Only matters while `allowRegistration`
+             *     is on. On by default; accounts made by an administrator, and the
+             *     first account ever, are never pending.
+             */
+            registrationApproval: boolean;
+            /**
              * @description Whether anyone may use the chat without an account. A guest's
              *     conversations are kept in their own browser; the server holds none
              *     of them. Off by default.
@@ -2689,6 +2792,8 @@ export interface components {
             askUser?: boolean;
             memory?: boolean;
             avatarUploads?: boolean;
+            allowRegistration?: boolean;
+            registrationApproval?: boolean;
             guestMode?: boolean;
             /** @description 0 to 100000 (400 `invalid_guest_limit` otherwise); 0 is unlimited. */
             guestHourlyLimit?: number;
@@ -3163,11 +3268,16 @@ export interface components {
             /** @description Latest failures first, at most 8. */
             errors: components["schemas"]["DashboardError"][];
         };
-        /** @description Exactly one of `role` or `disabled` must be given. */
+        /** @description Exactly one of `role`, `disabled` or `approved` must be given. */
         BulkUpdateUsersRequest: {
             userIds: string[];
             role?: components["schemas"]["UserRole"];
             disabled?: boolean;
+            /**
+             * @description Only `true` (400 `invalid_approval` otherwise): lets pending
+             *     accounts in. Accounts that are not pending are left as they are.
+             */
+            approved?: boolean;
         };
         /**
          * @description `self` — the caller's own account, which cannot be demoted or disabled.
@@ -3189,6 +3299,17 @@ export interface components {
         /** @description error */
         Error: {
             headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description too many attempts; try again after the time in `Retry-After` */
+        RateLimited: {
+            headers: {
+                /** @description Seconds until another attempt may be made. */
+                "Retry-After"?: number;
                 [name: string]: unknown;
             };
             content: {
@@ -3227,6 +3348,27 @@ export interface operations {
             };
         };
     };
+    getAuthOptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthOptions"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     register: {
         parameters: {
             query?: never;
@@ -3250,6 +3392,16 @@ export interface operations {
                     "application/json": components["schemas"]["SessionUser"];
                 };
             };
+            /** @description created and waiting for an administrator's approval; no session */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegisterPending"];
+                };
+            };
+            429: components["responses"]["RateLimited"];
             default: components["responses"]["Error"];
         };
     };
@@ -3276,6 +3428,7 @@ export interface operations {
                     "application/json": components["schemas"]["SessionUser"];
                 };
             };
+            429: components["responses"]["RateLimited"];
             default: components["responses"]["Error"];
         };
     };
@@ -3407,6 +3560,12 @@ export interface operations {
                 page?: number;
                 /** @description Matches against email and name. */
                 search?: string;
+                /**
+                 * @description Only accounts in one of these states; repeat the parameter for
+                 *     several. Absent: all of them. A disabled account is `disabled`
+                 *     even if it is also waiting for approval (a rejected sign-up).
+                 */
+                status?: components["schemas"]["UserStatus"][];
             };
             header?: never;
             path?: never;

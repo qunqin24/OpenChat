@@ -96,6 +96,12 @@ func (s *Server) systemSettings(ctx context.Context) (SystemSettings, error) {
 	if err := guestSettings(ctx, s.q, &settings); err != nil {
 		return settings, err
 	}
+	switches, err := s.signupSwitches(ctx)
+	if err != nil {
+		return settings, err
+	}
+	settings.AllowRegistration = switches.open
+	settings.RegistrationApproval = switches.approval
 	keep := retentionOf(ctx, s.q)
 	settings.DeletedRetentionDays = int(keep.deleted / (24 * time.Hour))
 	settings.UnsentUploadHours = int(keep.unsentUploads / time.Hour)
@@ -202,6 +208,8 @@ func (s *Server) UpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 		value any
 		log   string
 	}{
+		{settingAllowRegistration, body.AllowRegistration, "allow registration changed"},
+		{settingRegistrationApproval, body.RegistrationApproval, "registration approval changed"},
 		{settingGuestMode, body.GuestMode, "guest mode changed"},
 		{settingGuestHourlyLimit, body.GuestHourlyLimit, "guest hourly limit changed"},
 		{settingGuestDailyLimit, body.GuestDailyLimit, "guest daily limit changed"},

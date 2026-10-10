@@ -5,13 +5,16 @@ RETURNING *;
 
 -- name: GetSessionUser :one
 -- One round trip for the whole auth check: the session must be unexpired and
--- the account still enabled.
+-- the account still enabled and not waiting for approval. A pending account is
+-- never given a session; this is the second lock on that door, for the day a
+-- code path forgets the first.
 SELECT sqlc.embed(users), s.id AS session_id, s.expires_at
 FROM sessions s
          JOIN users ON users.id = s.user_id
 WHERE s.token_hash = sqlc.arg('token_hash')
   AND s.expires_at > now()
-  AND users.disabled_at IS NULL;
+  AND users.disabled_at IS NULL
+  AND NOT users.pending;
 
 -- name: TouchSession :exec
 UPDATE sessions

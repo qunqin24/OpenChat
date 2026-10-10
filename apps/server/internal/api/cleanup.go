@@ -112,6 +112,9 @@ func (s *Server) CleanupNow(ctx context.Context) {
 	// no limit looks at any more.
 	s.sweepGuests(ctx, now.Add(-guestStaleAfter))
 
+	// The sign-in and sign-up attempts no limit looks at any more.
+	s.purgeAuthAttempts(ctx, now)
+
 	s.sweepOrphanFiles(ctx, now.Add(-keep.orphanFiles))
 
 	if _, err := s.notes().PurgeEvents(ctx); err != nil {

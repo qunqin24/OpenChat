@@ -113,12 +113,13 @@ func (q *Queries) DeleteUserSessions(ctx context.Context, userID uuid.UUID) erro
 }
 
 const getSessionUser = `-- name: GetSessionUser :one
-SELECT users.id, users.email, users.name, users.created_at, users.updated_at, users.password_hash, users.role, users.disabled_at, users.last_seen_at, users.instructions_about, users.instructions_style, users.memory_enabled, users.memory_learn, users.avatar_key, users.guest, s.id AS session_id, s.expires_at
+SELECT users.id, users.email, users.name, users.created_at, users.updated_at, users.password_hash, users.role, users.disabled_at, users.last_seen_at, users.instructions_about, users.instructions_style, users.memory_enabled, users.memory_learn, users.avatar_key, users.guest, users.pending, s.id AS session_id, s.expires_at
 FROM sessions s
          JOIN users ON users.id = s.user_id
 WHERE s.token_hash = $1
   AND s.expires_at > now()
   AND users.disabled_at IS NULL
+  AND NOT users.pending
 `
 
 type GetSessionUserRow struct {
@@ -128,7 +129,9 @@ type GetSessionUserRow struct {
 }
 
 // One round trip for the whole auth check: the session must be unexpired and
-// the account still enabled.
+// the account still enabled and not waiting for approval. A pending account is
+// never given a session; this is the second lock on that door, for the day a
+// code path forgets the first.
 func (q *Queries) GetSessionUser(ctx context.Context, tokenHash []byte) (GetSessionUserRow, error) {
 	row := q.db.QueryRow(ctx, getSessionUser, tokenHash)
 	var i GetSessionUserRow
@@ -148,6 +151,7 @@ func (q *Queries) GetSessionUser(ctx context.Context, tokenHash []byte) (GetSess
 		&i.User.MemoryLearn,
 		&i.User.AvatarKey,
 		&i.User.Guest,
+		&i.User.Pending,
 		&i.SessionID,
 		&i.ExpiresAt,
 	)
