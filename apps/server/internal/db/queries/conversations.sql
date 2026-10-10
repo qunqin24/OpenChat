@@ -25,6 +25,36 @@ WHERE user_id = sqlc.arg('user_id')
 ORDER BY updated_at DESC, id DESC
 LIMIT sqlc.arg('row_limit');
 
+-- name: SearchConversations :many
+-- The caller's conversations whose title or any message's text contains the
+-- pattern (an ILIKE pattern, escaped by the caller), newest first, each with
+-- the latest message that matched. Every branch is searched: what was said on
+-- a branch not on show was still said. Reasoning and tool rows are not words
+-- the person wrote or read as the answer, so only user and assistant text.
+-- A conversation found by its title alone has no hit: empty strings, not NULLs.
+SELECT c.*,
+       COALESCE(hit.id::text, '')::text  AS hit_id,
+       COALESCE(hit.role::text, '')::text AS hit_role,
+       COALESCE(hit.content, '')::text    AS hit_content
+FROM conversations c
+         LEFT JOIN LATERAL (
+    SELECT m.id, m.role, m.content
+    FROM messages m
+    WHERE m.conversation_id = c.id
+      AND m.role IN ('user', 'assistant')
+      AND m.content ILIKE sqlc.arg('pattern')::text
+    ORDER BY m.created_at DESC, m.id DESC
+    LIMIT 1
+    ) hit ON true
+WHERE c.user_id = sqlc.arg('user_id')
+  AND c.deleted_at IS NULL
+  AND NOT c.temporary
+  AND (c.title ILIKE sqlc.arg('pattern')::text OR hit.id IS NOT NULL)
+  AND (sqlc.narg('cursor_updated_at')::timestamptz IS NULL
+    OR (c.updated_at, c.id) < (sqlc.narg('cursor_updated_at')::timestamptz, sqlc.narg('cursor_id')::uuid))
+ORDER BY c.updated_at DESC, c.id DESC
+LIMIT sqlc.arg('row_limit');
+
 -- name: UpdateConversationTitle :one
 UPDATE conversations
 SET title      = sqlc.arg('title'),

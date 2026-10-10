@@ -174,6 +174,105 @@ func (q *Queries) LockConversation(ctx context.Context, id uuid.UUID) (Conversat
 	return i, err
 }
 
+const searchConversations = `-- name: SearchConversations :many
+SELECT c.id, c.user_id, c.title, c.model, c.created_at, c.updated_at, c.deleted_at, c.reasoning_effort, c.web_search, c.memory_snapshot, c.temporary, c.current_input_id,
+       COALESCE(hit.id::text, '')::text  AS hit_id,
+       COALESCE(hit.role::text, '')::text AS hit_role,
+       COALESCE(hit.content, '')::text    AS hit_content
+FROM conversations c
+         LEFT JOIN LATERAL (
+    SELECT m.id, m.role, m.content
+    FROM messages m
+    WHERE m.conversation_id = c.id
+      AND m.role IN ('user', 'assistant')
+      AND m.content ILIKE $1::text
+    ORDER BY m.created_at DESC, m.id DESC
+    LIMIT 1
+    ) hit ON true
+WHERE c.user_id = $2
+  AND c.deleted_at IS NULL
+  AND NOT c.temporary
+  AND (c.title ILIKE $1::text OR hit.id IS NOT NULL)
+  AND ($3::timestamptz IS NULL
+    OR (c.updated_at, c.id) < ($3::timestamptz, $4::uuid))
+ORDER BY c.updated_at DESC, c.id DESC
+LIMIT $5
+`
+
+type SearchConversationsParams struct {
+	Pattern         string             `json:"pattern"`
+	UserID          *uuid.UUID         `json:"user_id"`
+	CursorUpdatedAt pgtype.Timestamptz `json:"cursor_updated_at"`
+	CursorID        *uuid.UUID         `json:"cursor_id"`
+	RowLimit        int32              `json:"row_limit"`
+}
+
+type SearchConversationsRow struct {
+	ID              uuid.UUID          `json:"id"`
+	UserID          *uuid.UUID         `json:"user_id"`
+	Title           string             `json:"title"`
+	Model           *string            `json:"model"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt       pgtype.Timestamptz `json:"deleted_at"`
+	ReasoningEffort *string            `json:"reasoning_effort"`
+	WebSearch       bool               `json:"web_search"`
+	MemorySnapshot  []byte             `json:"memory_snapshot"`
+	Temporary       bool               `json:"temporary"`
+	CurrentInputID  *uuid.UUID         `json:"current_input_id"`
+	HitID           string             `json:"hit_id"`
+	HitRole         string             `json:"hit_role"`
+	HitContent      string             `json:"hit_content"`
+}
+
+// The caller's conversations whose title or any message's text contains the
+// pattern (an ILIKE pattern, escaped by the caller), newest first, each with
+// the latest message that matched. Every branch is searched: what was said on
+// a branch not on show was still said. Reasoning and tool rows are not words
+// the person wrote or read as the answer, so only user and assistant text.
+// A conversation found by its title alone has no hit: empty strings, not NULLs.
+func (q *Queries) SearchConversations(ctx context.Context, arg SearchConversationsParams) ([]SearchConversationsRow, error) {
+	rows, err := q.db.Query(ctx, searchConversations,
+		arg.Pattern,
+		arg.UserID,
+		arg.CursorUpdatedAt,
+		arg.CursorID,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchConversationsRow{}
+	for rows.Next() {
+		var i SearchConversationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Title,
+			&i.Model,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.ReasoningEffort,
+			&i.WebSearch,
+			&i.MemorySnapshot,
+			&i.Temporary,
+			&i.CurrentInputID,
+			&i.HitID,
+			&i.HitRole,
+			&i.HitContent,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setConversationModel = `-- name: SetConversationModel :one
 UPDATE conversations
 SET model = $1

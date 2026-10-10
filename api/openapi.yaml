@@ -785,6 +785,14 @@ paths:
       parameters:
         - { $ref: "#/components/parameters/Limit" }
         - { $ref: "#/components/parameters/Cursor" }
+        - name: search
+          in: query
+          description: |
+            Only conversations whose title or any message's text contains this,
+            ignoring case — every branch, not only the one on show. A
+            conversation found by what was said in it carries `match`. Keep it
+            the same while following `nextCursor`.
+          schema: { type: string, maxLength: 200 }
       responses:
         "200":
           description: a page of conversations
@@ -1595,6 +1603,23 @@ components:
             Has no effect where the server offers no web search.
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+        match:
+          description: |
+            Only in a search's results: the latest message containing the
+            search, cut down to the words around it.
+          allOf: [{ $ref: "#/components/schemas/ConversationMatch" }]
+
+    ConversationMatch:
+      type: object
+      required: [messageId, role, excerpt]
+      properties:
+        messageId: { type: string, format: uuid }
+        role: { type: string, enum: [user, assistant] }
+        excerpt:
+          type: string
+          description: |
+            The message's text around the first occurrence of the search, on one
+            line, with `…` where it was cut.
 
     ReasoningEffort:
       type: string

@@ -1339,6 +1339,22 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /**
+             * @description Only in a search's results: the latest message containing the
+             *     search, cut down to the words around it.
+             */
+            match?: components["schemas"]["ConversationMatch"];
+        };
+        ConversationMatch: {
+            /** Format: uuid */
+            messageId: string;
+            /** @enum {string} */
+            role: "user" | "assistant";
+            /**
+             * @description The message's text around the first occurrence of the search, on one
+             *     line, with `…` where it was cut.
+             */
+            excerpt: string;
         };
         /**
          * @description How hard a reasoning model thinks. `auto` sends nothing and leaves the
@@ -3831,6 +3847,13 @@ export interface operations {
             query?: {
                 limit?: components["parameters"]["Limit"];
                 cursor?: components["parameters"]["Cursor"];
+                /**
+                 * @description Only conversations whose title or any message's text contains this,
+                 *     ignoring case — every branch, not only the one on show. A
+                 *     conversation found by what was said in it carries `match`. Keep it
+                 *     the same while following `nextCursor`.
+                 */
+                search?: string;
             };
             header?: never;
             path?: never;

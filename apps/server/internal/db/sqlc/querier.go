@@ -385,6 +385,13 @@ type Querier interface {
 	// One step of a run: a new checkpoint, new live state, or both. Guarded on
 	// `running` so nothing can resurrect a run that already finished.
 	SaveRunState(ctx context.Context, arg SaveRunStateParams) (Run, error)
+	// The caller's conversations whose title or any message's text contains the
+	// pattern (an ILIKE pattern, escaped by the caller), newest first, each with
+	// the latest message that matched. Every branch is searched: what was said on
+	// a branch not on show was still said. Reasoning and tool rows are not words
+	// the person wrote or read as the answer, so only user and assistant text.
+	// A conversation found by its title alone has no hit: empty strings, not NULLs.
+	SearchConversations(ctx context.Context, arg SearchConversationsParams) ([]SearchConversationsRow, error)
 	// The only statement in this file that changes `enabled` on a row that already
 	// exists. The inserts set it once, when the row is created and there is no
 	// decision to preserve; a refresh never touches it. That is the whole point of

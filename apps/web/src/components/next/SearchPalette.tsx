@@ -11,7 +11,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useChatModels } from '@/hooks/use-chat-models'
-import { useRenameConversation } from '@/hooks/use-conversations'
+import { useConversationSearch, useRenameConversation } from '@/hooks/use-conversations'
 import { useMessages } from '@/hooks/use-messages'
 import { API_BASE_URL } from '@/lib/api'
 import { groupConversations, parseTimestamp } from '@/lib/grouping'
@@ -38,9 +38,13 @@ const NEW_CHAT = 'action:new'
 
 /**
  * Search, as a palette: actions first, then every conversation by date, and
- * beside them a read-only preview of whichever one the cursor is on — so a
- * reader can find the conversation by what was said in it, not only by its
- * title, before opening it.
+ * beside them a read-only preview of whichever one the cursor is on.
+ *
+ * Typing searches on the server, titles and everything said alike, and a
+ * conversation found by its words shows the passage under its title; the
+ * preview marks the words and scrolls to the first place they appear. Until
+ * the server answers the first time, the loaded titles are filtered here so
+ * the list responds to the first keystroke.
  *
  * Portalled into the sidebar's own `.prism-next` scope rather than <body>, so
  * the ported `.n-palette*` styles and the transcript's styles apply inside it —
@@ -57,13 +61,25 @@ export function SearchPalette({
   const [renaming, setRenaming] = useState<string | null>(null)
   const results = useRef<HTMLDivElement>(null)
   const field = useRef<HTMLInputElement>(null)
-  const more = useRef<HTMLDivElement>(null)
+  const sentinel = useRef<HTMLDivElement>(null)
 
+  const typed = query.trim()
+  const term = useDebounced(typed, 200)
+  const search = useConversationSearch(term)
+  const found = useMemo(() => search.data?.pages.flatMap((page) => page.items), [search.data])
   const matches = useMemo(() => {
-    const needle = query.trim().toLocaleLowerCase()
-    if (!needle) return conversations
+    if (!typed) return conversations
+    if (found) return found
+    const needle = typed.toLocaleLowerCase()
     return conversations.filter((c) => (c.title || t('chat.untitled')).toLocaleLowerCase().includes(needle))
-  }, [conversations, query, t])
+  }, [conversations, typed, found, t])
+  // What the list is paging through: the search's pages while there is one.
+  const searching = typed !== ''
+  const more = searching ? !!search.hasNextPage : hasMore
+  const loadingMore = searching ? search.isFetching : loading
+  const loadMore = searching ? () => void search.fetchNextPage() : onLoadMore
+  // The words shown in the results — the ones the server searched for.
+  const marked = searching && found ? term : ''
   const groups = useMemo(
     () => groupConversations(matches, t, i18n.resolvedLanguage),
     [matches, t, i18n.resolvedLanguage],
@@ -84,14 +100,16 @@ export function SearchPalette({
   // The older conversations load as the list is scrolled to its end — and a
   // search that matches nothing loaded yet keeps loading until it finds some.
   useEffect(() => {
-    const target = more.current
-    if (!open || !target || !hasMore || loading) return
+    const target = sentinel.current
+    if (!open || !target || !more || loadingMore) return
     const observer = new IntersectionObserver(([entry]) => {
-      if (entry?.isIntersecting) onLoadMore()
+      if (entry?.isIntersecting) loadMore()
     }, { root: results.current, rootMargin: '0px 0px 120px 0px' })
     observer.observe(target)
     return () => observer.disconnect()
-  }, [open, hasMore, loading, onLoadMore, matches.length])
+    // loadMore is a new function each render; what it does follows `searching`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, more, loadingMore, searching, matches.length])
 
   const previewId = cursor && cursor !== NEW_CHAT && matches.some((c) => c.id === cursor) ? cursor : null
 
@@ -136,6 +154,7 @@ export function SearchPalette({
                         <PaletteRow
                           key={conversation.id}
                           conversation={conversation}
+                          term={marked}
                           renaming={renaming === conversation.id}
                           onRename={(on) => setRenaming(on ? conversation.id : null)}
                           onOpen={() => go(conversation.id)}
@@ -146,16 +165,16 @@ export function SearchPalette({
                     </Command.Group>
                   ))}
 
-                  {matches.length === 0 && !hasMore && (
+                  {matches.length === 0 && !more && !(searching && (!found || search.isFetching)) && (
                     <div className="n-palette-empty">{t('next.sidebar.search-empty')}</div>
                   )}
-                  {hasMore && (
-                    <div ref={more} className="n-palette-more" role="status">
-                      {loading ? t('state.loading') : null}
+                  {more && (
+                    <div ref={sentinel} className="n-palette-more" role="status">
+                      {loadingMore ? t('state.loading') : null}
                     </div>
                   )}
                 </Command.List>
-                <Preview conversationId={previewId} />
+                <Preview conversationId={previewId} term={marked} />
               </div>
             </Command>
           </Dialog.Content>
@@ -167,6 +186,8 @@ export function SearchPalette({
 
 interface RowProps {
   conversation: Conversation
+  /** The search, to mark in the title and the passage; empty for none. */
+  term: string
   renaming: boolean
   onRename: (on: boolean) => void
   onOpen: () => void
@@ -174,7 +195,7 @@ interface RowProps {
   onMenuClosed: () => void
 }
 
-function PaletteRow({ conversation, renaming, onRename, onOpen, onDelete, onMenuClosed }: RowProps) {
+function PaletteRow({ conversation, term, renaming, onRename, onOpen, onDelete, onMenuClosed }: RowProps) {
   const { t, i18n } = useTranslation()
   const rename = useRenameConversation()
   const [title, setTitle] = useState(conversation.title)
@@ -229,7 +250,16 @@ function PaletteRow({ conversation, renaming, onRename, onOpen, onDelete, onMenu
           </button>
         </form>
       ) : (
-        <span className="n-palette-title" dir="auto">{conversation.title || t('chat.untitled')}</span>
+        <span className="n-palette-text">
+          <span className="n-palette-title" dir="auto">
+            <Marked text={conversation.title || t('chat.untitled')} term={term} />
+          </span>
+          {conversation.match && (
+            <span className="n-palette-excerpt" dir="auto">
+              <Marked text={conversation.match.excerpt} term={term} />
+            </span>
+          )}
+        </span>
       )}
       <span className="n-palette-date">{formatDay(conversation.updatedAt, t, i18n.resolvedLanguage)}</span>
       {!renaming && (
@@ -275,7 +305,7 @@ function PaletteRow({ conversation, renaming, onRename, onOpen, onDelete, onMenu
  * it left off. Fetched after the cursor rests for a moment, so running the
  * arrow keys down the list does not load every conversation it passes.
  */
-function Preview({ conversationId }: { conversationId: string | null }) {
+function Preview({ conversationId, term }: { conversationId: string | null; term: string }) {
   const { t } = useTranslation()
   const [shown, setShown] = useState(conversationId)
   const scroll = useRef<HTMLDivElement>(null)
@@ -290,10 +320,24 @@ function Preview({ conversationId }: { conversationId: string | null }) {
   const turns = useMemo(() => buildTurns(messages.data?.items ?? [], null), [messages.data])
   const modelById = useMemo(() => new Map((models.data ?? []).map((m) => [m.id, m])), [models.data])
 
+  // To the end, where the conversation left off — or, for a search, to the
+  // first place the words appear on the branch on show, marked with the CSS
+  // highlight API so the transcript's own DOM is left alone. A match on a
+  // branch not on show has nothing to mark, and the end is where it stays.
   useLayoutEffect(() => {
     const el = scroll.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [turns])
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+    const ranges = term ? rangesOf(el, term) : []
+    const first = ranges[0]?.startContainer.parentElement
+    if (first) {
+      const top = first.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop
+      el.scrollTop = Math.max(0, top - el.clientHeight / 3)
+    }
+    if (ranges.length === 0 || typeof CSS === 'undefined' || !('highlights' in CSS)) return
+    CSS.highlights.set(HIGHLIGHT, new Highlight(...ranges))
+    return () => { CSS.highlights.delete(HIGHLIGHT) }
+  }, [turns, term])
 
   return (
     <div ref={scroll} className="n-palette-preview" aria-hidden="true">
@@ -319,6 +363,54 @@ function Preview({ conversationId }: { conversationId: string | null }) {
       )}
     </div>
   )
+}
+
+const HIGHLIGHT = 'n-search'
+
+/** Every occurrence of term in root's text, ignoring case. */
+function rangesOf(root: HTMLElement, term: string): Range[] {
+  const needle = term.toLocaleLowerCase()
+  const ranges: Range[] = []
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  for (let node = walker.nextNode(); node && ranges.length < 200; node = walker.nextNode()) {
+    const text = (node.nodeValue ?? '').toLocaleLowerCase()
+    for (let at = text.indexOf(needle); at !== -1; at = text.indexOf(needle, at + needle.length)) {
+      const range = document.createRange()
+      range.setStart(node, at)
+      range.setEnd(node, at + needle.length)
+      ranges.push(range)
+    }
+  }
+  return ranges
+}
+
+/** text with every occurrence of term, ignoring case, in a <mark>. */
+function Marked({ text, term }: { text: string; term: string }) {
+  if (!term) return <>{text}</>
+  const lower = text.toLocaleLowerCase()
+  const needle = term.toLocaleLowerCase()
+  // Lowercasing that changes a string's length (rare, e.g. 'İ') would put the
+  // marks in the wrong place; better none.
+  if (lower.length !== text.length) return <>{text}</>
+  const out: React.ReactNode[] = []
+  let from = 0
+  for (let at = lower.indexOf(needle); at !== -1; at = lower.indexOf(needle, from)) {
+    if (at > from) out.push(text.slice(from, at))
+    out.push(<mark key={at} className="n-palette-mark">{text.slice(at, at + needle.length)}</mark>)
+    from = at + needle.length
+  }
+  if (from < text.length) out.push(text.slice(from))
+  return <>{out}</>
+}
+
+/** value, once it has stopped changing for `delay` ms. */
+function useDebounced<T>(value: T, delay: number): T {
+  const [settled, setSettled] = useState(value)
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSettled(value), delay)
+    return () => window.clearTimeout(timer)
+  }, [value, delay])
+  return settled
 }
 
 function turnModel(turn: Turn) {

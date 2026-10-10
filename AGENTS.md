@@ -50,6 +50,7 @@ grep -rn -- "--n-\|prism-next" apps/web/src/features/admin apps/web/src/componen
 - 事件流里除了 run 的批次，还有不属于任何 run 的 `branch_changed`（切换版本、选另一个回答发出时 run id 为空、version 为 0；改写时和 `run_started` 同一批）。凡是不经 run 就改变「当前显示的对话记录」的新操作，都要 `announceBranch`，否则开着同一对话的另一个标签页会一直显示旧记录。
 - 头像：用户上传图片本身（`PUT /me/avatar`，png/jpeg/webp，≤1 MiB），服务端解码、取中心正方形、缩到 256 px、重新编码成 PNG 再存，所以文件里夹带的东西不会被保留；对象在 `avatars/<用户>/<uuid>.png`，库里只存 key（`users.avatar_key`），读取用的是附件同一套签名读取地址，`avatarURL` 对同一个 key 在有效期过半前复用同一个地址。`files_local.go` 对 `avatars/` 前缀的 key 查 `users` 而不是 `attachments`，且只允许读；被替换或移除的图片文件立即删，行不再指向它后旧地址也就不再被服务。孤儿清扫只看 `uploads/`，不要把头像放进去。
 - 「我的数据」：`GET /me/export` 一次一个对话地流式写出 JSON（只有当前分支的 user/assistant 文本和附件文件名，不含临时和已删除的对话；写到一半出错就切断连接，不留一份看似完整的残缺文件），`DELETE /me/conversations` 软删除调用者的全部对话（含临时的），之后走和单个删除一样的保留期清理。两者都只认会话里的账号，没有任何参数能指向别人。
+- 搜索：`GET /conversations?search=` 在标题和所有分支上 user/assistant 消息的 `content` 里做 `ILIKE` 子串匹配（中文没有空格分词，所以不用全文检索），只查调用者自己的非临时对话，分页同列表；靠消息命中的结果带 `match`（消息 id、角色、命中处前后的片段）。前端搜索结果的查询键是 `queryKeys.conversations.search(term)`，刻意不在 `list` 下面——`list` 会持久化到 localStorage，而搜索结果引用了消息内容。
 - 使用日志用游标分页（`created_at, id`，走 `usage_logs_created_idx`），`nextCursor` 是下一页的 `cursor`，筛选条件在翻页间必须不变；总数是 `summary.requests`，没有页码也没有 `total`。
 - 服务端自带前端：`make build` 先建 web（vite 同时预压缩出 `.br`/`.gz`），再拷进 `internal/webui/dist` 嵌入二进制，一个进程、一个源。`/assets/*` 带 `immutable` 长缓存，`index.html` 是 `no-cache`；缺失的 `/assets/x.js` 是真 404，不回落到 index.html。开发仍走 `make web`。
 - 没跑过 web 构建时 `webui/dist` 里只有 `.gitkeep`，服务端只提供 API，`/` 返回一行纯文本说明；该目录除 `.gitkeep` 外都被 gitignore，不要提交。

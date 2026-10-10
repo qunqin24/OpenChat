@@ -1,5 +1,5 @@
 import type { Conversation, CreateConversationRequest } from '@openchat/api-client'
-import { infiniteQueryOptions, queryOptions, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { infiniteQueryOptions, type QueryClient, queryOptions, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
@@ -17,6 +17,37 @@ export const conversationsQueryOptions = infiniteQueryOptions({
     ),
   getNextPageParam: (page) => page.nextCursor ?? undefined,
 })
+
+/** The list and any search over it: both show titles and which conversations exist. */
+function refreshLists(queryClient: QueryClient) {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.list() })
+  void queryClient.invalidateQueries({ queryKey: [...queryKeys.conversations.all, 'search'] })
+}
+
+/**
+ * Conversations whose title or anything said in them contains `term`, newest
+ * first, a page at a time; each found by its words carries the passage. Off
+ * while the term is empty.
+ */
+export function useConversationSearch(term: string) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.conversations.search(term),
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ signal, pageParam }) =>
+      unwrap(
+        await api.GET('/conversations', {
+          params: { query: { limit: 30, cursor: pageParam, search: term } },
+          signal,
+        }),
+      ),
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+    enabled: term !== '',
+    // The previous term's results stay up while the next one's load, so the
+    // list does not flash empty on every keystroke.
+    placeholderData: (previous) => previous,
+    gcTime: 60_000,
+  })
+}
 
 export function useConversations() {
   return useInfiniteQuery({ ...conversationsQueryOptions, placeholderData: (previous) => previous })
@@ -47,7 +78,7 @@ export function useCreateConversation() {
       unwrap(await api.POST('/conversations', { body })),
     onSuccess: (conversation: Conversation) => {
       queryClient.setQueryData(queryKeys.conversations.detail(conversation.id), conversation)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.list() })
+      refreshLists(queryClient)
     },
   })
 }
@@ -65,7 +96,7 @@ export function useRenameConversation() {
       ),
     onSuccess: (conversation: Conversation) => {
       queryClient.setQueryData(queryKeys.conversations.detail(conversation.id), conversation)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.list() })
+      refreshLists(queryClient)
     },
   })
 }
@@ -89,7 +120,7 @@ export function useGenerateTitle() {
       ),
     onSuccess: (conversation: Conversation) => {
       queryClient.setQueryData(queryKeys.conversations.detail(conversation.id), conversation)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.list() })
+      refreshLists(queryClient)
     },
   })
 }
@@ -107,7 +138,7 @@ export function useDeleteConversation() {
     onSuccess: (_data, conversationId) => {
       queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(conversationId) })
       queryClient.removeQueries({ queryKey: queryKeys.messages.list(conversationId) })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.list() })
+      refreshLists(queryClient)
     },
   })
 }

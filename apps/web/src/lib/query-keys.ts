@@ -6,6 +6,8 @@ export const queryKeys = {
   conversations: {
     all: ['conversations'] as const,
     list: () => [...queryKeys.conversations.all, 'list'] as const,
+    /** Kept apart from `list`, which is persisted: search results quote messages. */
+    search: (term: string) => [...queryKeys.conversations.all, 'search', term] as const,
     detail: (id: string) => [...queryKeys.conversations.all, 'detail', id] as const,
     context: (id: string) => [...queryKeys.conversations.all, 'context', id] as const,
   },

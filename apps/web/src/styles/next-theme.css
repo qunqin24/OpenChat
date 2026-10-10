@@ -42,6 +42,7 @@
   --n-text-2: #6f6f6f;
   --n-text-3: #9a9a9a;
   --n-hover: rgba(26, 26, 26, 0.06);
+  --n-search-mark: rgba(250, 204, 21, 0.38);
   --n-hover-strong: rgba(26, 26, 26, 0.1);
   --n-active: rgba(26, 26, 26, 0.12);
   --n-line: rgba(0, 0, 0, 0.08);
@@ -89,6 +90,7 @@
   --n-text-2: #a8a8a8;
   --n-text-3: #7a7a7a;
   --n-hover: rgba(255, 255, 255, 0.06);
+  --n-search-mark: rgba(250, 204, 21, 0.28);
   --n-hover-strong: rgba(255, 255, 255, 0.1);
   --n-active: rgba(255, 255, 255, 0.14);
   --n-line: rgba(255, 255, 255, 0.09);
@@ -596,6 +598,35 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+.prism-next .n-palette-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.prism-next .n-palette-text > .n-palette-title {
+  flex: none;
+}
+/* The passage a search found the conversation by: one quiet line under the
+   title, so a result reads as "this conversation, because of this". */
+.prism-next .n-palette-excerpt {
+  overflow: hidden;
+  color: var(--n-text-3);
+  font-size: 12.5px;
+  line-height: 1.45;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.prism-next .n-palette-mark {
+  border-radius: 3px;
+  background: var(--n-search-mark);
+  color: inherit;
+}
+.prism-next ::highlight(n-search) {
+  background-color: var(--n-search-mark);
+  color: inherit;
 }
 .prism-next .n-palette-date {
   flex-shrink: 0;

@@ -19,6 +19,10 @@ func (s *Server) ListConversations(w http.ResponseWriter, r *http.Request, param
 
 	user := auth.MustUser(r.Context())
 	limit := clampLimit(params.Limit)
+	if search := trimmed(params.Search); search != "" {
+		s.searchConversations(w, r, user.ID, search, limit, cursorAt, cursorID)
+		return
+	}
 	// Fetch one extra row to learn whether another page exists.
 	rows, err := s.q.ListConversations(r.Context(), sqlc.ListConversationsParams{
 		UserID:          &user.ID,
