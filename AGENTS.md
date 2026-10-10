@@ -123,7 +123,7 @@ grep -rn -- "--n-\|prism-next" apps/web/src/features/admin apps/web/src/componen
 
 ## 认证
 
-HttpOnly Cookie 会话，库里只存 token 的 SHA-256；前端从不接触 token，靠 `/auth/session` 判断登录状态，API 客户端必须 `credentials: 'include'`。用户名不能含 `@`（数据库约束保证，登录框同时接受用户名和邮箱）。第一个注册的账号成为管理员（见下「注册」）；最后一个启用的管理员不能被降级或停用。停用账号或改密码会清掉其会话，已开着的页面下一次请求得到 401 就被带去登录页（见前端约定）。用停用的账号登录（密码对了服务端才说 `account_disabled`）时，登录页不显示一行红字，而是盖上全屏的「你已被封禁」（`components/auth/BannedScreen.tsx`），「返回」或 Esc 回到清空的表单。自助接口（`PATCH /auth/me`、`POST /auth/password`）刻意不带角色和停用字段。不做账号删除，停用即可。
+HttpOnly Cookie 会话，库里只存 token 的 SHA-256；前端从不接触 token，靠 `/auth/session` 判断登录状态，API 客户端必须 `credentials: 'include'`。用户名不能含 `@`（数据库约束保证，登录框同时接受用户名和邮箱）。第一个注册的账号成为管理员（见下「注册」）；最后一个启用的管理员不能被降级或停用。停用账号或改密码会清掉其会话，已开着的页面下一次请求得到 401 就被带去登录页（见前端约定）。用停用或待审批的账号登录（密码对了服务端才说 `account_disabled` / `pending_approval`）时，登录页不显示一行红字，而是盖上全屏的毛玻璃覆盖层（`components/auth/AccountOverlay.tsx`，照搬 OpenWebUI 的 `AccountPending.svelte`）：「你已被封禁」，或「账号等待审批」加「再次检查」（用刚才的账号密码再登录一次，批准了就直接进去）。「返回」或 Esc 回到清空的表单。自助接口（`PATCH /auth/me`、`POST /auth/password`）刻意不带角色和停用字段。不做账号删除，停用即可。
 
 ### 注册与审批
 
@@ -141,7 +141,7 @@ HttpOnly Cookie 会话，库里只存 token 的 SHA-256；前端从不接触 tok
 - **pending 的账号什么都碰不到**：登录不发会话，`GetSessionUser` 还多一道 `NOT users.pending` 作为第二把锁，所以 `auth.Middleware.Require`（唯一的登录闸）也会拒绝它——就算有人哪天写出一条给它发会话的路径。新增任何「凭 token 认人」的路径都要走 `GetSessionUser`，别另写。
 - 批准只有一个方向：`PATCH /admin/users/{id}` 带 `approved: true`，或 `POST /admin/users/bulk` 带 `approved: true`（和 `role`、`disabled` 三选一）；`approved: false` 是 400 `invalid_approval`，没有「退回待审批」。批准和启用/停用互相独立。非管理员调这些接口得到 404。
 - **拒绝 = 停用**（账号从不删除）：待审批的行上「拒绝」就是 `disabled: true`，之后它是个普通的已停用账号（登录说 `account_disabled`），再「启用」会让它回到待审批名单。用户列表的 `status` 过滤（`pending`/`enabled`/`disabled`，可重复）里 disabled 优先于 pending，所以「待审批」名单只含还在等决定的人。
-- 登录页和注册页靠公开的 `GET /auth/options`（`registration`、`approval`、`guest`）决定显示什么：注册关闭时隐藏「注册」链接、`/register` 显示「注册已关闭」；审批模式下注册成功后注册页显示「等待审批」而不是跳进聊天。读不到选项时按开放处理（服务端才是裁判）。改了开关要让 `queryKeys.auth.options` 失效。
+- 登录页和注册页靠公开的 `GET /auth/options`（`registration`、`approval`、`guest`）决定显示什么：注册关闭时隐藏「注册」链接、`/register` 显示「注册已关闭」；审批模式下注册成功后注册页盖上同一个「账号等待审批」覆盖层（「再次检查」用注册时的邮箱和密码登录）而不是跳进聊天。读不到选项时按开放处理（服务端才是裁判）。改了开关要让 `queryKeys.auth.options` 失效。
 
 ### 登录与注册的限流
 

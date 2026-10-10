@@ -3,9 +3,10 @@ import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { isAuthFieldError, type AuthErrorKey } from '@/features/auth'
-import { useRegister } from '@/features/auth/use-auth'
+import { useLogin, useRegister } from '@/features/auth/use-auth'
 import { useAuthOptions } from '@/hooks/use-auth-options'
 import AuthField from './AuthField'
+import { BannedScreen, PendingScreen } from './AccountOverlay'
 import AuthShell from './AuthShell'
 import { validateEmail, validateName, validatePassword } from './validation'
 
@@ -26,6 +27,8 @@ export function RegisterPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const register = useRegister()
+  // "Check again" on the waiting screen signs in with what was registered.
+  const login = useLogin()
   const options = useAuthOptions()
   // Registered, but an administrator has to approve the account before it can
   // sign in: there is no session, so the page says so instead of moving on.
@@ -100,22 +103,7 @@ export function RegisterPage() {
     if (failure && !failureField) setDismissedFormFailure(failure)
   }
 
-  if (waiting) {
-    return (
-      <AuthShell title={t('auth.register.pending-title')}>
-        <p className="n-auth-notice" role="status">
-          {t('auth.register.pending')}
-        </p>
-        <div className="n-auth-switch">
-          <Link className="n-auth-link" to="/login">
-            {t('auth.register.to-login')}
-          </Link>
-        </div>
-      </AuthShell>
-    )
-  }
-
-  if (!options.registration) {
+  if (!options.registration && !waiting) {
     return (
       <AuthShell title={t('auth.register.closed-title')}>
         <p className="n-auth-notice" role="status">
@@ -128,6 +116,19 @@ export function RegisterPage() {
         </div>
       </AuthShell>
     )
+  }
+
+  // Registered in approval mode: the form stays behind a frosted cover saying
+  // so, as the login page does for an account that is not approved yet.
+  const refused = isAuthFieldError(login.error) ? login.error.key : null
+  const toLogin = () => void navigate({ to: '/login' })
+  const checkAgain = async () => {
+    try {
+      await login.mutateAsync({ identifier: email, password })
+      await navigate({ to: '/' })
+    } catch {
+      // Still waiting, or now refused: shown from login.error.
+    }
   }
 
   return (
@@ -202,6 +203,12 @@ export function RegisterPage() {
           </div>
         </div>
       </form>
+      {waiting &&
+        (refused === 'auth.error.account-disabled' ? (
+          <BannedScreen onBack={toLogin} />
+        ) : (
+          <PendingScreen check={checkAgain} onBack={toLogin} />
+        ))}
     </AuthShell>
   )
 }

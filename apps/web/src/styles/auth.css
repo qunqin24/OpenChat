@@ -358,295 +358,124 @@
   text-decoration: underline;
 }
 
-/* The banned screen (BannedScreen.tsx): signing in to a disabled account covers
-   the whole window, in the manner of a competitive game's ban notice - deep
-   slate, one hard red, off-white heavy type, square edges and clipped corners,
-   and a short glitch as it lands. It is the same in both themes: it is the one
-   place on these pages meant to stop you. Unlike the rest of the page, the
-   type here is heavy, tight and (for Latin) uppercase. */
-.n-banned {
-  --n-banned-bg: #0f1923;
-  --n-banned-red: #ff4655;
-  --n-banned-ink: #ece8e1;
-  --n-banned-dim: rgb(236 232 225 / 0.55);
+/* The account overlay (AccountOverlay.tsx: waiting for approval, or banned),
+   after OpenWebUI's AccountPending overlay. `fixed w-full h-full flex z-999` with an inner `backdrop-blur-lg
+   bg-white/10 dark:bg-gray-900/50`: the login page stays visible behind,
+   frosted. `m-auto pb-10` centres the column a little above the middle. */
+.n-account-overlay {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 999;
   display: flex;
   overflow-y: auto;
-  color: var(--n-banned-ink);
-  background:
-    /* scanlines */
-    repeating-linear-gradient(0deg, rgb(255 255 255 / 0.025) 0 1px, transparent 1px 3px),
-    /* the red bleeding in from the left */
-    radial-gradient(ellipse 55% 70% at 0% 50%, rgb(255 70 85 / 0.22), transparent 70%),
-    radial-gradient(ellipse 50% 40% at 100% 100%, rgb(255 70 85 / 0.1), transparent 70%),
-    var(--n-banned-bg);
-  animation: n-banned-in 300ms ease-out both;
+  background: rgb(255 255 255 / 0.1); /* bg-white/10 */
+  -webkit-backdrop-filter: blur(16px); /* backdrop-blur-lg */
+  backdrop-filter: blur(16px);
+  animation: n-account-overlay-in 200ms ease-out both;
 }
 
-/* A red bar across the top edge, like the frame of a client dialog. */
-.n-banned::before {
-  content: '';
-  position: fixed;
-  inset: 0 0 auto;
-  height: 4px;
-  background: var(--n-banned-red);
-  box-shadow: 0 0 24px rgb(255 70 85 / 0.6);
+.dark .n-account-overlay {
+  background: oklch(0.2 0 0 / 0.5); /* dark:bg-gray-900/50 */
 }
 
-.n-banned-column {
+.n-account-overlay-column {
   width: 100%;
-  max-width: 880px;
+  max-width: 448px; /* max-w-md */
   margin: auto;
-  padding: clamp(32px, 8vh, 72px) 24px;
-  /* It renders inside the login column, which centres its text. */
-  text-align: left;
+  padding: 24px 24px 64px; /* pb-10 plus the column's own gutter */
+  text-align: center;
 }
 
-@media (min-width: 640px) {
-  .n-banned-column {
-    padding-inline: 56px;
-  }
-}
-
-.n-banned-kicker {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--n-banned-red);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.32em;
-  animation: n-banned-fade 400ms ease 150ms both;
-}
-
-.n-banned-kicker-mark {
-  width: 10px;
-  height: 10px;
-  background: var(--n-banned-red);
-  transform: rotate(45deg);
-}
-
-.n-banned-title {
-  position: relative;
-  margin: clamp(10px, 2vh, 18px) 0 0;
-  /* As large as the window allows in either direction. */
-  font-size: clamp(44px, min(12vw, 17vh), 140px);
-  line-height: 0.95;
-  font-weight: 900;
-  letter-spacing: -0.02em;
-  text-transform: uppercase;
-  animation: n-banned-slam 500ms cubic-bezier(0.2, 0.9, 0.2, 1) 80ms both;
-}
-
-/* The glitch: a red and a cyan copy of the title, offset and sliced, that
-   flicker for half a second as it lands and then are gone. */
-.n-banned-title::before,
-.n-banned-title::after {
-  content: attr(data-text);
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.n-banned-title::before {
-  color: var(--n-banned-red);
-  animation: n-banned-glitch-a 650ms steps(1, end) 300ms both;
-}
-
-.n-banned-title::after {
-  color: #3ee6e6;
-  animation: n-banned-glitch-b 650ms steps(1, end) 300ms both;
-}
-
-.n-banned-rule {
-  width: 72px;
-  height: 4px;
-  margin: clamp(16px, 4vh, 28px) 0 clamp(16px, 4vh, 32px);
-  background: var(--n-banned-red);
-  transform-origin: left;
-  animation: n-banned-wipe 450ms cubic-bezier(0.65, 0, 0.35, 1) 450ms both;
-}
-
-/* The account, status and who did it: a slab with a red edge, rows ruled. */
-.n-banned-facts {
-  max-width: 520px;
+/* `text-center text-2xl font-normal`, pre-wrap; white in dark mode. */
+.n-account-overlay-title {
   margin: 0;
-  border-left: 3px solid var(--n-banned-red);
-  background: rgb(255 255 255 / 0.04);
-  animation: n-banned-fade 400ms ease 550ms both;
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 400;
+  white-space: pre-wrap;
 }
 
-.n-banned-facts > div {
-  display: flex;
-  gap: 16px;
-  justify-content: space-between;
-  padding: clamp(8px, 1.6vh, 12px) 18px;
+.dark .n-account-overlay-title {
+  color: #ffffff;
+}
+
+/* `mt-4 text-center text-sm dark:text-gray-200`, pre-wrap so the locale's
+   line break shows. */
+.n-account-overlay-text {
+  margin: 16px 0 0;
   font-size: 14px;
   line-height: 20px;
+  white-space: pre-wrap;
 }
 
-.n-banned-facts > div + div {
-  border-top: 1px solid rgb(255 255 255 / 0.07);
+.dark .n-account-overlay-text {
+  color: oklch(0.92 0 0); /* --color-gray-200 */
 }
 
-.n-banned-facts dt {
-  flex: none;
-  color: var(--n-banned-dim);
-  letter-spacing: 0.08em;
-}
-
-.n-banned-facts dd {
-  min-width: 0;
-  margin: 0;
-  overflow: hidden;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.n-banned-status {
-  color: var(--n-banned-red);
-  letter-spacing: 0.08em;
-}
-
-.n-banned-text {
-  max-width: 520px;
-  margin: clamp(12px, 2.5vh, 20px) 0 0;
-  color: var(--n-banned-dim);
+/* What checking again found. */
+.n-account-overlay-status {
+  margin: 12px 0 0;
   font-size: 14px;
-  line-height: 1.7;
-  animation: n-banned-fade 400ms ease 650ms both;
+  line-height: 20px;
+  opacity: 0.6;
 }
 
-/* A red slab with the top-left and bottom-right corners cut off. */
-.n-banned-back {
-  margin-top: clamp(20px, 5vh, 36px);
-  padding: 14px 56px;
-  border: 0;
-  background: var(--n-banned-red);
-  color: var(--n-banned-ink);
+/* `mt-6 mx-auto w-fit`: the button with the small link centred under it. */
+.n-account-overlay-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: fit-content;
+  margin: 24px auto 0;
+}
+
+/* `px-5 py-2 rounded-full bg-white border border-gray-100
+   dark:border-none hover:bg-gray-100 text-gray-700 font-normal text-sm`. */
+.n-account-overlay-button {
+  display: flex;
+  align-items: center;
+  padding: 8px 20px;
+  border: 1px solid oklch(0.94 0 0); /* border-gray-100 */
+  border-radius: 9999px;
+  background: #ffffff;
+  color: oklch(0.42 0 0); /* text-gray-700 */
   font: inherit;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
   cursor: pointer;
-  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
-  transition:
-    background-color 150ms ease,
-    color 150ms ease;
-  animation: n-banned-fade 400ms ease 750ms both;
+  transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.n-banned-back:hover {
-  background: var(--n-banned-ink);
-  color: var(--n-banned-bg);
+.dark .n-account-overlay-button {
+  border: none;
 }
 
-/* clip-path cuts an outline off, so focus is shown on the label instead. The
-   button is focused on arrival, so this must still read as the red slab. */
-.n-banned-back:focus-visible {
-  outline: none;
+.n-account-overlay-button:hover {
+  background: oklch(0.94 0 0); /* hover:bg-gray-100 */
+}
+
+.n-account-overlay-button:disabled {
+  cursor: default;
+}
+
+/* `text-xs text-center w-full mt-2 text-gray-400 underline`. */
+.n-account-overlay-link {
+  width: 100%;
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: oklch(0.77 0 0); /* text-gray-400 */
+  font: inherit;
+  font-size: 12px;
+  line-height: 16px;
   text-decoration: underline;
-  text-decoration-thickness: 2px;
-  text-underline-offset: 5px;
+  cursor: pointer;
 }
 
-@keyframes n-banned-in {
+@keyframes n-account-overlay-in {
   from {
     opacity: 0;
-  }
-}
-
-@keyframes n-banned-fade {
-  from {
-    opacity: 0;
-  }
-}
-
-@keyframes n-banned-slam {
-  from {
-    opacity: 0;
-    transform: scale(1.18);
-    filter: blur(6px);
-  }
-  60% {
-    opacity: 1;
-    transform: scale(0.98);
-    filter: blur(0);
-  }
-}
-
-@keyframes n-banned-wipe {
-  from {
-    transform: scaleX(0);
-  }
-}
-
-@keyframes n-banned-glitch-a {
-  0% {
-    opacity: 0.85;
-    transform: translate(-6px, 2px);
-    clip-path: inset(10% 0 55% 0);
-  }
-  20% {
-    transform: translate(5px, -2px);
-    clip-path: inset(60% 0 8% 0);
-  }
-  40% {
-    opacity: 0;
-  }
-  55% {
-    opacity: 0.85;
-    transform: translate(-3px, 0);
-    clip-path: inset(35% 0 35% 0);
-  }
-  70%,
-  100% {
-    opacity: 0;
-  }
-}
-
-@keyframes n-banned-glitch-b {
-  0% {
-    opacity: 0.7;
-    transform: translate(6px, -2px);
-    clip-path: inset(50% 0 20% 0);
-  }
-  20% {
-    transform: translate(-4px, 2px);
-    clip-path: inset(5% 0 70% 0);
-  }
-  40% {
-    opacity: 0;
-  }
-  55% {
-    opacity: 0.7;
-    transform: translate(3px, 0);
-    clip-path: inset(70% 0 5% 0);
-  }
-  70%,
-  100% {
-    opacity: 0;
-  }
-}
-
-/* Under reduced motion it simply appears: no slam, no glitch, no wipe. */
-@media (prefers-reduced-motion: reduce) {
-  .n-banned-kicker,
-  .n-banned-title,
-  .n-banned-rule,
-  .n-banned-facts,
-  .n-banned-text,
-  .n-banned-back {
-    animation: none;
-  }
-
-  .n-banned-title::before,
-  .n-banned-title::after {
-    display: none;
   }
 }

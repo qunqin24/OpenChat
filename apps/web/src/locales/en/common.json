@@ -335,14 +335,18 @@
       "identifier": "Email or username",
       "identifier-placeholder": "Your email or username"
     },
+    "pending": {
+      "title": "Account activation pending",
+      "subtitle": "Contact the administrator for access",
+      "text": "Your account is waiting for an administrator's approval.\nOnce it is approved, you can sign in.",
+      "check": "Check again",
+      "still": "Still waiting for approval",
+      "back": "Back to sign in"
+    },
     "banned": {
       "title": "You've been banned",
-      "account": "Account",
-      "status": "Status",
-      "status-value": "Banned",
-      "by": "Action by",
-      "by-value": "Administrator",
-      "text": "An administrator has disabled this account, so it cannot sign in. If you think this is a mistake, contact the administrator.",
+      "subtitle": "Contact the administrator",
+      "text": "An administrator has disabled this account, so it cannot sign in.\nIf you think this is a mistake, ask the administrator to restore it.",
       "back": "Back"
     },
     "login": {
@@ -357,8 +361,6 @@
       "action": "Create Account",
       "link": "Sign up",
       "have-account": "Already have an account?",
-      "pending-title": "Waiting for approval",
-      "pending": "Your account has been created and is waiting for an administrator's approval. You can sign in once it is approved.",
       "closed-title": "Registration is closed",
       "closed": "New accounts are not being accepted right now. Ask an administrator if you need one.",
       "to-login": "Back to sign in"

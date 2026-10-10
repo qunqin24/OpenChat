@@ -335,14 +335,18 @@
       "identifier": "邮箱或用户名",
       "identifier-placeholder": "输入你的邮箱或用户名"
     },
+    "pending": {
+      "title": "账号等待审批",
+      "subtitle": "请联系管理员开通",
+      "text": "你的账号正在等待管理员审批。\n管理员在后台批准后，你就可以登录了。",
+      "check": "再次检查",
+      "still": "仍在等待审批",
+      "back": "返回登录"
+    },
     "banned": {
       "title": "你已被封禁",
-      "account": "账号",
-      "status": "状态",
-      "status-value": "已封禁",
-      "by": "处理方",
-      "by-value": "管理员",
-      "text": "这个账号已被管理员停用，无法登录。如果你认为这是误判，请联系管理员。",
+      "subtitle": "请联系管理员",
+      "text": "这个账号已被管理员停用，无法登录。\n如果你认为这是误判，请联系管理员恢复。",
       "back": "返回"
     },
     "login": {
@@ -357,8 +361,6 @@
       "action": "创建账号",
       "link": "注册",
       "have-account": "已拥有账号？",
-      "pending-title": "等待审批",
-      "pending": "账号已创建，正在等待管理员审批。通过后就可以登录了。",
       "closed-title": "注册已关闭",
       "closed": "当前不开放注册，如需账号请联系管理员。",
       "to-login": "返回登录"
