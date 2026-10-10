@@ -3075,6 +3075,13 @@ export interface components {
             sortOrder: number;
             /** Format: date-time */
             createdAt: string;
+            /**
+             * Format: double
+             * @description USD the channel's requests have cost, all time, as the usage log
+             *     priced them; requests to an unpriced model add nothing. Set in the
+             *     channel list only.
+             */
+            spent?: number;
         };
         ChannelConnection: {
             type: components["schemas"]["ChannelType"];

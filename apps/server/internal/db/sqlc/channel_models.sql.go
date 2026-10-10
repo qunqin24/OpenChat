@@ -47,6 +47,41 @@ func (q *Queries) AddManualChannelModel(ctx context.Context, arg AddManualChanne
 	return i, err
 }
 
+const channelSpend = `-- name: ChannelSpend :many
+SELECT channel_id::uuid AS channel_id, COALESCE(sum(cost), 0)::float8 AS spent
+FROM usage_logs
+WHERE channel_id IS NOT NULL
+GROUP BY channel_id
+`
+
+type ChannelSpendRow struct {
+	ChannelID uuid.UUID `json:"channel_id"`
+	Spent     float64   `json:"spent"`
+}
+
+// What each channel's requests have cost, all time, from the usage ledger: one
+// grouped read for the whole channel list. Requests with no price (a model
+// the catalogue does not price) add nothing. A channel never used is absent.
+func (q *Queries) ChannelSpend(ctx context.Context) ([]ChannelSpendRow, error) {
+	rows, err := q.db.Query(ctx, channelSpend)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChannelSpendRow{}
+	for rows.Next() {
+		var i ChannelSpendRow
+		if err := rows.Scan(&i.ChannelID, &i.Spent); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countEnabledChannelModels = `-- name: CountEnabledChannelModels :many
 SELECT channel_id, count(*) AS model_count
 FROM channel_models

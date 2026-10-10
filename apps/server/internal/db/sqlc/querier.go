@@ -60,6 +60,10 @@ type Querier interface {
 	BulkApproveUsers(ctx context.Context, ids []uuid.UUID) (int64, error)
 	BulkSetUserDisabled(ctx context.Context, arg BulkSetUserDisabledParams) (int64, error)
 	BulkUpdateUserRole(ctx context.Context, arg BulkUpdateUserRoleParams) (int64, error)
+	// What each channel's requests have cost, all time, from the usage ledger: one
+	// grouped read for the whole channel list. Requests with no price (a model
+	// the catalogue does not price) add nothing. A channel never used is absent.
+	ChannelSpend(ctx context.Context) ([]ChannelSpendRow, error)
 	CountAdmins(ctx context.Context) (int64, error)
 	CountCatalogModels(ctx context.Context) (int64, error)
 	CountCatalogProviders(ctx context.Context) (int64, error)

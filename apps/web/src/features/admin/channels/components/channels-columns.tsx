@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/shadcn/ui/checkbox'
 import { ModelIcon } from '@/components/model-icon'
 import { DataTableColumnHeader } from '@/components/shadcn/data-table'
 import { cn } from '@/lib/utils'
+import { formatUsd } from '@/features/admin/usage-logs/format'
 import type { ChannelTypeInfo } from '../channel-types'
 import { ChannelEnabledSwitch } from './channel-enabled-switch'
 import { ChannelsRowActions } from './channels-row-actions'
@@ -104,6 +105,27 @@ export function channelsColumns(
           {row.original.modelCount}
         </span>
       ),
+      enableSorting: false,
+    },
+    {
+      accessorKey: 'spent',
+      meta: { title: t('admin.channels.spent'), className: 'text-end' },
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title={t('admin.channels.spent')} />
+      ),
+      // All time, from the usage log. The column says what the channel has
+      // cost so far; the usage log is where to see when and on what.
+      cell: ({ row }) => {
+        const spent = row.original.spent ?? 0
+        return (
+          <span
+            className={cn('text-sm tabular-nums', spent === 0 && 'text-muted-foreground')}
+            title={t('admin.channels.spent-hint')}
+          >
+            {formatUsd(spent)}
+          </span>
+        )
+      },
       enableSorting: false,
     },
     {

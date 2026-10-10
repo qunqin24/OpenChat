@@ -77,9 +77,22 @@ func (s *Server) ListChannels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	spend, err := s.q.ChannelSpend(r.Context())
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	spent := make(map[uuid.UUID]float64, len(spend))
+	for _, row := range spend {
+		spent[row.ChannelID] = row.Spent
+	}
+
 	channels := make([]Channel, 0, len(rows))
 	for _, row := range rows {
-		channels = append(channels, toChannel(row, counts[row.ID]))
+		channel := toChannel(row, counts[row.ID])
+		total := spent[row.ID]
+		channel.Spent = &total
+		channels = append(channels, channel)
 	}
 	httpx.JSON(w, http.StatusOK, channels)
 }

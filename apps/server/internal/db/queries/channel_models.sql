@@ -109,6 +109,15 @@ FROM channel_models
 WHERE enabled
 GROUP BY channel_id;
 
+-- name: ChannelSpend :many
+-- What each channel's requests have cost, all time, from the usage ledger: one
+-- grouped read for the whole channel list. Requests with no price (a model
+-- the catalogue does not price) add nothing. A channel never used is absent.
+SELECT channel_id::uuid AS channel_id, COALESCE(sum(cost), 0)::float8 AS spent
+FROM usage_logs
+WHERE channel_id IS NOT NULL
+GROUP BY channel_id;
+
 -- name: CountEnabledChannelModelsFor :one
 SELECT count(*)
 FROM channel_models

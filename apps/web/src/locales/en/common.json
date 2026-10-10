@@ -703,6 +703,8 @@
       "none": "No channels yet",
       "name": "Name",
       "base-url": "Base URL",
+      "spent": "Spent",
+      "spent-hint": "What all of this channel's requests have cost, as the usage log priced them; models without a price add nothing.",
       "base-url-hint": "Leave blank to use the provider's default.",
       "api-key": "API key",
       "api-key-hint": "Leave blank to keep the stored key; it cannot be read back.",

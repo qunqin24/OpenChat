@@ -3685,6 +3685,13 @@ components:
             e.g. `…4f2a`. Absent when no key is stored.
         sortOrder: { type: integer }
         createdAt: { type: string, format: date-time }
+        spent:
+          type: number
+          format: double
+          description: |
+            USD the channel's requests have cost, all time, as the usage log
+            priced them; requests to an unpriced model add nothing. Set in the
+            channel list only.
 
     ChannelConnection:
       type: object
