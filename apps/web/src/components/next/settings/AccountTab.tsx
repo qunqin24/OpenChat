@@ -84,7 +84,7 @@ function Profile({ id, name, email, avatarUrl }: { id: string; name: string; ema
           </div>
         </div>
 
-        <p className="n-settings-help">{t('settings.account.avatar-hint')}</p>
+        {AVATAR_UPLOADS && <p className="n-settings-help">{t('settings.account.avatar-hint')}</p>}
 
         <hr className="n-settings-rule" />
         <Password />
@@ -98,6 +98,13 @@ function Profile({ id, name, email, avatarUrl }: { id: string; name: string; ema
     </form>
   )
 }
+
+/**
+ * Whether people may set a picture of their own. Off for now: the button says
+ * so and the hint about formats is left out. The server side (`PUT /me/avatar`)
+ * is in place; turning this back on is all it takes.
+ */
+const AVATAR_UPLOADS = false
 
 /**
  * The account's picture with the two things to do to it. Choosing a file
@@ -134,8 +141,15 @@ function Avatar({ id, name, email, src }: { id: string; name: string; email: str
         aria-label={t('settings.account.avatar')}
         onChange={choose}
       />
-      <button type="button" className="n-settings-soft is-small" disabled={set.isPending} onClick={() => input.current?.click()}>
-        {t(src ? 'settings.account.avatar-change' : 'settings.account.avatar-upload')}
+      <button
+        type="button"
+        className="n-settings-soft is-small"
+        disabled={!AVATAR_UPLOADS || set.isPending}
+        onClick={() => input.current?.click()}
+      >
+        {!AVATAR_UPLOADS
+          ? t('settings.account.avatar-unavailable')
+          : t(src ? 'settings.account.avatar-change' : 'settings.account.avatar-upload')}
       </button>
       {src && (
         <button

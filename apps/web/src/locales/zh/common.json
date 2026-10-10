@@ -1073,6 +1073,7 @@
       "avatar": "头像",
       "avatar-hint": "PNG、JPEG 或 WebP，会取中间一块裁成正方形。不设置时显示名字的首字。",
       "avatar-upload": "上传头像",
+      "avatar-unavailable": "暂不可用",
       "avatar-change": "更换头像",
       "avatar-remove": "移除头像",
       "avatar-saved": "头像已更新",

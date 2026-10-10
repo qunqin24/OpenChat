@@ -1073,6 +1073,7 @@
       "avatar": "Profile picture",
       "avatar-hint": "PNG, JPEG or WebP; the middle of the image is cut to a square. Without one, the first letter of your name is shown.",
       "avatar-upload": "Upload a picture",
+      "avatar-unavailable": "Not available yet",
       "avatar-change": "Change picture",
       "avatar-remove": "Remove picture",
       "avatar-saved": "Picture updated",
