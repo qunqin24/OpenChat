@@ -30,7 +30,7 @@ type partJSON struct {
 	// text
 	Phase string `json:"phase,omitempty"`
 
-	// reasoning, tool_call
+	// text, reasoning, tool_call
 	Signature string `json:"signature,omitempty"`
 	Redacted  []byte `json:"redacted,omitempty"`
 
@@ -72,7 +72,7 @@ func UnmarshalPart(data []byte) (Part, error) {
 func toPartJSON(part Part) partJSON {
 	switch p := part.(type) {
 	case TextPart:
-		return partJSON{Type: PartText, Text: p.Text, Phase: p.Phase}
+		return partJSON{Type: PartText, Text: p.Text, Phase: p.Phase, Signature: p.Signature}
 	case ReasoningPart:
 		return partJSON{Type: PartReasoning, Text: p.Text, Signature: p.Signature, Redacted: p.Redacted, DurationMS: p.DurationMS}
 	case ToolCallPart:
@@ -90,7 +90,7 @@ func toPartJSON(part Part) partJSON {
 func (raw partJSON) part() (Part, error) {
 	switch raw.Type {
 	case PartText:
-		return TextPart{Text: raw.Text, Phase: raw.Phase}, nil
+		return TextPart{Text: raw.Text, Phase: raw.Phase, Signature: raw.Signature}, nil
 	case PartReasoning:
 		return ReasoningPart{Text: raw.Text, Signature: raw.Signature, Redacted: raw.Redacted, DurationMS: raw.DurationMS}, nil
 	case PartToolCall:

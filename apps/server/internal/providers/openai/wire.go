@@ -36,6 +36,12 @@ type delta struct {
 	ReasoningContent *string `json:"reasoning_content"`
 	Reasoning        *string `json:"reasoning"`
 
+	// ReasoningDetails is OpenRouter's structured record of the same thinking,
+	// with the signatures and encrypted state that have to come back. Left raw
+	// and parsed on the side (see parseDetails): in another shape it is
+	// ignored rather than failing the frame.
+	ReasoningDetails json.RawMessage `json:"reasoning_details"`
+
 	ToolCalls []toolCallDelta `json:"tool_calls"`
 }
 
@@ -109,6 +115,10 @@ type wireMessage struct {
 	// field the vendors that want it read it from. Never folded into Content:
 	// that would present the thinking as something the model said.
 	ReasoningContent string `json:"reasoning_content,omitempty"`
+
+	// ReasoningDetails is OpenRouter's record of that thinking, sent back
+	// unmodified instead of ReasoningContent when there is one.
+	ReasoningDetails json.RawMessage `json:"reasoning_details,omitempty"`
 
 	ToolCalls  []wireToolCall `json:"tool_calls,omitempty"`
 	ToolCallID string         `json:"tool_call_id,omitempty"`

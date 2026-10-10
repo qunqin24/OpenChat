@@ -8,7 +8,10 @@
 // without a database and a provider be tested without a browser.
 package llm
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"strings"
+)
 
 type Role string
 
@@ -59,6 +62,15 @@ type TextPart struct {
 	// it: OpenAI asks for it back on every assistant message of gpt-5.3-codex
 	// and later, and says dropping it degrades the model. Never shown.
 	Phase string
+
+	// Signature is the provider's optional attestation on answer text, opaque
+	// and prefixed with the adapter that issued it (SignatureGemini). Gemini
+	// returns one on the last part of a reply that has no function call and
+	// recommends sending it back on that part; omitting it is not an error,
+	// only a weaker next answer
+	// (https://ai.google.dev/gemini-api/docs/generate-content/thought-signatures).
+	// Every other adapter ignores it. Never sent to a browser.
+	Signature string
 }
 
 // ReasoningPart is the model thinking out loud. Signature and Redacted are kept
@@ -92,9 +104,35 @@ type ReasoningPart struct {
 // its own API would reject.
 const SignatureOpenAIResponses = "openai-responses:"
 
-// SignatureGemini prefixes a ToolCallPart.Signature that is a Gemini
-// thoughtSignature, so no other adapter mistakes it for its own.
+// SignatureGemini prefixes a ToolCallPart.Signature, or a TextPart.Signature,
+// that is a Gemini thoughtSignature, so no other adapter mistakes it for its
+// own.
 const SignatureGemini = "gemini:"
+
+// SignatureOpenRouter prefixes the Signature of reasoning that came from
+// OpenRouter's `reasoning_details`, followed by the model that was asked for.
+// Its Redacted holds those details as a JSON array, exactly as OpenRouter sent
+// them (Claude's signed thinking, OpenAI's encrypted reasoning, Gemini's
+// thought signatures), because they have to go back unmodified on the same
+// assistant message
+// (https://openrouter.ai/docs/guides/best-practices/reasoning-tokens). They are
+// replayed only to that model through OpenRouter; every other adapter leaves
+// such a part out, since the blob is not in any shape its own API accepts.
+const SignatureOpenRouter = "openrouter:"
+
+// ForeignSignature reports whether a signature was issued by one of the
+// adapters that namespace theirs. An adapter whose own signatures carry no
+// prefix (Anthropic's) uses it to leave out everything else: one list here, so
+// a new prefix cannot be forgotten in a request builder that would then send
+// another vendor's blob as its own.
+func ForeignSignature(signature string) bool {
+	for _, prefix := range []string{SignatureOpenAIResponses, SignatureGemini, SignatureOpenRouter} {
+		if strings.HasPrefix(signature, prefix) {
+			return true
+		}
+	}
+	return false
+}
 
 // ToolCallPart is the model asking for a tool. Arguments and RawArguments are
 // separate because they answer different questions: may this be executed, and

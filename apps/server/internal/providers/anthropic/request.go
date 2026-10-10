@@ -355,8 +355,7 @@ func convertAssistant(message llm.Message) ([]wireContentBlock, error) {
 			// Another API's reasoning, left from before the conversation
 			// switched to Claude: replaying it would be rejected. This matters
 			// more now that a signed block needs no text to be sent.
-			case strings.HasPrefix(p.Signature, llm.SignatureOpenAIResponses),
-				strings.HasPrefix(p.Signature, llm.SignatureGemini):
+			case llm.ForeignSignature(p.Signature):
 			case len(p.Redacted) > 0:
 				blocks = append(blocks, wireContentBlock{Type: "redacted_thinking", Data: string(p.Redacted)})
 			case p.Signature != "":

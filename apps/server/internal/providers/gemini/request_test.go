@@ -437,3 +437,35 @@ func TestBuildBodyNeverSendsAForeignSignatureOrADummyToOlderModels(t *testing.T)
 		t.Error("model generations are misread")
 	}
 }
+
+func TestBuildBodyReplaysATextSignatureOnItsPart(t *testing.T) {
+	// Recommended, not enforced: the answer goes back with the signature it
+	// came with. A bare signature joins the text before it, since a part
+	// cannot be a signature alone; another vendor's is not sent at all.
+	// https://ai.google.dev/gemini-api/docs/generate-content/thought-signatures
+	body := build(t, llm.Request{
+		Model: "gemini-3-flash-preview",
+		Messages: []llm.Message{
+			llm.TextMessage(llm.RoleUser, "hi"),
+			{Role: llm.RoleAssistant, Parts: []llm.Part{llm.TextPart{Text: "one", Signature: llm.SignatureGemini + "Sig1="}}},
+			llm.TextMessage(llm.RoleUser, "more"),
+			{Role: llm.RoleAssistant, Parts: []llm.Part{
+				llm.TextPart{Text: "two"},
+				llm.TextPart{Signature: llm.SignatureGemini + "Sig2="},
+			}},
+			llm.TextMessage(llm.RoleUser, "more"),
+			{Role: llm.RoleAssistant, Parts: []llm.Part{llm.TextPart{Text: "three", Signature: llm.SignatureOpenAIResponses + "gpt-5"}}},
+		},
+	})
+
+	sent := contents(t, body)
+	for i, want := range map[int]any{1: "Sig1=", 3: "Sig2=", 5: nil} {
+		part := sent[i]["parts"].([]any)
+		if len(part) != 1 {
+			t.Fatalf("content %d parts = %v", i, part)
+		}
+		if got := part[0].(map[string]any)["thoughtSignature"]; got != want {
+			t.Errorf("content %d thoughtSignature = %v, want %v", i, got, want)
+		}
+	}
+}

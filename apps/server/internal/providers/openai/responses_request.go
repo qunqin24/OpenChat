@@ -31,6 +31,21 @@ var responsesReservedKeys = map[string]bool{
 }
 
 func buildResponsesBody(req llm.Request, cfg Config) ([]byte, error) {
+	return buildResponsesBodyWith(req, cfg, true)
+}
+
+// asksForReasoning is whether the request carries the reasoning parameters at
+// all: they are refused by a model that does not think (gpt-4.1 answers 400 to
+// the include), so they go only to one the catalogue says thinks or to a
+// request that names a level.
+func asksForReasoning(req llm.Request, cfg Config) bool {
+	return cfg.Reasoning || (req.Options.Reasoning != nil && req.Options.Reasoning.Effort != "")
+}
+
+// buildResponsesBodyWith is buildResponsesBody with the reasoning summary
+// optional, for the organisations that may not ask for one (see
+// ResponsesClient.Stream).
+func buildResponsesBodyWith(req llm.Request, cfg Config, summary bool) ([]byte, error) {
 	if req.Model == "" {
 		return nil, llm.Errorf(llm.ErrorProvider, nil, "openai: the request names no model")
 	}
@@ -50,10 +65,7 @@ func buildResponsesBody(req llm.Request, cfg Config) ([]byte, error) {
 		"store": false,
 	}
 	opts := req.Options
-	// The reasoning parameters are refused by a model that does not think
-	// (gpt-4.1 answers 400 to the include), so they go only to one the
-	// catalogue says thinks or to a request that names a level.
-	thinks := cfg.Reasoning || (opts.Reasoning != nil && opts.Reasoning.Effort != "")
+	thinks := asksForReasoning(req, cfg)
 	if thinks {
 		body["include"] = []string{"reasoning.encrypted_content"}
 	}
@@ -80,11 +92,16 @@ func buildResponsesBody(req llm.Request, cfg Config) ([]byte, error) {
 	if thinks {
 		// The summary is the only thinking the model will show, and without
 		// asking for it a model left on its default level shows none.
-		reasoning := map[string]any{"summary": "auto"}
+		reasoning := map[string]any{}
+		if summary {
+			reasoning["summary"] = "auto"
+		}
 		if opts.Reasoning != nil && opts.Reasoning.Effort != "" {
 			reasoning["effort"] = string(opts.Reasoning.Effort)
 		}
-		body["reasoning"] = reasoning
+		if len(reasoning) > 0 {
+			body["reasoning"] = reasoning
+		}
 	}
 
 	for key, value := range opts.Extra {

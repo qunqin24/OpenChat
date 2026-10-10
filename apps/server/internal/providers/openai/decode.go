@@ -33,6 +33,11 @@ type block struct {
 	name   string
 	args   strings.Builder
 
+	// details are OpenRouter's reasoning_details for this thinking block, and
+	// model the one they were asked of; see reasoning_details.go.
+	details detailList
+	model   string
+
 	closed bool
 }
 
@@ -41,7 +46,12 @@ type block struct {
 func (b *block) part() llm.Part {
 	switch b.kind {
 	case llm.PartReasoning:
-		return llm.ReasoningPart{Text: b.text.String()}
+		part := llm.ReasoningPart{Text: b.text.String()}
+		if len(b.details) > 0 {
+			part.Signature = detailsSignature(b.model)
+			part.Redacted = b.details.replay()
+		}
+		return part
 	case llm.PartToolCall:
 		return b.toolCall()
 	default:
@@ -85,8 +95,9 @@ func unwrapEmit(err error) error {
 }
 
 type assembler struct {
-	cfg  Config
-	emit func(llm.Event) error
+	cfg       Config
+	requested string // the model asked for; stamped on reasoning_details
+	emit      func(llm.Event) error
 
 	blocks []*block
 	active *block         // the open text or reasoning block, if any
@@ -103,7 +114,7 @@ type assembler struct {
 // which never echoes a model still yields the best answer available, and is
 // overwritten the moment the stream says otherwise.
 func decode(ctx context.Context, body io.Reader, cfg Config, model string, emit func(llm.Event) error) (llm.ModelResponse, error) {
-	a := &assembler{cfg: cfg, emit: emit, tools: map[int]*block{}}
+	a := &assembler{cfg: cfg, requested: model, emit: emit, tools: map[int]*block{}}
 	a.resp.Provider = cfg.Provider
 	a.resp.Model = model
 
@@ -195,8 +206,21 @@ func (a *assembler) chunk(data []byte) error {
 }
 
 func (a *assembler) choice(ch chunkChoice) error {
-	if reasoning := reasoningDelta(ch.Delta); reasoning != "" {
+	details := parseDetails(ch.Delta.ReasoningDetails)
+	reasoning := reasoningDelta(ch.Delta)
+	if reasoning == "" {
+		// A chunk may carry only the structured form; what it says is still
+		// the thinking to show. When both come, the plain string is the one
+		// shown and the details are not read twice.
+		reasoning = textOf(details)
+	}
+	if reasoning != "" {
 		if err := a.textDelta(llm.PartReasoning, reasoning); err != nil {
+			return err
+		}
+	}
+	if len(details) > 0 && a.cfg.Compat.ReasoningDetails {
+		if err := a.keepDetails(details); err != nil {
 			return err
 		}
 	}
@@ -229,12 +253,14 @@ func reasoningDelta(d delta) string {
 }
 
 func (a *assembler) open(kind llm.PartKind) *block {
-	b := &block{index: len(a.blocks), kind: kind}
+	b := &block{index: len(a.blocks), kind: kind, model: a.requested}
 	a.blocks = append(a.blocks, b)
 	return b
 }
 
-func (a *assembler) textDelta(kind llm.PartKind, text string) error {
+// activate makes the open block one of kind, ending the one that is not and
+// starting a new one if there is none.
+func (a *assembler) activate(kind llm.PartKind) error {
 	if a.active != nil && a.active.kind != kind {
 		// The model switched between thinking and answering. That ends the
 		// block: merging the two would lose the order they appeared in, which
@@ -249,6 +275,41 @@ func (a *assembler) textDelta(kind llm.PartKind, text string) error {
 			return err
 		}
 		a.active = b
+	}
+	return nil
+}
+
+// keepDetails files OpenRouter's reasoning_details on the thinking block they
+// belong to: the open one, else the latest that was open (a trailing chunk can
+// carry the signature after the answer has begun), else a block of their own
+// — an encrypted-only reasoning has no text to have started one. Only the
+// final response carries them; a part_end sent earlier is a display copy.
+func (a *assembler) keepDetails(details []reasoningDetail) error {
+	var target *block
+	switch {
+	case a.active != nil && a.active.kind == llm.PartReasoning:
+		target = a.active
+	default:
+		for i := len(a.blocks) - 1; i >= 0; i-- {
+			if a.blocks[i].kind == llm.PartReasoning {
+				target = a.blocks[i]
+				break
+			}
+		}
+	}
+	if target == nil {
+		if err := a.activate(llm.PartReasoning); err != nil {
+			return err
+		}
+		target = a.active
+	}
+	target.details = target.details.add(details)
+	return nil
+}
+
+func (a *assembler) textDelta(kind llm.PartKind, text string) error {
+	if err := a.activate(kind); err != nil {
+		return err
 	}
 
 	a.active.text.WriteString(text)

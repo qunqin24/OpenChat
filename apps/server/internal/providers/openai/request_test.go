@@ -202,13 +202,23 @@ func TestBuildBodyAsksForThinkingTheWayEachVendorTakesIt(t *testing.T) {
 		{"default has no use for a budget", ThinkingEffort, "m", budget(2000), `{}`},
 		{"no opinion sends nothing", ThinkingEffort, "m", nil, `{}`},
 
-		{"dashscope turns thinking on with the level", ThinkingDashScope, "qwen3.8-max", effort(llm.EffortHigh), `{"enable_thinking":true,"reasoning_effort":"high"}`},
+		{"dashscope turns thinking on with the level", ThinkingDashScope, "qwen3.8-max", effort(llm.EffortHigh), `{"enable_thinking":true,"reasoning_effort":"high","preserve_thinking":true}`},
 		{"dashscope turns thinking off", ThinkingDashScope, "qwen3.8-max", effort(llm.EffortNone), `{"enable_thinking":false}`},
-		{"dashscope takes a budget", ThinkingDashScope, "qwen3.7-plus", budget(4096), `{"enable_thinking":true,"thinking_budget":4096}`},
+		{"dashscope takes a budget", ThinkingDashScope, "qwen3.7-plus", budget(4096), `{"enable_thinking":true,"thinking_budget":4096,"preserve_thinking":true}`},
+		{"dashscope reads earlier thinking even at its default level", ThinkingDashScope, "qwen3.6-plus", nil, `{"preserve_thinking":true}`},
+		{"dashscope leaves models that never documented it alone", ThinkingDashScope, "qwen3-max", effort(llm.EffortHigh), `{"enable_thinking":true,"reasoning_effort":"high"}`},
+		{"dashscope sends nothing for an older model with no level", ThinkingDashScope, "qwen-plus", nil, `{}`},
 
 		{"switch passes the level through", ThinkingSwitch, "glm-5.2", effort(llm.EffortMax), `{"reasoning_effort":"max"}`},
 		{"switch turns thinking off", ThinkingSwitch, "glm-5.2", effort(llm.EffortNone), `{"thinking":{"type":"disabled"}}`},
 
+		{"glm 4.7 reads earlier thinking", ThinkingGLM, "glm-4.7", effort(llm.EffortHigh), `{"reasoning_effort":"high","thinking":{"type":"enabled","clear_thinking":false}}`},
+		{"glm keeps the flag without a chosen level", ThinkingGLM, "glm-5.2", nil, `{"thinking":{"clear_thinking":false}}`},
+		{"glm turned off does not preserve", ThinkingGLM, "glm-5.2", effort(llm.EffortNone), `{"thinking":{"type":"disabled"}}`},
+		{"glm before 4.6 has no such parameter", ThinkingGLM, "glm-4.5", effort(llm.EffortHigh), `{"reasoning_effort":"high"}`},
+		{"glm vision variants parse", ThinkingGLM, "glm-4.6v", nil, `{"thinking":{"clear_thinking":false}}`},
+		{"toggle is on or off and no level", ThinkingToggle, "mimo-v2.6-pro", effort(llm.EffortHigh), `{"thinking":{"type":"enabled"}}`},
+		{"toggle turns off", ThinkingToggle, "mimo-v2.6-pro", effort(llm.EffortNone), `{"thinking":{"type":"disabled"}}`},
 		{"kimi k3 takes an effort", ThinkingMoonshot, "kimi-k3", effort(llm.EffortLow), `{"reasoning_effort":"low"}`},
 		{"kimi k2.6 takes no effort, only the switch", ThinkingMoonshot, "kimi-k2.6", effort(llm.EffortHigh), `{"thinking":{"type":"enabled"}}`},
 		{"kimi k2.6 can be turned off", ThinkingMoonshot, "kimi-k2.6", effort(llm.EffortNone), `{"thinking":{"type":"disabled"}}`},
@@ -221,7 +231,7 @@ func TestBuildBodyAsksForThinkingTheWayEachVendorTakesIt(t *testing.T) {
 			sent := buildRequest(t, Config{Compat: Compat{Thinking: tc.style}},
 				llm.Request{Model: tc.model, Options: llm.Options{Reasoning: tc.reasoning}})
 			got := map[string]any{}
-			for _, key := range []string{"reasoning_effort", "enable_thinking", "thinking_budget", "thinking", "reasoning"} {
+			for _, key := range []string{"reasoning_effort", "enable_thinking", "thinking_budget", "thinking", "reasoning", "preserve_thinking"} {
 				if v, ok := sent[key]; ok {
 					got[key] = v
 				}

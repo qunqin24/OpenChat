@@ -624,3 +624,38 @@ func (r *blockingReader) Read(p []byte) (int, error) {
 	r.off += n
 	return n, nil
 }
+
+func TestStreamKeepsAThoughtSignatureOnAnswerText(t *testing.T) {
+	// Without a function call the signature rides the last part of the reply,
+	// and while streaming that part can be an empty text. It belongs to the
+	// answer text it follows, so it is kept for the next request.
+	// https://ai.google.dev/gemini-api/docs/generate-content/thought-signatures
+	rec, resp, err := decodeFixture(t, "text_signature.sse", Config{Provider: "google"})
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got, want := kinds(resp.Message.Parts), []llm.PartKind{llm.PartReasoning, llm.PartText}; !slices.Equal(got, want) {
+		t.Fatalf("parts = %v, want %v — the empty signature part must not open a block of its own", got, want)
+	}
+	text := resp.Message.Parts[1].(llm.TextPart)
+	if text.Text != "is 42. Done." {
+		t.Errorf("text = %q", text.Text)
+	}
+	// One attestation per reply: the last one is kept, never glued to another.
+	if want := llm.SignatureGemini + "LastSig="; text.Signature != want {
+		t.Errorf("signature = %q, want %q", text.Signature, want)
+	}
+	if strings.Contains(rec.Deltas(llm.PartText), "Sig") {
+		t.Error("the signature reached the visible answer")
+	}
+	// The part_end event is what the run layer stores.
+	var ended llm.TextPart
+	for _, ev := range rec.OfType(llm.EventPartEnd) {
+		if p, ok := ev.Part.(llm.TextPart); ok {
+			ended = p
+		}
+	}
+	if ended.Signature != text.Signature {
+		t.Errorf("part_end signature = %q, want %q", ended.Signature, text.Signature)
+	}
+}

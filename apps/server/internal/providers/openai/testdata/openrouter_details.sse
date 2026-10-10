@@ -1,0 +1,16 @@
+: OPENROUTER PROCESSING
+
+data: {"id":"gen-details","object":"chat.completion.chunk","created":1730000000,"model":"anthropic/claude-sonnet-4.5","provider":"Anthropic","choices":[{"index":0,"delta":{"role":"assistant","content":"","reasoning":"The user ","reasoning_details":[{"type":"reasoning.text","text":"The user ","signature":null,"id":"reasoning-text-1","format":"anthropic-claude-v1","index":0}]},"finish_reason":null}]}
+
+data: {"id":"gen-details","object":"chat.completion.chunk","created":1730000000,"model":"anthropic/claude-sonnet-4.5","choices":[{"index":0,"delta":{"role":"assistant","content":"","reasoning":"wants the weather.","reasoning_details":[{"type":"reasoning.text","text":"wants the weather.","signature":null,"id":"reasoning-text-1","format":"anthropic-claude-v1","index":0}]},"finish_reason":null}]}
+
+data: {"id":"gen-details","object":"chat.completion.chunk","created":1730000000,"model":"anthropic/claude-sonnet-4.5","choices":[{"index":0,"delta":{"role":"assistant","content":"","reasoning":"","reasoning_details":[{"type":"reasoning.text","text":"","signature":"EqQBsignature==","id":"reasoning-text-1","format":"anthropic-claude-v1","index":0}]},"finish_reason":null}]}
+
+data: {"id":"gen-details","object":"chat.completion.chunk","created":1730000000,"model":"anthropic/claude-sonnet-4.5","choices":[{"index":0,"delta":{"role":"assistant","content":"Checking."},"finish_reason":null}]}
+
+data: {"id":"gen-details","object":"chat.completion.chunk","created":1730000000,"model":"anthropic/claude-sonnet-4.5","choices":[{"index":0,"delta":{"role":"assistant","content":"","tool_calls":[{"index":0,"id":"toolu_1","type":"function","function":{"name":"weather","arguments":"{\"city\":\"Oslo\"}"}}],"reasoning_details":[{"type":"reasoning.encrypted","data":"opaque-state","id":"tool_toolu_1","format":"google-gemini-v1","index":1,"vendor_field":{"keep":true}}]},"finish_reason":null}]}
+
+data: {"id":"gen-details","object":"chat.completion.chunk","created":1730000000,"model":"anthropic/claude-sonnet-4.5","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10,"completion_tokens":20}}
+
+data: [DONE]
+

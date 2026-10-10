@@ -96,14 +96,28 @@ var channelTypes = []channelTypeDef{
 		Compat: openai.Compat{EchoReasoning: true, Thinking: openai.ThinkingMoonshot}},
 	{ID: "zhipu", Label: "智谱 GLM", WireApi: "openai", Group: Vendor,
 		Endpoint: "https://open.bigmodel.cn/api/paas/v4", KeyHint: "…", IconID: "zhipu",
-		Compat: openai.Compat{EchoReasoning: true, Thinking: openai.ThinkingSwitch}},
+		// clear_thinking:false makes GLM-4.6+ read the reasoning we send back;
+		// by default it drops it (docs.z.ai/guides/capabilities/thinking-mode).
+		Compat: openai.Compat{EchoReasoning: true, Thinking: openai.ThinkingGLM}},
 	{ID: "dashscope", Label: "阿里云百炼 DashScope", WireApi: "openai", Group: Vendor,
 		Endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1", KeyHint: "sk-…", IconID: "qwen",
 		Compat: openai.Compat{EchoReasoning: true, MaxCompletionTokens: true, Thinking: openai.ThinkingDashScope}},
 	{ID: "volcengine", Label: "火山方舟 Volcengine", WireApi: "openai", Group: Vendor,
-		Endpoint: "https://ark.cn-beijing.volces.com/api/v3", KeyHint: "…", IconID: "volcengine"},
+		Endpoint: "https://ark.cn-beijing.volces.com/api/v3", KeyHint: "…", IconID: "volcengine",
+		// ModelArk's deep-reasoning guide says to keep reasoning_content in
+		// the history of a multi-turn conversation and let the model decide
+		// whether to read it (docs.byteplus.com/en/docs/ModelArk/1449737,
+		// the same page as www.volcengine.com/docs/82379/1449737). Thinking
+		// is `thinking: {type}` plus `reasoning_effort`, as for DeepSeek.
+		Compat: openai.Compat{EchoReasoning: true, Thinking: openai.ThinkingSwitch}},
 	{ID: "minimax", Label: "MiniMax", WireApi: "openai", Group: Vendor,
-		Endpoint: "https://api.minimax.chat/v1", KeyHint: "…", IconID: "minimax"},
+		Endpoint: "https://api.minimax.chat/v1", KeyHint: "…", IconID: "minimax",
+		// MiniMax-M3.1-Flash-Preview returns its thinking in reasoning_content
+		// and asks that the whole assistant message, that field included, goes
+		// back in a tool loop; the M2.x models keep it inside content as
+		// <think>, which is replayed as the text it is
+		// (platform.minimax.io/docs/api-reference/text-openai-api).
+		Compat: openai.Compat{EchoReasoning: true}},
 	{ID: "xai", Label: "xAI Grok", WireApi: "openai", Group: Vendor,
 		Endpoint: "https://api.x.ai/v1", KeyHint: "xai-…", IconID: "grok"},
 	{ID: "mistral", Label: "Mistral AI", WireApi: "openai", Group: Vendor,
@@ -115,14 +129,20 @@ var channelTypes = []channelTypeDef{
 	{ID: "qianfan", Label: "百度千帆 Qianfan", WireApi: "openai", Group: Vendor,
 		Endpoint: "https://qianfan.baidubce.com/v2", KeyHint: "bce-v3/…", IconID: "wenxin"},
 	{ID: "mimo", Label: "小米 MiMo", WireApi: "openai", Group: Vendor,
-		Endpoint: "https://api.xiaomimimo.com/v1", KeyHint: "…", IconID: "mimo"},
+		Endpoint: "https://api.xiaomimimo.com/v1", KeyHint: "…", IconID: "mimo",
+		// With thinking on, an assistant message that made tool calls must come
+		// back with its full reasoning_content or the API answers 400
+		// (mimo.mi.com/static/docs/quick-start/usage-guide/text-generation/deep-thinking.md).
+		Compat: openai.Compat{EchoReasoning: true, Thinking: openai.ThinkingToggle}},
 
 	// Hosts that serve other people's models, or a router in front of several
 	// of them. Same protocol; the difference an operator cares about is whose
 	// invoice it lands on.
 	{ID: "openrouter", Label: "OpenRouter", WireApi: "openai", Group: Platform,
 		Endpoint: "https://openrouter.ai/api/v1", KeyHint: "sk-or-…", IconID: "openrouter",
-		Compat: openai.Compat{Thinking: openai.ThinkingOpenRouter}},
+		// reasoning_details carries the signatures and encrypted reasoning of
+		// whichever model is routed to, and goes back unmodified.
+		Compat: openai.Compat{Thinking: openai.ThinkingOpenRouter, ReasoningDetails: true}},
 	{ID: "siliconflow", Label: "硅基流动 SiliconFlow", WireApi: "openai", Group: Platform,
 		Endpoint: "https://api.siliconflow.cn/v1", KeyHint: "sk-…", IconID: "siliconcloud"},
 	{ID: "groq", Label: "Groq", WireApi: "openai", Group: Platform,
@@ -142,7 +162,11 @@ var channelTypes = []channelTypeDef{
 	// Responses, the other open models on Chat Completions — all under one base URL and one key. Its model list is
 	// OpenAI-style, which is what WireApi says. The open models it serves on
 	// Chat Completions (GLM, Kimi, DeepSeek) are the ones that want their
-	// reasoning handed back.
+	// reasoning handed back. They get no vendor-style thinking controls
+	// (GLM's clear_thinking, Kimi's thinking switch): opencode.ai/docs/go lists
+	// the endpoints and models but nowhere says which request parameters the
+	// gateway forwards, and a field it drops is a silent no-op while one it
+	// rejects is a failed request.
 	{ID: "opencode-go", Label: "OpenCode Go", WireApi: "openai", Group: Platform,
 		Endpoint: "https://opencode.ai/zen/go/v1", KeyHint: "sk-…", IconID: "opencode",
 		Doc: "https://opencode.ai/auth", Route: openCodeRoute,

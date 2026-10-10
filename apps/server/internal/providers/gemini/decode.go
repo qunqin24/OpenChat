@@ -36,8 +36,8 @@ type block struct {
 	args   string
 
 	// callSignature is the thoughtSignature that came on the functionCall part.
-	// It is kept apart from signature because that one is a reasoning block's
-	// attestation, which this adapter never replays.
+	// It is kept apart from signature, which belongs to a reasoning or text
+	// block: only a call's is mandatory to send back.
 	callSignature string
 }
 
@@ -61,14 +61,28 @@ func (b *block) part() llm.Part {
 			Signature:    callSignature(b.callSignature),
 		}
 	default:
-		return llm.TextPart{Text: b.text.String()}
+		return llm.TextPart{Text: b.text.String(), Signature: callSignature(b.signature.String())}
 	}
+}
+
+// setSignature files a thoughtSignature that arrived on a text part. A
+// reasoning block's are appended, the way its text is. On answer text the last
+// one wins: it is a single attestation the API puts on the final part of a
+// reply (it may arrive on an empty text part while streaming), and gluing two
+// together would corrupt both.
+// https://ai.google.dev/gemini-api/docs/generate-content/thought-signatures
+func (b *block) setSignature(signature string, kind llm.PartKind) {
+	if kind != llm.PartReasoning {
+		b.signature.Reset()
+	}
+	b.signature.WriteString(signature)
 }
 
 // callSignature namespaces a thoughtSignature for storage, on a tool call or a
 // reasoning block. The prefix is what stops another adapter replaying it, and
 // what lets request.go tell a signature this API issued from one it did not.
-// Reasoning is never read back here, so only a call's is ever stripped.
+// Reasoning is never read back here, so only a call's and a text part's are
+// ever stripped.
 func callSignature(raw string) string {
 	if raw == "" {
 		return ""
@@ -278,11 +292,8 @@ func (a *assembler) textPart(kind llm.PartKind, text, signature string) error {
 		a.active = b
 	}
 
-	if signature != "" && kind == llm.PartReasoning {
-		// A signature on answer text is the model's optional bookkeeping for
-		// quality (the API validates only the ones on function calls), and
-		// llm.TextPart has nowhere to keep it, so it is not replayed.
-		a.active.signature.WriteString(signature)
+	if signature != "" {
+		a.active.setSignature(signature, kind)
 	}
 	if text == "" {
 		return nil
@@ -356,14 +367,14 @@ func syntheticID(ordinal int, name string) string {
 // attachSignature files a signature that arrived on its own. It belongs to
 // whatever block the model was in the middle of; with no block at all there is
 // nothing it attests to, and keeping it would mean inventing one. Only a
-// reasoning block has a place for one: a function call's arrives on the call's
-// own part, and one trailing after answer text is the optional kind.
+// reasoning or answer-text block has a place for one: a function call's arrives
+// on the call's own part.
 func (a *assembler) attachSignature(signature string) {
 	if len(a.blocks) == 0 {
 		return
 	}
-	if b := a.blocks[len(a.blocks)-1]; b.kind == llm.PartReasoning {
-		b.signature.WriteString(signature)
+	if b := a.blocks[len(a.blocks)-1]; b.kind != llm.PartToolCall {
+		b.setSignature(signature, b.kind)
 	}
 }
 

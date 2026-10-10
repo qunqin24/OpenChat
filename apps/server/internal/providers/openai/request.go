@@ -26,7 +26,7 @@ func buildBody(req llm.Request, cfg Config) ([]byte, error) {
 		return nil, llm.Errorf(llm.ErrorProvider, nil, "openai: the request names no model")
 	}
 
-	messages, err := convertMessages(req.Messages, cfg)
+	messages, err := convertMessages(req.Messages, cfg, req.Model)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +98,7 @@ func convertTools(tools []llm.Tool) []map[string]any {
 	return out
 }
 
-func convertMessages(messages []llm.Message, cfg Config) ([]wireMessage, error) {
+func convertMessages(messages []llm.Message, cfg Config, model string) ([]wireMessage, error) {
 	out := make([]wireMessage, 0, len(messages))
 	for _, message := range messages {
 		switch message.Role {
@@ -109,7 +109,7 @@ func convertMessages(messages []llm.Message, cfg Config) ([]wireMessage, error) 
 			}
 			out = append(out, results...)
 		case llm.RoleAssistant:
-			converted, err := convertAssistant(message, cfg)
+			converted, err := convertAssistant(message, cfg, model)
 			if err != nil {
 				return nil, err
 			}
@@ -167,8 +167,11 @@ func toolResultContent(result llm.ToolResultPart) string {
 	return b.String()
 }
 
-func convertAssistant(message llm.Message, cfg Config) (wireMessage, error) {
+func convertAssistant(message llm.Message, cfg Config, model string) (wireMessage, error) {
 	out := wireMessage{Role: "assistant"}
+	if cfg.Compat.ReasoningDetails {
+		out.ReasoningDetails = storedDetails(message, model)
+	}
 
 	var text, reasoning strings.Builder
 	for _, part := range message.Parts {
@@ -180,7 +183,7 @@ func convertAssistant(message llm.Message, cfg Config) (wireMessage, error) {
 			// implementations of this protocol reject their own
 			// reasoning_content on the way in. A signed or encrypted block is
 			// another provider's, in a form this protocol has no field for.
-			if cfg.Compat.EchoReasoning && p.Signature == "" && len(p.Redacted) == 0 {
+			if cfg.Compat.EchoReasoning && out.ReasoningDetails == nil && p.Signature == "" && len(p.Redacted) == 0 {
 				reasoning.WriteString(p.Text)
 			}
 		case llm.ToolCallPart:

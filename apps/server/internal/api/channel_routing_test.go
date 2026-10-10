@@ -79,12 +79,12 @@ func TestChannelTypesCarryTheirVendorsQuirks(t *testing.T) {
 	// Reasoning goes back to the vendors that read it, in the field they read
 	// it from, and to nobody else: most endpoints reject their own
 	// reasoning_content coming back in.
-	for _, id := range []ChannelType{"deepseek", "moonshot", "zhipu", "dashscope", "opencode-go"} {
+	for _, id := range []ChannelType{"deepseek", "moonshot", "zhipu", "dashscope", "opencode-go", "mimo", "volcengine", "minimax"} {
 		if !compatFor(id).EchoReasoning {
 			t.Errorf("%s does not echo reasoning", id)
 		}
 	}
-	for _, id := range []ChannelType{"openai", "openai-compatible", "openrouter", "ollama", "groq", "xai"} {
+	for _, id := range []ChannelType{"openai", "openai-compatible", "openrouter", "ollama", "groq", "xai", "siliconflow", "modelscope"} {
 		if compatFor(id).EchoReasoning {
 			t.Errorf("%s echoes reasoning", id)
 		}
@@ -95,7 +95,9 @@ func TestChannelTypesCarryTheirVendorsQuirks(t *testing.T) {
 	styles := map[ChannelType]openai.ThinkingStyle{
 		"dashscope":  openai.ThinkingDashScope,
 		"deepseek":   openai.ThinkingSwitch,
-		"zhipu":      openai.ThinkingSwitch,
+		"zhipu":      openai.ThinkingGLM,
+		"volcengine": openai.ThinkingSwitch,
+		"mimo":       openai.ThinkingToggle,
 		"moonshot":   openai.ThinkingMoonshot,
 		"openrouter": openai.ThinkingOpenRouter,
 	}
@@ -110,6 +112,13 @@ func TestChannelTypesCarryTheirVendorsQuirks(t *testing.T) {
 		want := def.ID == "openai" || def.ID == "dashscope"
 		if def.Compat.MaxCompletionTokens != want {
 			t.Errorf("%s max_completion_tokens = %v, want %v", def.ID, def.Compat.MaxCompletionTokens, want)
+		}
+	}
+
+	// OpenRouter alone sends reasoning_details, and so alone is sent them back.
+	for _, def := range channelTypes {
+		if want := def.ID == "openrouter"; def.Compat.ReasoningDetails != want {
+			t.Errorf("%s reasoning_details = %v, want %v", def.ID, def.Compat.ReasoningDetails, want)
 		}
 	}
 

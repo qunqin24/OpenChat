@@ -916,3 +916,105 @@ func TestResponsesStreamTreatsACancelledResponseAsAnError(t *testing.T) {
 		t.Errorf("error = %v, want a provider error", err)
 	}
 }
+
+// An organisation that has not completed verification is refused a reasoning
+// summary (https://developers.openai.com/api/docs/guides/reasoning). The
+// request is repeated once without it, and the model is not asked again.
+func TestResponsesClientRetriesWithoutASummaryTheOrganisationMayNotHave(t *testing.T) {
+	var bodies []map[string]any
+	transport := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		raw, _ := io.ReadAll(r.Body)
+		var sent map[string]any
+		if err := json.Unmarshal(raw, &sent); err != nil {
+			t.Fatalf("request body: %v", err)
+		}
+		bodies = append(bodies, sent)
+		if reasoning, _ := sent["reasoning"].(map[string]any); reasoning["summary"] != nil {
+			return respond(http.StatusBadRequest, "application/json", string(fixture(t, "responses_summary_unverified.json"))), nil
+		}
+		return respond(http.StatusOK, "text/event-stream", string(fixture(t, "responses_text.sse"))), nil
+	})
+	cfg := Config{Provider: "openai", BaseURL: "https://summary-retry.test/v1", APIKey: "sk-retry", Reasoning: true,
+		HTTPClient: &http.Client{Transport: transport}}
+	req := llm.Request{
+		Model:    "gpt-5",
+		Messages: []llm.Message{llm.TextMessage(llm.RoleUser, "hello")},
+		Options:  llm.Options{Reasoning: &llm.ReasoningOptions{Effort: llm.EffortHigh}},
+	}
+	stream := func(cfg Config) {
+		t.Helper()
+		client, err := NewResponses(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := client.Stream(context.Background(), req, func(llm.Event) error { return nil })
+		if err != nil {
+			t.Fatalf("Stream: %v", err)
+		}
+		if resp.Message.Text() != "The aperture is open." {
+			t.Errorf("text = %q", resp.Message.Text())
+		}
+	}
+
+	stream(cfg)
+	if len(bodies) != 2 {
+		t.Fatalf("requests = %d, want the refused one and the retry", len(bodies))
+	}
+	retry, _ := bodies[1]["reasoning"].(map[string]any)
+	if _, has := retry["summary"]; has || retry["effort"] != "high" {
+		t.Errorf("retry reasoning = %v, want the effort kept and the summary dropped", bodies[1]["reasoning"])
+	}
+	if bodies[1]["include"] == nil {
+		t.Error("the retry lost the encrypted reasoning include")
+	}
+
+	// A client built for a later run remembers, and goes straight to the form
+	// that works.
+	stream(cfg)
+	if len(bodies) != 3 {
+		t.Fatalf("requests = %d, want one more", len(bodies))
+	}
+	if reasoning, _ := bodies[2]["reasoning"].(map[string]any); reasoning["summary"] != nil {
+		t.Errorf("third request still asks for a summary: %v", reasoning)
+	}
+
+	// Another model is asked afresh.
+	other := req
+	other.Model = "o3"
+	client, _ := NewResponses(cfg)
+	_, _ = client.Stream(context.Background(), other, func(llm.Event) error { return nil })
+	if reasoning, _ := bodies[3]["reasoning"].(map[string]any); reasoning["summary"] != "auto" {
+		t.Errorf("a different model was not asked for a summary: %v", bodies[3]["reasoning"])
+	}
+}
+
+func TestResponsesClientDoesNotRetryOtherBadRequests(t *testing.T) {
+	calls := 0
+	transport := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		calls++
+		return respond(http.StatusBadRequest, "application/json",
+			`{"error":{"message":"Your organization must be verified to stream this model.","code":"unsupported_value","param":"stream"}}`), nil
+	})
+	client, _ := NewResponses(Config{Provider: "openai", BaseURL: "https://no-retry.test/v1", APIKey: "k", Reasoning: true,
+		HTTPClient: &http.Client{Transport: transport}})
+	_, err := client.Stream(context.Background(), llm.Request{Model: "o3", Messages: []llm.Message{llm.TextMessage(llm.RoleUser, "hi")}},
+		func(llm.Event) error { return nil })
+	if !llm.IsKind(err, llm.ErrorProvider) || calls != 1 {
+		t.Errorf("err = %v after %d calls, want the refusal passed on untouched", err, calls)
+	}
+}
+
+func TestIsSummaryRefusal(t *testing.T) {
+	for message, want := range map[string]bool{
+		"Your organization must be verified to generate reasoning summaries. Please go to: ...": true,
+		"Your organization must be verified to stream this model.":                              false,
+		"Unsupported parameter: 'temperature'":                                                  false,
+	} {
+		if got := isSummaryRefusal(&llm.Error{Kind: llm.ErrorProvider, Message: message}); got != want {
+			t.Errorf("%q = %v, want %v", message, got, want)
+		}
+	}
+	if isSummaryRefusal(&llm.Error{Kind: llm.ErrorAuth, Message: "reasoning summaries need verification"}) {
+		t.Error("an auth failure was read as a summary refusal")
+	}
+}

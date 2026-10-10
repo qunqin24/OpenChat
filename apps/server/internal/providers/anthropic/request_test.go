@@ -653,3 +653,24 @@ func TestBuildBodyMarksTheCacheableParts(t *testing.T) {
 		}
 	})
 }
+
+func TestBuildBodyLeavesOutOpenRouterReasoningDetails(t *testing.T) {
+	// OpenRouter's reasoning_details are kept as a JSON array in Redacted; sent
+	// here they would be a redacted_thinking block with garbage in it.
+	body := build(t, llm.Request{
+		Model: "claude-sonnet-5-5",
+		Messages: []llm.Message{
+			llm.TextMessage(llm.RoleUser, "hello"),
+			{Role: llm.RoleAssistant, Parts: []llm.Part{
+				llm.ReasoningPart{Text: "hm", Signature: llm.SignatureOpenRouter + "anthropic/claude-sonnet-4.5",
+					Redacted: []byte(`[{"type":"reasoning.text","text":"hm","signature":"EqQB"}]`)},
+				llm.TextPart{Text: "the answer"},
+			}},
+		},
+	}, Config{})
+
+	blocks := body.Messages[1]["content"].([]any)
+	if len(blocks) != 1 || blocks[0].(map[string]any)["type"] != "text" {
+		t.Fatalf("blocks = %v, want only the text", blocks)
+	}
+}

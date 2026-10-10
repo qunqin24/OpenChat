@@ -229,10 +229,23 @@ func convertAssistant(message llm.Message, model string) ([]wireRequestPart, err
 	for _, part := range message.Parts {
 		switch p := part.(type) {
 		case llm.TextPart:
+			signature, ours := strings.CutPrefix(p.Signature, llm.SignatureGemini)
+			if !ours {
+				// Another adapter's: it would only be rejected here.
+				signature = ""
+			}
 			if p.Text == "" {
+				// A part needs content, and a signature alone is not any; the
+				// text it vouches for is the part before it.
+				if last := len(parts) - 1; signature != "" && last >= 0 && parts[last].Text != "" && parts[last].ThoughtSignature == "" {
+					parts[last].ThoughtSignature = signature
+				}
 				continue
 			}
-			parts = append(parts, wireRequestPart{Text: p.Text})
+			// Sent back on the part it came on, as the docs recommend; a
+			// reply without it is not rejected, only answered a little worse.
+			// https://ai.google.dev/gemini-api/docs/generate-content/thought-signatures
+			parts = append(parts, wireRequestPart{Text: p.Text, ThoughtSignature: signature})
 		case llm.ReasoningPart:
 			continue
 		case llm.ToolCallPart:

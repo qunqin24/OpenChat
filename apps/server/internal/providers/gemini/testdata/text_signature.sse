@@ -1,0 +1,8 @@
+data: {"candidates":[{"content":{"parts":[{"text":"The answer ","thought":true}],"role":"model"},"index":0}],"modelVersion":"gemini-3-flash-preview","responseId":"resp-sig"}
+
+data: {"candidates":[{"content":{"parts":[{"text":"is 42."}],"role":"model"},"index":0}],"modelVersion":"gemini-3-flash-preview","responseId":"resp-sig"}
+
+data: {"candidates":[{"content":{"parts":[{"text":" Done.","thoughtSignature":"Cx0BtextSig="}],"role":"model"},"index":0}],"modelVersion":"gemini-3-flash-preview","responseId":"resp-sig"}
+
+data: {"candidates":[{"content":{"parts":[{"text":"","thoughtSignature":"LastSig="}],"role":"model"},"finishReason":"STOP","index":0}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5,"totalTokenCount":15},"modelVersion":"gemini-3-flash-preview","responseId":"resp-sig"}
+

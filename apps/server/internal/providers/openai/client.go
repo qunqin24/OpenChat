@@ -54,6 +54,16 @@ type Compat struct {
 	// what they document, and costs nothing where it is ignored.
 	EchoReasoning bool
 
+	// ReasoningDetails keeps OpenRouter's `reasoning_details` from the stream
+	// and sends them back, unmodified, on the assistant message they came
+	// with: that is how Claude's signed thinking and OpenAI's and Gemini's
+	// encrypted reasoning survive a tool loop through a router
+	// (https://openrouter.ai/docs/guides/best-practices/reasoning-tokens).
+	// They replace reasoning_content on that message, and only a model that
+	// wrote them is sent them. Off elsewhere: no other endpoint sends the
+	// field, and a relay that does not know it should not be sent it.
+	ReasoningDetails bool
+
 	// MaxCompletionTokens names the output limit `max_completion_tokens`
 	// instead of the deprecated `max_tokens`. OpenAI's reasoning models reject
 	// the old name outright, and it counts the thinking in the limit, which
@@ -81,6 +91,13 @@ const (
 	// `thinking: {type: disabled}`, since `none` is not one of their levels,
 	// and the levels they do have are a plain `reasoning_effort`.
 	ThinkingSwitch ThinkingStyle = "switch"
+	// ThinkingGLM is Z.ai's: ThinkingSwitch, and for GLM-4.6 and later the
+	// request also says `clear_thinking: false`, so the reasoning we send back
+	// is read (see preserveFields).
+	ThinkingGLM ThinkingStyle = "glm"
+	// ThinkingToggle is a plain on/off `thinking: {type: enabled|disabled}`
+	// with no levels, which is all MiMo has.
+	ThinkingToggle ThinkingStyle = "toggle"
 	// ThinkingMoonshot is Kimi: K3 takes `reasoning_effort`, the K2 models an
 	// on/off `thinking: {type}` and no effort at all.
 	ThinkingMoonshot ThinkingStyle = "moonshot"
