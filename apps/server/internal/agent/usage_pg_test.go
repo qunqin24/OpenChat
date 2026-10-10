@@ -23,6 +23,7 @@ type ledgerRow struct {
 	duration                    int
 	user                        *uuid.UUID
 	conversation                *uuid.UUID
+	estimated                   bool
 }
 
 // ledger reads the rows a run wrote, oldest first.
@@ -31,7 +32,7 @@ func (f *fixture) ledger(runID uuid.UUID) []ledgerRow {
 	rows, err := f.pool.Query(context.Background(), `
 		SELECT kind, status, model_id, served_model, error_code, error_message,
 		       input_tokens, output_tokens, reasoning_tokens, cache_read_tokens,
-		       cost::double precision, first_token_ms, duration_ms, user_id, conversation_id
+		       cost::double precision, first_token_ms, duration_ms, user_id, conversation_id, estimated
 		FROM usage_logs WHERE run_id = $1 ORDER BY created_at, id`, runID)
 	if err != nil {
 		f.t.Fatal(err)
@@ -41,7 +42,7 @@ func (f *fixture) ledger(runID uuid.UUID) []ledgerRow {
 	for rows.Next() {
 		var r ledgerRow
 		if err := rows.Scan(&r.kind, &r.status, &r.model, &r.served, &r.code, &r.message,
-			&r.input, &r.output, &r.reasoning, &r.cacheRead, &r.cost, &r.firstToken, &r.duration, &r.user, &r.conversation); err != nil {
+			&r.input, &r.output, &r.reasoning, &r.cacheRead, &r.cost, &r.firstToken, &r.duration, &r.user, &r.conversation, &r.estimated); err != nil {
 			f.t.Fatal(err)
 		}
 		out = append(out, r)

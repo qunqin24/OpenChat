@@ -374,15 +374,7 @@ func (c *Compactor) fold(ctx context.Context, p CompactParams, existing, latest 
 		id := p.ConversationID
 		ledgerConversation, session = &id, id.String()
 	}
-	meter := c.usage.Begin(ledger.Call{
-		Kind:           ledger.KindCompression,
-		UserID:         p.UserID,
-		ConversationID: ledgerConversation,
-		RunID:          p.RunID,
-		ChannelID:      p.ChannelID,
-		ModelID:        p.ModelID,
-	}, c.now)
-	resp, err := p.Client.Stream(ctx, llm.Request{
+	request := llm.Request{
 		Model: p.ModelID,
 		Messages: []llm.Message{
 			llm.TextMessage(llm.RoleSystem, systemPromptSummary),
@@ -390,7 +382,24 @@ func (c *Compactor) fold(ctx context.Context, p CompactParams, existing, latest 
 		},
 		Options: llm.Options{MaxTokens: &maxTokens, Reasoning: p.Profile.Effort},
 		Session: session,
-	}, meter.Wrap(nil))
+	}
+	meter := c.usage.Begin(ledger.Call{
+		Kind:           ledger.KindCompression,
+		UserID:         p.UserID,
+		ConversationID: ledgerConversation,
+		RunID:          p.RunID,
+		ChannelID:      p.ChannelID,
+		ModelID:        p.ModelID,
+		InputEstimate:  llm.EstimateInput(request),
+	}, c.now)
+	defer meter.Release()
+	// A summary that would take the model over its cap is not written; to a
+	// run that is a compression that failed, and the request goes out as it is
+	// (to meet the same check of its own).
+	if err := meter.Reserve(ctx); err != nil {
+		return summarised{}, err
+	}
+	resp, err := p.Client.Stream(ctx, request, meter.Wrap(nil))
 	meter.End(ctx, resp, err)
 	if err != nil {
 		return summarised{}, err

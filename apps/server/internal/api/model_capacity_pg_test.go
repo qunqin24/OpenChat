@@ -52,9 +52,28 @@ type capFixture struct {
 	// promptTokens is the input each request reports: at $3 per million, 100000
 	// of them cost $0.30.
 	promptTokens int
+
+	// hold, when set, has the endpoint take each request up - it streams a first
+	// chunk of text, no usage yet - and then wait for hold to be closed or for
+	// the client to go away, as a model does for as long as it is writing. The
+	// requests that are waiting are counted in held.
+	hold chan struct{}
+	// holdSilently waits before sending anything, not even the first chunk.
+	holdSilently bool
+	// noUsage has the endpoint leave its usage out, as some gateways do.
+	noUsage bool
+	held    atomic.Int32
+	// reserver holds money back for requests in flight; nil in a fixture made
+	// without one.
+	reserver *SpendReserver
 }
 
 func newCapFixture(t *testing.T, priced bool) *capFixture {
+	t.Helper()
+	return newCapFixtureWith(t, priced, false)
+}
+
+func newCapFixtureWith(t *testing.T, priced, reserve bool) *capFixture {
 	t.Helper()
 	pool := agentTestPool(t)
 	ctx := context.Background()
@@ -66,7 +85,23 @@ func newCapFixture(t *testing.T, priced bool) *capFixture {
 		_, _ = io.Copy(io.Discard, r.Body)
 		n := f.requests.Add(1)
 		w.Header().Set("Content-Type", "text/event-stream")
+		if f.hold != nil {
+			if !f.holdSilently {
+				_, _ = io.WriteString(w, `data: {"id":"r","model":"served","choices":[{"index":0,"delta":{"role":"assistant","content":"The first words of a long answer, which the user will not wait for."},"finish_reason":null}]}`+"\n\n")
+				w.(http.Flusher).Flush()
+			}
+			f.held.Add(1)
+			defer f.held.Add(-1)
+			select {
+			case <-f.hold:
+			case <-r.Context().Done():
+				return
+			}
+		}
 		usage := fmt.Sprintf(`"usage":{"prompt_tokens":%d,"completion_tokens":0,"total_tokens":%d}`, f.promptTokens, f.promptTokens)
+		if f.noUsage {
+			usage = `"note":"no usage here"`
+		}
 		if f.toolFirst && n == 1 {
 			_, _ = fmt.Fprintf(w, `data: {"id":"r","model":"served","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"http://127.0.0.1:9/\"}"}}]},"finish_reason":null}]}`+"\n\n")
 			_, _ = fmt.Fprintf(w, `data: {"id":"r","model":"served","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}],%s}`+"\n\n", usage)
@@ -112,11 +147,15 @@ func newCapFixture(t *testing.T, priced bool) *capFixture {
 		_, _ = pool.Exec(bg, "DELETE FROM users WHERE id = ANY($1)", []uuid.UUID{f.member.ID, f.admin.ID})
 	})
 
+	opts := agent.Options{SystemPrompt: NewSystemPrompt(pool), PartialInterval: 5 * time.Millisecond, Capacity: NewCapacityCheck(pool)}
+	if reserve {
+		f.reserver = NewSpendReserver(pool)
+		opts.Reserver = f.reserver
+	}
 	f.runner = agent.NewRunner(pool, agent.NewHub(), NewModelResolver(pool),
-		func(context.Context) []agent.Tool { return []agent.Tool{tools.WebFetch{}} },
-		agent.Options{SystemPrompt: NewSystemPrompt(pool), PartialInterval: 5 * time.Millisecond, Capacity: NewCapacityCheck(pool)})
+		func(context.Context) []agent.Tool { return []agent.Tool{tools.WebFetch{}} }, opts)
 	t.Cleanup(func() { _ = f.runner.Shutdown(context.Background()) })
-	f.server = &Server{pool: pool, q: q, runner: f.runner}
+	f.server = &Server{pool: pool, q: q, runner: f.runner, usage: f.runner.Recorder()}
 	return f
 }
 

@@ -94,6 +94,14 @@ type Options struct {
 	// run that is refused ends with CodeModelCapacity. Without it there are no
 	// caps.
 	Capacity func(ctx context.Context, userID uuid.UUID, modelID string) (bool, error)
+	// Reserver holds money back for the requests of capped models while they
+	// are out (see api.SpendReserver), so the ledger, which is written when a
+	// request ends, is not the only thing a request is checked against. Without
+	// it a request is checked against the ledger alone. It serves every path
+	// that records in the ledger: the run's requests, its compressions, and the
+	// titles and manual compressions the server makes (api.NewServer takes the
+	// runner's Recorder).
+	Reserver ledger.Reserver
 }
 
 func (o Options) withDefaults() Options {
@@ -167,6 +175,7 @@ func NewRunner(pool *pgxpool.Pool, hub *Hub, models ModelResolver, tools ToolSou
 		tools = func(context.Context) []Tool { return nil }
 	}
 	recorder := ledger.NewRecorder(sqlc.New(pool))
+	recorder.SetReserver(opts.Reserver)
 	return &Runner{
 		pool:      pool,
 		q:         sqlc.New(pool),
@@ -182,6 +191,10 @@ func NewRunner(pool *pgxpool.Pool, hub *Hub, models ModelResolver, tools ToolSou
 		active:    map[uuid.UUID]context.CancelCauseFunc{},
 	}
 }
+
+// Recorder is the usage ledger the runner writes, which the server's own model
+// requests share so that they are held back and counted in one place.
+func (r *Runner) Recorder() *ledger.Recorder { return r.usage }
 
 // Hub is where this runner publishes.
 func (r *Runner) Hub() *Hub { return r.hub }

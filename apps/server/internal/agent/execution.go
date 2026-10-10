@@ -434,6 +434,13 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 		messages = append(messages, llm.TextMessage(llm.RoleUser, finalRoundNote))
 	}
 
+	request := llm.Request{
+		Model:    ex.run.ModelID,
+		Messages: messages,
+		Tools:    definitions(offered),
+		Options:  options,
+		Session:  ex.run.ConversationID.String(),
+	}
 	stream := newPartialStream(ex, ex.cp.Attempt, r.opts.PartialInterval)
 	meter := r.usage.Begin(ledger.Call{
 		Kind:           ledger.KindChat,
@@ -442,14 +449,25 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 		RunID:          &ex.run.ID,
 		ChannelID:      ex.run.ChannelID,
 		ModelID:        ex.run.ModelID,
+		// What the request is expected to cost if the provider never says: the
+		// money held back for it while it is out, and its price if it is stopped.
+		InputEstimate: llm.EstimateInput(request),
 	}, r.now)
-	resp, streamErr := client.Stream(ctx, llm.Request{
-		Model:    ex.run.ModelID,
-		Messages: messages,
-		Tools:    definitions(offered),
-		Options:  options,
-		Session:  ex.run.ConversationID.String(),
-	}, meter.Wrap(stream.emit))
+	// The ledger row is written when the request ends, so the money it will
+	// cost is held back until then: without it every request that starts before
+	// the first one ends sees the same spend and passes the cap together.
+	defer meter.Release()
+	if err := meter.Reserve(ctx); err != nil {
+		if ctx.Err() != nil {
+			return false, nil // stopped meanwhile; the loop ends the run as it should
+		}
+		if errors.Is(err, ledger.ErrCapacity) {
+			slog.Info("run stopped: this request would take the model over its spending cap", "run_id", ex.run.ID, "model", ex.run.ModelID)
+			return true, ex.failWithRow(CodeModelCapacity)
+		}
+		return false, fmt.Errorf("agent: reserving the cost of a request to %s: %w", ex.run.ModelID, err)
+	}
+	resp, streamErr := client.Stream(ctx, request, meter.Wrap(stream.emit))
 	stream.close()
 	resp.Message.Parts = stream.stampAll(resp.Message.Parts)
 

@@ -170,14 +170,7 @@ func (s *Server) generateTitle(ctx context.Context, userID, conversationID uuid.
 	if conversationID != uuid.Nil {
 		ledgerConversation, session = &conversationID, conversationID.String()
 	}
-	meter := s.usage.Begin(ledger.Call{
-		Kind:           ledger.KindTitle,
-		UserID:         userID,
-		ConversationID: ledgerConversation,
-		ChannelID:      &channelID,
-		ModelID:        modelID,
-	}, nil)
-	resp, err := client.Stream(ctx, llm.Request{
+	request := llm.Request{
 		Model: modelID,
 		Messages: []llm.Message{
 			llm.TextMessage(llm.RoleSystem, titlePrompt),
@@ -185,7 +178,23 @@ func (s *Server) generateTitle(ctx context.Context, userID, conversationID uuid.
 		},
 		Options: llm.Options{MaxTokens: &maxTokens, Reasoning: leastThinking(ctx, s.q, modelID)},
 		Session: session,
-	}, meter.Wrap(nil))
+	}
+	meter := s.usage.Begin(ledger.Call{
+		Kind:           ledger.KindTitle,
+		UserID:         userID,
+		ConversationID: ledgerConversation,
+		ChannelID:      &channelID,
+		ModelID:        modelID,
+		InputEstimate:  llm.EstimateInput(request),
+	}, nil)
+	defer meter.Release()
+	if err := meter.Reserve(ctx); err != nil {
+		if errors.Is(err, ledger.ErrCapacity) {
+			return "", errModelCapacity
+		}
+		return "", err
+	}
+	resp, err := client.Stream(ctx, request, meter.Wrap(nil))
 	meter.End(ctx, resp, err)
 	if err != nil {
 		return "", err

@@ -145,6 +145,7 @@ func (s *Server) toUsageLog(ctx context.Context, row sqlc.ListUsageLogsRow) Usag
 		CacheWritePrice:  numberPtr(row.CacheWritePrice),
 		Cost:             numberPtr(row.Cost),
 		DurationMs:       int64(row.DurationMs),
+		Estimated:        row.Estimated,
 	}
 	if row.FirstTokenMs != nil {
 		ms := int64(*row.FirstTokenMs)

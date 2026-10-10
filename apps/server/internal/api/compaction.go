@@ -16,6 +16,7 @@ import (
 	"github.com/qunqin/openchat/apps/server/internal/auth"
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin/openchat/apps/server/internal/httpx"
+	ledger "github.com/qunqin/openchat/apps/server/internal/usage"
 )
 
 // Compressing a conversation's context (internal/agent/compaction.go).
@@ -166,6 +167,9 @@ func (s *Server) CompactConversation(w http.ResponseWriter, r *http.Request, con
 	case errors.Is(err, agent.ErrCompactionBusy):
 		httpx.Fail(w, r, errCompactionBusy)
 		return
+	case errors.Is(err, ledger.ErrCapacity):
+		httpx.Fail(w, r, errModelCapacity)
+		return
 	case err != nil && ctx.Err() != nil:
 		return // the person went away
 	case err != nil:
@@ -292,6 +296,9 @@ func (s *Server) GuestCompact(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.Is(err, agent.ErrNothingToCompact):
 		httpx.Fail(w, r, errNothingToCompact)
+		return
+	case errors.Is(err, ledger.ErrCapacity):
+		httpx.Fail(w, r, errModelCapacity)
 		return
 	case err != nil && ctx.Err() != nil:
 		return

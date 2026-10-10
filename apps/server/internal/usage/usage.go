@@ -58,10 +58,34 @@ const (
 
 // Recorder writes the ledger.
 type Recorder struct {
-	q *sqlc.Queries
+	q        *sqlc.Queries
+	reserver Reserver
 }
 
 func NewRecorder(q *sqlc.Queries) *Recorder { return &Recorder{q: q} }
+
+// ErrCapacity is a request refused because the money it is expected to cost,
+// on top of what the model has cost and what requests in flight are expected
+// to, would reach the model's spending cap.
+var ErrCapacity = errors.New("usage: the model's spending cap would be reached")
+
+// Reserver holds money back for a request in flight. The ledger row of a
+// request is written when it ends, so without it every request that starts
+// before the first one ends is checked against the same spend; a Reserver
+// counts the requests that are out as spent. It decides whether the request
+// may go (ErrCapacity when not) and returns what releases the hold, which the
+// Meter calls once the request's own row is written.
+type Reserver interface {
+	Reserve(ctx context.Context, call Call) (release func(), err error)
+}
+
+// SetReserver sets who holds money back for requests. Called while the
+// application is assembled, before any request is made.
+func (r *Recorder) SetReserver(rv Reserver) {
+	if r != nil {
+		r.reserver = rv
+	}
+}
 
 // Call is what is known about a request before it is made.
 type Call struct {
@@ -75,6 +99,11 @@ type Call struct {
 	ChannelID      *uuid.UUID
 	// ModelID is the id the request asked for.
 	ModelID string
+	// InputEstimate is the request's estimated input tokens (llm.EstimateInput).
+	// It prices a request whose provider never reports usage - one that was
+	// stopped or broke before the usage frame - and is what a Reserver holds
+	// back for it. Zero when the caller did not estimate.
+	InputEstimate int
 }
 
 // Meter times and then records one request.
@@ -87,6 +116,10 @@ type Meter struct {
 
 	mu    sync.Mutex
 	first time.Time
+	// alive is set once the provider has sent anything at all: the request was
+	// taken up, so whatever it cost is owed whether or not usage ever arrives.
+	alive   bool
+	release func()
 }
 
 // Begin starts timing a request. A nil Recorder is a ledger that is switched
@@ -106,17 +139,48 @@ func (r *Recorder) Begin(call Call, clock func() time.Time) *Meter {
 // the connection is alive.
 func (m *Meter) Wrap(next func(llm.Event) error) func(llm.Event) error {
 	return func(ev llm.Event) error {
-		if ev.Type == llm.EventPartDelta {
-			m.mu.Lock()
-			if m.first.IsZero() {
-				m.first = m.clock()
-			}
-			m.mu.Unlock()
+		m.mu.Lock()
+		m.alive = true
+		if ev.Type == llm.EventPartDelta && m.first.IsZero() {
+			m.first = m.clock()
 		}
+		m.mu.Unlock()
 		if next == nil {
 			return nil
 		}
 		return next(ev)
+	}
+}
+
+// Reserve asks the recorder's Reserver (if it has one) whether the request may
+// go, and holds back what it is expected to cost until End. It returns
+// ErrCapacity for a request that would take its model over the cap. Call it
+// just before the request is made; the timing starts again here, so the check
+// is not part of the request's duration.
+func (m *Meter) Reserve(ctx context.Context) error {
+	if m.rec == nil || m.rec.reserver == nil {
+		return nil
+	}
+	release, err := m.rec.reserver.Reserve(ctx, m.call)
+	if err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.release = release
+	m.started = m.clock()
+	m.mu.Unlock()
+	return nil
+}
+
+// Release gives back what Reserve held, if it still does. End does it too, once
+// the row is written; a caller that can leave without calling End defers this.
+func (m *Meter) Release() {
+	m.mu.Lock()
+	release := m.release
+	m.release = nil
+	m.mu.Unlock()
+	if release != nil {
+		release()
 	}
 }
 
@@ -125,7 +189,17 @@ func (m *Meter) Wrap(next func(llm.Event) error) func(llm.Event) error {
 // the user (or the run's deadline), which is an ordinary ending and not a
 // failure. The write itself never uses it, since a cancelled context is
 // exactly when the row is still wanted.
+//
+// A request that was taken up and ended without the provider's usage - stopped
+// by the user, broken mid-stream, or from a provider that does not report any -
+// still cost what it cost. Its row then carries an estimate (see settle) and is
+// flagged `estimated`: leaving it at nothing would let a request that is
+// stopped just before the usage frame go on for free, as many times as anyone
+// likes.
 func (m *Meter) End(ctx context.Context, resp llm.ModelResponse, err error) {
+	// After the row is written, never before: for as long as the request is
+	// out, the money it will cost is either held or in the ledger.
+	defer m.Release()
 	if m.rec == nil || m.rec.q == nil {
 		// No ledger configured (a Server assembled without one): timing still
 		// works, nothing is written.
@@ -159,9 +233,9 @@ func (m *Meter) End(ctx context.Context, resp llm.ModelResponse, err error) {
 		row.ErrorMessage = &message
 	}
 
-	var usage *llm.Usage
-	if resp.Usage != nil {
-		usage = resp.Usage
+	usage, estimated := m.settle(ctx, resp, err)
+	row.Estimated = estimated
+	if usage != nil {
 		row.InputTokens = int32(clampInt(usage.InputTokens))
 		row.OutputTokens = int32(clampInt(usage.OutputTokens))
 		row.ReasoningTokens = int32(clampInt(usage.ReasoningTokens))
@@ -177,6 +251,54 @@ func (m *Meter) End(ctx context.Context, resp llm.ModelResponse, err error) {
 	if werr := m.rec.q.InsertUsageLog(wctx, row); werr != nil {
 		slog.Warn("usage: record request", "kind", m.call.Kind, "model", m.call.ModelID, "error", werr)
 	}
+}
+
+// settle is the usage a row is written with: the provider's when it reported
+// it, else an estimate of what is known to have been spent.
+//
+// The provider's figure wins wherever it exists. A report that is only partial
+// (Anthropic gives the input at the start of the message and the output at the
+// end, so a stream stopped between has the first and not the second) is kept
+// as it is and filled in only where it says nothing: no input at all becomes
+// the request's input estimate, no output the estimate of what has streamed.
+// A request that ended cleanly with usage is never touched.
+//
+// Only a request that was taken up has an estimate: one the provider refused
+// before it started (a status error, no connection) was not billed. Stopping
+// is always taken as taken up - the user pressed Stop after it was sent, and a
+// provider bills the context it has read whether or not anyone waits for the
+// answer.
+func (m *Meter) settle(ctx context.Context, resp llm.ModelResponse, err error) (*llm.Usage, bool) {
+	cancelled := ctx.Err() != nil
+	if resp.Usage != nil && err == nil && !cancelled {
+		return resp.Usage, false
+	}
+	m.mu.Lock()
+	alive := m.alive
+	m.mu.Unlock()
+	if !cancelled && err != nil && !alive && len(resp.Message.Parts) == 0 {
+		return resp.Usage, false
+	}
+
+	var usage llm.Usage
+	if resp.Usage != nil {
+		usage = *resp.Usage
+	}
+	estimated := false
+	if usage.InputTokens+usage.CacheReadTokens+usage.CacheWriteTokens == 0 && m.call.InputEstimate > 0 {
+		usage.InputTokens = m.call.InputEstimate
+		estimated = true
+	}
+	if usage.OutputTokens == 0 {
+		if output, reasoning := llm.EstimateOutput(resp.Message); output > 0 {
+			usage.OutputTokens, usage.ReasoningTokens = output, min(reasoning, output)
+			estimated = true
+		}
+	}
+	if !estimated {
+		return resp.Usage, false
+	}
+	return &usage, true
 }
 
 // price fills in the channel's name and the prices the model had when the

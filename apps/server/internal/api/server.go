@@ -61,6 +61,11 @@ func NewServer(cfg *config.Config, pool *pgxpool.Pool, store storage.Backend, ru
 		runner: runner,
 		usage:  usage.NewRecorder(sqlc.New(pool)),
 	}
+	if runner != nil {
+		// One ledger, and one set of holds against the caps, for every request
+		// the process makes.
+		s.usage = runner.Recorder()
+	}
 	switch store := store.(type) {
 	case *storage.Switch:
 		s.storageSwitch = store
