@@ -214,7 +214,9 @@ func (s *Server) chooseRun(ctx context.Context, conv sqlc.Conversation, model *s
 	if modelID == "" && conv.Model != nil {
 		modelID = *conv.Model
 	}
-	modelID, channelID, err := s.pickChannel(ctx, modelID)
+	// The asker's own standing, so a conversation that remembers a model since
+	// kept for administrators cannot go on using it.
+	modelID, channelID, err := s.pickChannel(ctx, modelID, isStaff(ctx))
 	if err != nil {
 		return c, err
 	}
@@ -592,7 +594,7 @@ func (s *Server) GetChatFeatures(w http.ResponseWriter, r *http.Request) {
 
 // ListChatModels lists what an enabled channel offers, for the model picker.
 func (s *Server) ListChatModels(w http.ResponseWriter, r *http.Request) {
-	models, err := s.chatModels(r.Context())
+	models, err := s.chatModels(r.Context(), isStaff(r.Context()))
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return

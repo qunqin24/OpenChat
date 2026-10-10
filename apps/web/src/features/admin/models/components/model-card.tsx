@@ -5,6 +5,7 @@ import {
   Paperclip,
   PlugZap,
   PowerOff,
+  ShieldCheck,
   SlidersHorizontal,
   Wrench,
 } from 'lucide-react'
@@ -64,9 +65,10 @@ export function ModelCard({ model }: { model: CatalogModel }) {
   const capabilities = CAPABILITIES.filter((capability) => has(capability.key))
   const contextLimit = settings?.contextLimit || model.contextLimit
   const outputLimit = settings?.outputLimit || model.outputLimit
-  const customized = Object.values(model.override ?? {}).some(
-    (value) => value !== undefined && value !== null,
-  )
+  // Keeping a model for administrators has its own badge, so it does not
+  // also count as "customised".
+  const { adminOnly, ...rest } = model.override ?? {}
+  const customized = Object.values(rest).some((value) => value !== undefined && value !== null)
   const kind = settings?.kind ?? 'text'
 
   // Only channels where the operator selected this model are included.
@@ -143,8 +145,14 @@ export function ModelCard({ model }: { model: CatalogModel }) {
         </p>
       )}
 
-      {(capabilities.length > 0 || customized || kind !== 'text') && (
+      {(capabilities.length > 0 || customized || adminOnly || kind !== 'text') && (
         <div className="flex flex-wrap gap-1 px-4 pt-3">
+          {adminOnly && (
+            <Badge variant="outline" className="font-normal">
+              <ShieldCheck aria-hidden="true" />
+              {t('admin.models.settings.admin-only')}
+            </Badge>
+          )}
           {customized && (
             <Badge variant="outline" className="border-primary/30 text-primary font-normal">
               <SlidersHorizontal aria-hidden="true" />

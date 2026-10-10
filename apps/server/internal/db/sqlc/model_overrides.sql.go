@@ -21,7 +21,7 @@ func (q *Queries) DeleteModelOverride(ctx context.Context, modelID string) error
 }
 
 const getModelOverride = `-- name: GetModelOverride :one
-SELECT model_id, kind, reasoning, tool_call, input_modalities, context_limit, input_limit, output_limit, reasoning_efforts, updated_at
+SELECT model_id, kind, reasoning, tool_call, input_modalities, context_limit, input_limit, output_limit, reasoning_efforts, updated_at, admin_only
 FROM model_overrides
 WHERE model_id = $1
 `
@@ -40,12 +40,13 @@ func (q *Queries) GetModelOverride(ctx context.Context, modelID string) (ModelOv
 		&i.OutputLimit,
 		&i.ReasoningEfforts,
 		&i.UpdatedAt,
+		&i.AdminOnly,
 	)
 	return i, err
 }
 
 const listModelOverrides = `-- name: ListModelOverrides :many
-SELECT model_id, kind, reasoning, tool_call, input_modalities, context_limit, input_limit, output_limit, reasoning_efforts, updated_at
+SELECT model_id, kind, reasoning, tool_call, input_modalities, context_limit, input_limit, output_limit, reasoning_efforts, updated_at, admin_only
 FROM model_overrides
 WHERE model_id = ANY ($1::text[])
 `
@@ -70,6 +71,7 @@ func (q *Queries) ListModelOverrides(ctx context.Context, modelIds []string) ([]
 			&i.OutputLimit,
 			&i.ReasoningEfforts,
 			&i.UpdatedAt,
+			&i.AdminOnly,
 		); err != nil {
 			return nil, err
 		}
@@ -83,10 +85,10 @@ func (q *Queries) ListModelOverrides(ctx context.Context, modelIds []string) ([]
 
 const saveModelOverride = `-- name: SaveModelOverride :one
 INSERT INTO model_overrides (model_id, kind, reasoning, tool_call, input_modalities,
-                             context_limit, input_limit, output_limit, reasoning_efforts)
+                             context_limit, input_limit, output_limit, reasoning_efforts, admin_only)
 VALUES ($1, $2, $3, $4,
         $5::text[], $6, $7,
-        $8, $9::text[])
+        $8, $9::text[], $10)
 ON CONFLICT (model_id) DO UPDATE
     SET kind              = excluded.kind,
         reasoning         = excluded.reasoning,
@@ -96,8 +98,9 @@ ON CONFLICT (model_id) DO UPDATE
         input_limit       = excluded.input_limit,
         output_limit      = excluded.output_limit,
         reasoning_efforts = excluded.reasoning_efforts,
+        admin_only        = excluded.admin_only,
         updated_at        = now()
-RETURNING model_id, kind, reasoning, tool_call, input_modalities, context_limit, input_limit, output_limit, reasoning_efforts, updated_at
+RETURNING model_id, kind, reasoning, tool_call, input_modalities, context_limit, input_limit, output_limit, reasoning_efforts, updated_at, admin_only
 `
 
 type SaveModelOverrideParams struct {
@@ -110,6 +113,7 @@ type SaveModelOverrideParams struct {
 	InputLimit       *int64   `json:"input_limit"`
 	OutputLimit      *int64   `json:"output_limit"`
 	ReasoningEfforts []string `json:"reasoning_efforts"`
+	AdminOnly        bool     `json:"admin_only"`
 }
 
 // Replaces the whole override: the settings panel always sends every field,
@@ -125,6 +129,7 @@ func (q *Queries) SaveModelOverride(ctx context.Context, arg SaveModelOverridePa
 		arg.InputLimit,
 		arg.OutputLimit,
 		arg.ReasoningEfforts,
+		arg.AdminOnly,
 	)
 	var i ModelOverride
 	err := row.Scan(
@@ -138,6 +143,7 @@ func (q *Queries) SaveModelOverride(ctx context.Context, arg SaveModelOverridePa
 		&i.OutputLimit,
 		&i.ReasoningEfforts,
 		&i.UpdatedAt,
+		&i.AdminOnly,
 	)
 	return i, err
 }

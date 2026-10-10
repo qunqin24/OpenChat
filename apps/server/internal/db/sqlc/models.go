@@ -478,6 +478,7 @@ type ModelOverride struct {
 	OutputLimit      *int64             `json:"output_limit"`
 	ReasoningEfforts []string           `json:"reasoning_efforts"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	AdminOnly        bool               `json:"admin_only"`
 }
 
 type Run struct {

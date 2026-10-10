@@ -100,13 +100,18 @@ export function NextChat({ conversationId }: NextChatProps) {
   const saved = useMemo(() => loadComposerPrefs(userId), [userId])
 
   // The model: what this conversation remembers, else what was picked on the
-  // empty screen, else the last one picked if it is still offered, else the
-  // first one offered.
+  // empty screen, else the last one picked, else the first one offered — each
+  // only while it is still offered, since a model an administrator has taken
+  // away (or kept for administrators) would only be refused. Until the list
+  // arrives the conversation's own is trusted, so the picker does not flicker.
   const available = useMemo(() => models.data ?? [], [models.data])
   const [draftModel, setDraftModel] = useState<string>()
   const modelById = useMemo(() => new Map(available.map((m) => [m.id, m])), [available])
+  const offered = (id: string | null | undefined) =>
+    id && (models.data === undefined || modelById.has(id)) ? id : undefined
   const lastModel = saved.model && modelById.has(saved.model) ? saved.model : undefined
-  const modelId = conversation.data?.model ?? draftModel ?? lastModel ?? available[0]?.id ?? ''
+  const modelId =
+    offered(conversation.data?.model) ?? offered(draftModel) ?? lastModel ?? available[0]?.id ?? ''
 
   // Files: only what the selected model takes. With none that does, the button
   // and the drop zone say so rather than going quiet.

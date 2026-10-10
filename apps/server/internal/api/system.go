@@ -190,7 +190,7 @@ func (s *Server) UpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 		// Only a model something can answer with; empty is each
 		// conversation's own, and always available.
 		if task != "" {
-			if _, _, err := s.pickChannel(r.Context(), task); err != nil {
+			if _, _, err := s.pickChannel(r.Context(), task, true); err != nil {
 				httpx.Fail(w, r, err)
 				return
 			}

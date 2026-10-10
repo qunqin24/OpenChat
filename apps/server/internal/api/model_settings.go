@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/qunqin/openchat/apps/server/internal/auth"
 	"github.com/qunqin/openchat/apps/server/internal/catalog"
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin/openchat/apps/server/internal/httpx"
@@ -38,7 +39,7 @@ func (s *Server) UpdateModelSettings(w http.ResponseWriter, r *http.Request, mod
 	// the model follows the catalogue the way an untouched one does.
 	if params.Kind == nil && params.Reasoning == nil && params.ToolCall == nil &&
 		params.InputModalities == nil && params.ContextLimit == nil && params.InputLimit == nil &&
-		params.OutputLimit == nil && params.ReasoningEfforts == nil {
+		params.OutputLimit == nil && params.ReasoningEfforts == nil && !params.AdminOnly {
 		if err := s.q.DeleteModelOverride(r.Context(), modelId); err != nil {
 			httpx.Fail(w, r, err)
 			return
@@ -75,6 +76,7 @@ func overrideParams(modelID string, body ModelOverride) (sqlc.SaveModelOverrideP
 		ContextLimit: body.ContextLimit,
 		InputLimit:   body.InputLimit,
 		OutputLimit:  body.OutputLimit,
+		AdminOnly:    body.AdminOnly != nil && *body.AdminOnly,
 	}
 	if body.Kind != nil {
 		if !body.Kind.Valid() {
@@ -123,6 +125,9 @@ func toModelOverride(row sqlc.ModelOverride) ModelOverride {
 		InputLimit:   row.InputLimit,
 		OutputLimit:  row.OutputLimit,
 	}
+	if row.AdminOnly {
+		out.AdminOnly = &row.AdminOnly
+	}
 	if row.Kind != nil {
 		kind := ModelKind(*row.Kind)
 		out.Kind = &kind
@@ -152,6 +157,7 @@ func fromOverrideRow(row sqlc.ModelOverride) catalog.Override {
 		ContextLimit:    row.ContextLimit,
 		InputLimit:      row.InputLimit,
 		OutputLimit:     row.OutputLimit,
+		AdminOnly:       row.AdminOnly,
 	}
 	if row.Kind != nil {
 		kind := catalog.Kind(*row.Kind)
@@ -248,6 +254,7 @@ func toModelSettings(settings catalog.Settings, levels []llm.ReasoningEffort) Mo
 		InputLimit:       settings.InputLimit,
 		OutputLimit:      settings.OutputLimit,
 		ReasoningEfforts: toEfforts(levels),
+		AdminOnly:        settings.AdminOnly,
 	}
 }
 
@@ -282,8 +289,9 @@ func withSettings(model *CatalogModel, row sqlc.ListServedModelsRow, override *s
 }
 
 // chatModels are what people may pick in chat: served by an enabled channel,
-// and text models by their settings.
-func (s *Server) chatModels(ctx context.Context) ([]ChatModel, error) {
+// and text models by their settings. staff includes the models kept for
+// administrators, for an administrator or the server's own tasks.
+func (s *Server) chatModels(ctx context.Context, staff bool) ([]ChatModel, error) {
 	enabled := true
 	rows, err := s.q.ListServedModels(ctx, sqlc.ListServedModelsParams{
 		Enabled:   &enabled,
@@ -309,7 +317,7 @@ func (s *Server) chatModels(ctx context.Context) ([]ChatModel, error) {
 			o = fromOverrideRow(override)
 		}
 		settings := catalog.Resolve(servedDefaults(row), o)
-		if settings.Kind != catalog.KindText {
+		if settings.Kind != catalog.KindText || (settings.AdminOnly && !staff) {
 			continue
 		}
 		view := toModelSettings(settings, settings.Profile.Levels())
@@ -328,4 +336,11 @@ func (s *Server) chatModels(ctx context.Context) ([]ChatModel, error) {
 		})
 	}
 	return out, nil
+}
+
+// isStaff is whether the request is an administrator's, who may use the
+// models kept from everyone else.
+func isStaff(ctx context.Context) bool {
+	user, ok := auth.UserFrom(ctx)
+	return ok && user.Role == sqlc.UserRoleAdmin
 }

@@ -126,6 +126,7 @@ function defaultsOf(model: CatalogModel): ModelSettings {
       inputLimit: 0,
       outputLimit: 0,
       reasoningEfforts: [],
+      adminOnly: false,
     }
   )
 }
@@ -150,6 +151,7 @@ function SettingsForm({ model, onOpenChange }: Omit<ModelSettingsPanelProps, 'op
       message: t('admin.models.settings.limit-invalid'),
     })
   const schema = z.object({
+    forMembers: z.boolean(),
     kind: z.enum(['text', 'image', 'embedding', 'rerank']),
     reasoning: z.boolean(),
     toolCall: z.boolean(),
@@ -164,6 +166,7 @@ function SettingsForm({ model, onOpenChange }: Omit<ModelSettingsPanelProps, 'op
   const form = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: {
+      forMembers: !override.adminOnly,
       kind: settings.kind,
       reasoning: settings.reasoning,
       toolCall: settings.toolCall,
@@ -177,6 +180,7 @@ function SettingsForm({ model, onOpenChange }: Omit<ModelSettingsPanelProps, 'op
 
   const reasoning = useWatch({ control: form.control, name: 'reasoning' })
   const toolCall = useWatch({ control: form.control, name: 'toolCall' })
+  const forMembers = useWatch({ control: form.control, name: 'forMembers' })
 
   // A model the catalogue gives no levels can still be vouched for: the
   // operator picks from every level, and they are sent as efforts.
@@ -197,6 +201,7 @@ function SettingsForm({ model, onOpenChange }: Omit<ModelSettingsPanelProps, 'op
     }
     const efforts = EFFORTS.filter((e) => values.reasoningEfforts.includes(e))
     return {
+      adminOnly: !values.forMembers,
       kind: values.kind === defaults.kind ? null : values.kind,
       reasoning: values.reasoning === defaults.reasoning ? null : values.reasoning,
       toolCall: values.toolCall === defaults.toolCall ? null : values.toolCall,
@@ -231,7 +236,7 @@ function SettingsForm({ model, onOpenChange }: Omit<ModelSettingsPanelProps, 'op
   }
 
   // A capability switch, in the bordered row the settings pages use.
-  const switchRow = (name: 'reasoning' | 'toolCall', label: string, hint: string, modified: boolean) => (
+  const switchRow = (name: 'forMembers' | 'reasoning' | 'toolCall', label: string, hint: string, modified: boolean) => (
     <FormField
       control={form.control}
       name={name}
@@ -291,6 +296,15 @@ function SettingsForm({ model, onOpenChange }: Omit<ModelSettingsPanelProps, 'op
             onSubmit={form.handleSubmit((values) => void submit(values))}
           >
             <PanelSection title={t('admin.models.settings.section-usage')}>
+              {/* Who sees the model at all, ahead of what it can do. On means
+                  the usual — offered to everyone — so off is the decision. */}
+              {switchRow(
+                'forMembers',
+                t('admin.models.settings.for-members'),
+                t('admin.models.settings.for-members-hint'),
+                !forMembers,
+              )}
+
               <FormField
                 control={form.control}
                 name="kind"

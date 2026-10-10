@@ -167,10 +167,12 @@ func clientFor(channel sqlc.Channel, modelID string, thinks bool) (llm.ModelClie
 // pickChannel chooses where a new run of modelID is answered from. An empty
 // modelID means "whatever is available": the conversation never chose. Only a
 // model offered in chat may be picked — one an operator has marked as an
-// embedding model, say, is unavailable however it is asked for.
-func (s *Server) pickChannel(ctx context.Context, modelID string) (string, uuid.UUID, error) {
+// embedding model, say, is unavailable however it is asked for, and one kept
+// for administrators is unavailable unless staff: an administrator's request,
+// or the server's own task that no person asked for.
+func (s *Server) pickChannel(ctx context.Context, modelID string, staff bool) (string, uuid.UUID, error) {
 	if modelID == "" {
-		models, err := s.chatModels(ctx)
+		models, err := s.chatModels(ctx, staff)
 		if err != nil {
 			return "", uuid.Nil, err
 		}
@@ -183,7 +185,7 @@ func (s *Server) pickChannel(ctx context.Context, modelID string) (string, uuid.
 		if err != nil {
 			return "", uuid.Nil, err
 		}
-		if settings.Kind != catalog.KindText {
+		if settings.Kind != catalog.KindText || (settings.AdminOnly && !staff) {
 			return "", uuid.Nil, errModelUnavailable
 		}
 	}

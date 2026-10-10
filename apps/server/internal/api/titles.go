@@ -167,7 +167,7 @@ func (s *Server) taskModel(ctx context.Context, ownModel string, ownChannel *uui
 		return "", uuid.Nil, err
 	}
 	if configured != "" {
-		modelID, channelID, err := s.pickChannel(ctx, configured)
+		modelID, channelID, err := s.pickChannel(ctx, configured, true)
 		if err == nil {
 			return modelID, channelID, nil
 		}
@@ -176,7 +176,7 @@ func (s *Server) taskModel(ctx context.Context, ownModel string, ownChannel *uui
 	if ownChannel != nil {
 		return ownModel, *ownChannel, nil
 	}
-	return s.pickChannel(ctx, ownModel)
+	return s.pickChannel(ctx, ownModel, true)
 }
 
 // leastThinking asks a reasoning model to think as little as it allows: a

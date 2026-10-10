@@ -413,8 +413,9 @@ export interface paths {
          *     it. Every field is sent; null follows the catalogue, so resetting one
          *     field is sending it as null. The settings are enforced where requests
          *     are made, not only in the picker: a level not allowed is dropped, a
-         *     model that may not call tools is offered none, and an output limit is
-         *     sent with every request.
+         *     model that may not call tools is offered none, an output limit is
+         *     sent with every request, and an administrators-only model is neither
+         *     listed for nor answered to anyone else.
          */
         put: operations["updateModelSettings"];
         post?: never;
@@ -2261,6 +2262,12 @@ export interface components {
          */
         InputModality: "image" | "audio" | "video" | "pdf";
         ModelSettings: {
+            /**
+             * @description Offered to administrators only. Everyone else does not see it in
+             *     the picker and is refused it when asking for it by id; the
+             *     server's own tasks, such as titles, still use it.
+             */
+            adminOnly: boolean;
             kind: components["schemas"]["ModelKind"];
             reasoning: boolean;
             toolCall: boolean;
@@ -2288,6 +2295,11 @@ export interface components {
         };
         /** @description The operator's settings for a model. Null follows the catalogue. */
         ModelOverride: {
+            /**
+             * @description Keep the model for administrators only. Not a catalogue figure:
+             *     absent is the same as false.
+             */
+            adminOnly?: boolean;
             kind?: components["schemas"]["ModelKind"] | null;
             reasoning?: boolean | null;
             toolCall?: boolean | null;

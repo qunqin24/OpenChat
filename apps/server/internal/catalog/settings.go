@@ -68,6 +68,7 @@ type Override struct {
 	InputLimit       *int64
 	OutputLimit      *int64
 	ReasoningEfforts []llm.ReasoningEffort // nil offers every level; empty offers none
+	AdminOnly        bool                  // offered to administrators only; the catalogue has no say
 }
 
 // Settings are how a model is actually offered and called.
@@ -86,6 +87,9 @@ type Settings struct {
 	// Options all answer within it, so the picker, the request check and the
 	// wire agree.
 	Profile ReasoningProfile
+	// AdminOnly keeps the model from everyone but administrators. The server's
+	// own tasks, which no person asks for, are not held back by it.
+	AdminOnly bool
 }
 
 // Resolve applies an operator's decisions to the catalogue's.
@@ -99,6 +103,7 @@ func Resolve(d Defaults, o Override) Settings {
 		InputLimit:      d.InputLimit,
 		OutputLimit:     d.OutputLimit,
 		Profile:         d.Profile,
+		AdminOnly:       o.AdminOnly,
 	}
 	if o.Kind != nil {
 		s.Kind = *o.Kind
