@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next'
 import type { Conversation } from '@openchat/api-client'
 import { useNavigate } from '@tanstack/react-router'
 import { Command } from 'cmdk'
@@ -299,7 +300,7 @@ function Preview({ conversationId }: { conversationId: string | null }) {
       {!shown ? (
         <div className="n-palette-preview-idle">{t('next.search.preview-idle')}</div>
       ) : messages.isPending ? (
-        <div className="n-palette-preview-idle"><span className="n-spinner" /></div>
+        <div className="n-palette-preview-idle"><span className="n-spinner" data-motion="essential" /></div>
       ) : turns.length === 0 ? (
         <div className="n-palette-preview-idle">{t('next.search.preview-empty')}</div>
       ) : (
@@ -324,7 +325,7 @@ function turnModel(turn: Turn) {
   return turn.responses.find((m) => m.model)?.model
 }
 
-type T = ReturnType<typeof useTranslation>['t']
+type T = TFunction<'common'>
 
 /** 今天 / 昨天 / 2026/09/26 — a day, not a duration. */
 function formatDay(value: string | undefined, t: T, locale?: string): string {

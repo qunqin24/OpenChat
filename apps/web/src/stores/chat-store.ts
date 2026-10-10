@@ -2,6 +2,7 @@ import type { Attachment, BatchEvent, Message, Run, SnapshotEvent } from '@openc
 import { create } from 'zustand'
 
 import { applyBatch, fromSnapshot, idle, type ConversationLive } from '@/lib/run-state'
+import type { Replacing } from '@/lib/transcript'
 
 /**
  * Client state for the chat screen that is not in the query cache.
@@ -42,6 +43,15 @@ interface ChatState {
   unpost: (key: string) => void
 
   /**
+   * Each conversation's redo — the last answer regenerated, or a question
+   * edited (with the turns after it, which leave the branch shown) — until the
+   * server has started the new run: what is being replaced is hidden from the
+   * click on, not a round trip later.
+   */
+  replacing: Record<string, Replacing>
+  redo: (conversationId: string, target: Replacing | null) => void
+
+  /**
    * Prompt typed on the empty-state screen, carried across the navigation that
    * follows creating the conversation for it. The new route consumes it on mount.
    */
@@ -49,57 +59,79 @@ interface ChatState {
 
   applySnapshot: (conversationId: string, snapshot: SnapshotEvent) => void
   applyBatch: (conversationId: string, batch: BatchEvent) => void
-  /** A run this page started, known from the POST before its first event. */
-  startRun: (conversationId: string, run: Run, input: Message) => void
+  /**
+   * A run this page started, known from the POST before its first event.
+   * `rows` are what the same commit wrote besides the run: the result of an
+   * answered question.
+   */
+  startRun: (conversationId: string, run: Run, input: Message, rows?: Message[]) => void
   /** Drops a finished run once the message list holds its rows. */
   settle: (conversationId: string, runId: string) => void
+
+  /**
+   * The empty screen's temporary-chat switch: the conversation made for the
+   * next message is temporary. Not persisted — a new visit starts an ordinary
+   * chat, and a switch left on by mistake would quietly keep nothing.
+   */
+  temporaryChat: boolean
+  setTemporaryChat: (on: boolean) => void
 
   setPendingPrompt: (prompt: PendingPrompt | null) => void
   takePendingPrompt: () => PendingPrompt | null
 }
 
-const without = (outbox: Record<string, OutboxItem>, key: string) => {
-  if (!(key in outbox)) return outbox
-  const next = { ...outbox }
+const without = <T,>(record: Record<string, T>, key: string) => {
+  if (!(key in record)) return record
+  const next = { ...record }
   delete next[key]
   return next
 }
 
+/** A run has started: what was waiting on it is the run's to show now. */
+const settled = (state: ChatState, conversationId: string) => ({
+  outbox: without(state.outbox, conversationId),
+  replacing: without(state.replacing, conversationId),
+})
+
 export const useChatStore = create<ChatState>()((set, get) => ({
   live: {},
   outbox: {},
+  replacing: {},
   pendingPrompt: null,
+  temporaryChat: false,
 
+  setTemporaryChat: (temporaryChat) => set({ temporaryChat }),
   post: (key, item) => set((state) => ({ outbox: { ...state.outbox, [key]: item } })),
   unpost: (key) => set((state) => ({ outbox: without(state.outbox, key) })),
+  redo: (conversationId, target) =>
+    set((state) => ({
+      replacing: target ? { ...state.replacing, [conversationId]: target } : without(state.replacing, conversationId),
+    })),
 
   applySnapshot: (conversationId, snapshot) =>
     set((state) => ({
       live: { ...state.live, [conversationId]: fromSnapshot(snapshot) },
       // A run in flight already shows the message it answers.
-      outbox: snapshot.run?.status === 'running' ? without(state.outbox, conversationId) : state.outbox,
+      ...(snapshot.run?.status === 'running' ? settled(state, conversationId) : {}),
     })),
 
   applyBatch: (conversationId, batch) =>
     set((state) => ({
       live: { ...state.live, [conversationId]: applyBatch(state.live[conversationId] ?? idle, batch) },
       // The stream can announce the run before the POST that started it returns.
-      outbox: batch.events.some((event) => event.type === 'run_started')
-        ? without(state.outbox, conversationId)
-        : state.outbox,
+      ...(batch.events.some((event) => event.type === 'run_started') ? settled(state, conversationId) : {}),
     })),
 
-  startRun: (conversationId, run, input) =>
+  startRun: (conversationId, run, input, rows = []) =>
     set((state) => {
       const current = state.live[conversationId]
-      const outbox = without(state.outbox, conversationId)
       // The stream may already have announced it.
-      if (current?.run?.run.id === run.id) return { outbox }
+      if (current?.run?.run.id === run.id) return settled(state, conversationId)
       return {
-        outbox,
+        ...settled(state, conversationId),
         live: {
           ...state.live,
-          [conversationId]: { run: { run, messages: [input], partial: null, retry: null, tools: {} } },
+          [conversationId]: { run: { run, messages: [input, ...rows], partial: null, retry: null, tools: {} } },
         },
       }
     }),

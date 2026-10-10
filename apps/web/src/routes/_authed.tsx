@@ -5,6 +5,7 @@ import { sessionQueryOptions } from '@/features/auth/use-auth'
 import { chatFeaturesQueryOptions, chatModelsQueryOptions } from '@/hooks/use-chat-models'
 import { conversationsQueryOptions } from '@/hooks/use-conversations'
 import { adoptQueryCache } from '@/lib/query-persist'
+import { isSettingsTab, type SettingsTab } from '@/lib/settings'
 
 /**
  * Pathless layout wrapping everything that requires a session. The guard runs
@@ -12,6 +13,10 @@ import { adoptQueryCache } from '@/lib/query-persist'
  * app shell.
  */
 export const Route = createFileRoute('/_authed')({
+  // The settings dialog is a search parameter, so every signed-in page can
+  // open it and a link can name its tab.
+  validateSearch: (search: Record<string, unknown>): { settings?: SettingsTab } =>
+    isSettingsTab(search.settings) ? { settings: search.settings } : {},
   beforeLoad: async ({ context, location }) => {
     const { queryClient } = context
     // What every signed-in page shows, asked for alongside the session check

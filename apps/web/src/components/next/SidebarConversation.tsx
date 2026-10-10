@@ -1,13 +1,15 @@
 import type { Conversation } from '@openchat/api-client'
 import { Link } from '@tanstack/react-router'
-import { Check, MoreHorizontal, PencilLine, Trash2, X } from 'lucide-react'
+import { Check, MoreHorizontal, PencilLine, Sparkles, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useRenameConversation } from '@/hooks/use-conversations'
+import { toast } from 'sonner'
+
+import { useGenerateTitle, useRenameConversation } from '@/hooks/use-conversations'
 import { formatRelative } from '@/lib/grouping'
 import { cn } from '@/lib/utils'
 
@@ -21,6 +23,7 @@ interface Props {
 export function SidebarConversation({ conversation, active, onDelete, onNavigate }: Props) {
   const { t } = useTranslation()
   const rename = useRenameConversation()
+  const smartTitle = useGenerateTitle()
   const [menuOpen, setMenuOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(conversation.title)
@@ -81,7 +84,11 @@ export function SidebarConversation({ conversation, active, onDelete, onNavigate
             onClick={(event) => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && event.button === 0) onNavigate() }}
             onDoubleClick={(event) => { event.preventDefault(); startEditing() }}
           >
-            <span className="n-row-label" dir="auto">{conversation.title || t('chat.untitled')}</span>
+            {smartTitle.isPending ? (
+              <span className="n-row-label n-reasoning-live" data-motion="essential">{t('chat.smart-title-pending')}</span>
+            ) : (
+              <span className="n-row-label" dir="auto">{conversation.title || t('chat.untitled')}</span>
+            )}
             <span className="n-row-meta">{formatRelative(conversation.updatedAt, t)}</span>
           </Link>
           <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -90,6 +97,14 @@ export function SidebarConversation({ conversation, active, onDelete, onNavigate
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" onCloseAutoFocus={(event) => { if (editing) event.preventDefault() }}>
               <DropdownMenuItem onSelect={startEditing}><PencilLine /><span>{t('chat.rename')}</span></DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={smartTitle.isPending}
+                onSelect={() =>
+                  smartTitle.mutate(conversation.id, { onError: () => toast.error(t('chat.smart-title-failed')) })
+                }
+              >
+                <Sparkles /><span>{t('chat.smart-title')}</span>
+              </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => onDelete(conversation)}><Trash2 /><span>{t('chat.delete')}</span></DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

@@ -1,13 +1,20 @@
 /**
- * Design tokens and base layout for the next-generation chat UI.
+ * Design tokens and base layout for the chat UI.
+ *
+ * This is a local file, edited in place: the base layer that the other chat
+ * sheets (sidebar, chat-typography, chat-layout, agent, genui, ...) build on.
+ * They are imported after it, usually at the same specificity, so where one of
+ * them sets the same property on the same element it wins by import order and
+ * the value here is only the starting point. A property should live in one
+ * place; if a later sheet owns it, delete it here instead of restating it.
  *
  * Layout rules are scoped under `.prism-next` so they cannot collide with the
- * legacy global styles in `assets/pages/*.less`. Two things deliberately sit at
- * the top level instead: the `--n-*` tokens, and the model-picker rules — both
- * are needed by content Radix renders through a portal attached to <body>,
- * which is outside the `.prism-next` element and so beyond any descendant
- * selector or variable inherited from it. The `--n-` prefix keeps the global
- * tokens from colliding with the legacy `--background` / `--foreground` set.
+ * admin panel's styles. Two things deliberately sit at the top level instead:
+ * the `--n-*` tokens, and the tooltip rules — both are needed by content Radix
+ * renders through a portal attached to <body>, which is outside the
+ * `.prism-next` element and so beyond any descendant selector or variable
+ * inherited from it. The `--n-` prefix keeps the chat tokens from colliding
+ * with the admin theme's `--background` / `--foreground` set.
  *
  * Motion and surface techniques follow the AIcss component library
  * (https://www.aicss.dev), adapted to this app's token system:
@@ -15,12 +22,8 @@
  *     even on every edge and paints above the drop shadows
  *   - button fills live on `::before`, so a press scales the fill only and
  *     never the icon on top
- *   - disclosures collapse with `grid-template-rows: 1fr -> 0fr`
  *   - one shared easing curve for every transition
  */
-/* Every scrollable surface here uses the same slim rail. Kept as a mixin
-   because Firefox and WebKit need entirely different properties, and setting
-   only `scrollbar-width` leaves WebKit on the chunky system scrollbar. */
 /* Surface greys are kept at zero chroma — R, G and B equal, no exceptions.
    A surface carrying even a couple of points of blue reads as a slightly dirty
    grey next to a neutral one, and the tint compounds as surfaces stack. The
@@ -29,12 +32,15 @@
    where it is carrying meaning rather than decorating. */
 :root {
   --n-bg: #ffffff;
-  --n-sidebar: #f9f9f9;
   --n-panel: #f4f4f4;
-  --n-bubble: #f1f1f1;
+  /* OpenWebUI's bubble is gray-50: a tint, not a grey slab. */
+  --n-bubble: #f4f4f4;
   --n-text: #1a1a1a;
-  --n-text-2: #a1a1a1;
-  --n-text-3: #b4b4b4;
+  /* Secondary and tertiary text sit darker than a soft grey ramp would put them
+     (#a1a1a1 is under 3:1 on white), so timestamps, labels and hints stay
+     readable. */
+  --n-text-2: #6f6f6f;
+  --n-text-3: #9a9a9a;
   --n-hover: rgba(26, 26, 26, 0.06);
   --n-hover-strong: rgba(26, 26, 26, 0.1);
   --n-active: rgba(26, 26, 26, 0.12);
@@ -55,6 +61,8 @@
   --n-card: #ffffff;
   --n-shadow-card: 0 0 0 0.5px rgba(0, 0, 0, 0.07), 0 1px 1px rgba(16, 18, 24, 0.05), 0 2px 4px -1px rgba(16, 18, 24, 0.05), 0 6px 10px -6px rgba(16, 18, 24, 0.07);
   --n-shadow-card-hover: 0 0 0 0.5px rgba(0, 0, 0, 0.09), 0 1px 2px rgba(16, 18, 24, 0.06), 0 4px 8px -3px rgba(16, 18, 24, 0.07), 0 10px 16px -10px rgba(16, 18, 24, 0.1);
+  /* Fallback only: Sidebar.tsx sets the live width inline from the ui-store
+     (default 245px, user-resizable). */
   --n-sidebar-w: 260px;
   --n-column: 860px;
 }
@@ -65,26 +73,21 @@
   flex-direction: row;
   overflow: hidden;
   background: var(--n-bg);
-  color: var(--n-text);
-  font-size: 15px;
-  line-height: 1.65;
-  letter-spacing: -0.005em;
   -webkit-font-smoothing: antialiased;
 }
 .dark {
-  --n-bg: #1b1b1b;
-  /* Deliberately darker than the page, and by enough to register: at the old
-     two-point gap the sidebar and the transcript read as one slab. */
-  --n-sidebar: #111111;
-  --n-panel: #242424;
-  --n-bubble: #2a2a2a;
+  /* OpenWebUI's dark ramp (gray-900 page, gray-950 sidebar, gray-850
+     raised surfaces): near-black rather than a mid grey, which read as muddy. */
+  --n-bg: #161616;
+  --n-panel: #262626;
+  --n-bubble: #262626;
   --n-text: #f5f5f5;
   /* Secondary and tertiary text are *lighter* here than their light-mode
      counterparts, not darker. Contrast against a dark ground falls off faster
      than the mirrored value suggests, so a straight inversion of the light
      ramp leaves secondary text looking switched off rather than de-emphasised. */
   --n-text-2: #a8a8a8;
-  --n-text-3: #767676;
+  --n-text-3: #7a7a7a;
   --n-hover: rgba(255, 255, 255, 0.06);
   --n-hover-strong: rgba(255, 255, 255, 0.1);
   --n-active: rgba(255, 255, 255, 0.14);
@@ -96,277 +99,21 @@
   /* Dark surfaces swallow drop shadows, so elevation is carried by three things
      at once: a card lighter than the page, a top-edge inset highlight standing
      in for the light a raised edge would catch, and deeper blacks below. */
-  --n-card: #212121;
+  --n-card: #1e1e1e;
   --n-shadow-card: inset 0 0.5px 0 rgba(255, 255, 255, 0.06), 0 0 0 0.5px rgba(255, 255, 255, 0.08), 0 1px 1px rgba(0, 0, 0, 0.28), 0 2px 5px -2px rgba(0, 0, 0, 0.32), 0 6px 10px -7px rgba(0, 0, 0, 0.4);
   --n-shadow-card-hover: inset 0 0.5px 0 rgba(255, 255, 255, 0.1), 0 0 0 0.5px rgba(255, 255, 255, 0.12), 0 1px 2px rgba(0, 0, 0, 0.32), 0 4px 9px -3px rgba(0, 0, 0, 0.38), 0 10px 16px -10px rgba(0, 0, 0, 0.48);
-}
-/* ---------------------------------------------------------------- sidebar */
-.prism-next {
-  /* Brand header. Shares the rows' 10px inset so the column lines up, but is
-     deliberately inert — it labels the app rather than navigating anywhere. */
-  /* Nav entries and conversation rows share one visual language.
-     The height is fixed rather than derived from padding: the trailing slot
-     swaps a ~20px timestamp for a 28px menu button on hover, and a
-     padding-driven row would visibly grow at that moment. */
-  /* Date group heading: 昨天 / 过去 7 天 / 七月 */
-  /* Relative timestamp, cross-faded with the `...` menu on hover.
-     The menu is taken out of flow and laid over the timestamp instead of
-     replacing it, so neither the row height nor the title width shifts. */
-  /* ------------------------------------------------------------- main area */
-  /* Drop target hint. `pointer-events: none` is essential: the overlay must
-     not intercept the drop, which is handled by the window listener. */
-  /* -------------------------------------------------------------- messages */
-  /* Shown while a conversation is being fetched. Without it the transcript is
-     empty for that moment, and the empty state is the new-chat welcome — so
-     opening a conversation flashed "what shall we do today" first. */
-  /* The avatar hangs in a left gutter so the model name, tool rows and body
-     all share one left edge — the name reads as a heading for the text rather
-     than as a label attached to the avatar. */
-  /* One gap governs the whole turn — name, reasoning, tool rows, body and
-     actions are all flex children, so every seam is the same height instead of
-     each block carrying its own margin. */
-  /* `align-items: flex-start` sizes each block to its content, which is what
-     keeps short ones from stretching — but it also means a block wide enough
-     to overflow (a many-column table) simply grows past the column, taking the
-     page with it. Capping the children gives anything that scrolls internally
-     a real width to resolve its own `max-width: 100%` against. */
-  /* Absolutely positioned, so it stays out of the flex flow. Lifted by half the
-     difference between its height and the name's line box to sit centred on it. */
-  /* Hover-revealed message actions. */
-  /* Variant switcher: `‹ 2/2 ›` for prompts answered more than once. */
-  /* ------------------------------------------------------------- welcome */
-  /* Sits in the upper third rather than dead-centre, so the eye lands on the
-     model name first and the suggestions stay close to the composer. */
-  /* ------------------------------------------------------- disclosure rows */
-  /* The label's leading verb sits brighter than its trailing detail. */
-  /* Collapse without measuring heights. */
-  /* Reasoning is set as quiet, tightly-led grey text rather than a quote —
-     it is the model muttering, not a citation, so no rule and no italics. */
-  /* Only while tokens arrive is the viewport capped and masked, so a long
-     chain of thought cannot push the answer off the screen (the technique is
-     from the AIcss thinking-reasoning component). Once the reply is complete,
-     expanding is a deliberate request to read all of it — capping and fading
-     it then would just be in the way. */
-  /* Search activity, ported from the AIcss web-search component: shimmering
-     query header, then each returned page resolving beneath a hairline rail —
-     dotted ring while pending, spinning globe while loading, green check. */
-  /* Sources rise into place one after another rather than all landing at once.
-     The reference staggers them because it discovers each page at a different
-     moment; here every hit arrives together, so the stagger is a reveal, not a
-     claim about timing — which is why it is a delay on one animation and not a
-     per-row state machine. */
-  /* One 12px slot holding both marks. Each source shows a globe and then ticks
-     over to a check, one after another down the list. Every hit here was
-     already fetched, so — like the row stagger — this is the reveal finishing,
-     not a claim that the sources resolved at different times. That is also why
-     it is two delayed animations rather than a per-row state machine driven by
-     invented timings. */
-  /* The title keeps its width; the URL is what gives way when space runs out. */
-  /* The outbound arrow only offers itself once the source has resolved. */
-  /* Toggle under a folded code block. It sits outside the block's own frame so
-     it never covers the last visible line. */
-  /* -------------------------------------------------------------- composer */
-  /* Expanded state: the box grows toward the top of the viewport. The dock is
-     `flex-shrink: 0`, so the transcript above yields the space. */
-  /* Scoped through `.n-composer` on purpose: this button also carries
-     `.n-icon-btn`, which sets `position: relative` at equal specificity and
-     later in the file, so a bare `.n-composer-toggle` loses the cascade and
-     the button falls back into normal flow at the top-left. */
-  /* Keep long lines clear of the floating toggle. */
-  /* Editing is a different send mode, so it stays visible even after the
-     textarea is focused. Kept to one line to preserve the compact dock. */
-  /* The expand control normally occupies the banner's top-right corner. In
-     edit mode it follows the banner down to the actual text field. */
-  /* The chip sits on the first text line rather than above the box, so a mode
-     reads as part of what is being written. The textarea keeps its own
-     auto-grow: only the row around it is new. */
-  /* Anchored to the composer rather than portalled, so the scoped rules and
-     tokens reach it without the top-level treatment the picker needs.
-
-     Stacked above `.n-scroll-bottom` (z-index 5) deliberately: `.n-composer`
-     is positioned but sets no z-index, so it opens no stacking context of its
-     own and this menu competes with the jump-to-bottom button directly. Both
-     sit in the strip just above the composer, so at any lower value the button
-     punches a hole through the open menu. */
-  /* Title and hint share a baseline instead of stacking, so a row stays one
-     line tall and the list reads as choices rather than a settings page. */
-  /* Pushed to the far edge rather than sat beside the hint, which is elastic:
-     against the row's end the marks line up down the list, so "what is on" is
-     one glance instead of a scan. */
-  /* ------------------------------------------------------------- drawing */
-  /* Five settings plus two buttons will not fit one line on a narrow window,
-     so this row wraps instead of squeezing the pills into ellipses. */
-  /* Trigger for one setting: reads as the current value, opens the rest.
-     Full text colour rather than the muted one the chat's model button uses —
-     these pills are the only content in the row, so at this size the muted
-     tone reads as disabled instead of quiet. */
-  /* Waiting state, after the AIcss image-generation component. The dotted
-     field is a static grid; a second grid of darker dots sits on top of it,
-     masked down to a couple of soft blobs that drift and breathe. Masking the
-     dots rather than drawing a gradient keeps the texture reading as the same
-     material, lit from underneath. */
-  /* The gallery is the legacy component, which brings its own card styling —
-     and its own layout assumptions. It expects to be the scroll area itself,
-     stretched to fill a flex parent, with deep top and bottom padding holding
-     room for panels that float over it in the old page. Here `.n-scroll` is
-     the scroller and the composer is docked below, so that reserved space is
-     nothing but empty height: enough to make an empty canvas scroll. Targeted
-     structurally because the padding is applied through utility classes that
-     change with the props. */
-  /* --------------------------------------------------------- model market */
-  /* Not `.n-column`: that width is set for reading prose, and a card grid
-     squeezed into it truncates every model name while the page keeps hundreds
-     of pixels empty on both sides. */
-  /* Search gets the full row. Pricing affects every card, so its switch lives
-     in the page header rather than competing with query and tag filters. */
-  /* A switch rather than a pressed pill: this flips a unit that every price
-     on the page is quoted in, which is a mode, not an action. */
-  /* `auto-fill` rather than `auto-fit`: a single result keeps its column width
-     instead of stretching the card across the whole page. Equal implicit rows
-     make sparse cards share the same footprint as cards with tags or prices. */
-  /* The card lifts on hover rather than only tinting: at this size a tint
-     alone is nearly invisible against the page, which is what made the grid
-     read as flat. */
-  /* Latency / throughput / health, sat against the model name. Fixed columns
-     so the figures line up down the grid instead of shifting with each name. */
-  /* Two lines, so a long description cannot set the height of its whole row. */
-  /* The unit carries the meaning of the number beside it, so it stays legible
-     rather than shrinking away to a decoration. */
-  /* Detail panel: a sheet on the right, dismissed by the scrim or Escape. */
-  /* Figures read as figures: name above, value large. Two per row where they
-     pair naturally (input/output, latency/throughput). */
-  /* Performance values keep their exact reading, while the supporting shape
-     makes level and recent movement scannable without exposing raw telemetry. */
-  /* The card clamps its description to two lines; here it runs in full. */
-  /* Text only, centred in the canvas. The gallery's own empty state leads with
-     a framed icon and sits at the top once its stretch is removed; nothing
-     here needs an icon to explain it. */
-  /* Attachment row, above the text area. */
-  /* Remove control: corner badge on thumbnails, inline on file pills. */
-  /* Round soft button. The fill lives on ::before so a press scales only the
-     container, never the icon on top. */
-  /* Primary send affordance: filled dark circle, white glyph. */
-  /* Reasoning turned off: the control stays available but reads as inactive. */
-  /* Model picker reads as plain text, not a form control. */
-  /* Floating scroll-to-bottom pill above the composer. */
-  /* `bottom: 100%` pins the pill just past the top edge of the composer
-     wrapper, so it floats over the transcript instead of sitting inside the
-     composer's own action row. */
-  /* -------------------------------------------------------- search palette */
-  /* `.prism-next` creates no containing block (no transform/filter/contain),
-     so a fixed overlay nested inside it still resolves against the viewport
-     and escapes the ancestor's `overflow: hidden`. */
-  /* Preview pane. Contents are fetched lazily, so it also carries the
-     idle and loading states. */
-  /* No rule between the panes: the two columns are separated by whitespace
-     alone. The vertical line in the reference is the results list's scrollbar
-     thumb, which appears only when that list actually overflows. */
-  /* Preview turns reuse the transcript components, tightened a little since
-     the pane is narrower than the chat column. */
-  /* --------------------------------------------------------------- overlay */
-  /* Caret is solid while tokens arrive and only blinks once idle. */
-  /* Placeholder shown between the model header and its first token. A dot
-     rather than a bar: it never sits beside text, so it reads as a status
-     indicator instead of a text cursor. It breathes rather than blinking —
-     a motionless dot looks like a stalled request. */
-  /* A soft brightness valley sweeps through the label while thinking. */
-  /* ------------------------------------------------------------ usage log */
-  /* Tabular figures so a number changing under a refresh does not shuffle the
-     digits beside it. */
-  /* The only two hued chips on the page: a rate is a live reading rather than
-     a recorded total, and the colour is what separates the two at a glance. */
-  /* The table scrolls inside its own box: eight columns will not fit a narrow
-     window, and letting the page scroll sideways instead would drag the
-     sidebar and stat cards along with it. */
-  /* The size picker is pinned left and the page controls stay centred on the
-     row, so paging through does not shift the arrows sideways as the label
-     between them changes width. */
-  /* One record per card below the table's breakpoint — see LogTable.tsx. */
 }
 .prism-next .n-sidebar {
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
-  width: var(--n-sidebar-w);
-  height: 100%;
-  background: var(--n-sidebar);
-  transition: margin-left 0.28s cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-sidebar.collapsed {
-  margin-left: calc(var(--n-sidebar-w) * -1);
-}
-.prism-next .n-sidebar-scroll {
-  flex: 1;
-  min-height: 0;
-  padding: 0 8px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--n-line) transparent;
-  /* Idle until pointed at: the conversation list is long, and a permanent
-       rail competes with the titles for attention. */
-  scrollbar-color: transparent transparent;
-}
-.prism-next .n-sidebar-scroll::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-.prism-next .n-sidebar-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.prism-next .n-sidebar-scroll::-webkit-scrollbar-thumb {
-  background: var(--n-line);
-  border-radius: 999px;
-}
-.prism-next .n-sidebar-scroll::-webkit-scrollbar-thumb:hover {
-  background: var(--n-text-3);
-}
-.prism-next .n-sidebar-scroll::-webkit-scrollbar-thumb {
-  background: transparent;
-}
-.prism-next .n-sidebar-scroll:hover {
-  scrollbar-color: var(--n-line) transparent;
-}
-.prism-next .n-sidebar-scroll:hover::-webkit-scrollbar-thumb {
-  background: var(--n-line);
-}
-.prism-next .n-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 40px;
-  padding: 0 10px;
-  margin-bottom: 4px;
-  font-size: 15px;
-  font-weight: 600;
-  user-select: none;
-}
-.prism-next .n-brand-logo {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  object-fit: contain;
-}
-.prism-next .n-brand-name {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 .prism-next .n-row {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
   width: 100%;
-  min-height: 36px;
-  padding: 0 10px;
   border: 0;
   background: transparent;
-  color: var(--n-text);
-  font-size: 14px;
-  line-height: 1.4;
   text-align: left;
   cursor: pointer;
   user-select: none;
@@ -375,15 +122,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: 8px;
   background: transparent;
-  transition: background 150ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-row:hover::before {
-  background: var(--n-hover);
-}
-.prism-next .n-row.active::before {
-  background: var(--n-active);
 }
 .prism-next .n-row > * {
   position: relative;
@@ -396,35 +135,10 @@
   text-overflow: ellipsis;
 }
 .prism-next .n-group {
-  padding: 18px 10px 6px;
-  color: var(--n-text-3);
-  font-size: 12px;
-  font-weight: 500;
   user-select: none;
 }
 .prism-next .n-row-meta {
   flex-shrink: 0;
-  color: var(--n-text-3);
-  font-size: 12px;
-  transition: opacity 150ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-row .n-row-menu {
-  position: absolute;
-  top: 50%;
-  right: 5px;
-  opacity: 0;
-  transform: translateY(-50%);
-  pointer-events: none;
-  transition: opacity 150ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-row:hover .n-row-meta,
-.prism-next .n-row.menu-open .n-row-meta {
-  opacity: 0;
-}
-.prism-next .n-row:hover .n-row-menu,
-.prism-next .n-row.menu-open .n-row-menu {
-  opacity: 1;
-  pointer-events: auto;
 }
 .prism-next .n-route-motion {
   display: flex;
@@ -440,43 +154,48 @@
   flex-direction: column;
   height: 100%;
 }
-.prism-next .n-drop {
-  position: absolute;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  background: color-mix(in srgb, var(--n-bg) 62%, transparent);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-  pointer-events: none;
-  user-select: none;
-  animation: n-fade-in 140ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-.prism-next .n-drop-title {
-  font-size: 28px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-.prism-next .n-drop-hint {
-  color: var(--n-text-2);
-  font-size: 15px;
+/* The bar floats over the transcript rather than sitting above it, on
+   OpenWebUI's navbar gradient (Navbar.svelte, `#navbar-bg-gradient-to-b`):
+   page colour at 90% at the top, 50% at 40%, gone by 97%, reaching 40px past
+   the bar. Never opaque — text scrolling up stays faintly legible behind the
+   title rather than being cut off — and only in a conversation; the empty
+   screen has nothing to scroll under it. The transcript starts below the bar
+   (padding); anything sticky sticks below the fade, where it is not washed. */
+.prism-next .n-main {
+  --n-topbar-h: 52px;
+  /* How far the fade reaches below the bar (`-bottom-10`). */
+  --n-topbar-fade: 40px;
 }
 .prism-next .n-topbar {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 10;
+  isolation: isolate;
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
-  height: 52px;
+  height: var(--n-topbar-h);
   padding: 0 14px;
+}
+.prism-next .n-topbar.has-chat::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 calc(-1 * var(--n-topbar-fade));
+  z-index: -1;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--n-bg) 90%, transparent) 0%,
+    color-mix(in srgb, var(--n-bg) 50%, transparent) 40%,
+    transparent 97%
+  );
+  pointer-events: none;
 }
 .prism-next .n-scroll {
   position: relative;
   flex: 1;
   min-height: 0;
+  padding-top: var(--n-topbar-h);
+  scroll-padding-top: var(--n-topbar-h);
   overflow-y: auto;
   /* Setting only `overflow-y` leaves the other axis computing to `auto`, not
        `visible` — so any block that manages to exceed the column turns the
@@ -512,7 +231,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 60vh;
+  /* The whole transcript area, so the spinner sits midway between the top bar
+     and the composer; 60vh from the top left it well above the middle. */
+  height: 100%;
 }
 .prism-next .n-spinner {
   width: 22px;
@@ -544,9 +265,12 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
-  padding-left: 44px;
-  margin: 26px 0;
-  animation: n-block-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* The avatar sits 5px higher than the name beside it. That room is inside
+     the box (padding, taken off the margin), not above it: an older message
+     is drawn with content-visibility, whose containment clips whatever hangs
+     outside its box — the avatar's top was cut flat. */
+  padding: 5px 0 0 44px;
+  margin: 21px 0 26px;
 }
 .prism-next .n-msg-assistant > * {
   max-width: 100%;
@@ -554,13 +278,8 @@
 }
 .prism-next .n-msg-avatar {
   position: absolute;
-  top: -5px;
+  top: 0;
   left: 0;
-}
-.prism-next .n-msg-head {
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.5;
 }
 .prism-next .n-actions {
   display: flex;
@@ -610,396 +329,25 @@
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
-.prism-next .n-welcome {
-  padding-top: 13vh;
-  padding-bottom: 40px;
-  user-select: none;
-}
-.prism-next .n-welcome-title {
-  margin: 14px 0 0;
-  font-size: 34px;
-  font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
-}
-.prism-next .n-welcome-sub {
-  margin: 2px 0 0;
-  color: var(--n-text-3);
-  font-size: 30px;
-  font-weight: 500;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
-}
 .prism-next .n-suggest-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin: 34px 0 8px;
-  color: var(--n-text-2);
-  font-size: 14px;
-}
-.prism-next .n-suggest-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px 32px;
 }
 .prism-next .n-suggest {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  padding: 8px 10px;
   border: 0;
   background: transparent;
   text-align: left;
   cursor: pointer;
 }
-.prism-next .n-suggest::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 10px;
-  background: transparent;
-  transition: background 150ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-suggest:hover::before {
-  background: var(--n-hover);
-}
 .prism-next .n-suggest > * {
   position: relative;
-}
-.prism-next .n-suggest-title {
-  color: var(--n-text);
-  font-size: 15px;
-}
-.prism-next .n-suggest-detail {
-  color: var(--n-text-3);
-  font-size: 14px;
-}
-.prism-next .n-disclosure {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--n-text-2);
-  /* Matches the body copy: these rows are part of the reply, not captions. */
-  font-size: 15px;
-  line-height: 1.5;
-  font-weight: 500;
-  cursor: pointer;
-  transition: color 150ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-disclosure:disabled {
-  cursor: default;
-}
-.prism-next .n-disclosure:not(:disabled):hover {
-  color: var(--n-text);
-}
-.prism-next .n-disclosure .n-verb {
-  color: var(--n-text-2);
-}
-.prism-next .n-disclosure .n-detail {
-  color: color-mix(in srgb, var(--n-text-2) 68%, transparent);
-}
-.prism-next .n-chevron {
-  flex-shrink: 0;
-  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-disclosure[aria-expanded="false"] .n-chevron {
-  transform: rotate(-90deg);
-}
-.prism-next .n-collapsible {
-  display: grid;
-  grid-template-rows: 1fr;
-  opacity: 1;
-  transition: grid-template-rows 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease;
-}
-.prism-next .n-collapsible.collapsed {
-  grid-template-rows: 0fr;
-  opacity: 0;
-  pointer-events: none;
-}
-.prism-next .n-collapsible-inner {
-  min-height: 0;
-  overflow: hidden;
-}
-.prism-next .n-think-body {
-  margin: 2px 0 0;
-  color: var(--n-text-2);
-  font-size: 13px;
-  line-height: 20px;
-}
-.prism-next .n-think-body.streaming {
-  max-height: 180px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  /* The rail would flicker as the tail advances, so it stays hidden. */
-  scrollbar-width: none;
-}
-.prism-next .n-think-body.streaming::-webkit-scrollbar {
-  width: 0;
-}
-.prism-next .n-think-body.streaming.fade-top {
-  --n-fade-top: 18px;
-}
-.prism-next .n-think-body.streaming.fade-bottom {
-  --n-fade-bottom: 18px;
-}
-.prism-next .n-think-body.streaming.fade-top,
-.prism-next .n-think-body.streaming.fade-bottom {
-  --n-mask: linear-gradient(to bottom, transparent 0, #000 var(--n-fade-top, 0px), #000 calc(100% - var(--n-fade-bottom, 0px)), transparent 100%);
-  -webkit-mask-image: var(--n-mask);
-  mask-image: var(--n-mask);
-}
-.prism-next .n-ws {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 100%;
-  font-size: 13px;
-  line-height: 1.4;
-  animation: n-ws-fade 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-.prism-next .n-ws-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 20px;
-}
-.prism-next .n-ws-icon {
-  flex: none;
-  width: 14px;
-  height: 14px;
-  margin-left: -1px;
-  color: var(--n-text-2);
-}
-.prism-next .n-ws-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  font-weight: 550;
-  color: var(--n-text);
-  white-space: nowrap;
-}
-.prism-next .n-ws-label > span:first-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.prism-next .n-ws-quote {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.prism-next .n-ws-chevron {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  flex: none;
-  border: none;
-  background: none;
-  padding: 0;
-  color: var(--n-text-3);
-  cursor: pointer;
-  border-radius: 4px;
-  transition: color 160ms cubic-bezier(0.22, 1, 0.36, 1), transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
-  /* Points down when open, right when closed — the same rotation the shared
-       disclosure uses. The AIcss original flips 180° instead, which reads as
-       "collapse me" rather than as the state it is in. */
-}
-.prism-next .n-ws-chevron:hover {
-  color: var(--n-text-2);
-}
-.prism-next .n-ws-chevron[aria-expanded="false"] {
-  transform: rotate(-90deg);
-}
-.prism-next .n-ws-results {
-  position: relative;
-  display: flex;
-  align-items: stretch;
-  gap: 6px;
-}
-.prism-next .n-ws-rail {
-  flex: none;
-  width: 1px;
-  align-self: stretch;
-  margin-left: 5.5px;
-  border-left: 1px solid var(--n-line);
-}
-.prism-next .n-ws-list {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  padding: 4px 0 2px 6px;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.prism-next .n-ws-site {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  color: var(--n-text-2);
-  font-size: 12px;
-  line-height: 18px;
-  text-decoration: none;
-  opacity: 0;
-  transform: translateY(4px);
-  animation: n-ws-enter 340ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  animation-delay: calc(var(--n-ws-index, 0) * 55ms);
-}
-.prism-next .n-ws-site:hover .n-ws-url {
-  color: var(--n-text);
-}
-.prism-next .n-ws-bullet {
-  position: relative;
-  width: 12px;
-  height: 12px;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.prism-next .n-ws-globe,
-.prism-next .n-ws-check {
-  position: absolute;
-  inset: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.prism-next .n-ws-globe svg,
-.prism-next .n-ws-check svg {
-  flex: none;
-}
-.prism-next .n-ws-globe {
-  color: var(--n-text-3);
-  animation: n-ws-mark-out 240ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  animation-delay: calc(var(--n-ws-index, 0) * 130ms + 380ms);
-}
-.prism-next .n-ws-check {
-  color: var(--n-ok);
-  opacity: 0;
-  transform: scale(1.175);
-  animation: n-ws-mark-in 280ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  animation-delay: calc(var(--n-ws-index, 0) * 130ms + 380ms);
-}
-.prism-next .n-ws-title {
-  flex: none;
-  max-width: 60%;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--n-text);
-  font-weight: 450;
-}
-.prism-next .n-ws-sep {
-  flex: none;
-  color: var(--n-text-3);
-}
-.prism-next .n-ws-url {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  transition: color 160ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-ws-arrow {
-  display: inline-flex;
-  flex: none;
-  margin-left: -2px;
-  color: var(--n-text-3);
-  opacity: 0;
-  transform: rotate(45deg) translate(0, 2px);
-  transition: opacity 160ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-ws-site[data-state="done"]:hover .n-ws-arrow {
-  opacity: 1;
-  transform: rotate(45deg) translate(0, 0);
-}
-.prism-next .n-ws-error {
-  margin-left: 20px;
-  color: var(--n-err);
-  font-size: 13px;
-}
-.prism-next .n-code-fold-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin: 6px 0 2px;
-  padding: 3px 8px 3px 6px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--n-text-2);
-  font-size: 12.5px;
-  cursor: pointer;
-  transition: color 160ms cubic-bezier(0.22, 1, 0.36, 1), background 160ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-code-fold-toggle:hover {
-  color: var(--n-text);
-  background: var(--n-panel);
-}
-.prism-next .n-code-fold-caret {
-  flex-shrink: 0;
-  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-code-fold-toggle[aria-expanded="true"] .n-code-fold-caret {
-  transform: rotate(180deg);
-}
-.prism-next .n-tool-panel {
-  margin: 6px 0;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: var(--n-panel);
-  font-size: 13px;
-}
-.prism-next .n-tool-label {
-  margin-bottom: 4px;
-  color: var(--n-text-3);
-  font-size: 12px;
-}
-.prism-next .n-tool-pre {
-  max-height: 260px;
-  margin: 0;
-  padding: 8px 10px;
-  overflow: auto;
-  border-radius: 8px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--n-line) transparent;
-  background: var(--n-bg);
-  color: var(--n-text-2);
-  font-family: "JetBrains Mono Variable", ui-monospace, monospace;
-  font-size: 12px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-}
-.prism-next .n-tool-pre::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-.prism-next .n-tool-pre::-webkit-scrollbar-track {
-  background: transparent;
-}
-.prism-next .n-tool-pre::-webkit-scrollbar-thumb {
-  background: var(--n-line);
-  border-radius: 999px;
-}
-.prism-next .n-tool-pre::-webkit-scrollbar-thumb:hover {
-  background: var(--n-text-3);
 }
 .prism-next .n-composer-dock {
   position: relative;
   flex-shrink: 0;
-  padding-bottom: 18px;
   /* The transcript ends flush against this dock, which reads as a hard cut
        mid-sentence. A short wash to the page colour lets the last lines
        dissolve instead. Non-interactive so it never eats a click. */
@@ -1018,15 +366,6 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px 12px 10px;
-  border: 0.5px solid transparent;
-  border-radius: 22px;
-  background: var(--n-bg);
-  box-shadow: var(--n-ring);
-}
-.prism-next .n-composer.expanded .n-composer-input {
-  max-height: calc(100vh - 240px);
 }
 .prism-next .n-composer .n-composer-toggle {
   position: absolute;
@@ -1036,54 +375,6 @@
 }
 .prism-next .n-composer.has-toggle .n-composer-input {
   padding-right: 34px;
-}
-.prism-next .n-composer-edit {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  padding: 0 2px 8px;
-  box-shadow: inset 0 -0.5px 0 var(--n-line);
-  color: var(--n-text-2);
-  font-size: 11.5px;
-  line-height: 1.4;
-}
-.prism-next .n-composer-edit-copy {
-  display: flex;
-  align-items: baseline;
-  flex: 1;
-  gap: 8px;
-  min-width: 0;
-}
-.prism-next .n-composer-edit-copy strong {
-  flex-shrink: 0;
-  color: var(--n-text);
-  font-weight: 550;
-}
-.prism-next .n-composer-edit-copy span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.prism-next .n-composer-edit-cancel {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--n-text-2);
-  cursor: pointer;
-  transition: color 150ms cubic-bezier(0.22, 1, 0.36, 1), background 150ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-composer-edit-cancel:hover {
-  background: var(--n-hover);
-  color: var(--n-text);
 }
 .prism-next .n-composer.editing .n-composer-toggle {
   top: 46px;
@@ -1097,961 +388,18 @@
   flex: 1;
   min-width: 0;
 }
-.prism-next .n-mode-chip {
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
-  gap: 4px;
-  /* Matches the textarea's own padding so both sit on one baseline. */
-  margin-top: 2px;
-  padding: 1px 4px 1px 6px;
-  border-radius: 7px;
-  background: var(--n-hover);
-  color: var(--n-link, #2563eb);
-  line-height: 1.6;
-  white-space: nowrap;
-}
-.prism-next .n-mode-chip-remove {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  opacity: 0.55;
-  cursor: pointer;
-  transition: opacity 150ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-mode-chip-remove:hover {
-  opacity: 1;
-}
-.prism-next .n-mention {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
-  right: 0;
-  z-index: 6;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 6px;
-  border-radius: 16px;
-  background: var(--n-bg);
-  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.07), 0 3px 10px rgba(0, 0, 0, 0.07);
-}
-.prism-next .n-mention-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 8px 10px;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--n-text);
-  font-size: 14px;
-  line-height: 1.4;
-  text-align: left;
-  cursor: pointer;
-}
-.prism-next .n-mention-row.active {
-  background: var(--n-hover);
-}
-.prism-next .n-mention-emoji {
-  flex-shrink: 0;
-}
-.prism-next .n-mention-title {
-  flex-shrink: 0;
-}
-.prism-next .n-mention-hint {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--n-text-2);
-  font-size: 13px;
-}
-.prism-next .n-mention-check {
-  display: inline-flex;
-  flex-shrink: 0;
-  margin-left: auto;
-  padding-left: 8px;
-  color: var(--n-text);
-}
-.prism-next .n-draw-bar {
-  flex-wrap: wrap;
-  row-gap: 6px;
-}
-.prism-next .n-draw-pick {
-  flex-shrink: 0;
-  padding: 4px 11px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  box-shadow: 0 0 0 0.5px var(--n-line);
-  color: var(--n-text);
-  font-size: 13px;
-  line-height: 1.5;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background 150ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 150ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-draw-pick:hover,
-.prism-next .n-draw-pick[data-state="open"] {
-  background: var(--n-hover);
-  box-shadow: 0 0 0 0.5px transparent;
-}
-.prism-next .n-ig {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  padding: 24px 0 8px;
-}
-.prism-next .n-ig-canvas {
-  position: relative;
-  width: 100%;
-  max-width: 240px;
-  aspect-ratio: 1;
-  border-radius: 14px;
-  background: var(--n-panel);
-  overflow: hidden;
-}
-.prism-next .n-ig-dots,
-.prism-next .n-ig-glow {
-  position: absolute;
-  inset: 2px;
-  background-size: 11px 11px;
-  background-repeat: space;
-}
-.prism-next .n-ig-dots {
-  background-image: radial-gradient(circle, var(--n-text-2) 0.7px, transparent 1.3px);
-  opacity: 0.22;
-}
-.prism-next .n-ig-glow {
-  background-image: radial-gradient(circle, var(--n-text) 1.1px, transparent 1.6px);
-  -webkit-mask-image: radial-gradient(ellipse at center, #000 0%, transparent 60%), radial-gradient(ellipse at center, #000 0%, transparent 62%);
-  mask-image: radial-gradient(ellipse at center, #000 0%, transparent 60%), radial-gradient(ellipse at center, #000 0%, transparent 62%);
-  -webkit-mask-repeat: no-repeat, no-repeat;
-  mask-repeat: no-repeat, no-repeat;
-  animation: n-ig-morph 4.2s cubic-bezier(0.35, 1.55, 0.65, 1) infinite, n-ig-breathe 1.9s cubic-bezier(0.66, 0, 0.34, 1) infinite;
-}
-.prism-next .n-ig-res {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  padding: 2px 7px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--n-bg) 72%, transparent);
-  backdrop-filter: blur(4px);
-  color: var(--n-text-2);
-  font-size: 11px;
-}
-.prism-next .n-ig-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  max-width: 240px;
-}
-.prism-next .n-ig-label {
-  font-size: 14px;
-  font-weight: 550;
-}
-.prism-next .n-ig-prompt {
-  color: var(--n-text-2);
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.prism-next .n-model-canvas {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: 100%;
-  max-width: 1360px;
-  margin: 0 auto;
-  padding: 12px 24px 24px;
-}
-.prism-next .n-model-filters {
-  width: 100%;
-}
-.prism-next .n-model-search {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  height: 40px;
-  padding: 0 8px 0 14px;
-  border-radius: 999px;
-  background: var(--n-bg);
-  box-shadow: var(--n-ring);
-  color: var(--n-text-2);
-  transition: box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-model-search:focus-within {
-  box-shadow: 0 0 0 1px var(--n-accent), 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-.prism-next .n-model-search input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  outline: none;
-  background: transparent;
-  color: var(--n-text);
-  font: inherit;
-  font-size: 14px;
-}
-.prism-next .n-model-pricing-switch {
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
-  gap: 8px;
-  width: auto;
-  height: 32px;
-  margin-left: auto;
-  padding: 0 2px 0 8px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--n-text-2);
-  font-size: 13px;
-  cursor: pointer;
-  transition: color 150ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-model-pricing-switch[aria-checked="true"] {
-  color: var(--n-text);
-}
-.prism-next .n-model-switch-label {
-  white-space: nowrap;
-}
-.prism-next .n-model-switch-track {
-  position: relative;
-  width: 34px;
-  height: 20px;
-  flex-shrink: 0;
-  border-radius: 999px;
-  background: var(--n-line);
-  transition: background 180ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-model-pricing-switch[aria-checked="true"] .n-model-switch-track {
-  background: var(--n-accent);
-}
-.prism-next .n-model-switch-knob {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--n-bg);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-model-pricing-switch[aria-checked="true"] .n-model-switch-knob {
-  transform: translateX(14px);
-}
-.prism-next .n-model-refine {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-  min-width: 0;
-}
-.prism-next .n-model-brandbar {
-  display: flex;
-  flex: 1 1 520px;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.prism-next .n-model-filter-label {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 2px;
-  color: var(--n-text-3);
-  font-size: 12px;
-  white-space: nowrap;
-}
-.prism-next .n-model-sort {
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
-  gap: 6px;
-  height: 30px;
-  margin-left: auto;
-  padding: 0 8px 0 10px;
-  border-radius: 999px;
-  background: var(--n-panel);
-  color: var(--n-text-2);
-  font-size: 12px;
-  cursor: pointer;
-}
-.prism-next .n-model-sort:focus-within {
-  box-shadow: 0 0 0 1px var(--n-accent);
-  color: var(--n-text);
-}
-.prism-next .n-model-sort select {
-  appearance: none;
-  min-width: 0;
-  border: 0;
-  outline: none;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-.prism-next .n-model-sort svg {
-  flex-shrink: 0;
-}
-.prism-next .n-model-tagbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.prism-next .n-model-grid {
-  display: grid;
-  padding-top: 2px;
-  /* Wide enough for a full model name. Every implicit row uses the same
-       flexible height, and each card stretches to fill that track. */
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  grid-auto-rows: 1fr;
-  align-items: stretch;
-  gap: 12px;
-}
-.prism-next .n-model-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  height: 100%;
-  min-height: 146px;
-  padding: 14px;
-  border-radius: 16px;
-  background: var(--n-card);
-  box-shadow: var(--n-shadow-card);
-  cursor: pointer;
-  transition: box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
-  /* Pressing sinks the card back down: the shadow has to travel with it, or
-       the card looks like it slid rather than took a push. */
-  /* Included in the reader's plan: a shade, not a badge — the old UI makes
-       the same distinction and has no string for it. */
-  /* Tags sit *on* the raised card, so their fill has to be relative to it.
-       The flat `--n-panel` is a page-level surface and lands within a point or
-       two of the dark card, which erases the chips; a translucent fill keeps
-       the same step above whichever surface it happens to be over. */
-}
-.prism-next .n-model-card:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--n-shadow-card-hover);
-}
-.prism-next .n-model-card:active {
-  transform: translateY(0);
-  box-shadow: var(--n-shadow-card);
-  transition-duration: 90ms;
-}
-.prism-next .n-model-card.active {
-  box-shadow: 0 0 0 1.5px var(--n-accent), var(--n-shadow-card-hover);
-}
-.prism-next .n-model-card.plan {
-  background: color-mix(in srgb, var(--n-accent) 4%, var(--n-card));
-}
-.prism-next .n-model-card .n-model-tag {
-  background: var(--n-hover);
-}
-.prism-next .n-model-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.prism-next .n-model-avatar {
-  flex-shrink: 0;
-  border-radius: 8px;
-}
-.prism-next .n-model-name {
-  flex: 1;
-  min-width: 0;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-.prism-next .n-model-mini {
-  display: grid;
-  grid-template-columns: auto auto auto;
-  gap: 10px;
-  flex-shrink: 0;
-  margin-left: auto;
-  text-align: center;
-}
-.prism-next .n-model-mini > div {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-}
-.prism-next .n-model-mini-label {
-  color: var(--n-text-3);
-  font-size: 10px;
-  line-height: 1;
-  white-space: nowrap;
-}
-.prism-next .n-model-mini-value {
-  color: var(--n-text-2);
-  font-size: 11.5px;
-  font-weight: 600;
-  line-height: 1;
-  white-space: nowrap;
-}
-.prism-next .n-model-bars {
-  display: inline-flex;
-  align-items: flex-end;
-  gap: 1.5px;
-  height: 12px;
-  /* Health reads by how much of the meter fills, not only by hue — the same
-       reading survives without colour vision. */
-}
-.prism-next .n-model-bars i {
-  width: 3px;
-  border-radius: 999px;
-  background: var(--n-line);
-}
-.prism-next .n-model-bars i:nth-child(1) {
-  height: 6px;
-}
-.prism-next .n-model-bars i:nth-child(2) {
-  height: 9px;
-}
-.prism-next .n-model-bars i:nth-child(3) {
-  height: 12px;
-}
-.prism-next .n-model-bars[data-status="good"] i {
-  background: var(--n-ok);
-}
-.prism-next .n-model-bars[data-status="warn"] i:nth-child(-n + 2) {
-  background: #f59e0b;
-}
-.prism-next .n-model-bars[data-status="bad"] i:nth-child(1) {
-  background: var(--n-err);
-}
-.prism-next .n-model-desc {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  margin: 0;
-  color: var(--n-text-2);
-  font-size: 13px;
-  line-height: 1.5;
-}
-.prism-next .n-model-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.prism-next .n-model-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 9px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--n-panel);
-  color: var(--n-text-2);
-  font-size: 12px;
-  line-height: 1.5;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background 150ms cubic-bezier(0.22, 1, 0.36, 1), color 150ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-model-tag:hover {
-  color: var(--n-text);
-}
-.prism-next .n-model-tag.on {
-  background: var(--n-accent);
-  color: var(--n-accent-fg);
-}
-.prism-next .n-model-tag-icon {
-  display: inline-flex;
-}
-.prism-next .n-model-tag-icon svg {
-  width: 12px;
-  height: 12px;
-}
-.prism-next .n-model-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: auto;
-  padding-top: 10px;
-  box-shadow: inset 0 0.5px 0 var(--n-line);
-  font-size: 13px;
-}
-.prism-next .n-model-price {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-  min-width: 0;
-  color: var(--n-text);
-}
-.prism-next .n-model-unit {
-  color: var(--n-text-3);
-  font-size: 11px;
-  white-space: nowrap;
-}
-.prism-next .n-model-metric {
-  color: var(--n-text-3);
-}
-.prism-next .n-model-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: flex;
-  justify-content: flex-end;
-  background: rgba(0, 0, 0, 0.4);
-}
-.prism-next .n-model-panel {
-  display: flex;
-  flex-direction: column;
-  width: min(420px, 100%);
-  height: 100%;
-  background: var(--n-bg);
-  box-shadow: -1px 0 0 var(--n-line);
-  animation: n-model-in 260ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-model-panel-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 14px 12px;
-  box-shadow: 0 0.5px 0 var(--n-line);
-}
-.prism-next .n-model-panel-name {
-  font-size: 15px;
-  font-weight: 600;
-}
-.prism-next .n-model-panel-id {
-  color: var(--n-text-3);
-  font-size: 12px;
-}
-.prism-next .n-model-panel-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 14px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--n-line) transparent;
-}
-.prism-next .n-model-panel-body::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-.prism-next .n-model-panel-body::-webkit-scrollbar-track {
-  background: transparent;
-}
-.prism-next .n-model-panel-body::-webkit-scrollbar-thumb {
-  background: var(--n-line);
-  border-radius: 999px;
-}
-.prism-next .n-model-panel-body::-webkit-scrollbar-thumb:hover {
-  background: var(--n-text-3);
-}
-.prism-next .n-model-section {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.prism-next .n-model-section-title {
-  color: var(--n-text-2);
-  font-size: 12px;
-}
-.prism-next .n-model-section-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-.prism-next .n-model-section-meta {
-  color: var(--n-text-3);
-  font-size: 10px;
-  white-space: nowrap;
-}
-.prism-next .n-model-stats {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 6px;
-}
-.prism-next .n-model-stats.two {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.prism-next .n-model-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: var(--n-panel);
-}
-.prism-next .n-model-stat-label {
-  color: var(--n-text-2);
-  font-size: 12px;
-}
-.prism-next .n-model-stat-value {
-  font-size: 17px;
-  font-weight: 600;
-  line-height: 1.3;
-}
-.prism-next .n-model-stat-hint {
-  color: var(--n-text-3);
-  font-size: 11px;
-}
-.prism-next .n-model-chart-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-}
-.prism-next .n-model-chart-card {
-  --n-chart: #8b5cf6;
-  min-width: 0;
-  min-height: 104px;
-  padding: 10px 12px 8px;
-  margin: 0;
-  overflow: hidden;
-  border-radius: 12px;
-  background: var(--n-panel);
-  /* Empty metrics keep their visual identity without implying a measured
-       value. The grid, track and ring remain; only the signal turns neutral. */
-}
-.prism-next .n-model-chart-card.latency {
-  --n-chart: #f59e0b;
-}
-.prism-next .n-model-chart-card.throughput {
-  --n-chart: #3b82f6;
-}
-.prism-next .n-model-chart-card.success {
-  --n-chart: var(--n-ok);
-}
-.prism-next .n-model-chart-card.availability {
-  --n-chart: #8b5cf6;
-}
-.prism-next .n-model-chart-card.empty {
-  --n-chart: var(--n-text-3);
-}
-.prism-next .n-model-chart-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  color: var(--n-text-2);
-  font-size: 11px;
-}
-.prism-next .n-model-chart-head span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.prism-next .n-model-chart-head strong {
-  flex-shrink: 0;
-  color: var(--n-text);
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
-.prism-next .n-model-trend {
-  display: block;
-  width: 100%;
-  height: 54px;
-  margin-top: 6px;
-  color: var(--n-chart);
-}
-.prism-next .n-model-chart-gridline {
-  stroke: var(--n-line);
-  stroke-width: 1;
-  vector-effect: non-scaling-stroke;
-}
-.prism-next .n-model-chart-line {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
-}
-.prism-next .n-model-chart-dot {
-  fill: currentColor;
-  stroke: var(--n-panel);
-  stroke-width: 1.5;
-  vector-effect: non-scaling-stroke;
-}
-.prism-next .n-model-chart-snapshot {
-  opacity: 0.75;
-}
-.prism-next .n-model-meter {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  height: 54px;
-  margin-top: 6px;
-}
-.prism-next .n-model-meter-track {
-  position: relative;
-  height: 10px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--n-line);
-}
-.prism-next .n-model-meter-track i {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: color-mix(in srgb, var(--n-bg) 70%, transparent);
-}
-.prism-next .n-model-meter-fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--n-chart);
-}
-.prism-next .n-model-meter-scale {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 5px;
-  color: var(--n-text-3);
-  font-size: 9px;
-  font-variant-numeric: tabular-nums;
-}
-.prism-next .n-model-rate {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 54px;
-  height: 54px;
-  margin: 6px auto 0;
-}
-.prism-next .n-model-rate svg {
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-}
-.prism-next .n-model-rate span {
-  position: absolute;
-  color: var(--n-text-2);
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-}
-.prism-next .n-model-rate-track,
-.prism-next .n-model-rate-fill {
-  fill: none;
-  stroke-width: 4;
-}
-.prism-next .n-model-rate-track {
-  stroke: var(--n-line);
-}
-.prism-next .n-model-rate-fill {
-  stroke: var(--n-chart);
-  stroke-linecap: round;
-}
-.prism-next .n-model-blank {
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: var(--n-panel);
-  color: var(--n-text-2);
-  font-size: 13px;
-}
-.prism-next .n-model-desc.full {
-  display: block;
-  -webkit-line-clamp: none;
-}
-.prism-next .n-model-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 7px 10px;
-  border-radius: 10px;
-  background: var(--n-panel);
-  font-size: 13px;
-}
-.prism-next .n-model-row-label {
-  color: var(--n-text-2);
-}
-.prism-next .n-model-row-value {
-  color: var(--n-text);
-}
-.prism-next .n-model-panel-foot {
-  padding: 12px 14px;
-  box-shadow: 0 -0.5px 0 var(--n-line);
-}
-.prism-next .n-model-use {
-  width: 100%;
-  height: 38px;
-  border: 0;
-  border-radius: 12px;
-  background: var(--n-accent);
-  color: var(--n-accent-fg);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.prism-next .n-model-use:hover {
-  background: var(--n-accent-hover);
-}
-.prism-next .n-draw-empty {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 60vh;
-  text-align: center;
-}
-.prism-next .n-draw-empty-title {
-  font-size: 16px;
-  font-weight: 600;
-}
-.prism-next .n-draw-empty-hint {
-  color: var(--n-text-2);
-  font-size: 14px;
-}
-.prism-next .n-draw-canvas > div {
-  flex: none;
-  min-height: 0;
-  overflow: visible;
-}
-.prism-next .n-draw-canvas > div > div {
-  min-height: 0;
-  padding: 0;
-}
-.prism-next .n-draw-canvas {
-  padding-top: 12px;
-  padding-bottom: 8px;
-}
-.prism-next .n-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 2px 2px 0;
-}
-.prism-next .n-chip-image {
-  position: relative;
-  width: 54px;
-  height: 54px;
-  border-radius: 12px;
-  overflow: hidden;
-  background: var(--n-panel);
-}
-.prism-next .n-chip-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.prism-next .n-chip-file {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  max-width: 280px;
-  height: 40px;
-  padding: 0 30px 0 11px;
-  border-radius: 12px;
-  background: var(--n-panel);
-  font-size: 14px;
-}
-.prism-next .n-chip-name {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.prism-next .n-chip-size {
-  flex-shrink: 0;
-  color: var(--n-text-3);
-  font-size: 13px;
-}
-.prism-next .n-chip-remove {
-  position: absolute;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  cursor: pointer;
-  transition: opacity 120ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-chip-image .n-chip-remove {
-  top: 3px;
-  right: 3px;
-  background: rgba(0, 0, 0, 0.6);
-  color: #fff;
-  opacity: 0;
-}
-.prism-next .n-chip-image:hover .n-chip-remove,
-.prism-next .n-chip-remove:focus-visible {
-  opacity: 1;
-}
-.prism-next .n-chip-file .n-chip-remove {
-  top: 50%;
-  right: 7px;
-  transform: translateY(-50%);
-  background: transparent;
-  color: var(--n-text-2);
-}
-.prism-next .n-chip-file .n-chip-remove:hover {
-  background: var(--n-hover);
-  color: var(--n-text);
-}
 .prism-next .n-composer-input {
   width: 100%;
-  max-height: 220px;
-  padding: 2px 4px;
   border: 0;
   outline: none;
   resize: none;
   background: transparent;
-  color: var(--n-text);
   font: inherit;
-  line-height: 1.6;
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--n-line) transparent;
-}
-.prism-next .n-composer-input::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-.prism-next .n-composer-input::-webkit-scrollbar-track {
-  background: transparent;
-}
-.prism-next .n-composer-input::-webkit-scrollbar-thumb {
-  background: var(--n-line);
-  border-radius: 999px;
-}
-.prism-next .n-composer-input::-webkit-scrollbar-thumb:hover {
-  background: var(--n-text-3);
-}
-.prism-next .n-composer-input::placeholder {
-  color: var(--n-text);
-  opacity: 0.5;
 }
 .prism-next .n-composer-bar {
   display: flex;
   align-items: center;
-  gap: 6px;
 }
 .prism-next .n-icon-btn {
   position: relative;
@@ -2103,15 +451,6 @@
 .prism-next .n-icon-btn.primary:not(:disabled):active::before {
   background: var(--n-accent-hover);
 }
-.prism-next .n-icon-btn.primary:disabled {
-  color: var(--n-text-2);
-}
-.prism-next .n-icon-btn.primary:disabled::before {
-  background: var(--n-hover);
-}
-.prism-next .n-icon-btn.muted {
-  color: var(--n-text-3);
-}
 .prism-next .n-icon-btn.sm {
   width: 28px;
   height: 28px;
@@ -2119,42 +458,6 @@
 }
 .prism-next .n-icon-btn.sm:not(:disabled):hover {
   color: var(--n-text);
-}
-.prism-next .n-model-btn {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 240px;
-  height: 30px;
-  padding: 0 10px;
-  border: 0;
-  background: transparent;
-  color: var(--n-text-2);
-  font-size: 14px;
-  cursor: pointer;
-}
-.prism-next .n-model-btn::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 999px;
-  background: transparent;
-  transition: background 150ms cubic-bezier(0.22, 1, 0.36, 1), transform 150ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-model-btn:hover::before {
-  background: var(--n-hover);
-}
-.prism-next .n-model-btn:active::before {
-  transform: scale(0.98);
-}
-.prism-next .n-model-btn > * {
-  position: relative;
-}
-.prism-next .n-model-btn span {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 .prism-next .n-scroll-bottom {
   position: absolute;
@@ -2181,7 +484,6 @@
 .prism-next .n-palette-overlay {
   position: fixed;
   inset: 0;
-  z-index: 60;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2195,17 +497,22 @@
   width: min(1120px, 94vw);
   height: min(720px, 76vh);
   overflow: hidden;
-  border-radius: 20px;
   background: var(--n-bg);
   box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.07), 0 12px 40px rgba(0, 0, 0, 0.16);
   animation: n-palette-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+/* Closing plays the opening backwards, a little quicker: Radix keeps the
+   dialog mounted until this animation ends. */
+.prism-next .n-palette-overlay[data-state='closed'] {
+  animation: n-fade-out 150ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+.prism-next .n-palette[data-state='closed'] {
+  animation: n-palette-out 150ms cubic-bezier(0.4, 0, 1, 1) both;
+}
 .prism-next .n-palette-head {
   display: flex;
   align-items: center;
-  gap: 10px;
   flex-shrink: 0;
-  padding: 14px 18px;
 }
 .prism-next .n-palette-input {
   flex: 1;
@@ -2226,9 +533,11 @@
   min-height: 0;
 }
 .prism-next .n-palette-results {
-  flex: 0 0 52%;
+  /* Half and half with the preview, padding included: the two panes are
+     padded differently, so splitting only the room inside them was not even. */
+  flex: 0 0 50%;
+  box-sizing: border-box;
   min-width: 0;
-  padding: 0 10px 12px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -2248,21 +557,12 @@
 .prism-next .n-palette-results::-webkit-scrollbar-thumb:hover {
   background: var(--n-text-3);
 }
-.prism-next .n-palette-section {
-  padding: 14px 10px 5px;
-  color: var(--n-text-3);
-  font-size: 12px;
-  font-weight: 500;
-  user-select: none;
-}
 .prism-next .n-palette-item {
   position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
-  min-height: 36px;
-  padding: 0 10px;
   border: 0;
   background: transparent;
   color: var(--n-text);
@@ -2303,9 +603,9 @@
   text-align: center;
 }
 .prism-next .n-palette-preview {
-  flex: 1;
+  flex: 0 0 50%;
+  box-sizing: border-box;
   min-width: 0;
-  padding: 18px 22px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -2338,19 +638,12 @@
 .prism-next .n-palette-preview .n-msg-assistant {
   margin: 16px 0;
 }
+.prism-next .n-palette-preview .n-msg-assistant {
+  margin-top: 11px; /* 16px, less the 5px the avatar's room takes inside */
+}
 .prism-next .n-palette-preview .n-msg-user:first-child,
 .prism-next .n-palette-preview .n-msg-assistant:first-child {
   margin-top: 0;
-}
-.prism-next .n-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  gap: 10px;
-  color: var(--n-text-2);
-  user-select: none;
 }
 .prism-next .n-caret {
   display: inline-block;
@@ -2362,543 +655,9 @@
   vertical-align: middle;
   animation: n-caret-pulse 1.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
 }
-.prism-next .n-shimmer {
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  background: linear-gradient(90deg, var(--n-text-2) 0%, var(--n-text-2) 30%, color-mix(in srgb, var(--n-text-2) 45%, transparent) 45%, color-mix(in srgb, var(--n-text-2) 45%, transparent) 55%, var(--n-text-2) 70%, var(--n-text-2) 100%);
-  background-size: 300% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  animation: n-shine 2.25s cubic-bezier(0.25, 0.1, 0.25, 1) infinite;
-}
-.prism-next .n-log-canvas {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: 100%;
-  max-width: 1360px;
-  margin: 0 auto;
-  padding: 12px 24px 24px;
-}
-.prism-next .n-log-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 12px;
-}
-.prism-next .n-log-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 14px 16px;
-  border-radius: 16px;
-  background: var(--n-card);
-  box-shadow: var(--n-shadow-card);
-}
-.prism-next .n-log-stat-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-.prism-next .n-log-stat-title {
-  font-size: 13px;
-  font-weight: 550;
-}
-.prism-next .n-log-stat-icon svg {
-  width: 20px;
-  height: 20px;
-  color: var(--n-text-2);
-  stroke-width: 1.8;
-}
-.prism-next .n-log-stat-value {
-  display: block;
-  font-size: 24px;
-  font-weight: 600;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-}
-.prism-next .n-log-stat-label {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--n-text-2);
-  font-size: 11.5px;
-}
-.prism-next .n-log-stat-split {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-.prism-next .n-log-rates {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-.prism-next .n-log-rate {
-  padding: 2px 7px;
-  border-radius: 999px;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 550;
-  font-variant-numeric: tabular-nums;
-}
-.prism-next .n-log-rate.rpm {
-  background: #2563eb;
-}
-.prism-next .n-log-rate.tpm {
-  background: #7c3aed;
-}
-.prism-next .n-log-panel {
-  overflow: hidden;
-  border-radius: 16px;
-  background: var(--n-card);
-  box-shadow: var(--n-shadow-card);
-}
-.prism-next .n-log-filters {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 12px 16px;
-  padding: 16px;
-}
-.prism-next .n-log-field {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 6px;
-}
-.prism-next .n-log-field-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--n-text-2);
-  font-size: 12px;
-  white-space: nowrap;
-}
-.prism-next .n-log-input,
-.prism-next .n-log-select {
-  width: 100%;
-  height: 34px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 10px;
-  background: var(--n-panel);
-  color: var(--n-text);
-  font-size: 13px;
-  outline: none;
-  box-shadow: 0 0 0 0.5px var(--n-line);
-  transition: box-shadow 150ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-log-input:focus,
-.prism-next .n-log-select:focus {
-  box-shadow: 0 0 0 1.5px var(--n-accent);
-}
-.prism-next .n-log-input::placeholder,
-.prism-next .n-log-select::placeholder {
-  color: var(--n-text-3);
-}
-.prism-next .n-log-select {
-  appearance: none;
-  cursor: pointer;
-}
-.prism-next .n-log-switches {
-  display: grid;
-  grid-template-columns: auto auto;
-  align-content: end;
-  align-items: center;
-  gap: 8px 10px;
-}
-.prism-next .n-switch {
-  position: relative;
-  width: 34px;
-  height: 20px;
-  flex-shrink: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: var(--n-hover-strong);
-  cursor: pointer;
-  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-switch.on {
-  background: var(--n-accent);
-}
-.prism-next .n-switch-knob {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--n-bg);
-  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.n-switch.on .prism-next .n-switch-knob {
-  transform: translateX(14px);
-  background: var(--n-accent-fg);
-}
-.prism-next .n-log-query {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  align-self: end;
-  height: 34px;
-  padding: 0 18px;
-  border: 0;
-  border-radius: 10px;
-  background: var(--n-accent);
-  color: var(--n-accent-fg);
-  font-size: 13px;
-  font-weight: 550;
-  cursor: pointer;
-  transition: background 150ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-log-query:hover:not(:disabled) {
-  background: var(--n-accent-hover);
-}
-.prism-next .n-log-query:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.prism-next .n-log-table-wrap {
-  overflow-x: auto;
-  border-top: 0.5px solid var(--n-line);
-  scrollbar-width: thin;
-  scrollbar-color: var(--n-line) transparent;
-}
-.prism-next .n-log-table-wrap::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-.prism-next .n-log-table-wrap::-webkit-scrollbar-track {
-  background: transparent;
-}
-.prism-next .n-log-table-wrap::-webkit-scrollbar-thumb {
-  background: var(--n-line);
-  border-radius: 999px;
-}
-.prism-next .n-log-table-wrap::-webkit-scrollbar-thumb:hover {
-  background: var(--n-text-3);
-}
-.prism-next .n-log-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-.prism-next .n-log-table th,
-.prism-next .n-log-table td {
-  padding: 10px 14px;
-  text-align: left;
-  vertical-align: top;
-  white-space: nowrap;
-}
-.prism-next .n-log-table th {
-  color: var(--n-text-2);
-  font-weight: 500;
-  user-select: none;
-}
-.prism-next .n-log-table tbody tr {
-  border-top: 0.5px solid var(--n-line);
-}
-.prism-next .n-log-table tbody tr:hover {
-  background: var(--n-hover);
-}
-.prism-next .n-log-table td {
-  font-variant-numeric: tabular-nums;
-}
-.prism-next .n-log-th {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.prism-next .n-log-unit {
-  padding: 1px 5px;
-  border-radius: 5px;
-  background: var(--n-panel);
-  color: var(--n-text-3);
-  font-size: 10px;
-  text-transform: uppercase;
-}
-.prism-next .n-log-time {
-  color: var(--n-text-2);
-}
-.prism-next .n-log-model {
-  font-weight: 550;
-}
-.prism-next .n-log-clip {
-  max-width: 190px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.prism-next .n-log-type {
-  display: inline-flex;
-  padding: 2px 9px;
-  border-radius: 999px;
-  background: var(--n-panel);
-  color: var(--n-text-2);
-  font-size: 11.5px;
-  font-weight: 500;
-}
-.prism-next .n-log-type.consume {
-  background: color-mix(in srgb, var(--n-err) 14%, transparent);
-  color: var(--n-err);
-}
-.prism-next .n-log-type.topup {
-  background: color-mix(in srgb, var(--n-ok) 16%, transparent);
-  color: color-mix(in srgb, var(--n-ok) 80%, var(--n-text));
-}
-.prism-next .n-log-cache {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 4px;
-}
-.prism-next .n-log-badge {
-  padding: 1px 6px;
-  border-radius: 6px;
-  color: var(--n-text-2);
-  font-size: 10.5px;
-  white-space: nowrap;
-  box-shadow: inset 0 0 0 0.5px var(--n-line);
-}
-.prism-next .n-log-badge.hit {
-  background: var(--n-panel);
-  color: var(--n-text);
-}
-.prism-next .n-log-empty {
-  padding: 40px 16px;
-  color: var(--n-text-3);
-  font-size: 13px;
-  text-align: center;
-}
-.prism-next .n-log-shimmer {
-  display: block;
-  width: 84px;
-  height: 24px;
-  border-radius: 7px;
-  background: var(--n-hover);
-  animation: n-log-pulse 1.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
-}
-.prism-next .n-log-shimmer.sm {
-  width: 64px;
-  height: 15px;
-}
-.prism-next .n-log-skeleton-row:hover {
-  background: transparent;
-}
-.prism-next .n-log-pager {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 14px;
-  border-top: 0.5px solid var(--n-line);
-}
-.prism-next .n-log-size {
-  position: absolute;
-  left: 14px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--n-text-2);
-  font-size: 12.5px;
-}
-.prism-next .n-log-size .n-log-select {
-  width: auto;
-  height: 28px;
-  padding: 0 8px;
-  font-size: 12.5px;
-}
-@media (max-width: 640px) {
-  .prism-next {
-    /* No room to overlay at this width: the picker rejoins the flow above the
-       arrows rather than sitting on top of them. */
-  }
-  .prism-next .n-log-pager {
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-  .prism-next .n-log-size {
-    position: static;
-    width: 100%;
-    justify-content: center;
-  }
-}
-.prism-next .n-log-pager-label {
-  color: var(--n-text-2);
-  font-size: 12.5px;
-  font-variant-numeric: tabular-nums;
-}
-.prism-next .n-log-cards {
-  display: none;
-  flex-direction: column;
-  border-top: 0.5px solid var(--n-line);
-}
-.prism-next .n-log-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 14px 16px;
-}
-.prism-next .n-log-card + .prism-next .n-log-card {
-  border-top: 0.5px solid var(--n-line);
-}
-.prism-next .n-log-card-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-.prism-next .n-log-card-token {
-  margin-top: 2px;
-  color: var(--n-text-3);
-  font-size: 12px;
-}
-.prism-next .n-log-card-model {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  font-size: 15px;
-  font-weight: 600;
-}
-.prism-next .n-log-card-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-.prism-next .n-log-card-grid > div {
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: var(--n-panel);
-  font-size: 13px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-@media (max-width: 860px) {
-  .prism-next .n-log-canvas {
-    padding: 12px 12px 20px;
-  }
-  .prism-next .n-log-table-wrap {
-    display: none;
-  }
-  .prism-next .n-log-cards {
-    display: flex;
-  }
-}
-@keyframes n-log-pulse {
-  50% {
-    opacity: 0.45;
-  }
-}
-@keyframes n-ws-enter {
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-@keyframes n-ws-fade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-@keyframes n-model-in {
-  from {
-    transform: translateX(12px);
-    opacity: 0;
-  }
-}
 @keyframes n-spin {
   to {
     transform: rotate(360deg);
-  }
-}
-@keyframes n-ig-morph {
-  0%,
-  100% {
-    -webkit-mask-size: 52% 46%,
-      40% 40%;
-    mask-size: 52% 46%,
-      40% 40%;
-    -webkit-mask-position: 16% 20%,
-      30% 32%;
-    mask-position: 16% 20%,
-      30% 32%;
-  }
-  25% {
-    -webkit-mask-size: 46% 58%,
-      44% 38%;
-    mask-size: 46% 58%,
-      44% 38%;
-    -webkit-mask-position: 84% 16%,
-      66% 30%;
-    mask-position: 84% 16%,
-      66% 30%;
-  }
-  50% {
-    -webkit-mask-size: 60% 44%,
-      38% 46%;
-    mask-size: 60% 44%,
-      38% 46%;
-    -webkit-mask-position: 82% 84%,
-      62% 68%;
-    mask-position: 82% 84%,
-      62% 68%;
-  }
-  75% {
-    -webkit-mask-size: 48% 54%,
-      46% 40%;
-    mask-size: 48% 54%,
-      46% 40%;
-    -webkit-mask-position: 14% 82%,
-      34% 66%;
-    mask-position: 14% 82%,
-      34% 66%;
-  }
-}
-@keyframes n-ig-breathe {
-  0%,
-  100% {
-    opacity: 0.55;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-@keyframes n-ws-mark-out {
-  to {
-    opacity: 0;
-    transform: scale(0.775);
-  }
-}
-@keyframes n-ws-mark-in {
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-/* The reveal is decoration, not information — nothing here is only conveyed by
-   motion, so it can be dropped wholesale for readers who ask for less of it. */
-@media (prefers-reduced-motion: reduce) {
-  .prism-next .n-ig-glow {
-    animation: none;
-    opacity: 0.7;
-  }
-  .prism-next .n-ws,
-  .prism-next .n-ws-site,
-  .prism-next .n-ws-check {
-    animation: none;
-    opacity: 1;
-    transform: none;
-  }
-  /* Straight to the settled state: the check, with no globe behind it. */
-  .prism-next .n-ws-globe {
-    animation: none;
-    opacity: 0;
   }
 }
 @keyframes n-caret-pulse {
@@ -2912,16 +671,6 @@
     transform: scale(1);
   }
 }
-@keyframes n-shine {
-  0%,
-  18% {
-    background-position: 100% 0;
-  }
-  82%,
-  100% {
-    background-position: 0% 0;
-  }
-}
 @keyframes n-fade-in {
   from {
     opacity: 0;
@@ -2930,12 +679,15 @@
     opacity: 1;
   }
 }
-@keyframes n-block-in {
-  from {
+@keyframes n-fade-out {
+  to {
     opacity: 0;
   }
+}
+@keyframes n-palette-out {
   to {
-    opacity: 1;
+    opacity: 0;
+    transform: scale(0.985) translateY(-6px);
   }
 }
 @keyframes n-palette-in {
@@ -2961,16 +713,14 @@
     filter: blur(0);
   }
 }
-/* ----------------------------------------------------------------- mobile */
+/* ----------------------------------------------------------------- mobile
+   What the base layer needs below 768px. The sidebar drawer, welcome screen
+   and search palette have their own narrow-screen rules in sidebar.css and
+   chat-layout.css. */
 @media (max-width: 768px) {
   .prism-next {
+    /* Fallback only: the live drawer width is set inline from the ui-store. */
     --n-sidebar-w: 82vw;
-    /* Touch has no hover, so keep actions visible. */
-  }
-  .prism-next .n-sidebar {
-    position: absolute;
-    z-index: 40;
-    box-shadow: 0 0 40px rgba(0, 0, 0, 0.18);
   }
   .prism-next .n-column {
     padding: 0 14px;
@@ -2981,130 +731,41 @@
   .prism-next .n-msg-assistant {
     padding-left: 38px;
   }
-  .prism-next .n-welcome {
-    padding-top: 8vh;
-  }
-  .prism-next .n-welcome-title {
-    font-size: 27px;
-  }
-  .prism-next .n-welcome-sub {
-    font-size: 24px;
-  }
-  .prism-next .n-suggest-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
+  /* Touch has no hover, so keep actions visible. */
   .prism-next .n-actions {
     opacity: 1;
   }
 }
-/* The legacy markdown styles assume a bubble container; neutralise the outer
-   spacing so assistant text sits flush in the new full-width column. */
-/* Table styling follows the AIcss data-table: a tinted, rounded frame whose
-   header sits on the tint, with the body below it on the page colour.
-   Overrides the GitHub-derived rules in `assets/markdown/theme.less`, so the
-   selectors carry the extra `.prism-next .n-markdown` weight they need.
-
-   The reference rounds the body's top corners, but it draws the body as its own
-   bordered block. Rounding a `td` instead just notches the cell and lets the
-   frame's tint show through the cut, so only the outer frame is rounded here. */
-.prism-next .n-markdown .markdown-body table {
-  /* `display: block` is what makes a wide table scroll on its own instead of
-     stretching the message column; `width: max-content` keeps the columns
-     sized to their content rather than collapsing. */
-  display: block;
-  width: max-content;
-  max-width: 100%;
-  overflow-x: auto;
-  border-collapse: separate;
-  border-spacing: 0;
-  border: 1px solid var(--n-line);
-  border-radius: 12px;
-  background: var(--n-panel);
-  font-size: 13px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--n-line) transparent;
-}
-.prism-next .n-markdown .markdown-body table::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-.prism-next .n-markdown .markdown-body table::-webkit-scrollbar-track {
-  background: transparent;
-}
-.prism-next .n-markdown .markdown-body table::-webkit-scrollbar-thumb {
-  background: var(--n-line);
-  border-radius: 999px;
-}
-.prism-next .n-markdown .markdown-body table::-webkit-scrollbar-thumb:hover {
-  background: var(--n-text-3);
-}
-.prism-next .n-markdown .markdown-body table th,
-.prism-next .n-markdown .markdown-body table td {
-  padding: 9px 12px;
-  border: 0;
-  white-space: nowrap;
-}
-.prism-next .n-markdown .markdown-body table th:not(:last-child),
-.prism-next .n-markdown .markdown-body table td:not(:last-child) {
-  border-right: 1px solid var(--n-line);
-}
-.prism-next .n-markdown .markdown-body table th {
-  padding-top: 7px;
-  padding-bottom: 7px;
-  color: var(--n-text-2);
-  font-weight: 500;
-  text-align: left;
-}
-/* The body is its own surface; the zebra striping from the base theme would
-   fight the card, so rows are flat and separated by hairlines instead. */
-.prism-next .n-markdown .markdown-body table tbody tr,
-.prism-next .n-markdown .markdown-body table tbody tr:nth-child(2n) {
-  background: var(--n-bg);
-  border: 0;
-}
-.prism-next .n-markdown .markdown-body table tbody tr:not(:last-child) td {
-  border-bottom: 1px solid var(--n-line);
-}
-.prism-next .n-markdown .markdown-body table tbody tr:first-child td {
-  border-top: 1px solid var(--n-line);
-}
-.prism-next .n-think-body .markdown-body {
-  font-size: 13px;
-  line-height: 20px;
-  color: inherit;
-}
-.prism-next .n-think-body .markdown-body p,
-.prism-next .n-think-body .markdown-body ul,
-.prism-next .n-think-body .markdown-body ol {
-  margin: 0 0 4px;
-}
-.prism-next .n-think-body .markdown-body > :last-child {
-  margin-bottom: 0;
-}
+/* Answers are laid out by `.n-prose` (chat-typography.css); this trims the
+   outer spacing of the `.markdown-body` wrapper so assistant text sits flush
+   in the full-width column. */
 .prism-next .n-markdown > .markdown-body > :first-child {
   margin-top: 0;
 }
 .prism-next .n-markdown > .markdown-body > :last-child {
   margin-bottom: 0;
 }
+/* Same exception as the global rule in globals.css: elements marked
+   `data-motion='essential'` (loading indicators, the reasoning shimmer) keep
+   their animation, because a frozen one reads as a hung page. */
 @media (prefers-reduced-motion: reduce) {
-  .prism-next *,
-  .prism-next *::before,
-  .prism-next *::after {
+  .prism-next *:not([data-motion='essential']),
+  .prism-next *:not([data-motion='essential'])::before,
+  .prism-next *:not([data-motion='essential'])::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-  /* The one carve-out from the blanket rule above: a spinner's motion is the
-     message, not decoration. Frozen it reads as a broken ring rather than as
-     "loading", so it is slowed instead of stopped. */
+  /* Also exempt: a spinner's motion is the message, not decoration. Frozen it
+     reads as a broken ring rather than as "loading", so it is slowed instead
+     of stopped. */
   .prism-next .n-spinner {
     animation-duration: 1.4s !important;
     animation-iteration-count: infinite !important;
   }
 }
 /* ---------------------------------------------------------------- tooltip
-   Portalled to <body> like the model picker below, so it is styled at the top
+   Portalled to <body>, outside `.prism-next`, so it is styled at the top
    level. The surface is an inversion of the page rather than another panel:
    `--n-accent` / `--n-accent-fg` already flip with the theme, and an inverted
    chip reads as an overlay instead of as one more card floating in the UI. */
@@ -3118,20 +779,16 @@
   border-radius: 10px;
   background: var(--n-accent);
   color: var(--n-accent-fg);
-  font-size: 12.5px;
-  line-height: 1.45;
-  letter-spacing: -0.005em;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14), 0 6px 14px -6px rgba(0, 0, 0, 0.22);
   animation: n-tip-in 130ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.n-tip-label {
-  font-weight: 550;
 }
 /* Mixed against the tooltip's own foreground, not against a page token — the
    surface is inverted here, so `--n-text-2` would be the wrong direction. */
 .n-tip-hint {
   color: color-mix(in srgb, var(--n-accent-fg) 66%, transparent);
   font-size: 12px;
+  /* A hint may break its own lines (the context meter's figures). */
+  white-space: pre-line;
 }
 .n-tip-arrow {
   fill: var(--n-accent);
@@ -3152,305 +809,4 @@
   .n-tip {
     animation: none;
   }
-}
-/* ------------------------------------------------------------ model picker
-   Rendered through a Radix portal attached to <body>, i.e. outside the
-   `.prism-next` element — so these rules and the tokens they consume must
-   both live at the top level to reach it. */
-/* Portalled like the model picker, so these live at the top level too. Kept
-   standalone rather than layered on `.n-picker`: that one sets `padding: 0`
-   and is defined later at the same specificity, so it would win the cascade
-   and press every label against the edge. */
-.n-draw-menu {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-width: min(300px, calc(100vw - 24px));
-  padding: 12px;
-  border: 0;
-  border-radius: 14px;
-  background: var(--n-bg);
-  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.07), 0 3px 10px rgba(0, 0, 0, 0.07);
-}
-.n-draw-opt-label {
-  color: var(--n-text-2);
-  font-size: 12px;
-}
-.n-draw-opt-values {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.n-draw-opt-value {
-  padding: 4px 9px;
-  border: 0;
-  border-radius: 8px;
-  background: var(--n-panel);
-  color: var(--n-text-2);
-  font-size: 12.5px;
-  cursor: pointer;
-  transition: background 150ms cubic-bezier(0.22, 1, 0.36, 1), color 150ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.n-draw-opt-value:hover {
-  color: var(--n-text);
-}
-.n-draw-opt-value.active {
-  background: var(--n-accent);
-  color: var(--n-accent-fg);
-}
-.n-picker {
-  display: flex;
-  flex-direction: column;
-  width: 320px;
-  max-width: calc(100vw - 24px);
-  padding: 0;
-  overflow: hidden;
-  border: 0;
-  border-radius: 16px;
-  background: var(--n-bg);
-  /* Hairline ring carries the edge; the drop shadow only lifts the panel a
-     little off the page rather than casting a halo around it. */
-  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.07), 0 3px 10px rgba(0, 0, 0, 0.07);
-}
-.n-picker-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  padding: 9px 11px;
-  font-size: 14px;
-}
-.n-picker-search {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  outline: none;
-  background: transparent;
-  color: var(--n-text);
-  font: inherit;
-}
-.n-picker-search::placeholder {
-  color: var(--n-text-3);
-}
-/* Filter trigger reads as a quiet label, not a select box. */
-.n-filter-btn {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-  height: 24px;
-  padding: 0 7px;
-  border: 0;
-  background: transparent;
-  color: var(--n-text-2);
-  font-size: 14px;
-  cursor: pointer;
-}
-.n-filter-btn::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 999px;
-  background: transparent;
-  transition: background 150ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.n-filter-btn:hover::before {
-  background: var(--n-hover);
-}
-.n-filter-btn > * {
-  position: relative;
-}
-.n-picker-list {
-  max-height: 296px;
-  padding: 0 6px 6px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--n-line) transparent;
-}
-.n-picker-list::-webkit-scrollbar {
-  width: 6px;
-}
-.n-picker-list::-webkit-scrollbar-thumb {
-  background: var(--n-line);
-  border-radius: 3px;
-}
-.n-picker-item {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  padding: 6px 8px;
-  border: 0;
-  background: transparent;
-  color: var(--n-text);
-  font-size: 14px;
-  text-align: left;
-  cursor: pointer;
-}
-.n-picker-item::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 10px;
-  background: transparent;
-  transition: background 150ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.n-picker-item:hover::before,
-.n-picker-item.cursor::before {
-  background: var(--n-hover);
-}
-.n-picker-item > * {
-  position: relative;
-}
-.n-picker-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.n-picker-tags {
-  display: inline-flex;
-  flex-shrink: 0;
-  gap: 5px;
-  color: var(--n-text-3);
-}
-.n-picker-empty {
-  padding: 18px 10px 20px;
-  color: var(--n-text-3);
-  font-size: 14px;
-  text-align: center;
-}
-/* -------------------------------------------------------- picker internals
-   Portalled with the model panel, so these rules sit at the top level. */
-/* Effort shown beside the model name on the composer trigger. */
-.prism-next .n-model-btn .n-model-effort {
-  flex-shrink: 0;
-  color: var(--n-text-3);
-}
-.n-picker-text {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  flex: 1;
-  min-width: 0;
-}
-.n-picker-desc {
-  overflow: hidden;
-  color: var(--n-text-3);
-  font-size: 12.5px;
-  line-height: 1.4;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.n-picker-item.dimmed {
-  opacity: 0.45;
-}
-.n-picker-item .n-check {
-  color: #2f6fed;
-}
-.n-badge {
-  flex-shrink: 0;
-  padding: 1px 6px;
-  border-radius: 5px;
-  background: var(--n-panel);
-  color: var(--n-text-2);
-  font-size: 11.5px;
-}
-/* Footer holds the drill-in rows, divided from the list above. */
-.n-picker-foot {
-  padding: 0 6px 6px;
-}
-/* Inset rule, aligned with the row text rather than spanning the full panel —
-   it separates neighbouring rows instead of capping the whole section. */
-.n-sep {
-  height: 1px;
-  margin: 5px 8px;
-  background: var(--n-line);
-}
-.n-nav-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 7px 8px;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--n-text);
-  font-size: 14px;
-  text-align: left;
-  cursor: pointer;
-  transition: background-color 140ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.n-nav-row:hover {
-  background: var(--n-hover);
-}
-.n-nav-row.back {
-  margin: 4px 6px 0;
-  width: auto;
-  font-weight: 500;
-}
-.n-nav-label {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  flex: 1;
-  min-width: 0;
-}
-.n-nav-hint {
-  color: var(--n-text-3);
-  font-size: 12.5px;
-  line-height: 1.4;
-}
-.n-nav-value {
-  flex-shrink: 0;
-  color: var(--n-text-3);
-}
-.n-effort-hint {
-  margin: 6px 12px 10px;
-  color: var(--n-text-2);
-  font-size: 12.5px;
-  line-height: 1.5;
-}
-.n-switch-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 8px;
-  /* Portalled content sits outside `.prism-next`, so it inherits the document
-     font size rather than this UI's — every panel has to state its own. */
-  font-size: 14px;
-}
-.n-switch {
-  position: relative;
-  flex-shrink: 0;
-  width: 34px;
-  height: 20px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: var(--n-line);
-  cursor: pointer;
-  transition: background-color 180ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.n-switch.on {
-  background: var(--n-accent);
-}
-.n-switch-knob {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.n-switch.on .n-switch-knob {
-  transform: translateX(14px);
 }

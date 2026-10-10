@@ -1,8 +1,10 @@
 import type { ChatModel } from '@openchat/api-client'
-import { Zap } from 'lucide-react'
+import { Ghost, Zap } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { ModelIcon } from '@/components/model-icon'
+import { useChatStore } from '@/stores/chat-store'
+import { TemporaryNote } from './TemporaryChat'
 
 /**
  * Suggestion ids. Kept as explicit keys rather than an i18n array so every
@@ -26,12 +28,13 @@ interface WelcomeProps {
  */
 export function Welcome({ onPick, modelName, model }: WelcomeProps) {
   const { t } = useTranslation()
+  const temporary = useChatStore((s) => s.temporaryChat)
 
   return (
     <div className="n-welcome n-chat-fade">
       {/* The model's own mark when there is one; with nothing configured, the
           heading reads "OpenChat" and the mark is ours. */}
-      <span className="n-welcome-avatar" aria-hidden="true">
+      <span className="n-welcome-avatar" aria-hidden="true" hidden={temporary}>
         {model ? (
           <ModelIcon
             subject="model"
@@ -46,13 +49,20 @@ export function Welcome({ onPick, modelName, model }: WelcomeProps) {
       </span>
 
       <div className="n-welcome-heading">
-        <h1 className="n-welcome-title" title={modelName}>
-          {modelName}
+        <h1 className="n-welcome-title" title={temporary ? undefined : modelName}>
+          {temporary ? (
+            <>
+              <Ghost className="n-welcome-ghost" aria-hidden="true" />
+              {t('next.temporary.title')}
+            </>
+          ) : (
+            modelName
+          )}
         </h1>
-        <p className="n-welcome-sub">{t('next.welcome.greeting')}</p>
+        {temporary ? <TemporaryNote /> : <p className="n-welcome-sub">{t('next.welcome.greeting')}</p>}
       </div>
 
-      <div className="n-welcome-suggestions">
+      <div className="n-welcome-suggestions" hidden={temporary}>
         <div className="n-suggest-head">
           <Zap className="h-3.5 w-3.5" aria-hidden="true" />
           {t('next.welcome.suggestions')}

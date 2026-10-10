@@ -7,7 +7,8 @@ import { cn } from '@/lib/utils'
  *
  * The artwork comes from `@lobehub/icons-static-svg` (MIT). Only the files
  * named below are vendored into `public/model-icons/`, by
- * `scripts/sync-model-icons.mjs` — the upstream package ships 906 of them and
+ * `scripts/sync-model-icons.mjs` (plus a few of our own, from
+ * `scripts/model-icons/`) — the upstream package ships 906 of them and
  * bundling the lot to show a few dozen would be absurd. That script reads the
  * three maps in this file, so this file is the single list of what gets copied:
  * add a mapping, re-run `pnpm sync:model-icons`.
@@ -153,6 +154,7 @@ const BRAND_ICONS: Record<string, string> = {
   claude: 'claude-color',
   gemini: 'gemini-color',
   openrouter: 'openrouter-color',
+  opencode: 'opencode',
   deepseek: 'deepseek-color',
   siliconcloud: 'siliconcloud-color',
   moonshot: 'moonshot',
@@ -190,7 +192,8 @@ const FAMILY_ICONS: Record<string, string> = {
   o: 'openai',
   codex: 'openai',
   qwen: 'qwen-color',
-  glm: 'chatglm-color',
+  // Z.ai's mark on a disc (scripts/model-icons), as Z.ai shows it as an avatar.
+  glm: 'zai-disc',
   kimi: 'kimi-color',
   minimax: 'minimax-color',
   llama: 'meta-color',

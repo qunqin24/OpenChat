@@ -196,7 +196,9 @@ const renderers: Record<string, (props: Props) => ReactNode> = {
   ),
   Steps: (p) => <ol className="n-ui-steps">{children(p.items)}</ol>,
   Step: (p) => (
-    <li className={cn('n-ui-step', `is-${str(p.status) || 'todo'}`)}>
+    // No status is an ordinary procedure, drawn numbered; the done / current /
+    // to-do look is for a plan whose progress is being tracked.
+    <li className={cn('n-ui-step', `is-${str(p.status) || 'plain'}`)}>
       <span className="n-ui-step-marker" aria-hidden="true">
         {str(p.status) === 'done' && <CircleCheck />}
       </span>

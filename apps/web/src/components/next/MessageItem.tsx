@@ -1,15 +1,21 @@
+import type { TFunction } from 'i18next'
 import type { ChatModel, Message, MessagePart } from '@openchat/api-client'
-import { Check, Copy } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Copy, Pencil, RefreshCw } from 'lucide-react'
 import { Collapsible } from 'radix-ui'
-import { isValidElement, useState, type ReactNode } from 'react'
+import { isValidElement, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Streamdown } from 'streamdown'
 
 import { ModelIcon } from '@/components/model-icon'
+import { useStuck } from '@/hooks/use-stuck'
+import { answersOf, ASK_USER, parseQuestions } from '@/lib/ask-user'
 import { copyClipboard } from '@/lib/clipboard'
 import { splitSegments } from '@/lib/genui/segments'
 import { turnText, type Turn } from '@/lib/transcript'
+import AskUserCard from './AskUserCard'
+import { MEMORY_TOOL, memoryChangeOf } from '@/lib/memory-tool'
 import GenUIBlock from './genui/GenUIBlock'
+import MemoryChip from './MemoryChip'
 import MessageAttachments from './MessageAttachments'
 import { markdownComponents, markdownLinkSafety, prepareMarkdown, useMarkdownPlugins } from './markdown-components'
 import ToolActivity, {
@@ -39,14 +45,129 @@ function CopyButton({ content }: { content: string }) {
   )
 }
 
-/** User turns render as a right-aligned bubble with no avatar. */
-export function UserMessage({ message }: { message: Message }) {
+/**
+ * User turns render as a right-aligned bubble with no avatar. Any of them can
+ * be edited in place (`onEdit`): the bubble becomes a field, and sending it
+ * asks the question again in the new words, as a branch beside the old one.
+ * A question that has other versions carries a pager to step between them
+ * (`versions`), each with the turns that followed it.
+ */
+export function UserMessage({
+  message,
+  onEdit,
+  versions,
+}: {
+  message: Message
+  onEdit?: (content: string) => void
+  versions?: AnswerVersions
+}) {
+  const { t } = useTranslation()
+  const [draft, setDraft] = useState<string | null>(null)
+  const files = message.attachments && message.attachments.length > 0 && <MessageAttachments items={message.attachments} />
+
+  if (draft !== null) {
+    return (
+      <div className="n-msg-user is-editing">
+        {files}
+        <EditField
+          value={draft}
+          onChange={setDraft}
+          onCancel={() => setDraft(null)}
+          onSubmit={
+            onEdit &&
+            ((content) => {
+              setDraft(null)
+              onEdit(content)
+            })
+          }
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="n-msg-user">
-      {message.attachments && message.attachments.length > 0 && <MessageAttachments items={message.attachments} />}
+      {files}
       <div className="n-bubble">{message.content}</div>
-      <div className="n-actions">
+      <div className={versions ? 'n-actions always' : 'n-actions'}>
+        {versions && <VersionPager {...versions} scope="question-version" />}
         <CopyButton content={message.content} />
+        {onEdit && (
+          <button type="button" className="n-icon-btn sm" aria-label={t('chat.edit')} onClick={() => setDraft(message.content)}>
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The question being reworded: a field the size of what is in it, Enter to
+ * send and Escape to put it back, as in the composer. Unchanged wording sends
+ * too — it is asked again, as a new version, with whatever model and settings
+ * the composer has now. Held back only when empty, or while the conversation
+ * is busy (no `onSubmit`).
+ */
+function EditField({
+  value,
+  onChange,
+  onCancel,
+  onSubmit,
+}: {
+  value: string
+  onChange: (value: string) => void
+  onCancel: () => void
+  onSubmit?: (content: string) => void
+}) {
+  const { t } = useTranslation()
+  const field = useRef<HTMLTextAreaElement>(null)
+  const content = value.trim()
+  const ready = Boolean(onSubmit) && content !== ''
+
+  // Grows with the text, up to the cap in CSS, after which it scrolls.
+  useLayoutEffect(() => {
+    const el = field.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+    // A scrollbar only once the text is past the cap: at its own height a
+    // sub-pixel rounding was enough to show one on a single line.
+    el.style.overflowY = el.scrollHeight > el.clientHeight + 1 ? 'auto' : 'hidden'
+  }, [value])
+
+  const submit = () => {
+    if (ready) onSubmit?.(content)
+  }
+
+  return (
+    <div className="n-edit">
+      <textarea
+        ref={field}
+        className="n-edit-field"
+        value={value}
+        rows={1}
+        aria-label={t('chat.edit')}
+        autoFocus
+        onFocus={(e) => e.currentTarget.setSelectionRange(e.currentTarget.value.length, e.currentTarget.value.length)}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault()
+            onCancel()
+          } else if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+            e.preventDefault()
+            submit()
+          }
+        }}
+      />
+      <div className="n-edit-actions">
+        <button type="button" className="n-edit-btn" onClick={onCancel}>
+          {t('chat.edit-cancel')}
+        </button>
+        <button type="button" className="n-edit-btn is-primary" disabled={!ready} onClick={submit}>
+          {t('chat.edit-send')}
+        </button>
       </div>
     </div>
   )
@@ -99,6 +220,7 @@ function Reasoning({ text, streaming, durationMs }: { text: string; streaming: b
     setWasStreaming(streaming)
     setOpen(streaming)
   }
+  const [toggle, stuck] = useStuck<HTMLButtonElement>(open && Boolean(text))
   if (!text && !streaming) return null
 
   const seconds = durationMs === undefined ? null : Math.max(1, Math.round(durationMs / 1000))
@@ -106,7 +228,7 @@ function Reasoning({ text, streaming, durationMs }: { text: string; streaming: b
     // A Radix collapsible rather than <details>, so the body can animate
     // open and closed: <details> drops its content the instant it closes.
     <Collapsible.Root className="n-reasoning" open={open && Boolean(text)} onOpenChange={setOpen}>
-      <Collapsible.Trigger className="n-reasoning-toggle">
+      <Collapsible.Trigger ref={toggle} className="n-reasoning-toggle" data-stuck={stuck || undefined}>
         {streaming ? (
           <span className="n-reasoning-live" data-motion="essential">
             {t('chat.reasoning.live')}
@@ -146,9 +268,18 @@ const ERROR_CODES = [
   'internal',
 ] as const
 
-function errorText(t: ReturnType<typeof useTranslation>['t'], code?: string | null) {
+function errorText(t: TFunction<'common'>, code?: string | null) {
   const known = ERROR_CODES.find((c) => c === code)
   return known ? t(`chat.error.${known}`) : t('chat.error.model_error')
+}
+
+/** The versions of an answer or of a question, and which of them is shown. */
+export interface AnswerVersions {
+  /** Zero-based position of the answer shown. */
+  index: number
+  count: number
+  onPick: (index: number) => void
+  busy: boolean
 }
 
 interface AssistantTurnProps {
@@ -156,13 +287,65 @@ interface AssistantTurnProps {
   /** The catalogue's entry for the model, for its name and mark. */
   model?: ChatModel
   modelId: string
+  /** The last answer only: answer again. Absent while that cannot be done. */
+  onRegenerate?: () => void
+  /** The last answer only, once it has more than one version. */
+  versions?: AnswerVersions
+  /** The call id of the model's question this reply is waiting on, if it is. */
+  askingCallId?: string | null
+  /** Brings the waiting question's panel back over the composer. */
+  onOpenQuestion?: () => void
+}
+
+/** ‹ 2 / 3 › — steps through an input's answers, or a question's versions. */
+function VersionPager({
+  index,
+  count,
+  onPick,
+  busy,
+  scope = 'version',
+}: AnswerVersions & { scope?: 'version' | 'question-version' }) {
+  const { t } = useTranslation()
+  return (
+    <div className="n-pager" role="group" aria-label={t(`chat.${scope}.label`)}>
+      <button
+        type="button"
+        className="n-pager-btn"
+        aria-label={t(`chat.${scope}.previous`)}
+        disabled={busy || index === 0}
+        onClick={() => onPick(index - 1)}
+      >
+        <ChevronLeft className="h-3.5 w-3.5" />
+      </button>
+      <span className="n-pager-count">
+        {index + 1} / {count}
+      </span>
+      <button
+        type="button"
+        className="n-pager-btn"
+        aria-label={t(`chat.${scope}.next`)}
+        disabled={busy || index === count - 1}
+        onClick={() => onPick(index + 1)}
+      >
+        <ChevronRight className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  )
 }
 
 /**
  * One reply: every response and tool step of a run, in the order they
  * happened, under one model header.
  */
-export function AssistantTurn({ turn, model, modelId }: AssistantTurnProps) {
+export function AssistantTurn({
+  turn,
+  model,
+  modelId,
+  onRegenerate,
+  versions,
+  askingCallId,
+  onOpenQuestion,
+}: AssistantTurnProps) {
   const { t } = useTranslation()
   const live = turn.live
   const running = live?.run.status === 'running'
@@ -197,8 +380,42 @@ export function AssistantTurn({ turn, model, modelId }: AssistantTurnProps) {
                 fold: { kind: 'note', text: part.text },
               }
             : null
-        case 'tool_call':
+        case 'tool_call': {
+          if (part.name === ASK_USER) {
+            // The model's question is a card in the reply, not a step of the
+            // activity line. Still streaming, it has nothing to draw yet; one
+            // the server refused is a failed step like any other.
+            const questions = parseQuestions(part.arguments)
+            const result = turn.results[part.id]
+            if (!questions) {
+              if (streaming) return null
+            } else if (result?.status !== 'failed') {
+              const answers = answersOf(result)
+              // Unanswered is only "skipped" once the reply is over and the
+              // question is not the one waiting: while the run goes on it may
+              // still be the question the reply stops on.
+              const state = answers ? 'answered' : !result && (part.id === askingCallId || running) ? 'pending' : 'skipped'
+              return (
+                <AskUserCard
+                  key={key}
+                  questions={questions}
+                  state={state}
+                  answers={answers}
+                  onOpen={state === 'pending' ? onOpenQuestion : undefined}
+                />
+              )
+            }
+          }
+          if (part.name === MEMORY_TOOL) {
+            // A note the model kept is one quiet line in the reply, with its
+            // undo, not a step of the activity line. One that failed (the list
+            // is full, say) is a failed step like any other.
+            const change = memoryChangeOf(turn.results[part.id])
+            if (change) return <MemoryChip key={key} change={change} />
+            if (!turn.results[part.id] && (streaming || running)) return null
+          }
           return { key, step: { call: part, result: turn.results[part.id], status: toolStatus(part.id) } }
+        }
         default:
           return null
       }
@@ -242,7 +459,35 @@ export function AssistantTurn({ turn, model, modelId }: AssistantTurnProps) {
   // in order. What comes before stays as written; what comes after is the
   // answer. A notice inside that stretch is shown just after the line.
   const first = entries.findIndex(isToolBlock)
-  const last = entries.length - 1 - [...entries].reverse().findIndex(isToolBlock)
+  let last = entries.length - 1 - [...entries].reverse().findIndex(isToolBlock)
+  // Thinking after the last call is still part of the search — the model
+  // weighing what it found, and often deciding to look again — so it folds in
+  // too. Only the answer's text comes after the line.
+  if (first >= 0) {
+    for (let i = last + 1; i < entries.length; i++) {
+      const entry = entries[i]
+      if (entry === null) continue
+      if (!isFoldBlock(entry) || entry.fold.kind !== 'reasoning') break
+      last = i
+    }
+  }
+  // Working, with nothing on screen moving: before the first token, and
+  // between a tool round and the next response.
+  const toolRunning = Object.values(live?.tools ?? {}).includes('running')
+  const waiting = running && !toolRunning && (!turn.partial || turn.partial.length === 0)
+  // The model is thinking inside the line right now — streaming its thoughts,
+  // or quiet between a round and its next response — and the line says so,
+  // rather than reading as a search that is over with a stray caret below it.
+  const tail = first >= 0 ? entries[last] : null
+  const thinking =
+    first >= 0 &&
+    ((running &&
+      isFoldBlock(tail) &&
+      tail.fold.kind === 'reasoning' &&
+      tail.key.startsWith('partial:') &&
+      // Still the newest thing written: once the answer starts, it is over.
+      entries.slice(last + 1).every((entry) => entry === null)) ||
+      waiting)
   const blocks: ReactNode[] = []
   const after: ReactNode[] = []
   const items: ActivityItem[] = []
@@ -258,13 +503,9 @@ export function AssistantTurn({ turn, model, modelId }: AssistantTurnProps) {
       const node = isFoldBlock(entry) ? entry.node : entry
       if (node !== null && !isToolBlock(node)) blocks.push(node)
     }
-    if (i === last) blocks.push(<ToolActivity key="activity" items={items} />, ...after)
+    if (i === last) blocks.push(<ToolActivity key="activity" items={items} thinking={thinking} />, ...after)
   })
 
-  // Working, with nothing on screen moving: before the first token, and
-  // between a tool round and the next response.
-  const toolRunning = Object.values(live?.tools ?? {}).includes('running')
-  const waiting = running && !toolRunning && (!turn.partial || turn.partial.length === 0)
   const text = turnText(turn)
   const name = model?.name ?? modelId
 
@@ -285,11 +526,18 @@ export function AssistantTurn({ turn, model, modelId }: AssistantTurnProps) {
       <div className="n-msg-head">{name}</div>
       <div className="n-msg-body">{blocks}</div>
 
-      {waiting && <span className="n-caret" />}
+      {waiting && first < 0 && <span className="n-caret" />}
 
-      {!running && text && (
-        <div className="n-actions">
-          <CopyButton content={text} />
+      {!running && (text || onRegenerate || versions) && (
+        // The last answer keeps its actions in view, as the place to go next.
+        <div className={onRegenerate ? 'n-actions always' : 'n-actions'}>
+          {versions && <VersionPager {...versions} />}
+          {text && <CopyButton content={text} />}
+          {onRegenerate && (
+            <button type="button" className="n-icon-btn sm" aria-label={t('chat.regenerate')} onClick={onRegenerate}>
+              <RefreshCw className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       )}
     </div>

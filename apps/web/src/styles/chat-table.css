@@ -1,24 +1,33 @@
 /**
  * Tables in answers — Markdown tables (MarkdownTable.tsx) and interface tables
  * (the Table component in genui) — drawn one way: a tinted, rounded frame that
- * holds the header, and the body inset in it as a white block whose top
+ * holds the header, and the body inset in it as a card-coloured block whose top
  * corners are rounded, so the tint shows around them.
  *
- * Each rule names both tables in a selector list rather than an `:is()`: the
- * Markdown table also matches prism's rules in next-theme.css (column rules,
- * row stripes, padding), and a list keeps each selector's own specificity,
- * which for the Markdown half has to outweigh those.
+ * Each rule names both tables in a selector list rather than an `:is()`, so each
+ * selector keeps its own specificity. The Markdown table gets all of its table
+ * styling from this sheet; the base layer (next-theme.css) has no table rules.
  *
- * The frame's outline is a box-shadow ring, not a border, so the body's cells
+ * The frame's edge is an inset outline, not a border, so the body's cells
  * reach the frame's edges and the frame's rounding clips them cleanly.
  */
 
 .prism-next .n-ui-table-wrap,
 .prism-next .n-md-table-scroll {
+  /* Sized to the table, not stretched across the column: short tables stay
+     compact, a wide one still scrolls inside it. */
+  width: fit-content;
+  max-width: 100%;
   overflow-x: auto;
-  border-radius: 16px;
+  border-radius: 12px;
   background: var(--n-table-frame);
-  box-shadow: 0 0 0 1px var(--n-line), 0 1px 2px rgb(0 0 0 / 4%);
+  /* The outline is drawn inside the frame, over the cells: an older answer is
+     laid out with content-visibility, whose containment clips anything past
+     its box, and a frame as wide as the column lost an outside ring on the
+     right. */
+  outline: 1px solid var(--n-line);
+  outline-offset: -1px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
   scrollbar-width: thin;
   scrollbar-color: var(--n-line) transparent;
 }
@@ -36,7 +45,7 @@
 .prism-next .n-ui-table,
 .prism-next .n-markdown .markdown-body table {
   display: table;
-  width: 100%;
+  width: auto;
   max-width: none;
   margin: 0;
   overflow: visible;
@@ -46,12 +55,12 @@
   border-spacing: 0;
   background: transparent;
   font-size: 14px;
-  line-height: 22px;
+  line-height: 21px;
 }
 
 .prism-next .n-ui-table th,
 .prism-next .n-markdown .markdown-body table th {
-  padding: 12px 18px;
+  padding: 7px 14px;
   border: 0;
   background: transparent;
   color: var(--n-chat-strong);
@@ -64,8 +73,8 @@
 
 .prism-next .n-ui-table td,
 .prism-next .n-markdown .markdown-body table td {
-  min-width: 6em;
-  padding: 12px 18px;
+  min-width: 4em;
+  padding: 7px 14px;
   border: 0;
   border-top: 1px solid var(--n-table-rule);
   background: var(--n-card);
@@ -103,14 +112,15 @@
 }
 .prism-next .n-ui-table tbody tr:first-child td:first-child,
 .prism-next .n-markdown .markdown-body table tbody tr:first-child td:first-child {
-  border-top-left-radius: 14px;
+  border-top-left-radius: 10px;
 }
 .prism-next .n-ui-table tbody tr:first-child td:last-child,
 .prism-next .n-markdown .markdown-body table tbody tr:first-child td:last-child {
-  border-top-right-radius: 14px;
+  border-top-right-radius: 10px;
 }
 
-/* prism separates rows with a bottom rule; here the top rule does that. */
-.prism-next .n-markdown .markdown-body table tbody tr:not(:last-child) td {
-  border-bottom: 0;
+/* Room for the copy button, which floats over the last column's label now
+   that the table is only as wide as its content. */
+.prism-next .n-markdown .markdown-body table th:last-child {
+  padding-right: 40px;
 }

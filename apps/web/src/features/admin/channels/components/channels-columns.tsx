@@ -4,6 +4,7 @@ import type { TFunction } from 'i18next'
 
 import { LongText } from '@/components/shadcn/long-text'
 import { Badge } from '@/components/shadcn/ui/badge'
+import { Checkbox } from '@/components/shadcn/ui/checkbox'
 import { ModelIcon } from '@/components/model-icon'
 import { DataTableColumnHeader } from '@/components/shadcn/data-table'
 import { cn } from '@/lib/utils'
@@ -23,6 +24,28 @@ export function channelsColumns(
   const byId = new Map(types.map((type) => [type.id, type]))
 
   return [
+    {
+      id: 'select',
+      header: ({ table }) => (
+        <Checkbox
+          checked={table.getIsAllRowsSelected() || (table.getIsSomeRowsSelected() && 'indeterminate')}
+          onCheckedChange={(value) => table.toggleAllRowsSelected(Boolean(value))}
+          aria-label={t('admin.channels.select-all')}
+          className="translate-y-[2px]"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(Boolean(value))}
+          aria-label={t('admin.channels.select-row')}
+          className="translate-y-[2px]"
+        />
+      ),
+      meta: { className: 'w-10' },
+      enableSorting: false,
+      enableHiding: false,
+    },
     {
       accessorKey: 'name',
       meta: { title: t('admin.channels.name') },

@@ -6,14 +6,22 @@
   "nav": {
     "toggleSidebar": "Toggle sidebar",
     "toggleTheme": "Appearance",
-    "language": "Language"
+    "language": "Language",
+    "settings": "Settings"
   },
   "chat": {
     "placeholder": "Send a message…",
     "send": "Send",
     "stop": "Stop",
     "copy": "Copy",
+    "regenerate": "Regenerate",
+    "edit": "Edit",
+    "edit-send": "Send",
+    "edit-cancel": "Cancel",
     "rename": "Rename",
+    "smart-title": "Smart rename",
+    "smart-title-pending": "Naming…",
+    "smart-title-failed": "Could not name this chat. Please try again.",
     "delete": "Delete",
     "untitled": "New chat",
     "stopped": "Stopped",
@@ -63,6 +71,12 @@
       "attachments_too_large": "The files in one message can add up to at most 20 MB.",
       "attachment_unsupported": "The selected model does not accept this kind of file. Remove it or pick another model.",
       "attachment_unavailable": "A file did not upload, or was already sent. Remove it and add it again.",
+      "nothing_to_answer": "There is no message in this conversation to answer.",
+      "not_latest": "Only the last answer can be switched.",
+      "not_on_path": "That question is no longer on the branch being shown.",
+      "message_not_found": "That message no longer exists.",
+      "not_pending": "This question was already answered, skipped, or replaced by a new version.",
+      "invalid_answers": "The answers are incomplete. Check each question.",
       "generic": "Sending failed. Try again."
     },
     "thinking": {
@@ -90,6 +104,52 @@
       "label": "Web",
       "on-hint": "Web on: the model searches and reads pages when it needs to. Click to turn off",
       "off-hint": "Web off: the model answers from what it knows. Click to turn on"
+    },
+    "question-version": {
+      "label": "Question versions",
+      "previous": "Previous version of the question",
+      "next": "Next version of the question",
+      "error": "Could not switch to that version. Please try again."
+    },
+    "version": {
+      "label": "Answer versions",
+      "previous": "Previous version",
+      "next": "Next version",
+      "error": "Could not switch versions. Please try again."
+    },
+    "ask": {
+      "label": "Needs your choice",
+      "multi": "Pick any",
+      "other": "Other",
+      "answered": "Answered",
+      "skipped": "Skipped",
+      "unanswered": "Not answered",
+      "pending": "Waiting for your answer",
+      "question": "Question",
+      "dismiss": "Hide question",
+      "skip": "Skip",
+      "send": "Send",
+      "next": "Next",
+      "previous": "Previous question",
+      "step": "{{n}} / {{total}}",
+      "write": "Or write your own reply",
+      "open": "Answer"
+    },
+    "preview": {
+      "show": "Preview",
+      "code": "Code",
+      "fullscreen": "Full-screen preview",
+      "close": "Exit full screen",
+      "title": "HTML preview"
+    },
+    "memory": {
+      "add": "Saved to memory",
+      "update": "Memory updated",
+      "delete": "Removed from memory",
+      "undo": "Undo",
+      "undone": "Undone",
+      "manage": "Manage memory",
+      "step": "Updating memory"
     }
   },
   "state": {
@@ -224,6 +284,19 @@
       "new-chat": "Start a new conversation",
       "preview-idle": "Select a conversation to preview",
       "preview-empty": "This conversation has no messages yet"
+    },
+    "temporary": {
+      "label": "Temporary chat",
+      "on-hint": "On: this chat stays out of your history and uses no memory",
+      "off-hint": "Turn on to start a chat that stays out of your history and uses no memory",
+      "note": "Temporary chats stay out of your history, memory and search, and are deleted 24 hours after they start. Custom instructions still apply.",
+      "title": "You're in a temporary chat",
+      "exit": "Leave temporary chat"
+    },
+    "context": {
+      "label": "Context window",
+      "hint": "{{percent}}% used ({{left}}% left)\n{{used}} / {{limit}} tokens",
+      "aria": "Context window {{percent}}% used"
     }
   },
   "auth": {
@@ -278,22 +351,76 @@
       "channels": "Channels",
       "models": "Models",
       "web-search": "Web search",
-      "storage": "File storage"
+      "storage": "File storage",
+      "usage-logs": "Usage logs"
     },
-    "stats": {
-      "users": "Total users",
-      "active": "Enabled",
-      "conversations": "Conversations",
-      "messages": "Messages",
-      "new-users": "New users",
-      "new-7d": "{{n}} in the last 7 days",
-      "disabled": "{{n}} disabled",
-      "messages-7d": "{{n}} in the last 7 days"
-    },
-    "trend": {
-      "title": "Activity",
-      "days": "{{n}} days",
-      "messages": "Messages"
+    "dashboard": {
+      "subtitle": "Volume, spend and reliability of model requests",
+      "range": {
+        "24h": "24 hours",
+        "7d": "7 days",
+        "30d": "30 days",
+        "90d": "90 days"
+      },
+      "vs-prev": "Arrows compare with the previous period of the same length",
+      "kpi": {
+        "cost": "Cost",
+        "requests": "Requests",
+        "tokens": "Tokens",
+        "cache": "Cache hit rate",
+        "errors": "Error rate",
+        "latency": "First token P50"
+      },
+      "hint": {
+        "cost-saved": "{{v}} saved by caching",
+        "cost-none": "Unpriced requests add nothing",
+        "requests": "{{n}} active users of {{total}}",
+        "tokens": "in {{input}} · out {{output}}",
+        "cache": "read {{read}} · write {{write}}",
+        "errors": "{{n}} failed",
+        "latency": "P95 {{v}}"
+      },
+      "trend": {
+        "title": "Trend",
+        "cost": "Cost",
+        "requests": "Requests",
+        "success": "Succeeded",
+        "errors": "Failed"
+      },
+      "models": {
+        "title": "Models",
+        "subtitle": "Busiest first",
+        "model": "Model",
+        "requests": "Requests",
+        "tokens": "Tokens in / out",
+        "cost": "Cost",
+        "cache": "Cache hit",
+        "errors": "Errors",
+        "latency": "First token P50"
+      },
+      "channels": {
+        "title": "Channel health",
+        "subtitle": "Which upstream is failing or slow",
+        "channel": "Channel",
+        "requests": "Requests",
+        "errors": "Errors",
+        "first-token": "First token P50 / P95",
+        "duration": "Total time P50 / P95",
+        "last-error": "Last failure"
+      },
+      "users": {
+        "title": "Top spenders",
+        "subtitle": "Highest cost first",
+        "anonymous": "Deleted account",
+        "requests": "{{n}} requests"
+      },
+      "errors": {
+        "title": "Recent failures",
+        "all": "View all",
+        "empty": "No failed requests in this window",
+        "unknown": "Unknown error"
+      },
+      "empty": "No requests in this window yet"
     },
     "users": {
       "search": "Search email or username",
@@ -359,13 +486,16 @@
       "enable": "Enable",
       "disable": "Disable",
       "done": "Updated {{n}} accounts",
-      "skipped": "{{n}} skipped"
+      "skipped": "{{n}} skipped",
+      "entity-channel": "channel",
+      "delete": "Delete",
+      "channels-updated": "Updated {{n}} channels",
+      "channels-deleted": "Deleted {{n}} channels",
+      "failed": "{{n}} failed",
+      "channels-delete-confirm": "This deletes the {{n}} selected channels and their keys. It cannot be undone, and no conversation is affected.",
+      "channels-delete-title": "Delete {{n}} channels"
     },
     "sign-out-confirm": "Sign out of OpenChat? You will need to sign in again.",
-    "recent-users": {
-      "title": "Recent signups",
-      "subtitle": "The newest accounts"
-    },
     "ui": {
       "table": {
         "rows-per-page": "Rows per page",
@@ -404,10 +534,6 @@
       "nav-group": {
         "general": "General",
         "other": "Other"
-      },
-      "teams": {
-        "label": "Teams",
-        "add": "Add team"
       },
       "config": {
         "open": "Open theme settings",
@@ -492,7 +618,21 @@
         "genui": "Intelligent UI",
         "genui-hint": "Lets models lay out answers with interface components — cards, figures, tables, steps — for plans, comparisons and checklists. The component guide is added to every request's system prompt, about 2–3k tokens.",
         "genui-on": "Intelligent UI is on",
-        "genui-off": "Intelligent UI is off"
+        "genui-off": "Intelligent UI is off",
+        "ask-user": "Ask the user",
+        "ask-user-hint": "Lets models put multiple-choice questions to the user, and wait for the answers, when they are blocked on a decision that is the user's to make. On by default; for runs in progress it takes effect at their next request.",
+        "ask-user-on": "Asking the user is on",
+        "ask-user-off": "Asking the user is off",
+        "task-model": "Task model",
+        "task-model-hint": "The model background tasks use — for now, titling a conversation after its first answer. A cheap, fast model is best. Unset, each conversation's own model is used.",
+        "task-model-own": "Conversation's own model",
+        "task-model-gone": "{{model}} (unavailable)",
+        "task-model-saved": "Task model saved",
+        "memory": "Personal memory",
+        "memory-hint": "When on, the model can remember long-lasting things about a user and use them in later new chats. Off, no chat reads or writes memory; people can still view and delete theirs, and custom instructions are unaffected. On by default. Administrators cannot see anyone's memories.",
+        "memory-on": "Personal memory turned on",
+        "memory-off": "Personal memory turned off",
+        "save-failed": "Couldn't save the setting. Try again."
       }
     },
     "channels": {
@@ -565,7 +705,14 @@
       "picker-empty": "No vendors match.",
       "picker-relay": "Any OpenAI-compatible endpoint",
       "api-key-format": "Key format: {{format}}",
-      "api-key-doc": "Get a key"
+      "api-key-doc": "Get a key",
+      "select-all": "Select all channels",
+      "select-row": "Select this channel",
+      "api-format": "Request format",
+      "api-format-chat": "Chat Completions",
+      "api-format-chat-hint": "Served by nearly every OpenAI-compatible endpoint. Pick this when unsure.",
+      "api-format-responses": "Responses",
+      "api-format-responses-hint": "OpenAI's newer API. Reasoning models keep their thinking across tool calls; the endpoint must support it."
     },
     "models": {
       "title": "Models",
@@ -749,6 +896,168 @@
       "save": "Save settings",
       "saved": "File storage settings saved",
       "save-failed": "Could not save. Try again."
+    },
+    "usage": {
+      "subtitle": "Every request made to a model: who sent it, through which channel, what it cost and how fast it came back.",
+      "none": "No requests match these filters",
+      "refresh": "Refresh",
+      "time": "Time",
+      "channel": "Channel",
+      "user": "User",
+      "model": "Model",
+      "stream": "Stream",
+      "tokens": "In / out tokens",
+      "cost": "Cost",
+      "timing": "First / total time",
+      "details": "Details",
+      "status": "Status",
+      "kind": "Type",
+      "any-channel": "All channels",
+      "any-status": "Any status",
+      "any-kind": "Any type",
+      "status-ok": "OK",
+      "status-error": "Error",
+      "kind-chat": "Chat",
+      "kind-title": "Title",
+      "from": "From date",
+      "to": "To date",
+      "search-model": "Search models…",
+      "streamed": "Stream",
+      "not-streamed": "Whole",
+      "speed": "{{n}} t/s",
+      "first-token": "Time to first token",
+      "duration": "Total time",
+      "cache-read": "cache read {{n}}",
+      "cache-write": "cache write {{n}}",
+      "reasoning": "reasoning {{n}}",
+      "cache-read-price": "cache read",
+      "cache-write-price": "cache write",
+      "tier-standard": "Standard",
+      "price-hint": "USD per 1M tokens, input / output, as priced when the request was made",
+      "sum-requests": "Requests",
+      "sum-errors": "{{n}} failed",
+      "sum-input": "Input tokens",
+      "sum-output": "Output tokens",
+      "sum-cost": "Cost",
+      "sum-cost-note": "Unpriced requests add nothing",
+      "sum-cache": "Cache hit rate",
+      "sum-cache-note": "read {{read}} · write {{write}}",
+      "sum-cache-saved": "read {{read}} · saved {{saved}}",
+      "cache-hit": "{{n}} hit",
+      "error-code": {
+        "no_model": "Model unavailable",
+        "model_error": "Model error",
+        "model_auth": "Key rejected",
+        "model_rate_limited": "Rate limited",
+        "context_too_long": "Context too long",
+        "internal": "Server error"
+      }
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "close": "Close",
+    "save": "Save",
+    "cancel": "Cancel",
+    "retry": "Retry",
+    "load-failed": "Couldn't load this. Try again.",
+    "counter": "{{n}} / {{max}}",
+    "tabs": {
+      "general": "General",
+      "personalization": "Personalization",
+      "account": "Account",
+      "data": "Data"
+    },
+    "general": {
+      "theme": "Appearance",
+      "language": "Language",
+      "section": "Interface settings"
+    },
+    "personalization": {
+      "instructions": "Custom instructions",
+      "instructions-hint": "Write what you want the model to always know and follow. Every new chat starts with them, temporary chats included.",
+      "about": "About you",
+      "about-placeholder": "For example: I'm a backend engineer working mostly in Go and PostgreSQL.",
+      "style": "How you want answers",
+      "style-placeholder": "For example: lead with the conclusion, then explain; keep answers short.",
+      "saved": "Custom instructions saved",
+      "save-failed": "Couldn't save. Try again.",
+      "memory": "Memory",
+      "memory-admin-off": "An administrator has turned memory off: no chat reads or writes it for now. You can still view and delete your memories.",
+      "memory-temporary": "Temporary chats never read or write memory; they only use the custom instructions above.",
+      "learn": "Learn from conversations",
+      "soon": "Coming soon",
+      "memory-description": "Add memories with Manage below to make the model more helpful and tailored to you. The model also keeps notes worth remembering on its own as you chat, tells you in its reply, and you can undo it."
+    },
+    "memory": {
+      "clear-yes": "Yes, clear all",
+      "cleared": "Memory cleared",
+      "full": "Memory is full ({{max}} notes). Delete or tidy some first; the model won't add new ones either.",
+      "full-error": "Memory is full. Delete some first.",
+      "add-placeholder": "Add a memory…",
+      "add": "Add",
+      "empty": "No memories yet. The model notes what is worth keeping during chats, and you can add your own.",
+      "edit": "Edit",
+      "delete": "Delete",
+      "source-model": "Added by model",
+      "source-auto": "Automatic",
+      "recent": "Recently changed by the model",
+      "op-add": "Added",
+      "op-update": "Updated",
+      "op-delete": "Deleted",
+      "undo": "Undo",
+      "undone": "Undone",
+      "undo-changed": "Can't undo: the memory was changed since.",
+      "undo-failed": "Couldn't undo. Try again.",
+      "duplicate": "That memory already exists.",
+      "too-long": "A memory can be at most 200 characters.",
+      "empty-error": "A memory can't be empty.",
+      "failed": "That didn't work. Try again.",
+      "title": "Memory",
+      "manage": "Manage",
+      "count": "{{n}} / {{max}}",
+      "search": "Search memories",
+      "clear-search": "Clear search",
+      "content": "Content",
+      "updated-at": "Updated at",
+      "no-match": "No memories match.",
+      "add-memory": "Add memory",
+      "clear-memory": "Clear memory",
+      "clear-confirm": "Clear all memories?",
+      "delete-confirm": "Delete this memory?"
+    },
+    "account": {
+      "name": "Username",
+      "name-hint": "You can sign in with your username or email.",
+      "email": "Email",
+      "saved": "Profile saved",
+      "password": "Change password",
+      "current-password": "Current password",
+      "new-password": "New password",
+      "password-hint": "Other devices will be signed out; this one stays signed in.",
+      "confirm-password": "Confirm new password",
+      "password-mismatch": "The passwords don't match.",
+      "password-changed": "Password changed",
+      "change-password": "Change password",
+      "title": "Your account",
+      "desc": "Manage your account information.",
+      "show": "Show",
+      "hide": "Hide",
+      "new-placeholder": "Enter a new password (8 characters or more)",
+      "confirm-placeholder": "Enter the new password again"
+    },
+    "data": {
+      "soon": "Coming soon",
+      "hint": "Exporting and deleting your data will be available later.",
+      "temporary": "Temporary chats are deleted 24 hours after they start."
+    },
+    "search": "Search",
+    "no-results": "No results found",
+    "keywords": {
+      "general": "appearance,theme,dark,light,language",
+      "personalization": "custom instructions,memory,personalization,preferences",
+      "account": "account,username,email,password,avatar",
+      "data": "data,export,delete,temporary chat"
     }
   }
 }

@@ -47,7 +47,10 @@ export function Chart({ kind, labels, series, title, caption, unit }: ChartProps
 
   const number = new Intl.NumberFormat(i18n.resolvedLanguage, { maximumFractionDigits: 2 })
   const compact = new Intl.NumberFormat(i18n.resolvedLanguage, { notation: 'compact', maximumFractionDigits: 1 })
-  const format = (v: number) => (Number.isFinite(v) ? `${number.format(v)}${unit ?? ''}` : '—')
+  // A symbol or a one-character unit sits on the number (12%, 3元); a word
+  // gets a space (2 相对分值, 40 ms), or it reads as part of the number.
+  const spaced = unit && [...unit].length > 1 && /^[\p{L}]/u.test(unit) ? ` ${unit}` : (unit ?? '')
+  const format = (v: number) => (Number.isFinite(v) ? `${number.format(v)}${spaced}` : '—')
 
   const round = kind === 'donut' || kind === 'pie'
   const shown = round ? series.slice(0, 1) : series
@@ -142,11 +145,24 @@ function Cartesian({ kind, width, labels, series, hover, onHover, tick, format }
   const labelWidth = Math.max(...labels.map((l) => [...l].reduce((w, c) => w + (c.charCodeAt(0) > 0x2e80 ? 12 : 7), 0)), 0) + 14
   const every = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(plotW / labelWidth))))
 
+  // Where the pointer is over the plot, for the tooltip to follow it.
+  const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null)
   const pick = (event: PointerEvent<SVGRectElement>) => {
     const box = event.currentTarget.getBoundingClientRect()
     const px = event.clientX - box.left
     const i = bars ? Math.floor(px / band) : Math.round(n > 1 ? (px / plotW) * (n - 1) : 0)
     onHover(Math.min(n - 1, Math.max(0, i)))
+    setPointer({ x: PAD.left + px, y: PAD.top + event.clientY - box.top })
+  }
+  // Beside the pointer, below and to the right; on the other side of it where
+  // that would run off the plot's right edge or bottom.
+  const tipHeight = 34 + 18 * series.length
+  const tipStyle = pointer && {
+    left: pointer.x,
+    top: pointer.y,
+    transform: `translate(${pointer.x > width - 180 ? 'calc(-100% - 14px)' : '14px'}, ${
+      pointer.y + 14 + tipHeight > height ? 'calc(-100% - 14px)' : '14px'
+    })`,
   }
 
   const groupW = band * 0.64
@@ -214,15 +230,14 @@ function Cartesian({ kind, width, labels, series, hover, onHover, tick, format }
           height={PLOT_HEIGHT}
           onPointerMove={pick}
           onPointerDown={pick}
-          onPointerLeave={() => onHover(null)}
+          onPointerLeave={() => {
+            onHover(null)
+            setPointer(null)
+          }}
         />
       </svg>
-      {hover !== null && (
-        <div
-          className="n-ui-chart-tip"
-          style={{ left: Math.min(Math.max(x(hover), 70), width - 70), top: PAD.top }}
-          role="presentation"
-        >
+      {hover !== null && tipStyle && (
+        <div className="n-ui-chart-tip" style={tipStyle} role="presentation">
           <div className="n-ui-chart-tip-label">{labels[hover]}</div>
           {series.map((s, si) => (
             <div key={si} className="n-ui-chart-tip-row">

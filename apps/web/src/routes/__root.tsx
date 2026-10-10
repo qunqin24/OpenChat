@@ -3,7 +3,6 @@ import { createRootRouteWithContext, Outlet, useRouterState } from '@tanstack/re
 import { lazy, Suspense, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { GlobalProgress } from '@/components/GlobalProgress'
 import { Toaster } from '@/components/Toaster'
 import { dismissBootSplash } from '@/lib/boot'
 
@@ -53,7 +52,6 @@ function RootLayout() {
 
   return (
     <>
-      <GlobalProgress />
       <Outlet />
       <Toaster />
       {DEVTOOLS && (

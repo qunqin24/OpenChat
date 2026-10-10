@@ -12,7 +12,7 @@ export const Route = createFileRoute('/_authed/chat/$conversationId')({
   // usually opens from cache.
   loader: ({ context, params }) => {
     void context.queryClient.prefetchQuery(conversationQueryOptions(params.conversationId))
-    void context.queryClient.prefetchQuery(messagesQueryOptions(params.conversationId))
+    void context.queryClient.prefetchInfiniteQuery(messagesQueryOptions(params.conversationId))
   },
   component: ChatRoute,
 })

@@ -44,6 +44,12 @@ export function restoreQueryCache(client: QueryClient) {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return
     const stored = JSON.parse(raw) as Stored
+    // Drawn at once, never trusted: dated as old as can be, so every query
+    // refetches when first used however recently it was saved. Kept at their
+    // real age, anything saved within the default stale time would be taken
+    // as fresh and never checked — a reload right after a change would show
+    // the page as it was before it.
+    for (const query of stored.state.queries) query.state.dataUpdatedAt = 0
     hydrate(client, stored.state)
     restoredOwner = stored.owner
   } catch {
@@ -89,17 +95,30 @@ export function persistQueryCache(client: QueryClient) {
     clearTimeout(timer)
     timer = setTimeout(() => save(client), SAVE_DELAY)
   })
+  // A reload or a closed tab inside the delay would lose the last change.
+  window.addEventListener('pagehide', () => {
+    clearTimeout(timer)
+    save(client)
+  })
 }
 
 function save(client: QueryClient) {
   const who = owner
   if (!who) return
+  // A temporary chat is not kept anywhere, this browser's storage included.
+  const temporary = new Set(
+    client
+      .getQueryCache()
+      .findAll({ queryKey: [...queryKeys.conversations.all, 'detail'] })
+      .filter((q) => (q.state.data as { temporary?: boolean } | undefined)?.temporary)
+      .map((q) => String(q.queryKey[2])),
+  )
   // The transcripts most recently fetched, and those conversations' details.
   const recent = new Set(
     client
       .getQueryCache()
       .findAll({ queryKey: queryKeys.messages.all })
-      .filter((q) => q.state.status === 'success')
+      .filter((q) => q.state.status === 'success' && !temporary.has(String(q.queryKey[2])))
       .sort((a, b) => b.state.dataUpdatedAt - a.state.dataUpdatedAt)
       .slice(0, RECENT_CONVERSATIONS)
       .map((q) => String(q.queryKey[2])),
@@ -118,7 +137,9 @@ function save(client: QueryClient) {
         )
       },
     })
-    // Only the first page of the conversation list: the rest load on scroll.
+    // Only the first page of an infinite query: the conversation list's newest
+    // and a transcript's newest rows. The rest load on scroll, and a transcript's
+    // older pages are never stored — they could fill the quota on their own.
     for (const query of state.queries) {
       const data = query.state.data as { pages?: unknown[]; pageParams?: unknown[] } | undefined
       if (data?.pages && data.pages.length > 1) {

@@ -1,4 +1,4 @@
-import { MessageSquare, MessagesSquare, UserCheck, Users } from 'lucide-react'
+import type { DashboardRange } from '@openchat/api-client'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -7,134 +7,118 @@ import { Header } from '@/components/shadcn/layout/header'
 import { Main } from '@/components/shadcn/layout/main'
 import { ProfileDropdown } from '@/components/shadcn/profile-dropdown'
 import { Search } from '@/components/shadcn/search'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/shadcn/ui/card'
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/shadcn/ui/card'
 import { Skeleton } from '@/components/shadcn/ui/skeleton'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn/ui/tabs'
-import { useAdminStats } from '@/features/admin/use-admin'
-import { Overview } from './components/overview'
-import { RecentUsers } from './components/recent-users'
+import { Tabs, TabsList, TabsTrigger } from '@/components/shadcn/ui/tabs'
+import { useAdminDashboard } from '@/features/admin/use-admin'
+import { cn } from '@/lib/utils'
+import { ChannelsTable } from './components/channels-table'
+import { KpiCards } from './components/kpi-cards'
+import { ModelsTable } from './components/models-table'
+import { AllErrorsLink, RecentErrors } from './components/recent-errors'
+import { TopUsers } from './components/top-users'
+import { TrendChart } from './components/trend-chart'
 
-const WINDOWS = ['7', '30', '90'] as const
+const RANGES: DashboardRange[] = ['24h', '7d', '30d', '90d']
 
+/**
+ * How the model requests are going: spend, volume, cache, failures and speed
+ * over a window, from the usage ledger -- what an operator of a chat service
+ * watches, rather than how many accounts exist.
+ */
 export function Dashboard() {
   const { t } = useTranslation()
-  const [days, setDays] = useState<(typeof WINDOWS)[number]>('30')
-  const { data, isPending } = useAdminStats(Number(days))
+  const [range, setRange] = useState<DashboardRange>('7d')
+  const { data, isError, isPlaceholderData } = useAdminDashboard(range)
 
-  const totals = data?.totals
-
-  const cards = [
-    {
-      title: t('admin.stats.users'),
-      icon: Users,
-      value: totals?.totalUsers,
-      hint: t('admin.stats.new-7d', { n: totals?.newUsers7d ?? 0 }),
-    },
-    {
-      title: t('admin.stats.active'),
-      icon: UserCheck,
-      value: totals?.activeUsers,
-      hint: t('admin.stats.disabled', {
-        n: (totals?.totalUsers ?? 0) - (totals?.activeUsers ?? 0),
-      }),
-    },
-    {
-      title: t('admin.stats.conversations'),
-      icon: MessagesSquare,
-      value: totals?.totalConversations,
-    },
-    {
-      title: t('admin.stats.messages'),
-      icon: MessageSquare,
-      value: totals?.totalMessages,
-      hint: t('admin.stats.messages-7d', { n: totals?.messages7d ?? 0 }),
-    },
-  ]
+  // Switching the range keeps the old figures up until the new ones arrive;
+  // they are dimmed meanwhile so they are not mistaken for the new window's.
+  const dimmed = isPlaceholderData
+  const body = (node: React.ReactNode, skeleton = 'h-48') =>
+    data ? <div className={cn('transition-opacity', dimmed && 'opacity-60')}>{node}</div> : <Skeleton className={cn('mx-6 w-auto', skeleton)} />
 
   return (
     <>
-      {/* ===== Top Heading ===== */}
       <Header>
         <Search className="me-auto" />
         <ConfigDrawer />
         <ProfileDropdown />
       </Header>
 
-      {/* ===== Main ===== */}
-      <Main>
-        <div className="mb-2 flex items-center justify-between space-y-2">
-          <h1 className="text-2xl font-bold tracking-tight">{t('admin.nav.dashboard')}</h1>
+      <Main className="flex flex-1 flex-col gap-4 sm:gap-6">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">{t('admin.nav.dashboard')}</h1>
+            <p className="text-muted-foreground">{t('admin.dashboard.subtitle')}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-muted-foreground hidden text-xs xl:inline">{t('admin.dashboard.vs-prev')}</span>
+            <Tabs value={range} onValueChange={(value) => setRange(value as DashboardRange)}>
+              <TabsList>
+                {RANGES.map((value) => (
+                  <TabsTrigger key={value} value={value}>
+                    {t(`admin.dashboard.range.${value}`)}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </div>
         </div>
 
-        <Tabs
-          orientation="vertical"
-          value={days}
-          onValueChange={(value) => setDays(value as typeof days)}
-          className="space-y-4"
-        >
-          <div className="w-full overflow-x-auto pb-2">
-            <TabsList>
-              {WINDOWS.map((window) => (
-                <TabsTrigger key={window} value={window}>
-                  {t('admin.trend.days', { n: window })}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </div>
+        {isError && !data ? (
+          <p className="text-destructive text-sm">{t('state.error')}</p>
+        ) : (
+          <>
+            <KpiCards data={data} dimmed={dimmed} />
 
-          {WINDOWS.map((window) => (
-            <TabsContent key={window} value={window} className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {cards.map((card) => (
-                  <Card key={card.title}>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
-                      <card.icon className="text-muted-foreground h-4 w-4" />
-                    </CardHeader>
-                    <CardContent>
-                      {isPending ? (
-                        <Skeleton className="h-8 w-24" />
-                      ) : (
-                        <div className="text-2xl font-bold">{card.value?.toLocaleString()}</div>
-                      )}
-                      {card.hint && !isPending && (
-                        <p className="text-muted-foreground text-xs">{card.hint}</p>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle>{t('admin.dashboard.trend.title')}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {body(data && <TrendChart trend={data.trend} bucket={data.bucket} range={range} />, 'h-72')}
+                </CardContent>
+              </Card>
 
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-7">
-                <Card className="col-span-1 lg:col-span-4">
-                  <CardHeader>
-                    <CardTitle>{t('admin.trend.title')}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="ps-2">
-                    <Overview data={data?.trend ?? []} />
-                  </CardContent>
-                </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>{t('admin.dashboard.users.title')}</CardTitle>
+                  <CardDescription>{t('admin.dashboard.users.subtitle')}</CardDescription>
+                </CardHeader>
+                <CardContent>{body(data && <TopUsers users={data.users} />, 'h-72')}</CardContent>
+              </Card>
+            </div>
 
-                <Card className="col-span-1 lg:col-span-3">
-                  <CardHeader>
-                    <CardTitle>{t('admin.recent-users.title')}</CardTitle>
-                    <p className="text-muted-foreground text-sm">
-                      {t('admin.recent-users.subtitle')}
-                    </p>
-                  </CardHeader>
-                  <CardContent>
-                    <RecentUsers />
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-          ))}
-        </Tabs>
+            <Card className="gap-4">
+              <CardHeader>
+                <CardTitle>{t('admin.dashboard.models.title')}</CardTitle>
+                <CardDescription>{t('admin.dashboard.models.subtitle')}</CardDescription>
+              </CardHeader>
+              <CardContent>{body(data && <ModelsTable models={data.models} />)}</CardContent>
+            </Card>
+
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <Card className="gap-4 lg:col-span-2">
+                <CardHeader>
+                  <CardTitle>{t('admin.dashboard.channels.title')}</CardTitle>
+                  <CardDescription>{t('admin.dashboard.channels.subtitle')}</CardDescription>
+                </CardHeader>
+                <CardContent>{body(data && <ChannelsTable channels={data.channels} />)}</CardContent>
+              </Card>
+
+              <Card className="gap-4">
+                <CardHeader>
+                  <CardTitle>{t('admin.dashboard.errors.title')}</CardTitle>
+                  <CardAction>
+                    <AllErrorsLink />
+                  </CardAction>
+                </CardHeader>
+                <CardContent>{body(data && <RecentErrors errors={data.errors} />)}</CardContent>
+              </Card>
+            </div>
+          </>
+        )}
       </Main>
     </>
   )

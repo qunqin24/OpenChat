@@ -1,0 +1,304 @@
+/**
+ * The model's questions. Open, they are answered in a panel floating over the
+ * composer (AskUserDock) while the reply holds one line pointing at it
+ * (AskUserCard, waiting); then the card is the record of what was chosen, or
+ * one folded line once it was written past.
+ *
+ * Chat tokens only (`--n-*`), under `.prism-next` like the rest of the chat.
+ * Motion is limited to colour changes; the global reduced-motion rule already
+ * flattens those.
+ */
+
+/* In the reply, a question is one folded line drawn like the activity and
+   reasoning lines: waiting (pointing at the panel), answered or skipped. */
+.prism-next .n-ask {
+  margin: 4px 0;
+}
+.prism-next .n-ask-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.prism-next .n-ask-fold {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  margin-inline-start: -6px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--n-text-2);
+  font: inherit;
+  font-size: 15px;
+  line-height: 22px;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+.prism-next .n-ask-fold:not(:disabled):hover {
+  background: var(--n-hover);
+  color: var(--n-text);
+}
+.prism-next .n-ask-fold:disabled {
+  cursor: default;
+}
+.prism-next .n-ask-fold:focus-visible {
+  border-radius: 8px;
+}
+.prism-next .n-ask-label {
+  flex: none;
+}
+.prism-next .n-ask-summary {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--n-text-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prism-next .n-ask-chevron {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  transition: transform 150ms ease;
+}
+.prism-next .n-ask.is-open .n-ask-chevron {
+  transform: rotate(90deg);
+}
+.prism-next .n-ask.is-waiting .n-ask-label {
+  color: var(--n-text);
+}
+.prism-next .n-ask-open {
+  flex: none;
+  margin-inline-start: 4px;
+  color: var(--n-text);
+  font-weight: 500;
+}
+
+/* Opened, each question over its answer, behind the same rule as the steps of
+   a search. */
+.prism-next .n-ask-record {
+  display: grid;
+  gap: 10px;
+  margin: 6px 0 4px 1px;
+  padding: 2px 0 2px 14px;
+  border-inline-start: 1px solid var(--n-line);
+  font-size: 14px;
+  line-height: 21px;
+  animation: n-ask-record-in 180ms ease-out;
+}
+@keyframes n-ask-record-in {
+  from { opacity: 0; transform: translateY(-2px); }
+}
+.prism-next .n-ask-record dt {
+  color: var(--n-text-3);
+}
+.prism-next .n-ask-record dd {
+  margin: 0;
+  color: var(--n-chat-body);
+  overflow-wrap: anywhere;
+}
+.prism-next .n-ask-record dd.is-muted,
+.prism-next .n-ask-none {
+  color: var(--n-text-3);
+}
+
+/* ---- the panel over the composer --------------------------------------- */
+
+.prism-next .n-ask-dock {
+  margin: 0 4px 10px;
+  padding: 14px 16px 12px;
+  border-radius: 22px;
+  background: var(--n-card);
+  box-shadow: var(--n-shadow-card);
+  font-size: 15px;
+  line-height: 22px;
+  animation: n-ask-dock-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes n-ask-dock-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.prism-next .n-ask-dock-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  color: var(--n-text-2);
+  font-size: 14px;
+}
+.prism-next .n-ask-dock-label {
+  display: inline-flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.prism-next .n-ask-dock-count {
+  color: var(--n-text-3);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.prism-next .n-ask-dock-question {
+  margin: 10px 2px 10px;
+  color: var(--n-text);
+  font-weight: 500;
+}
+.prism-next .n-ask-dock-kind {
+  margin-inline-start: 8px;
+  color: var(--n-text-3);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.prism-next .n-ask-dock-options {
+  display: grid;
+  gap: 2px;
+  max-height: min(46dvh, 420px);
+  overflow-y: auto;
+}
+.prism-next .n-ask-dock-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--n-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+.prism-next .n-ask-dock-opt:not(:disabled):hover,
+.prism-next .n-ask-dock-opt.is-on {
+  background: var(--n-hover);
+}
+.prism-next .n-ask-dock-opt:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.prism-next .n-ask-dock-opt:focus-visible {
+  border-radius: 12px;
+}
+/* The option's number, which its key also picks; a tick once chosen. */
+.prism-next .n-ask-dock-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 1px var(--n-line);
+  color: var(--n-text-2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.prism-next .n-ask-dock-opt.is-on .n-ask-dock-num {
+  background: var(--n-accent);
+  box-shadow: none;
+  color: var(--n-accent-fg);
+}
+.prism-next .n-ask-dock-opt-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding-top: 1px;
+}
+.prism-next .n-ask-dock-opt-label {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.prism-next .n-ask-dock-opt-desc {
+  color: var(--n-text-2);
+  font-size: 13px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.prism-next .n-ask-dock-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--n-line);
+}
+.prism-next .n-ask-dock-write {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 6px 8px 6px 12px;
+  color: var(--n-text-3);
+  cursor: text;
+}
+.prism-next .n-ask-dock-write.is-on,
+.prism-next .n-ask-dock-write:focus-within {
+  color: var(--n-text-2);
+}
+.prism-next .n-ask-dock-write input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--n-text);
+  font: inherit;
+  outline: none;
+}
+.prism-next .n-ask-dock-write input::placeholder {
+  color: var(--n-text-3);
+}
+.prism-next .n-ask-dock-skip,
+.prism-next .n-ask-dock-send {
+  flex: none;
+  height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 120ms ease, opacity 120ms ease;
+}
+.prism-next .n-ask-dock-skip {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--n-line);
+  color: var(--n-text);
+}
+.prism-next .n-ask-dock-skip:hover {
+  background: var(--n-hover);
+}
+.prism-next .n-ask-dock-send {
+  background: var(--n-accent);
+  color: var(--n-accent-fg);
+}
+.prism-next .n-ask-dock-send:not(:disabled):hover {
+  background: var(--n-accent-hover);
+}
+.prism-next .n-ask-dock-send:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.prism-next :is(.n-ask-dock-skip, .n-ask-dock-send):focus-visible {
+  border-radius: 999px;
+}
+
+@media (max-width: 640px) {
+  .prism-next .n-ask-dock-foot { flex-wrap: wrap; }
+  .prism-next .n-ask-dock-write { flex-basis: 100%; }
+  .prism-next .n-ask-dock-skip { margin-inline-start: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prism-next :is(.n-ask-dock, .n-ask-record) { animation: none; }
+}

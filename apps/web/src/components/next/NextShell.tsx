@@ -19,6 +19,7 @@ import { useDeleteConversation } from '@/hooks/use-conversations'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useUIStore } from '@/stores/ui-store'
 import Sidebar from './Sidebar'
+import SettingsDialog from './settings/SettingsDialog'
 
 interface NextShellContextValue {
   collapsed: boolean
@@ -56,6 +57,8 @@ export function NextShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const collapsed = mobile ? !mobileOpen : !sidebarOpen
   const [pendingDelete, setPendingDelete] = useState<Conversation | null>(null)
+  // The shell's own scope, which the settings dialog is drawn into.
+  const [host, setHost] = useState<HTMLElement | null>(null)
   // Where focus was when the confirmation was asked for. The dialog has no
   // trigger to hand focus back to, and the search palette, which can ask for
   // it, needs its field focused again for the arrow keys to work.
@@ -89,7 +92,7 @@ export function NextShell() {
   return (
     <NextShellContext.Provider value={shellContext}>
       <Dialog.Root open={mobile && mobileOpen} onOpenChange={setMobileOpen}>
-        <div className="prism-next">
+        <div className="prism-next" ref={setHost}>
           {mobile ? (
             <Dialog.Portal>
               <Dialog.Overlay className="n-sidebar-backdrop" />
@@ -119,6 +122,8 @@ export function NextShell() {
           <div className="n-route-motion">
             <Outlet />
           </div>
+
+          <SettingsDialog host={host} />
 
           <AlertDialog
             open={pendingDelete !== null}

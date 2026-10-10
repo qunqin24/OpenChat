@@ -28,6 +28,7 @@ import {
   FormMessage,
 } from '@/components/shadcn/ui/form'
 import { Input } from '@/components/shadcn/ui/input'
+import { RadioGroup, RadioGroupItem } from '@/components/shadcn/ui/radio-group'
 import { Switch } from '@/components/shadcn/ui/switch'
 import { useCreateChannel, useUpdateChannel } from '@/features/admin/use-admin'
 import { ChannelProviderPicker } from './channel-provider-picker'
@@ -128,6 +129,7 @@ function ChannelForm({
     baseUrl: z.string().trim(),
     apiKey: z.string(),
     enabled: z.boolean(),
+    apiFormat: z.enum(['chat', 'responses']),
   })
 
   const form = useForm<z.input<typeof schema>>({
@@ -140,6 +142,7 @@ function ChannelForm({
       // an empty field is exactly what "keep the stored key" looks like.
       apiKey: '',
       enabled: channel?.enabled ?? true,
+      apiFormat: channel?.apiFormat ?? 'chat',
     },
   })
 
@@ -234,6 +237,7 @@ function ChannelForm({
           // vendor's default".
           ...(values.baseUrl !== (channel.baseUrl ?? '') ? { baseUrl: values.baseUrl } : {}),
           ...(values.enabled !== channel.enabled ? { enabled: values.enabled } : {}),
+          ...(values.apiFormat !== channel.apiFormat ? { apiFormat: values.apiFormat } : {}),
           // The load-bearing line: the property exists only when the admin
           // actually typed a key, or asked for the stored one to go. Blank and
           // untouched leaves it in place, because the field is absent rather
@@ -247,6 +251,10 @@ function ChannelForm({
           type: values.type,
           enabled: values.enabled,
           models: selectedModels,
+          // Only where the vendor offers the choice; elsewhere the server
+          // ignores it, and sending it would only mislead a reader of the
+          // request.
+          ...(selected?.apiFormatChoice ? { apiFormat: values.apiFormat } : {}),
           ...(values.baseUrl ? { baseUrl: values.baseUrl } : {}),
           ...(values.apiKey ? { apiKey: values.apiKey } : {}),
         })
@@ -380,6 +388,48 @@ function ChannelForm({
                   </FormItem>
                 )}
               />
+
+              {/* Only on the OpenAI protocol, which has two request formats; the
+                  others have one, and a gateway that routes per model (OpenCode
+                  Go) chooses for itself. */}
+              {selected?.apiFormatChoice && (
+                <FormField
+                  control={form.control}
+                  name="apiFormat"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('admin.channels.api-format')}</FormLabel>
+                      <FormControl>
+                        <RadioGroup value={field.value} onValueChange={field.onChange} className="grid gap-2">
+                          {(['chat', 'responses'] as const).map((format) => (
+                            <label
+                              key={format}
+                              className={cn(
+                                'flex cursor-pointer items-start gap-3 rounded-md border p-3',
+                                field.value === format && 'border-primary',
+                              )}
+                            >
+                              <RadioGroupItem value={format} className="mt-0.5" />
+                              <span className="grid gap-1">
+                                <span className="text-sm font-medium">
+                                  {t(`admin.channels.api-format-${format}`)}
+                                  <code className="text-muted-foreground ms-2 text-xs">
+                                    {format === 'chat' ? '/chat/completions' : '/responses'}
+                                  </code>
+                                </span>
+                                <span className="text-muted-foreground text-xs">
+                                  {t(`admin.channels.api-format-${format}-hint`)}
+                                </span>
+                              </span>
+                            </label>
+                          ))}
+                        </RadioGroup>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
             </PanelSection>
 
             <PanelSection title={t('admin.channels.section-credential')}>

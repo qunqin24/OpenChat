@@ -1,34 +1,52 @@
 import { useNavigate } from '@tanstack/react-router'
 import { ArrowDown } from 'lucide-react'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import type { ReasoningEffort } from '@openchat/api-client'
+import type { Message, ReasoningEffort } from '@openchat/api-client'
 import { useChatFeatures, useChatModels, useUpdateConversationSettings } from '@/hooks/use-chat-models'
 import { useConversationEvents } from '@/hooks/use-conversation-events'
 import { useConversation, useCreateConversation } from '@/hooks/use-conversations'
 import { useAttachments } from '@/hooks/use-attachments'
 import { useFileDrop } from '@/hooks/use-file-drop'
 import { useMessages } from '@/hooks/use-messages'
-import { useCancelRun, useSendMessage } from '@/hooks/use-send-message'
+import {
+  useAnswerQuestion,
+  useCancelRun,
+  useChooseAnswer,
+  useEditMessage,
+  useRegenerate,
+  useSendMessage,
+  useSwitchVersion,
+} from '@/hooks/use-send-message'
+import { useSession } from '@/features/auth/use-auth'
 import { API_BASE_URL } from '@/lib/api'
+import { loadComposerPrefs, saveComposerPrefs } from '@/lib/composer-prefs'
 import { acceptAttribute, acceptsOf } from '@/lib/attachments'
 import { isRunning } from '@/lib/run-state'
-import { buildTurns } from '@/lib/transcript'
+import { buildTurns, pendingQuestion } from '@/lib/transcript'
+import { parseQuestions, type AskAnswer } from '@/lib/ask-user'
 import { useChatStore } from '@/stores/chat-store'
+import AskUserDock from './AskUserDock'
 import Composer from './Composer'
+import ContextMeter from './ContextMeter'
 import { DropOverlay } from './DropOverlay'
 import { ImageSource, proxiedImages } from './genui/image-source'
 import { AssistantTurn, PendingReply, UserMessage } from './MessageItem'
 import ModelPicker from './ModelPicker'
-import ThinkingControl from './ThinkingControl'
+import ThinkingPicker from './ThinkingPicker'
 import WebSearchToggle from './WebSearchToggle'
 import { SidebarToggle } from './NextShell'
+import { TemporaryBar, TemporaryToggle } from './TemporaryChat'
 import Welcome from './Welcome'
 
 /** Distance from the bottom, in px, still counted as "parked at the tail". */
 const BOTTOM_SLACK = 24
+/** Turns drawn when a conversation opens, and drawn more of each time the reader nears the top. */
+const TURN_STEP = 20
+/** How close to the top, in px, the reader must be before older turns are drawn (or loaded). */
+const TOP_REACH = 800
 
 interface NextChatProps {
   conversationId?: string
@@ -40,6 +58,7 @@ export function NextChat({ conversationId }: NextChatProps) {
 
   const [input, setInput] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
+  const columnRef = useRef<HTMLDivElement>(null)
   const parked = useRef(true)
   const [showJump, setShowJump] = useState(false)
 
@@ -49,6 +68,11 @@ export function NextChat({ conversationId }: NextChatProps) {
   const createConversation = useCreateConversation()
   const sendMessage = useSendMessage(conversationId ?? '')
   const cancelRun = useCancelRun(conversationId ?? '')
+  const regenerate = useRegenerate(conversationId ?? '')
+  const chooseAnswer = useChooseAnswer(conversationId ?? '')
+  const editMessage = useEditMessage(conversationId ?? '')
+  const switchVersion = useSwitchVersion(conversationId ?? '')
+  const answerQuestion = useAnswerQuestion(conversationId ?? '')
   const updateSettings = useUpdateConversationSettings()
 
   // Attaches to whatever this conversation is running — including a run that
@@ -61,15 +85,28 @@ export function NextChat({ conversationId }: NextChatProps) {
   const post = useChatStore((s) => s.post)
   const unpost = useChatStore((s) => s.unpost)
   const takePendingPrompt = useChatStore((s) => s.takePendingPrompt)
+  const temporaryChat = useChatStore((s) => s.temporaryChat)
+  const setTemporaryChat = useChatStore((s) => s.setTemporaryChat)
+  const replacing = useChatStore((s) => s.replacing[conversationId ?? ''])
 
-  const working = isRunning(live) || sendMessage.isPending
+  // Anything that makes the model's open question moot, as writing something
+  // else does, or is about to: a run going, a message or a redo on its way.
+  const superseded =
+    isRunning(live) || sendMessage.isPending || regenerate.isPending || editMessage.isPending || Boolean(outgoing) || Boolean(replacing)
+  const working = superseded || answerQuestion.isPending
+
+  // What the composer was last set to, anywhere, for a new chat to open with.
+  const userId = useSession().data?.id
+  const saved = useMemo(() => loadComposerPrefs(userId), [userId])
 
   // The model: what this conversation remembers, else what was picked on the
-  // empty screen, else the first one offered.
+  // empty screen, else the last one picked if it is still offered, else the
+  // first one offered.
   const available = useMemo(() => models.data ?? [], [models.data])
   const [draftModel, setDraftModel] = useState<string>()
-  const modelId = conversation.data?.model ?? draftModel ?? available[0]?.id ?? ''
   const modelById = useMemo(() => new Map(available.map((m) => [m.id, m])), [available])
+  const lastModel = saved.model && modelById.has(saved.model) ? saved.model : undefined
+  const modelId = conversation.data?.model ?? draftModel ?? lastModel ?? available[0]?.id ?? ''
 
   // Files: only what the selected model takes. With none that does, the button
   // and the drop zone say so rather than going quiet.
@@ -94,38 +131,41 @@ export function NextChat({ conversationId }: NextChatProps) {
   const pickModel = useCallback(
     (id: string) => {
       setDraftModel(id)
+      saveComposerPrefs(userId, { model: id })
       if (conversationId) updateSettings.mutate({ conversationId, model: id })
     },
-    [conversationId, updateSettings],
+    [conversationId, updateSettings, userId],
   )
 
   // Reasoning effort, remembered the same way. Offered only for a model the
   // catalogue says reasons; the server drops it for one it knows does not.
-  const [draftEffort, setDraftEffort] = useState<ReasoningEffort>('auto')
-  const effort = conversation.data?.reasoningEffort ?? draftEffort
+  const [draftEffort, setDraftEffort] = useState<ReasoningEffort>()
+  const effort = conversation.data?.reasoningEffort ?? draftEffort ?? saved.effort ?? 'auto'
   // The model's own thinking levels, from models.dev via the catalogue.
   const thinkingLevels = useMemo(() => modelById.get(modelId)?.reasoningEfforts ?? [], [modelById, modelId])
   const canThink = thinkingLevels.length > 0
   const pickEffort = useCallback(
     (next: ReasoningEffort) => {
       setDraftEffort(next)
+      saveComposerPrefs(userId, { effort: next })
       if (conversationId) updateSettings.mutate({ conversationId, reasoningEffort: next })
     },
-    [conversationId, updateSettings],
+    [conversationId, updateSettings, userId],
   )
 
   // Web access, remembered the same way. Offered when the server has web
   // search on and the model may call tools; off, the run gets no web tools.
   const features = useChatFeatures()
-  const [draftWebSearch, setDraftWebSearch] = useState(true)
-  const webSearch = conversation.data?.webSearch ?? draftWebSearch
+  const [draftWebSearch, setDraftWebSearch] = useState<boolean>()
+  const webSearch = conversation.data?.webSearch ?? draftWebSearch ?? saved.webSearch ?? true
   const canSearch = (features.data?.webSearch ?? false) && (modelById.get(modelId)?.toolCall ?? true)
   const pickWebSearch = useCallback(
     (next: boolean) => {
       setDraftWebSearch(next)
+      saveComposerPrefs(userId, { webSearch: next })
       if (conversationId) updateSettings.mutate({ conversationId, webSearch: next })
     },
-    [conversationId, updateSettings],
+    [conversationId, updateSettings, userId],
   )
 
   // Pictures in answers come through the server, for this conversation only.
@@ -135,9 +175,110 @@ export function NextChat({ conversationId }: NextChatProps) {
   )
 
   const turns = useMemo(
-    () => buildTurns(messages.data?.items ?? [], live?.run ?? null),
-    [messages.data, live],
+    () => buildTurns(messages.data?.items ?? [], live?.run ?? null, replacing),
+    [messages.data, live, replacing],
   )
+
+  // Only the end of a long transcript is drawn: the last turns, then 20 more
+  // each time the reader scrolls near the top, then — once the drawn turns
+  // reach the oldest loaded one — the next older page from the server. The
+  // window's top is a turn, not a count, so turns arriving at the end do not
+  // push the one at the top away from a reader who has scrolled up.
+  const hasOlder = messages.hasNextPage
+  // A page can begin in the middle of a reply (its question is in the page
+  // before): that half-turn waits for its other half rather than being drawn.
+  const floor = hasOlder && turns[0]?.kind === 'assistant' ? 1 : 0
+  const [topKey, setTopKey] = useState<string>()
+  const topIndex = topKey ? turns.findIndex((turn) => turn.key === topKey) : -1
+  const start = Math.max(floor, topIndex >= 0 ? topIndex : turns.length - TURN_STEP)
+  const anchor = useRef<{ el: HTMLElement; top: number } | null>(null)
+
+  // The last answer can be asked for again, and its versions stepped through:
+  // only the last, as an earlier one has later turns built on it.
+  const last = useMemo(() => {
+    const answer = turns.at(-1)
+    const input = [...turns].reverse().find((turn) => turn.kind === 'user')
+    if (answer?.kind !== 'assistant' || input?.kind !== 'user') return null
+    const runs = input.message.versions ?? []
+    return { answer, inputId: input.message.id, runs, at: runs.indexOf(answer.key) }
+  }, [turns])
+
+  // The question the last reply ended on, if nobody has answered or written past it.
+  const askingCallId = useMemo(() => pendingQuestion(turns, superseded), [turns, superseded])
+  const asking = useMemo(() => {
+    if (!askingCallId) return null
+    for (const turn of turns) {
+      if (turn.kind !== 'assistant') continue
+      for (const response of turn.responses) {
+        for (const part of response.parts) {
+          if (part.type === 'tool_call' && part.id === askingCallId) {
+            const questions = parseQuestions(part.arguments)
+            return questions ? { callId: askingCallId, questions } : null
+          }
+        }
+      }
+    }
+    return null
+  }, [askingCallId, turns])
+  // The panel put away for this question (Skip, ✕ or Escape); the line in the
+  // reply brings it back.
+  const [dismissedCallId, setDismissedCallId] = useState<string | null>(null)
+  const dock = useRef<HTMLDivElement>(null)
+  const dismissQuestion = () => {
+    if (asking) setDismissedCallId(asking.callId)
+    dock.current?.querySelector<HTMLTextAreaElement>('textarea')?.focus()
+  }
+  const handleAnswer = (callId: string, answers: AskAnswer[]) => {
+    parked.current = true
+    answerQuestion.mutate({
+      callId,
+      answers,
+      model: modelId || undefined,
+      reasoningEffort: canThink ? effort : undefined,
+      webSearch: canSearch ? webSearch : undefined,
+    })
+  }
+
+  const handleRegenerate = () => {
+    if (!last) return
+    parked.current = true
+    regenerate.mutate({
+      replacing: last.answer.runs,
+      model: modelId || undefined,
+      reasoningEffort: canThink ? effort : undefined,
+      webSearch: canSearch ? webSearch : undefined,
+    })
+  }
+
+  // Any question can be reworded and asked again: the new wording starts a
+  // branch, and the turns after the old one leave the transcript (they stay on
+  // the server, behind the question's version pager).
+  const editQuestion = (message: Message, content: string) => {
+    parked.current = true
+    editMessage.mutate({
+      messageId: message.id,
+      content,
+      attachments: message.attachments ?? [],
+      model: modelId || undefined,
+      reasoningEffort: canThink ? effort : undefined,
+      webSearch: canSearch ? webSearch : undefined,
+    })
+  }
+
+  // The versions of a question: stepping to one shows it with the turns that
+  // followed it, as that branch was left.
+  const pickQuestion = (message: Message, index: number) => {
+    const messageId = message.branches?.[index]
+    if (!messageId) return
+    parked.current = true
+    switchVersion.mutate({ messageId })
+  }
+
+  const pickAnswer = (index: number) => {
+    const runId = last?.runs[index]
+    if (runId) chooseAnswer.mutate({ runId, inputId: last.inputId })
+  }
+
   const isEmpty = !outgoing && (!conversationId || (!messages.isPending && turns.length === 0))
 
   // Grows as the reply streams, so the tail-follow below reacts to tokens and
@@ -155,20 +296,102 @@ export function NextChat({ conversationId }: NextChatProps) {
     setShowJump(false)
   }, [])
 
-  const handleScroll = useCallback(() => {
+  const handleScroll = () => {
     const el = scrollRef.current
     if (!el) return
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight
     parked.current = distance <= BOTTOM_SLACK
     setShowJump(!parked.current)
-  }, [])
+    loadOlder()
+  }
+
+  // Pins the window's top once there is a transcript to window.
+  const pinned = turns[start]
+  if (topKey === undefined && !messages.isPending && pinned) setTopKey(pinned.key)
+
+  // Notes which message sits at the top of the screen and where, to put it
+  // back once turns have been added above it. The first one that starts below
+  // the top bar, not the one cut off by it: a message partly out of sight can
+  // itself change height as the browser draws it, and the place held would
+  // move with it.
+  const holdPlace = () => {
+    const scroller = scrollRef.current
+    if (!scroller) return
+    const top = scroller.getBoundingClientRect().top
+    const shown = top + parseFloat(getComputedStyle(scroller).paddingTop)
+    let held: HTMLElement | undefined
+    for (const child of columnRef.current?.children ?? []) {
+      if (!(child instanceof HTMLElement) || child.dataset.edge) continue
+      const rect = child.getBoundingClientRect()
+      if (rect.bottom <= top) continue
+      held = child
+      if (rect.top >= shown) break
+    }
+    if (held) anchor.current = { el: held, top: held.getBoundingClientRect().top - top }
+  }
+
+  // Draws older turns when the reader is near the top: more of what is loaded,
+  // else the next page of it. Run on scrolling, and again whenever what it
+  // reads changes, so it goes on until the reader is no longer near the top.
+  const loadOlder = () => {
+    const scroller = scrollRef.current
+    if (!scroller || messages.isPending || scroller.scrollTop >= TOP_REACH) return
+    const above = turns[Math.max(floor, start - TURN_STEP)]
+    if (start > floor && above) {
+      holdPlace()
+      setTopKey(above.key)
+    } else if (hasOlder && !messages.isFetchingNextPage && !messages.isFetchNextPageError) {
+      void messages.fetchNextPage()
+    }
+  }
+  const loadOlderAfterChange = useEffectEvent(loadOlder)
+  useEffect(() => {
+    loadOlderAfterChange()
+  }, [start, floor, turns.length, hasOlder, messages.isFetchingNextPage, messages.isPending])
+
+  // Turns added above keep the message the reader is looking at where it was.
+  // A browser's own scroll anchoring may have done it already (the shift
+  // measured here is then zero); Safari has none. And turns drawn above
+  // are `content-visibility: auto`, laid out at an estimated height until the
+  // browser decides they are near enough to draw — which it does after this
+  // runs. So for a moment the column's size is watched and the place put back
+  // whenever it changes, ending at the reader's first touch.
+  useLayoutEffect(() => {
+    const held = anchor.current
+    anchor.current = null
+    const scroller = scrollRef.current
+    const column = columnRef.current
+    if (!held || !scroller || !column) return
+    // Where the scroll position was left. Found elsewhere, someone else moved
+    // it — the reader, a jump to the end, the browser's own anchoring — and
+    // this lets go.
+    let left = scroller.scrollTop
+    const restore = () => {
+      if (!held.el.isConnected || Math.abs(scroller.scrollTop - left) > 1) return stop()
+      const shift = held.el.getBoundingClientRect().top - scroller.getBoundingClientRect().top - held.top
+      if (shift) scroller.scrollTop += shift
+      left = scroller.scrollTop
+    }
+    restore()
+    const observer = new ResizeObserver(restore)
+    observer.observe(column)
+    const touches = ['wheel', 'touchstart', 'pointerdown', 'keydown'] as const
+    const timer = window.setTimeout(stop, 1000)
+    function stop() {
+      observer.disconnect()
+      window.clearTimeout(timer)
+      for (const type of touches) scroller?.removeEventListener(type, stop)
+    }
+    for (const type of touches) scroller.addEventListener(type, stop, { passive: true })
+    return stop
+  }, [start])
 
   // Follow the tail while the reader has not scrolled away from it.
   useLayoutEffect(() => {
     // The landing page is its own scrollable document on short screens; opening
     // it at the bottom would hide the model heading and the input above it.
     if (!isEmpty && parked.current) scrollToBottom('auto')
-  }, [isEmpty, turns.length, streamed, outgoing, scrollToBottom])
+  }, [isEmpty, turns.length, streamed, outgoing, replacing, scrollToBottom])
 
   const handleSend = useCallback(async () => {
     const content = input.trim()
@@ -222,7 +445,11 @@ export function NextChat({ conversationId }: NextChatProps) {
         ...(modelId ? { model: modelId } : {}),
         ...(canThink && effort !== 'auto' ? { reasoningEffort: effort } : {}),
         ...(canSearch && !webSearch ? { webSearch: false } : {}),
+        ...(temporaryChat ? { temporary: true } : {}),
       })
+      // Once made, the conversation itself says it is temporary; the switch
+      // starts the next new chat off again.
+      setTemporaryChat(false)
       // The message moves with it to the conversation's own page.
       post(created.id, item)
       unpost('')
@@ -249,7 +476,9 @@ export function NextChat({ conversationId }: NextChatProps) {
     post,
     sendMessage,
     setPendingPrompt,
+    setTemporaryChat,
     t,
+    temporaryChat,
     unpost,
     webSearch,
   ])
@@ -275,6 +504,13 @@ export function NextChat({ conversationId }: NextChatProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId, takePendingPrompt])
 
+  // A temporary chat, made or about to be: the chat is drawn in its dark frame.
+  const temporaryMode = conversationId ? Boolean(conversation.data?.temporary) : temporaryChat
+  const exitTemporary = () => {
+    setTemporaryChat(false)
+    if (conversationId) void navigate({ to: '/' })
+  }
+
   const title = conversationId ? (conversation.data?.title ?? '') : t('next.nav.new')
   const modelName = modelById.get(modelId)?.name ?? (modelId || 'OpenChat')
 
@@ -290,7 +526,8 @@ export function NextChat({ conversationId }: NextChatProps) {
       disabled={createConversation.isPending}
       modelSlot={
         <>
-          {canThink && <ThinkingControl levels={thinkingLevels} value={effort} onChange={pickEffort} />}
+          {conversationId && <ContextMeter conversationId={conversationId} limit={modelById.get(modelId)?.contextLimit} />}
+          {canThink && <ThinkingPicker levels={thinkingLevels} value={effort} onChange={pickEffort} />}
           <ModelPicker models={available} value={modelId} onChange={pickModel} />
         </>
       }
@@ -311,35 +548,69 @@ export function NextChat({ conversationId }: NextChatProps) {
   )
 
   return (
-    <main className="n-main" {...fileDrop.handlers}>
+    <main className={temporaryMode ? 'n-main is-temporary' : 'n-main'} {...fileDrop.handlers}>
       <DropOverlay show={fileDrop.dragging} unavailable={canAttach ? undefined : uploadHint} />
-      <div className="n-topbar">
+      <div className={conversationId ? 'n-topbar has-chat' : 'n-topbar'}>
         <SidebarToggle />
-        {conversationId && <div className="n-chat-title">{title}</div>}
+        {/* A temporary chat is never titled; its band says what it is. */}
+        {conversationId && !temporaryMode && <div className="n-chat-title">{title}</div>}
+        <div className="n-topbar-end">
+          {!temporaryMode && !conversationId && <TemporaryToggle />}
+        </div>
       </div>
 
       <div className={isEmpty ? 'n-scroll n-scroll-welcome' : 'n-scroll'} ref={scrollRef} onScroll={handleScroll}>
         {conversationId && messages.isPending && !outgoing ? (
           <div className="n-loading" role="status" aria-label={t('state.loading')}>
-            <span className="n-spinner" />
+            <span className="n-spinner" data-motion="essential" />
           </div>
         ) : isEmpty ? (
           <Welcome onPick={setInput} modelName={modelName} model={modelById.get(modelId)} />
         ) : (
           <ImageSource.Provider value={images}>
-            <div className="n-column n-chat-fade">
-              {turns.map((turn) =>
-                turn.kind === 'user' ? (
-                  <UserMessage key={turn.key} message={turn.message} />
+            <div className="n-column n-chat-fade" ref={columnRef}>
+              {(start > floor || hasOlder) && (
+                // Room for the spinner is always kept while there is more above,
+                // so it appearing does not move the transcript.
+                <div className="flex h-10 items-center justify-center" data-edge>
+                  {messages.isFetchingNextPage && (
+                    <span className="n-spinner" data-motion="essential" role="status" aria-label={t('state.loading')} />
+                  )}
+                </div>
+              )}
+              {turns.slice(start).map((turn) => {
+                const pager = turn.kind === 'user' ? versionsOf(turn.message) : undefined
+                return turn.kind === 'user' ? (
+                  <UserMessage
+                    key={turn.key}
+                    message={turn.message}
+                    onEdit={!working && !outgoing ? (content) => editQuestion(turn.message, content) : undefined}
+                    versions={
+                      pager && {
+                        ...pager,
+                        busy: working || switchVersion.isPending,
+                        onPick: (to) => pickQuestion(turn.message, to),
+                      }
+                    }
+                  />
                 ) : (
                   <AssistantTurn
                     key={turn.key}
                     turn={turn}
                     modelId={turnModel(turn) ?? modelId}
                     model={modelById.get(turnModel(turn) ?? modelId)}
+                    askingCallId={askingCallId}
+                    onOpenQuestion={() => setDismissedCallId(null)}
+                    onRegenerate={turn === last?.answer && !working && !outgoing ? handleRegenerate : undefined}
+                    versions={
+                      turn === last?.answer && last.at >= 0 && last.runs.length > 1
+                        ? { index: last.at, count: last.runs.length, onPick: pickAnswer, busy: working || chooseAnswer.isPending }
+                        : undefined
+                    }
                   />
-                ),
-              )}
+                )
+              })}
+              {replacing && !outgoing && <PendingReply modelId={modelId} model={modelById.get(modelId)} />}
               {outgoing && (
                 <>
                   <UserMessage
@@ -362,8 +633,18 @@ export function NextChat({ conversationId }: NextChatProps) {
         )}
       </div>
 
-      <div className="n-composer-dock">
+      <div ref={dock} className="n-composer-dock">
         <div className="n-column relative">
+          {asking && (
+            <AskUserDock
+              key={asking.callId}
+              questions={asking.questions}
+              busy={answerQuestion.isPending}
+              hidden={dismissedCallId === asking.callId}
+              onSubmit={(answers) => handleAnswer(asking.callId, answers)}
+              onDismiss={dismissQuestion}
+            />
+          )}
           {showJump && !isEmpty && (
             <button
               type="button"
@@ -377,8 +658,17 @@ export function NextChat({ conversationId }: NextChatProps) {
           {composer}
         </div>
       </div>
+      {/* Last, so turning it on or off never shifts the elements above it. */}
+      {temporaryMode && <TemporaryBar onExit={exitTemporary} />}
     </main>
   )
+}
+
+/** Where a question is among its versions, if it has others. */
+function versionsOf(message: Message) {
+  const branches = message.branches
+  const index = branches?.indexOf(message.id) ?? -1
+  return branches && branches.length > 1 && index >= 0 ? { index, count: branches.length } : undefined
 }
 
 /** The model a reply was answered with: its run's, or its rows'. */

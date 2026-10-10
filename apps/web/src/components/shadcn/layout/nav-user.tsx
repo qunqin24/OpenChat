@@ -7,8 +7,7 @@ import {
   LogOut,
 } from 'lucide-react'
 import useDialogState from '@/hooks/use-dialog-state'
-import { initialsOf } from '@/lib/initials'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/shadcn/ui/avatar'
+import { UserAvatar } from '@/components/user-avatar'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,9 +28,9 @@ import { useTranslation } from 'react-i18next'
 
 type NavUserProps = {
   user: {
+    id: string
     name: string
     email: string
-    avatar: string
   }
 }
 
@@ -50,13 +49,9 @@ export function NavUser({ user }: NavUserProps) {
                 size='lg'
                 className='data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground'
               >
-                <Avatar className='h-8 w-8 rounded-lg'>
-                  <AvatarImage src={user.avatar} alt={user.name} />
-                  {/* Upstream hardcodes "SN" here, its author's initials. */}
-                  <AvatarFallback className='rounded-lg'>
-                    {initialsOf(user.name || user.email)}
-                  </AvatarFallback>
-                </Avatar>
+                {/* Deviation from upstream: shadcn's Avatar with a hardcoded "SN"
+                    fallback; here the coloured initial shared with the chat. */}
+                <UserAvatar id={user.id} name={user.name} email={user.email} className='size-8 text-sm' />
                 <div className='grid flex-1 text-start text-sm leading-tight'>
                   <span className='truncate font-semibold'>{user.name}</span>
                   <span className='truncate text-xs'>{user.email}</span>
@@ -72,12 +67,7 @@ export function NavUser({ user }: NavUserProps) {
             >
               <DropdownMenuLabel className='p-0 font-normal'>
                 <div className='flex items-center gap-2 px-1 py-1.5 text-start text-sm'>
-                  <Avatar className='h-8 w-8 rounded-lg'>
-                    <AvatarImage src={user.avatar} alt={user.name} />
-                    <AvatarFallback className='rounded-lg'>
-                      {initialsOf(user.name || user.email)}
-                    </AvatarFallback>
-                  </Avatar>
+                  <UserAvatar id={user.id} name={user.name} email={user.email} className='size-8 text-sm' />
                   <div className='grid flex-1 text-start text-sm leading-tight'>
                     <span className='truncate font-semibold'>{user.name}</span>
                     <span className='truncate text-xs'>{user.email}</span>

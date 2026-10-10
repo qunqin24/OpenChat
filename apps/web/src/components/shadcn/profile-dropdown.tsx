@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { Link } from '@tanstack/react-router'
 import useDialogState from '@/hooks/use-dialog-state'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/shadcn/ui/avatar'
 import { Button } from '@/components/shadcn/ui/button'
 import {
   DropdownMenu,
@@ -13,7 +12,7 @@ import {
 } from '@/components/shadcn/ui/dropdown-menu'
 import { SignOutDialog } from '@/components/shadcn/sign-out-dialog'
 import { useSession } from '@/features/auth/use-auth'
-import { initialsOf } from '@/lib/initials'
+import { UserAvatar } from '@/components/user-avatar'
 
 export function ProfileDropdown() {
   const [open, setOpen] = useDialogState()
@@ -25,10 +24,9 @@ export function ProfileDropdown() {
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <Button variant='ghost' className='relative h-8 w-8 rounded-full'>
-            <Avatar className='h-8 w-8'>
-              <AvatarImage src={session?.avatarUrl} alt={session?.name ?? ''} />
-              <AvatarFallback>{initialsOf(session?.name ?? session?.email)}</AvatarFallback>
-            </Avatar>
+            {/* Deviation from upstream: a coloured initial (UserAvatar) shared with
+                the chat, instead of shadcn's Avatar over a fetched picture. */}
+            <UserAvatar id={session?.id} name={session?.name} email={session?.email} className='size-8 text-sm' />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className='w-56' align='end' forceMount>

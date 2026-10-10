@@ -9,8 +9,7 @@
  * (`--color-gray-*` in src/tailwind.css) is zero-chroma oklch, quoted
  * verbatim below.
  *
- * Kept out of next-theme.css so that file stays a faithful copy of the prism
- * original and can be re-synced.
+ * Kept out of next-theme.css, which is the chat surface's base layer.
  *
  * The look is deliberately bare: a plain white/black page, a centred column
  * no wider than 448px, borderless transparent inputs whose placeholders carry

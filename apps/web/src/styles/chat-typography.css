@@ -2,15 +2,11 @@
  * OpenWebUI type scale and neutral text ramp, from ChatPlaceholder, Suggestions,
  * Navbar, Messages/Name and app.css's markdown-prose at 0a7c15832f.
  * The welcome screen here uses the left-aligned ChatPlaceholder variant.
- * Keep this separate from the verbatim prism stylesheet and the admin theme.
+ * Layered on next-theme.css (the base layer, a local edited file) and kept
+ * separate from the admin theme. Where both set a property, this sheet wins by
+ * coming later in the import order.
  */
 :root {
-  /* The prism ramp (next-theme.css, kept verbatim) puts secondary text at
-     #a1a1a1 — under 3:1 on white, which is what makes timestamps, labels and
-     hints across the chat look washed out. Overridden here rather than there
-     so the prism file can still be re-synced. */
-  --n-text-2: #6f6f6f;
-  --n-text-3: #9a9a9a;
   --n-chat-font: -apple-system, BlinkMacSystemFont, 'Inter Variable', ui-sans-serif,
     system-ui, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif;
 }
@@ -30,6 +26,7 @@
   --n-chat-placeholder: oklch(0.66 0 0);
   --n-chat-code-text: oklch(0.24 0 0);
   --n-chat-code-bg: oklch(0.95 0 0);
+  --n-chat-code-surface: var(--n-bg);
   --n-chat-rule: oklch(0.91 0 0);
   --n-table-frame: oklch(0.982 0 0);
   --n-table-rule: rgb(0 0 0 / 6%);
@@ -56,10 +53,12 @@
   --n-chat-input: oklch(0.94 0 0);
   --n-chat-code-text: oklch(0.92 0 0);
   --n-chat-code-bg: oklch(0.32 0 0);
+  /* Darker than the page, as OpenWebUI's black blocks are. */
+  --n-chat-code-surface: #0d0d0d;
   --n-chat-rule: oklch(1 0 0 / 10%);
-  --n-table-frame: #292929;
+  --n-table-frame: #1f1f1f;
   --n-table-rule: rgb(255 255 255 / 7%);
-  --n-table-hover: #252525;
+  --n-table-hover: #1c1c1c;
   --n-ui-tint: rgb(255 255 255 / 4.5%);
 }
 
@@ -81,13 +80,6 @@
   line-height: 18px;
 }
 
-/* Restates prism's dark values: the :root override above comes later in the
-   cascade at the same specificity, so without this it would win in dark mode. */
-.dark {
-  --n-text-2: #a8a8a8;
-  --n-text-3: #7a7a7a;
-}
-
 .prism-next .n-chat-title {
   overflow: hidden;
   color: var(--n-chat-body);
@@ -101,7 +93,9 @@
 .prism-next .n-welcome-title {
   color: var(--n-chat-heading);
   font-size: 30px;
-  font-weight: 600;
+  /* OpenWebUI sets its greeting at the regular weight; medium keeps a little
+     more presence at this size without the heaviness of semibold. */
+  font-weight: 500;
   line-height: 36px;
   letter-spacing: 0;
 }
@@ -201,7 +195,9 @@
 .prism-next .n-markdown :is(h1, h2, h3, h4, h5, h6) {
   margin: 8px 0 4px;
   color: var(--n-chat-strong);
-  font-weight: 600;
+  /* Medium, as OpenWebUI's prose sets headings and bold: PingFang's
+     semibold reads as heavy, crowded strokes in Chinese. */
+  font-weight: 500;
   line-height: 1.375;
   letter-spacing: 0;
 }
@@ -217,7 +213,7 @@
 
 .prism-next .n-markdown :is(strong, b, [data-streamdown='strong']) {
   color: var(--n-chat-strong);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .prism-next .n-markdown :is(ul, ol) {
@@ -273,9 +269,8 @@
    never generates (it does not scan node_modules), so the frame fell back to
    black `currentColor` borders, the actions bar to a row of its own, and the
    highlighting to plain text. Everything is spelled out here instead, on its
-   data-streamdown hooks, in the same frame-and-sheet shape as the tables:
-   a tinted frame carrying the language and the actions, the code on the page
-   colour inside it. */
+   data-streamdown hooks: one sheet with a hairline edge, the language and the
+   actions in its top row. */
 .prism-next .n-markdown [data-streamdown='code-block'] {
   position: relative;
   display: flex;
@@ -285,15 +280,19 @@
   padding: 0 4px 4px;
   border: 0;
   border-radius: 16px;
-  background: var(--n-table-frame);
+  /* OpenWebUI's CodeBlock: one sheet on the code surface with a hairline
+     edge — no tinted frame or header band, which read as grey slabs. */
+  background: var(--n-chat-code-surface);
   box-shadow: inset 0 0 0 1px var(--n-table-rule);
 }
 
 .prism-next .n-markdown [data-streamdown='code-block-header'] {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   height: 36px;
-  padding: 0 10px;
+  padding: 0 12px;
   color: var(--n-chat-muted);
   font-family: var(--font-mono);
   font-size: 12px;
@@ -302,11 +301,45 @@
   text-transform: lowercase;
 }
 
-/* The actions ride in the header's row, and stay in reach while a long block
-   scrolls past: the wrapper is sticky, the buttons take the pointer. */
+/* A macOS window's traffic lights ahead of the language: one dot, its two
+   siblings drawn as offset shadows of it, and room left for them after. */
+.prism-next .n-markdown [data-streamdown='code-block-header']::before {
+  content: '';
+  flex-shrink: 0;
+  width: 11px;
+  height: 11px;
+  margin-right: 46px;
+  border-radius: 50%;
+  background: #ff5f57;
+  box-shadow:
+    18px 0 0 #febc2e,
+    36px 0 0 #28c840;
+}
+
+/* Code scrolling up inside a tall block dissolves into the header rather than
+   being cut off at its edge: the top bar's fade (OpenWebUI's navbar curve),
+   on the code surface, over the body's top padding — so code at rest, which
+   starts below that padding, is never under it. */
+.prism-next .n-markdown [data-streamdown='code-block-header']::after {
+  content: '';
+  position: absolute;
+  inset: 100% 0 auto;
+  height: 14px;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--n-chat-code-surface) 90%, transparent) 0%,
+    color-mix(in srgb, var(--n-chat-code-surface) 50%, transparent) 40%,
+    transparent 97%
+  );
+  pointer-events: none;
+}
+
+/* The actions ride in the header's row and stay there — Streamdown makes the
+   wrapper sticky, so they would float down over the code of a long block;
+   the buttons take the pointer, the wrapper lets it through. */
 .prism-next .n-markdown [data-streamdown='code-block'] > div:has(> [data-streamdown='code-block-actions']) {
-  position: sticky;
-  top: 8px;
+  position: relative;
+  top: auto;
   z-index: 1;
   display: flex;
   align-items: center;
@@ -358,7 +391,7 @@
   padding: 14px 16px;
   border: 0;
   border-radius: 12px;
-  background: var(--n-bg);
+  background: transparent;
   scrollbar-width: thin;
   scrollbar-color: var(--n-line) transparent;
 }
@@ -367,9 +400,9 @@
   margin: 0;
   background: transparent;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 400;
-  line-height: 21px;
+  line-height: 22px;
   white-space: pre;
 }
 
@@ -387,7 +420,7 @@
 }
 .prism-next .n-markdown [data-streamdown='code-block-body'] code > span {
   display: block;
-  min-height: 21px;
+  min-height: 22px;
 }
 .prism-next .n-markdown [data-streamdown='code-block-body'] code > span::before {
   counter-increment: line;
@@ -409,16 +442,95 @@
   color: var(--shiki-dark, var(--sdm-c, inherit));
 }
 
+/* An html block's own actions (HtmlPreview): a labelled toggle between the
+   code and the page, and the preview's full-screen button — sized and coloured
+   like the copy and download buttons beside them. */
+.prism-next .n-code-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--n-chat-muted);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.prism-next .n-code-action.is-icon {
+  width: 28px;
+  padding: 0;
+}
+.prism-next .n-code-action:not(:disabled):hover {
+  background: var(--n-hover-strong);
+  color: var(--n-chat-body);
+}
+.prism-next .n-code-action:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.prism-next .n-code-action svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* A preview does not scroll under the header, so it gets no fade over it. */
+.prism-next .n-markdown .n-html-preview [data-streamdown='code-block-header']::after {
+  display: none;
+}
+
+/* The page itself, on white whatever the theme: a page that sets no
+   background assumes one. Inset in the block like the code body. */
+.prism-next .n-html-frame {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+/* Full screen: the page over the whole chat, under a slim bar to leave by. */
+.prism-next .n-html-full {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: var(--n-bg);
+}
+.prism-next .n-html-full-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 44px;
+  padding: 0 8px 0 16px;
+  color: var(--n-chat-muted);
+  font-size: 13px;
+  box-shadow: inset 0 -1px 0 var(--n-line);
+}
+.prism-next .n-html-full .n-html-frame {
+  flex: 1;
+  height: auto;
+  border-radius: 0;
+}
+
 /* MarkdownTable replaces Streamdown's nested frames with one scroller, drawn
    in chat-table.css; the copy button floats over its top right on hover. */
 .prism-next .n-md-table {
   position: relative;
+  /* Hugs the table, so the copy button sits on its corner, not the column's. */
+  width: fit-content;
+  max-width: 100%;
   margin: 12px 0;
 }
 .prism-next .n-md-table-copy {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 3px;
+  right: 3px;
   opacity: 0;
   transition: opacity 150ms ease;
 }

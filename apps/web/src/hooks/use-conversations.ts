@@ -70,6 +70,30 @@ export function useRenameConversation() {
   })
 }
 
+/**
+ * Names a conversation from what it is about: the server has the task model
+ * read its latest exchanges and renames it to the result. Takes as long as
+ * the model does.
+ */
+export function useGenerateTitle() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    // The row shows it is being named.
+    meta: { silent: true },
+    mutationFn: async (conversationId: string) =>
+      unwrap(
+        await api.POST('/conversations/{conversationId}/title', {
+          params: { path: { conversationId } },
+        }),
+      ),
+    onSuccess: (conversation: Conversation) => {
+      queryClient.setQueryData(queryKeys.conversations.detail(conversation.id), conversation)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.list() })
+    },
+  })
+}
+
 export function useDeleteConversation() {
   const queryClient = useQueryClient()
 

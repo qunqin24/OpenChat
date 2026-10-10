@@ -1,5 +1,6 @@
 import type { Message, MessagePart, ToolResultPart } from '@openchat/api-client'
 
+import { ASK_USER } from './ask-user'
 import type { LiveRun } from './run-state'
 
 /**
@@ -8,7 +9,9 @@ import type { LiveRun } from './run-state'
  *
  * A run that searched twice and then answered is five rows on the server
  * (response with calls, two results, response with calls…); the reader sees one
- * reply with its tool steps inside it, in order.
+ * reply with its tool steps inside it, in order. So is a reply that stopped to
+ * ask a question: the run that asked and the run the answer started share one
+ * block, keyed by the first of them.
  */
 export type Turn =
   | { kind: 'user'; key: string; message: Message }
@@ -17,6 +20,8 @@ export type Turn =
       key: string
       /** Response rows in order; tool rows are folded into `results`. */
       responses: Message[]
+      /** Every run that wrote a row of this reply: more than one when it went on after a question. */
+      runs: string[]
       results: Record<string, ToolResultPart>
       /** The response still streaming, if this is the run in flight. */
       partial: MessagePart[] | null
@@ -26,18 +31,56 @@ export type Turn =
 export type AssistantTurn = Extract<Turn, { kind: 'assistant' }>
 
 /**
+ * What a redo hides until the server has started it: the last answer's runs
+ * (regenerating), or a question and everything after it (editing — an edited
+ * question starts a new branch, and what followed the old wording is off it).
+ */
+export interface Replacing {
+  runs?: string[]
+  from?: string
+}
+
+/**
  * Merges the persisted rows with the run in flight and groups them into turns.
  * Rows the live run holds that the message list already has are not repeated.
+ *
+ * A run in flight can be redoing something the list still holds: answering
+ * the same question again (its input is in the list), or an edit of any
+ * question on the branch (its input is new, `editOf` that question's first
+ * version). Regenerating leaves out the old answer; an edit leaves out the old
+ * wording and every turn after it, which are off the new branch. So does
+ * `replacing`, what a redo was just asked for and the server has not started
+ * yet.
  */
-export function buildTurns(persisted: Message[], live: LiveRun | null): Turn[] {
+export function buildTurns(persisted: Message[], live: LiveRun | null, replacing?: Replacing): Turn[] {
   const seen = new Set(persisted.map((m) => m.id))
-  const rows = [...persisted, ...(live?.messages ?? []).filter((m) => !seen.has(m.id))]
+  const input = live?.messages[0]
+  let from = Infinity
+  // A run that goes on after a question is no redo: the reply before it stays.
+  if (input?.role === 'user' && !live?.run.continues) {
+    const same = persisted.findIndex((m) => m.id === input.id)
+    if (same >= 0) from = same + 1
+    else if (input.editOf) {
+      const edited = persisted.findIndex((m) => m.role === 'user' && (m.editOf ?? m.id) === input.editOf)
+      if (edited >= 0) from = edited
+    }
+  }
+  const cut = replacing?.from ? persisted.findIndex((m) => m.id === replacing.from) : -1
+  const kept = persisted.filter(
+    (m, i) =>
+      !(
+        (m.runId && replacing?.runs?.includes(m.runId)) ||
+        (cut >= 0 && i >= cut) ||
+        (i >= from && m.runId !== live?.run.id)
+      ),
+  )
+  const rows = [...kept, ...(live?.messages ?? []).filter((m) => !seen.has(m.id))]
 
   const turns: Turn[] = []
   let current: AssistantTurn | null = null
 
   const assistantTurn = (key: string): AssistantTurn => {
-    const turn: AssistantTurn = { kind: 'assistant', key, responses: [], results: {}, partial: null, live: null }
+    const turn: AssistantTurn = { kind: 'assistant', key, responses: [], runs: [], results: {}, partial: null, live: null }
     turns.push(turn)
     return turn
   }
@@ -50,12 +93,15 @@ export function buildTurns(persisted: Message[], live: LiveRun | null): Turn[] {
     }
     if (message.role !== 'assistant' && message.role !== 'tool') continue
 
-    // A new run, or rows from before runs existed, start their own block.
+    // The rows after a question belong to the block that asked it, and after
+    // anything else a run starts its own: no two replies follow each other
+    // without a question between them (a redone one is hidden).
     let turn: AssistantTurn | null = current
-    if (!turn || (message.runId && turn.key !== message.runId)) {
+    if (!turn) {
       turn = assistantTurn(message.runId ?? message.id)
       current = turn
     }
+    if (message.runId && !turn.runs.includes(message.runId)) turn.runs.push(message.runId)
     if (message.role === 'assistant') {
       turn.responses.push(message)
     } else {
@@ -69,10 +115,12 @@ export function buildTurns(persisted: Message[], live: LiveRun | null): Turn[] {
     // The run in flight owns the last block, which may not exist yet: before
     // its first response there is only the user's input.
     let last = turns.at(-1)
-    if (!last || last.kind !== 'assistant' || last.key !== live.run.id) {
+    // One that continues a reply writes into the block that asked.
+    if (!last || last.kind !== 'assistant' || (last.key !== live.run.id && !live.run.continues)) {
       if (live.run.status !== 'running') return turns
       last = assistantTurn(live.run.id)
     }
+    if (!last.runs.includes(live.run.id)) last.runs.push(live.run.id)
     last.partial = live.partial
     last.live = live
   }
@@ -87,4 +135,21 @@ export function turnText(turn: AssistantTurn): string {
     .map((p) => p.text)
     .join('')
     .trim()
+}
+
+/**
+ * The question the conversation is waiting on, by call id: the last reply
+ * ended on an ask_user call nobody has answered. `busy` is anything that
+ * supersedes it — a run going, a message on its way — since writing something
+ * else is how a question is skipped.
+ */
+export function pendingQuestion(turns: Turn[], busy: boolean): string | null {
+  const last = turns.at(-1)
+  if (busy || last?.kind !== 'assistant') return null
+  const response = last.responses.at(-1)
+  if (response?.stopReason !== 'tool_calls') return null
+  for (const part of response.parts) {
+    if (part.type === 'tool_call' && part.name === ASK_USER && !last.results[part.id]) return part.id
+  }
+  return null
 }

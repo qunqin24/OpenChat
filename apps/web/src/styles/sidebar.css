@@ -1,7 +1,8 @@
 /**
  * Chat sidebar, measured against OpenWebUI's Sidebar/Section/ChatItem at
  * 0a7c15832f: 245px panel, 42px rail, 13px/20px text, 32px chat rows.
- * Local overrides keep the original prism next-theme.css re-syncable.
+ * Layered on next-theme.css, which still supplies the shared row, group and
+ * palette rules; where both set a property, this sheet wins by coming later.
  */
 .prism-next .n-sidebar {
   --n-sidebar-bg: oklch(0.98 0 0);
@@ -19,7 +20,6 @@
   width: var(--n-sidebar-w);
   height: 100%;
   margin-left: 0;
-  border-right: 1px solid var(--n-sidebar-line);
   background: var(--n-sidebar-bg);
   color: var(--n-sidebar-text);
   box-shadow: none;
@@ -27,7 +27,31 @@
   font-weight: 400;
   line-height: 20px;
   letter-spacing: 0;
+}
+
+/* The panel slides over the rail by its clipping width; its content keeps the
+   full width throughout, so the move is a reveal with nothing reflowing. */
+.prism-next .n-sidebar-panel {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 1;
+  display: flex;
+  width: var(--n-sidebar-w);
+  overflow: hidden;
+  background: var(--n-sidebar-bg);
   transition: width 250ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.prism-next .n-sidebar.collapsed .n-sidebar-panel {
+  width: 0;
+  pointer-events: none;
+}
+
+.prism-next .n-sidebar.is-mobile .n-sidebar-panel {
+  position: static;
+  flex: 1;
+  width: auto;
+  transition: none;
 }
 
 .dark .prism-next .n-sidebar {
@@ -44,10 +68,18 @@
 
 .prism-next .n-sidebar-inner {
   display: flex;
-  flex: 1;
+  flex: 0 0 auto;
   flex-direction: column;
+  box-sizing: border-box;
+  width: var(--n-sidebar-w);
   min-height: 0;
   overflow: hidden;
+  border-right: 1px solid var(--n-sidebar-line);
+}
+
+.prism-next .n-sidebar.is-mobile .n-sidebar-inner {
+  flex: 1;
+  width: auto;
 }
 
 .prism-next .n-sidebar-header {
@@ -405,59 +437,76 @@
   gap: 12px;
 }
 
-/* Compact desktop rail retains the same buttons and focus targets. */
+/* Compact desktop rail: icons only, in the layout while the panel is shut. */
 .prism-next .n-sidebar.collapsed {
   width: 42px;
-  margin-left: 0;
   background: transparent;
-  border-right-width: 0.5px;
 }
 
-.prism-next .n-sidebar.collapsed .n-sidebar-header {
+.prism-next .n-sidebar-rail {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  height: 100%;
+  border-right: 0.5px solid var(--n-sidebar-line);
+  transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.prism-next .n-sidebar-rail:hover {
+  background: color-mix(in oklch, var(--n-sidebar-hover) 30%, transparent);
+}
+
+.prism-next .n-sidebar-rail .n-sidebar-header {
   justify-content: center;
 }
 
-.prism-next .n-sidebar.collapsed .n-sidebar-brand,
-.prism-next .n-sidebar.collapsed .n-row-label,
-.prism-next .n-sidebar.collapsed .n-sidebar-hotkey {
+.prism-next .n-sidebar-rail .n-row-label {
   display: none;
+}
+
+.prism-next .n-sidebar-rail-fill {
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: e-resize;
 }
 
 /* The rail button is the logo until hover/keyboard focus swaps in the panels
    icon; clicking the logo still toggles the sidebar open. */
-.prism-next .n-sidebar.collapsed .n-sidebar-rail-logo {
+.prism-next .n-sidebar-rail .n-sidebar-rail-logo {
   display: block;
 }
 
-.prism-next .n-sidebar.collapsed .n-sidebar-toggle > svg {
+.prism-next .n-sidebar-rail .n-sidebar-toggle > svg {
   display: none;
 }
 
-.prism-next .n-sidebar.collapsed .n-sidebar-toggle:is(:hover, :focus-visible) .n-sidebar-rail-logo {
+.prism-next .n-sidebar-rail .n-sidebar-toggle:is(:hover, :focus-visible) .n-sidebar-rail-logo {
   display: none;
 }
 
-.prism-next .n-sidebar.collapsed .n-sidebar-toggle:is(:hover, :focus-visible) > svg {
+.prism-next .n-sidebar-rail .n-sidebar-toggle:is(:hover, :focus-visible) > svg {
   display: block;
 }
 
-.prism-next .n-sidebar.collapsed .n-row {
+.prism-next .n-sidebar-rail .n-row {
   justify-content: center;
   gap: 0;
   padding-inline: 0;
 }
 
-.prism-next .n-sidebar.collapsed .n-sidebar-scroll {
-  overflow: hidden;
-}
-
-.prism-next .n-sidebar.collapsed .n-sidebar-account::before {
+.prism-next .n-sidebar-rail .n-sidebar-account::before {
   display: none;
 }
 
 .prism-next .n-sidebar.resizing {
-  transition: none;
   user-select: none;
+}
+
+.prism-next .n-sidebar.resizing .n-sidebar-panel {
+  transition: none;
 }
 
 .prism-next .n-sidebar-resize {
@@ -532,9 +581,9 @@
   .prism-next .n-sidebar-hotkey { display: none; }
 }
 
-/* Search palette. The layout (overlay, two panes, rows, preview) is prism's
-   ported `.n-palette*` in next-theme.css; this adds what cmdk and our rows
-   need on top of it. Portalled into the shell root, so `.prism-next` scopes it. */
+/* Search palette. The base layout (overlay, two panes, rows, preview) is
+   `.n-palette*` in next-theme.css; this adds what cmdk and our rows need on
+   top of it and overrides its size and spacing. Portalled into the shell root, so `.prism-next` scopes it. */
 .prism-next .n-palette-overlay { z-index: 70; }
 .prism-next .n-palette { border-radius: 24px; }
 .dark .prism-next .n-palette { box-shadow: 0 0 0 1px rgb(255 255 255 / 8%), 0 12px 40px rgb(0 0 0 / 50%); }
@@ -605,6 +654,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .prism-next .n-sidebar { transition: none; }
+  .prism-next .n-sidebar-panel { transition: none; }
   .n-sidebar-mobile-frame[data-state], .n-sidebar-backdrop[data-state] { animation: none; }
 }

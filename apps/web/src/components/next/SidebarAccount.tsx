@@ -1,5 +1,5 @@
 import { useNavigate } from '@tanstack/react-router'
-import { Check, Languages, LogOut, Monitor, Moon, Sun, UserRound } from 'lucide-react'
+import { Check, Languages, LogOut, Monitor, Moon, Settings, Sun, UserRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -7,10 +7,11 @@ import {
   DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent,
   DropdownMenuSubTrigger, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { UserAvatar } from '@/components/user-avatar'
 import { useLogout, useSession } from '@/features/auth/use-auth'
 import { supportedLanguages } from '@/lib/i18n'
+import { useSettings } from '@/lib/settings'
 import { useUIStore, type Theme } from '@/stores/ui-store'
-import ModelAvatar from './ModelAvatar'
 
 const THEMES: Array<{ value: Theme; icon: typeof Sun }> = [
   { value: 'light', icon: Sun },
@@ -24,6 +25,7 @@ export function SidebarAccount({ collapsed, onNavigate }: { collapsed: boolean; 
   const navigate = useNavigate()
   const { data: session } = useSession()
   const logout = useLogout()
+  const settings = useSettings()
   const theme = useUIStore((s) => s.theme)
   const setTheme = useUIStore((s) => s.setTheme)
   const ThemeIcon = THEMES.find((option) => option.value === theme)?.icon ?? Monitor
@@ -35,16 +37,20 @@ export function SidebarAccount({ collapsed, onNavigate }: { collapsed: boolean; 
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button type="button" className="n-row n-account-trigger" aria-label={name} title={collapsed ? name : undefined}>
-          <ModelAvatar name={name} size={22} />
+          <UserAvatar id={session.id} name={session.name} email={session.email} className="size-[22px] text-[11px]" />
           <span className="n-row-label">{name}</span>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className={collapsed ? 'n-account-menu-rail' : 'n-account-menu'} align="end" side="top">
         <DropdownMenuLabel>
-          <ModelAvatar name={name} size={18} />
+          <UserAvatar id={session.id} name={session.name} email={session.email} className="size-[18px] text-[9px]" />
           <span className="n-menu-label-text">{name}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => { onNavigate(); settings.open('general') }}>
+          <Settings aria-hidden="true" />
+          <span>{t('nav.settings')}</span>
+        </DropdownMenuItem>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <ThemeIcon aria-hidden="true" />

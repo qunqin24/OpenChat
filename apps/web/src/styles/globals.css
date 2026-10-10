@@ -6,8 +6,10 @@
 @import '@fontsource-variable/inter';
 @import '@fontsource-variable/manrope';
 
-/* The prism base stays verbatim for re-syncing. Local sidebar and typography
-   overrides below adapt the chat surface to OpenWebUI's visual specifications.
+/* next-theme.css is the chat surface's base layer: tokens plus the layout every
+   other chat sheet builds on. It is a local file, edited in place. The sheets
+   after it (sidebar, typography, layout, ...) adapt it to OpenWebUI's visual
+   specifications, mostly at the same specificity, so a later import wins.
    All of these rules are scoped, and outrank Tailwind's preflight layer. */
 @import './next-theme.css';
 @import './sidebar.css';
@@ -23,6 +25,8 @@
 @import './file-drop.css';
 @import './attachments.css';
 @import './agent.css';
+@import './ask-user.css';
+@import './settings.css';
 @import './genui.css';
 @import './chat-table.css';
 

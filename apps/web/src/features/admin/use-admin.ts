@@ -2,6 +2,7 @@ import type {
   BulkUpdateUsersRequest,
   CreateChannelRequest,
   CreateUserRequest,
+  DashboardRange,
   UpdateChannelRequest,
   UpdateUserRequest,
 } from '@openchat/api-client'
@@ -11,7 +12,7 @@ import { api, unwrap } from '@/lib/api'
 
 export const adminKeys = {
   all: ['admin'] as const,
-  stats: (days: number) => [...adminKeys.all, 'stats', days] as const,
+  dashboard: (range: DashboardRange) => [...adminKeys.all, 'dashboard', range] as const,
   users: (page: number, search: string) => [...adminKeys.all, 'users', page, search] as const,
   system: () => [...adminKeys.all, 'system'] as const,
   /** Shared with features/admin/models, which owns the rest of this subtree. */
@@ -21,17 +22,17 @@ export const adminKeys = {
   storage: () => [...adminKeys.all, 'storage'] as const,
 }
 
-export function useAdminStats(days = 30) {
+export function useAdminDashboard(range: DashboardRange) {
   return useQuery({
-    queryKey: adminKeys.stats(days),
+    queryKey: adminKeys.dashboard(range),
     queryFn: async ({ signal }) =>
-      unwrap(await api.GET('/admin/stats', { params: { query: { days } }, signal })),
-    // Changing the window changes the key, which would otherwise drop `data` to
-    // undefined until the new request lands — the charts would empty out and
-    // redraw on every switch. Keeping the previous response on screen also
-    // leaves the totals correct throughout, since they do not depend on `days`
-    // at all; only the trend does.
+      unwrap(await api.GET('/admin/dashboard', { params: { query: { range } }, signal })),
+    // A new range is a new key, which would otherwise drop `data` and empty the
+    // whole page on every switch; the previous figures stay until the new ones
+    // land (the page dims them meanwhile, see `isPlaceholderData`).
     placeholderData: (previous) => previous,
+    // Operating figures: worth a fresh look when the tab comes back.
+    staleTime: 30_000,
   })
 }
 
@@ -177,6 +178,40 @@ export function useDeleteChannel() {
       // A channel decides which models are reachable, so the catalogue's
       // answer changed as well — it lives under a different key and would
       // otherwise go on reporting the reach this channel just altered.
+      void queryClient.invalidateQueries({ queryKey: adminKeys.catalog() })
+    },
+  })
+}
+
+/**
+ * Enables, disables or deletes several channels at once. There is no bulk
+ * endpoint — an operator has a handful of channels — so this sends the
+ * single-channel requests side by side, lets each succeed or fail on its own,
+ * and refreshes the list (and the catalogue, whose reach they decide) once at
+ * the end rather than after every one.
+ */
+export function useBulkChannels() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ channelIds, action }: { channelIds: string[]; action: 'enable' | 'disable' | 'delete' }) => {
+      const results = await Promise.allSettled(
+        channelIds.map(async (channelId) =>
+          action === 'delete'
+            ? unwrap(await api.DELETE('/admin/channels/{channelId}', { params: { path: { channelId } } }))
+            : unwrap(
+                await api.PATCH('/admin/channels/{channelId}', {
+                  params: { path: { channelId } },
+                  body: { enabled: action === 'enable' },
+                }),
+              ),
+        ),
+      )
+      const failed = results.filter((result) => result.status === 'rejected').length
+      return { done: results.length - failed, failed }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.channels() })
       void queryClient.invalidateQueries({ queryKey: adminKeys.catalog() })
     },
   })

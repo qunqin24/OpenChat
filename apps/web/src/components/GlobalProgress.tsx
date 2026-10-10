@@ -9,8 +9,9 @@ const SHOW_AFTER_MS = 300
 const SETTLE_MS = 220
 
 /**
- * One progress bar for the whole app: route transitions, queries and
- * mutations all feed it.
+ * The admin panel's progress bar (mounted by routes/admin.tsx, not the chat):
+ * route transitions, first loads and actions without an indicator of their own
+ * feed it.
  *
  * The width is faked on purpose. Neither a route load nor a fetch reports
  * progress, so the bar eases toward 90% and waits there, then jumps to 100%
@@ -19,8 +20,14 @@ const SETTLE_MS = 220
  */
 export function GlobalProgress() {
   const isRouting = useRouterState({ select: (state) => state.status === 'pending' })
-  const fetching = useIsFetching()
-  const mutating = useIsMutating()
+  // Only loads with nothing to show yet: a refetch behind data already on the
+  // screen (after an answer, on reconnect) is the page keeping itself current,
+  // not something the reader is waiting for.
+  const fetching = useIsFetching({ predicate: (query) => query.state.data === undefined })
+  // Actions that show their own progress where they happen — a reply waiting
+  // in the transcript, a row saying it is being named — opt out with
+  // `meta: { silent: true }`, or the bar would announce them twice.
+  const mutating = useIsMutating({ predicate: (mutation) => !mutation.options.meta?.silent })
 
   const busy = isRouting || fetching > 0 || mutating > 0
 

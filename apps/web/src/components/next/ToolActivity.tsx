@@ -1,8 +1,10 @@
+import type { TFunction } from 'i18next'
 import type { ToolCallPart, ToolResultPart } from '@openchat/api-client'
-import { ChevronRight, Globe, Search, TriangleAlert, Wrench } from 'lucide-react'
+import { Brain, ChevronRight, Globe, Search, TriangleAlert, Wrench } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { useStuck } from '@/hooks/use-stuck'
 import { API_BASE_URL } from '@/lib/api'
 import { siteName } from '@/lib/urls'
 import { cn } from '@/lib/utils'
@@ -42,9 +44,10 @@ const STEP_SOURCES = 6
  * light timeline rather than a stack of boxes, so the answer below stays the
  * thing the eye lands on.
  */
-export function ToolActivity({ items }: { items: ActivityItem[] }) {
+export function ToolActivity({ items, thinking = false }: { items: ActivityItem[]; thinking?: boolean }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
+  const [head, stuck] = useStuck<HTMLButtonElement>(open)
   const steps = items.filter((item): item is ActivityItem & { kind: 'tool' } => item.kind === 'tool')
 
   const active = steps.find((step) => step.status === 'pending' || step.status === 'running')
@@ -68,6 +71,8 @@ export function ToolActivity({ items }: { items: ActivityItem[] }) {
   let title: string
   if (active) {
     title = stepLabel(t, active, true)
+  } else if (thinking) {
+    title = t('chat.reasoning.live')
   } else {
     const parts = [
       searches > 0 && t('chat.tool.searched', { count: searches }),
@@ -80,10 +85,17 @@ export function ToolActivity({ items }: { items: ActivityItem[] }) {
   }
 
   return (
-    <div className={cn('n-activity', open && 'is-open', active && 'is-active')}>
-      <button type="button" className="n-activity-head" aria-expanded={open} onClick={() => setOpen(!open)}>
+    <div className={cn('n-activity', open && 'is-open', (active || thinking) && 'is-active')}>
+      <button
+        ref={head}
+        type="button"
+        className="n-activity-head"
+        data-stuck={stuck || undefined}
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
         <span className="n-activity-icon">
-          {active ? (
+          {active || thinking ? (
             // Opacity, not movement, and kept under reduced motion: a frozen
             // indicator cannot be told apart from a stuck one.
             <span className="n-activity-pulse" data-motion="essential" role="status" aria-label={t('chat.tool.running')} />
@@ -92,7 +104,7 @@ export function ToolActivity({ items }: { items: ActivityItem[] }) {
           )}
         </span>
         <span className="n-activity-title">{title}</span>
-        {!active && failed > 0 && (
+        {!active && !thinking && failed > 0 && (
           <span className="n-activity-failed">{t('chat.tool.failures', { count: failed })}</span>
         )}
         {sources.length > 0 && (
@@ -193,10 +205,11 @@ export function SourceMark({ url }: { url: string }) {
 function stepIcon(name: string) {
   if (name === 'web_search') return <Search aria-hidden="true" />
   if (name === 'web_fetch') return <Globe aria-hidden="true" />
+  if (name === 'memory') return <Brain aria-hidden="true" />
   return <Wrench aria-hidden="true" />
 }
 
-type T = ReturnType<typeof useTranslation>['t']
+type T = TFunction<'common'>
 
 function stepLabel(t: T, step: ToolActivityStep, running: boolean): string {
   const args = callArguments(step.call)
@@ -210,6 +223,7 @@ function stepLabel(t: T, step: ToolActivityStep, running: boolean): string {
     if (!url) return t('chat.tool.fetch-pending')
     return running ? t('chat.tool.reading', { host: siteName(url) }) : t('chat.tool.fetch', { host: siteName(url) })
   }
+  if (step.call.name === 'memory') return t('chat.memory.step')
   return t('chat.tool.generic', { name: step.call.name })
 }
 

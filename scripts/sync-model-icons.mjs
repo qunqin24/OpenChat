@@ -29,6 +29,13 @@ const require = createRequire(import.meta.url)
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 const sourceDir = join(dirname(require.resolve('@lobehub/icons-static-svg/package.json')), 'icons')
+/**
+ * Our own marks, for the few shapes upstream does not draw (Z.ai's mark on a
+ * disc, as Z.ai shows it). Same naming rules — `-color` keeps its colours, a
+ * flat one paints with `currentColor` and is inverted in dark mode — and a
+ * file here wins over an upstream one of the same name.
+ */
+const customDir = join(repoRoot, 'scripts/model-icons')
 const componentPath = join(repoRoot, 'apps/web/src/components/model-icon.tsx')
 const outDir = join(repoRoot, 'apps/web/public/model-icons')
 
@@ -86,7 +93,8 @@ let bytes = 0
 mkdirSync(outDir, { recursive: true })
 
 for (const name of wanted) {
-  const from = join(sourceDir, `${name}.svg`)
+  const custom = join(customDir, `${name}.svg`)
+  const from = existsSync(custom) ? custom : join(sourceDir, `${name}.svg`)
   if (!existsSync(from)) {
     missing.push(name)
     continue
@@ -95,7 +103,7 @@ for (const name of wanted) {
   // Lobe ships `<brand>-color.svg` next to the flat `<brand>.svg` when there is
   // colour artwork. Taking the flat one anyway is almost always an oversight,
   // so say so instead of silently shipping the duller mark.
-  if (!name.endsWith('-color') && existsSync(join(sourceDir, `${name}-color.svg`))) {
+  if (from !== custom && !name.endsWith('-color') && existsSync(join(sourceDir, `${name}-color.svg`))) {
     shouldBeColour.push(name)
   }
 
@@ -135,7 +143,7 @@ for (const file of readdirSync(outDir)) {
 }
 
 if (missing.length > 0) {
-  console.error(`Not in @lobehub/icons-static-svg: ${missing.join(', ')}`)
+  console.error(`Not in @lobehub/icons-static-svg or scripts/model-icons: ${missing.join(', ')}`)
 }
 if (shouldBeColour.length > 0) {
   console.error(`A -color variant exists upstream for: ${shouldBeColour.join(', ')}`)

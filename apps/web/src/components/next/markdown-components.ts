@@ -2,6 +2,7 @@ import { cjk } from '@streamdown/cjk'
 import { useEffect, useSyncExternalStore } from 'react'
 import type { Components, LinkSafetyConfig, PluginConfig } from 'streamdown'
 
+import { HtmlPreview } from './HtmlPreview'
 import { MarkdownTable } from './MarkdownTable'
 
 /** Streamdown overrides shared by every Markdown surface in the chat. */
@@ -27,7 +28,8 @@ export const markdownComponents: Components = { table: MarkdownTable }
  * Markdown on the page picks them up then. Until they arrive a code block is
  * plain and a formula shows as its source, for the moment it takes.
  */
-let plugins: PluginConfig = { cjk }
+// html blocks can be previewed as the page they describe (HtmlPreview).
+let plugins: PluginConfig = { cjk, renderers: [{ language: ['html', 'htm'], component: HtmlPreview }] }
 const listeners = new Set<() => void>()
 const loading = { code: false, math: false }
 

@@ -38,8 +38,9 @@
 
 /* ---- layout -------------------------------------------------------------- */
 
-/* Surfaces are lifted with the theme's card shadow rather than outlined: a
-   hairline around every card and table reads as a form, not an answer. */
+/* Cards are lifted with the theme's card shadow rather than outlined: a
+   hairline around every card reads as a form, not an answer. Tables are the
+   exception: chat-table.css frames them with a tinted ring. */
 .prism-next .n-ui-card {
   display: flex;
   flex-direction: column;
@@ -51,6 +52,14 @@
 .prism-next .n-ui-card.is-muted {
   background: var(--n-ui-tint);
   box-shadow: none;
+}
+/* Side by side, cards are peers and share one surface: a muted card next to a
+   plain one read as two different kinds of thing, which the model rarely
+   means. A muted card stands alone, or in a row of muted ones; the accent
+   tone, which marks the recommended one, still shows. */
+.prism-next .n-ui-grid:has(> .n-ui-card:not(.is-muted)) > .n-ui-card.is-muted {
+  background: var(--n-card);
+  box-shadow: var(--n-shadow-card);
 }
 .prism-next .n-ui-card.is-accent {
   box-shadow: var(--n-shadow-card-hover);
@@ -104,10 +113,12 @@
   font-size: 12px;
 }
 .prism-next .n-ui-card-title {
+  /* Titles are medium, as the answer's headings are (chat-typography.css);
+     figures keep their semibold, where weight helps the number read. */
   margin: 0;
   color: var(--n-chat-heading);
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 24px;
 }
 .prism-next .n-ui-card-subtitle {
@@ -131,9 +142,17 @@
   flex: 1 1 160px;
   min-width: 0;
 }
-/* Badges are labels, not columns: they keep their own width in a row. */
+/* Badges are labels, not columns or blocks: they keep their own width in a
+   row, and in a stack (a card, a tab, folded detail) they sit at the start
+   rather than stretching across it. */
 .prism-next .n-ui-row > .n-ui-badge {
   flex: 0 0 auto;
+}
+.prism-next .n-ui-stack > .n-ui-badge {
+  align-self: flex-start;
+}
+.prism-next .n-ui-grid > .n-ui-badge {
+  justify-self: start;
 }
 .prism-next .n-ui-row:has(> .n-ui-badge) {
   align-items: center;
@@ -169,7 +188,7 @@
 
 .prism-next .n-ui-heading {
   margin: 0;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.35;
 }
 .prism-next .n-ui-heading.is-l1 {
@@ -216,7 +235,7 @@
   min-width: 0;
 }
 .prism-next .n-ui-callout-title {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 /* ---- data ---------------------------------------------------------------- */
@@ -375,6 +394,25 @@
   border: 1.5px solid var(--n-text-3);
   border-radius: 999px;
 }
+/* An ordinary procedure: the number, light on a dark disc. */
+.prism-next .n-ui-steps {
+  counter-reset: n-ui-step;
+}
+.prism-next .n-ui-step {
+  counter-increment: n-ui-step;
+}
+.prism-next .n-ui-step.is-plain .n-ui-step-marker {
+  border: 0;
+  background: var(--n-chat-heading, var(--n-text));
+  color: var(--n-bg);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.prism-next .n-ui-step.is-plain .n-ui-step-marker::before {
+  content: counter(n-ui-step);
+}
 .prism-next .n-ui-step.is-current .n-ui-step-marker {
   border-color: var(--n-text);
   box-shadow: inset 0 0 0 3px var(--n-bg), inset 0 0 0 9px var(--n-text);
@@ -392,7 +430,7 @@
 }
 .prism-next .n-ui-step-title,
 .prism-next .n-ui-event-title {
-  font-weight: 600;
+  font-weight: 500;
 }
 .prism-next .n-ui-step.is-todo .n-ui-step-title {
   color: var(--n-text-2);
@@ -453,7 +491,7 @@
   margin-bottom: 10px;
   color: var(--n-chat-heading);
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 500;
 }
 .prism-next .n-ui-chart-frame {
   position: relative;
@@ -518,8 +556,10 @@
   box-shadow: var(--n-shadow-card);
   font-size: 12px;
   line-height: 18px;
+  white-space: nowrap;
   pointer-events: none;
-  transform: translateX(-50%);
+  /* Placed by the chart at the pointer, then nudged off it (Chart.tsx). */
+  transition: transform 80ms ease-out;
 }
 .prism-next .n-ui-chart-tip-label {
   margin-bottom: 2px;
@@ -638,7 +678,7 @@
 .prism-next .n-ui-tabs-trigger[data-state='active'] {
   background: var(--n-ui-tint);
   color: var(--n-chat-heading);
-  font-weight: 600;
+  font-weight: 500;
 }
 .prism-next .n-ui-tabs-panel {
   padding: 14px 10px 8px;
@@ -665,7 +705,7 @@
   color: var(--n-chat-heading);
   font: inherit;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
 }
@@ -743,7 +783,7 @@
 .prism-next .n-ui-checklist-title {
   color: var(--n-chat-heading);
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 500;
 }
 .prism-next .n-ui-checklist-count {
   margin-left: auto;
@@ -1019,7 +1059,7 @@
   margin: 2px 0 0;
   color: var(--n-chat-heading);
   font-size: 20px;
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1.35;
 }
 .prism-next .n-ui-article-title a {

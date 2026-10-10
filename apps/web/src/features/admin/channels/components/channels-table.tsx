@@ -1,6 +1,6 @@
 import type { Channel } from '@openchat/api-client'
-import { flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
-import { useMemo } from 'react'
+import { flexRender, getCoreRowModel, useReactTable, type RowSelectionState } from '@tanstack/react-table'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Skeleton } from '@/components/shadcn/ui/skeleton'
@@ -15,13 +15,15 @@ import {
 import { useAdminChannels } from '@/features/admin/use-admin'
 import { cn } from '@/lib/utils'
 import { useChannelTypes } from '../channel-types'
+import { ChannelsBulkActions } from './channels-bulk-actions'
 import { channelsColumns } from './channels-columns'
 
 /**
  * The users table runs in manual mode because the server pages and searches it.
  * Channels come back as one short list — an operator has a handful of them —
- * so there is nothing to page, filter or select across, and this is the plain
- * client-side table react-table gives you for free.
+ * so there is nothing to page or filter, and this is the plain client-side
+ * table react-table gives you for free, with row selection for the bulk
+ * toolbar.
  */
 export function ChannelsTable() {
   const { t } = useTranslation()
@@ -34,12 +36,18 @@ export function ChannelsTable() {
   const rows = useMemo(() => data ?? [], [data])
   const columns = useMemo(() => channelsColumns(t, types ?? []), [t, types])
 
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
+
   const table = useReactTable<Channel>({
     data: rows,
     columns,
-    // Keyed by channel id so React reuses rows across a refetch.
+    // Keyed by channel id so React reuses rows across a refetch, and a
+    // selection survives one.
     getRowId: (row) => row.id,
     getCoreRowModel: getCoreRowModel(),
+    state: { rowSelection },
+    onRowSelectionChange: setRowSelection,
+    enableRowSelection: true,
   })
 
   return (
@@ -100,7 +108,7 @@ export function ChannelsTable() {
             {!isError &&
               !isPending &&
               table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id} className="group/row">
+                <TableRow key={row.id} className="group/row" data-state={row.getIsSelected() && 'selected'}>
                   {row.getVisibleCells().map((cell) => (
                     <TableCell
                       key={cell.id}
@@ -117,6 +125,7 @@ export function ChannelsTable() {
           </TableBody>
         </Table>
       </div>
+      <ChannelsBulkActions table={table} />
     </div>
   )
 }

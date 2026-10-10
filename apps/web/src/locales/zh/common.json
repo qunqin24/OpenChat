@@ -6,14 +6,22 @@
   "nav": {
     "toggleSidebar": "切换侧边栏",
     "toggleTheme": "外观",
-    "language": "语言"
+    "language": "语言",
+    "settings": "设置"
   },
   "chat": {
     "placeholder": "发送消息…",
     "send": "发送",
     "stop": "停止",
     "copy": "复制",
+    "regenerate": "重新回答",
+    "edit": "编辑",
+    "edit-send": "发送",
+    "edit-cancel": "取消",
     "rename": "重命名",
+    "smart-title": "智能命名",
+    "smart-title-pending": "正在命名…",
+    "smart-title-failed": "智能命名失败，请稍后重试。",
     "delete": "删除",
     "untitled": "新对话",
     "stopped": "已停止",
@@ -63,6 +71,12 @@
       "attachments_too_large": "一条消息的文件加起来最多 20 MB。",
       "attachment_unsupported": "所选模型不支持这类文件，请移除文件或换一个模型。",
       "attachment_unavailable": "有文件没有上传成功或已经发送过，请移除后重新添加。",
+      "nothing_to_answer": "这个对话里还没有可以回答的消息。",
+      "not_latest": "只能切换最后一条回答的版本。",
+      "not_on_path": "这条提问已不在当前显示的分支上。",
+      "message_not_found": "这条消息已经不存在了。",
+      "not_pending": "这个问题已经回答过、被跳过，或被重新生成替换了。",
+      "invalid_answers": "回答不完整，请检查每个问题。",
       "generic": "发送失败，请重试。"
     },
     "thinking": {
@@ -90,6 +104,52 @@
       "label": "联网",
       "on-hint": "联网已开启：模型会在需要时搜索和读取网页。点击关闭",
       "off-hint": "联网已关闭：模型只用已有知识回答。点击开启"
+    },
+    "question-version": {
+      "label": "提问版本",
+      "previous": "上一个提问版本",
+      "next": "下一个提问版本",
+      "error": "切换提问版本失败，请重试。"
+    },
+    "version": {
+      "label": "回答版本",
+      "previous": "上一个版本",
+      "next": "下一个版本",
+      "error": "切换回答版本失败，请重试。"
+    },
+    "ask": {
+      "label": "需要你的选择",
+      "multi": "可多选",
+      "other": "其他",
+      "answered": "已回答",
+      "skipped": "已跳过",
+      "unanswered": "未作答",
+      "pending": "等待你的回答",
+      "question": "问题",
+      "dismiss": "收起问题",
+      "skip": "跳过",
+      "send": "发送",
+      "next": "下一题",
+      "previous": "上一题",
+      "step": "{{n}} / {{total}}",
+      "write": "或自行撰写回复",
+      "open": "回答"
+    },
+    "preview": {
+      "show": "预览",
+      "code": "代码",
+      "fullscreen": "全屏预览",
+      "close": "退出全屏",
+      "title": "HTML 预览"
+    },
+    "memory": {
+      "add": "已保存到记忆",
+      "update": "已更新记忆",
+      "delete": "已从记忆中删除",
+      "undo": "撤销",
+      "undone": "已撤销",
+      "manage": "管理记忆",
+      "step": "更新记忆"
     }
   },
   "state": {
@@ -224,6 +284,19 @@
       "new-chat": "开始新对话",
       "preview-idle": "选择对话进行预览",
       "preview-empty": "这个对话还没有消息"
+    },
+    "temporary": {
+      "label": "临时聊天",
+      "on-hint": "已开启：这次对话不会进入历史记录，也不使用记忆",
+      "off-hint": "开启后，下一次对话不进入历史记录、不使用记忆",
+      "note": "临时聊天不会出现在历史记录、记忆和搜索中，创建 24 小时后自动删除。自定义指令仍然生效。",
+      "title": "你正处于临时聊天",
+      "exit": "退出临时聊天"
+    },
+    "context": {
+      "label": "上下文窗口",
+      "hint": "已用 {{percent}}%（剩余 {{left}}%）\n{{used}} / {{limit}} tokens",
+      "aria": "上下文窗口已用 {{percent}}%"
     }
   },
   "auth": {
@@ -278,22 +351,76 @@
       "channels": "渠道",
       "models": "模型市场",
       "web-search": "联网搜索",
-      "storage": "文件存储"
+      "storage": "文件存储",
+      "usage-logs": "使用日志"
     },
-    "stats": {
-      "users": "用户总数",
-      "active": "启用中",
-      "conversations": "对话总数",
-      "messages": "消息总数",
-      "new-users": "新增用户",
-      "new-7d": "近 7 天新增 {{n}}",
-      "disabled": "已停用 {{n}}",
-      "messages-7d": "近 7 天 {{n}} 条"
-    },
-    "trend": {
-      "title": "活跃趋势",
-      "days": "{{n}} 天",
-      "messages": "消息"
+    "dashboard": {
+      "subtitle": "模型请求的用量、花费与稳定性",
+      "range": {
+        "24h": "24 小时",
+        "7d": "7 天",
+        "30d": "30 天",
+        "90d": "90 天"
+      },
+      "vs-prev": "箭头为较上一个等长周期的变化",
+      "kpi": {
+        "cost": "费用",
+        "requests": "请求数",
+        "tokens": "Token",
+        "cache": "缓存命中率",
+        "errors": "错误率",
+        "latency": "首字延迟 P50"
+      },
+      "hint": {
+        "cost-saved": "缓存省下 {{v}}",
+        "cost-none": "未定价的请求不计入",
+        "requests": "{{n}} 位活跃用户 · 共 {{total}} 个账号",
+        "tokens": "输入 {{input}} · 输出 {{output}}",
+        "cache": "缓存读 {{read}} · 写 {{write}}",
+        "errors": "{{n}} 次失败",
+        "latency": "P95 {{v}}"
+      },
+      "trend": {
+        "title": "趋势",
+        "cost": "费用",
+        "requests": "请求数",
+        "success": "成功",
+        "errors": "失败"
+      },
+      "models": {
+        "title": "模型",
+        "subtitle": "按请求数排序",
+        "model": "模型",
+        "requests": "请求",
+        "tokens": "Token 入 / 出",
+        "cost": "费用",
+        "cache": "缓存命中",
+        "errors": "错误率",
+        "latency": "首字 P50"
+      },
+      "channels": {
+        "title": "渠道健康",
+        "subtitle": "哪个上游在出错或变慢",
+        "channel": "渠道",
+        "requests": "请求",
+        "errors": "错误率",
+        "first-token": "首字 P50 / P95",
+        "duration": "总耗时 P50 / P95",
+        "last-error": "最近失败"
+      },
+      "users": {
+        "title": "用户花费",
+        "subtitle": "按费用排序",
+        "anonymous": "已删除的账号",
+        "requests": "{{n}} 次请求"
+      },
+      "errors": {
+        "title": "最近失败",
+        "all": "查看全部",
+        "empty": "这段时间没有失败的请求",
+        "unknown": "未知错误"
+      },
+      "empty": "这段时间还没有请求"
     },
     "users": {
       "search": "搜索邮箱或用户名",
@@ -359,13 +486,16 @@
       "enable": "启用",
       "disable": "停用",
       "done": "已更新 {{n}} 个账号",
-      "skipped": "{{n}} 个被跳过"
+      "skipped": "{{n}} 个被跳过",
+      "entity-channel": "渠道",
+      "delete": "删除",
+      "channels-updated": "已更新 {{n}} 个渠道",
+      "channels-deleted": "已删除 {{n}} 个渠道",
+      "failed": "{{n}} 个失败",
+      "channels-delete-confirm": "将删除选中的 {{n}} 个渠道及其密钥。此操作不可撤销，但不会影响任何聊天记录。",
+      "channels-delete-title": "删除 {{n}} 个渠道"
     },
     "sign-out-confirm": "确定要退出登录吗？下次访问需要重新登录。",
-    "recent-users": {
-      "title": "最近注册",
-      "subtitle": "最新加入的账号"
-    },
     "ui": {
       "table": {
         "rows-per-page": "每页行数",
@@ -404,10 +534,6 @@
       "nav-group": {
         "general": "常规",
         "other": "其他"
-      },
-      "teams": {
-        "label": "团队",
-        "add": "新建团队"
       },
       "config": {
         "open": "外观设置",
@@ -492,7 +618,21 @@
         "genui": "智能 UI",
         "genui-hint": "开启后，模型可以用卡片、指标、表格、步骤等界面组件来组织回答，适合方案、对比、清单这类内容。组件说明会加进每次请求的系统提示词，约多 2~3k token。",
         "genui-on": "智能 UI 已开启",
-        "genui-off": "智能 UI 已关闭"
+        "genui-off": "智能 UI 已关闭",
+        "ask-user": "向用户提问",
+        "ask-user-hint": "开启后，模型可以在遇到只有用户才能决定的事项时，用选择题向用户提问并等待回答。默认开启，对话进行中的运行在下一次请求时生效。",
+        "ask-user-on": "向用户提问已开启",
+        "ask-user-off": "向用户提问已关闭",
+        "task-model": "任务模型",
+        "task-model-hint": "用来处理后台任务的模型，目前用于在对话第一次回答后自动生成标题。建议选一个便宜、快的模型。不选时用每个对话自己的模型。",
+        "task-model-own": "跟随对话模型",
+        "task-model-gone": "{{model}}（已不可用）",
+        "task-model-saved": "任务模型已保存",
+        "memory": "个人记忆",
+        "memory-hint": "开启后，模型可以记住用户的长期信息，并在之后的新对话里参考。关闭后所有对话都不读取、不写入记忆，用户仍可查看和删除自己的记忆，自定义指令不受影响。默认开启。管理员看不到任何人的记忆内容。",
+        "memory-on": "个人记忆已开启",
+        "memory-off": "个人记忆已关闭",
+        "save-failed": "保存失败，请稍后重试"
       }
     },
     "channels": {
@@ -565,7 +705,14 @@
       "picker-empty": "没有匹配的厂商。",
       "picker-relay": "填写任意兼容 OpenAI 协议的地址",
       "api-key-format": "密钥格式：{{format}}",
-      "api-key-doc": "前往申请密钥"
+      "api-key-doc": "前往申请密钥",
+      "select-all": "全选渠道",
+      "select-row": "选择这个渠道",
+      "api-format": "接口格式",
+      "api-format-chat": "Chat Completions",
+      "api-format-chat-hint": "几乎所有 OpenAI 兼容服务都支持，不确定时选这个。",
+      "api-format-responses": "Responses",
+      "api-format-responses-hint": "OpenAI 的新接口。推理模型能在多轮工具调用之间保留思考，需要服务端支持。"
     },
     "models": {
       "title": "模型市场",
@@ -749,6 +896,168 @@
       "save": "保存设置",
       "saved": "文件存储设置已保存",
       "save-failed": "保存失败，请重试"
+    },
+    "usage": {
+      "subtitle": "所有发往模型的请求：谁发的、走了哪个渠道、花了多少钱、响应有多快。",
+      "none": "没有符合条件的请求",
+      "refresh": "刷新",
+      "time": "时间",
+      "channel": "渠道",
+      "user": "用户",
+      "model": "模型",
+      "stream": "流式",
+      "tokens": "输入/输出 Token",
+      "cost": "费用",
+      "timing": "首字/总耗时",
+      "details": "详情",
+      "status": "状态",
+      "kind": "类型",
+      "any-channel": "全部渠道",
+      "any-status": "全部状态",
+      "any-kind": "全部类型",
+      "status-ok": "成功",
+      "status-error": "错误",
+      "kind-chat": "对话",
+      "kind-title": "标题",
+      "from": "开始日期",
+      "to": "结束日期",
+      "search-model": "搜索模型…",
+      "streamed": "流式",
+      "not-streamed": "整段",
+      "speed": "{{n}} t/s",
+      "first-token": "首字耗时",
+      "duration": "总耗时",
+      "cache-read": "缓存读 {{n}}",
+      "cache-write": "缓存写 {{n}}",
+      "reasoning": "推理 {{n}}",
+      "cache-read-price": "缓存读",
+      "cache-write-price": "缓存写",
+      "tier-standard": "标准",
+      "price-hint": "美元 / 百万 Token，输入 / 输出，为请求发生时的定价",
+      "sum-requests": "请求数",
+      "sum-errors": "{{n}} 次失败",
+      "sum-input": "输入 Token",
+      "sum-output": "输出 Token",
+      "sum-cost": "费用",
+      "sum-cost-note": "未定价的请求不计入",
+      "sum-cache": "缓存命中率",
+      "sum-cache-note": "缓存读 {{read}} · 写 {{write}}",
+      "sum-cache-saved": "缓存读 {{read}} · 省 {{saved}}",
+      "cache-hit": "命中 {{n}}",
+      "error-code": {
+        "no_model": "模型不可用",
+        "model_error": "模型出错",
+        "model_auth": "密钥被拒",
+        "model_rate_limited": "被限流",
+        "context_too_long": "上下文过长",
+        "internal": "服务器错误"
+      }
+    }
+  },
+  "settings": {
+    "title": "设置",
+    "close": "关闭",
+    "save": "保存",
+    "cancel": "取消",
+    "retry": "重试",
+    "load-failed": "加载失败，请稍后重试。",
+    "counter": "{{n}} / {{max}}",
+    "tabs": {
+      "general": "通用",
+      "personalization": "个性化",
+      "account": "账户",
+      "data": "数据"
+    },
+    "general": {
+      "theme": "外观",
+      "language": "语言",
+      "section": "界面设置"
+    },
+    "personalization": {
+      "instructions": "自定义指令",
+      "instructions-hint": "写下你希望模型始终了解和遵循的内容。之后的每个新对话都会带上它们，临时聊天也不例外。",
+      "about": "关于你",
+      "about-placeholder": "例如：我是一名后端工程师，常用 Go 和 PostgreSQL。",
+      "style": "希望怎么回答",
+      "style-placeholder": "例如：先给结论，再解释；回答尽量简短。",
+      "saved": "自定义指令已保存",
+      "save-failed": "保存失败，请稍后重试。",
+      "memory": "记忆",
+      "memory-admin-off": "管理员已关闭记忆功能：所有对话暂时不会读取或写入记忆。你仍然可以查看和删除已有的记忆。",
+      "memory-temporary": "临时聊天不会读取或写入记忆，只会用到上面的自定义指令。",
+      "learn": "从对话中学习",
+      "soon": "即将推出",
+      "memory-description": "你可以点下面的“管理”添加记忆，让模型更了解你、回答更贴合你。模型也会在对话中自己记下值得长期记住的内容，并在回复里告诉你，可以随时撤销。"
+    },
+    "memory": {
+      "clear-yes": "确认清空",
+      "cleared": "记忆已清空",
+      "full": "记忆已满（{{max}} 条）。请先删除或整理一些，模型也不会再添加新的记忆。",
+      "full-error": "记忆已满，请先删除一些。",
+      "add-placeholder": "添加一条记忆…",
+      "add": "添加",
+      "empty": "还没有记忆。模型会在对话中记下值得长期记住的信息，你也可以自己添加。",
+      "edit": "编辑",
+      "delete": "删除",
+      "source-model": "模型添加",
+      "source-auto": "自动",
+      "recent": "最近由模型更改",
+      "op-add": "新增",
+      "op-update": "更新",
+      "op-delete": "删除",
+      "undo": "撤销",
+      "undone": "已撤销",
+      "undo-changed": "无法撤销：这条记忆之后被改动过。",
+      "undo-failed": "撤销失败，请稍后重试。",
+      "duplicate": "已经有这条记忆了。",
+      "too-long": "一条记忆最多 200 个字符。",
+      "empty-error": "记忆不能为空。",
+      "failed": "操作失败，请稍后重试。",
+      "title": "记忆",
+      "manage": "管理",
+      "count": "{{n}} / {{max}} 条",
+      "search": "搜索记忆",
+      "clear-search": "清除搜索",
+      "content": "内容",
+      "updated-at": "更新时间",
+      "no-match": "没有找到匹配的记忆。",
+      "add-memory": "添加记忆",
+      "clear-memory": "清空记忆",
+      "clear-confirm": "确认清空全部记忆？",
+      "delete-confirm": "删除这条记忆？"
+    },
+    "account": {
+      "name": "用户名",
+      "name-hint": "登录时可以使用用户名或邮箱。",
+      "email": "邮箱",
+      "saved": "个人资料已保存",
+      "password": "修改密码",
+      "current-password": "当前密码",
+      "new-password": "新密码",
+      "password-hint": "修改后，其他设备上的登录会退出，当前这个不受影响。",
+      "confirm-password": "确认新密码",
+      "password-mismatch": "两次输入的密码不一致。",
+      "password-changed": "密码已修改",
+      "change-password": "修改密码",
+      "title": "你的账户",
+      "desc": "管理你的账户信息。",
+      "show": "显示",
+      "hide": "隐藏",
+      "new-placeholder": "输入新密码（至少 8 位）",
+      "confirm-placeholder": "再输入一次新密码"
+    },
+    "data": {
+      "soon": "敬请期待",
+      "hint": "导出和删除个人数据的功能会在之后提供。",
+      "temporary": "临时聊天在创建 24 小时后自动删除。"
+    },
+    "search": "搜索",
+    "no-results": "没有结果",
+    "keywords": {
+      "general": "外观,主题,深色,浅色,语言,theme,language,appearance",
+      "personalization": "自定义指令,记忆,个性化,偏好,instructions,memory,personalization",
+      "account": "账户,用户名,邮箱,密码,头像,account,email,password",
+      "data": "数据,导出,删除,临时聊天,data,export"
     }
   }
 }

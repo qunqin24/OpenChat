@@ -31,7 +31,8 @@
   background: transparent;
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
+  /* OpenWebUI's collapsible titles are body size. */
+  font-size: 15px;
   color: var(--n-text-2);
   user-select: none;
 }
@@ -39,27 +40,35 @@
   content: '›';
   transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
 }
+.prism-next .n-reasoning-toggle[data-state='open'] {
+  /* Room above and below once it is stuck, taken back so nothing moves. */
+  padding-block: 4px;
+  margin-block: -4px;
+}
 .prism-next .n-reasoning-toggle[data-state='open']::after {
   transform: rotate(90deg);
 }
 /* Height from Radix's measurement of the content, so it opens to exactly its
-   size and closes from it; the fade keeps the text from being sliced. */
+   size and closes from it. OpenWebUI's Collapsible motion: Svelte's `slide` —
+   height alone, no fade, 300ms on quintOut both ways (Svelte plays an outro's
+   easing forwards on the remaining height, so closing also starts fast and
+   settles, rather than easing in). */
 .prism-next .n-reasoning-content {
   overflow: hidden;
 }
 .prism-next .n-reasoning-content[data-state='open'] {
-  animation: n-reasoning-open 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: n-reasoning-open 300ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 .prism-next .n-reasoning-content[data-state='closed'] {
-  animation: n-reasoning-close 200ms cubic-bezier(0.4, 0, 1, 1);
+  animation: n-reasoning-close 300ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 @keyframes n-reasoning-open {
-  from { height: 0; opacity: 0; }
-  to { height: var(--radix-collapsible-content-height); opacity: 1; }
+  from { height: 0; }
+  to { height: var(--radix-collapsible-content-height); }
 }
 @keyframes n-reasoning-close {
-  from { height: var(--radix-collapsible-content-height); opacity: 1; }
-  to { height: 0; opacity: 0; }
+  from { height: var(--radix-collapsible-content-height); }
+  to { height: 0; }
 }
 .prism-next .n-reasoning-body {
   margin-top: 6px;
@@ -106,6 +115,10 @@
   line-height: 20px;
 }
 .prism-next .n-activity-head {
+  /* Body size, like the reasoning toggle and OpenWebUI's collapsible titles;
+     the steps inside stay a size down. */
+  font-size: 15px;
+  line-height: 22px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -120,6 +133,42 @@
 .prism-next .n-activity-head:hover {
   background: var(--n-hover);
   color: var(--n-text);
+}
+/* Open, the line stays at the top of the transcript while its steps scroll
+   under it, so a long search can be closed from wherever the reader is. Sticky
+   within the activity, so it lets go once the steps have scrolled past. Open
+   reasoning does the same with its toggle. Both stick right under the floating
+   top bar, drawn over its fade. */
+.prism-next .n-reasoning-toggle[data-state='open'],
+.prism-next .n-activity.is-open .n-activity-head {
+  position: sticky;
+  /* 0, not the bar's height: the transcript's top padding (room for the
+     floating bar) already offsets where a sticky box stops. */
+  top: 0;
+  /* Above the top bar (z-index 10) and so above its fade, which would
+     otherwise wash the label out; it sits below the bar, so the bar's own
+     title is never covered. */
+  z-index: 11;
+  isolation: isolate;
+}
+/* Pinned (data-stuck, from useStuck), the header joins the top bar: the bar
+   turns solid and the header continues it, page colour out to the column's
+   edges, so the two read as one header with the transcript fading in beneath
+   it — not as a band floating over text that still shows above it. Only while
+   pinned: in the flow, the fade would fog the text below it. */
+.prism-next .n-reasoning-toggle[data-stuck]::before,
+.prism-next .n-activity-head[data-stuck]::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  /* 1px up, so no hairline of text shows at the seam with the bar. */
+  inset: -1px -100vmax -20px;
+  background: linear-gradient(to bottom, var(--n-bg) calc(100% - 20px), transparent 100%);
+  pointer-events: none;
+}
+.prism-next .n-main:has([data-stuck]) .n-topbar::before {
+  inset: 0;
+  background: var(--n-bg);
 }
 .prism-next .n-activity-icon {
   display: inline-flex;
@@ -221,7 +270,7 @@
   }
 }
 /* What the model said between rounds, in the body colour: it is the account of
-   how the search went, worth reading, not a footnote. Its thinking stays quiet. */
+   how the search went, worth reading, not a footnote. Its thinking is a step quieter. */
 .prism-next .n-activity-note {
   padding: 5px 0 5px 22px;
   color: var(--n-chat-body);
@@ -230,8 +279,9 @@
   white-space: pre-wrap;
 }
 .prism-next .n-activity-note.is-reasoning {
-  color: var(--n-text-3);
-  font-style: italic;
+  /* Quieter than what the model said, but read, not skimmed past: the same
+     muted ink as the reasoning outside a search, upright. */
+  color: var(--n-chat-muted);
 }
 .prism-next .n-activity-step {
   display: flex;
@@ -408,134 +458,38 @@
   }
 }
 
-/* The thinking slider (ThinkingSlider.tsx), shown in a popover from the
-   composer's thinking button — so unscoped: the popover renders in a portal,
-   outside `.prism-next`. */
-/* The slider itself: a pill track that fills blue up
-   to a white knob, with ticks rising in height towards more thinking. While
-   held, the knob and fill follow the pointer. */
-.n-think {
-  position: relative;
-  flex-shrink: 0;
-  height: 28px;
-  margin-inline: 4px;
-  user-select: none;
-  touch-action: none;
+/* ---- thinking effort ---------------------------------------------------- */
+
+/* Rising bars, one per level the model has, filled up to the chosen one: in
+   the composer's thinking button and beside each level in its menu (which
+   renders in a portal, outside `.prism-next`, so these are unscoped). */
+.n-effort-meter {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
 }
-.n-think-track {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  border-radius: 999px;
-  /* Opaque, so the tab above can be the same material and join it seamlessly. */
-  background: linear-gradient(180deg, var(--n-think-surface), var(--n-think-surface-2));
-  cursor: pointer;
-  outline: none;
-}
-.n-think.is-dragging .n-think-track {
-  cursor: grabbing;
-}
-.n-think-track:focus-visible {
-  box-shadow: 0 0 0 3px rgb(37 99 235 / 30%);
-}
-.n-think-track[aria-disabled='true'] {
-  cursor: default;
-  opacity: 0.5;
-}
-.n-think-fill {
-  position: absolute;
-  inset-block: 0;
-  left: 0;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #1677ff, #0a5ce0);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 18%);
-  transition: width 180ms cubic-bezier(0.22, 1, 0.36, 1), opacity 150ms ease;
-}
-.n-think-fill.is-empty {
-  opacity: 0;
-}
-.n-think-knob {
-  position: absolute;
-  top: 50%;
-  height: 22px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, #ffffff, #f4f4f5);
-  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 8%), 0 1px 2px rgb(0 0 0 / 18%);
-  transform: translateY(-50%);
-  /* The same curve and duration as the fill's width, so on release the two
-     settle onto the stop together. */
-  transition:
-    left 180ms cubic-bezier(0.22, 1, 0.36, 1),
-    width 180ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.n-think-tick {
-  position: absolute;
-  top: 50%;
-  width: 1.5px;
-  margin-left: -0.75px;
+.n-effort-bar {
+  width: 3px;
   border-radius: 1px;
-  background: rgb(0 0 0 / 20%);
-  transform: translateY(-50%);
-  pointer-events: none;
-  transition: background-color 150ms ease;
+  background: currentColor;
+  opacity: 0.25;
 }
-.n-think-tick.is-filled {
-  background: rgb(255 255 255 / 45%);
+.n-effort-bar.is-on {
+  opacity: 1;
 }
-.n-think-tick.is-under {
-  background: rgb(0 0 0 / 45%);
+.n-menu.n-effort-menu {
+  width: 220px;
 }
-/* While held, the knob and the fill follow the pointer exactly: no easing on
-   either, or the fill trails the knob on a fast drag. Only the fill's fade in
-   and out at automatic stays animated. */
-.n-think.is-dragging .n-think-fill {
-  transition: opacity 150ms ease;
+.n-effort-icon {
+  display: inline-flex;
+  width: 20px;
+  flex-shrink: 0;
+  justify-content: center;
 }
-.n-think.is-dragging .n-think-knob {
-  transition: none;
-}
-
-:root {
-  --n-think-surface: #f3f3f4;
-  --n-think-surface-2: #ececed;
-}
-
-.dark .n-think-tick {
-  background: rgb(255 255 255 / 26%);
-}
-.dark .n-think-tick.is-under {
-  background: rgb(0 0 0 / 50%);
-}
-.dark .n-think-knob {
-  background: linear-gradient(180deg, #fafafa, #e8e8ea);
-}
-.dark {
-  --n-think-surface: #333335;
-  --n-think-surface-2: #38383a;
-}
-
-/* The popover: a heading naming the level, then the slider. */
-.n-menu.n-think-pop {
-  gap: 6px;
-  min-width: 0;
-  padding: 10px 12px 12px;
-  overflow: visible;
-}
-.n-think-pop-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  font-size: 12px;
-  line-height: 16px;
-}
-.n-think-pop-head > :first-child {
-  color: var(--n-text-2);
-}
-.n-think-pop-head > :last-child {
-  font-weight: 500;
-}
-.n-think-pop .n-think {
-  margin: 8px 0 0;
+.n-effort-icon svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* The composer's web switch. Off it is quiet like the other controls; on it

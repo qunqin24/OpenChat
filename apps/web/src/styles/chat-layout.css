@@ -3,7 +3,8 @@
  * 0a7c15832f): the avatar owns the first line, the model name and grey greeting
  * follow it, then a two-column starter grid. The composer is always docked
  * below, so the welcome centres itself in the scroll region left above it.
- * This is the local override layer; next-theme.css stays verbatim.
+ * Layered on next-theme.css: where both set a property, this sheet wins by
+ * coming later in the import order.
  */
 /* Messages.svelte's empty state is `h-full flex pt-18`; ChatPlaceholder then
    centres itself with `m-auto`. Auto margins fall to zero once the frame is
@@ -12,7 +13,7 @@
 .prism-next .n-scroll-welcome {
   display: flex;
   flex-direction: column;
-  padding-top: 72px;
+  padding-top: calc(72px + var(--n-topbar-h, 0px));
 }
 
 .prism-next .n-welcome {
@@ -27,7 +28,6 @@
 
 /* ChatPlaceholder's size-2.7 (43.2px), a full circle. */
 .prism-next .n-welcome-avatar {
-  --n-avatar-size: 2.7rem;
   display: flex;
   border-radius: 9999px;
 }
@@ -178,25 +178,6 @@
   background: oklch(0.42 0 0);
 }
 
-/* Plain-text model tag before Send; matches MessageInput's triggerClass:
-   text-[0.8125rem] font-normal, gray-600 in light and gray-300 in dark. */
-.prism-next .n-composer-model {
-  align-self: center;
-  max-width: 14rem;
-  overflow: hidden;
-  padding-inline: 4px;
-  color: oklch(0.51 0 0);
-  font-size: 0.8125rem;
-  font-weight: 400;
-  line-height: 20px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.dark .prism-next .n-composer-model {
-  color: oklch(0.85 0 0);
-}
-
 .prism-next .n-composer-dock {
   padding-bottom: max(8px, env(safe-area-inset-bottom));
 }
@@ -220,14 +201,10 @@
  * carries this class, and streaming updates reuse the mounted content node.
  */
 .prism-next .n-chat-fade {
-  animation: n-chat-fade-in 50ms linear both;
-}
-
-/* Historical replies must not replay the ported 320ms entrance on every chat
- * switch. The ready content above owns the single transition for the view.
- */
-.prism-next .n-msg-assistant {
-  animation: none;
+  /* `backwards`, not `both`: a fill that outlives the fade keeps the column a
+     stacking context, and the headers that stick under the top bar
+     (agent.css) could then never be drawn above the bar's fade. */
+  animation: n-chat-fade-in 50ms linear backwards;
 }
 
 @keyframes n-chat-fade-in {
@@ -245,8 +222,109 @@
    newest exchange, where the tail-follow reads heights and a reply streams —
    are always drawn. */
 @supports (content-visibility: auto) {
-  .prism-next .n-chat-fade > :is(.n-msg-user, .n-msg-assistant):not(:nth-last-child(-n + 2)) {
+  /* A reply with reasoning or a search open is exempt: containment would make
+     it a stacking context, sinking its stuck header under the top bar's fade. */
+  .prism-next .n-chat-fade > :is(.n-msg-user, .n-msg-assistant):not(:nth-last-child(-n + 2)):not(:has(.n-reasoning-toggle[data-state='open'], .n-activity.is-open)) {
     content-visibility: auto;
     contain-intrinsic-size: auto 200px;
+    /* Containment clips painting to the message's box, and blocks as wide as
+       the column (a Grid of cards, a table) drew their shadows past its right
+       edge, which came out cut. The box reaches 16px further right, given back
+       by the negative margin, so nothing moves and the shadows have room; the
+       left already has the avatar's. Not the bottom: vertical margins between
+       messages collapse, and the same trick there would change the spacing. */
+    padding-inline-end: 16px;
+    margin-inline-end: -16px;
   }
 }
+
+/* Editing the last question in place (UserMessage): the bubble widens into a
+   box holding the field, with Cancel and Send beneath the text on the right.
+   On the bubble's own colour, so it reads as the same message opened up. */
+.prism-next .n-msg-user.is-editing {
+  align-items: stretch;
+}
+.prism-next .n-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px 10px 16px;
+  border-radius: 22px;
+  background: var(--n-bubble);
+}
+.prism-next .n-edit-field {
+  width: 100%;
+  max-height: 40vh;
+  padding: 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--n-chat-input, var(--n-text));
+  font: inherit;
+  line-height: 1.625;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.prism-next .n-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.prism-next .n-edit-btn {
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--n-bg);
+  box-shadow: inset 0 0 0 1px var(--n-line);
+  color: var(--n-text);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 120ms ease, opacity 120ms ease;
+}
+.prism-next .n-edit-btn:hover {
+  background: color-mix(in srgb, var(--n-bg) 92%, var(--n-text));
+}
+.prism-next .n-edit-btn.is-primary {
+  background: var(--n-accent);
+  box-shadow: none;
+  color: var(--n-accent-fg);
+}
+.prism-next .n-edit-btn.is-primary:not(:disabled):hover {
+  background: var(--n-accent-hover);
+}
+.prism-next .n-edit-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* The composer's context meter (ContextMeter): a ring that fills as the
+   conversation uses up the model's window, amber past 80%, red past 95%. */
+.prism-next .n-context-meter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 999px;
+  color: var(--n-text-2);
+  cursor: default;
+}
+.prism-next .n-context-meter:hover { background: var(--n-hover); }
+.prism-next .n-context-meter:focus-visible { outline-offset: -2px; }
+.prism-next .n-context-meter svg { width: 18px; height: 18px; transform: rotate(-90deg); }
+.prism-next .n-context-track { fill: none; stroke: var(--n-line); stroke-width: 2.5; }
+.prism-next .n-context-fill {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.prism-next .n-context-meter.is-high { color: #d97706; }
+.prism-next .n-context-meter.is-full { color: var(--n-err); }
