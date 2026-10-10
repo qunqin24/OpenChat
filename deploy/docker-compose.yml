@@ -55,6 +55,10 @@ services:
       HTTP_ADDR: ":8080"
       DATABASE_URL: postgres://openchat:${POSTGRES_PASSWORD}@postgres:5432/openchat?sslmode=disable
       CORS_ORIGINS: https://${DOMAIN:-localhost}
+      # The time zone days and months are counted in: a model's daily and
+      # monthly spending caps start over at this zone's midnight. The image has
+      # no zone database of its own; the binary carries one.
+      TZ: ${TZ:-Asia/Shanghai}
     volumes:
       - openchat-data:/app/data
     # Reachable only through Caddy. For a trial without a domain, publish it

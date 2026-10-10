@@ -60,6 +60,13 @@ grep -rn -- "--n-\|prism-next" apps/web/src/features/admin apps/web/src/componen
 - 没跑过 web 构建时 `webui/dist` 里只有 `.gitkeep`，服务端只提供 API，`/` 返回一行纯文本说明；该目录除 `.gitkeep` 外都被 gitignore，不要提交。
 - 个人记忆（`internal/memory`、`tools/memory.go`）：对话在第一次运行时把用户的自定义指令和记忆存成 `conversations.memory_snapshot`，此后每次请求的系统提示词都从这份快照渲染，同一对话内字节不变（提示缓存和思考块校验依赖它）；对话中改动的记忆从下一个对话起生效。模型用短 id（`m1`…）引用快照里的记忆，id 只在本对话的快照里有意义；工具执行时的用户取自 `agent.ScopeFrom(ctx)`，永远不信参数。记忆上限 100 条、每条 200 字，满了拒绝而不淘汰。只有模型的改动写 `memory_events`（撤销和"最近更改"用），用户自己删改记忆时会连带清掉对应日志。记忆接口全在 `/me/*`，没有任何管理员接口能读到别人的记忆或自定义指令；管理员只有 `memory` 总开关。
 - 临时对话（`conversations.temporary`）：不进列表、不起标题、没有记忆和 memory 工具（自定义指令照常），创建 24 小时后由 `Server.StartCleanup` 里的单条 `DELETE` 删除（多实例安全）；用量日志的会话外键是 `SET NULL`，记录保留。
+- 模型容量上限（`internal/api/model_capacity.go`，列在 `model_overrides`：`capacity` / `capacity_period` / `capacity_admin_exempt` / `capacity_since`）：给单个模型设一个美元上限，周期是 `total` / `monthly` / `daily`。花费是 `usage_logs.cost` 里该模型自周期开始的总和，**按请求的 `model_id` 算，不按 `served_model`**（模型的上架、选择、对话里存的、设置里配的都是请求 id；`served_model` 是服务商回显的字符串，可能是带日期的变体或中转站自己的名字）。所有用户、访客、管理员、`chat` 和 `title` 等各种 kind 的请求都计入。没有价格的模型（元数据没有输入或输出价格，或服务商没返回用量）`cost` 是 NULL，总和恒为 0，上限永远不会触发——设置面板会提示。金额全程是 `numeric`：存成整数微美元（至多 6 位小数）、在 SQL 里和总和比较（`ModelSpends`，一次查询算出一批模型），不要经过 float 比较；达到即触发（`花费 >= 上限`）。
+  - 周期按服务器本地时区的零点算（日从当天零点、月从 1 日零点，`time.Date` 构造，所以夏令时的 23/25 小时日也对）。时区来自环境变量 `TZ`（部署默认 `Asia/Shanghai`），`cmd/openchat` 引入 `time/tzdata`，因为生产镜像是 distroless、没有系统时区库，缺了它 Go 会悄悄把 `TZ=Asia/Shanghai` 当成 UTC。`total` 从 `capacity_since` 起算，NULL 表示整个历史；「重新计算」（`POST /admin/models/{id}/capacity/reset`）把它设为现在，使用日志不动。保存设置不会改 `capacity_since`（`SaveModelOverride` 的 `ON CONFLICT` 不更新它）；清掉上限时周期和管理员豁免会被写回默认值（`total`、开），不留看不见的状态。
+  - 「恢复默认」（`DELETE .../settings`）删掉整行，所以上限、周期、豁免和起点一并消失；保存时如果什么都没决定（含没有上限）也删行，起点随之丢失。花费记录仍在使用日志里。
+  - 上限对所有人生效，除非该模型的 `capacity_admin_exempt` 开着且请求者是管理员（`asker.admin`；管理员的花费照样计入）。访客不是管理员。后台为某人做的事（标题）按那个人算：管理员的对话在豁免下照常起标题。
+  - 执行点：①起一次运行之前，`chooseRun` → `pickChannel(ctx, modelID, asker)` 返回 `errModelCapacity`（409 `model_capacity_reached`），此时什么都还没写，发送、重新生成、改写、回答 ask_user 和访客运行都走这条；"随便哪个模型"（空 id）会跳过已满的模型，全满才拒绝。②运行当中，`agent.Options.Capacity`（`api.NewCapacityCheck`）在 `generate` 里**每次模型请求之前**问一次，满了就以 `failWithRow(CodeModelCapacity)` 结束，留下一条带该错误码的空失败助手消息；账本在请求结束时才写，所以超出量最多是检查通过时已在飞的请求，不是整个工具循环。查询出错按失败处理（运行以 `internal` 结束），不放行。③任务模型：配置的任务模型满了就退回对话自己的模型，也满了就跳过标题（`taskModel` 返回 `errModelCapacity`；按需起标题的接口把它原样返回）。④`GET /models`、`/guest/config` 的 `atCapacity` 按请求者算，满的模型仍然列出来。新增任何会用模型的新路径（比如上下文压缩）都要在它的请求前过这几个点之一，用量记一个新 kind 就会自动计入花费。
+  - 保存任务模型（`UpdateSystemSettings`）不检查容量（`asker.ignoreCap`），只看它能不能被回答。
+  - 索引：`usage_logs_model_idx` 是 `(model_id, created_at DESC) INCLUDE (cost)`，上限的求和是 index-only scan；只有设了上限的模型才查花费，没设的只多一次主键查询。`total` 且从不重新计算的上限要扫该模型全部历史，历史很长就用「重新计算」收窄。
 
 ## 前端约定
 
@@ -77,6 +84,7 @@ grep -rn -- "--n-\|prism-next" apps/web/src/features/admin apps/web/src/componen
 - 所有面向用户的字符串都走 `t()`（`zh`、`en`，键有类型约束）；服务端 `message` 不直接渲染。
 - 动效：全局遵守 `prefers-reduced-motion`，加载指示器标 `data-motion="essential"`，用透明度脉动代替位移。
 - 设置对话框（通用/个性化/账户/数据）是 `?settings=<tab>` 搜索参数（`lib/settings.ts`），挂在 `_authed` 布局上，渲染进 `.prism-next` 里；样式照搬 Open WebUI 经典设置弹窗，在 `styles/settings.css`。记忆列表是它里面的第二层弹窗（`MemoryManager`）。记忆相关查询键在 `queryKeys.memory`，不写入本地缓存（`query-persist` 只存白名单），临时对话的转录同样不落本地缓存。
+- 容量上限的前端：设置面板的「容量」一节（`features/admin/models/capacity.ts` 是纯逻辑，有 vitest）、卡片上的用量条、`ChatModel.atCapacity`。选择器里满的模型**保留在列表里但禁用**，原因写在名字下面（禁用项没有指针事件，tooltip 出不来）；对话自己的模型或用户明确选的模型即使满了也不会被悄悄换掉——新对话的默认模型才会绕开满的（`defaultModelId`）；在满的模型上发送时 `NextChat` 先重取一次模型列表（列表最多旧一分钟、还会本地持久化），仍满就弹提示、什么都不创建，取不到就交给服务器决定。重新生成/改写/回答由服务器拒绝，`useSendError` 弹同一句话并让模型列表失效；运行中途被拦住，错误行按 `chat.error.model_capacity_reached` 显示，`use-conversation-events` 看到 `run_finished` 带这个码也会让模型列表失效。
 
 ## 游客模式
 

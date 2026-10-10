@@ -51,6 +51,12 @@ docker compose -f deploy/docker-compose.yml exec postgres pg_dump -U openchat op
 
 附件也可以之后在 后台 → 文件存储 切到 S3 兼容存储，不用改部署文件。
 
+## 时区
+
+每个模型可以在 后台 → 模型 → 设置 里设容量上限，按「每月」或「每天」统计时，在**服务器的时区**的零点自动清零。时区由 `deploy/.env` 里的 `TZ` 决定，默认 `Asia/Shanghai`，填 IANA 名称（如 `America/New_York`）；改了之后 `up -d` 重新创建容器即可。镜像里没有系统时区库，二进制自带了一份，所以不用额外挂载。`TZ` 写错时服务会在日志里警告，并退回按 UTC 计算。
+
+「总计」上限不看时区。
+
 ## 注意
 
 - `APP_ENV=production` 时登录 Cookie 只走 HTTPS。没有域名、只想用 `http://IP:8080` 先试一下的话：把 `openchat` 服务的 `expose` 换成 `ports: ["8080:8080"]`，`APP_ENV` 设为 `development`，不启动 caddy（`up -d postgres openchat`）。
