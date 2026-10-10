@@ -22,6 +22,24 @@ func (q *Queries) GetSetting(ctx context.Context, key string) ([]byte, error) {
 	return value, err
 }
 
+const insertSettingIfMissing = `-- name: InsertSettingIfMissing :exec
+INSERT INTO app_settings (key, value, updated_at)
+VALUES ($1, $2, now())
+ON CONFLICT (key) DO NOTHING
+`
+
+type InsertSettingIfMissingParams struct {
+	Key   string `json:"key"`
+	Value []byte `json:"value"`
+}
+
+// Writes a setting only when there is none yet, so two processes that both find
+// it missing cannot overwrite each other's value. Read it back afterwards.
+func (q *Queries) InsertSettingIfMissing(ctx context.Context, arg InsertSettingIfMissingParams) error {
+	_, err := q.db.Exec(ctx, insertSettingIfMissing, arg.Key, arg.Value)
+	return err
+}
+
 const setSetting = `-- name: SetSetting :exec
 INSERT INTO app_settings (key, value, updated_at)
 VALUES ($1, $2, now())

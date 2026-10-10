@@ -11,30 +11,38 @@ import (
 	"github.com/google/uuid"
 )
 
-const attachToMessage = `-- name: AttachToMessage :exec
+const attachToMessage = `-- name: AttachToMessage :execrows
 UPDATE attachments
 SET message_id = $1
 WHERE id = ANY ($2::uuid[])
+  AND user_id = $3
+  AND message_id IS NULL
 `
 
 type AttachToMessageParams struct {
 	MessageID *uuid.UUID  `json:"message_id"`
 	Ids       []uuid.UUID `json:"ids"`
+	UserID    *uuid.UUID  `json:"user_id"`
 }
 
-func (q *Queries) AttachToMessage(ctx context.Context, arg AttachToMessageParams) error {
-	_, err := q.db.Exec(ctx, attachToMessage, arg.MessageID, arg.Ids)
-	return err
+// Claims uploads for a message. Only the caller's own, only unclaimed ones: the
+// row count is how the caller notices that an id did not qualify.
+func (q *Queries) AttachToMessage(ctx context.Context, arg AttachToMessageParams) (int64, error) {
+	result, err := q.db.Exec(ctx, attachToMessage, arg.MessageID, arg.Ids, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const createAttachment = `-- name: CreateAttachment :one
-INSERT INTO attachments (message_id, storage_key, filename, content_type, size_bytes)
+INSERT INTO attachments (user_id, storage_key, filename, content_type, size_bytes)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, message_id, storage_key, filename, content_type, size_bytes, created_at
+RETURNING id, message_id, storage_key, filename, content_type, size_bytes, created_at, user_id
 `
 
 type CreateAttachmentParams struct {
-	MessageID   *uuid.UUID `json:"message_id"`
+	UserID      *uuid.UUID `json:"user_id"`
 	StorageKey  string     `json:"storage_key"`
 	Filename    string     `json:"filename"`
 	ContentType string     `json:"content_type"`
@@ -43,7 +51,7 @@ type CreateAttachmentParams struct {
 
 func (q *Queries) CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (Attachment, error) {
 	row := q.db.QueryRow(ctx, createAttachment,
-		arg.MessageID,
+		arg.UserID,
 		arg.StorageKey,
 		arg.Filename,
 		arg.ContentType,
@@ -58,15 +66,40 @@ func (q *Queries) CreateAttachment(ctx context.Context, arg CreateAttachmentPara
 		&i.ContentType,
 		&i.SizeBytes,
 		&i.CreatedAt,
+		&i.UserID,
+	)
+	return i, err
+}
+
+const getAttachmentByStorageKey = `-- name: GetAttachmentByStorageKey :one
+SELECT id, message_id, storage_key, filename, content_type, size_bytes, created_at, user_id
+FROM attachments
+WHERE storage_key = $1
+`
+
+// What the local storage driver's handlers know a file by. The signature in
+// the URL is what authorises the request, so there is no owner to check.
+func (q *Queries) GetAttachmentByStorageKey(ctx context.Context, storageKey string) (Attachment, error) {
+	row := q.db.QueryRow(ctx, getAttachmentByStorageKey, storageKey)
+	var i Attachment
+	err := row.Scan(
+		&i.ID,
+		&i.MessageID,
+		&i.StorageKey,
+		&i.Filename,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.CreatedAt,
+		&i.UserID,
 	)
 	return i, err
 }
 
 const listAttachmentsByMessages = `-- name: ListAttachmentsByMessages :many
-SELECT id, message_id, storage_key, filename, content_type, size_bytes, created_at
+SELECT id, message_id, storage_key, filename, content_type, size_bytes, created_at, user_id
 FROM attachments
 WHERE message_id = ANY ($1::uuid[])
-ORDER BY created_at
+ORDER BY created_at, id
 `
 
 func (q *Queries) ListAttachmentsByMessages(ctx context.Context, messageIds []uuid.UUID) ([]Attachment, error) {
@@ -86,6 +119,94 @@ func (q *Queries) ListAttachmentsByMessages(ctx context.Context, messageIds []uu
 			&i.ContentType,
 			&i.SizeBytes,
 			&i.CreatedAt,
+			&i.UserID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAttachmentsForUser = `-- name: ListAttachmentsForUser :many
+SELECT id, message_id, storage_key, filename, content_type, size_bytes, created_at, user_id
+FROM attachments
+WHERE id = ANY ($1::uuid[])
+  AND user_id = $2
+`
+
+type ListAttachmentsForUserParams struct {
+	Ids    []uuid.UUID `json:"ids"`
+	UserID *uuid.UUID  `json:"user_id"`
+}
+
+// Attachments by id, within one user's scope: what the context builder resolves
+// a reference through, so a reference to someone else's file reads as missing.
+func (q *Queries) ListAttachmentsForUser(ctx context.Context, arg ListAttachmentsForUserParams) ([]Attachment, error) {
+	rows, err := q.db.Query(ctx, listAttachmentsForUser, arg.Ids, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Attachment{}
+	for rows.Next() {
+		var i Attachment
+		if err := rows.Scan(
+			&i.ID,
+			&i.MessageID,
+			&i.StorageKey,
+			&i.Filename,
+			&i.ContentType,
+			&i.SizeBytes,
+			&i.CreatedAt,
+			&i.UserID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPendingAttachments = `-- name: ListPendingAttachments :many
+SELECT id, message_id, storage_key, filename, content_type, size_bytes, created_at, user_id
+FROM attachments
+WHERE id = ANY ($1::uuid[])
+  AND user_id = $2
+  AND message_id IS NULL
+ORDER BY created_at, id
+`
+
+type ListPendingAttachmentsParams struct {
+	Ids    []uuid.UUID `json:"ids"`
+	UserID *uuid.UUID  `json:"user_id"`
+}
+
+// The caller's own uploads that no message has claimed yet.
+func (q *Queries) ListPendingAttachments(ctx context.Context, arg ListPendingAttachmentsParams) ([]Attachment, error) {
+	rows, err := q.db.Query(ctx, listPendingAttachments, arg.Ids, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Attachment{}
+	for rows.Next() {
+		var i Attachment
+		if err := rows.Scan(
+			&i.ID,
+			&i.MessageID,
+			&i.StorageKey,
+			&i.Filename,
+			&i.ContentType,
+			&i.SizeBytes,
+			&i.CreatedAt,
+			&i.UserID,
 		); err != nil {
 			return nil, err
 		}

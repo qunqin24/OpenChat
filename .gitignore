@@ -10,3 +10,6 @@ tmp/
 coverage/
 .vite/
 *.log
+
+# what the local storage driver keeps under its default directory (set in the admin panel)
+**/data/uploads/

@@ -4,7 +4,6 @@ package config
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -18,13 +17,6 @@ type Config struct {
 	CORSOrigins     []string
 
 	DatabaseURL string
-
-	S3Endpoint     string
-	S3Region       string
-	S3Bucket       string
-	S3AccessKey    string
-	S3SecretKey    string
-	S3UsePathStyle bool
 }
 
 // Load reads configuration from the environment, applying defaults that are
@@ -37,17 +29,12 @@ func Load() (*Config, error) {
 		ShutdownTimeout: envDuration("SHUTDOWN_TIMEOUT", 15*time.Second),
 		CORSOrigins:     envList("CORS_ORIGINS", []string{"http://localhost:5173"}),
 		DatabaseURL:     env("DATABASE_URL", "postgres://openchat:openchat@localhost:5432/openchat?sslmode=disable"),
-		S3Endpoint:      env("S3_ENDPOINT", "http://localhost:9000"),
-		S3Region:        env("S3_REGION", "us-east-1"),
-		S3Bucket:        env("S3_BUCKET", "openchat"),
-		S3AccessKey:     env("S3_ACCESS_KEY_ID", ""),
-		S3SecretKey:     env("S3_SECRET_ACCESS_KEY", ""),
-		S3UsePathStyle:  envBool("S3_USE_PATH_STYLE", true),
 	}
 
 	if c.DatabaseURL == "" {
 		return nil, fmt.Errorf("config: DATABASE_URL is required")
 	}
+
 	return c, nil
 }
 
@@ -58,18 +45,6 @@ func env(key, fallback string) string {
 		return v
 	}
 	return fallback
-}
-
-func envBool(key string, fallback bool) bool {
-	v, ok := os.LookupEnv(key)
-	if !ok || v == "" {
-		return fallback
-	}
-	b, err := strconv.ParseBool(v)
-	if err != nil {
-		return fallback
-	}
-	return b
 }
 
 func envDuration(key string, fallback time.Duration) time.Duration {
