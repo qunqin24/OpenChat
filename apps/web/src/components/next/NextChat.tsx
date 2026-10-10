@@ -310,6 +310,26 @@ export function NextChat({ conversationId }: NextChatProps) {
     loadOlder()
   }
 
+  // The transcript can also stop overflowing without a scroll: a section the
+  // reader opened, scrolled through and folded away again leaves it shorter
+  // than the screen, and the browser moves nothing — so no scroll event ever
+  // took down the jump button it had put up. Whenever the column or the
+  // screen changes size, a reader who is now at the end is parked again.
+  const transcriptShown = !isEmpty && !(conversationId && messages.isPending && !outgoing)
+  useEffect(() => {
+    const scroller = scrollRef.current
+    const column = columnRef.current
+    if (!transcriptShown || !scroller || !column) return
+    const observer = new ResizeObserver(() => {
+      if (scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight > BOTTOM_SLACK) return
+      parked.current = true
+      setShowJump(false)
+    })
+    observer.observe(column)
+    observer.observe(scroller)
+    return () => observer.disconnect()
+  }, [transcriptShown])
+
   // Pins the window's top once there is a transcript to window.
   const pinned = turns[start]
   if (topKey === undefined && !messages.isPending && pinned) setTopKey(pinned.key)
