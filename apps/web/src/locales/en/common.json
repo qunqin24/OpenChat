@@ -730,7 +730,11 @@
       "api-format-chat": "Chat Completions",
       "api-format-chat-hint": "Served by nearly every OpenAI-compatible endpoint. Pick this when unsure.",
       "api-format-responses": "Responses",
-      "api-format-responses-hint": "OpenAI's newer API. Reasoning models keep their thinking across tool calls; the endpoint must support it."
+      "api-format-responses-hint": "OpenAI's newer API. Reasoning models keep their thinking across tool calls; the endpoint must support it.",
+      "region": "Site",
+      "region-cn": "Mainland China",
+      "region-global": "International",
+      "region-hint": "The two sites have separate accounts and keys; pick the one your key is from."
     },
     "models": {
       "title": "Models",

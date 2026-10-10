@@ -2583,6 +2583,21 @@ export interface components {
              *     protocol has one format or the type routes each model itself.
              */
             apiFormatChoice: boolean;
+            /**
+             * @description The sites a vendor runs separately — a mainland China one and an
+             *     international one, each with its own accounts and keys. When
+             *     present, the first is `endpoint`, and the form offers the choice,
+             *     which sets the channel's base URL.
+             */
+            regions?: components["schemas"]["ChannelRegion"][];
+        };
+        ChannelRegion: {
+            /**
+             * @description `cn`: the mainland China site. `global`: the international one.
+             * @enum {string}
+             */
+            id: "cn" | "global";
+            endpoint: string;
         };
         ChannelModel: {
             /** @description As the endpoint spells it, which is what gets sent back to it. */

@@ -730,7 +730,11 @@
       "api-format-chat": "Chat Completions",
       "api-format-chat-hint": "几乎所有 OpenAI 兼容服务都支持，不确定时选这个。",
       "api-format-responses": "Responses",
-      "api-format-responses-hint": "OpenAI 的新接口。推理模型能在多轮工具调用之间保留思考，需要服务端支持。"
+      "api-format-responses-hint": "OpenAI 的新接口。推理模型能在多轮工具调用之间保留思考，需要服务端支持。",
+      "region": "站点",
+      "region-cn": "国内站",
+      "region-global": "国际站",
+      "region-hint": "两个站点的账号和密钥互不通用，选你的密钥所属的站点。"
     },
     "models": {
       "title": "模型市场",

@@ -57,6 +57,10 @@ type channelTypeDef struct {
 	// Gateway is what a gateway asks every client to send: its own user agent,
 	// and the conversation's id in a session header. Nil sends neither.
 	Gateway *gatewayIdentity `json:"-"`
+	// Regions are a vendor's separate sites, mainland China first, each with
+	// its own accounts and keys: a key from one is refused by the other, so the
+	// operator picks the one their key belongs to. The first is Endpoint.
+	Regions []ChannelRegion `json:"-"`
 }
 
 // gatewayIdentity is how requests to a gateway identify their client and their
@@ -111,7 +115,14 @@ var channelTypes = []channelTypeDef{
 		// is `thinking: {type}` plus `reasoning_effort`, as for DeepSeek.
 		Compat: openai.Compat{EchoReasoning: true, Thinking: openai.ThinkingSwitch}},
 	{ID: "minimax", Label: "MiniMax", WireApi: "openai", Group: Vendor,
-		Endpoint: "https://api.minimax.chat/v1", KeyHint: "…", IconID: "minimax",
+		Endpoint: "https://api.minimaxi.com/v1", KeyHint: "…", IconID: "minimax",
+		// Two sites with separate accounts (platform.minimaxi.com in China,
+		// platform.minimax.io elsewhere); api.minimax.chat is the old name of
+		// the first.
+		Regions: []ChannelRegion{
+			{Id: Cn, Endpoint: "https://api.minimaxi.com/v1"},
+			{Id: Global, Endpoint: "https://api.minimax.io/v1"},
+		},
 		// MiniMax-M3.1-Flash-Preview returns its thinking in reasoning_content
 		// and asks that the whole assistant message, that field included, goes
 		// back in a tool loop; the M2.x models keep it inside content as
@@ -258,6 +269,10 @@ func (s *Server) ListChannelTypes(w http.ResponseWriter, r *http.Request) {
 		if t.Doc != "" {
 			doc := t.Doc
 			info.Doc = &doc
+		}
+		if len(t.Regions) > 0 {
+			regions := t.Regions
+			info.Regions = &regions
 		}
 		out = append(out, info)
 	}

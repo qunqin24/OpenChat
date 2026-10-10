@@ -3081,6 +3081,24 @@ components:
             Whether the operator chooses the request format (`ApiFormat`) for a
             channel of this type: true for the OpenAI protocol, false where the
             protocol has one format or the type routes each model itself.
+        regions:
+          type: array
+          description: |
+            The sites a vendor runs separately — a mainland China one and an
+            international one, each with its own accounts and keys. When
+            present, the first is `endpoint`, and the form offers the choice,
+            which sets the channel's base URL.
+          items: { $ref: "#/components/schemas/ChannelRegion" }
+
+    ChannelRegion:
+      type: object
+      required: [id, endpoint]
+      properties:
+        id:
+          type: string
+          enum: [cn, global]
+          description: "`cn`: the mainland China site. `global`: the international one."
+        endpoint: { type: string }
 
     ChannelModel:
       type: object

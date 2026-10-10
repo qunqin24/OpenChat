@@ -358,6 +358,49 @@ function ChannelForm({
                 </div>
               </div>
 
+              {/* A vendor with separate sites (MiniMax's China and international
+                  platforms): a key works on one of them only, so the operator
+                  picks the one it is from. The first site is the type's own
+                  endpoint and is chosen by leaving the base URL blank; a custom
+                  address matches neither. */}
+              {selected?.regions && selected.regions.length > 1 && (
+                <FormItem>
+                  <FormLabel>{t('admin.channels.region')}</FormLabel>
+                  <RadioGroup
+                    value={
+                      (baseUrl.trim() === ''
+                        ? selected.regions[0]
+                        : selected.regions.find((region) => region.endpoint === baseUrl.trim())
+                      )?.id ?? ''
+                    }
+                    onValueChange={(id) => {
+                      const index = selected.regions!.findIndex((region) => region.id === id)
+                      form.setValue('baseUrl', index <= 0 ? '' : selected.regions![index]!.endpoint, { shouldDirty: true })
+                      resetModelSelection()
+                    }}
+                    className="grid grid-cols-2 gap-2"
+                  >
+                    {selected.regions.map((region) => (
+                      <label
+                        key={region.id}
+                        className={cn(
+                          'flex cursor-pointer items-start gap-3 rounded-md border p-3',
+                          (baseUrl.trim() === '' ? selected.regions![0]!.id === region.id : region.endpoint === baseUrl.trim()) &&
+                            'border-primary',
+                        )}
+                      >
+                        <RadioGroupItem value={region.id} className="mt-0.5" />
+                        <span className="grid gap-1">
+                          <span className="text-sm font-medium">{t(`admin.channels.region-${region.id}`)}</span>
+                          <code className="text-muted-foreground text-xs break-all">{new URL(region.endpoint).host}</code>
+                        </span>
+                      </label>
+                    ))}
+                  </RadioGroup>
+                  <FormDescription className="text-xs">{t('admin.channels.region-hint')}</FormDescription>
+                </FormItem>
+              )}
+
               <FormField
                 control={form.control}
                 name="baseUrl"
