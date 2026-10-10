@@ -5,22 +5,38 @@
  * Keep this separate from the verbatim prism stylesheet and the admin theme.
  */
 :root {
+  /* The prism ramp (next-theme.css, kept verbatim) puts secondary text at
+     #a1a1a1 — under 3:1 on white, which is what makes timestamps, labels and
+     hints across the chat look washed out. Overridden here rather than there
+     so the prism file can still be re-synced. */
+  --n-text-2: #6f6f6f;
+  --n-text-3: #9a9a9a;
   --n-chat-font: -apple-system, BlinkMacSystemFont, 'Inter Variable', ui-sans-serif,
     system-ui, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif;
 }
 
 .prism-next {
-  --n-chat-body: oklch(0.42 0 0);
-  --n-chat-heading: oklch(0.32 0 0);
-  --n-chat-strong: oklch(0.2 0 0);
+  /* Darker than OpenWebUI's ramp, which sets body text at oklch(0.42) and the
+     welcome line at 0.77: on a white page that reads as grey haze, not as
+     de-emphasis. Body text is near-black now and the steps below it are spaced
+     so each one is still clearly legible. */
+  --n-chat-body: oklch(0.26 0 0);
+  --n-chat-heading: oklch(0.18 0 0);
+  --n-chat-strong: oklch(0.15 0 0);
   --n-chat-label: #000;
-  --n-chat-muted: oklch(0.51 0 0);
-  --n-chat-faint: oklch(0.77 0 0);
-  --n-chat-input: oklch(0.42 0 0);
-  --n-chat-placeholder: oklch(0.77 0 0);
-  --n-chat-code-text: oklch(0.32 0 0);
-  --n-chat-code-bg: oklch(0.94 0 0);
-  --n-chat-rule: oklch(0.98 0 0);
+  --n-chat-muted: oklch(0.5 0 0);
+  --n-chat-faint: oklch(0.62 0 0);
+  --n-chat-input: oklch(0.2 0 0);
+  --n-chat-placeholder: oklch(0.66 0 0);
+  --n-chat-code-text: oklch(0.24 0 0);
+  --n-chat-code-bg: oklch(0.95 0 0);
+  --n-chat-rule: oklch(0.91 0 0);
+  --n-table-frame: oklch(0.982 0 0);
+  --n-table-rule: rgb(0 0 0 / 6%);
+  --n-table-hover: oklch(0.992 0 0);
+  /* Fill for tiles inside an answer (stats, callouts). Lighter than --n-panel,
+     which is sized for chrome like the composer and reads as grey in content. */
+  --n-ui-tint: oklch(0.977 0 0);
   color: var(--n-chat-body);
   font-family: var(--n-chat-font);
   font-size: 15px;
@@ -31,21 +47,24 @@
 }
 
 .dark .prism-next {
-  --n-chat-body: oklch(0.85 0 0);
+  --n-chat-body: oklch(0.9 0 0);
   --n-chat-heading: oklch(0.94 0 0);
   --n-chat-strong: #fff;
   --n-chat-label: #fff;
   --n-chat-muted: oklch(0.77 0 0);
-  --n-chat-faint: oklch(0.69 0 0);
+  --n-chat-faint: oklch(0.66 0 0);
   --n-chat-input: oklch(0.94 0 0);
   --n-chat-code-text: oklch(0.92 0 0);
   --n-chat-code-bg: oklch(0.32 0 0);
-  --n-chat-rule: oklch(0.27 0 0 / 30%);
+  --n-chat-rule: oklch(1 0 0 / 10%);
+  --n-table-frame: #292929;
+  --n-table-rule: rgb(255 255 255 / 7%);
+  --n-table-hover: #252525;
+  --n-ui-tint: rgb(255 255 255 / 4.5%);
 }
 
 .n-menu,
-.n-tip,
-.n-sidebar-search-dialog {
+.n-tip {
   font-family: var(--n-chat-font);
   letter-spacing: 0;
 }
@@ -62,6 +81,13 @@
   line-height: 18px;
 }
 
+/* Restates prism's dark values: the :root override above comes later in the
+   cascade at the same specificity, so without this it would win in dark mode. */
+.dark {
+  --n-text-2: #a8a8a8;
+  --n-text-3: #7a7a7a;
+}
+
 .prism-next .n-chat-title {
   overflow: hidden;
   color: var(--n-chat-body);
@@ -75,7 +101,7 @@
 .prism-next .n-welcome-title {
   color: var(--n-chat-heading);
   font-size: 30px;
-  font-weight: 400;
+  font-weight: 600;
   line-height: 36px;
   letter-spacing: 0;
 }
@@ -175,11 +201,14 @@
 .prism-next .n-markdown :is(h1, h2, h3, h4, h5, h6) {
   margin: 8px 0 4px;
   color: var(--n-chat-strong);
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.375;
   letter-spacing: 0;
 }
 
+/* A section heading opens a new part of the answer, so it gets clear space
+   above it — more than a paragraph's, and enough to read past a block. */
+.prism-next .n-markdown :is(h1, h2, h3) { margin: 20px 0 6px; }
 .prism-next .n-markdown h1 { font-size: 20px; }
 .prism-next .n-markdown h2 { font-size: 18px; }
 .prism-next .n-markdown h3 { font-size: 16px; }
@@ -188,7 +217,7 @@
 
 .prism-next .n-markdown :is(strong, b, [data-streamdown='strong']) {
   color: var(--n-chat-strong);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .prism-next .n-markdown :is(ul, ol) {
@@ -240,41 +269,161 @@
   line-height: 1.625;
 }
 
-.prism-next .n-markdown pre {
-  margin-block: 12px;
+/* Code blocks. Streamdown draws them with Tailwind utilities that this build
+   never generates (it does not scan node_modules), so the frame fell back to
+   black `currentColor` borders, the actions bar to a row of its own, and the
+   highlighting to plain text. Everything is spelled out here instead, on its
+   data-streamdown hooks, in the same frame-and-sheet shape as the tables:
+   a tinted frame carrying the language and the actions, the code on the page
+   colour inside it. */
+.prism-next .n-markdown [data-streamdown='code-block'] {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 14px 0;
+  padding: 0 4px 4px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--n-table-frame);
+  box-shadow: inset 0 0 0 1px var(--n-table-rule);
+}
+
+.prism-next .n-markdown [data-streamdown='code-block-header'] {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 10px;
+  color: var(--n-chat-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  text-transform: lowercase;
+}
+
+/* The actions ride in the header's row, and stay in reach while a long block
+   scrolls past: the wrapper is sticky, the buttons take the pointer. */
+.prism-next .n-markdown [data-streamdown='code-block'] > div:has(> [data-streamdown='code-block-actions']) {
+  position: sticky;
+  top: 8px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 36px;
+  margin-top: -36px;
+  padding-right: 4px;
+  pointer-events: none;
+}
+
+.prism-next .n-markdown [data-streamdown='code-block-actions'] {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  backdrop-filter: none;
+  pointer-events: auto;
+}
+
+.prism-next .n-markdown :is([data-streamdown='code-block-copy-button'], [data-streamdown='code-block-download-button']) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--n-chat-muted);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.prism-next .n-markdown :is([data-streamdown='code-block-copy-button'], [data-streamdown='code-block-download-button']):hover {
+  background: var(--n-hover-strong);
+  color: var(--n-chat-body);
+}
+
+.prism-next .n-markdown :is([data-streamdown='code-block-copy-button'], [data-streamdown='code-block-download-button']) svg {
+  width: 15px;
+  height: 15px;
+}
+
+.prism-next .n-markdown [data-streamdown='code-block-body'] {
   overflow-x: auto;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--n-bg);
+  scrollbar-width: thin;
+  scrollbar-color: var(--n-line) transparent;
+}
+
+.prism-next .n-markdown pre {
+  margin: 0;
+  background: transparent;
   font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 400;
-  line-height: 20px;
+  line-height: 21px;
   white-space: pre;
 }
 
 .prism-next .n-markdown pre code {
+  display: block;
   font: inherit;
   white-space: inherit;
 }
 
-.prism-next .n-markdown [data-streamdown='code-block-header'] {
-  color: var(--n-chat-muted);
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 16px;
+/* One line per span, numbered in the gutter. The numbers are generated
+   content, so selecting or copying the code never picks them up. A block that
+   starts part-way through a file resets the counter inline. */
+.prism-next .n-markdown [data-streamdown='code-block-body'] code {
+  counter-reset: line;
+}
+.prism-next .n-markdown [data-streamdown='code-block-body'] code > span {
+  display: block;
+  min-height: 21px;
+}
+.prism-next .n-markdown [data-streamdown='code-block-body'] code > span::before {
+  counter-increment: line;
+  content: counter(line);
+  display: inline-block;
+  width: 2ch;
+  margin-right: 18px;
+  color: var(--n-chat-faint);
+  text-align: right;
+  user-select: none;
 }
 
-.prism-next .n-markdown .markdown-body table {
-  font-size: 13px;
-  line-height: 20px;
+/* Shiki's colours arrive as custom properties on each token: the light
+   theme's as --sdm-c, the dark theme's as --shiki-dark. */
+.prism-next .n-markdown [data-streamdown='code-block-body'] code > span > span {
+  color: var(--sdm-c, inherit);
+}
+.dark .prism-next .n-markdown [data-streamdown='code-block-body'] code > span > span {
+  color: var(--shiki-dark, var(--sdm-c, inherit));
 }
 
-.prism-next .n-markdown .markdown-body table th {
-  color: var(--n-chat-muted);
-  font-weight: 500;
+/* MarkdownTable replaces Streamdown's nested frames with one scroller, drawn
+   in chat-table.css; the copy button floats over its top right on hover. */
+.prism-next .n-md-table {
+  position: relative;
+  margin: 12px 0;
 }
-
-.prism-next .n-markdown .markdown-body table :is(th, td) {
-  font-size: inherit;
-  line-height: inherit;
+.prism-next .n-md-table-copy {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+.prism-next .n-md-table:is(:hover, :focus-within) .n-md-table-copy {
+  opacity: 1;
 }
 
 .prism-next .n-markdown hr {

@@ -1,9 +1,11 @@
 import { ArrowUp, Maximize2, Minimize2, Plus, Square } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ClipboardEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import type { PendingAttachment } from '@/hooks/use-attachments'
 import { isEnter, withCtrl, withShift } from '@/lib/keys'
 import { cn } from '@/lib/utils'
+import AttachmentTray from './AttachmentTray'
 import Tooltip, { TooltipGroup } from './Tooltip'
 
 interface ComposerProps {
@@ -13,10 +15,24 @@ interface ComposerProps {
   onStop: () => void
   working: boolean
   disabled?: boolean
-  /** Plain-text label for the active model; no selector until a catalogue exists. */
-  modelName?: string
-  /** Whether the active model accepts file attachments. */
-  canUpload?: boolean
+  /** The model picker, docked beside the send button. */
+  modelSlot?: ReactNode
+  /** Switches for this conversation's tools, beside the attach button. */
+  toolsSlot?: ReactNode
+  /**
+   * File attachments. `accept` is the picker's filter and is empty when the
+   * model takes no files, which leaves the button off; `hint` says what the
+   * button does, or why it does not.
+   */
+  attach?: {
+    accept: string
+    hint: string
+    items: PendingAttachment[]
+    onAdd: (files: File[]) => void
+    onRemove: (key: string) => void
+    /** Why sending is held back, when a file is still going up or failed. */
+    blocked?: string
+  }
 }
 
 export function Composer({
@@ -26,11 +42,13 @@ export function Composer({
   onStop,
   working,
   disabled,
-  modelName,
-  canUpload = false,
+  modelSlot,
+  toolsSlot,
+  attach,
 }: ComposerProps) {
   const { t } = useTranslation()
   const ref = useRef<HTMLTextAreaElement>(null)
+  const picker = useRef<HTMLInputElement>(null)
 
   const [expanded, setExpanded] = useState(false)
   const [overflowing, setOverflowing] = useState(false)
@@ -50,7 +68,16 @@ export function Composer({
     if (!expanded) setOverflowing(el.scrollHeight > el.clientHeight)
   }, [value, expanded])
 
-  const canSend = value.trim().length > 0 && !disabled
+  const canUpload = !!attach?.accept
+  const canSend = value.trim().length > 0 && !disabled && !attach?.blocked
+
+  // Images copied from elsewhere paste in as files.
+  const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(event.clipboardData.files)
+    if (files.length === 0 || !attach) return
+    event.preventDefault()
+    attach.onAdd(files)
+  }
   const showToggle = expanded || overflowing
 
   return (
@@ -79,6 +106,8 @@ export function Composer({
           </Tooltip>
         )}
 
+        {attach && <AttachmentTray items={attach.items} onRemove={attach.onRemove} />}
+
         <div className="n-composer-field">
           <textarea
             id="input"
@@ -90,6 +119,7 @@ export function Composer({
             aria-label={t('chat.placeholder')}
             placeholder={t('chat.placeholder')}
             onChange={(event) => onValueChange(event.target.value)}
+            onPaste={handlePaste}
             onKeyDown={(event) => {
               if (!isEnter(event)) return
               // Bare Enter sends; Ctrl/Cmd or Shift inserts a newline.
@@ -104,37 +134,56 @@ export function Composer({
           {/* A disabled trigger fires no pointer events, so the tooltip would go
               silent exactly when the reader most needs to know why the button is
               dead — hence the wrapper span picking the hover up for it. */}
-          <Tooltip label={canUpload ? t('next.file.upload') : t('next.file.unavailable')}>
+          <Tooltip label={attach?.hint ?? t('next.file.none')}>
             <span className="n-tip-wrap">
               <button
                 type="button"
                 className="n-icon-btn"
                 disabled={!canUpload}
                 aria-label={t('next.file.upload')}
+                onClick={() => picker.current?.click()}
               >
                 <Plus className="h-[18px] w-[18px]" />
               </button>
             </span>
           </Tooltip>
+          {attach && (
+            <input
+              ref={picker}
+              type="file"
+              multiple
+              hidden
+              accept={attach.accept}
+              onChange={(event) => {
+                attach.onAdd(Array.from(event.target.files ?? []))
+                // Picking the same file again must still fire a change.
+                event.target.value = ''
+              }}
+            />
+          )}
+
+          {toolsSlot}
 
           <div className="grow" />
 
-          {modelName && <span className="n-composer-model">{modelName}</span>}
+          {modelSlot}
 
-          <Tooltip label={working ? t('chat.stop') : t('chat.send')}>
-            <button
-              type="button"
-              className="n-icon-btn primary"
-              disabled={!working && !canSend}
-              aria-label={working ? t('chat.stop') : t('chat.send')}
-              onClick={() => (working ? onStop() : onSend())}
-            >
-              {working ? (
-                <Square className="h-3.5 w-3.5 fill-current" />
-              ) : (
-                <ArrowUp className="h-[18px] w-[18px]" />
-              )}
-            </button>
+          <Tooltip label={working ? t('chat.stop') : (attach?.blocked ?? t('chat.send'))}>
+            <span className="n-tip-wrap">
+              <button
+                type="button"
+                className="n-icon-btn primary"
+                disabled={!working && !canSend}
+                aria-label={working ? t('chat.stop') : t('chat.send')}
+                onClick={() => (working ? onStop() : onSend())}
+              >
+                {working ? (
+                  <Square className="h-3.5 w-3.5 fill-current" />
+                ) : (
+                  <ArrowUp className="h-[18px] w-[18px]" />
+                )}
+              </button>
+            </span>
           </Tooltip>
         </div>
       </div>

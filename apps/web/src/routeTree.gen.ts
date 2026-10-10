@@ -18,7 +18,10 @@ import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminChannelsRouteImport } from './routes/admin.channels'
 import { Route as AdminModelsRouteImport } from './routes/admin.models'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
+import { Route as AdminStorageRouteImport } from './routes/admin.storage'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
+import { Route as AdminWebSearchRouteImport } from './routes/admin.web-search'
+import { Route as DevGenuiRouteImport } from './routes/dev.genui'
 import { Route as DevLoadingRouteImport } from './routes/dev.loading'
 import { Route as AuthedChatConversationIdRouteImport } from './routes/_authed.chat.$conversationId'
 import { Route as AdminSettingsIndexRouteImport } from './routes/admin.settings.index'
@@ -70,10 +73,25 @@ const AdminSettingsRoute = AdminSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminStorageRoute = AdminStorageRouteImport.update({
+  id: '/storage',
+  path: '/storage',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminUsersRoute = AdminUsersRouteImport.update({
   id: '/users',
   path: '/users',
   getParentRoute: () => AdminRoute,
+} as any)
+const AdminWebSearchRoute = AdminWebSearchRouteImport.update({
+  id: '/web-search',
+  path: '/web-search',
+  getParentRoute: () => AdminRoute,
+} as any)
+const DevGenuiRoute = DevGenuiRouteImport.update({
+  id: '/dev/genui',
+  path: '/dev/genui',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const DevLoadingRoute = DevLoadingRouteImport.update({
   id: '/dev/loading',
@@ -115,7 +133,10 @@ export interface FileRoutesByFullPath {
   '/admin/channels': typeof AdminChannelsRoute
   '/admin/models': typeof AdminModelsRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
+  '/admin/storage': typeof AdminStorageRoute
   '/admin/users': typeof AdminUsersRoute
+  '/admin/web-search': typeof AdminWebSearchRoute
+  '/dev/genui': typeof DevGenuiRoute
   '/dev/loading': typeof DevLoadingRoute
   '/admin/': typeof AdminIndexRoute
   '/chat/$conversationId': typeof AuthedChatConversationIdRoute
@@ -129,7 +150,10 @@ export interface FileRoutesByTo {
   '/register': typeof RegisterRoute
   '/admin/channels': typeof AdminChannelsRoute
   '/admin/models': typeof AdminModelsRoute
+  '/admin/storage': typeof AdminStorageRoute
   '/admin/users': typeof AdminUsersRoute
+  '/admin/web-search': typeof AdminWebSearchRoute
+  '/dev/genui': typeof DevGenuiRoute
   '/dev/loading': typeof DevLoadingRoute
   '/': typeof AuthedIndexRoute
   '/admin': typeof AdminIndexRoute
@@ -148,7 +172,10 @@ export interface FileRoutesById {
   '/admin/channels': typeof AdminChannelsRoute
   '/admin/models': typeof AdminModelsRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
+  '/admin/storage': typeof AdminStorageRoute
   '/admin/users': typeof AdminUsersRoute
+  '/admin/web-search': typeof AdminWebSearchRoute
+  '/dev/genui': typeof DevGenuiRoute
   '/dev/loading': typeof DevLoadingRoute
   '/_authed/': typeof AuthedIndexRoute
   '/admin/': typeof AdminIndexRoute
@@ -168,7 +195,10 @@ export interface FileRouteTypes {
     | '/admin/channels'
     | '/admin/models'
     | '/admin/settings'
+    | '/admin/storage'
     | '/admin/users'
+    | '/admin/web-search'
+    | '/dev/genui'
     | '/dev/loading'
     | '/admin/'
     | '/chat/$conversationId'
@@ -182,7 +212,10 @@ export interface FileRouteTypes {
     | '/register'
     | '/admin/channels'
     | '/admin/models'
+    | '/admin/storage'
     | '/admin/users'
+    | '/admin/web-search'
+    | '/dev/genui'
     | '/dev/loading'
     | '/'
     | '/admin'
@@ -200,7 +233,10 @@ export interface FileRouteTypes {
     | '/admin/channels'
     | '/admin/models'
     | '/admin/settings'
+    | '/admin/storage'
     | '/admin/users'
+    | '/admin/web-search'
+    | '/dev/genui'
     | '/dev/loading'
     | '/_authed/'
     | '/admin/'
@@ -216,6 +252,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRouteWithChildren
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
+  DevGenuiRoute: typeof DevGenuiRoute
   DevLoadingRoute: typeof DevLoadingRoute
 }
 
@@ -284,12 +321,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/storage': {
+      id: '/admin/storage'
+      path: '/storage'
+      fullPath: '/admin/storage'
+      preLoaderRoute: typeof AdminStorageRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/users': {
       id: '/admin/users'
       path: '/users'
       fullPath: '/admin/users'
       preLoaderRoute: typeof AdminUsersRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/admin/web-search': {
+      id: '/admin/web-search'
+      path: '/web-search'
+      fullPath: '/admin/web-search'
+      preLoaderRoute: typeof AdminWebSearchRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/dev/genui': {
+      id: '/dev/genui'
+      path: '/dev/genui'
+      fullPath: '/dev/genui'
+      preLoaderRoute: typeof DevGenuiRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/dev/loading': {
       id: '/dev/loading'
@@ -371,7 +429,9 @@ interface AdminRouteChildren {
   AdminChannelsRoute: typeof AdminChannelsRoute
   AdminModelsRoute: typeof AdminModelsRoute
   AdminSettingsRoute: typeof AdminSettingsRouteWithChildren
+  AdminStorageRoute: typeof AdminStorageRoute
   AdminUsersRoute: typeof AdminUsersRoute
+  AdminWebSearchRoute: typeof AdminWebSearchRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
@@ -379,7 +439,9 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminChannelsRoute: AdminChannelsRoute,
   AdminModelsRoute: AdminModelsRoute,
   AdminSettingsRoute: AdminSettingsRouteWithChildren,
+  AdminStorageRoute: AdminStorageRoute,
   AdminUsersRoute: AdminUsersRoute,
+  AdminWebSearchRoute: AdminWebSearchRoute,
   AdminIndexRoute: AdminIndexRoute,
 }
 
@@ -390,6 +452,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRouteWithChildren,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
+  DevGenuiRoute: DevGenuiRoute,
   DevLoadingRoute: DevLoadingRoute,
 }
 export const routeTree = rootRouteImport

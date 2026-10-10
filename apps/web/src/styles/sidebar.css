@@ -5,11 +5,11 @@
  */
 .prism-next .n-sidebar {
   --n-sidebar-bg: oklch(0.98 0 0);
-  --n-sidebar-text: oklch(0.42 0 0);
-  --n-sidebar-muted: oklch(0.69 0 0);
-  --n-sidebar-faint: oklch(0.77 0 0);
-  --n-sidebar-section: oklch(0.77 0 0);
-  --n-sidebar-icon: oklch(0.51 0 0);
+  --n-sidebar-text: oklch(0.25 0 0);
+  --n-sidebar-muted: oklch(0.56 0 0);
+  --n-sidebar-faint: oklch(0.64 0 0);
+  --n-sidebar-section: oklch(0.58 0 0);
+  --n-sidebar-icon: oklch(0.4 0 0);
   --n-sidebar-line: oklch(0.98 0 0);
   --n-sidebar-hover: oklch(0.94 0 0);
   --n-sidebar-selected: rgb(0 0 0 / 3.5%);
@@ -32,7 +32,7 @@
 
 .dark .prism-next .n-sidebar {
   --n-sidebar-bg: oklch(0.16 0 0);
-  --n-sidebar-text: oklch(0.85 0 0);
+  --n-sidebar-text: oklch(0.9 0 0);
   --n-sidebar-muted: oklch(0.69 0 0);
   --n-sidebar-faint: oklch(0.51 0 0);
   --n-sidebar-section: oklch(0.69 0 0);
@@ -80,14 +80,14 @@
   text-overflow: ellipsis;
 }
 
-/* The favicon aperture is reused as an alpha mask so the mark follows the
+/* The logo mark is reused as an alpha mask so the mark follows the
    surface's text colour, instead of the SVG's own OS dark-mode stroke. */
 .prism-next .n-sidebar-logo,
 .prism-next .n-sidebar-rail-logo {
   flex-shrink: 0;
   background-color: currentColor;
-  -webkit-mask: url('/favicon.svg') center / contain no-repeat;
-  mask: url('/favicon.svg') center / contain no-repeat;
+  -webkit-mask: url('/logo-mark.svg') center / contain no-repeat;
+  mask: url('/logo-mark.svg') center / contain no-repeat;
 }
 
 .prism-next .n-sidebar-logo {
@@ -532,53 +532,77 @@
   .prism-next .n-sidebar-hotkey { display: none; }
 }
 
-/* Search is also portalled; its surface uses the chat menu palette. */
-.n-sidebar-search-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 70;
-  background: rgb(0 0 0 / 30%);
-  backdrop-filter: blur(2px);
-}
-
-.n-sidebar-search-dialog {
-  position: fixed;
-  inset: min(18vh, 120px) auto auto 50%;
-  z-index: 71;
-  width: min(560px, calc(100vw - 32px));
-  max-height: calc(80dvh - 32px);
-  transform: translateX(-50%);
-  overflow: hidden;
-  border: 1px solid var(--n-menu-border);
-  border-radius: 16px;
-  outline: none;
-  background: var(--n-menu-bg);
-  color: var(--n-menu-text);
-  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 10%), 0 8px 10px -6px rgb(0 0 0 / 10%);
-  font-size: 13px;
-  line-height: 20px;
-}
-
-.n-sidebar-search-field {
-  display: flex;
+/* Search palette. The layout (overlay, two panes, rows, preview) is prism's
+   ported `.n-palette*` in next-theme.css; this adds what cmdk and our rows
+   need on top of it. Portalled into the shell root, so `.prism-next` scopes it. */
+.prism-next .n-palette-overlay { z-index: 70; }
+.prism-next .n-palette { border-radius: 24px; }
+.dark .prism-next .n-palette { box-shadow: 0 0 0 1px rgb(255 255 255 / 8%), 0 12px 40px rgb(0 0 0 / 50%); }
+.prism-next .n-palette [cmdk-root] { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.prism-next .n-palette-head { gap: 12px; padding: 18px 22px 10px; }
+.prism-next .n-palette-icon { width: 18px; height: 18px; flex-shrink: 0; color: var(--n-text-2); }
+.prism-next .n-palette-clear,
+.prism-next .n-palette-row-button {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--n-menu-border);
+  justify-content: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--n-text-2);
+  cursor: pointer;
 }
+.prism-next .n-palette-clear svg,
+.prism-next .n-palette-row-button svg { width: 16px; height: 16px; }
+.prism-next .n-palette-clear:is(:hover, :focus-visible),
+.prism-next .n-palette-row-button:is(:hover, :focus-visible, [data-state='open']) {
+  outline: none;
+  background: var(--n-hover-strong);
+  color: var(--n-text);
+}
+.prism-next .n-palette-results { padding: 0 12px 16px; }
+.prism-next .n-palette-group [cmdk-group-heading] {
+  padding: 16px 10px 6px;
+  color: var(--n-text-3);
+  font-size: 12px;
+  font-weight: 500;
+  user-select: none;
+}
+.prism-next .n-palette-group:first-child [cmdk-group-heading] { padding-top: 6px; }
+.prism-next .n-palette-item { min-height: 38px; padding: 0 8px 0 10px; }
+.prism-next .n-palette-item[data-selected='true']::before { background: var(--n-hover); }
+.prism-next .n-palette-item-icon { width: 17px; height: 17px; flex-shrink: 0; color: var(--n-text-2); }
+.prism-next .n-palette-date { min-width: 4.5em; text-align: right; font-variant-numeric: tabular-nums; }
+.prism-next .n-palette-rename { display: flex; flex: 1; min-width: 0; align-items: center; gap: 4px; }
+.prism-next .n-palette-rename input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--n-line);
+  border-radius: 8px;
+  outline: none;
+  background: var(--n-bg);
+  color: var(--n-text);
+  font: inherit;
+}
+.prism-next .n-palette-rename input[aria-invalid='true'] { border-color: var(--n-danger, #dc2626); }
+.prism-next .n-palette-more { min-height: 40px; padding: 10px; color: var(--n-text-3); font-size: 12px; text-align: center; }
+.prism-next .n-palette-preview { padding: 8px 24px 24px 12px; }
+.prism-next .n-palette-preview-idle .n-spinner { width: 18px; height: 18px; }
+/* The transcript at a reading size for a pane half the width of the chat. */
+.prism-next .n-palette-transcript { font-size: 14px; }
+.prism-next .n-palette-transcript .n-actions { display: none; }
 
-.n-sidebar-search-field > svg { width: 16px; height: 16px; flex-shrink: 0; }
-.n-sidebar-search-field input { flex: 1; min-width: 0; border: 0; background: transparent; color: inherit; font: inherit; outline: none; }
-.n-sidebar-search-field button { display: flex; padding: 2px; border: 0; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
-.n-sidebar-search-results { max-height: min(360px, 52dvh); overflow-y: auto; overscroll-behavior: contain; padding: 6px; }
-.n-sidebar-search-result { display: flex; align-items: center; gap: 16px; min-height: 36px; padding: 8px 10px; border-radius: 10px; cursor: pointer; }
-.n-sidebar-search-result[data-selected='true'] { background: var(--n-menu-hover); }
-.n-sidebar-search-result > span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.n-sidebar-search-result > span:last-child { flex-shrink: 0; color: var(--n-text-2); font-size: 11px; }
-.n-sidebar-search-more { display: block; width: 100%; min-height: 36px; border: 0; border-top: 1px solid var(--n-menu-border); background: transparent; color: inherit; font: inherit; cursor: pointer; }
-.n-sidebar-search-more:disabled { opacity: 0.5; cursor: default; }
-.n-sidebar-search-field button:focus-visible,
-.n-sidebar-search-more:is(:hover, :focus-visible) { outline: none; background: var(--n-menu-hover); }
+@media (max-width: 767px) {
+  .prism-next .n-palette { height: min(640px, 82dvh); }
+  .prism-next .n-palette-results { flex-basis: 100%; }
+  .prism-next .n-palette-preview { display: none; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .prism-next .n-sidebar { transition: none; }

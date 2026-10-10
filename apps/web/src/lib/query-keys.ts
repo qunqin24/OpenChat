@@ -12,4 +12,9 @@ export const queryKeys = {
     all: ['messages'] as const,
     list: (conversationId: string) => [...queryKeys.messages.all, 'list', conversationId] as const,
   },
+  features: ['features'] as const,
+  models: {
+    all: ['models'] as const,
+    list: () => [...queryKeys.models.all, 'list'] as const,
+  },
 } as const

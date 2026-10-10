@@ -2,7 +2,7 @@ import type { Conversation } from '@openchat/api-client'
 import { Outlet, useNavigate, useParams } from '@tanstack/react-router'
 import { PanelLeft } from 'lucide-react'
 import { Dialog } from 'radix-ui'
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -56,6 +56,14 @@ export function NextShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const collapsed = mobile ? !mobileOpen : !sidebarOpen
   const [pendingDelete, setPendingDelete] = useState<Conversation | null>(null)
+  // Where focus was when the confirmation was asked for. The dialog has no
+  // trigger to hand focus back to, and the search palette, which can ask for
+  // it, needs its field focused again for the arrow keys to work.
+  const returnFocus = useRef<HTMLElement | null>(null)
+  const askDelete = useCallback((conversation: Conversation) => {
+    returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setPendingDelete(conversation)
+  }, [])
 
   const toggleCollapsed = useCallback(() => {
     if (mobile) setMobileOpen((value) => !value)
@@ -93,7 +101,7 @@ export function NextShell() {
                   onToggle={closeMobile}
                   onNavigate={closeMobile}
                   activeId={activeId}
-                  onDelete={setPendingDelete}
+                  onDelete={askDelete}
                 />
               </Dialog.Content>
             </Dialog.Portal>
@@ -104,7 +112,7 @@ export function NextShell() {
               onToggle={toggleCollapsed}
               onNavigate={closeMobile}
               activeId={activeId}
-              onDelete={setPendingDelete}
+              onDelete={askDelete}
             />
           )}
 
@@ -116,12 +124,20 @@ export function NextShell() {
             open={pendingDelete !== null}
             onOpenChange={(open) => !open && setPendingDelete(null)}
           >
-            <AlertDialogContent>
+            <AlertDialogContent
+              onCloseAutoFocus={(event) => {
+                const target = returnFocus.current
+                returnFocus.current = null
+                if (target?.isConnected) {
+                  event.preventDefault()
+                  target.focus()
+                }
+              }}
+            >
               <AlertDialogHeader>
                 <AlertDialogTitle>{t('next.conversation.remove-title')}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  {t('next.conversation.remove-description')}
-                  <strong> {pendingDelete?.title}</strong>
+                  {t('next.conversation.remove-description', { title: pendingDelete?.title ?? '' })}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

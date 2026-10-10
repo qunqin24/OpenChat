@@ -1,0 +1,116 @@
+/**
+ * Tables in answers — Markdown tables (MarkdownTable.tsx) and interface tables
+ * (the Table component in genui) — drawn one way: a tinted, rounded frame that
+ * holds the header, and the body inset in it as a white block whose top
+ * corners are rounded, so the tint shows around them.
+ *
+ * Each rule names both tables in a selector list rather than an `:is()`: the
+ * Markdown table also matches prism's rules in next-theme.css (column rules,
+ * row stripes, padding), and a list keeps each selector's own specificity,
+ * which for the Markdown half has to outweigh those.
+ *
+ * The frame's outline is a box-shadow ring, not a border, so the body's cells
+ * reach the frame's edges and the frame's rounding clips them cleanly.
+ */
+
+.prism-next .n-ui-table-wrap,
+.prism-next .n-md-table-scroll {
+  overflow-x: auto;
+  border-radius: 16px;
+  background: var(--n-table-frame);
+  box-shadow: 0 0 0 1px var(--n-line), 0 1px 2px rgb(0 0 0 / 4%);
+  scrollbar-width: thin;
+  scrollbar-color: var(--n-line) transparent;
+}
+
+/* An interface table's title sits above the frame, not inside it, so the tinted
+   band holds only the column labels. */
+.prism-next .n-ui-table-caption {
+  padding: 0 2px 8px;
+  color: var(--n-chat-strong);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.prism-next .n-ui-table,
+.prism-next .n-markdown .markdown-body table {
+  display: table;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: transparent;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.prism-next .n-ui-table th,
+.prism-next .n-markdown .markdown-body table th {
+  padding: 12px 18px;
+  border: 0;
+  background: transparent;
+  color: var(--n-chat-strong);
+  font-size: inherit;
+  font-weight: 500;
+  line-height: inherit;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.prism-next .n-ui-table td,
+.prism-next .n-markdown .markdown-body table td {
+  min-width: 6em;
+  padding: 12px 18px;
+  border: 0;
+  border-top: 1px solid var(--n-table-rule);
+  background: var(--n-card);
+  color: var(--n-chat-body);
+  font-size: inherit;
+  line-height: inherit;
+  vertical-align: top;
+  white-space: normal;
+  transition: background-color 120ms ease;
+}
+
+.prism-next .n-ui-table :is(th, td):not(:last-child),
+.prism-next .n-markdown .markdown-body table :is(th, td):not(:last-child) {
+  border-right: 1px solid var(--n-table-rule);
+}
+
+/* Rows are see-through so the frame's tint shows past the body's rounded top
+   corners; the cells carry the body colour. */
+.prism-next .n-ui-table tbody tr,
+.prism-next .n-markdown .markdown-body table tbody tr,
+.prism-next .n-markdown .markdown-body table tbody tr:nth-child(2n) {
+  border: 0;
+  background: transparent;
+}
+
+.prism-next .n-ui-table tbody tr:hover td,
+.prism-next .n-markdown .markdown-body table tbody tr:hover td {
+  background: var(--n-table-hover);
+}
+
+/* The body's top edge, which curves down at each end into the frame. */
+.prism-next .n-ui-table tbody tr:first-child td,
+.prism-next .n-markdown .markdown-body table tbody tr:first-child td {
+  border-top-color: var(--n-line);
+}
+.prism-next .n-ui-table tbody tr:first-child td:first-child,
+.prism-next .n-markdown .markdown-body table tbody tr:first-child td:first-child {
+  border-top-left-radius: 14px;
+}
+.prism-next .n-ui-table tbody tr:first-child td:last-child,
+.prism-next .n-markdown .markdown-body table tbody tr:first-child td:last-child {
+  border-top-right-radius: 14px;
+}
+
+/* prism separates rows with a bottom rule; here the top rule does that. */
+.prism-next .n-markdown .markdown-body table tbody tr:not(:last-child) td {
+  border-bottom: 0;
+}

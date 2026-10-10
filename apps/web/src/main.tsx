@@ -8,6 +8,7 @@ import { queryClient } from '@/lib/query'
 import { router } from '@/router'
 import { applyTheme, useUIStore } from '@/stores/ui-store'
 
+import 'katex/dist/katex.min.css'
 import 'streamdown/styles.css'
 import '@/styles/globals.css'
 

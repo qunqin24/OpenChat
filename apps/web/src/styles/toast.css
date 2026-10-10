@@ -1,0 +1,109 @@
+/**
+ * OpenWebUI +layout.svelte at 0a7c15832f, with svelte-sonner 0.3.28.
+ * React sonner 2.0.8 owns stacking, dragging, dismissal and focus management;
+ * scoped overrides align its differing defaults without affecting either UI.
+ */
+.n-toast[data-sonner-toaster] [data-sonner-toast][data-styled='true'] {
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 10%);
+  font-size: 13px;
+}
+
+@media (min-width: 601px) {
+  .n-toast[data-sonner-toaster] [data-sonner-toast][data-styled='true'] {
+    width: var(--width);
+  }
+}
+
+.n-toast[data-sonner-toaster],
+.n-toast[data-sonner-toaster] :is([data-sonner-toast], [data-sonner-toast] *) {
+  font-family: var(--n-chat-font);
+}
+
+.n-toast[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-title] {
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.n-toast[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-description] {
+  font-weight: 400;
+  line-height: 1.4;
+  color: inherit;
+}
+
+/* Match the pinned svelte-sonner status palette, rather than React's slightly
+ * different status borders. React uses data-sonner-theme, not data-theme. */
+.n-toast[data-sonner-toaster][data-sonner-theme='light'] {
+  --success-bg: hsl(143 85% 96%);
+  --success-border: hsl(145 92% 91%);
+  --success-text: hsl(140 100% 27%);
+  --info-bg: hsl(208 100% 97%);
+  --info-border: hsl(221 91% 91%);
+  --info-text: hsl(210 92% 45%);
+  --warning-bg: hsl(49 100% 97%);
+  --warning-border: hsl(49 91% 91%);
+  --warning-text: hsl(31 92% 45%);
+  --error-bg: hsl(359 100% 97%);
+  --error-border: hsl(359 100% 94%);
+  --error-text: hsl(360 100% 45%);
+}
+
+.n-toast[data-sonner-toaster][data-sonner-theme='dark'] {
+  --success-bg: hsl(150 100% 6%);
+  --success-border: hsl(147 100% 12%);
+  --success-text: hsl(150 86% 65%);
+  --info-bg: hsl(215 100% 6%);
+  --info-border: hsl(223 100% 12%);
+  --info-text: hsl(216 87% 65%);
+  --warning-bg: hsl(64 100% 6%);
+  --warning-border: hsl(60 100% 12%);
+  --warning-text: hsl(46 87% 65%);
+  --error-bg: hsl(358 76% 10%);
+  --error-border: hsl(357 89% 16%);
+  --error-text: hsl(358 100% 81%);
+}
+
+.n-toast[data-sonner-toaster][data-sonner-theme='light'] [data-styled='true'] [data-close-button] {
+  background: rgb(255 255 255 / 80%);
+  color: oklch(0.69 0 0);
+  border-color: oklch(0.92 0 0);
+}
+
+.n-toast[data-sonner-toaster][data-sonner-theme='light'] [data-styled='true'] [data-close-button]:hover {
+  background: oklch(0.98 0 0);
+  color: oklch(0.42 0 0);
+}
+
+.n-toast[data-sonner-toaster][data-sonner-theme='dark'] [data-styled='true'] [data-close-button] {
+  background: oklch(0.27 0 0);
+  color: oklch(0.77 0 0);
+  border-color: oklch(0.42 0 0);
+}
+
+.n-toast[data-sonner-toaster][data-sonner-theme='dark'] [data-styled='true'] [data-close-button]:hover {
+  background: oklch(0.32 0 0);
+  color: oklch(0.92 0 0);
+}
+
+/* Loading is essential feedback. Only this wrapper animates; under reduced
+ * motion it pulses without rotation while Sonner disables toast travel. */
+.n-toast[data-sonner-toaster] .n-toast-spinner {
+  display: inline-flex;
+  animation: n-toast-spin 900ms linear infinite;
+}
+
+@keyframes n-toast-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes n-toast-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .n-toast[data-sonner-toaster] .n-toast-spinner {
+    animation: n-toast-pulse 1.2s ease-in-out infinite;
+  }
+}

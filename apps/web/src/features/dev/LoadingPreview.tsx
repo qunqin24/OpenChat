@@ -81,18 +81,29 @@ export function LoadingPreview() {
 
   return (
     <div className="n-auth">
-      <div className="n-auth-card" style={{ maxWidth: 520 }}>
+      <div className="n-auth-column" style={{ maxWidth: 600 }}>
         <h1 className="n-auth-title">加载动画预览</h1>
-        <p className="n-auth-sub">开发预览页，两种全局加载状态各自循环。</p>
+        <p style={{ margin: '4px 0 20px', color: 'var(--n-text-2)', fontSize: 14 }}>
+          开发预览页，两种全局加载状态各自循环。
+        </p>
 
         {reducedMotion && (
-          <div className="n-auth-alert" role="status" style={{ marginBottom: 16 }}>
+          <p
+            role="status"
+            style={{
+              margin: '0 0 16px',
+              color: 'var(--n-text-2)',
+              fontSize: 14,
+              lineHeight: 1.7,
+              textAlign: 'left',
+            }}
+          >
             你的系统开启了「减少动态效果」。进度条不会被停掉 —— 只是把横向扫动换成了
             原地的明暗脉动，因为完全静止的加载条看起来像卡死了。
-          </div>
+          </p>
         )}
 
-        <div className="n-auth-form">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <button
             type="button"
             className="n-auth-submit"
@@ -110,7 +121,15 @@ export function LoadingPreview() {
           </button>
         </div>
 
-        <div className="n-auth-hint" style={{ textAlign: 'left' }}>
+        <p
+          style={{
+            marginTop: 24,
+            color: 'var(--n-text-2)',
+            fontSize: 13,
+            lineHeight: 1.7,
+            textAlign: 'left',
+          }}
+        >
           <strong>顶部进度条</strong>：现在正在循环 —— 每 {REQUEST_MS / 1000}s
           一次请求，间隔 {REQUEST_GAP_MS / 1000}s。前 300ms 不显示，缓动到 90%
           等待，完成时才到 100%。
@@ -119,7 +138,7 @@ export function LoadingPreview() {
           <strong>首屏遮罩</strong>：默认不播，因为它是全屏的，播起来会盖住这个页面
           （每 {SPLASH_HOLD_MS / 1000}s 淡出一次，能看到间隙）。它平时只在
           index.html 里、React 挂载前出现一次。
-        </div>
+        </p>
       </div>
     </div>
   )

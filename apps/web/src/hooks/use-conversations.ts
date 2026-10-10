@@ -1,4 +1,4 @@
-import type { Conversation } from '@openchat/api-client'
+import type { Conversation, CreateConversationRequest } from '@openchat/api-client'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/lib/api'
@@ -38,7 +38,7 @@ export function useCreateConversation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (body: { title?: string; model?: string }) =>
+    mutationFn: async (body: CreateConversationRequest) =>
       unwrap(await api.POST('/conversations', { body })),
     onSuccess: (conversation: Conversation) => {
       queryClient.setQueryData(queryKeys.conversations.detail(conversation.id), conversation)

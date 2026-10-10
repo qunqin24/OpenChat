@@ -1,45 +1,74 @@
+import type { BatchEvent, Message, Run, SnapshotEvent } from '@openchat/api-client'
 import { create } from 'zustand'
 
+import { applyBatch, fromSnapshot, idle, type ConversationLive } from '@/lib/run-state'
+
 /**
- * Live state for the in-flight assistant reply. It is deliberately separate from
- * TanStack Query: the persisted message list is server state, while a streaming
- * reply is ephemeral client state that changes many times per second.
+ * Client state for the chat screen that is not in the query cache.
+ *
+ * `live` is each conversation's run in flight. It changes many times a second
+ * while an answer streams, which would thrash the query cache, so it lives
+ * here; once a run is over its rows are refetched through Query and the live
+ * copy is let go (`settle`).
  */
-interface StreamState {
-  conversationId: string
-  messageId: string | null
-  text: string
-  error: string | null
+/** What was written on the empty-state screen, to be sent once the conversation exists. */
+export interface PendingPrompt {
+  content: string
+  /** Uploads already made for it; the new route sends them with the text. */
+  attachmentIds: string[]
 }
 
 interface ChatState {
-  stream: StreamState | null
-  controller: AbortController | null
+  live: Record<string, ConversationLive>
+
   /**
    * Prompt typed on the empty-state screen, carried across the navigation that
    * follows creating the conversation for it. The new route consumes it on mount.
    */
-  pendingPrompt: string | null
+  pendingPrompt: PendingPrompt | null
 
-  /** Begins a stream, aborting any previous one. Returns the signal to pass to fetch. */
-  start: (conversationId: string) => AbortSignal
-  setMessageId: (messageId: string) => void
-  appendDelta: (delta: string) => void
-  fail: (message: string) => void
-  finish: () => void
-  /** Aborts the in-flight stream, keeping whatever text already arrived. */
-  stop: () => void
+  applySnapshot: (conversationId: string, snapshot: SnapshotEvent) => void
+  applyBatch: (conversationId: string, batch: BatchEvent) => void
+  /** A run this page started, known from the POST before its first event. */
+  startRun: (conversationId: string, run: Run, input: Message) => void
+  /** Drops a finished run once the message list holds its rows. */
+  settle: (conversationId: string, runId: string) => void
 
-  setPendingPrompt: (prompt: string | null) => void
-  takePendingPrompt: () => string | null
-
-  isStreaming: (conversationId: string) => boolean
+  setPendingPrompt: (prompt: PendingPrompt | null) => void
+  takePendingPrompt: () => PendingPrompt | null
 }
 
 export const useChatStore = create<ChatState>()((set, get) => ({
-  stream: null,
-  controller: null,
+  live: {},
   pendingPrompt: null,
+
+  applySnapshot: (conversationId, snapshot) =>
+    set((state) => ({ live: { ...state.live, [conversationId]: fromSnapshot(snapshot) } })),
+
+  applyBatch: (conversationId, batch) =>
+    set((state) => ({
+      live: { ...state.live, [conversationId]: applyBatch(state.live[conversationId] ?? idle, batch) },
+    })),
+
+  startRun: (conversationId, run, input) =>
+    set((state) => {
+      const current = state.live[conversationId]
+      // The stream may already have announced it.
+      if (current?.run?.run.id === run.id) return state
+      return {
+        live: {
+          ...state.live,
+          [conversationId]: { run: { run, messages: [input], partial: null, retry: null, tools: {} } },
+        },
+      }
+    }),
+
+  settle: (conversationId, runId) =>
+    set((state) => {
+      const current = state.live[conversationId]
+      if (current?.run?.run.id !== runId || current.run.run.status === 'running') return state
+      return { live: { ...state.live, [conversationId]: idle } }
+    }),
 
   setPendingPrompt: (pendingPrompt) => set({ pendingPrompt }),
 
@@ -47,41 +76,5 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const { pendingPrompt } = get()
     if (pendingPrompt !== null) set({ pendingPrompt: null })
     return pendingPrompt
-  },
-
-  start: (conversationId) => {
-    get().controller?.abort()
-    const controller = new AbortController()
-    set({
-      controller,
-      stream: { conversationId, messageId: null, text: '', error: null },
-    })
-    return controller.signal
-  },
-
-  setMessageId: (messageId) =>
-    set((state) => (state.stream ? { stream: { ...state.stream, messageId } } : state)),
-
-  appendDelta: (delta) =>
-    set((state) =>
-      state.stream ? { stream: { ...state.stream, text: state.stream.text + delta } } : state,
-    ),
-
-  fail: (message) =>
-    set((state) => ({
-      controller: null,
-      stream: state.stream ? { ...state.stream, error: message } : state.stream,
-    })),
-
-  finish: () => set({ stream: null, controller: null }),
-
-  stop: () => {
-    get().controller?.abort()
-    set({ controller: null })
-  },
-
-  isStreaming: (conversationId) => {
-    const { stream, controller } = get()
-    return controller !== null && stream?.conversationId === conversationId
   },
 }))

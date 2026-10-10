@@ -11,8 +11,8 @@ import { cn } from '@/lib/utils'
 import { useUIStore } from '@/stores/ui-store'
 import { SidebarAccount } from './SidebarAccount'
 import { SidebarConversation } from './SidebarConversation'
+import { SearchPalette } from './SearchPalette'
 import { SidebarResizeHandle } from './SidebarResizeHandle'
-import { SidebarSearch } from './SidebarSearch'
 import Tooltip, { TooltipGroup } from './Tooltip'
 
 interface SidebarProps {
@@ -35,6 +35,7 @@ export function Sidebar({ collapsed, mobile, onToggle, onNavigate, activeId, onD
   const [dragWidth, setDragWidth] = useState<number | null>(null)
   const [scrolled, setScrolled] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [searchHost, setSearchHost] = useState<HTMLElement | null>(null)
   const scroll = useRef<HTMLDivElement>(null)
   const loadMore = useRef<HTMLButtonElement>(null)
   const searchTrigger = useRef<HTMLButtonElement>(null)
@@ -56,6 +57,7 @@ export function Sidebar({ collapsed, mobile, onToggle, onNavigate, activeId, onD
 
   const openSearch = useCallback(() => {
     searchOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setSearchHost(scroll.current?.closest<HTMLElement>('.prism-next') ?? null)
     setSearchOpen(true)
   }, [])
 
@@ -167,7 +169,8 @@ export function Sidebar({ collapsed, mobile, onToggle, onNavigate, activeId, onD
         {!collapsed && !mobile && <SidebarResizeHandle width={dragWidth ?? width} onResize={setDragWidth} onCommit={setWidth} />}
       </aside>
 
-      <SidebarSearch
+      <SearchPalette
+        host={searchHost}
         open={searchOpen}
         onOpenChange={setSearchOpen}
         conversations={history}
@@ -175,6 +178,7 @@ export function Sidebar({ collapsed, mobile, onToggle, onNavigate, activeId, onD
         loading={isFetchingNextPage}
         onLoadMore={() => void fetchNextPage()}
         onNavigate={onNavigate}
+        onDelete={onDelete}
         onRestoreFocus={() => {
           const target = searchOpener.current?.isConnected ? searchOpener.current : searchTrigger.current
           target?.focus()

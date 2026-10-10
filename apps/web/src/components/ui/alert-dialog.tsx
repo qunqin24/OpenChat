@@ -19,8 +19,10 @@ export function AlertDialogContent({
       />
       <RadixAlertDialog.Content
         className={cn(
-          'fixed top-1/2 left-1/2 z-50 w-[min(26rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2',
-          'rounded-2xl p-5',
+          'fixed top-1/2 left-1/2 z-50 w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2',
+          // OpenWebUI's confirm dialog: generous corners and padding, a heading
+          // that asks, and two full-width pill buttons side by side.
+          'rounded-3xl p-6',
           className,
         )}
         style={{ background: 'var(--n-card)', boxShadow: 'var(--n-shadow-card-hover)' }}
@@ -33,11 +35,11 @@ export function AlertDialogContent({
 }
 
 export function AlertDialogHeader({ className, ...props }: ComponentProps<'div'>) {
-  return <div className={cn('flex flex-col gap-1.5', className)} {...props} />
+  return <div className={cn('flex flex-col gap-2', className)} {...props} />
 }
 
 export function AlertDialogFooter({ className, ...props }: ComponentProps<'div'>) {
-  return <div className={cn('mt-5 flex justify-end gap-2', className)} {...props} />
+  return <div className={cn('mt-6 grid grid-cols-2 gap-2.5', className)} {...props} />
 }
 
 export function AlertDialogTitle({
@@ -46,7 +48,7 @@ export function AlertDialogTitle({
 }: ComponentProps<typeof RadixAlertDialog.Title>) {
   return (
     <RadixAlertDialog.Title
-      className={cn('text-[15px] font-semibold', className)}
+      className={cn('text-[17px] leading-6 font-semibold', className)}
       {...props}
     />
   )
@@ -71,8 +73,14 @@ export function AlertDialogCancel({
 }: ComponentProps<typeof RadixAlertDialog.Cancel>) {
   return (
     <RadixAlertDialog.Cancel
-      className={cn('h-9 rounded-lg px-3.5 text-sm font-medium transition-colors', className)}
-      style={{ background: 'var(--n-hover)', color: 'var(--n-text)' }}
+      className={cn(
+        'h-10 rounded-full px-4 text-sm font-medium transition-colors',
+        'bg-[var(--n-hover-strong)] text-[var(--n-text)] hover:bg-[var(--n-active)]',
+        // The portal sits outside the chat's own focus styles (focus.css); a soft
+        // ring rather than the browser's blue outline, which clashed here.
+        'outline-none focus-visible:ring-[3px] focus-visible:ring-black/15 dark:focus-visible:ring-white/25',
+        className,
+      )}
       {...props}
     />
   )
@@ -84,8 +92,12 @@ export function AlertDialogAction({
 }: ComponentProps<typeof RadixAlertDialog.Action>) {
   return (
     <RadixAlertDialog.Action
-      className={cn('h-9 rounded-lg px-3.5 text-sm font-medium transition-colors', className)}
-      style={{ background: 'var(--n-accent)', color: 'var(--n-accent-fg)' }}
+      className={cn(
+        'h-10 rounded-full px-4 text-sm font-medium transition-colors',
+        'bg-[var(--n-accent)] text-[var(--n-accent-fg)] hover:bg-[var(--n-accent-hover)]',
+        'outline-none focus-visible:ring-[3px] focus-visible:ring-black/15 dark:focus-visible:ring-white/25',
+        className,
+      )}
       {...props}
     />
   )

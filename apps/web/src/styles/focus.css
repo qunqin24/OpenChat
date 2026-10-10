@@ -65,3 +65,11 @@
 .prism-next .n-composer-input:focus-visible {
   outline: none;
 }
+
+/* The same for the search palette's field, which sits in the palette's own
+   header: the caret says where focus is. The rows show the cursor as their
+   fill, and focus never leaves the field while arrowing through them. */
+.prism-next .n-palette-input:focus-visible,
+.prism-next .n-palette-rename input:focus-visible {
+  outline: none;
+}

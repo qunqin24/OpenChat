@@ -21,6 +21,10 @@
 @import './chat-typography.css';
 @import './chat-layout.css';
 @import './file-drop.css';
+@import './attachments.css';
+@import './agent.css';
+@import './genui.css';
+@import './chat-table.css';
 
 /* The admin panel keeps shadcn's own look, so its tokens and base layer come
    across unchanged — the base layer scoped so it cannot reach the chat UI. */
