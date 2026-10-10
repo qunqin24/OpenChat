@@ -1,128 +1,55 @@
 # AGENTS.md
 
-本文件为在此仓库中工作的编码助手提供指引。（`CLAUDE.md` 只是指向这里的一个引用。）
+编码助手的仓库指引（`CLAUDE.md` 只是指向这里）。Go API 在 `apps/server`，React 前端在 `apps/web`，契约在 `api/openapi.yaml`。
 
 ## 命令
 
-`make help` 列出全部命令。常用的几个：
-
 ```bash
-make setup          # 安装依赖，创建 .env
-make up             # 通过 docker compose 起 Postgres + MinIO
-make ser            # Go API 跑在 :8080，启动时自动迁移
-make web            # Vite 跑在 :5173，把 /api 代理到 :8080
-make check          # lint + test + build —— CI 跑的就是这个
-make generate       # 重新生成 sqlc 和 API 契约（两端都生成）
+make setup      # 安装依赖，创建 .env
+make up         # docker compose 起 Postgres + MinIO（可选：DATABASE_URL 指向任意 Postgres 18 即可）
+make ser        # API :8080，启动时自动迁移
+make web        # Vite :5173，/api 代理到 :8080
+make check      # lint + test + build，即 CI
+make generate   # 重新生成 sqlc、API 契约、GenUI 目录
 ```
 
-跑单个 Go 测试：
+单个 Go 测试：`cd apps/server && go test ./internal/auth/ -run TestHashAndVerify -v`。前端没有测试运行器，靠 `tsc --noEmit`、`eslint .`、`vite build` 验证。
 
-```bash
-cd apps/server && go test ./internal/auth/ -run TestHashAndVerify -v
-```
+## 生成的代码
 
-前端没有测试运行器。前端的验证手段是 `pnpm --filter @openchat/web exec tsc --noEmit`、`eslint .` 和 `vite build`。
+`api/openapi.yaml` 同时生成 `internal/api/openapi.gen.go` 和 `packages/api-client/src/schema.d.ts`，改完跑 `make generate-api`。标了 `DO NOT EDIT` 的文件（另有 `internal/db/sqlc/*`、`routeTree.gen.ts`）不要手改，改源头再生成。TypeScript 锁定 5.9.3（openapi-typescript 需要 JS 版编译器）。
 
-没有 Docker 也能跑：把 `DATABASE_URL` 指向任意一个 Postgres 18 即可，只有附件功能需要 MinIO。
+## 两套设计系统，不要混用
 
-## 契约是唯一事实来源
-
-`api/openapi.yaml` 为**两端**生成代码：
-
-- `apps/server/internal/api/openapi.gen.go` —— Chi 处理器与模型（oapi-codegen）
-- `packages/api-client/src/schema.d.ts` —— TypeScript 类型（openapi-typescript）
-
-改了契约却没跑 `make generate-api`，两端就会不同步。生成的代码没有提交，CI 会失败。
-
-标了 `DO NOT EDIT` 的文件**一律不要手改**：`internal/db/sqlc/*`、`internal/api/openapi.gen.go`、`apps/web/src/routeTree.gen.ts`、`packages/api-client/src/schema.d.ts`。要改就改源头（`.sql` 查询、`openapi.yaml`、`src/routes/` 下的文件），然后重新生成。
-
-TypeScript 全仓库锁定在 5.9.3。`openapi-typescript` 需要 JS 版编译器 API，而 TS 7（原生移植版）不提供。
-
-## 两套设计系统，有意为之
-
-**这是本仓库最大的 bug 来源。** 聊天界面（AI Chatbot）和后台管理面板是**两套完全不同的样式系统，不要混用**：
-
-- 聊天/登录界面的组件**不要** import `components/shadcn/**`。
-- 后台面板的组件**不要**用 `--n-*` 令牌、`n-` 前缀的类名或 `.prism-next`。
-- 需要在两边都用的东西，写成不依赖任何一套令牌的组件（`lib/`、`hooks/` 里那些），或者干脆各写一份——**照搬一个组件比让它同时伺候两套令牌便宜得多**。
-
-这条边界目前是干净的，任何时候都可以用一行命令验证（应当无输出）：
+聊天/登录界面用 `--n-*` 令牌、`n-` 类名、`.prism-next`；后台面板用 shadcn（`components/shadcn/**`，`.shadcn-scope`）。两边共用的东西放 `lib/`、`hooks/`，或者各写一份。以下两条命令应当无输出：
 
 ```bash
 grep -rn "components/shadcn" apps/web/src/components/next apps/web/src/components/auth
 grep -rn -- "--n-\|prism-next" apps/web/src/features/admin apps/web/src/components/shadcn
 ```
 
-两套的分工如下：
-
-| | 聊天 / 登录 | 后台面板 |
-| --- | --- | --- |
-| 令牌 | `:root` 上的 `--n-*` | shadcn 的 `--background`、`--border` 等 |
-| 作用域类 | `.prism-next`、`.n-auth` | `.shadcn-scope` |
-| 样式文件 | `next-theme.css`（由 prism 的 Less 编译而来，保持原样以便重新同步）、`auth.css`、`menu.css` | `shadcn-theme.css`、`shadcn-base.css` |
-
-靠三条规则把它们隔开：
-
-1. **在 Tailwind 4 里，`border` 只设置宽度，颜色来自别处。** 没有默认值时它回退到 `currentColor`，也就是文字颜色，于是画出一道黑框。两套系统各自在自己的作用域内提供这个默认值。
-2. **Radix 的 portal 渲染在 `<body>` 下，位于所有作用域类之外。** 在那里通过 `[data-slot]`（shadcn 组件都带这个属性）**以及** `[data-slot] *`（用于嵌在组件内部的普通元素）才能选中它们。漏掉后代选择器，就是下拉菜单内部出现黑框的原因。
-3. **`shadcn-base.css` 必须待在 `@layer base` 里。** 无层级的规则优先级高于所有层级，所以一条无层级的默认边框色会盖过 Tailwind 自己的 `border-*` 工具类——那些用 `border-transparent` 预留空间的组件，就会把边框实实在在画出来。
-
-`focus.css` 里我们的 `:focus-visible` 处理是**刻意**只作用于 prism 界面的：shadcn 组件自带焦点环，一旦放开作用域，两者会叠加。
-
-`components/shadcn/**` 搬运自 [satnaing/shadcn-admin](https://github.com/satnaing/shadcn-admin)（MIT）。**凡是偏离上游的地方都要写注释说明原因**，这样将来重新同步时才分得清哪些是有意为之、哪些是漂移。已知的偏离：主题 provider 代理我们自己的 store；灰阶彩度清零；批量操作栏做了国际化并去掉了悬浮放大；危险菜单项是红字而非红底。
-
-## 状态：服务端 vs 客户端
-
-- **TanStack Query** 负责一切以服务端为准的数据——对话、消息、会话、后台数据。查询键集中在 `lib/query-keys.ts` 和 `features/admin/use-admin.ts`。
-- **Zustand** 负责不在服务端的东西：流式回复的中间态（`stores/chat-store.ts`，它每秒变化很多次，放进查询缓存会把缓存冲垮），以及主题和侧边栏状态（`stores/ui-store.ts`）。
-
-一次流式响应结束时，`use-send-message.ts` 会让消息列表失效，由 Query 重新拉取权威版本。这个交接方式就是应该遵循的范式。
-
-**任何查询键里含有筛选条件（页码、搜索词、时间窗）的查询，都需要 `placeholderData: (previous) => previous`**，否则每次变更界面都会先清空。
-
-## 认证
-
-会话是 **HttpOnly Cookie**，背后由 `sessions` 表支撑。Cookie 携带 32 字节熵，库里只存它的 SHA-256。
-
-由此决定的几件事：
-
-- 前端从不接收、存储或读取任何 token。「我登录了吗」是靠调用 `/auth/session` 来回答的——这也是会话属于 Query 而非 Zustand 状态的原因。
-- API 客户端设置了 `credentials: 'include'`（`lib/api.ts`）。少了它，浏览器会静默丢掉 Cookie。
-- `features/auth/` 是那道缝：一个 `AuthApi` 接口，在 `index.ts` 里一行代码选定实现。
-- **头像默认来自 Gravatar**（`internal/api/avatar.go`），由邮箱的 SHA-256 推导，不存库。它带 `d=404`——地址没注册过头像时返回 404，前端的 `AvatarImage` 加载失败，自然落到已有的首字母兜底，而不是 Gravatar 生成的马赛克小人。这是一个**对第三方的实时依赖**：请求一次就等于告诉 gravatar.com「这个访客在看这个账号」，和本仓库自托管字体的取舍是相反的。接口返回的是 `avatarUrl` 而不是哈希，所以将来支持上传头像时，改这一个函数即可，调用方一律不动。
-- **用户名不能包含 `@`**，由 `users_name_no_at` 这条 CHECK 约束保证。登录用同一个输入框接受用户名或邮箱，两个命名空间必须不相交——否则有人可以把用户名起成别人的邮箱，一个输入就对应两行记录。四个写这一列的处理器都做了校验，但真正的保证是约束：校验是那四个处理器的属性，不相交是这一列的属性。
-- **第一个注册的账号成为管理员**，这个判断写在 INSERT 内部，所以并发注册不会两个都抢到。管理员不能撤销自己的权限，最后一个启用状态的管理员不能被降级或停用。
-- 管理员也能创建账号（`POST /admin/users`），与注册的区别在于角色由调用方指定、且不下发会话。停用账号或替换其密码会清掉它的所有会话——凭证换了而它签发的会话还活着，等于没换，管理员改自己的密码同样如此。
-- 自助接口（`PATCH /auth/me`、`POST /auth/password`）**刻意**与管理员接口分开，而且更窄：`UpdateOwnProfile` 根本没有 `role` 和 `disabled` 参数，所以任何输入都无法提升调用者自己的权限。改自己的密码需要提供当前密码，并保留发起请求的那个会话、只吊销其余的；管理员改别人的密码两者都不需要。
+- Tailwind 4 的 `border` 只设宽度，没有默认颜色时画成黑框；两套系统各自在作用域内提供默认边框色。
+- Radix portal 渲染在 `<body>` 下、作用域之外，用 `[data-slot]` 和 `[data-slot] *` 选中。
+- `shadcn-base.css` 必须在 `@layer base` 里，否则会盖过 Tailwind 工具类。
+- shadcn 组件搬自 satnaing/shadcn-admin，偏离上游处要写注释说明原因。
 
 ## 后端约定
 
-**路由是手工挂载的**，在 `internal/api/router.go` 里，而不是用 `HandlerFromMux`，这样每个端点的保护级别在一处就能看清。新端点必须被**有意识地**放进某个分组——它不可能因为被遗忘而默认变成公开的。
-
-**归属是查询的一部分，而不是查完再检查。** `GetConversation` 接收 `user_id`；别人的行读出来就是「不存在」。后台 API 返回 404 而不是 403 也是同一个道理——403 等于向不该知道的人确认了后台的存在。
-
-**迁移是嵌进二进制的**（`go:embed`）并在启动时执行，所以部署不需要额外步骤。Goose 把每个迁移放在事务里跑，失败可以干净回滚。用 `make migration name=add_something` 创建新迁移。
-
-聊天 provider 是一个两方法的接口（`internal/chat`）。默认装的是 `Echo`，这样没有任何模型密钥也能把整套跑起来；要替换在 `cmd/openchat/main.go` 里改。
-
-`POST /conversations/{id}/messages` 返回 SSE。助手消息那一行在**第一个 token 之前**就写库，所以流到一半崩溃回复也还在。上下文被取消（点了停止、关了标签页）会把已生成的部分存为 `complete`；只有 provider 报错才算 `failed`。
+- 路由在 `internal/api/router.go` 手工挂载，每个新端点都要有意识地放进某个保护分组。
+- 归属写进查询（如 `GetConversation` 接收 `user_id`），别人的数据读出来就是不存在；后台接口对非管理员返回 404 而不是 403。
+- 迁移嵌进二进制、启动时执行；`make migration name=...` 新建。
+- 附件存储在 后台 → 文件存储 里配置（`/admin/storage`，存于 `app_settings`，运行时生效，不用重启，也没有任何存储相关的环境变量）。驱动是本地磁盘或 S3 兼容存储；`storage.Switch` 把新上传交给当前驱动，读取则先看本地磁盘有没有、再找 S3，所以切换驱动不会让旧文件失联。本地驱动由我们自己的 API 签发 HMAC 签名的读写地址 `/api/v1/files/content/{key}`，签名密钥在首次启动时自动生成并存进 `app_settings`（`storage_signing_key`，不经任何 API 暴露）；S3 密钥只写不读。库里的设置应用失败时回退到本地 `./data`，不拒绝启动。
+- 发消息返回 SSE；助手消息在第一个 token 前就写库，取消算 `complete`，provider 报错才算 `failed`。
 
 ## 前端约定
 
-**路由**是 `src/routes/` 下的文件式路由。守卫挂在无路径布局上：`_authed.tsx` 要求已登录，`admin.tsx` 额外要求管理员角色。两者都跑在 `beforeLoad`，所以未登录的访客不会先闪一下应用外壳。守卫用的是 `context.queryClient.ensureQueryData`，因此在受保护路由之间跳转不会产生额外请求。
+- 服务端数据用 TanStack Query（键在 `lib/query-keys.ts`、`features/admin/use-admin.ts`）；流式中间态和 UI 状态用 Zustand。流结束后让查询失效，重新拉取。查询键含筛选条件时加 `placeholderData: (previous) => previous`。
+- 路由守卫挂在无路径布局的 `beforeLoad`：`_authed.tsx` 要求登录，`admin.tsx` 要求管理员。
+- 表格是服务端分页/筛选；`getRowId` 用记录 id；列译名同时放进 `meta.title`。
+- 后台表单用 react-hook-form + zod，schema 建在组件内部（文案要翻译）；用 `useWatch` 而不是 `form.watch()`。登录注册页是手写校验。
+- 所有面向用户的字符串都走 `t()`（`zh`、`en`，键有类型约束）；服务端 `message` 不直接渲染。
+- 动效：全局遵守 `prefers-reduced-motion`，加载指示器标 `data-motion="essential"`，用透明度脉动代替位移。
 
-**表格**跑在手动模式（`manualPagination`、`manualFiltering`）——分页和搜索是服务端的事。`getRowId` 必须是账号 id，这样重新拉取后选中状态才不会丢。列的译名除了写在 header 渲染函数里，还要放一份到 `meta.title` 上：列显隐菜单没有 header 可读，否则会退回显示原始列名。
+## 认证
 
-**表单**跟着它所在的那半边应用走。登录注册页是手写校验（`components/auth/validation.ts`，校验函数返回本地化键），因为它们早于后台面板存在、而且每个表单只有两个字段。后台面板和上游一样，用 react-hook-form + zod，经由搬运来的 `ui/form.tsx`。**zod schema 要建在组件内部**——提示文案需要翻译，而且在 `users-action-dialog.tsx` 里密码规则还取决于当前是新建还是编辑。用 `useWatch` 而不是 `form.watch()`，React 编译器拒绝对后者做记忆化。
-
-字段级的 API 错误通过 `OpenChatError.field` 抵达表单，契约只在确实能归咎于某一个输入时才设置它（邮箱重复、密码过短、用户名被占用）。其余情况用横幅或 toast。认证相关的调用是例外：它们走 `features/auth/`，把服务端错误码映射成 `AuthErrorKey` 本地化键——**服务端自己的 `message` 从不直接渲染**，因为它没有本地化。
-
-**字体**是自托管的（`@fontsource-variable/*`），所以设置页里的字体选择离线可用，也不会向第三方发请求。这个选择只作用于 `.shadcn-scope` 之内：`body` 设了自己的 `font-family`，`<html>` 上继承下来的类压不过它；而且聊天界面的排版属于搬运过来的 prism 设计，不该由用户替换。
-
-**国际化**：每一条面向用户的字符串都要走 `t()`，搬运来的组件也不例外——语言包是 `zh` 和 `en`。键是按语言文件做类型约束的（`types/i18next.d.ts`），所以改错键名会直接编译失败。搬运一个新的 shadcn 组件，意味着**用它之前先把它的字符串翻掉**；上游发的是硬编码英文，`sidebar-data.ts` 之所以必须改成 `useSidebarData()` hook，就是因为 `t` 只在组件内部可用。
-
-**动效**：`prefers-reduced-motion` 在 `globals.css` 里全局生效，但标了 `data-motion="essential"` 的元素会退出全局规则、自行处理。加载指示器用的就是这条——一个冻住的进度条和一个卡死的页面无法区分。它们把位移换成透明度脉动，而不是干脆不动。
-
-## 目前明确不做的
-
-**不做账号删除**——停用是可逆的等价操作，而删除用户会级联删掉他的所有对话。**也没有邀请和邮箱验证**：管理员建号时直接设定密码，通过别的渠道告知对方。设置页只搬了上游五个分区中的三个；通知分区没有任何东西可通知，显示分区和配置抽屉重复。**没有模型供应商目录**（搬来的 UI 是按有这个东西设计的：各家的密钥、模型列表、推理强度、联网开关）。**没有附件界面、工具调用和思维链展示。**
+HttpOnly Cookie 会话，库里只存 token 的 SHA-256；前端从不接触 token，靠 `/auth/session` 判断登录状态，API 客户端必须 `credentials: 'include'`。用户名不能含 `@`（数据库约束保证，登录框同时接受用户名和邮箱）。第一个注册的账号成为管理员；最后一个启用的管理员不能被降级或停用。停用账号或改密码会清掉其会话。自助接口（`PATCH /auth/me`、`POST /auth/password`）刻意不带角色和停用字段。不做账号删除，停用即可。
