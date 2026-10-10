@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -88,6 +90,10 @@ func (s *Server) systemSettings(ctx context.Context) (SystemSettings, error) {
 	if settings.TaskModel, err = stringSetting(ctx, s.q, settingTaskModel); err != nil {
 		return settings, err
 	}
+	keep := retentionOf(ctx, s.q)
+	settings.DeletedRetentionDays = int(keep.deleted / (24 * time.Hour))
+	settings.UnsentUploadHours = int(keep.unsentUploads / time.Hour)
+	settings.OrphanFileHours = int(keep.orphanFiles / time.Hour)
 	return settings, nil
 }
 
@@ -96,6 +102,37 @@ func (s *Server) UpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 	if err := httpx.DecodeJSON(r, &body); err != nil {
 		httpx.Fail(w, r, err)
 		return
+	}
+
+	// The periods are checked together before anything is saved, so a form
+	// that sends all three with one out of range changes none of them.
+	periods := []struct {
+		value    *int
+		key      string
+		min, max int
+	}{
+		{body.DeletedRetentionDays, settingDeletedRetentionDays, minRetentionDays, maxRetentionDays},
+		{body.UnsentUploadHours, settingUnsentUploadHours, minCleanupHours, maxCleanupHours},
+		{body.OrphanFileHours, settingOrphanFileHours, minCleanupHours, maxCleanupHours},
+	}
+	for _, p := range periods {
+		if p.value != nil && (*p.value < p.min || *p.value > p.max) {
+			httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "invalid_retention",
+				fmt.Sprintf("%s must be between %d and %d", p.key, p.min, p.max)))
+			return
+		}
+	}
+	for _, p := range periods {
+		if p.value == nil {
+			continue
+		}
+		value, _ := json.Marshal(*p.value)
+		if err := s.q.SetSetting(r.Context(), sqlc.SetSettingParams{Key: p.key, Value: value}); err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+		slog.InfoContext(r.Context(), "cleanup period changed",
+			"setting", p.key, "value", *p.value, "actor", auth.MustUser(r.Context()).Email)
 	}
 
 	if body.DebugLogging != nil {

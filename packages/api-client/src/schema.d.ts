@@ -2321,6 +2321,22 @@ export interface components {
         };
         SystemSettings: {
             /**
+             * @description How many days a conversation a user deleted is kept before it is
+             *     removed for good, with its messages and files. Until then the
+             *     delete can still be undone in the database. Default 30.
+             */
+            deletedRetentionDays: number;
+            /**
+             * @description How many hours a file uploaded in the composer but never sent with
+             *     a message is kept. Default 24.
+             */
+            unsentUploadHours: number;
+            /**
+             * @description How many hours a file on the local disk with no attachment pointing
+             *     to it is kept before the sweep removes it. Default 24.
+             */
+            orphanFileHours: number;
+            /**
              * @description The model background tasks use — for now, titling a conversation
              *     after its first answer. Empty: each conversation's own model.
              */
@@ -2363,6 +2379,12 @@ export interface components {
              *     otherwise), or empty for each conversation's own.
              */
             taskModel?: string;
+            /** @description 1 to 3650 (400 `invalid_retention` otherwise). */
+            deletedRetentionDays?: number;
+            /** @description 1 to 8760 (400 `invalid_retention` otherwise). */
+            unsentUploadHours?: number;
+            /** @description 1 to 8760 (400 `invalid_retention` otherwise). */
+            orphanFileHours?: number;
         };
         /**
          * @description The search service. `free` takes the keyless public tiers of Exa,

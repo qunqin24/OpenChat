@@ -2740,8 +2740,25 @@ components:
 
     SystemSettings:
       type: object
-      required: [debugLogging, generativeUi, askUser, memory, taskModel]
+      required: [debugLogging, generativeUi, askUser, memory, taskModel,
+                 deletedRetentionDays, unsentUploadHours, orphanFileHours]
       properties:
+        deletedRetentionDays:
+          type: integer
+          description: |
+            How many days a conversation a user deleted is kept before it is
+            removed for good, with its messages and files. Until then the
+            delete can still be undone in the database. Default 30.
+        unsentUploadHours:
+          type: integer
+          description: |
+            How many hours a file uploaded in the composer but never sent with
+            a message is kept. Default 24.
+        orphanFileHours:
+          type: integer
+          description: |
+            How many hours a file on the local disk with no attachment pointing
+            to it is kept before the sweep removes it. Default 24.
         taskModel:
           type: string
           description: |
@@ -2787,6 +2804,15 @@ components:
           description: |
             A model an enabled channel offers (400 `model_unavailable`
             otherwise), or empty for each conversation's own.
+        deletedRetentionDays:
+          type: integer
+          description: 1 to 3650 (400 `invalid_retention` otherwise).
+        unsentUploadHours:
+          type: integer
+          description: 1 to 8760 (400 `invalid_retention` otherwise).
+        orphanFileHours:
+          type: integer
+          description: 1 to 8760 (400 `invalid_retention` otherwise).
 
     WebSearchProvider:
       type: string

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/shadcn/ui/skeleton'
 import { Switch } from '@/components/shadcn/ui/switch'
 import { ContentSection } from '../components/content-section'
+import { RetentionForm } from './retention-form'
 
 /** The task model's select value for "each conversation's own" (Radix Select takes no empty value). */
 const OWN_MODEL = '__conversation__'
@@ -205,6 +206,8 @@ export function SettingsSystem() {
             </Select>
           )}
         </div>
+
+        {isPending || !data ? <Skeleton className="h-72 w-full" /> : <RetentionForm settings={data} />}
       </div>
     </ContentSection>
   )

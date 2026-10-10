@@ -634,7 +634,23 @@
         "memory-hint": "When on, the model can remember long-lasting things about a user and use them in later new chats. Off, no chat reads or writes memory; people can still view and delete theirs, and custom instructions are unaffected. On by default. Administrators cannot see anyone's memories.",
         "memory-on": "Personal memory turned on",
         "memory-off": "Personal memory turned off",
-        "save-failed": "Couldn't save the setting. Try again."
+        "save-failed": "Couldn't save the setting. Try again.",
+        "retention": {
+          "title": "Data retention",
+          "hint": "The server cleans up every 10 minutes. These are how long each kind of data is kept before it goes.",
+          "deleted": "Deleted conversations",
+          "deleted-hint": "A conversation a user deleted is kept this long, during which it can still be restored in the database; then it is removed for good with its messages and files.",
+          "unsent": "Unsent uploads",
+          "unsent-hint": "Files uploaded in the composer but never sent with a message are removed after this long.",
+          "orphan": "Orphaned files",
+          "orphan-hint": "Files under uploads/ on the local disk that no attachment points to are removed after this long. The data directory must belong to this database alone.",
+          "days": "days",
+          "hours": "hours",
+          "save": "Save",
+          "saved": "Data retention saved",
+          "whole": "Enter a whole number",
+          "range": "Between {{min}} and {{max}}"
+        }
       }
     },
     "channels": {

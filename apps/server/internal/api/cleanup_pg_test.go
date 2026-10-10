@@ -2,8 +2,11 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +16,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/qunqin/openchat/apps/server/internal/auth"
 	"github.com/qunqin/openchat/apps/server/internal/config"
+	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin/openchat/apps/server/internal/storage"
 )
 
@@ -287,5 +292,63 @@ func TestCleanupSurvivesAFileThatWillNotGo(t *testing.T) {
 	}
 	if f.fileExists(secondFile) {
 		t.Error("the file after the failing one was not removed")
+	}
+}
+
+// The periods come from System settings: reported with their defaults, saved
+// together or not at all, and used by the next pass.
+func TestCleanupPeriodsAreSettings(t *testing.T) {
+	f := newCleanupFixture(t)
+	ctx := context.Background()
+	clear := func() {
+		_, _ = f.pool.Exec(context.Background(), `DELETE FROM app_settings WHERE key = ANY($1)`,
+			[]string{settingDeletedRetentionDays, settingUnsentUploadHours, settingOrphanFileHours})
+	}
+	clear()
+	t.Cleanup(clear)
+
+	admin := sqlc.User{ID: f.user, Email: f.user.String() + "@test.invalid", Role: sqlc.UserRoleAdmin}
+	call := func(body string) (int, SystemSettings) {
+		rec := httptest.NewRecorder()
+		var req *http.Request
+		if body == "" {
+			req = httptest.NewRequest(http.MethodGet, "/", nil)
+			req = req.WithContext(auth.WithUser(req.Context(), admin))
+			f.server.GetSystemSettings(rec, req)
+		} else {
+			req = httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(body))
+			req = req.WithContext(auth.WithUser(req.Context(), admin))
+			f.server.UpdateSystemSettings(rec, req)
+		}
+		var out SystemSettings
+		_ = json.Unmarshal(rec.Body.Bytes(), &out)
+		return rec.Code, out
+	}
+
+	if code, got := call(""); code != http.StatusOK || got.DeletedRetentionDays != 30 || got.UnsentUploadHours != 24 || got.OrphanFileHours != 24 {
+		t.Fatalf("defaults: %d %+v", code, got)
+	}
+	// One out of range: none of the three is saved.
+	if code, _ := call(`{"deletedRetentionDays":7,"unsentUploadHours":0,"orphanFileHours":48}`); code != http.StatusBadRequest {
+		t.Fatalf("out of range accepted: %d", code)
+	}
+	if _, got := call(""); got.DeletedRetentionDays != 30 || got.OrphanFileHours != 24 {
+		t.Fatalf("a rejected update changed something: %+v", got)
+	}
+	if code, got := call(`{"deletedRetentionDays":2,"unsentUploadHours":6,"orphanFileHours":48}`); code != http.StatusOK ||
+		got.DeletedRetentionDays != 2 || got.UnsentUploadHours != 6 || got.OrphanFileHours != 48 {
+		t.Fatalf("update: %d %+v", code, got)
+	}
+
+	// Deleted three days ago: past a two-day retention, though well within the
+	// default thirty. Deleted a day ago: kept.
+	past, pastFile := f.conversation(false, 10*24*time.Hour, 3*24*time.Hour)
+	recent, _ := f.conversation(false, 10*24*time.Hour, 24*time.Hour)
+	f.server.CleanupNow(ctx)
+	if f.conversationExists(past) || f.fileExists(pastFile) {
+		t.Fatal("a conversation past the configured retention was kept")
+	}
+	if !f.conversationExists(recent) {
+		t.Fatal("a conversation within the configured retention was purged")
 	}
 }

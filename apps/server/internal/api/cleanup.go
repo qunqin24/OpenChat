@@ -15,6 +15,9 @@ const (
 	// temporaryLifetime is how long a temporary chat lives, counted from its
 	// creation, however recently it was used.
 	temporaryLifetime = 24 * time.Hour
+	// The next three are defaults; an administrator sets each in System
+	// settings (retentionOf).
+	//
 	// deletedRetention is how long a conversation the user deleted is kept
 	// before it is removed for good, with its messages, attachments and files.
 	// The delete is soft until then, so this is the window in which an operator
@@ -76,6 +79,7 @@ func (s *Server) StartCleanup(ctx context.Context) {
 // pointing at nothing.
 func (s *Server) CleanupNow(ctx context.Context) {
 	now := time.Now()
+	keep := retentionOf(ctx, s.q)
 	at := func(age time.Duration) pgtype.Timestamptz {
 		return pgtype.Timestamptz{Time: now.Add(-age), Valid: true}
 	}
@@ -91,7 +95,7 @@ func (s *Server) CleanupNow(ctx context.Context) {
 	})
 	s.removeConversations(ctx, "deleted conversations past their retention", func() (int, []string, error) {
 		rows, err := s.q.PurgeDeletedConversations(ctx,
-			sqlc.PurgeDeletedConversationsParams{Before: at(deletedRetention), RowLimit: cleanupBatch})
+			sqlc.PurgeDeletedConversationsParams{Before: at(keep.deleted), RowLimit: cleanupBatch})
 		var keys []string
 		for _, r := range rows {
 			keys = append(keys, r.StorageKeys...)
@@ -100,11 +104,11 @@ func (s *Server) CleanupNow(ctx context.Context) {
 	})
 	s.removeConversations(ctx, "unclaimed uploads", func() (int, []string, error) {
 		keys, err := s.q.DeleteStaleUploads(ctx,
-			sqlc.DeleteStaleUploadsParams{Before: at(unclaimedUploadLifetime), RowLimit: cleanupBatch})
+			sqlc.DeleteStaleUploadsParams{Before: at(keep.unsentUploads), RowLimit: cleanupBatch})
 		return len(keys), keys, err
 	})
 
-	s.sweepOrphanFiles(ctx, now.Add(-orphanGrace))
+	s.sweepOrphanFiles(ctx, now.Add(-keep.orphanFiles))
 
 	if _, err := s.notes().PurgeEvents(ctx); err != nil {
 		slog.WarnContext(ctx, "purge old memory events", "error", err)
