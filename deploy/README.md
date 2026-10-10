@@ -13,7 +13,8 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
 
 - 应用镜像直接从 GitHub 拉取（`ghcr.io/qunqin24/openchat:latest`）；想用这份代码自己构建就在命令末尾加 `--build`。要固定版本，在 `deploy/.env` 里写 `OPENCHAT_IMAGE=ghcr.io/qunqin24/openchat:1.0.0`。
 - 域名的 A/AAAA 记录要先指到这台服务器，80 和 443 端口要开着，Caddy 第一次启动时会自动申请证书。
-- 打开 `https://<域名>`，**第一个注册的账号就是管理员**，所以上线后立刻自己先注册。
+- 打开 `https://<域名>`，**第一个注册的账号就是管理员**（不受下面的注册开关限制，也不需要审批），所以上线后立刻自己先注册。
+- 注册默认是**审批模式**：之后自己注册的账号要等管理员在 后台 → 用户 批准才能登录。想完全开放，或者关闭注册、只由管理员新建账号，在 后台 → 系统 里改「允许注册」「新用户需审批」。
 - 进 后台 → 渠道 添加模型渠道；需要的话在 后台 → 系统 打开游客模式。
 
 ## 更新
@@ -53,5 +54,5 @@ docker compose -f deploy/docker-compose.yml exec postgres pg_dump -U openchat op
 ## 注意
 
 - `APP_ENV=production` 时登录 Cookie 只走 HTTPS。没有域名、只想用 `http://IP:8080` 先试一下的话：把 `openchat` 服务的 `expose` 换成 `ports: ["8080:8080"]`，`APP_ENV` 设为 `development`，不启动 caddy（`up -d postgres openchat`）。
-- 游客模式按 IP 限流读的是 `X-Forwarded-For`。Caddy 会用访客的真实地址覆盖它；如果前面还有别的代理或 CDN，要让它们也正确传递，否则限流按代理的地址算。
+- 游客模式的限额和登录/注册的失败次数限制（登录每 IP 每 15 分钟 10 次失败、同一标识 5 次，注册每 IP 每小时 5 次）都按访客 IP 算，读的是 `X-Forwarded-For`，也认 `X-Real-IP` 和 `True-Client-IP`。Caddyfile 已经用访客的真实地址覆盖前两者并丢掉后者；如果前面还有别的代理或 CDN，要让它们也正确传递，并且不要让访客自己带的这几个头原样到达应用，否则限流按代理的地址算，或者可以被伪造。
 - 看日志：`docker compose -f deploy/docker-compose.yml logs -f openchat`。
