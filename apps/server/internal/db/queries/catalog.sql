@@ -39,81 +39,17 @@ FROM catalog_providers p
 GROUP BY p.id
 ORDER BY p.name;
 
--- name: ListCatalogModels :many
--- The full-catalogue scope: everything models.dev knows about. Not an
--- inventory -- it is the pool you read when deciding which channel to add
--- next, which is why membership here owes nothing to the channels.
---
--- Offset paging, as in ListUsers: the table wants page numbers and a total.
---
--- `enabled` is a left join rather than a column because offering a model is
--- this installation's decision and the catalogue is a cache of somebody else's
--- file. What decides it is the channels' own model lists: a model is offered
--- when some channel that serves it has it switched on. The channels know a
--- model by its id alone, so a model id served anywhere counts for every
--- catalogue entry that spells it the same -- `claude-sonnet-4` reads as offered
--- under both `anthropic` and `amazon-bedrock`. `raw` is deliberately not
--- selected, being several times the size of everything else here.
---
--- Each capability narrows rather than widens, so asking for two gets models
--- that have both.
-SELECT m.provider_id,
-       m.model_id,
-       m.name,
-       m.description,
-       m.family,
-       m.attachment,
-       m.reasoning,
-       m.tool_call,
-       m.structured_output,
-       m.context_limit,
-       m.output_limit,
-       m.input_cost::double precision  AS input_cost,
-       m.output_cost::double precision AS output_cost,
-       m.release_date,
-       m.knowledge,
-       m.input_modalities,
-       m.output_modalities,
-       p.name                          AS provider_name,
-       coalesce(o.enabled, false)      AS enabled
-FROM catalog_models m
-         JOIN catalog_providers p ON p.id = m.provider_id
-         LEFT JOIN (SELECT cm.model_id, bool_or(cm.enabled) AS enabled
-                    FROM channel_models cm
-                    GROUP BY cm.model_id) o ON o.model_id = m.model_id
-WHERE (sqlc.narg('search')::text IS NULL
-    OR m.model_id ILIKE '%' || sqlc.narg('search')::text || '%'
-    OR m.name ILIKE '%' || sqlc.narg('search')::text || '%'
-    OR m.family ILIKE '%' || sqlc.narg('search')::text || '%')
-  AND (sqlc.narg('provider_id')::text IS NULL OR m.provider_id = sqlc.narg('provider_id')::text)
-  AND (NOT sqlc.arg('require_reasoning')::boolean OR m.reasoning)
-  AND (NOT sqlc.arg('require_tool_call')::boolean OR m.tool_call)
-  AND (NOT sqlc.arg('require_attachment')::boolean OR m.attachment)
-  AND (NOT sqlc.arg('require_structured_output')::boolean OR m.structured_output)
-  AND (sqlc.narg('enabled')::boolean IS NULL OR coalesce(o.enabled, false) = sqlc.narg('enabled')::boolean)
-ORDER BY p.name, m.name, m.model_id
-LIMIT sqlc.arg('row_limit') OFFSET sqlc.arg('row_offset');
-
--- name: CountCatalogModelsFiltered :one
-SELECT count(*)
-FROM catalog_models m
-         JOIN catalog_providers p ON p.id = m.provider_id
-         LEFT JOIN (SELECT cm.model_id, bool_or(cm.enabled) AS enabled
-                    FROM channel_models cm
-                    GROUP BY cm.model_id) o ON o.model_id = m.model_id
-WHERE (sqlc.narg('search')::text IS NULL
-    OR m.model_id ILIKE '%' || sqlc.narg('search')::text || '%'
-    OR m.name ILIKE '%' || sqlc.narg('search')::text || '%'
-    OR m.family ILIKE '%' || sqlc.narg('search')::text || '%')
-  AND (sqlc.narg('provider_id')::text IS NULL OR m.provider_id = sqlc.narg('provider_id')::text)
-  AND (NOT sqlc.arg('require_reasoning')::boolean OR m.reasoning)
-  AND (NOT sqlc.arg('require_tool_call')::boolean OR m.tool_call)
-  AND (NOT sqlc.arg('require_attachment')::boolean OR m.attachment)
-  AND (NOT sqlc.arg('require_structured_output')::boolean OR m.structured_output)
-  AND (sqlc.narg('enabled')::boolean IS NULL OR coalesce(o.enabled, false) = sqlc.narg('enabled')::boolean);
-
 -- name: ListServedModels :many
--- The channel scope: the models this installation actually serves.
+-- The models this installation actually serves -- the whole of what the model
+-- marketplace lists.
+--
+-- There is deliberately no companion query over catalog_models. The catalogue
+-- is a reference work, not an inventory: what an operator manages is what a
+-- configured channel can reach, and listing thousands of models nothing here
+-- can answer with was a second page that only ever answered a question the
+-- channel form already answers. The catalogue survives as decoration for these
+-- rows. Only models selected by the operator belong in the marketplace;
+-- unselected discoveries stay in the channel's configuration panel.
 --
 -- A channel's own model list is the authority on which models exist. A relay
 -- serving Claude through an OpenAI-shaped API serves Claude; a provider id
@@ -133,22 +69,26 @@ WHERE (sqlc.narg('search')::text IS NULL
 -- A capability filter necessarily excludes an uncatalogued model: nothing is
 -- known about what it can do, and answering "it might" is not a filter.
 WITH served AS (SELECT cm.model_id,
-                       bool_or(cm.enabled)                                  AS enabled,
+                       bool_or(c.enabled)                                   AS enabled,
                        min(nullif(cm.display_name, ''))                     AS display_name,
-                       -- The brands the operator put on the channels that serve
-                       -- it. `provider_id` on a channel is a hint, never how the
+                       -- The vendors the operator put on the channels that
+                       -- serve it. A channel's type is a hint, never how the
                        -- endpoint is called, and all it does here is pick which
                        -- catalogue row decorates the model -- it has no say in
-                       -- which models exist.
-                       array_remove(array_agg(DISTINCT c.provider_id), NULL) AS brands
+                       -- which models exist. Several type ids spell a models.dev
+                       -- provider id exactly (`openai`, `deepseek`, `groq`); the
+                       -- ones that do not simply never match, and the tie-break
+                       -- below falls through to picking the first by id.
+                       array_agg(DISTINCT c.type::text)                     AS brands
                 FROM channel_models cm
                          JOIN channels c ON c.id = cm.channel_id
+                WHERE cm.enabled
                 GROUP BY cm.model_id)
--- An uncatalogued model has no brand, and the serving channel's is not a
--- substitute: a relay branded `openai` is exactly the thing that serves models
--- OpenAI never made, so claiming its brand here would put the wrong mark on
--- them. Empty is the honest answer, and the card falls back to the model's own
--- name for its icon.
+-- An uncatalogued model has no brand, and the serving channel's type is not a
+-- substitute: a relay typed `openai-compatible` is exactly the thing that
+-- serves models OpenAI never made, so claiming its vendor here would put the
+-- wrong mark on them. Empty is the honest answer, and the card falls back to
+-- the model's own name for its icon.
 SELECT coalesce(m.provider_id, '')::text                            AS provider_id,
        s.model_id,
        -- The endpoint's own spelling is the last resort, and a perfectly good
@@ -162,6 +102,7 @@ SELECT coalesce(m.provider_id, '')::text                            AS provider_
        coalesce(m.structured_output, false)::boolean                AS structured_output,
        coalesce(m.context_limit, 0)::bigint                         AS context_limit,
        coalesce(m.output_limit, 0)::bigint                          AS output_limit,
+       coalesce(m.input_limit, 0)::bigint                           AS input_limit,
        coalesce(m.input_cost, 0)::double precision                  AS input_cost,
        coalesce(m.output_cost, 0)::double precision                 AS output_cost,
        coalesce(m.release_date, '')::text                           AS release_date,
@@ -169,7 +110,10 @@ SELECT coalesce(m.provider_id, '')::text                            AS provider_
        coalesce(m.input_modalities, '{}')::text[]                   AS input_modalities,
        coalesce(m.output_modalities, '{}')::text[]                  AS output_modalities,
        coalesce(m.provider_name, '')::text                          AS provider_name,
-       coalesce(s.enabled, false)::boolean                          AS enabled
+       coalesce(s.enabled, false)::boolean                          AS enabled,
+       -- How the model's thinking is controlled, verbatim from models.dev;
+       -- catalog.ParseReasoningOptions reads it.
+       coalesce(m.reasoning_options, '[]'::jsonb)::jsonb            AS reasoning_options
 FROM served s
          -- One catalogue row at most, chosen rather than joined: the same model
          -- id appears under several providers, and joining them all would
@@ -186,12 +130,14 @@ FROM served s
                                    c2.structured_output,
                                    c2.context_limit,
                                    c2.output_limit,
+                                   (c2.raw -> 'limit' ->> 'input')::numeric::bigint AS input_limit,
                                    c2.input_cost,
                                    c2.output_cost,
                                    c2.release_date,
                                    c2.knowledge,
                                    c2.input_modalities,
                                    c2.output_modalities,
+                                   c2.raw -> 'reasoning_options' AS reasoning_options,
                                    p.name AS provider_name
                             FROM catalog_models c2
                                      JOIN catalog_providers p ON p.id = c2.provider_id
@@ -222,11 +168,12 @@ LIMIT sqlc.arg('row_limit') OFFSET sqlc.arg('row_offset');
 -- rather than channel_models is what keeps a model served by three channels
 -- from counting three times.
 WITH served AS (SELECT cm.model_id,
-                       bool_or(cm.enabled)                                  AS enabled,
+                       bool_or(c.enabled)                                   AS enabled,
                        min(nullif(cm.display_name, ''))                     AS display_name,
-                       array_remove(array_agg(DISTINCT c.provider_id), NULL) AS brands
+                       array_agg(DISTINCT c.type::text)                     AS brands
                 FROM channel_models cm
                          JOIN channels c ON c.id = cm.channel_id
+                WHERE cm.enabled
                 GROUP BY cm.model_id)
 SELECT count(*)
 FROM served s
@@ -298,4 +245,29 @@ SELECT cm.model_id, c.id, c.name, c.enabled
 FROM channel_models cm
          JOIN channels c ON c.id = cm.channel_id
 WHERE cm.model_id = ANY (sqlc.arg('model_ids')::text[])
+  AND cm.enabled
 ORDER BY c.sort_order, c.created_at;
+
+-- name: ModelProfile :one
+-- What a run needs to know about its model: how its thinking is controlled,
+-- how much it may read and write, and what it can do. The catalogue row is
+-- chosen the way ListServedModels chooses it — a provider one of the serving
+-- channels names wins — so the levels a run accepts are the levels the picker
+-- showed. No rows when the catalogue does not know the model.
+SELECT coalesce(m.raw -> 'reasoning_options', '[]'::jsonb)::jsonb AS reasoning_options,
+       m.output_limit,
+       m.context_limit,
+       coalesce((m.raw -> 'limit' ->> 'input')::numeric::bigint, 0)::bigint AS input_limit,
+       m.reasoning,
+       m.tool_call,
+       m.input_modalities,
+       m.output_modalities
+FROM catalog_models m
+WHERE m.model_id = sqlc.arg('model_id')
+ORDER BY (m.provider_id IN (SELECT c.type::text
+                            FROM channel_models cm
+                                     JOIN channels c ON c.id = cm.channel_id
+                            WHERE cm.model_id = sqlc.arg('model_id')
+                              AND cm.enabled)) DESC,
+         m.provider_id
+LIMIT 1;

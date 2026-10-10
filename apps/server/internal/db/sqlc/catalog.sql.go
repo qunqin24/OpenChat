@@ -24,50 +24,6 @@ func (q *Queries) CountCatalogModels(ctx context.Context) (int64, error) {
 	return count, err
 }
 
-const countCatalogModelsFiltered = `-- name: CountCatalogModelsFiltered :one
-SELECT count(*)
-FROM catalog_models m
-         JOIN catalog_providers p ON p.id = m.provider_id
-         LEFT JOIN (SELECT cm.model_id, bool_or(cm.enabled) AS enabled
-                    FROM channel_models cm
-                    GROUP BY cm.model_id) o ON o.model_id = m.model_id
-WHERE ($1::text IS NULL
-    OR m.model_id ILIKE '%' || $1::text || '%'
-    OR m.name ILIKE '%' || $1::text || '%'
-    OR m.family ILIKE '%' || $1::text || '%')
-  AND ($2::text IS NULL OR m.provider_id = $2::text)
-  AND (NOT $3::boolean OR m.reasoning)
-  AND (NOT $4::boolean OR m.tool_call)
-  AND (NOT $5::boolean OR m.attachment)
-  AND (NOT $6::boolean OR m.structured_output)
-  AND ($7::boolean IS NULL OR coalesce(o.enabled, false) = $7::boolean)
-`
-
-type CountCatalogModelsFilteredParams struct {
-	Search                  *string `json:"search"`
-	ProviderID              *string `json:"provider_id"`
-	RequireReasoning        bool    `json:"require_reasoning"`
-	RequireToolCall         bool    `json:"require_tool_call"`
-	RequireAttachment       bool    `json:"require_attachment"`
-	RequireStructuredOutput bool    `json:"require_structured_output"`
-	Enabled                 *bool   `json:"enabled"`
-}
-
-func (q *Queries) CountCatalogModelsFiltered(ctx context.Context, arg CountCatalogModelsFilteredParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countCatalogModelsFiltered,
-		arg.Search,
-		arg.ProviderID,
-		arg.RequireReasoning,
-		arg.RequireToolCall,
-		arg.RequireAttachment,
-		arg.RequireStructuredOutput,
-		arg.Enabled,
-	)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const countCatalogProviders = `-- name: CountCatalogProviders :one
 SELECT count(*)
 FROM catalog_providers
@@ -82,11 +38,12 @@ func (q *Queries) CountCatalogProviders(ctx context.Context) (int64, error) {
 
 const countServedModels = `-- name: CountServedModels :one
 WITH served AS (SELECT cm.model_id,
-                       bool_or(cm.enabled)                                  AS enabled,
+                       bool_or(c.enabled)                                   AS enabled,
                        min(nullif(cm.display_name, ''))                     AS display_name,
-                       array_remove(array_agg(DISTINCT c.provider_id), NULL) AS brands
+                       array_agg(DISTINCT c.type::text)                     AS brands
                 FROM channel_models cm
                          JOIN channels c ON c.id = cm.channel_id
+                WHERE cm.enabled
                 GROUP BY cm.model_id)
 SELECT count(*)
 FROM served s
@@ -275,146 +232,6 @@ type InsertCatalogProvidersParams struct {
 	Env  []string `json:"env"`
 }
 
-const listCatalogModels = `-- name: ListCatalogModels :many
-SELECT m.provider_id,
-       m.model_id,
-       m.name,
-       m.description,
-       m.family,
-       m.attachment,
-       m.reasoning,
-       m.tool_call,
-       m.structured_output,
-       m.context_limit,
-       m.output_limit,
-       m.input_cost::double precision  AS input_cost,
-       m.output_cost::double precision AS output_cost,
-       m.release_date,
-       m.knowledge,
-       m.input_modalities,
-       m.output_modalities,
-       p.name                          AS provider_name,
-       coalesce(o.enabled, false)      AS enabled
-FROM catalog_models m
-         JOIN catalog_providers p ON p.id = m.provider_id
-         LEFT JOIN (SELECT cm.model_id, bool_or(cm.enabled) AS enabled
-                    FROM channel_models cm
-                    GROUP BY cm.model_id) o ON o.model_id = m.model_id
-WHERE ($1::text IS NULL
-    OR m.model_id ILIKE '%' || $1::text || '%'
-    OR m.name ILIKE '%' || $1::text || '%'
-    OR m.family ILIKE '%' || $1::text || '%')
-  AND ($2::text IS NULL OR m.provider_id = $2::text)
-  AND (NOT $3::boolean OR m.reasoning)
-  AND (NOT $4::boolean OR m.tool_call)
-  AND (NOT $5::boolean OR m.attachment)
-  AND (NOT $6::boolean OR m.structured_output)
-  AND ($7::boolean IS NULL OR coalesce(o.enabled, false) = $7::boolean)
-ORDER BY p.name, m.name, m.model_id
-LIMIT $9 OFFSET $8
-`
-
-type ListCatalogModelsParams struct {
-	Search                  *string `json:"search"`
-	ProviderID              *string `json:"provider_id"`
-	RequireReasoning        bool    `json:"require_reasoning"`
-	RequireToolCall         bool    `json:"require_tool_call"`
-	RequireAttachment       bool    `json:"require_attachment"`
-	RequireStructuredOutput bool    `json:"require_structured_output"`
-	Enabled                 *bool   `json:"enabled"`
-	RowOffset               int32   `json:"row_offset"`
-	RowLimit                int32   `json:"row_limit"`
-}
-
-type ListCatalogModelsRow struct {
-	ProviderID       string   `json:"provider_id"`
-	ModelID          string   `json:"model_id"`
-	Name             string   `json:"name"`
-	Description      string   `json:"description"`
-	Family           string   `json:"family"`
-	Attachment       bool     `json:"attachment"`
-	Reasoning        bool     `json:"reasoning"`
-	ToolCall         bool     `json:"tool_call"`
-	StructuredOutput bool     `json:"structured_output"`
-	ContextLimit     int64    `json:"context_limit"`
-	OutputLimit      int64    `json:"output_limit"`
-	InputCost        float64  `json:"input_cost"`
-	OutputCost       float64  `json:"output_cost"`
-	ReleaseDate      string   `json:"release_date"`
-	Knowledge        string   `json:"knowledge"`
-	InputModalities  []string `json:"input_modalities"`
-	OutputModalities []string `json:"output_modalities"`
-	ProviderName     string   `json:"provider_name"`
-	Enabled          bool     `json:"enabled"`
-}
-
-// The full-catalogue scope: everything models.dev knows about. Not an
-// inventory -- it is the pool you read when deciding which channel to add
-// next, which is why membership here owes nothing to the channels.
-//
-// Offset paging, as in ListUsers: the table wants page numbers and a total.
-//
-// `enabled` is a left join rather than a column because offering a model is
-// this installation's decision and the catalogue is a cache of somebody else's
-// file. What decides it is the channels' own model lists: a model is offered
-// when some channel that serves it has it switched on. The channels know a
-// model by its id alone, so a model id served anywhere counts for every
-// catalogue entry that spells it the same -- `claude-sonnet-4` reads as offered
-// under both `anthropic` and `amazon-bedrock`. `raw` is deliberately not
-// selected, being several times the size of everything else here.
-//
-// Each capability narrows rather than widens, so asking for two gets models
-// that have both.
-func (q *Queries) ListCatalogModels(ctx context.Context, arg ListCatalogModelsParams) ([]ListCatalogModelsRow, error) {
-	rows, err := q.db.Query(ctx, listCatalogModels,
-		arg.Search,
-		arg.ProviderID,
-		arg.RequireReasoning,
-		arg.RequireToolCall,
-		arg.RequireAttachment,
-		arg.RequireStructuredOutput,
-		arg.Enabled,
-		arg.RowOffset,
-		arg.RowLimit,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListCatalogModelsRow{}
-	for rows.Next() {
-		var i ListCatalogModelsRow
-		if err := rows.Scan(
-			&i.ProviderID,
-			&i.ModelID,
-			&i.Name,
-			&i.Description,
-			&i.Family,
-			&i.Attachment,
-			&i.Reasoning,
-			&i.ToolCall,
-			&i.StructuredOutput,
-			&i.ContextLimit,
-			&i.OutputLimit,
-			&i.InputCost,
-			&i.OutputCost,
-			&i.ReleaseDate,
-			&i.Knowledge,
-			&i.InputModalities,
-			&i.OutputModalities,
-			&i.ProviderName,
-			&i.Enabled,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listCatalogProviders = `-- name: ListCatalogProviders :many
 SELECT p.id,
        p.name,
@@ -469,6 +286,7 @@ SELECT cm.model_id, c.id, c.name, c.enabled
 FROM channel_models cm
          JOIN channels c ON c.id = cm.channel_id
 WHERE cm.model_id = ANY ($1::text[])
+  AND cm.enabled
 ORDER BY c.sort_order, c.created_at
 `
 
@@ -514,16 +332,20 @@ func (q *Queries) ListChannelsServingModels(ctx context.Context, modelIds []stri
 
 const listServedModels = `-- name: ListServedModels :many
 WITH served AS (SELECT cm.model_id,
-                       bool_or(cm.enabled)                                  AS enabled,
+                       bool_or(c.enabled)                                   AS enabled,
                        min(nullif(cm.display_name, ''))                     AS display_name,
-                       -- The brands the operator put on the channels that serve
-                       -- it. ` + "`" + `provider_id` + "`" + ` on a channel is a hint, never how the
+                       -- The vendors the operator put on the channels that
+                       -- serve it. A channel's type is a hint, never how the
                        -- endpoint is called, and all it does here is pick which
                        -- catalogue row decorates the model -- it has no say in
-                       -- which models exist.
-                       array_remove(array_agg(DISTINCT c.provider_id), NULL) AS brands
+                       -- which models exist. Several type ids spell a models.dev
+                       -- provider id exactly (` + "`" + `openai` + "`" + `, ` + "`" + `deepseek` + "`" + `, ` + "`" + `groq` + "`" + `); the
+                       -- ones that do not simply never match, and the tie-break
+                       -- below falls through to picking the first by id.
+                       array_agg(DISTINCT c.type::text)                     AS brands
                 FROM channel_models cm
                          JOIN channels c ON c.id = cm.channel_id
+                WHERE cm.enabled
                 GROUP BY cm.model_id)
 SELECT coalesce(m.provider_id, '')::text                            AS provider_id,
        s.model_id,
@@ -538,6 +360,7 @@ SELECT coalesce(m.provider_id, '')::text                            AS provider_
        coalesce(m.structured_output, false)::boolean                AS structured_output,
        coalesce(m.context_limit, 0)::bigint                         AS context_limit,
        coalesce(m.output_limit, 0)::bigint                          AS output_limit,
+       coalesce(m.input_limit, 0)::bigint                           AS input_limit,
        coalesce(m.input_cost, 0)::double precision                  AS input_cost,
        coalesce(m.output_cost, 0)::double precision                 AS output_cost,
        coalesce(m.release_date, '')::text                           AS release_date,
@@ -545,7 +368,10 @@ SELECT coalesce(m.provider_id, '')::text                            AS provider_
        coalesce(m.input_modalities, '{}')::text[]                   AS input_modalities,
        coalesce(m.output_modalities, '{}')::text[]                  AS output_modalities,
        coalesce(m.provider_name, '')::text                          AS provider_name,
-       coalesce(s.enabled, false)::boolean                          AS enabled
+       coalesce(s.enabled, false)::boolean                          AS enabled,
+       -- How the model's thinking is controlled, verbatim from models.dev;
+       -- catalog.ParseReasoningOptions reads it.
+       coalesce(m.reasoning_options, '[]'::jsonb)::jsonb            AS reasoning_options
 FROM served s
          -- One catalogue row at most, chosen rather than joined: the same model
          -- id appears under several providers, and joining them all would
@@ -562,12 +388,14 @@ FROM served s
                                    c2.structured_output,
                                    c2.context_limit,
                                    c2.output_limit,
+                                   (c2.raw -> 'limit' ->> 'input')::numeric::bigint AS input_limit,
                                    c2.input_cost,
                                    c2.output_cost,
                                    c2.release_date,
                                    c2.knowledge,
                                    c2.input_modalities,
                                    c2.output_modalities,
+                                   c2.raw -> 'reasoning_options' AS reasoning_options,
                                    p.name AS provider_name
                             FROM catalog_models c2
                                      JOIN catalog_providers p ON p.id = c2.provider_id
@@ -615,6 +443,7 @@ type ListServedModelsRow struct {
 	StructuredOutput bool     `json:"structured_output"`
 	ContextLimit     int64    `json:"context_limit"`
 	OutputLimit      int64    `json:"output_limit"`
+	InputLimit       int64    `json:"input_limit"`
 	InputCost        float64  `json:"input_cost"`
 	OutputCost       float64  `json:"output_cost"`
 	ReleaseDate      string   `json:"release_date"`
@@ -623,9 +452,19 @@ type ListServedModelsRow struct {
 	OutputModalities []string `json:"output_modalities"`
 	ProviderName     string   `json:"provider_name"`
 	Enabled          bool     `json:"enabled"`
+	ReasoningOptions []byte   `json:"reasoning_options"`
 }
 
-// The channel scope: the models this installation actually serves.
+// The models this installation actually serves -- the whole of what the model
+// marketplace lists.
+//
+// There is deliberately no companion query over catalog_models. The catalogue
+// is a reference work, not an inventory: what an operator manages is what a
+// configured channel can reach, and listing thousands of models nothing here
+// can answer with was a second page that only ever answered a question the
+// channel form already answers. The catalogue survives as decoration for these
+// rows. Only models selected by the operator belong in the marketplace;
+// unselected discoveries stay in the channel's configuration panel.
 //
 // A channel's own model list is the authority on which models exist. A relay
 // serving Claude through an OpenAI-shaped API serves Claude; a provider id
@@ -644,11 +483,11 @@ type ListServedModelsRow struct {
 //
 // A capability filter necessarily excludes an uncatalogued model: nothing is
 // known about what it can do, and answering "it might" is not a filter.
-// An uncatalogued model has no brand, and the serving channel's is not a
-// substitute: a relay branded `openai` is exactly the thing that serves models
-// OpenAI never made, so claiming its brand here would put the wrong mark on
-// them. Empty is the honest answer, and the card falls back to the model's own
-// name for its icon.
+// An uncatalogued model has no brand, and the serving channel's type is not a
+// substitute: a relay typed `openai-compatible` is exactly the thing that
+// serves models OpenAI never made, so claiming its vendor here would put the
+// wrong mark on them. Empty is the honest answer, and the card falls back to
+// the model's own name for its icon.
 // By name rather than by brand: half these rows can have no brand to group
 // under, and sorting on an empty one would herd every uncatalogued model into a
 // block at the top that looks like a fault.
@@ -683,6 +522,7 @@ func (q *Queries) ListServedModels(ctx context.Context, arg ListServedModelsPara
 			&i.StructuredOutput,
 			&i.ContextLimit,
 			&i.OutputLimit,
+			&i.InputLimit,
 			&i.InputCost,
 			&i.OutputCost,
 			&i.ReleaseDate,
@@ -691,6 +531,7 @@ func (q *Queries) ListServedModels(ctx context.Context, arg ListServedModelsPara
 			&i.OutputModalities,
 			&i.ProviderName,
 			&i.Enabled,
+			&i.ReasoningOptions,
 		); err != nil {
 			return nil, err
 		}
@@ -700,4 +541,56 @@ func (q *Queries) ListServedModels(ctx context.Context, arg ListServedModelsPara
 		return nil, err
 	}
 	return items, nil
+}
+
+const modelProfile = `-- name: ModelProfile :one
+SELECT coalesce(m.raw -> 'reasoning_options', '[]'::jsonb)::jsonb AS reasoning_options,
+       m.output_limit,
+       m.context_limit,
+       coalesce((m.raw -> 'limit' ->> 'input')::numeric::bigint, 0)::bigint AS input_limit,
+       m.reasoning,
+       m.tool_call,
+       m.input_modalities,
+       m.output_modalities
+FROM catalog_models m
+WHERE m.model_id = $1
+ORDER BY (m.provider_id IN (SELECT c.type::text
+                            FROM channel_models cm
+                                     JOIN channels c ON c.id = cm.channel_id
+                            WHERE cm.model_id = $1
+                              AND cm.enabled)) DESC,
+         m.provider_id
+LIMIT 1
+`
+
+type ModelProfileRow struct {
+	ReasoningOptions []byte   `json:"reasoning_options"`
+	OutputLimit      int64    `json:"output_limit"`
+	ContextLimit     int64    `json:"context_limit"`
+	InputLimit       int64    `json:"input_limit"`
+	Reasoning        bool     `json:"reasoning"`
+	ToolCall         bool     `json:"tool_call"`
+	InputModalities  []string `json:"input_modalities"`
+	OutputModalities []string `json:"output_modalities"`
+}
+
+// What a run needs to know about its model: how its thinking is controlled,
+// how much it may read and write, and what it can do. The catalogue row is
+// chosen the way ListServedModels chooses it — a provider one of the serving
+// channels names wins — so the levels a run accepts are the levels the picker
+// showed. No rows when the catalogue does not know the model.
+func (q *Queries) ModelProfile(ctx context.Context, modelID string) (ModelProfileRow, error) {
+	row := q.db.QueryRow(ctx, modelProfile, modelID)
+	var i ModelProfileRow
+	err := row.Scan(
+		&i.ReasoningOptions,
+		&i.OutputLimit,
+		&i.ContextLimit,
+		&i.InputLimit,
+		&i.Reasoning,
+		&i.ToolCall,
+		&i.InputModalities,
+		&i.OutputModalities,
+	)
+	return i, err
 }

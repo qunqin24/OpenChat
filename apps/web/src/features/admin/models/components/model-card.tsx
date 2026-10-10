@@ -1,5 +1,15 @@
 import { Link } from '@tanstack/react-router'
-import { Braces, Brain, ChevronRight, Paperclip, PlugZap, PowerOff, Wrench } from 'lucide-react'
+import {
+  Braces,
+  Brain,
+  ChevronRight,
+  Paperclip,
+  PlugZap,
+  PowerOff,
+  SlidersHorizontal,
+  Wrench,
+} from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { ModelIcon } from '@/components/model-icon'
@@ -9,6 +19,7 @@ import { Card } from '@/components/shadcn/ui/card'
 import { cn } from '@/lib/utils'
 import { formatCost, formatTokenLimit } from '../format'
 import { type CatalogModel } from '../use-catalog'
+import { ModelSettingsPanel } from './model-settings-panel'
 
 /**
  * `as const` so the labels stay literal: i18next types `t()` against the
@@ -43,12 +54,22 @@ function Stat({ label, value }: { label: string; value: string }) {
  */
 export function ModelCard({ model }: { model: CatalogModel }) {
   const { t } = useTranslation()
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
-  const capabilities = CAPABILITIES.filter((capability) => model[capability.key])
+  // The card shows the model as it is offered: the operator's settings over the
+  // catalogue's, as the server resolved them.
+  const settings = model.settings
+  const has = (key: (typeof CAPABILITIES)[number]['key']) =>
+    settings && (key === 'reasoning' || key === 'toolCall') ? settings[key] : model[key]
+  const capabilities = CAPABILITIES.filter((capability) => has(capability.key))
+  const contextLimit = settings?.contextLimit || model.contextLimit
+  const outputLimit = settings?.outputLimit || model.outputLimit
+  const customized = Object.values(model.override ?? {}).some(
+    (value) => value !== undefined && value !== null,
+  )
+  const kind = settings?.kind ?? 'text'
 
-  // Which of our channels serve this, read from their own model lists. Only the
-  // full catalogue can turn up a model with none — under `scope=channels` a
-  // model is on the page precisely because some channel serves it.
+  // Only channels where the operator selected this model are included.
   const channels = model.channels ?? []
   const unserved = channels.length === 0
 
@@ -62,8 +83,7 @@ export function ModelCard({ model }: { model: CatalogModel }) {
   // Three dashes in a row are how a card looks broken. When upstream has said
   // nothing about any of the figures — which is every model it does not list —
   // the row is dropped instead, and the card simply ends sooner.
-  const hasFigures =
-    model.contextLimit !== undefined || model.outputLimit !== undefined || cost !== undefined
+  const hasFigures = !!contextLimit || !!outputLimit || cost !== undefined
 
   return (
     <Card className="h-full gap-0 overflow-hidden py-0">
@@ -71,8 +91,10 @@ export function ModelCard({ model }: { model: CatalogModel }) {
         {/* With no catalogue entry there is no provider and no family, and the
             model's own id is the best brand hint left: `qwen-max` on an unknown
             relay still earns the Qwen mark, and anything unrecognised lands on
-            the designed letter rather than a broken image. */}
+            the designed letter rather than a broken image. The card is the
+            model's, so its family's mark leads the provider's. */}
         <ModelIcon
+          subject="model"
           providerId={model.providerId}
           family={model.family ?? model.modelId}
           name={model.providerName || model.name}
@@ -86,15 +108,11 @@ export function ModelCard({ model }: { model: CatalogModel }) {
           >
             {model.name}
           </p>
-          {/* Borrowed from the channel panel's wording rather than duplicated:
-              "not in the catalogue" is the same fact stated in the same words,
-              and it explains the quieter card below without sounding like a
-              fault. */}
           <p
             className="text-muted-foreground truncate text-xs"
             title={model.providerName || model.modelId}
           >
-            {model.providerName || t('admin.channels.models-unknown')}
+            {model.modelId}
           </p>
         </div>
       </div>
@@ -105,8 +123,19 @@ export function ModelCard({ model }: { model: CatalogModel }) {
         </p>
       )}
 
-      {capabilities.length > 0 && (
+      {(capabilities.length > 0 || customized || kind !== 'text') && (
         <div className="flex flex-wrap gap-1 px-4 pt-3">
+          {customized && (
+            <Badge variant="outline" className="border-primary/30 text-primary font-normal">
+              <SlidersHorizontal aria-hidden="true" />
+              {t('admin.models.settings.customized')}
+            </Badge>
+          )}
+          {kind !== 'text' && (
+            <Badge variant="outline" className="font-normal">
+              {t(`admin.models.settings.kind-${kind}`)}
+            </Badge>
+          )}
           {capabilities.map((capability) => (
             <Badge key={capability.key} variant="secondary" className="font-normal">
               <capability.icon aria-hidden="true" />
@@ -120,11 +149,11 @@ export function ModelCard({ model }: { model: CatalogModel }) {
         <dl className="grid grid-cols-3 gap-3 px-4 pt-4">
           <Stat
             label={t('admin.models.context')}
-            value={model.contextLimit === undefined ? '—' : formatTokenLimit(model.contextLimit)}
+            value={contextLimit ? formatTokenLimit(contextLimit) : '—'}
           />
           <Stat
             label={t('admin.models.output')}
-            value={model.outputLimit === undefined ? '—' : formatTokenLimit(model.outputLimit)}
+            value={outputLimit ? formatTokenLimit(outputLimit) : '—'}
           />
           <Stat label={t('admin.models.cost')} value={cost ?? '—'} />
         </dl>
@@ -190,15 +219,28 @@ export function ModelCard({ model }: { model: CatalogModel }) {
           </span>
         </span>
 
-        {!unserved && (
-          <Button asChild variant="ghost" size="sm" className="-me-2 h-7 px-2 text-xs">
-            <Link to="/admin/channels">
-              {t('admin.nav.channels')}
-              <ChevronRight aria-hidden="true" />
-            </Link>
+        <div className="-me-2 flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <SlidersHorizontal aria-hidden="true" />
+            {t('admin.models.settings.open')}
           </Button>
-        )}
+          {!unserved && (
+            <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs">
+              <Link to="/admin/channels">
+                {t('admin.nav.channels')}
+                <ChevronRight aria-hidden="true" />
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
+
+      <ModelSettingsPanel model={model} open={settingsOpen} onOpenChange={setSettingsOpen} />
     </Card>
   )
 }

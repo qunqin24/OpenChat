@@ -6,18 +6,9 @@ import { Header } from '@/components/shadcn/layout/header'
 import { Main } from '@/components/shadcn/layout/main'
 import { ProfileDropdown } from '@/components/shadcn/profile-dropdown'
 import { Search } from '@/components/shadcn/search'
-import { Tabs, TabsContent } from '@/components/shadcn/ui/tabs'
 import { ModelsGrid } from './components/models-grid'
 import { ModelsToolbar } from './components/models-toolbar'
-import {
-  DEFAULT_SCOPE,
-  SCOPES,
-  useCatalogModels,
-  useCatalogStatus,
-  useChannelReach,
-  useHasChannels,
-  type CatalogScope,
-} from './use-catalog'
+import { useCatalogModels, useChannelReach, useHasChannels } from './use-catalog'
 
 /** Divides evenly into two, three and four columns, so no row ends ragged. */
 const PAGE_SIZE = 24
@@ -28,27 +19,27 @@ const PAGE_SIZE = 24
  * comparison between brands — the mark, the blurb and what the model can do are
  * the columns that matter, and none of them fit a cell.
  *
- * It opens on the channel scope, not the catalogue. "Our models" means the ones
- * a configured channel can serve; the thousands of models upstream knows about
- * are a reference work, not an inventory, and they belong behind the second tab
- * — where they answer a different question, which channel to add next.
+ * It lists one thing: the models a configured channel serves. Browsing the
+ * whole models.dev catalogue used to sit beside it on a second tab, and it is
+ * deliberately gone — the catalogue runs to thousands of models this
+ * installation cannot answer with, so it is a reference work rather than an
+ * inventory, and the question it answered (which channel to add next) is one
+ * the channel form answers where the decision is actually made. It survives as
+ * optional metadata on these cards; it supplies neither their membership nor
+ * any marketplace controls.
  *
  * Searching, filtering and paging are all the server's, exactly as the user
- * table does it; the catalogue runs to thousands of rows and none of it is
- * worth shipping to the browser to slice there.
+ * table does it.
  */
 export function Models() {
   const { t } = useTranslation()
 
-  const [scope, setScope] = useState<CatalogScope>(DEFAULT_SCOPE)
   const [search, setSearch] = useState('')
-  const [providerId, setProviderId] = useState('')
   const [enabledOnly, setEnabledOnly] = useState(false)
   const [page, setPage] = useState(1)
 
-  const filters = { page, limit: PAGE_SIZE, search, providerId, enabledOnly, scope }
+  const filters = { page, limit: PAGE_SIZE, search, enabledOnly }
   const { data, isPending, isError } = useCatalogModels(filters)
-  const { data: status } = useCatalogStatus()
   // Asked once, unfiltered, so an empty grid can be attributed: no channels at
   // all, a channel whose model list nobody has fetched, or no model matching
   // what was typed. The query above cannot tell the three apart — all of them
@@ -59,16 +50,8 @@ export function Models() {
   // A narrowed filter can leave the cursor past the last page, so every filter
   // change rewinds it. Done in the handlers rather than an effect: the reset is
   // part of the same user action, not a reaction to one.
-  const changeScope = (value: CatalogScope) => {
-    setScope(value)
-    setPage(1)
-  }
   const changeSearch = (value: string) => {
     setSearch(value)
-    setPage(1)
-  }
-  const changeProvider = (value: string) => {
-    setProviderId(value)
     setPage(1)
   }
   const changeEnabledOnly = (value: boolean) => {
@@ -90,44 +73,25 @@ export function Models() {
           <p className="text-muted-foreground">{t('admin.models.subtitle')}</p>
         </div>
 
-        {/* The root sits here rather than in the toolbar so that each tab
-            controls a panel that actually exists: the toolbar renders the list,
-            and the grid below is the panel. The filters are deliberately outside
-            it — they mean the same thing in both scopes and survive a switch. */}
-        <Tabs
-          value={scope}
-          onValueChange={(value) => changeScope(value as CatalogScope)}
-          className="flex flex-1 flex-col gap-4 sm:gap-6"
-        >
-          <ModelsToolbar
-            search={search}
-            onSearchChange={changeSearch}
-            providerId={providerId}
-            onProviderChange={changeProvider}
-            enabledOnly={enabledOnly}
-            onEnabledOnlyChange={changeEnabledOnly}
-          />
+        <ModelsToolbar
+          search={search}
+          onSearchChange={changeSearch}
+          enabledOnly={enabledOnly}
+          onEnabledOnlyChange={changeEnabledOnly}
+        />
 
-          {SCOPES.map((value) => (
-            <TabsContent key={value} value={value}>
-              <ModelsGrid
-                models={data?.items ?? []}
-                total={data?.total ?? 0}
-                page={page}
-                limit={PAGE_SIZE}
-                onPageChange={setPage}
-                isPending={isPending}
-                isError={isError}
-                isCatalogueEmpty={status?.modelCount === 0}
-                scope={value}
-                hasChannels={hasChannels}
-                hasModels={hasModels}
-                isReachPending={isChannelsPending || isReachPending}
-                onBrowseAll={() => changeScope('all')}
-              />
-            </TabsContent>
-          ))}
-        </Tabs>
+        <ModelsGrid
+          models={data?.items ?? []}
+          total={data?.total ?? 0}
+          page={page}
+          limit={PAGE_SIZE}
+          onPageChange={setPage}
+          isPending={isPending}
+          isError={isError}
+          hasChannels={hasChannels}
+          hasModels={hasModels}
+          isReachPending={isChannelsPending || isReachPending}
+        />
       </Main>
     </>
   )

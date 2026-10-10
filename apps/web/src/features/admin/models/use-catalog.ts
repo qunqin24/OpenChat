@@ -1,37 +1,18 @@
-import type { components, paths } from '@openchat/api-client'
+import type { components } from '@openchat/api-client'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/lib/api'
+import { queryKeys } from '@/lib/query-keys'
 import { useAdminChannels } from '@/features/admin/use-admin'
 
 type Schemas = components['schemas']
 
-export type CatalogStatus = Schemas['CatalogStatus']
-export type CatalogProvider = Schemas['CatalogProvider']
 export type CatalogModel = Schemas['CatalogModel']
 export type ModelChannel = Schemas['ModelChannel']
-
-/**
- * Which catalogue the page is looking at. Read off the contract rather than
- * spelled out here, so adding a scope server-side surfaces as a type error in
- * the switch that renders them instead of as a value nothing handles.
- *
- * `channels` is what an operator means by "our models" — only what a configured
- * channel can actually reach. `all` is the whole upstream catalogue, which is
- * where you go to decide which channel to add next.
- */
-export type CatalogScope = NonNullable<
-  NonNullable<paths['/admin/catalog/models']['get']['parameters']['query']>['scope']
->
-
-/**
- * In tab order, narrowest first. `satisfies` pins it to the contract in both
- * directions: a scope that goes away stops compiling here, and one that arrives
- * has to be given a tab before the label map will type-check.
- */
-export const SCOPES = ['channels', 'all'] as const satisfies readonly CatalogScope[]
-
-export const DEFAULT_SCOPE: CatalogScope = SCOPES[0]
+export type ModelSettings = Schemas['ModelSettings']
+export type ModelOverride = Schemas['ModelOverride']
+export type ModelKind = Schemas['ModelKind']
+export type InputModality = Schemas['InputModality']
 
 /**
  * Nested under `admin` so the broad invalidation the user mutations already do
@@ -40,11 +21,9 @@ export const DEFAULT_SCOPE: CatalogScope = SCOPES[0]
  */
 export const catalogKeys = {
   all: ['admin', 'catalog'] as const,
-  status: () => [...catalogKeys.all, 'status'] as const,
-  providers: () => [...catalogKeys.all, 'providers'] as const,
   models: () => [...catalogKeys.all, 'models'] as const,
   modelPage: (filters: CatalogFilters) => [...catalogKeys.models(), filters] as const,
-  /** The unfiltered channel-scope probe; see `useChannelReach`. */
+  /** The unfiltered probe behind the empty state; see `useChannelReach`. */
   reach: () => [...catalogKeys.models(), 'reach'] as const,
 }
 
@@ -53,26 +32,8 @@ export type CatalogFilters = {
   limit: number
   /** Matched against model id, name and family, server-side. */
   search: string
-  /** Empty means every provider. */
-  providerId: string
   /** On: only models switched on here. Off: no constraint either way. */
   enabledOnly: boolean
-  /** Which catalogue is being listed — see `CatalogScope`. */
-  scope: CatalogScope
-}
-
-export function useCatalogStatus() {
-  return useQuery({
-    queryKey: catalogKeys.status(),
-    queryFn: async ({ signal }) => unwrap(await api.GET('/admin/catalog', { signal })),
-  })
-}
-
-export function useCatalogProviders() {
-  return useQuery({
-    queryKey: catalogKeys.providers(),
-    queryFn: async ({ signal }) => unwrap(await api.GET('/admin/catalog/providers', { signal })),
-  })
 }
 
 export function useCatalogModels(filters: CatalogFilters) {
@@ -86,24 +47,20 @@ export function useCatalogModels(filters: CatalogFilters) {
               page: filters.page,
               limit: filters.limit,
               ...(filters.search ? { search: filters.search } : {}),
-              ...(filters.providerId ? { providerId: filters.providerId } : {}),
               ...(filters.enabledOnly ? { enabled: true } : {}),
-              scope: filters.scope,
             },
           },
           signal,
         }),
       ),
-    // Every filter is part of the key — the scope included — so without this the
-    // grid would empty out and re-lay-out on each keystroke, provider change,
-    // page turn and scope switch: the one mistake AGENTS.md says this repo keeps
-    // making.
+    // Every filter is part of the key, so without this the grid would empty out
+    // and re-lay-out on each keystroke and page turn: the one mistake AGENTS.md
+    // says this repo keeps making.
     placeholderData: (previous) => previous,
     // What this answers depends on the channels, and the channel mutations live
-    // in another feature that invalidates its own keys and not the catalogue's.
-    // The global 30s would therefore replay a pre-channel answer to someone who
-    // has just come back from adding one — the empty state would send them off
-    // to add a second. Refetching on mount costs one request and cannot lie.
+    // in another feature whose invalidation of the catalogue keys is easy to
+    // lose track of. Refetching on mount costs one request and cannot replay a
+    // pre-channel answer to someone who has just come back from adding one.
     staleTime: 0,
   })
 }
@@ -132,14 +89,12 @@ export function useHasChannels() {
  * The grid has to tell three things apart that all arrive as an empty page:
  * nothing configured, nothing fetched yet, and nothing matching the filters.
  * The filtered query cannot answer any of them, so this asks the one unfiltered
- * question — with no search, no provider and no enabled constraint, does the
- * channel scope return anything? `limit: 1` because only `total` is read; the
- * page itself is thrown away, and asking for fewer rows than that is not
- * allowed.
+ * question — with no search and no enabled constraint, is there anything at
+ * all? `limit: 1` because only `total` is read; the page itself is thrown
+ * away, and asking for fewer rows than that is not allowed.
  *
- * It sits under the `models` key prefix, so a catalogue refresh — and the
- * channel-model mutations, which invalidate that prefix — sweep it along with
- * the pages.
+ * It sits under the `models` key prefix, so the channel-model mutations — which
+ * invalidate that prefix — sweep it along with the pages.
  */
 export function useChannelReach() {
   return useQuery({
@@ -147,7 +102,7 @@ export function useChannelReach() {
     queryFn: async ({ signal }) =>
       unwrap(
         await api.GET('/admin/catalog/models', {
-          params: { query: { page: 1, limit: 1, scope: 'channels' } },
+          params: { query: { page: 1, limit: 1 } },
           signal,
         }),
       ),
@@ -161,27 +116,41 @@ export function useChannelReach() {
 }
 
 /**
- * The catalogue is fetched from models.dev on demand rather than on a timer, so
- * this is the only thing that moves it. A failed refresh keeps the previous
- * snapshot — the response says so in `lastError`, which the toolbar surfaces.
+ * A model's settings belong to the model, not to a channel: the same id served
+ * through three channels is one model to the people choosing it. Saving moves
+ * both the marketplace and the chat picker, which reads the levels and the
+ * model list from `/models`.
  */
-export function useRefreshCatalog() {
+function useInvalidateModels() {
   const queryClient = useQueryClient()
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: catalogKeys.models() })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.models.all })
+  }
+}
 
+export function useUpdateModelSettings() {
+  const invalidate = useInvalidateModels()
   return useMutation({
-    mutationFn: async () => unwrap(await api.POST('/admin/catalog', {})),
-    onSuccess: (status) => {
-      // The response is the new status; no need to go and ask for it again.
-      queryClient.setQueryData(catalogKeys.status(), status)
-      void queryClient.invalidateQueries({ queryKey: catalogKeys.providers() })
-      void queryClient.invalidateQueries({ queryKey: catalogKeys.models() })
-    },
-    onError: () => {
-      // A failed refresh answers 502, so there is no status in the response to
-      // read — the server recorded `lastError` against the snapshot it kept.
-      // Without this the button would simply stop spinning and say nothing.
-      void queryClient.invalidateQueries({ queryKey: catalogKeys.status() })
-    },
+    mutationFn: async ({ modelId, override }: { modelId: string; override: ModelOverride }) =>
+      unwrap(
+        await api.PUT('/admin/models/{modelId}/settings', {
+          params: { path: { modelId } },
+          body: override,
+        }),
+      ),
+    onSuccess: invalidate,
+  })
+}
+
+export function useResetModelSettings() {
+  const invalidate = useInvalidateModels()
+  return useMutation({
+    mutationFn: async (modelId: string) =>
+      unwrap(
+        await api.DELETE('/admin/models/{modelId}/settings', { params: { path: { modelId } } }),
+      ),
+    onSuccess: invalidate,
   })
 }
 

@@ -5,9 +5,8 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/shadcn/ui/button'
 import { Card } from '@/components/shadcn/ui/card'
 import { Skeleton } from '@/components/shadcn/ui/skeleton'
-import { CatalogRefreshButton } from './catalog-refresh-button'
 import { ModelCard } from './model-card'
-import type { CatalogModel, CatalogScope } from '../use-catalog'
+import type { CatalogModel } from '../use-catalog'
 
 const GRID =
   'grid grid-cols-1 gap-4 @xl/content:grid-cols-2 @4xl/content:grid-cols-3 @6xl/content:grid-cols-4'
@@ -65,10 +64,6 @@ type ModelsGridProps = {
   onPageChange: (page: number) => void
   isPending: boolean
   isError: boolean
-  /** True when the catalogue itself is empty, not merely the current filter. */
-  isCatalogueEmpty: boolean
-  /** Which catalogue is being listed; only `channels` can run out of channels. */
-  scope: CatalogScope
   /**
    * Whether a channel has been configured at all. `undefined` while the channel
    * list is still being read.
@@ -76,14 +71,12 @@ type ModelsGridProps = {
   hasChannels: boolean | undefined
   /**
    * Whether the configured channels serve anything — the answer to the
-   * unfiltered channel-scope probe, not to the query behind this grid.
-   * `undefined` while that question is still open.
+   * unfiltered probe, not to the filtered query behind this grid. `undefined`
+   * while that question is still open.
    */
   hasModels: boolean | undefined
   /** True while either question above is still in flight. */
   isReachPending: boolean
-  /** Switches the page to the full catalogue, for the no-channels state. */
-  onBrowseAll: () => void
 }
 
 export function ModelsGrid({
@@ -94,12 +87,9 @@ export function ModelsGrid({
   onPageChange,
   isPending,
   isError,
-  isCatalogueEmpty,
-  scope,
   hasChannels,
   hasModels,
   isReachPending,
-  onBrowseAll,
 }: ModelsGridProps) {
   const { t } = useTranslation()
   const pageCount = Math.max(1, Math.ceil(total / limit))
@@ -109,64 +99,43 @@ export function ModelsGrid({
   if (isPending) return <LoadingGrid label={t('state.loading')} />
 
   if (models.length === 0) {
-    if (scope === 'channels') {
-      // An empty grid means three very different things here, and none of them
-      // is visible in this query: "nothing matched your filters", "no channel
-      // has been added", and "a channel is there but nobody has fetched what it
-      // serves". Only the two unfiltered probes separate them, so wait for them
-      // rather than guess — a wrong message flashed for a frame is worse than a
-      // frame of skeleton.
-      if (isReachPending) return <LoadingGrid label={t('state.loading')} />
+    // An empty grid means three very different things here, and none of them is
+    // visible in this query: "nothing matched your filters", "no channel has
+    // been added", and "a channel is there but nobody has fetched what it
+    // serves". Only the two unfiltered probes separate them, so wait for them
+    // rather than guess — a wrong message flashed for a frame is worse than a
+    // frame of skeleton.
+    if (isReachPending) return <LoadingGrid label={t('state.loading')} />
 
-      if (hasChannels === false) {
-        return (
-          <Placeholder
-            icon={Plug}
-            message={t('admin.models.no-channels')}
-            action={
-              <div className="flex flex-wrap items-center justify-center gap-2">
-                <Button asChild size="sm">
-                  <Link to="/admin/channels">{t('admin.models.go-to-channels')}</Link>
-                </Button>
-                {/* Adding a channel is the fix; browsing the catalogue is how
-                    you decide which one to add. Secondary, but on the same
-                    screen, because the two questions arrive together. */}
-                <Button variant="ghost" size="sm" onClick={onBrowseAll}>
-                  {t('admin.models.browse-all')}
-                </Button>
-              </div>
-            }
-          />
-        )
-      }
-
-      // The channel exists and lists nothing, which is where every new channel
-      // starts: what it serves is its own statement, and nobody has asked it
-      // for one yet. Saying "no matching models" here would blame the filters
-      // for an empty list that no filter could have changed.
-      if (hasModels === false) {
-        return (
-          <Placeholder
-            icon={PackageOpen}
-            message={t('admin.channels.models-empty-hint')}
-            action={
-              <Button asChild size="sm">
-                <Link to="/admin/channels">{t('admin.nav.channels')}</Link>
-              </Button>
-            }
-          />
-        )
-      }
-    } else if (isCatalogueEmpty) {
-      // Before the first sync there is nothing to browse and nothing to clear —
-      // the only useful thing on the page is the refresh, so it goes here too.
-      //
-      // Only on this tab. The channel tab's list comes from the channels, not
-      // from models.dev, so an unsynced catalogue is not the reason it is empty
-      // there — sending that operator to the refresh button would be sending
-      // them to the wrong page.
+    if (hasChannels === false) {
       return (
-        <Placeholder message={t('admin.models.never-synced')} action={<CatalogRefreshButton />} />
+        <Placeholder
+          icon={Plug}
+          message={t('admin.models.no-channels')}
+          action={
+            <Button asChild size="sm">
+              <Link to="/admin/channels">{t('admin.models.go-to-channels')}</Link>
+            </Button>
+          }
+        />
+      )
+    }
+
+    // The channel exists and lists nothing, which is where every new channel
+    // starts: what it serves is its own statement, and nobody has asked it for
+    // one yet. Saying "no matching models" here would blame the filters for an
+    // empty list that no filter could have changed.
+    if (hasModels === false) {
+      return (
+        <Placeholder
+          icon={PackageOpen}
+          message={t('admin.models.no-selected-models')}
+          action={
+            <Button asChild size="sm">
+              <Link to="/admin/channels">{t('admin.nav.channels')}</Link>
+            </Button>
+          }
+        />
       )
     }
 

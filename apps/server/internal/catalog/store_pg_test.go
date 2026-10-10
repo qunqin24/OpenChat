@@ -59,7 +59,7 @@ func TestPgStoreReplace(t *testing.T) {
 	// catalogue's, and the sync cannot even reach this table.
 	var channelID string
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO channels (name, kind) VALUES ('seed', 'openai') RETURNING id`,
+		`INSERT INTO channels (name, type) VALUES ('seed', 'openai') RETURNING id`,
 	).Scan(&channelID); err != nil {
 		t.Fatalf("seed channel: %v", err)
 	}
@@ -132,7 +132,12 @@ func TestPgStoreReplace(t *testing.T) {
 	}
 }
 
-func TestPgListCatalogModelsFilters(t *testing.T) {
+// TestPgListServedModelsFilters runs the one paging query the marketplace has.
+//
+// It is the filters and the total that matter here: the page and the count are
+// two separate statements over the same WHERE clause, and if they ever disagree
+// the grid pages onto a number the list cannot fill.
+func TestPgListServedModelsFilters(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
 	q := sqlc.New(pool)
@@ -148,34 +153,64 @@ func TestPgListCatalogModelsFilters(t *testing.T) {
 		t.Fatalf("replace: %v", err)
 	}
 
+	// A catalogue on its own must never populate the marketplace.
+	if total, err := q.CountServedModels(ctx, sqlc.CountServedModelsParams{}); err != nil || total != 0 {
+		t.Fatalf("catalogue-only total = %d, err = %v", total, err)
+	}
+
+	// Selected models in an enabled and a disabled channel. An unselected
+	// discovery must stay out of the marketplace, even without an enabled filter.
 	var channelID string
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO channels (name, kind) VALUES ('filters', 'openai') RETURNING id`,
+		`INSERT INTO channels (name, type) VALUES ('filters', 'openai') RETURNING id`,
 	).Scan(&channelID); err != nil {
 		t.Fatalf("seed channel: %v", err)
 	}
-	if _, err := pool.Exec(ctx,
-		`INSERT INTO channel_models (channel_id, model_id, enabled) VALUES ($1, $2, true)`,
-		channelID, "claude-sonnet-4-5"); err != nil {
-		t.Fatalf("enable: %v", err)
+	for _, model := range []struct {
+		id      string
+		enabled bool
+	}{
+		{"gpt-4o", true},
+		{"claude-sonnet-4-5", true},
+		{"bare", true},
+		{"private/custom", true},
+		{"unselected-discovery", false},
+	} {
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO channel_models (channel_id, model_id, enabled) VALUES ($1, $2, $3)`,
+			channelID, model.id, model.enabled); err != nil {
+			t.Fatalf("seed %s: %v", model.id, err)
+		}
+	}
+	var disabledChannelID string
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO channels (name, type, enabled) VALUES ('disabled', 'openai', false) RETURNING id`,
+	).Scan(&disabledChannelID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO channel_models (channel_id, model_id, enabled)
+		VALUES ($1, 'gpt-4o-mini', true), ($1, 'gpt-4o', true), ($1, 'private/custom', false)`, disabledChannelID); err != nil {
+		t.Fatal(err)
 	}
 
 	provider := "openai"
 	search := "MINI"
 	enabled := true
+	disabled := false
 
 	cases := []struct {
 		name   string
-		params sqlc.ListCatalogModelsParams
+		params sqlc.ListServedModelsParams
 		want   int
 	}{
-		{"unfiltered", sqlc.ListCatalogModelsParams{}, 4},
-		{"by provider", sqlc.ListCatalogModelsParams{ProviderID: &provider}, 2},
-		{"search is case insensitive", sqlc.ListCatalogModelsParams{Search: &search}, 1},
-		{"capabilities are all-of", sqlc.ListCatalogModelsParams{
+		{"unfiltered", sqlc.ListServedModelsParams{}, 5},
+		{"by provider", sqlc.ListServedModelsParams{ProviderID: &provider}, 2},
+		{"search is case insensitive", sqlc.ListServedModelsParams{Search: &search}, 1},
+		{"capabilities are all-of", sqlc.ListServedModelsParams{
 			RequireReasoning: true, RequireToolCall: true,
 		}, 1},
-		{"enabled", sqlc.ListCatalogModelsParams{Enabled: &enabled}, 1},
+		{"enabled", sqlc.ListServedModelsParams{Enabled: &enabled}, 4},
+		{"disabled channels", sqlc.ListServedModelsParams{Enabled: &disabled}, 1},
 	}
 
 	for _, tc := range cases {
@@ -183,7 +218,7 @@ func TestPgListCatalogModelsFilters(t *testing.T) {
 			params := tc.params
 			params.RowLimit = 50
 
-			rows, err := q.ListCatalogModels(ctx, params)
+			rows, err := q.ListServedModels(ctx, params)
 			if err != nil {
 				t.Fatalf("list: %v", err)
 			}
@@ -191,7 +226,7 @@ func TestPgListCatalogModelsFilters(t *testing.T) {
 				t.Errorf("rows = %d, want %d", len(rows), tc.want)
 			}
 
-			total, err := q.CountCatalogModelsFiltered(ctx, sqlc.CountCatalogModelsFilteredParams{
+			total, err := q.CountServedModels(ctx, sqlc.CountServedModelsParams{
 				Search:                  params.Search,
 				ProviderID:              params.ProviderID,
 				RequireReasoning:        params.RequireReasoning,
@@ -209,6 +244,11 @@ func TestPgListCatalogModelsFilters(t *testing.T) {
 				t.Errorf("total = %d, want %d", total, tc.want)
 			}
 		})
+	}
+	// The channel badges use the same membership rule as the page itself.
+	channels, err := q.ListChannelsServingModels(ctx, []string{"private/custom"})
+	if err != nil || len(channels) != 1 || channels[0].ID.String() != channelID {
+		t.Fatalf("selected channel badges = %+v, err = %v", channels, err)
 	}
 }
 
