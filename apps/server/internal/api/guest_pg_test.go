@@ -55,6 +55,12 @@ type guestHarness struct {
 
 func newGuestHarness(t *testing.T) *guestHarness {
 	t.Helper()
+	return newGuestHarnessWith(t, nil)
+}
+
+// newGuestHarnessWith is newGuestHarness with a say in the runner's options.
+func newGuestHarnessWith(t *testing.T, tweak func(*agent.Options)) *guestHarness {
+	t.Helper()
 	pool := dbtest.Pool(t, "api_guest")
 	ctx := context.Background()
 	q := sqlc.New(pool)
@@ -105,8 +111,11 @@ func newGuestHarness(t *testing.T) *guestHarness {
 		_, _ = pool.Exec(context.Background(), "DELETE FROM model_overrides WHERE model_id = $1", h.model)
 	})
 
-	runner := agent.NewRunner(pool, agent.NewHub(), NewModelResolver(pool), NewToolSource(pool),
-		agent.Options{SystemPrompt: NewSystemPrompt(pool), Blobs: h.blobs, Modalities: NewModalities(pool), PartialInterval: 5 * time.Millisecond})
+	opts := agent.Options{SystemPrompt: NewSystemPrompt(pool), Blobs: h.blobs, Modalities: NewModalities(pool), PartialInterval: 5 * time.Millisecond}
+	if tweak != nil {
+		tweak(&opts)
+	}
+	runner := agent.NewRunner(pool, agent.NewHub(), NewModelResolver(pool), NewToolSource(pool), opts)
 	t.Cleanup(func() { _ = runner.Shutdown(context.Background()) })
 	h.server = &Server{cfg: &config.Config{}, pool: pool, q: q, runner: runner, store: h.blobs, usage: usage.NewRecorder(q)}
 	runner.AfterRun(h.server.TitleAfterRun)

@@ -50,10 +50,13 @@ const (
 	// guestBodyLimit bounds a request: the path with its tool results, and the
 	// files that fit a request, base64.
 	guestBodyLimit = 64 << 20
-	// guestMaxRows bounds the transcript a request carries. A run reads at most
-	// the last 200 rows (agent.Options.HistoryLimit), and the page sends a few
-	// more than that.
+	// guestMaxRows bounds the transcript a request carries: the page sends the
+	// last 300 rows, two more when it holds a summary (the rows the summary
+	// keeps and ends at), and the model's context is held within its window by
+	// compression, not by how many rows there are.
 	guestMaxRows = 400
+	// guestSummaryChars bounds a summary the browser sends back.
+	guestSummaryChars = 400_000
 	// guestFileBytes bounds the files of one request that are written to storage.
 	guestFileBytes = 2 * agent.MaxAttachmentBytes
 	// guestStaleAfter is how long a guest user may live before the sweep takes
@@ -103,6 +106,7 @@ type guestPlan struct {
 	titled    bool
 	memories  []GuestMemory
 	snapshot  []byte
+	summary   *ContextSummary
 	memoryOn  bool
 	about     string
 	style     string
@@ -250,6 +254,26 @@ func (s *Server) planGuestRun(ctx context.Context, body GuestRunRequest) (*guest
 		plan.rows = append(plan.rows, row)
 	}
 	spaceOut(plan.rows, time.Now())
+
+	// The conversation's compressed context, written over the rows as it is on
+	// an account: its last row and the question it keeps have to be rows of
+	// the request, or it would describe a transcript this run does not have.
+	if sum := body.Summary; sum != nil {
+		if strings.TrimSpace(sum.Content) == "" || len(sum.Content) > guestSummaryChars || sum.InputTokens < 0 || sum.OutputTokens < 0 {
+			return nil, guestBad("invalid_summary", "the summary is empty or too long")
+		}
+		through := slices.IndexFunc(plan.rows, func(r guestRow) bool { return r.id == sum.ThroughMessageId })
+		if through < 0 {
+			return nil, guestBad("invalid_summary", "the summary ends at a message the request does not carry")
+		}
+		if sum.KeptMessageId != nil {
+			kept := slices.IndexFunc(plan.rows, func(r guestRow) bool { return r.id == *sum.KeptMessageId })
+			if kept < 0 || kept > through || plan.rows[kept].role != sqlc.MessageRoleUser {
+				return nil, guestBad("invalid_summary", "the summary keeps a message that is not a user message of the request")
+			}
+		}
+		plan.summary = sum
+	}
 
 	switch body.Action {
 	case "send":
@@ -602,6 +626,15 @@ func (s *Server) seedGuest(ctx context.Context, plan *guestPlan) (st *guestRunSt
 			}
 		}
 
+		if sum := plan.summary; sum != nil {
+			if _, err := q.UpsertContextSummary(ctx, sqlc.UpsertContextSummaryParams{
+				ConversationID: st.conv.ID, ThroughMessageID: sum.ThroughMessageId, KeptMessageID: sum.KeptMessageId,
+				Content: sum.Content, ModelID: sum.Model, InputTokens: int32(sum.InputTokens), OutputTokens: int32(sum.OutputTokens),
+			}); err != nil {
+				return err
+			}
+		}
+
 		switch plan.req.Action {
 		case "send":
 			in := plan.input
@@ -863,6 +896,12 @@ func (s *Server) guestEnd(ctx context.Context, st *guestRunState, title string) 
 	if title != "" {
 		end.Title = &title
 	}
+	// The summary as the run left it: the one it was sent, or the one it made.
+	summary, err := agent.LoadSummary(ctx, s.q, st.conv.ID)
+	if err != nil {
+		return end, err
+	}
+	end.Summary = toContextSummary(summary)
 	return end, nil
 }
 

@@ -784,6 +784,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/conversations/{conversationId}/compaction": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The conversation's compressed context
+         * @description A long conversation is compressed: the part of it that no longer fits
+         *     the model's window is written down as a summary, and the model is sent
+         *     that in place of the messages it covers (see `ContextSummary`). The
+         *     messages themselves are never changed or hidden; the transcript still
+         *     lists all of them, and the summary says where it ends
+         *     (`throughMessageId`). A conversation has at most one summary, and none
+         *     until it was compressed.
+         */
+        get: operations["getCompaction"];
+        put?: never;
+        /**
+         * Compress the conversation's context now
+         * @description Summarises the whole conversation, the last question included, with the
+         *     conversation's own model, and replaces the summary it had. Counted in
+         *     the usage ledger as kind `compression`. A question with no answer yet
+         *     (one that failed for its length, say) is not summarised but kept, and
+         *     the summary ends at it, so that answering it again leaves the summary
+         *     in place. Other followers of the conversation are told with a
+         *     `compaction_changed` event.
+         *
+         *     409 `conversation_busy` while a run is going; 409 `nothing_to_compact`
+         *     when nothing has been written since the last summary; 409
+         *     `compaction_busy` when the conversation is being compressed already;
+         *     502 `compaction_failed` when the model gave no summary.
+         */
+        post: operations["compactConversation"];
+        /**
+         * Take back the compression
+         * @description Deletes the summary. The messages it covered were never removed, so the
+         *     model is sent the whole conversation again. Idempotent. 409
+         *     `conversation_busy` while a run is going. Other followers are told with
+         *     a `compaction_changed` event (without a summary).
+         */
+        delete: operations["undoCompaction"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/conversations/{conversationId}/messages": {
         parameters: {
             query?: never;
@@ -1397,6 +1447,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/guest/compaction": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Summarise a guest's conversation on request
+         * @description The guest's browser keeps the conversation and decides what is to be
+         *     summarised; the server only has the model write it, with the model the
+         *     browser names, and keeps nothing. Counts against the guest limits like
+         *     a run. Compression during a run needs no request of its own: it is part
+         *     of the run (`compaction_finished`).
+         */
+        post: operations["guestCompact"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/guest/favicons/{domain}": {
         parameters: {
             query?: never;
@@ -1501,6 +1575,39 @@ export interface components {
             usedTokens?: number | null;
             /** @description The model that request went to. */
             model?: string | null;
+        };
+        /**
+         * @description A conversation's compressed context. `content` (Markdown) stands in, in
+         *     what the model is sent, for every message up to and including
+         *     `throughMessageId`, except the user message `keptMessageId`, which is
+         *     sent as it was written. Messages after `throughMessageId` are sent as
+         *     they are. Nothing is removed from the transcript: a client shows a
+         *     divider after the `throughMessageId` message and the summary behind it.
+         *     Editing a question deletes it and everything after it, and the summary
+         *     with them when it ends there or later; regenerating an answer that the
+         *     summary covers deletes the summary too.
+         */
+        ContextSummary: {
+            content: string;
+            /** Format: uuid */
+            throughMessageId: string;
+            /**
+             * Format: uuid
+             * @description The user message in the covered range that is sent as written, if one is.
+             */
+            keptMessageId?: string | null;
+            /** @description The model that wrote it. */
+            model: string;
+            /** @description Tokens it took to write */
+            inputTokens: number;
+            /** @description Tokens it took to write */
+            outputTokens: number;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        /** @description A conversation's summary; `summary` is absent when it has none. */
+        CompactionState: {
+            summary?: components["schemas"]["ContextSummary"];
         };
         Conversation: {
             /** Format: uuid */
@@ -1798,6 +1905,8 @@ export interface components {
                 retry?: components["schemas"]["RetryInfo"];
             };
             tools?: components["schemas"]["ToolSlot"][];
+            /** @description The run is compressing the conversation's context before its next request. */
+            compacting?: boolean;
         };
         RetryInfo: {
             /** Format: date-time */
@@ -1843,7 +1952,7 @@ export interface components {
             version: number;
             events: components["schemas"]["RunEvent"][];
         };
-        RunEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["RunFinishedEvent"] | components["schemas"]["GenerationStartedEvent"] | components["schemas"]["PartStartedEvent"] | components["schemas"]["PartDeltaEvent"] | components["schemas"]["PartEndedEvent"] | components["schemas"]["MessageAppendedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"] | components["schemas"]["RetryScheduledEvent"] | components["schemas"]["TitleChangedEvent"] | components["schemas"]["TranscriptChangedEvent"];
+        RunEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["RunFinishedEvent"] | components["schemas"]["GenerationStartedEvent"] | components["schemas"]["PartStartedEvent"] | components["schemas"]["PartDeltaEvent"] | components["schemas"]["PartEndedEvent"] | components["schemas"]["MessageAppendedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"] | components["schemas"]["RetryScheduledEvent"] | components["schemas"]["TitleChangedEvent"] | components["schemas"]["TranscriptChangedEvent"] | components["schemas"]["CompactionStartedEvent"] | components["schemas"]["CompactionFinishedEvent"] | components["schemas"]["CompactionChangedEvent"];
         RunStartedEvent: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -1977,6 +2086,48 @@ export interface components {
              *     whatever follows the question the run answers.
              */
             from?: string;
+        };
+        /**
+         * @description The run is compressing the conversation's context before its next
+         *     request (the first, or one after a tool round). Until
+         *     `compaction_finished`, `LiveState.compacting` is true.
+         */
+        CompactionStartedEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "compaction_started";
+        };
+        /**
+         * @description The compression ended. `summary` is the conversation's new summary;
+         *     absent when it failed or had nothing to do, in which case the request
+         *     went out as it was and the compression is tried again before the next.
+         */
+        CompactionFinishedEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "compaction_finished";
+            summary?: components["schemas"]["ContextSummary"];
+        };
+        /**
+         * @description The conversation's summary was made or taken back by a request of the
+         *     person's (`compactConversation`, `undoCompaction`) and not by a run.
+         *     Sent in a batch of its own, with the nil run id and version 0. `summary`
+         *     is the one it has now, absent for none. A summary deleted along with the
+         *     rows it ended at (an edit, a regeneration) is not announced: the
+         *     `transcript_changed` of that edit says the transcript changed, and the
+         *     summary is read again with it.
+         */
+        CompactionChangedEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "compaction_changed";
+            summary?: components["schemas"]["ContextSummary"];
         };
         ConversationExport: {
             /** @description The shape of this document; 1. */
@@ -2228,10 +2379,11 @@ export interface components {
         };
         /**
          * @description `chat` is a model request of a run; `title` is the background request
-         *     that names a conversation.
+         *     that names a conversation; `compression` is a request that writes a
+         *     conversation's context summary, made with the conversation's own model.
          * @enum {string}
          */
-        UsageKind: "chat" | "title";
+        UsageKind: "chat" | "title" | "compression";
         /**
          * @description A user stopping a reply is `ok`; only a failed request is `error`.
          * @enum {string}
@@ -2671,6 +2823,34 @@ export interface components {
             memorySnapshot?: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * @description The conversation's compressed context, if the browser holds one,
+             *     sent back so the run builds its requests from it as an account's do.
+             *     `messages` then begins at the summary's `keptMessageId` (when it has
+             *     one) and its `throughMessageId` - the rows between them, which the
+             *     summary replaces, are not sent - and goes on from there; the server
+             *     writes them as they are and the summary over them.
+             *     `throughMessageId` and `keptMessageId` have to be among `messages`.
+             */
+            summary?: components["schemas"]["ContextSummary"];
+        };
+        GuestCompactRequest: {
+            model?: string;
+            /** @description The text of the summary the conversation has, to be folded into the new one. */
+            existing?: string;
+            /**
+             * @description The rows to add to the summary, in order, without the question being
+             *     kept (`latest`) - rows the summary already covers are not sent.
+             */
+            messages: components["schemas"]["GuestMessage"][];
+            /** @description The text of the user message that is kept as written, if one is. */
+            latest?: string;
+        };
+        GuestCompactResponse: {
+            content: string;
+            model: string;
+            inputTokens: number;
+            outputTokens: number;
         };
         /**
          * @description The last frame of a guest's run: what the browser has to keep, because
@@ -2692,6 +2872,12 @@ export interface components {
             memoryEvents: components["schemas"]["MemoryEvent"][];
             /** @description Set when the conversation was given a title after this run. */
             title?: string;
+            /**
+             * @description The conversation's compressed context as the run left it; absent
+             *     when it has none. The same summary was announced in the run's own
+             *     events (`compaction_finished`) when the run made it.
+             */
+            summary?: components["schemas"]["ContextSummary"];
         };
         /** @description One SSE frame of a guest run. */
         GuestRunEvent: components["schemas"]["SnapshotEvent"] | components["schemas"]["BatchEvent"] | components["schemas"]["GuestEndEvent"];
@@ -2766,6 +2952,16 @@ export interface components {
              */
             askUser: boolean;
             /**
+             * @description Whether a request that would fill more than half of the model's
+             *     context window (65% once the conversation has a summary) is
+             *     compressed first: the older part of the conversation is summarised
+             *     by the conversation's own model and the model is sent the summary
+             *     in its place. On by default. Off, requests go out as they are, and
+             *     people can still compress a conversation themselves. Takes effect
+             *     at the next model request, including for runs in progress.
+             */
+            compressContext: boolean;
+            /**
              * @description Whether people may upload a picture of their own (`PUT /me/avatar`,
              *     403 `avatar_uploads_off` otherwise). Off by default. Removing a
              *     picture already set is always allowed.
@@ -2790,6 +2986,7 @@ export interface components {
             debugLogging?: boolean;
             generativeUi?: boolean;
             askUser?: boolean;
+            compressContext?: boolean;
             memory?: boolean;
             avatarUploads?: boolean;
             allowRegistration?: boolean;
@@ -4494,6 +4691,73 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    getCompaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the summary, absent when there is none */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompactionState"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    compactConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the conversation's summary now */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompactionState"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    undoCompaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the conversation has no summary now */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     listMessages: {
         parameters: {
             query?: {
@@ -5168,6 +5432,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GuestTitle"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    guestCompact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuestCompactRequest"];
+            };
+        };
+        responses: {
+            /** @description the summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuestCompactResponse"];
                 };
             };
             default: components["responses"]["Error"];

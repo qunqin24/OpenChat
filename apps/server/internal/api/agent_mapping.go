@@ -162,6 +162,10 @@ func toLiveState(live agent.Live) LiveState {
 		}
 		out.Tools = &slots
 	}
+	if live.Compacting {
+		compacting := true
+		out.Compacting = &compacting
+	}
 	return out
 }
 
@@ -208,6 +212,12 @@ func toRunEvent(event agent.Event) (RunEvent, bool) {
 			event.From = &from
 		}
 		err = out.FromTranscriptChangedEvent(event)
+	case agent.CompactionStarted:
+		err = out.FromCompactionStartedEvent(CompactionStartedEvent{Type: CompactionStarted})
+	case agent.CompactionFinished:
+		err = out.FromCompactionFinishedEvent(CompactionFinishedEvent{Type: CompactionFinished, Summary: toContextSummary(e.Summary)})
+	case agent.CompactionChanged:
+		err = out.FromCompactionChangedEvent(CompactionChangedEvent{Type: CompactionChanged, Summary: toContextSummary(e.Summary)})
 	default:
 		return out, false
 	}

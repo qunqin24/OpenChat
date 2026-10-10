@@ -84,6 +84,9 @@ func (s *Server) systemSettings(ctx context.Context) (SystemSettings, error) {
 	if settings.AskUser, err = boolSettingOr(ctx, s.q, settingAskUser, true); err != nil {
 		return settings, err
 	}
+	if settings.CompressContext, err = boolSettingOr(ctx, s.q, settingCompressContext, true); err != nil {
+		return settings, err
+	}
 	if settings.Memory, err = boolSettingOr(ctx, s.q, memory.SettingEnabled, true); err != nil {
 		return settings, err
 	}
@@ -191,6 +194,16 @@ func (s *Server) UpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		slog.InfoContext(r.Context(), "ask_user changed",
 			"enabled", *body.AskUser, "actor", auth.MustUser(r.Context()).Email)
+	}
+
+	if body.CompressContext != nil {
+		value, _ := json.Marshal(*body.CompressContext)
+		if err := s.q.SetSetting(r.Context(), sqlc.SetSettingParams{Key: settingCompressContext, Value: value}); err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+		slog.InfoContext(r.Context(), "context compression changed",
+			"enabled", *body.CompressContext, "actor", auth.MustUser(r.Context()).Email)
 	}
 
 	if body.AvatarUploads != nil {

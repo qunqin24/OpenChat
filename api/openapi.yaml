@@ -979,6 +979,65 @@ paths:
               schema: { $ref: "#/components/schemas/ContextUsage" }
         default: { $ref: "#/components/responses/Error" }
 
+  /conversations/{conversationId}/compaction:
+    parameters:
+      - { $ref: "#/components/parameters/ConversationId" }
+    get:
+      tags: [conversations]
+      summary: The conversation's compressed context
+      description: |
+        A long conversation is compressed: the part of it that no longer fits
+        the model's window is written down as a summary, and the model is sent
+        that in place of the messages it covers (see `ContextSummary`). The
+        messages themselves are never changed or hidden; the transcript still
+        lists all of them, and the summary says where it ends
+        (`throughMessageId`). A conversation has at most one summary, and none
+        until it was compressed.
+      operationId: getCompaction
+      responses:
+        "200":
+          description: the summary, absent when there is none
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompactionState" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [conversations]
+      summary: Compress the conversation's context now
+      description: |
+        Summarises the whole conversation, the last question included, with the
+        conversation's own model, and replaces the summary it had. Counted in
+        the usage ledger as kind `compression`. A question with no answer yet
+        (one that failed for its length, say) is not summarised but kept, and
+        the summary ends at it, so that answering it again leaves the summary
+        in place. Other followers of the conversation are told with a
+        `compaction_changed` event.
+
+        409 `conversation_busy` while a run is going; 409 `nothing_to_compact`
+        when nothing has been written since the last summary; 409
+        `compaction_busy` when the conversation is being compressed already;
+        502 `compaction_failed` when the model gave no summary.
+      operationId: compactConversation
+      responses:
+        "200":
+          description: the conversation's summary now
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompactionState" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [conversations]
+      summary: Take back the compression
+      description: |
+        Deletes the summary. The messages it covered were never removed, so the
+        model is sent the whole conversation again. Idempotent. 409
+        `conversation_busy` while a run is going. Other followers are told with
+        a `compaction_changed` event (without a summary).
+      operationId: undoCompaction
+      responses:
+        "204": { description: the conversation has no summary now }
+        default: { $ref: "#/components/responses/Error" }
+
   /conversations/{conversationId}/messages:
     parameters:
       - { $ref: "#/components/parameters/ConversationId" }
@@ -1620,6 +1679,31 @@ paths:
               schema: { $ref: "#/components/schemas/GuestTitle" }
         default: { $ref: "#/components/responses/Error" }
 
+  /guest/compaction:
+    post:
+      tags: [guest]
+      security: []
+      summary: Summarise a guest's conversation on request
+      description: |
+        The guest's browser keeps the conversation and decides what is to be
+        summarised; the server only has the model write it, with the model the
+        browser names, and keeps nothing. Counts against the guest limits like
+        a run. Compression during a run needs no request of its own: it is part
+        of the run (`compaction_finished`).
+      operationId: guestCompact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GuestCompactRequest" }
+      responses:
+        "200":
+          description: the summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GuestCompactResponse" }
+        default: { $ref: "#/components/responses/Error" }
+
   /guest/favicons/{domain}:
     get:
       tags: [guest]
@@ -1776,6 +1860,38 @@ components:
           type: string
           nullable: true
           description: The model that request went to.
+
+    ContextSummary:
+      type: object
+      description: |
+        A conversation's compressed context. `content` (Markdown) stands in, in
+        what the model is sent, for every message up to and including
+        `throughMessageId`, except the user message `keptMessageId`, which is
+        sent as it was written. Messages after `throughMessageId` are sent as
+        they are. Nothing is removed from the transcript: a client shows a
+        divider after the `throughMessageId` message and the summary behind it.
+        Editing a question deletes it and everything after it, and the summary
+        with them when it ends there or later; regenerating an answer that the
+        summary covers deletes the summary too.
+      required: [content, throughMessageId, model, inputTokens, outputTokens, createdAt]
+      properties:
+        content: { type: string }
+        throughMessageId: { type: string, format: uuid }
+        keptMessageId:
+          type: string
+          format: uuid
+          nullable: true
+          description: The user message in the covered range that is sent as written, if one is.
+        model: { type: string, description: The model that wrote it. }
+        inputTokens: { type: integer, description: Tokens it took to write, in. }
+        outputTokens: { type: integer, description: Tokens it took to write, out. }
+        createdAt: { type: string, format: date-time }
+
+    CompactionState:
+      type: object
+      description: A conversation's summary; `summary` is absent when it has none.
+      properties:
+        summary: { $ref: "#/components/schemas/ContextSummary" }
 
     Conversation:
       type: object
@@ -2157,6 +2273,9 @@ components:
         tools:
           type: array
           items: { $ref: "#/components/schemas/ToolSlot" }
+        compacting:
+          type: boolean
+          description: The run is compressing the conversation's context before its next request.
 
     RetryInfo:
       type: object
@@ -2229,9 +2348,15 @@ components:
         - $ref: "#/components/schemas/RetryScheduledEvent"
         - $ref: "#/components/schemas/TitleChangedEvent"
         - $ref: "#/components/schemas/TranscriptChangedEvent"
+        - $ref: "#/components/schemas/CompactionStartedEvent"
+        - $ref: "#/components/schemas/CompactionFinishedEvent"
+        - $ref: "#/components/schemas/CompactionChangedEvent"
       discriminator:
         propertyName: type
         mapping:
+          compaction_started: "#/components/schemas/CompactionStartedEvent"
+          compaction_finished: "#/components/schemas/CompactionFinishedEvent"
+          compaction_changed: "#/components/schemas/CompactionChangedEvent"
           run_started: "#/components/schemas/RunStartedEvent"
           run_finished: "#/components/schemas/RunFinishedEvent"
           generation_started: "#/components/schemas/GenerationStartedEvent"
@@ -2363,6 +2488,42 @@ components:
             every row after it are gone, which a client can act on before the
             fetch comes back. Absent for a regeneration, whose deleted answer is
             whatever follows the question the run answers.
+
+    CompactionStartedEvent:
+      type: object
+      description: |
+        The run is compressing the conversation's context before its next
+        request (the first, or one after a tool round). Until
+        `compaction_finished`, `LiveState.compacting` is true.
+      required: [type]
+      properties:
+        type: { type: string, const: compaction_started }
+
+    CompactionFinishedEvent:
+      type: object
+      description: |
+        The compression ended. `summary` is the conversation's new summary;
+        absent when it failed or had nothing to do, in which case the request
+        went out as it was and the compression is tried again before the next.
+      required: [type]
+      properties:
+        type: { type: string, const: compaction_finished }
+        summary: { $ref: "#/components/schemas/ContextSummary" }
+
+    CompactionChangedEvent:
+      type: object
+      description: |
+        The conversation's summary was made or taken back by a request of the
+        person's (`compactConversation`, `undoCompaction`) and not by a run.
+        Sent in a batch of its own, with the nil run id and version 0. `summary`
+        is the one it has now, absent for none. A summary deleted along with the
+        rows it ended at (an edit, a regeneration) is not announced: the
+        `transcript_changed` of that edit says the transcript changed, and the
+        summary is read again with it.
+      required: [type]
+      properties:
+        type: { type: string, const: compaction_changed }
+        summary: { $ref: "#/components/schemas/ContextSummary" }
 
     ConversationExport:
       type: object
@@ -2669,11 +2830,12 @@ components:
       type: string
       description: |
         `chat` is a model request of a run; `title` is the background request
-        that names a conversation.
-      enum: [chat, title]
+        that names a conversation; `compression` is a request that writes a
+        conversation's context summary, made with the conversation's own model.
+      enum: [chat, title, compression]
       # Named explicitly: bare `Chat` would collide with ApiFormat's `chat` and
       # make the generator rename both enums' constants.
-      x-enum-varnames: [UsageKindChat, UsageKindTitle]
+      x-enum-varnames: [UsageKindChat, UsageKindTitle, UsageKindCompression]
 
     UsageStatus:
       type: string
@@ -3156,6 +3318,43 @@ components:
           description: |
             The conversation's snapshot from `GuestEndEvent`, sent back so the
             system prompt is the same bytes at every turn. Absent on its first run.
+        summary:
+          description: |
+            The conversation's compressed context, if the browser holds one,
+            sent back so the run builds its requests from it as an account's do.
+            `messages` then begins at the summary's `keptMessageId` (when it has
+            one) and its `throughMessageId` - the rows between them, which the
+            summary replaces, are not sent - and goes on from there; the server
+            writes them as they are and the summary over them.
+            `throughMessageId` and `keptMessageId` have to be among `messages`.
+          allOf: [{ $ref: "#/components/schemas/ContextSummary" }]
+
+    GuestCompactRequest:
+      type: object
+      required: [messages]
+      properties:
+        model: { type: string }
+        existing:
+          type: string
+          description: The text of the summary the conversation has, to be folded into the new one.
+        messages:
+          type: array
+          description: |
+            The rows to add to the summary, in order, without the question being
+            kept (`latest`) - rows the summary already covers are not sent.
+          items: { $ref: "#/components/schemas/GuestMessage" }
+        latest:
+          type: string
+          description: The text of the user message that is kept as written, if one is.
+
+    GuestCompactResponse:
+      type: object
+      required: [content, model, inputTokens, outputTokens]
+      properties:
+        content: { type: string }
+        model: { type: string }
+        inputTokens: { type: integer }
+        outputTokens: { type: integer }
 
     GuestEndEvent:
       type: object
@@ -3181,6 +3380,12 @@ components:
         title:
           type: string
           description: Set when the conversation was given a title after this run.
+        summary:
+          description: |
+            The conversation's compressed context as the run left it; absent
+            when it has none. The same summary was announced in the run's own
+            events (`compaction_finished`) when the run made it.
+          allOf: [{ $ref: "#/components/schemas/ContextSummary" }]
 
     GuestRunEvent:
       description: One SSE frame of a guest run.
@@ -3220,7 +3425,7 @@ components:
 
     SystemSettings:
       type: object
-      required: [debugLogging, generativeUi, askUser, memory, taskModel, avatarUploads,
+      required: [debugLogging, generativeUi, askUser, compressContext, memory, taskModel, avatarUploads,
                  deletedRetentionDays, unsentUploadHours, orphanFileHours,
                  guestMode, guestHourlyLimit, guestDailyLimit,
                  allowRegistration, registrationApproval]
@@ -3284,6 +3489,16 @@ components:
             multiple-choice questions to the user and wait for the answers.
             On by default. Takes effect at the next model request, including
             for runs in progress.
+        compressContext:
+          type: boolean
+          description: |
+            Whether a request that would fill more than half of the model's
+            context window (65% once the conversation has a summary) is
+            compressed first: the older part of the conversation is summarised
+            by the conversation's own model and the model is sent the summary
+            in its place. On by default. Off, requests go out as they are, and
+            people can still compress a conversation themselves. Takes effect
+            at the next model request, including for runs in progress.
         avatarUploads:
           type: boolean
           description: |
@@ -3311,6 +3526,7 @@ components:
         debugLogging: { type: boolean }
         generativeUi: { type: boolean }
         askUser: { type: boolean }
+        compressContext: { type: boolean }
         memory: { type: boolean }
         avatarUploads: { type: boolean }
         allowRegistration: { type: boolean }
