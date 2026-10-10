@@ -1,4 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { type QueryKey, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { getRouteApi } from '@tanstack/react-router'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -10,9 +12,13 @@ import { Label } from '@/components/shadcn/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/shadcn/ui/select'
 import { Skeleton } from '@/components/shadcn/ui/skeleton'
 import { Switch } from '@/components/shadcn/ui/switch'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn/ui/tabs'
 import { ContentSection } from '../components/content-section'
 import { GuestLimitsForm } from './guest-limits-form'
 import { RetentionForm } from './retention-form'
+import { SYSTEM_TABS, type SystemTab } from './tabs'
+
+const route = getRouteApi('/admin/settings/system')
 
 /** The task model's select value for "each conversation's own" (Radix Select takes no empty value). */
 const OWN_MODEL = '__conversation__'
@@ -24,62 +30,23 @@ const OWN_MODEL = '__conversation__'
 export function SettingsSystem() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const { tab = 'general' } = route.useSearch()
+  const navigate = route.useNavigate()
+  const setTab = (next: SystemTab) => void navigate({ search: { tab: next }, replace: true })
 
   const { data, isPending } = useQuery({
     queryKey: adminKeys.system(),
     queryFn: async ({ signal }) => unwrap(await api.GET('/admin/system', { signal })),
   })
 
-  const toggleGenUI = useMutation({
-    mutationFn: async (generativeUi: boolean) =>
-      unwrap(await api.PATCH('/admin/system', { body: { generativeUi } })),
-    onSuccess: (next) => {
-      queryClient.setQueryData(adminKeys.system(), next)
-      toast.success(t(next.generativeUi ? 'admin.settings.system.genui-on' : 'admin.settings.system.genui-off'))
-    },
-    onError: () => toast.error(t('admin.settings.system.save-failed')),
-  })
-
-  const toggleAskUser = useMutation({
-    mutationFn: async (askUser: boolean) => unwrap(await api.PATCH('/admin/system', { body: { askUser } })),
-    onSuccess: (next) => {
-      queryClient.setQueryData(adminKeys.system(), next)
-      toast.success(t(next.askUser ? 'admin.settings.system.ask-user-on' : 'admin.settings.system.ask-user-off'))
-    },
-    onError: () => toast.error(t('admin.settings.system.save-failed')),
-  })
-
-  const toggleMemory = useMutation({
-    mutationFn: async (memory: boolean) => unwrap(await api.PATCH('/admin/system', { body: { memory } })),
-    onSuccess: (next) => {
-      queryClient.setQueryData(adminKeys.system(), next)
-      toast.success(t(next.memory ? 'admin.settings.system.memory-on' : 'admin.settings.system.memory-off'))
-    },
-    onError: () => toast.error(t('admin.settings.system.save-failed')),
-  })
-
-  const toggleAvatars = useMutation({
-    mutationFn: async (avatarUploads: boolean) =>
-      unwrap(await api.PATCH('/admin/system', { body: { avatarUploads } })),
-    onSuccess: (next) => {
-      queryClient.setQueryData(adminKeys.system(), next)
-      // The account settings read it from the chat's features.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.features })
-      toast.success(t(next.avatarUploads ? 'admin.settings.system.avatars-on' : 'admin.settings.system.avatars-off'))
-    },
-    onError: () => toast.error(t('admin.settings.system.save-failed')),
-  })
-
-  const toggleGuest = useMutation({
-    mutationFn: async (guestMode: boolean) => unwrap(await api.PATCH('/admin/system', { body: { guestMode } })),
-    onSuccess: (next) => {
-      queryClient.setQueryData(adminKeys.system(), next)
-      // The sign-in page offers the button from this.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.guest.status })
-      toast.success(t(next.guestMode ? 'admin.settings.system.guest-on' : 'admin.settings.system.guest-off'))
-    },
-    onError: () => toast.error(t('admin.settings.system.save-failed')),
-  })
+  const toggleGenUI = useSystemToggle('generativeUi', 'genui')
+  const toggleAskUser = useSystemToggle('askUser', 'ask-user')
+  const toggleMemory = useSystemToggle('memory', 'memory')
+  // The account settings read it from the chat's features.
+  const toggleAvatars = useSystemToggle('avatarUploads', 'avatars', [queryKeys.features])
+  // The sign-in page offers the button from this.
+  const toggleGuest = useSystemToggle('guestMode', 'guest', [queryKeys.guest.status])
+  const toggleDebug = useSystemToggle('debugLogging', '')
 
   // What enabled channels offer — the same list the chat's model picker shows.
   const models = useChatModels()
@@ -98,186 +65,134 @@ export function SettingsSystem() {
   const offered = models.data ?? []
   const stale = taskModel !== '' && !offered.some((m) => m.id === taskModel)
 
-  const update = useMutation({
-    mutationFn: async (debugLogging: boolean) =>
-      unwrap(await api.PATCH('/admin/system', { body: { debugLogging } })),
+
+  const loading = (width = 'w-8', height = 'h-5') => <Skeleton className={`${height} ${width} shrink-0`} />
+  const toggle = (id: string, checked: boolean, mutation: { isPending: boolean; mutate: (v: boolean) => void }) =>
+    isPending ? (
+      loading()
+    ) : (
+      <Switch
+        id={id}
+        className="mt-0.5 shrink-0"
+        checked={checked}
+        disabled={mutation.isPending}
+        onCheckedChange={(value) => mutation.mutate(value)}
+      />
+    )
+
+  return (
+    <ContentSection title={t('admin.settings.system.title')} desc={t('admin.settings.system.subtitle')}>
+      <Tabs value={tab} onValueChange={(value) => setTab(value as SystemTab)}>
+        <TabsList>
+          {SYSTEM_TABS.map((value) => (
+            <TabsTrigger key={value} value={value}>
+              {t(`admin.settings.system.tabs.${value}`)}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+
+        <TabsContent value="general" className="divide-y">
+          <SettingRow id="task-model" label={t('admin.settings.system.task-model')} hint={t('admin.settings.system.task-model-hint')}>
+            {isPending || models.isPending ? (
+              loading('w-48', 'h-9')
+            ) : (
+              <Select
+                value={taskModel || OWN_MODEL}
+                disabled={setTaskModel.isPending}
+                onValueChange={(value) => setTaskModel.mutate(value === OWN_MODEL ? '' : value)}
+              >
+                <SelectTrigger id="task-model" className="w-48 shrink-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={OWN_MODEL}>{t('admin.settings.system.task-model-own')}</SelectItem>
+                  {stale && (
+                    <SelectItem value={taskModel}>
+                      {t('admin.settings.system.task-model-gone', { model: taskModel })}
+                    </SelectItem>
+                  )}
+                  {offered.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      {model.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </SettingRow>
+          <SettingRow id="debug-logging" label={t('admin.settings.system.debug')} hint={t('admin.settings.system.debug-hint')}>
+            {toggle('debug-logging', data?.debugLogging ?? false, toggleDebug)}
+          </SettingRow>
+        </TabsContent>
+
+        <TabsContent value="chat" className="divide-y">
+          <SettingRow id="generative-ui" label={t('admin.settings.system.genui')} hint={t('admin.settings.system.genui-hint')}>
+            {toggle('generative-ui', data?.generativeUi ?? false, toggleGenUI)}
+          </SettingRow>
+          <SettingRow id="ask-user" label={t('admin.settings.system.ask-user')} hint={t('admin.settings.system.ask-user-hint')}>
+            {toggle('ask-user', data?.askUser ?? true, toggleAskUser)}
+          </SettingRow>
+          <SettingRow id="memory" label={t('admin.settings.system.memory')} hint={t('admin.settings.system.memory-hint')}>
+            {toggle('memory', data?.memory ?? true, toggleMemory)}
+          </SettingRow>
+        </TabsContent>
+
+        <TabsContent value="access" className="divide-y">
+          <SettingRow id="guest-mode" label={t('admin.settings.system.guest')} hint={t('admin.settings.system.guest-hint')}>
+            {toggle('guest-mode', data?.guestMode ?? false, toggleGuest)}
+          </SettingRow>
+          {isPending || !data ? <Skeleton className="my-4 h-56 w-full" /> : <GuestLimitsForm settings={data} />}
+          <SettingRow id="avatar-uploads" label={t('admin.settings.system.avatars')} hint={t('admin.settings.system.avatars-hint')}>
+            {toggle('avatar-uploads', data?.avatarUploads ?? false, toggleAvatars)}
+          </SettingRow>
+        </TabsContent>
+
+        <TabsContent value="data">
+          {isPending || !data ? <Skeleton className="my-4 h-72 w-full" /> : <RetentionForm settings={data} />}
+        </TabsContent>
+      </Tabs>
+    </ContentSection>
+  )
+}
+
+/**
+ * One setting as a line of the list: what it is on the left, its control on
+ * the right, the lines divided by rules rather than each boxed in a card.
+ */
+function SettingRow({ id, label, hint, children }: { id: string; label: string; hint: string; children: ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-6 py-4">
+      <div className="space-y-1">
+        <Label htmlFor={id} className="text-sm font-medium">
+          {label}
+        </Label>
+        <p className="text-muted-foreground text-sm">{hint}</p>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+type SystemFlag = 'generativeUi' | 'askUser' | 'memory' | 'avatarUploads' | 'guestMode' | 'debugLogging'
+
+/**
+ * A switch saved on its own, as each of these is: the server answers with the
+ * whole settings, which replace the cached ones. `message` names the toasts
+ * (`<message>-on` / `-off`); debug logging's are the bare `on` / `off`.
+ */
+function useSystemToggle(flag: SystemFlag, message: string, alsoRefresh: QueryKey[] = []) {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (value: boolean) => unwrap(await api.PATCH('/admin/system', { body: { [flag]: value } })),
     onSuccess: (next) => {
       queryClient.setQueryData(adminKeys.system(), next)
-      toast.success(t(next.debugLogging ? 'admin.settings.system.on' : 'admin.settings.system.off'))
+      for (const key of alsoRefresh) void queryClient.invalidateQueries({ queryKey: key })
+      const prefix = message ? `${message}-` : ''
+      toast.success(t(`admin.settings.system.${prefix}${next[flag] ? 'on' : 'off'}` as 'admin.settings.system.on'))
     },
     onError: () => toast.error(t('admin.settings.system.save-failed')),
   })
-
-  return (
-    <ContentSection
-      title={t('admin.settings.system.title')}
-      desc={t('admin.settings.system.subtitle')}
-    >
-      <div className="space-y-4">
-        <div className="flex items-start justify-between gap-6 rounded-lg border p-4">
-          <div className="space-y-1">
-            <Label htmlFor="debug-logging" className="text-base">
-              {t('admin.settings.system.debug')}
-            </Label>
-            <p className="text-muted-foreground text-sm">
-              {t('admin.settings.system.debug-hint')}
-            </p>
-          </div>
-
-          {isPending ? (
-            <Skeleton className="h-5 w-8 shrink-0" />
-          ) : (
-            <Switch
-              id="debug-logging"
-              className="mt-1 shrink-0"
-              checked={data?.debugLogging ?? false}
-              disabled={update.isPending}
-              onCheckedChange={(value) => update.mutate(value)}
-            />
-          )}
-        </div>
-
-        <div className="flex items-start justify-between gap-6 rounded-lg border p-4">
-          <div className="space-y-1">
-            <Label htmlFor="generative-ui" className="text-base">
-              {t('admin.settings.system.genui')}
-            </Label>
-            <p className="text-muted-foreground text-sm">{t('admin.settings.system.genui-hint')}</p>
-          </div>
-          {isPending ? (
-            <Skeleton className="h-5 w-8 shrink-0" />
-          ) : (
-            <Switch
-              id="generative-ui"
-              className="mt-1 shrink-0"
-              checked={data?.generativeUi ?? false}
-              disabled={toggleGenUI.isPending}
-              onCheckedChange={(value) => toggleGenUI.mutate(value)}
-            />
-          )}
-        </div>
-
-        <div className="flex items-start justify-between gap-6 rounded-lg border p-4">
-          <div className="space-y-1">
-            <Label htmlFor="ask-user" className="text-base">
-              {t('admin.settings.system.ask-user')}
-            </Label>
-            <p className="text-muted-foreground text-sm">{t('admin.settings.system.ask-user-hint')}</p>
-          </div>
-          {isPending ? (
-            <Skeleton className="h-5 w-8 shrink-0" />
-          ) : (
-            <Switch
-              id="ask-user"
-              className="mt-1 shrink-0"
-              checked={data?.askUser ?? true}
-              disabled={toggleAskUser.isPending}
-              onCheckedChange={(value) => toggleAskUser.mutate(value)}
-            />
-          )}
-        </div>
-
-        <div className="flex items-start justify-between gap-6 rounded-lg border p-4">
-          <div className="space-y-1">
-            <Label htmlFor="memory" className="text-base">
-              {t('admin.settings.system.memory')}
-            </Label>
-            <p className="text-muted-foreground text-sm">{t('admin.settings.system.memory-hint')}</p>
-          </div>
-          {isPending ? (
-            <Skeleton className="h-5 w-8 shrink-0" />
-          ) : (
-            <Switch
-              id="memory"
-              className="mt-1 shrink-0"
-              checked={data?.memory ?? true}
-              disabled={toggleMemory.isPending}
-              onCheckedChange={(value) => toggleMemory.mutate(value)}
-            />
-          )}
-        </div>
-
-        <div className="flex items-start justify-between gap-6 rounded-lg border p-4">
-          <div className="space-y-1">
-            <Label htmlFor="avatar-uploads" className="text-base">
-              {t('admin.settings.system.avatars')}
-            </Label>
-            <p className="text-muted-foreground text-sm">{t('admin.settings.system.avatars-hint')}</p>
-          </div>
-          {isPending ? (
-            <Skeleton className="h-5 w-8 shrink-0" />
-          ) : (
-            <Switch
-              id="avatar-uploads"
-              className="mt-1 shrink-0"
-              checked={data?.avatarUploads ?? false}
-              disabled={toggleAvatars.isPending}
-              onCheckedChange={(value) => toggleAvatars.mutate(value)}
-            />
-          )}
-        </div>
-
-        <div className="flex items-start justify-between gap-6 rounded-lg border p-4">
-          <div className="space-y-1">
-            <Label htmlFor="guest-mode" className="text-base">
-              {t('admin.settings.system.guest')}
-            </Label>
-            <p className="text-muted-foreground text-sm">{t('admin.settings.system.guest-hint')}</p>
-          </div>
-          {isPending ? (
-            <Skeleton className="h-5 w-8 shrink-0" />
-          ) : (
-            <Switch
-              id="guest-mode"
-              className="mt-1 shrink-0"
-              checked={data?.guestMode ?? false}
-              disabled={toggleGuest.isPending}
-              onCheckedChange={(value) => toggleGuest.mutate(value)}
-            />
-          )}
-        </div>
-
-        {isPending || !data ? <Skeleton className="h-56 w-full" /> : <GuestLimitsForm settings={data} />}
-
-        <div className="flex items-start justify-between gap-6 rounded-lg border p-4">
-          <div className="space-y-1">
-            <Label htmlFor="task-model" className="text-base">
-              {t('admin.settings.system.task-model')}
-            </Label>
-            <p className="text-muted-foreground text-sm">{t('admin.settings.system.task-model-hint')}</p>
-          </div>
-          {isPending || models.isPending ? (
-            <Skeleton className="h-9 w-56 shrink-0" />
-          ) : (
-            <Select
-              value={taskModel || OWN_MODEL}
-              disabled={setTaskModel.isPending}
-              onValueChange={(value) => setTaskModel.mutate(value === OWN_MODEL ? '' : value)}
-            >
-              <SelectTrigger id="task-model" className="w-56 shrink-0">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={OWN_MODEL}>{t('admin.settings.system.task-model-own')}</SelectItem>
-                {stale && (
-                  <SelectItem value={taskModel}>
-                    {t('admin.settings.system.task-model-gone', { model: taskModel })}
-                  </SelectItem>
-                )}
-                {offered.map((model) => (
-                  <SelectItem key={model.id} value={model.id}>
-                    {model.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-
-        {isPending || !data ? <Skeleton className="h-72 w-full" /> : <RetentionForm settings={data} />}
-      </div>
-    </ContentSection>
-  )
 }
 
 export default SettingsSystem

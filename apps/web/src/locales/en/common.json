@@ -606,6 +606,7 @@
         "lang-en": "English"
       },
       "system": {
+        "tabs": {"general": "General", "chat": "Chat", "access": "Access", "data": "Data"},
         "title": "System",
         "subtitle": "Server-wide settings. They apply to everyone.",
         "debug": "Debug mode",

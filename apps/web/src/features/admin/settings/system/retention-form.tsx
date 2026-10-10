@@ -59,9 +59,9 @@ export function RetentionForm({ settings }: { settings: SystemSettings }) {
   ] as const
 
   return (
-    <div className="space-y-4 rounded-lg border p-4">
+    <div className="space-y-4 py-4">
       <div className="space-y-1">
-        <div className="text-base font-medium">{t('admin.settings.system.retention.title')}</div>
+        <div className="text-sm font-medium">{t('admin.settings.system.retention.title')}</div>
         <p className="text-muted-foreground text-sm">{t('admin.settings.system.retention.hint')}</p>
       </div>
       <Form {...form}>
