@@ -1,150 +1,186 @@
 /**
  * Sign-in and sign-up screens.
  *
+ * A visual port of OpenWebUI's auth route — `src/routes/auth/+page.svelte`
+ * (with `src/lib/components/common/SensitiveInput.svelte` and
+ * `Spinner.svelte`) at commit 0a7c15832fb30b1903753e83f81dc7d27e5b0944,
+ * rebuilt as plain CSS on this app's class hooks. The upstream Tailwind
+ * classes each rule mirrors are noted inline; OpenWebUI's grey ramp
+ * (`--color-gray-*` in src/tailwind.css) is zero-chroma oklch, quoted
+ * verbatim below.
+ *
  * Kept out of next-theme.css so that file stays a faithful copy of the prism
- * original and can be re-synced. Everything here is built from the same `--n-*`
- * tokens and the same techniques: hairline rings via box-shadow rather than
- * borders, button fills on `::before` so a press scales the fill and not the
- * label, and one shared easing curve.
+ * original and can be re-synced.
+ *
+ * The look is deliberately bare: a plain white/black page, a centred column
+ * no wider than 448px, borderless transparent inputs whose placeholders carry
+ * the field's shape, and a single low-contrast pill button. There is no card,
+ * no input ring, and no bold type anywhere on the page.
  */
 
+/* #auth-page + #auth-container: fixed, bg-white dark:bg-black,
+   text-black dark:text-white. `overflow-y: auto` plus `margin: auto` on the
+   column (rather than `justify-content: center`) keeps the top reachable on
+   windows shorter than the form — plain centring would clip it. */
 .n-auth {
   position: fixed;
   inset: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
   overflow-y: auto;
-  background: var(--n-bg);
-  color: var(--n-text);
-  font-size: 15px;
-  line-height: 1.65;
-  letter-spacing: -0.005em;
+  background: #ffffff;
+  color: #000000;
+  /* The OpenWebUI system-font-first stack the chat UI already aligned to
+     (--n-chat-font in chat-typography.css): -apple-system, then the bundled
+     Inter Variable, then system fallbacks. Everything on the page is
+     font-normal with no tracking. */
+  font-family: var(--n-chat-font, var(--font-sans));
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0;
 }
 
-.n-auth-card {
+.dark .n-auth {
+  background: #000000;
+  color: #ffffff;
+}
+
+/* The inner column: `w-full px-10` gutters, with the content capped at
+   `sm:max-w-md` (448px) — expressed as a 528px cap including the gutters,
+   active only from the sm breakpoint (640px) up, exactly like upstream;
+   below it the column stays full width. `margin: auto` plus the page's
+   overflow keeps the top reachable on short windows, and the extra bottom
+   padding reproduces the upstream `my-auto pb-10` lift above true centre.
+   Card text is dark:text-gray-100. */
+.n-auth-column {
   width: 100%;
-  max-width: 380px;
+  margin: auto;
+  padding: 24px 40px 64px;
+  text-align: center;
 }
 
-.n-auth-brand {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-bottom: 28px;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+@media (min-width: 640px) {
+  .n-auth-column {
+    max-width: 528px; /* 448 + 2×40 gutters */
+  }
 }
 
+.dark .n-auth-column {
+  color: oklch(0.94 0 0); /* --color-gray-100 */
+}
+
+/* Header block: `mb-1`, holding only the title outside onboarding. */
+.n-auth-head {
+  margin-bottom: 4px;
+}
+
+/* `text-2xl font-normal` — the title is deliberately *not* bold. */
 .n-auth-title {
   margin: 0;
-  font-size: 26px;
-  font-weight: 600;
-  line-height: 1.25;
-  letter-spacing: -0.02em;
-  text-align: center;
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 400;
 }
 
-.n-auth-sub {
-  margin: 6px 0 26px;
-  color: var(--n-text-2);
-  font-size: 14px;
-  text-align: center;
-}
-
+/* The upstream form is `flex flex-col justify-center`. The flex context is
+   load-bearing for spacing: block siblings would collapse the header's
+   margin-bottom (4px) and the fields' margin-top (16px) into one 16px gap,
+   while flex items keep both — 20px from title to first label. */
 .n-auth-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
 }
 
-.n-auth-field {
+/* The form's field stack: `flex flex-col mt-4`. */
+.n-auth-fields {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  margin-top: 16px;
 }
 
+/* Upstream gives every field wrapper `mb-2` except the password's, so the
+   gap exists *between* fields only — none after the last one. */
+.n-auth-field + .n-auth-field {
+  margin-top: 8px;
+}
+
+/* `text-sm font-normal text-left mb-1 block`, colour inherited. */
 .n-auth-label {
-  color: var(--n-text-2);
-  font-size: 13px;
-  font-weight: 500;
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+  text-align: left;
 }
 
-/* The ring lives on the wrapper so the show/hide button can sit inside it
-   without breaking the outline. */
-.n-auth-input-wrap {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 42px;
-  padding: 0 6px 0 12px;
-  border-radius: 12px;
-  background: var(--n-panel);
-  box-shadow: 0 0 0 0.5px var(--n-line);
-  transition:
-    box-shadow 160ms cubic-bezier(0.22, 1, 0.36, 1),
-    background 160ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-/**
- * Focus is carried by two layers rather than one heavy ring: a 1px edge at
- * partial opacity, plus a wide, very faint halo. A solid 1.5px of `--n-accent`
- * — pure black in light mode — reads as a hard border stamped on the field,
- * which fights the hairline edges everywhere else in the theme. Splitting it
- * keeps the focus obvious without that weight.
- */
-.n-auth-input-wrap:focus-within {
-  background: var(--n-card);
-  box-shadow:
-    0 0 0 1px color-mix(in oklab, var(--n-text) 45%, transparent),
-    0 0 0 4px color-mix(in oklab, var(--n-text) 7%, transparent);
-}
-
-.n-auth-input-wrap.invalid {
-  box-shadow:
-    0 0 0 1px color-mix(in oklab, var(--n-err) 70%, transparent),
-    0 0 0 4px color-mix(in oklab, var(--n-err) 10%, transparent);
-}
-
-/* While a rejected field is being corrected, focus stays visible but keeps the
-   error's colour — swapping to the neutral ring would read as "fixed" before
-   anything changed. */
-.n-auth-input-wrap.invalid:focus-within {
-  background: var(--n-card);
-  box-shadow:
-    0 0 0 1px var(--n-err),
-    0 0 0 4px color-mix(in oklab, var(--n-err) 14%, transparent);
-}
-
+/* `my-0.5 w-full text-sm outline-hidden bg-transparent`: the input is bare
+   text on the page — no fill, border, or radius, and no focus ring; the
+   caret is the focus indicator (focus.css restates the outline removal). */
 .n-auth-input {
-  flex: 1;
-  min-width: 0;
+  display: block;
+  width: 100%;
+  margin: 2px 0;
+  padding: 0;
   border: 0;
   outline: none;
   background: transparent;
-  color: var(--n-text);
+  color: inherit;
   font: inherit;
-  font-size: 15px;
+  font-size: 14px;
+  line-height: 20px;
 }
 
 .n-auth-input::placeholder {
-  color: var(--n-text-3);
+  color: oklch(0.85 0 0); /* placeholder:text-gray-300 */
 }
 
+/* Inputs disable while a submission is in flight (upstream keeps them
+   editable; we block edits so the in-flight values stay the submitted ones).
+   With no box to grey out, the text itself dims. */
 .n-auth-input:disabled {
   cursor: not-allowed;
-  opacity: 0.6;
+  opacity: 0.5;
+}
+
+.dark .n-auth-input::placeholder {
+  color: oklch(0.51 0 0); /* dark:placeholder:text-gray-600 */
+}
+
+/* Password row: SensitiveInput's `flex flex-1` wrapper, input plus the
+   show/hide button. */
+.n-auth-secret {
+  display: flex;
+  align-items: center;
+}
+
+/* SensitiveInput adds `py-0.5` to the input itself. */
+.n-auth-secret .n-auth-input {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 0;
+}
+
+/* SensitiveInput's toggle: `pl-1.5 bg-transparent transition`, a bare 16px
+   icon (Lucide Eye/EyeOff per project convention) in the text colour. */
+.n-auth-reveal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  padding: 0 0 0 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
 }
 
 /**
  * Autofilled fields.
  *
- * Chromium (so Edge and Chrome) paints its own pale-blue ground and text colour
- * for `:-webkit-autofill` through internal styles that plain `background` and
+ * Chromium paints its own pale-blue ground and text colour for
+ * `:-webkit-autofill` through internal styles that plain `background` and
  * `color` cannot override. Two workarounds are needed:
  *
  *   - a large inset box-shadow, which repaints the field without touching the
@@ -154,148 +190,121 @@
  * The absurd transition delay is the standard trick for the split second
  * before the shadow lands, during which the blue would otherwise flash.
  *
- * The wrapper's own ring is unaffected: it lives on `.n-auth-input-wrap`, and
- * the shadow here is confined to the inner input.
+ * The repaint matches the page ground — plain white, or plain black in dark
+ * mode — because the inputs themselves are transparent.
  */
 .n-auth-input:-webkit-autofill,
 .n-auth-input:-webkit-autofill:hover,
 .n-auth-input:-webkit-autofill:focus,
 .n-auth-input:-webkit-autofill:active {
-  -webkit-text-fill-color: var(--n-text);
-  -webkit-box-shadow: inset 0 0 0 1000px var(--n-panel);
-  box-shadow: inset 0 0 0 1000px var(--n-panel);
-  caret-color: var(--n-text);
+  -webkit-text-fill-color: #000000;
+  -webkit-box-shadow: inset 0 0 0 1000px #ffffff;
+  box-shadow: inset 0 0 0 1000px #ffffff;
+  caret-color: #000000;
   transition: background-color 100000s ease-in-out 0s;
 }
 
-/* The wrapper lightens on focus, so the repaint has to follow it. */
-.n-auth-input-wrap:focus-within .n-auth-input:-webkit-autofill {
-  -webkit-box-shadow: inset 0 0 0 1000px var(--n-card);
-  box-shadow: inset 0 0 0 1000px var(--n-card);
+.dark .n-auth-input:-webkit-autofill,
+.dark .n-auth-input:-webkit-autofill:hover,
+.dark .n-auth-input:-webkit-autofill:focus,
+.dark .n-auth-input:-webkit-autofill:active {
+  -webkit-text-fill-color: oklch(0.94 0 0);
+  -webkit-box-shadow: inset 0 0 0 1000px #000000;
+  box-shadow: inset 0 0 0 1000px #000000;
+  caret-color: oklch(0.94 0 0);
 }
 
 /* Firefox uses its own selector and does respect `background`. */
 .n-auth-input:autofill {
   background: transparent;
-  color: var(--n-text);
+  color: inherit;
 }
 
-/* Reveal toggle, same ::before fill trick as .n-icon-btn. */
-.n-auth-reveal {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 30px;
-  height: 30px;
-  border: 0;
-  background: transparent;
-  color: var(--n-text-2);
-  cursor: pointer;
-}
-
-.n-auth-reveal::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 999px;
-  background: transparent;
-  transition:
-    background 150ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 150ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.n-auth-reveal:hover::before {
-  background: var(--n-hover);
-}
-
-.n-auth-reveal:active::before {
-  transform: scale(0.98);
-  background: var(--n-hover-strong);
-}
-
-.n-auth-reveal svg {
-  position: relative;
-}
-
+/* Field-level failure, under the input. OpenWebUI reports through toasts and
+   has no inline error style; ours keeps the translated message, set small and
+   left-aligned so it reads as belonging to the field above it. */
 .n-auth-error {
-  display: flex;
-  align-items: center;
-  gap: 5px;
+  display: block;
+  margin-top: 4px;
   color: var(--n-err);
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 16px;
+  text-align: left;
 }
 
-/* Form-level failure (bad credentials), above the submit button. */
+/* The actions block: `mt-5`. */
+.n-auth-actions {
+  margin-top: 20px;
+}
+
+/* Form-level failure (bad credentials), above the submit button — the inline
+   counterpart of OpenWebUI's error toast: text only, no box. */
 .n-auth-alert {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: color-mix(in oklab, var(--n-err) 12%, transparent);
+  margin-bottom: 12px;
   color: var(--n-err);
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 20px;
 }
 
+/* `bg-gray-700/5 hover:bg-gray-700/10 dark:bg-gray-100/5
+   dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white
+   transition w-full rounded-full font-normal text-sm py-2.5
+   disabled:opacity-50 flex justify-center` — a low-contrast pill, not a
+   filled button; in light mode the label keeps the page's black. */
 .n-auth-submit {
-  position: relative;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  height: 42px;
-  margin-top: 4px;
+  width: 100%;
+  padding: 10px 0;
   border: 0;
-  border-radius: 12px;
-  background: transparent;
-  color: var(--n-accent-fg);
+  border-radius: 9999px;
+  background: oklch(0.42 0 0 / 0.05); /* bg-gray-700/5 */
+  color: inherit;
   font: inherit;
-  font-size: 15px;
-  font-weight: 500;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
   cursor: pointer;
-}
-
-.n-auth-submit::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: var(--n-accent);
   transition:
-    background 150ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 150ms cubic-bezier(0.22, 1, 0.36, 1);
+    background-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.n-auth-submit:not(:disabled):hover::before {
-  background: var(--n-accent-hover);
+.n-auth-submit:hover {
+  background: oklch(0.42 0 0 / 0.1); /* hover:bg-gray-700/10 */
 }
 
-.n-auth-submit:not(:disabled):active::before {
-  transform: scale(0.99);
+.dark .n-auth-submit {
+  background: oklch(0.94 0 0 / 0.05); /* dark:bg-gray-100/5 */
+  color: oklch(0.85 0 0); /* dark:text-gray-300 */
+}
+
+.dark .n-auth-submit:hover {
+  background: oklch(0.94 0 0 / 0.1); /* dark:hover:bg-gray-100/10 */
+  color: #ffffff; /* dark:hover:text-white */
 }
 
 .n-auth-submit:disabled {
-  cursor: not-allowed;
+  opacity: 0.5; /* disabled:opacity-50 */
 }
 
-.n-auth-submit:disabled::before {
-  opacity: 0.45;
-}
-
-.n-auth-submit > * {
-  position: relative;
-}
-
+/* OpenWebUI's Spinner: 16px (size-4), a 25%-opacity ring with one rotating
+   arc, 0.75s per turn, `ml-1.5` after the label. Drawn here as a border
+   spinner, which is the same silhouette. Marked data-motion="essential" in
+   the markup: a frozen spinner reads as a hung request, so under
+   reduced-motion it keeps moving — see the pulse below. */
 .n-auth-spinner {
-  width: 15px;
-  height: 15px;
-  border: 2px solid color-mix(in oklab, var(--n-accent-fg) 35%, transparent);
-  border-top-color: var(--n-accent-fg);
+  flex: none;
+  align-self: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  border: 2px solid color-mix(in oklab, currentColor 25%, transparent);
+  border-top-color: currentColor;
   border-radius: 999px;
-  animation: n-auth-spin 700ms linear infinite;
+  animation: n-auth-spin 750ms linear infinite;
 }
 
 @keyframes n-auth-spin {
@@ -304,38 +313,38 @@
   }
 }
 
-.n-auth-foot {
-  margin-top: 20px;
-  color: var(--n-text-2);
+/* Rotation becomes an opacity pulse — feedback without travel, per the
+   motion convention in globals.css. */
+@media (prefers-reduced-motion: reduce) {
+  .n-auth-spinner {
+    animation-name: n-auth-spin-pulse;
+    animation-duration: 900ms;
+    animation-iteration-count: infinite;
+  }
+}
+
+@keyframes n-auth-spin-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Sign-in ↔ sign-up switch: `mt-4 text-sm text-center`, colour inherited. */
+.n-auth-switch {
+  margin-top: 16px;
   font-size: 14px;
+  line-height: 20px;
   text-align: center;
 }
 
+/* Upstream is a plain `font-normal underline` button — always underlined,
+   same colour as the text around it, no hover change. */
 .n-auth-link {
-  color: var(--n-text);
-  font-weight: 500;
-  text-decoration: none;
-  text-underline-offset: 3px;
-}
-
-.n-auth-link:hover {
+  color: inherit;
+  font-weight: 400;
   text-decoration: underline;
-}
-
-/* Mock-only affordance: goes away with the mock. */
-.n-auth-hint {
-  margin-top: 22px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: var(--n-panel);
-  color: var(--n-text-2);
-  font-size: 12.5px;
-  line-height: 1.6;
-  text-align: center;
-}
-
-.n-auth-hint code {
-  color: var(--n-text);
-  font-family: var(--font-mono);
-  font-size: 12px;
 }

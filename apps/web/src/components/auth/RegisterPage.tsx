@@ -1,15 +1,25 @@
 import { Link, useNavigate } from '@tanstack/react-router'
-import { AlertCircle } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { isAuthFieldError, type AuthErrorKey } from '@/features/auth'
 import { useRegister } from '@/features/auth/use-auth'
 import AuthField from './AuthField'
 import AuthShell from './AuthShell'
-import { MIN_PASSWORD_LENGTH, validateEmail, validateName, validatePassword } from './validation'
+import { validateEmail, validateName, validatePassword } from './validation'
 
 type Errors = Partial<Record<'email' | 'name' | 'password', AuthErrorKey>>
+type FormField = 'email' | 'name' | 'password'
+
+/** Server-side failures that blame one of this form's fields. `toAuthError`
+    defaults a fieldless failure to 'password', so the key is checked too —
+    'unknown' belongs in the banner, not under an innocent input. */
+function formFieldOf(failure: unknown): FormField | null {
+  if (!isAuthFieldError(failure) || failure.key === 'auth.error.unknown') return null
+  return failure.field === 'name' || failure.field === 'email' || failure.field === 'password'
+    ? failure.field
+    : null
+}
 
 export function RegisterPage() {
   const { t } = useTranslation()
@@ -20,9 +30,20 @@ export function RegisterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [errors, setErrors] = useState<Errors>({})
+  // Server failures the user has since edited away — hidden per field (or as
+  // a banner), but the mutation is never reset, so a retry's fresh error
+  // object still shows.
+  const [dismissedField, setDismissedField] = useState<{ failure: unknown; field: FormField } | null>(
+    null,
+  )
+  const [dismissedFormFailure, setDismissedFormFailure] = useState<unknown>(null)
+  // The button's disabled state is styling; this ref is the actual guard
+  // against a second request (requestSubmit, a fast second Enter, …).
+  const submittingRef = useRef(false)
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
+    if (submittingRef.current) return
 
     const next: Errors = {}
     const nameError = validateName(name)
@@ -35,90 +56,112 @@ export function RegisterPage() {
     setErrors(next)
     if (Object.keys(next).length > 0) return
 
+    submittingRef.current = true
     try {
       await register.mutateAsync({ email, name, password })
       await navigate({ to: '/' })
     } catch {
       // Rendered from `register.error` below.
+    } finally {
+      // Always released, so a failed attempt can be retried.
+      submittingRef.current = false
     }
   }
 
   const failure = register.error
-  // A taken address belongs next to the email input, not in the form-level
-  // banner, so it is routed to the field and kept out of `formError`.
-  const fieldFailure = isAuthFieldError(failure) ? failure : null
-  const formError = failure && !fieldFailure ? 'auth.error.unknown' : null
+  const failureField = formFieldOf(failure)
+  const formError =
+    failure && !failureField && failure !== dismissedFormFailure
+      ? isAuthFieldError(failure)
+        ? failure.key
+        : 'auth.error.unknown'
+      : null
+
+  /** A server field error stays next to its input until that input is edited. */
+  const serverError = (field: FormField): string | undefined => {
+    if (!failure || failureField !== field) return undefined
+    if (dismissedField && dismissedField.failure === failure && dismissedField.field === field) {
+      return undefined
+    }
+    return isAuthFieldError(failure) ? t(failure.key) : undefined
+  }
+
+  const dismissFailure = (field: FormField) => {
+    if (failure && failureField === field) setDismissedField({ failure, field })
+    if (failure && !failureField) setDismissedFormFailure(failure)
+  }
 
   return (
-    <AuthShell
-      title={t('auth.register.title')}
-      subtitle={t('auth.register.subtitle')}
-      footer={
-        <>
-          {t('auth.register.have-account')}{' '}
-          <Link className="n-auth-link" to="/login">
-            {t('auth.login.action')}
-          </Link>
-        </>
-      }
-    >
+    <AuthShell title={t('auth.register.title', { name: t('app.name') })}>
       <form className="n-auth-form" onSubmit={(event) => void handleSubmit(event)} noValidate>
-        <AuthField
-          label={t('auth.field.name')}
-          autoComplete="name"
-          autoFocus
-          placeholder={t('auth.field.name-placeholder')}
-          value={name}
-          disabled={register.isPending}
-          error={errors.name && t(errors.name)}
-          onChange={(event) => {
-            setName(event.target.value)
-            setErrors((current) => ({ ...current, name: undefined }))
-          }}
-        />
+        <div className="n-auth-fields">
+          <AuthField
+            label={t('auth.field.name')}
+            autoComplete="name"
+            autoFocus
+            placeholder={t('auth.field.name-placeholder')}
+            value={name}
+            disabled={register.isPending}
+            error={(errors.name && t(errors.name)) ?? serverError('name')}
+            onChange={(event) => {
+              setName(event.target.value)
+              setErrors((current) => ({ ...current, name: undefined }))
+              dismissFailure('name')
+            }}
+          />
 
-        <AuthField
-          label={t('auth.field.email')}
-          type="email"
-          autoComplete="email"
-          placeholder="you@example.com"
-          value={email}
-          disabled={register.isPending}
-          error={
-            (errors.email && t(errors.email)) ??
-            (fieldFailure?.field === 'email' ? t(fieldFailure.key) : undefined)
-          }
-          onChange={(event) => {
-            setEmail(event.target.value)
-            setErrors((current) => ({ ...current, email: undefined }))
-          }}
-        />
+          <AuthField
+            label={t('auth.field.email')}
+            type="email"
+            autoComplete="email"
+            placeholder={t('auth.field.email-placeholder')}
+            value={email}
+            disabled={register.isPending}
+            error={(errors.email && t(errors.email)) ?? serverError('email')}
+            onChange={(event) => {
+              setEmail(event.target.value)
+              setErrors((current) => ({ ...current, email: undefined }))
+              dismissFailure('email')
+            }}
+          />
 
-        <AuthField
-          label={t('auth.field.password')}
-          secret
-          autoComplete="new-password"
-          placeholder={t('auth.field.password-placeholder', { n: MIN_PASSWORD_LENGTH })}
-          value={password}
-          disabled={register.isPending}
-          error={errors.password && t(errors.password)}
-          onChange={(event) => {
-            setPassword(event.target.value)
-            setErrors((current) => ({ ...current, password: undefined }))
-          }}
-        />
+          <AuthField
+            label={t('auth.field.password')}
+            secret
+            autoComplete="new-password"
+            placeholder={t('auth.field.password-placeholder')}
+            value={password}
+            disabled={register.isPending}
+            error={(errors.password && t(errors.password)) ?? serverError('password')}
+            onChange={(event) => {
+              setPassword(event.target.value)
+              setErrors((current) => ({ ...current, password: undefined }))
+              dismissFailure('password')
+            }}
+          />
+        </div>
 
-        {formError && (
-          <div className="n-auth-alert" role="alert">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{t(formError)}</span>
+        <div className="n-auth-actions">
+          {formError && (
+            <div className="n-auth-alert" role="alert">
+              {t(formError)}
+            </div>
+          )}
+
+          <button type="submit" className="n-auth-submit" disabled={register.isPending}>
+            <span>{t('auth.register.action')}</span>
+            {register.isPending && (
+              <span className="n-auth-spinner" data-motion="essential" aria-hidden="true" />
+            )}
+          </button>
+
+          <div className="n-auth-switch">
+            {t('auth.register.have-account')}{' '}
+            <Link className="n-auth-link" to="/login">
+              {t('auth.login.action')}
+            </Link>
           </div>
-        )}
-
-        <button type="submit" className="n-auth-submit" disabled={register.isPending}>
-          {register.isPending && <span className="n-auth-spinner" aria-hidden="true" />}
-          <span>{t('auth.register.action')}</span>
-        </button>
+        </div>
       </form>
     </AuthShell>
   )
