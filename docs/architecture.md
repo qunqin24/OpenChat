@@ -1,3 +1,5 @@
+> **历史文档。** 这是项目早期的设计记录，很多内容（比如 Echo 占位模型、只支持 S3 的存储、`internal/chat` 包）已经不存在了。现在的约定以仓库根目录的 [AGENTS.md](../AGENTS.md) 为准，部署见 [部署指南](deployment.md)。
+
 # OpenChat 架构
 
 OpenChat 是一个流式聊天应用：React 19 SPA 前端 + Go API 后端，HTTP 契约由

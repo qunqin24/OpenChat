@@ -4,7 +4,9 @@
 #   docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
 #
 # Run from the repository root. The app image is pulled from GitHub's
-# registry; add --build to build it from this checkout instead.
+# registry. To build this checkout instead, add the build file:
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.build.yml --env-file deploy/.env up -d --build
+# To try it on plain HTTP without a domain, see deploy/docker-compose.trial.yml.
 # Attachments are kept on the `openchat-data` volume (the local storage driver);
 # switch to S3 later in 后台 → 文件存储 without touching this file.
 name: openchat
@@ -30,7 +32,9 @@ services:
       # Postgres 18 images keep their data under /var/lib/postgresql.
       - postgres-data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U openchat -d openchat"]
+      # Over TCP: while a new volume is initialised the server listens on the
+      # socket only, and a socket check would pass before the app can connect.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U openchat -d openchat"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -41,10 +45,10 @@ services:
     # this checkout instead.
     image: ${OPENCHAT_IMAGE:-ghcr.io/qunqin24/openchat:latest}
     logging: *logging
-    build:
-      context: ..
-      dockerfile: apps/server/Dockerfile
     restart: unless-stopped
+    # Longer than the server's own shutdown wait (SHUTDOWN_TIMEOUT, 15 s), so
+    # it stops on its own rather than being killed mid-commit.
+    stop_grace_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
@@ -53,16 +57,21 @@ services:
       # over HTTPS (Caddy below). For a plain-HTTP trial set it to development.
       APP_ENV: ${APP_ENV:-production}
       HTTP_ADDR: ":8080"
-      DATABASE_URL: postgres://openchat:${POSTGRES_PASSWORD}@postgres:5432/openchat?sslmode=disable
+      # timezone: the database's own day and month boundaries (the dashboard's
+      # "today") follow the same zone as the app's.
+      DATABASE_URL: postgres://openchat:${POSTGRES_PASSWORD}@postgres:5432/openchat?sslmode=disable&timezone=${TZ:-Asia/Shanghai}
       CORS_ORIGINS: https://${DOMAIN:-localhost}
       # The time zone days and months are counted in: a model's daily and
       # monthly spending caps start over at this zone's midnight. The image has
       # no zone database of its own; the binary carries one.
       TZ: ${TZ:-Asia/Shanghai}
+      # The copy of the log on the data volume (the image sets LOG_FILE).
+      LOG_FILE_MAX_MB: ${LOG_FILE_MAX_MB:-20}
+      LOG_FILE_KEEP: ${LOG_FILE_KEEP:-5}
     volumes:
       - openchat-data:/app/data
-    # Reachable only through Caddy. For a trial without a domain, publish it
-    # directly instead: ports: ["8080:8080"] (and APP_ENV=development).
+    # Reachable only through Caddy (docker-compose.trial.yml publishes it for
+    # a trial without a domain).
     expose:
       - "8080"
 

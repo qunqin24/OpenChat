@@ -1,3 +1,5 @@
+> **历史文档。** 这是项目早期的设计记录，很多内容（比如 Echo 占位模型、只支持 S3 的存储、`internal/chat` 包）已经不存在了。现在的约定以仓库根目录的 [AGENTS.md](../AGENTS.md) 为准，部署见 [部署指南](deployment.md)。
+
 # 前端手册
 
 面向改动 `apps/web/` 和 `packages/api-client/` 的 agent。前置阅读：

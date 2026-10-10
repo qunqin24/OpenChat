@@ -107,12 +107,10 @@ Caddy 会自动申请并续期 HTTPS 证书，第一次启动需要几十秒。�
 
 生产模式下登录 Cookie 带 `Secure` 标记，浏览器只会在 HTTPS 下发送它，所以用纯 HTTP 访问会“登录了又掉线”。只想试用的话，改用开发模式、直接暴露应用端口：
 
-1. 在 `deploy/docker-compose.yml` 里，把 `openchat` 服务的 `expose: ["8080"]` 换成 `ports: ["8080:8080"]`。
-2. 在 `deploy/.env` 里写 `APP_ENV=development`。
-3. 不启动 Caddy：
+`deploy/docker-compose.trial.yml` 已经写好了这些改动，叠加上去、不启动 Caddy 即可：
 
 ```bash
-docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d postgres openchat
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.trial.yml --env-file deploy/.env up -d postgres openchat
 ```
 
 打开 `http://服务器地址:8080`。**这只是试用**，正式使用请走上面的 HTTPS 部署。

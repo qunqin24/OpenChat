@@ -1,0 +1,13 @@
+# Build the app image from this checkout instead of pulling it:
+#
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.build.yml \
+#     --env-file deploy/.env up -d --build
+#
+# Kept out of the main file so that a plain `up` never starts a build on the
+# server when a pull fails: building needs Node and Go and a few GB of memory.
+services:
+  openchat:
+    image: openchat:local
+    build:
+      context: ..
+      dockerfile: apps/server/Dockerfile

@@ -108,12 +108,10 @@ Caddy requests and renews the HTTPS certificate on its own; the first start can 
 
 In production mode the session cookie is marked `Secure`, so browsers only send it over HTTPS. Over plain HTTP you would sign in and be logged out again immediately. To just try the app, switch to development mode and publish the app port directly:
 
-1. In `deploy/docker-compose.yml`, replace the `openchat` service's `expose: ["8080"]` with `ports: ["8080:8080"]`.
-2. Put `APP_ENV=development` in `deploy/.env`.
-3. Leave Caddy out:
+`deploy/docker-compose.trial.yml` has those changes ready; add it and leave Caddy out:
 
 ```bash
-docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d postgres openchat
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.trial.yml --env-file deploy/.env up -d postgres openchat
 ```
 
 Open `http://your-server:8080`. **This is for trying only.** Use the HTTPS setup above for real use.

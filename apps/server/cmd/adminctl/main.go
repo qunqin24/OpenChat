@@ -49,6 +49,9 @@ func run(email, name, password, role string) error {
 	case role != "admin" && role != "user":
 		return fmt.Errorf("-role must be admin or user, got %q", role)
 	}
+	// An existing account keeps its name unless one is given: recovering a
+	// password must not also rename the person.
+	nameGiven := name != ""
 	if name == "" {
 		name, _, _ = strings.Cut(email, "@")
 	}
@@ -85,12 +88,13 @@ func run(email, name, password, role string) error {
 		INSERT INTO users (email, name, password_hash, role)
 		VALUES ($1, $2, $3, $4::user_role)
 		ON CONFLICT (lower(email)) DO UPDATE
-		   SET name          = EXCLUDED.name,
+		   SET name          = CASE WHEN $5 THEN EXCLUDED.name ELSE users.name END,
 		       password_hash = EXCLUDED.password_hash,
 		       role          = EXCLUDED.role,
 		       disabled_at   = NULL,
+		       pending       = false,
 		       updated_at    = now()
-		RETURNING id, (xmax = 0)`, email, name, hash, role).Scan(&id, &created)
+		RETURNING id, (xmax = 0)`, email, name, hash, role, nameGiven).Scan(&id, &created)
 	if err != nil {
 		// The upsert resolves a clash on the address; a clash on the username
 		// belongs to a different account and cannot be resolved here.

@@ -45,6 +45,7 @@ COPY apps/server/ .
 # build: this is what `go:embed all:dist` picks up.
 COPY --from=web /repo/apps/server/internal/webui/dist ./internal/webui/dist
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /out/openchat ./cmd/openchat \
+ && CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /out/adminctl ./cmd/adminctl \
  && mkdir -p /out/data
 
 # ---- runtime -----------------------------------------------------------------
@@ -57,11 +58,17 @@ WORKDIR /app
 # What /healthz and the logs report; the release workflow passes the tag.
 ARG APP_VERSION=dev
 ENV APP_VERSION=$APP_VERSION
+# Secure cookies and JSON logs unless told otherwise: the image is for serving.
+# The plain-HTTP trial sets development explicitly.
+ENV APP_ENV=production
 # A copy of the log on the data volume, rotated at 20 MB with 5 kept: the
 # container's own log goes when the container is replaced, as on an upgrade.
 ENV LOG_FILE=/app/data/logs/openchat.log
 COPY --from=build --chown=nonroot:nonroot /out/data /app/data
 COPY --from=build /out/openchat /app/openchat
+# For when the only administrator is locked out (see docs/deployment.md):
+#   docker compose run --rm --entrypoint /app/adminctl openchat -email … -password …
+COPY --from=build /out/adminctl /app/adminctl
 EXPOSE 8080
 USER nonroot:nonroot
 ENTRYPOINT ["/app/openchat"]

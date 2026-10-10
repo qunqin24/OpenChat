@@ -5,3 +5,11 @@ bin
 .env
 .env.*
 **/data/uploads
+**/.env
+**/.env.*
+data
+apps/server/data
+docs
+design
+.claude
+.github

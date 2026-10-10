@@ -46,6 +46,23 @@ jobs:
           go tool oapi-codegen -config oapi-codegen.yaml ../../api/openapi.yaml
           git diff --exit-code || (echo "::error::run 'make generate' and commit the result" && exit 1)
 
+  image:
+    name: Docker image
+    runs-on: ubuntu-latest
+    # The release builds the image only on a tag; a Dockerfile that no longer
+    # builds should fail here, not leave a pushed tag without an image.
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/server/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   migrations:
     name: Migration order
     runs-on: ubuntu-latest

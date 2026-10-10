@@ -52,6 +52,7 @@ Edit `deploy/.env`. It contains a password, so never commit it; the repository a
 | `POSTGRES_PASSWORD` | yes | none | The database password. Use random characters, for example `openssl rand -hex 24`. Compose refuses to start without it |
 | `APP_ENV` | no | `production` | In `production` the session cookie is `Secure`, so the site must be reached over HTTPS. Change to `development` only for a trial without a domain |
 | `OPENCHAT_IMAGE` | no | `ghcr.io/qunqin24/openchat:latest` | The app image. To pin a version, write `ghcr.io/qunqin24/openchat:1.0.0` |
+| `TZ` | no | `Asia/Shanghai` | The time zone of "a day" and "a month": when models' daily and monthly spending caps start over, and the dashboard's "today". An IANA name such as `America/New_York` |
 
 > **About `POSTGRES_PASSWORD`**: the password is written into the data volume when the database is first initialised. Changing the value in `.env` later does not change it in the database, and the app can no longer connect. To change it, run `ALTER USER` in the database and then update `.env`.
 
@@ -186,11 +187,15 @@ Caddy's certificates live in the `openchat_caddy-data` volume. Losing them only 
 # the database
 docker compose -f deploy/docker-compose.yml exec -T postgres \
   pg_dump -U openchat openchat > openchat-$(date +%F).sql
+chmod 600 openchat-$(date +%F).sql
 
 # attachments and avatars (the volume as a tar.gz in the current directory)
 docker run --rm -v openchat_openchat-data:/data -v "$PWD":/backup alpine \
   tar czf /backup/openchat-data-$(date +%F).tar.gz -C /data .
 ```
+
+
+> **The backup holds secrets.** The database dump contains every channel's API key, the web-search key, the S3 secret and the file-signing key, in plain text. Keep it like a password: only somewhere you control, never in a public drive or repository.
 
 If attachments have been moved to S3, new uploads are in the bucket and you back that up on the storage service's side; files that were in the volume before the switch still need backing up.
 
@@ -209,8 +214,10 @@ docker compose -f deploy/docker-compose.yml exec -T postgres \
 
 # restore the attachments volume (docker creates it if it does not exist)
 docker run --rm -v openchat_openchat-data:/data -v "$PWD":/backup alpine \
-  tar xzf /backup/openchat-data-2026-01-01.tar.gz -C /data
+  sh -c 'tar xzf /backup/openchat-data-2026-01-01.tar.gz -C /data && chown -R 65532:65532 /data'
 ```
+
+(`65532` is the user the app runs as in the container. The restored files must belong to it, or the app cannot write uploads and logs.)
 
 Then start everything: `docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d`.
 
@@ -310,6 +317,19 @@ A tag with a suffix (for example `v1.1.0-rc.1`) pushes only `1.1.0-rc.1`, leaves
 Before tagging, make sure CI on `main` is green (`make check` runs the same set locally).
 
 > **Check the image's visibility after the first release.** A newly created GitHub container package may be private by default. If `docker pull` is denied for others, open `openchat` under Packages on the repository page and set its visibility to Public in the package settings.
+
+## Forgotten admin password
+
+The image includes an admin tool, `adminctl`, that changes an account straight in the database (it creates the account if it does not exist, otherwise it sets the password and role):
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env run --rm --entrypoint /app/adminctl openchat \
+  -email you@example.com -password 'new password' -role admin
+```
+
+It uses the app's own `DATABASE_URL`. The change applies at once, and the account's existing sessions end.
+
+> Only one instance is supported: one app container per database. Two instances would run the same answer twice, and could run migrations at the same time.
 
 ## Troubleshooting
 

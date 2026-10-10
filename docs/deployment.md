@@ -52,6 +52,7 @@ cp deploy/.env.example deploy/.env
 | `POSTGRES_PASSWORD` | 是 | 无 | 数据库密码，用一串随机字符，例如 `openssl rand -hex 24`。留空时 Compose 会拒绝启动 |
 | `APP_ENV` | 否 | `production` | `production` 时登录 Cookie 带 `Secure`，必须走 HTTPS。仅在无域名试用时才改成 `development` |
 | `OPENCHAT_IMAGE` | 否 | `ghcr.io/qunqin24/openchat:latest` | 应用镜像。想固定版本就写成 `ghcr.io/qunqin24/openchat:1.0.0` |
+| `TZ` | 否 | `Asia/Shanghai` | 「一天」「一个月」按哪个时区算：模型每日、每月花费上限的清零时间，以及仪表盘的「今天」。IANA 名称，如 `America/New_York` |
 
 > **关于 `POSTGRES_PASSWORD`**：数据库第一次初始化时就把密码写进了数据卷。之后再改 `.env` 里的值，数据库里的密码不会跟着变，应用会连不上。要改密码请在数据库里执行 `ALTER USER`，再同步 `.env`。
 
@@ -167,7 +168,9 @@ docker compose -f deploy/docker-compose.yml logs --tail 50 openchat
 curl -sS --max-time 20 https://你的域名/healthz
 ```
 
-要回退时，把镜像版本改回去，并且**恢复升级前的数据库备份**。迁移只往前走，旧版本不一定认得新版本改过的库。
+要回退时，把镜像版本改回去，并且**恢复升级前的数据库备份**。旧版本不认得新版本改过的库，而且它启动时不会报错（它没有要执行的迁移），只会在用到新改动的地方出问题，所以一定要连库一起退回。`docker compose run --rm openchat rollback` 能撤销最近一个迁移，但只适合排查，不能代替备份。
+
+> 只支持单实例运行：一个数据库只配一个应用容器。两个实例会重复执行同一个回答，迁移也可能同时执行。
 
 ## 备份与恢复
 
@@ -186,11 +189,14 @@ Caddy 的证书在 `openchat_caddy-data` 卷里，丢了会重新申请，不算
 # 数据库
 docker compose -f deploy/docker-compose.yml exec -T postgres \
   pg_dump -U openchat openchat > openchat-$(date +%F).sql
+chmod 600 openchat-$(date +%F).sql
 
 # 附件和头像（把卷打成 tar.gz，放在当前目录）
 docker run --rm -v openchat_openchat-data:/data -v "$PWD":/backup alpine \
   tar czf /backup/openchat-data-$(date +%F).tar.gz -C /data .
 ```
+
+> **备份里有密钥。** 数据库备份包含各渠道的 API Key、联网搜索的密钥、S3 密钥和文件签名密钥，都是明文。像对待密码一样保管它：只放在自己能控制的地方，不要传到公开的网盘或仓库。
 
 如果附件已经切到 S3，新上传的文件在桶里，要在存储服务那一侧做好桶的备份；切换之前留在卷里的旧附件仍然需要备份。
 
@@ -209,8 +215,10 @@ docker compose -f deploy/docker-compose.yml exec -T postgres \
 
 # 恢复附件卷（卷不存在时 docker 会自动创建）
 docker run --rm -v openchat_openchat-data:/data -v "$PWD":/backup alpine \
-  tar xzf /backup/openchat-data-2026-01-01.tar.gz -C /data
+  sh -c 'tar xzf /backup/openchat-data-2026-01-01.tar.gz -C /data && chown -R 65532:65532 /data'
 ```
+
+（`65532` 是应用在容器里运行的用户，恢复出来的文件要归它所有，否则应用写不了上传和日志。）
 
 再启动其余服务：`docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d`。
 
@@ -310,6 +318,17 @@ git tag v1.0.0 && git push origin v1.0.0
 打标签前，先让 `main` 上的 CI 全绿（`make check` 在本地跑的就是同一套）。
 
 > **第一次发布之后检查镜像的可见性。** 新建的 GitHub 容器包默认可能是私有的。如果别人 `docker pull` 时被拒绝，到仓库页面右侧的 Packages 里打开 `openchat`，在 Package settings 里把可见性改为 Public。
+
+## 忘记管理员密码
+
+镜像里带了一个管理工具 `adminctl`，直接改数据库里的账号（会创建不存在的账号，已存在的就改密码和角色）：
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env run --rm --entrypoint /app/adminctl openchat \
+  -email you@example.com -password '新的密码' -role admin
+```
+
+它用的是应用同一个 `DATABASE_URL`，改完立刻生效，该账号原来的登录会话会失效。
 
 ## 排错
 

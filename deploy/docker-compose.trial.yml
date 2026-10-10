@@ -1,0 +1,16 @@
+# A trial on plain HTTP, without a domain: the app on port 8080, no Caddy.
+#
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.trial.yml \
+#     --env-file deploy/.env up -d postgres openchat
+#
+# Then open http://<server>:8080. Development mode, because the sign-in cookie
+# of production mode is only sent over HTTPS. Not for real use: the per-IP
+# limits trust whatever address headers a client sends when nothing sits in
+# front, and everything travels unencrypted.
+services:
+  openchat:
+    environment:
+      APP_ENV: development
+      CORS_ORIGINS: http://localhost:8080
+    ports:
+      - "8080:8080"
