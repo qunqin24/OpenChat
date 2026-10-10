@@ -57,11 +57,18 @@ rollback: ## Revert the most recent migration
 	cd $(SERVER) && go run ./cmd/openchat rollback
 
 .PHONY: migration
+# The version is the current UTC time, or one past the newest migration if that
+# is later: goose refuses to start on a database that has run a higher version
+# than a migration it has not, so a new one must always sort last.
 migration: ## Create a migration: make migration name=add_users
 	@test -n "$(name)" || (echo "usage: make migration name=<snake_case_name>" && exit 1)
-	@printf -- "-- +goose Up\n-- +goose StatementBegin\n\n-- +goose StatementEnd\n\n-- +goose Down\n-- +goose StatementBegin\n\n-- +goose StatementEnd\n" \
-		> $(SERVER)/internal/db/migrations/$$(date -u +%Y%m%d%H%M%S)_$(name).sql
-	@echo "created $(SERVER)/internal/db/migrations/*_$(name).sql"
+	@dir=$(SERVER)/internal/db/migrations; \
+		latest=$$(ls $$dir | sed -n 's/^\([0-9]\{14\}\)_.*\.sql$$/\1/p' | sort | tail -1); \
+		now=$$(date -u +%Y%m%d%H%M%S); \
+		version=$$(( now > $${latest:-0} ? now : $${latest:-0} + 1 )); \
+		printf -- "-- +goose Up\n-- +goose StatementBegin\n\n-- +goose StatementEnd\n\n-- +goose Down\n-- +goose StatementBegin\n\n-- +goose StatementEnd\n" \
+			> $$dir/$${version}_$(name).sql; \
+		echo "created $$dir/$${version}_$(name).sql"
 
 ## ---------------------------------------------------------- code  gen ------
 

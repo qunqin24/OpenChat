@@ -46,6 +46,24 @@ jobs:
           go tool oapi-codegen -config oapi-codegen.yaml ../../api/openapi.yaml
           git diff --exit-code || (echo "::error::run 'make generate' and commit the result" && exit 1)
 
+  migrations:
+    name: Migration order
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      # A migration numbered below one already released stops every upgraded
+      # server from booting, and a fresh test database never shows it.
+      - name: New migrations sort after the released ones
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+        run: |
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            echo "no base to compare with"; exit 0
+          fi
+          scripts/check-migration-order.sh "$BASE"
+
   web:
     name: Web
     runs-on: ubuntu-latest

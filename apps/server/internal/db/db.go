@@ -54,7 +54,7 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	return nil
 }
 
-// Rollback reverts the most recent migration. Used by `openchat migrate down`.
+// Rollback reverts the most recent migration. Used by `openchat rollback`.
 func Rollback(ctx context.Context, pool *pgxpool.Pool) error {
 	goose.SetBaseFS(migrations.FS)
 	if err := goose.SetDialect("postgres"); err != nil {
