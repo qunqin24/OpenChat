@@ -12,15 +12,18 @@ import { toast } from 'sonner'
 import { useGenerateTitle, useRenameConversation } from '@/hooks/use-conversations'
 import { formatRelative } from '@/lib/grouping'
 import { cn } from '@/lib/utils'
+import { ThinkingOrb } from './ThinkingOrb'
 
 interface Props {
   conversation: Conversation
   active: boolean
+  /** Being answered right now; marked unless it is the one on screen. */
+  running?: boolean
   onDelete: (conversation: Conversation) => void
   onNavigate: () => void
 }
 
-export function SidebarConversation({ conversation, active, onDelete, onNavigate }: Props) {
+export function SidebarConversation({ conversation, active, running = false, onDelete, onNavigate }: Props) {
   const { t } = useTranslation()
   const rename = useRenameConversation()
   const smartTitle = useGenerateTitle()
@@ -84,6 +87,14 @@ export function SidebarConversation({ conversation, active, onDelete, onNavigate
             onClick={(event) => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && event.button === 0) onNavigate() }}
             onDoubleClick={(event) => { event.preventDefault(); startEditing() }}
           >
+            {running && !active && (
+              // Ahead of the title, where the row's menu never covers it and a
+              // phone shows it too: the conversation left working is easy to
+              // find again.
+              <span className="n-row-running" role="status" aria-label={t('next.sidebar.running')}>
+                <ThinkingOrb />
+              </span>
+            )}
             {smartTitle.isPending ? (
               <span className="n-row-label n-reasoning-live" data-motion="essential">{t('chat.smart-title-pending')}</span>
             ) : (

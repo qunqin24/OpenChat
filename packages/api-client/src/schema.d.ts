@@ -682,6 +682,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/conversations/running": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Which of the caller's conversations are being answered right now
+         * @description The ids of the caller's conversations with a run in progress, so a
+         *     list can mark the ones still working without following each one's
+         *     event stream. Temporary and deleted conversations are left out, as
+         *     they are from the list. A run waiting for the person's answer is not
+         *     in progress.
+         */
+        get: operations["listRunningConversations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/conversations/{conversationId}/context": {
         parameters: {
             query?: never;
@@ -1344,6 +1368,9 @@ export interface components {
              *     search, cut down to the words around it.
              */
             match?: components["schemas"]["ConversationMatch"];
+        };
+        RunningConversations: {
+            ids: string[];
         };
         ConversationMatch: {
             /** Format: uuid */
@@ -3987,6 +4014,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Conversation"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listRunningConversations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the conversations with a run in progress */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunningConversations"];
                 };
             };
             default: components["responses"]["Error"];

@@ -343,6 +343,14 @@
   transition: opacity 100ms;
 }
 
+.prism-next .n-sidebar .n-row-running {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-inline-end: 8px;
+}
+.prism-next .n-sidebar .n-row-running .n-orb {
+  color: var(--n-sidebar-text);
+}
 .prism-next .n-conversation-row:is(:hover, :focus-within, .active, .menu-open) .n-row-meta {
   opacity: 0;
 }

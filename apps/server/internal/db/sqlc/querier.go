@@ -283,6 +283,9 @@ type Querier interface {
 	// carries alongside the run's live state. The runs that continue it (the answer
 	// after a question) are its rows too.
 	ListRunMessages(ctx context.Context, arg ListRunMessagesParams) ([]Message, error)
+	// The caller's listed conversations with a run in progress; at most one run
+	// per conversation is (runs_one_active_per_conversation), so no duplicates.
+	ListRunningConversations(ctx context.Context, userID *uuid.UUID) ([]uuid.UUID, error)
 	// What a process that just started has to pick up.
 	ListRunningRuns(ctx context.Context) ([]Run, error)
 	// The models this installation actually serves -- the whole of what the model

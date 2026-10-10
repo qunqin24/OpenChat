@@ -55,6 +55,17 @@ WHERE c.user_id = sqlc.arg('user_id')
 ORDER BY c.updated_at DESC, c.id DESC
 LIMIT sqlc.arg('row_limit');
 
+-- name: ListRunningConversations :many
+-- The caller's listed conversations with a run in progress; at most one run
+-- per conversation is (runs_one_active_per_conversation), so no duplicates.
+SELECT r.conversation_id
+FROM runs r
+         JOIN conversations c ON c.id = r.conversation_id
+WHERE r.status = 'running'
+  AND c.user_id = sqlc.arg('user_id')
+  AND c.deleted_at IS NULL
+  AND NOT c.temporary;
+
 -- name: UpdateConversationTitle :one
 UPDATE conversations
 SET title      = sqlc.arg('title'),

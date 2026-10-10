@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"github.com/qunqin/openchat/apps/server/internal/auth"
 
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
@@ -202,4 +204,19 @@ func (s *Server) DeleteConversation(w http.ResponseWriter, r *http.Request, conv
 		return
 	}
 	httpx.NoContent(w)
+}
+
+// ListRunningConversations says which of the caller's conversations are being
+// answered right now, for the sidebar to mark without following each one.
+func (s *Server) ListRunningConversations(w http.ResponseWriter, r *http.Request) {
+	user := auth.MustUser(r.Context())
+	ids, err := s.q.ListRunningConversations(r.Context(), &user.ID)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	if ids == nil {
+		ids = []uuid.UUID{}
+	}
+	httpx.JSON(w, http.StatusOK, RunningConversations{Ids: ids})
 }

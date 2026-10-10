@@ -92,6 +92,8 @@ export function useConversationEvents(conversationId: string | undefined) {
               if (runEvent.type === 'run_started') {
                 // Started elsewhere, or by us: either way the sidebar order moved.
                 void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.list() })
+                // And the sidebar marks it as working until it is done.
+                void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.running() })
               }
               // Titled after its first answer. The batch carries the finished
               // run's last version, so the run state above has already seen

@@ -5,7 +5,7 @@ import { Collapsible } from 'radix-ui'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { useConversations } from '@/hooks/use-conversations'
+import { useConversations, useRunningConversations } from '@/hooks/use-conversations'
 import { groupConversations } from '@/lib/grouping'
 import { cn } from '@/lib/utils'
 import { useUIStore } from '@/stores/ui-store'
@@ -28,6 +28,7 @@ export function Sidebar({ collapsed, mobile, onToggle, onNavigate, activeId, onD
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const conversations = useConversations()
+  const running = useRunningConversations()
   const width = useUIStore((s) => s.sidebarWidth)
   const setWidth = useUIStore((s) => s.setSidebarWidth)
   const chatsOpen = useUIStore((s) => s.sidebarChatsOpen)
@@ -179,7 +180,7 @@ export function Sidebar({ collapsed, mobile, onToggle, onNavigate, activeId, onD
                         <section key={group.key} className="n-sidebar-group" aria-label={group.label}>
                           <h3 className="n-group">{group.label}</h3>
                           {group.items.map((conversation) => (
-                            <SidebarConversation key={conversation.id} conversation={conversation} active={conversation.id === activeId} onDelete={onDelete} onNavigate={onNavigate} />
+                            <SidebarConversation key={conversation.id} conversation={conversation} active={conversation.id === activeId} running={running.has(conversation.id)} onDelete={onDelete} onNavigate={onNavigate} />
                           ))}
                         </section>
                       ))}

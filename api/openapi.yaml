@@ -876,6 +876,25 @@ paths:
               schema: { $ref: "#/components/schemas/Conversation" }
         default: { $ref: "#/components/responses/Error" }
 
+  /conversations/running:
+    get:
+      tags: [conversations]
+      summary: Which of the caller's conversations are being answered right now
+      description: |
+        The ids of the caller's conversations with a run in progress, so a
+        list can mark the ones still working without following each one's
+        event stream. Temporary and deleted conversations are left out, as
+        they are from the list. A run waiting for the person's answer is not
+        in progress.
+      operationId: listRunningConversations
+      responses:
+        "200":
+          description: the conversations with a run in progress
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunningConversations" }
+        default: { $ref: "#/components/responses/Error" }
+
   /conversations/{conversationId}/context:
     parameters:
       - { $ref: "#/components/parameters/ConversationId" }
@@ -1608,6 +1627,14 @@ components:
             Only in a search's results: the latest message containing the
             search, cut down to the words around it.
           allOf: [{ $ref: "#/components/schemas/ConversationMatch" }]
+
+    RunningConversations:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          items: { type: string, format: uuid }
 
     ConversationMatch:
       type: object

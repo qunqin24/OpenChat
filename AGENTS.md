@@ -66,6 +66,7 @@ grep -rn -- "--n-\|prism-next" apps/web/src/features/admin apps/web/src/componen
 - 表格是服务端分页/筛选；`getRowId` 用记录 id；列译名同时放进 `meta.title`。
 - 游标分页的表格（使用日志）用 `DataTableCursorPagination`：游标只会往前，往回就是回到走过的游标，所以组件里留着已访问的游标栈，换筛选或每页行数就清空重来。
 - 管理后台的进度条挂在根（`AdminProgress`），只在目标路径在 `/admin` 下时才渲染——admin 布局在第一次从聊天进入时还没挂载，挂在布局里就晚了；聊天侧用自己就地的加载提示，不要给它加条。
+- 侧边栏标记正在回答的对话靠 `GET /conversations/running`（`useRunningConversations`）：有在跑的才每 3 秒轮询，`run_started` 时由事件流让它失效；某个 id 消失时刷新列表（标题、顺序可能变了）。当前打开的对话不标，它自己的页面已经在显示。
 - 另一个标签页切换版本/改写时收到 `branch_changed`，用 `refreshNewestMessages` 重取最新一页（`use-conversation-events.ts`），不要 `invalidateQueries` 消息键。
 - 后台表单用 react-hook-form + zod，schema 建在组件内部（文案要翻译）；用 `useWatch` 而不是 `form.watch()`。登录注册页是手写校验。
 - 所有面向用户的字符串都走 `t()`（`zh`、`en`，键有类型约束）；服务端 `message` 不直接渲染。

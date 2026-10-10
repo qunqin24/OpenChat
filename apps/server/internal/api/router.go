@@ -97,6 +97,7 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 			r.Delete("/conversations/{conversationId}", wrapper.DeleteConversation)
 			r.Post("/conversations/{conversationId}/title", wrapper.GenerateConversationTitle)
 			r.Get("/conversations/{conversationId}/context", wrapper.GetConversationContext)
+			r.Get("/conversations/running", wrapper.ListRunningConversations)
 			r.Get("/conversations/{conversationId}/messages", wrapper.ListMessages)
 			r.Post("/conversations/{conversationId}/messages", wrapper.CreateMessage)
 			r.Get("/conversations/{conversationId}/events", wrapper.StreamConversationEvents)

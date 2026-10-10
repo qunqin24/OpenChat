@@ -1,6 +1,8 @@
 import type { Conversation, CreateConversationRequest } from '@openchat/api-client'
 import { infiniteQueryOptions, type QueryClient, queryOptions, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { useEffect, useMemo, useRef } from 'react'
+
 import { api, unwrap } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
 
@@ -47,6 +49,32 @@ export function useConversationSearch(term: string) {
     placeholderData: (previous) => previous,
     gcTime: 60_000,
   })
+}
+
+/**
+ * The conversations being answered right now, for the sidebar. Asked again
+ * every few seconds while any is, and not otherwise: a run is started from a
+ * conversation's own page, whose event stream invalidates this the moment it
+ * starts. When one finishes, the list is refetched too — a conversation that
+ * finished out of sight may have moved, or been given its title.
+ */
+export function useRunningConversations() {
+  const queryClient = useQueryClient()
+  const query = useQuery({
+    queryKey: queryKeys.conversations.running(),
+    queryFn: async ({ signal }) => unwrap(await api.GET('/conversations/running', { signal })).ids,
+    refetchInterval: (q) => ((q.state.data?.length ?? 0) > 0 ? 3000 : false),
+  })
+  const ids = query.data
+  const previous = useRef<string[]>([])
+  useEffect(() => {
+    if (!ids) return
+    if (previous.current.some((id) => !ids.includes(id))) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.list() })
+    }
+    previous.current = ids
+  }, [ids, queryClient])
+  return useMemo(() => new Set(ids ?? []), [ids])
 }
 
 export function useConversations() {

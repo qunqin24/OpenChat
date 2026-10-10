@@ -144,6 +144,38 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 	return items, nil
 }
 
+const listRunningConversations = `-- name: ListRunningConversations :many
+SELECT r.conversation_id
+FROM runs r
+         JOIN conversations c ON c.id = r.conversation_id
+WHERE r.status = 'running'
+  AND c.user_id = $1
+  AND c.deleted_at IS NULL
+  AND NOT c.temporary
+`
+
+// The caller's listed conversations with a run in progress; at most one run
+// per conversation is (runs_one_active_per_conversation), so no duplicates.
+func (q *Queries) ListRunningConversations(ctx context.Context, userID *uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listRunningConversations, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var conversation_id uuid.UUID
+		if err := rows.Scan(&conversation_id); err != nil {
+			return nil, err
+		}
+		items = append(items, conversation_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockConversation = `-- name: LockConversation :one
 SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, current_input_id
 FROM conversations
