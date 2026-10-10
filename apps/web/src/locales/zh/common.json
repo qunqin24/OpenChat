@@ -201,6 +201,7 @@
       "empty": "还没有对话",
       "remove-title": "要删除这个对话吗？",
       "remove-description": "将删除「{{title}}」，删除后无法恢复。",
+      "remove-failed": "无法删除这个对话",
       "cancel": "取消"
     },
     "theme": {
@@ -526,6 +527,7 @@
       "approve": "批准",
       "done": "已更新 {{n}} 个账号",
       "skipped": "{{n}} 个被跳过",
+      "failed": "无法更新所选账号",
       "entity-channel": "渠道",
       "delete": "删除",
       "channels-updated": "已更新 {{n}} 个渠道",

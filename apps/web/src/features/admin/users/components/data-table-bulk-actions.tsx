@@ -32,16 +32,21 @@ export function UsersBulkActions<TData>({ table }: UsersBulkActionsProps<TData>)
   const apply = async (body: { role?: User['role']; disabled?: boolean; approved?: boolean }) => {
     if (selected.length === 0) return
 
-    const result = await bulkUpdate.mutateAsync({
-      userIds: selected.map((user) => user.id),
-      ...body,
-    })
+    try {
+      const result = await bulkUpdate.mutateAsync({
+        userIds: selected.map((user) => user.id),
+        ...body,
+      })
 
-    table.resetRowSelection()
+      table.resetRowSelection()
 
-    const parts = [t('admin.bulk.done', { n: result.updated })]
-    if (result.skipped.length > 0) parts.push(t('admin.bulk.skipped', { n: result.skipped.length }))
-    toast.success(parts.join(' · '))
+      const parts = [t('admin.bulk.done', { n: result.updated })]
+      if (result.skipped.length > 0) parts.push(t('admin.bulk.skipped', { n: result.skipped.length }))
+      toast.success(parts.join(' · '))
+    } catch {
+      // As the row actions do: say so, and leave the selection for another try.
+      toast.error(t('admin.bulk.failed'))
+    }
   }
 
   const actions = [

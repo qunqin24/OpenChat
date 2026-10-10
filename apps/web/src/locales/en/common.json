@@ -201,6 +201,7 @@
       "empty": "No conversations yet",
       "remove-title": "Delete this conversation?",
       "remove-description": "This deletes “{{title}}”. It can’t be undone.",
+      "remove-failed": "Could not delete the conversation",
       "cancel": "Cancel"
     },
     "theme": {
@@ -526,6 +527,7 @@
       "approve": "Approve",
       "done": "Updated {{n}} accounts",
       "skipped": "{{n}} skipped",
+      "failed": "Could not update the selected accounts",
       "entity-channel": "channel",
       "delete": "Delete",
       "channels-updated": "Updated {{n}} channels",

@@ -1,9 +1,11 @@
-import type { Conversation } from '@openchat/api-client'
+import { isOpenChatError, type Conversation } from '@openchat/api-client'
+import { useQueryClient } from '@tanstack/react-query'
 import { Outlet, useNavigate, useParams } from '@tanstack/react-router'
 import { PanelLeft } from 'lucide-react'
 import { Dialog } from 'radix-ui'
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import {
   AlertDialog,
@@ -17,6 +19,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useDeleteConversation } from '@/hooks/use-conversations'
 import { useChatPaths } from '@/lib/chat-paths'
+import { queryKeys } from '@/lib/query-keys'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useUIStore } from '@/stores/ui-store'
 import GuestNotice from './GuestNotice'
@@ -52,6 +55,7 @@ export function NextShell() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const paths = useChatPaths()
+  const queryClient = useQueryClient()
   const deleteConversation = useDeleteConversation()
 
   const mobile = useIsMobile()
@@ -88,9 +92,21 @@ export function NextShell() {
     if (!pendingDelete) return
     const removed = pendingDelete.id
     setPendingDelete(null)
-    await deleteConversation.mutateAsync(removed)
+    try {
+      await deleteConversation.mutateAsync(removed)
+    } catch (error) {
+      // Already gone (deleted from another tab or device) is what was asked for;
+      // the list is stale, not the action failed. Anything else is said, and the
+      // conversation stays where it is.
+      if (isOpenChatError(error) && error.status === 404) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all })
+      } else {
+        toast.error(t('next.conversation.remove-failed'))
+        return
+      }
+    }
     if (removed === activeId) await navigate({ to: paths.home })
-  }, [activeId, deleteConversation, navigate, paths.home, pendingDelete])
+  }, [activeId, deleteConversation, navigate, paths.home, pendingDelete, queryClient, t])
 
   return (
     <NextShellContext.Provider value={shellContext}>
