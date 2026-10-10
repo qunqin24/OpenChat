@@ -1,5 +1,7 @@
 import type {
   Attachment,
+  CompactionState,
+  ContextSummary,
   ContextUsage,
   Conversation,
   ConversationPage,
@@ -28,6 +30,7 @@ import {
   undoEvent,
 } from './memory'
 import type { GuestStorage } from './storage'
+import { survivingSummary } from './summary'
 import { byRow, deletedBy, encodeCursor, pageOf, rowKey, timeKey, transcriptOf } from './transcript'
 import type { ConversationData, StoredBlob, StoredConversation, StoredMessage, StoredPersonalization, StoredRun } from './types'
 
@@ -171,7 +174,7 @@ export class GuestRepo {
 
   private toConversation(c: StoredConversation): Conversation {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { memorySnapshot: _b, ...rest } = c
+    const { memorySnapshot: _b, summary: _s, ...rest } = c
     return { ...rest, reasoningEffort: rest.reasoningEffort ?? 'auto' }
   }
 
@@ -392,11 +395,16 @@ export class GuestRepo {
       const gone = redo ? deletedBy(data.messages, redo) : []
       const goneIds = new Set(gone.map((m) => m.id))
 
+      // A summary tied to a row that is deleted goes with it, as on the server.
+      const remaining = [...data.messages.filter((m) => !goneIds.has(m.id)), ...(question ? [question] : [])]
+      const summary = survivingSummary(data.conversation.summary, remaining) ?? null
+
       const stored: StoredRun = { ...run, inputId: input.id, tab, heartbeatAt: this.now().getTime() }
       await this.storage.putRuns([stored])
       if (question) await this.storage.putMessages([question])
       const next: StoredConversation = {
         ...data.conversation,
+        summary,
         model: run.model,
         updatedAt: at,
         ...(started.choice.reasoningEffort ? { reasoningEffort: started.choice.reasoningEffort } : {}),
@@ -444,12 +452,23 @@ export class GuestRepo {
   /** What the last frame of a run brings: the snapshot, the memories as they are now, the log, the title. */
   async runEnded(
     conversationId: string,
-    end: { run: Run; memorySnapshot: Record<string, unknown> | null; memories: Memory[]; memoryEvents: MemoryEvent[]; title?: string },
+    end: {
+      run: Run
+      memorySnapshot: Record<string, unknown> | null
+      memories: Memory[]
+      memoryEvents: MemoryEvent[]
+      title?: string
+      /** The compressed context as the run left it (the same as `compaction_finished` told, when it made one). */
+      summary?: ContextSummary
+    },
   ): Promise<void> {
     await this.serial(conversationId, async () => {
       const conversation = await this.storage.conversation(conversationId)
       if (conversation) {
-        const next = { ...conversation, memorySnapshot: end.memorySnapshot ?? conversation.memorySnapshot }
+        const next: StoredConversation = { ...conversation, memorySnapshot: end.memorySnapshot ?? conversation.memorySnapshot }
+        // Absent means the server sent none back, which is not the same as the
+        // conversation having none: a summary is only ever replaced here.
+        if (end.summary) next.summary = end.summary
         if (end.title && conversation.title === DEFAULT_TITLE) next.title = end.title
         await this.storage.putConversation(next)
       }
@@ -496,6 +515,32 @@ export class GuestRepo {
       await this.storage.putRuns([run])
       await this.storage.putMessages([message])
       return { run, message }
+    })
+  }
+
+  // ------------------------------------------------------- compressed context
+
+  /** The conversation's summary, if it still describes the rows it is tied to. */
+  async summaryOf(data: ConversationData): Promise<ContextSummary | undefined> {
+    return survivingSummary(data.conversation.summary, data.messages)
+  }
+
+  async compaction(id: string): Promise<CompactionState> {
+    const data = await this.load(id)
+    return { summary: await this.summaryOf(data) }
+  }
+
+  /**
+   * Keeps the conversation's summary - or none. A summary of rows that were
+   * deleted meanwhile (an edit made while it was being written) is not kept.
+   * Returns what the conversation holds after.
+   */
+  async setSummary(id: string, summary: ContextSummary | undefined): Promise<ContextSummary | undefined> {
+    return this.serial(id, async () => {
+      const data = await this.load(id)
+      const kept = survivingSummary(summary, data.messages)
+      await this.storage.putConversation({ ...data.conversation, summary: kept ?? null })
+      return kept
     })
   }
 

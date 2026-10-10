@@ -196,6 +196,10 @@ export class GuestRunner {
           // Kept before it is told: a page that hears a run finished asks for its rows.
           if (event.type === 'message_appended') await repo.messageAppended(conversationId, event.message)
           if (event.type === 'run_finished') await repo.runUpdated(conversationId, event.run)
+          // The context the run compressed is kept as soon as it is told: it
+          // ends at a row this page already holds (the rows came first), and a
+          // connection lost before the last frame must not lose it.
+          if (event.type === 'compaction_finished' && event.summary) await repo.setSummary(conversationId, event.summary)
         }
         hub.publish(conversationId, frame)
       }

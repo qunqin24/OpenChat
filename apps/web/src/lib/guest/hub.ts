@@ -1,4 +1,4 @@
-import type { BatchEvent, ConversationEvent, SnapshotEvent } from '@openchat/api-client'
+import type { BatchEvent, ContextSummary, ConversationEvent, SnapshotEvent } from '@openchat/api-client'
 
 import { applyBatch, fromSnapshot, idle, type ConversationLive } from '@/lib/run-state'
 
@@ -49,6 +49,7 @@ export class GuestHub {
       live: {
         generation: run.partial || run.retry ? { attempt: 1, parts: run.partial ?? [], ...(run.retry ? { retry: run.retry } : {}) } : undefined,
         tools: Object.entries(run.tools).map(([callId, status]) => ({ callId, name: '', status })),
+        ...(run.compacting ? { compacting: true } : {}),
       },
     }
   }
@@ -64,6 +65,20 @@ export class GuestHub {
       runId: '00000000-0000-0000-0000-000000000000',
       version: 0,
       events: [{ type: 'transcript_changed', ...(from ? { from } : {}) }],
+    }
+    this.publish(conversationId, batch)
+  }
+
+  /**
+   * The conversation's summary was made or taken back by the person, not by a
+   * run: told as the server tells it, in a batch with the nil run id.
+   */
+  announceCompaction(conversationId: string, summary: ContextSummary | undefined) {
+    const batch: BatchEvent = {
+      type: 'batch',
+      runId: '00000000-0000-0000-0000-000000000000',
+      version: 0,
+      events: [{ type: 'compaction_changed', ...(summary ? { summary } : {}) }],
     }
     this.publish(conversationId, batch)
   }

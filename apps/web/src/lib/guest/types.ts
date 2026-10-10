@@ -1,4 +1,4 @@
-import type { Attachment, Conversation, Memory, MemoryEvent, Message, Run } from '@openchat/api-client'
+import type { Attachment, ContextSummary, Conversation, Memory, MemoryEvent, Message, Run } from '@openchat/api-client'
 
 /**
  * What a guest's browser keeps, in IndexedDB. The server keeps nothing of a
@@ -28,6 +28,12 @@ export interface StoredRun extends Run {
 export interface StoredConversation extends Conversation {
   /** What the system prompt was rendered from at the first run (the server's memory.Snapshot). */
   memorySnapshot: Record<string, unknown> | null
+  /**
+   * The conversation's compressed context (summary.ts). Kept with the
+   * conversation, and valid only while the rows it names are there: read it
+   * through `survivingSummary`.
+   */
+  summary?: ContextSummary | null
 }
 
 /** One conversation as the functions over it read it. */

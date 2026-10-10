@@ -80,7 +80,16 @@ function wire(): Wired {
     },
     onDeleted: (conversationId, from) => channel?.postMessage({ conversationId, from }),
   })
-  const api = createGuestApi({ repo, runner, hub, baseUrl: API_BASE_URL, fetch: network, config: loadConfig })
+  const api = createGuestApi({
+    repo,
+    runner,
+    hub,
+    baseUrl: API_BASE_URL,
+    fetch: network,
+    config: loadConfig,
+    // The summary is read again with the transcript, so this tells it as a change.
+    compactionChanged: (conversationId) => channel?.postMessage({ conversationId }),
+  })
   // Another tab of the same guest changed a conversation (a run finished, or
   // started over a deletion of rows).
   if (channel) {

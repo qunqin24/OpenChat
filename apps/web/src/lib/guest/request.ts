@@ -9,6 +9,7 @@ import type {
 
 import { GuestError } from './errors'
 import { DEFAULT_TITLE } from './repo'
+import { rowsToSend, survivingSummary } from './summary'
 import { transcriptOf } from './transcript'
 import type { ConversationData, StoredBlob, StoredMessage, StoredPersonalization } from './types'
 
@@ -20,7 +21,12 @@ import type { ConversationData, StoredBlob, StoredMessage, StoredPersonalization
  * memory snapshot the system prompt was rendered from.
  */
 
-/** The most rows a request carries. A run reads the last 200; a few more are sent, never the whole of a long conversation. */
+/**
+ * The most rows a request carries: the newest of the conversation, and never
+ * the whole of a long one. A conversation that has a summary sends the rows
+ * after it (and the two rows the summary needs, summary.ts); what keeps the
+ * model's context within its window is compression, not this.
+ */
 export const MAX_ROWS = 300
 /** The files one request can carry, as the model is sent them (agent.MaxAttachmentBytes); older files are named but not sent. */
 export const MAX_FILE_BYTES = 20 << 20
@@ -116,10 +122,15 @@ export async function buildRunRequest(params: RunParams, what: RunAction): Promi
     }
   }
 
+  // What the conversation's summary still describes once this run has deleted
+  // what it replaces (an edit's question and what followed it, an old answer).
+  const summary = survivingSummary(data.conversation.summary, history)
+  const carried = rowsToSend(history, summary, MAX_ROWS)
+
   // The newest files are sent, as the newest are what the model gets.
   let budget = MAX_FILE_BYTES
   const sent = new Set<string>()
-  const wanted = [...history, ...(inputRow ? [inputRow] : [])]
+  const wanted = [...carried, ...(inputRow ? [inputRow] : [])]
   for (const row of [...wanted].reverse()) {
     for (const file of [...(row.attachments ?? [])].reverse()) {
       if (file.size <= budget) {
@@ -129,7 +140,7 @@ export async function buildRunRequest(params: RunParams, what: RunAction): Promi
     }
   }
   const messages: GuestMessage[] = []
-  for (const row of history.slice(-MAX_ROWS)) messages.push(await toGuestMessage(row, sent, params.readBlob))
+  for (const row of carried) messages.push(await toGuestMessage(row, sent, params.readBlob))
   const request: GuestRunRequest = {
     action: what.action === 'edit' ? 'send' : what.action,
     conversationId: data.conversation.id,
@@ -148,6 +159,7 @@ export async function buildRunRequest(params: RunParams, what: RunAction): Promi
       (m): GuestMemory => ({ id: m.id, content: m.content, source: m.source }),
     ),
     ...(data.conversation.memorySnapshot ? { memorySnapshot: data.conversation.memorySnapshot } : {}),
+    ...(summary ? { summary } : {}),
   }
   return { request, input }
 }
@@ -167,7 +179,7 @@ function userRow(id: string, content: string, files: StoredBlob[]): StoredMessag
   }
 }
 
-async function toGuestMessage(
+export async function toGuestMessage(
   row: StoredMessage,
   sent: Set<string>,
   readBlob: RunParams['readBlob'],

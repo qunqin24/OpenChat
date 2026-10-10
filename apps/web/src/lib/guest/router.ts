@@ -1,5 +1,6 @@
 import type { GuestConfig, Message, ReasoningEffort } from '@openchat/api-client'
 
+import { compactGuestConversation, undoGuestCompaction } from './compaction'
 import { GuestError, notFound } from './errors'
 import { eventStream, type GuestHub } from './hub'
 import type { GuestRepo } from './repo'
@@ -27,6 +28,8 @@ export interface GuestApiDeps {
   fetch: typeof globalThis.fetch
   /** What the server offers a guest; read once in a while. */
   config: () => Promise<GuestConfig>
+  /** A conversation's summary was made or taken back: the guest's other pages are told. */
+  compactionChanged?: (conversationId: string) => void
   newId?: () => string
 }
 
@@ -62,6 +65,7 @@ export function createGuestApi(deps: GuestApiDeps) {
   const { repo, runner, hub } = deps
   const newId = deps.newId ?? (() => crypto.randomUUID())
   const id = '([^/]+)'
+  const compaction = { repo, hub, baseUrl: deps.baseUrl, fetch: deps.fetch, changed: deps.compactionChanged }
 
   /** The settings a run is asked with, from a request body. */
   const choiceOf = (body: { model?: string; reasoningEffort?: ReasoningEffort; webSearch?: boolean }) => ({
@@ -150,6 +154,28 @@ export function createGuestApi(deps: GuestApiDeps) {
       method: 'GET',
       pattern: new RegExp(`^/conversations/${id}/context$`),
       handler: async ({ params }) => ok(await repo.context(params[0]!)),
+    },
+    // ---- the compressed context: kept in the page, written by the server's model
+    {
+      method: 'GET',
+      pattern: new RegExp(`^/conversations/${id}/compaction$`),
+      handler: async ({ params }) => ok(await repo.compaction(params[0]!)),
+    },
+    {
+      method: 'POST',
+      pattern: new RegExp(`^/conversations/${id}/compaction$`),
+      handler: async ({ params }) => {
+        const summary = await compactGuestConversation(compaction, params[0]!)
+        return ok({ summary })
+      },
+    },
+    {
+      method: 'DELETE',
+      pattern: new RegExp(`^/conversations/${id}/compaction$`),
+      handler: async ({ params }) => {
+        await undoGuestCompaction(compaction, params[0]!)
+        return empty()
+      },
     },
     {
       method: 'GET',

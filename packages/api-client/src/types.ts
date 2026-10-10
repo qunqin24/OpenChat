@@ -85,3 +85,8 @@ export type GuestAttachment = Schemas['GuestAttachment']
 export type GuestMemory = Schemas['GuestMemory']
 export type GuestEndEvent = Schemas['GuestEndEvent']
 export type GuestRunEvent = Schemas['GuestRunEvent']
+
+export type ContextSummary = Schemas['ContextSummary']
+export type CompactionState = Schemas['CompactionState']
+export type GuestCompactRequest = Schemas['GuestCompactRequest']
+export type GuestCompactResponse = Schemas['GuestCompactResponse']
