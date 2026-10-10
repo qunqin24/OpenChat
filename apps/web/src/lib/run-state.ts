@@ -25,6 +25,8 @@ export interface LiveRun {
   partial: MessagePart[] | null
   retry: RetryInfo | null
   tools: Record<string, ToolSlot['status']>
+  /** The run is compressing the conversation's context before its next request. */
+  compacting: boolean
 }
 
 export interface ConversationLive {
@@ -50,6 +52,7 @@ export function fromSnapshot(snapshot: SnapshotEvent): ConversationLive {
       partial: generation && generation.parts.length > 0 ? generation.parts : null,
       retry: generation?.retry ?? null,
       tools,
+      compacting: snapshot.live?.compacting ?? false,
     },
   }
 }
@@ -79,7 +82,7 @@ function applyEvent(live: LiveRun | null, event: RunEvent): LiveRun | null {
     const held = live?.run.id === event.run.id ? live.messages.find((m) => m.id === event.message.id) : undefined
     const message =
       held && held.attachments?.length ? { ...event.message, attachments: held.attachments } : event.message
-    return { run: event.run, messages: [message], partial: null, retry: null, tools: {} }
+    return { run: event.run, messages: [message], partial: null, retry: null, tools: {}, compacting: false }
   }
   // Anything else belongs to a run we are holding; a stray event for one we
   // never saw start is ignored, and the next snapshot sets things straight.
@@ -87,7 +90,7 @@ function applyEvent(live: LiveRun | null, event: RunEvent): LiveRun | null {
 
   switch (event.type) {
     case 'run_finished':
-      return { ...live, run: event.run, partial: null, retry: null }
+      return { ...live, run: event.run, partial: null, retry: null, compacting: false }
     case 'generation_started':
       return { ...live, partial: [], retry: null }
     case 'part_started':
@@ -113,6 +116,10 @@ function applyEvent(live: LiveRun | null, event: RunEvent): LiveRun | null {
       return { ...live, tools: { ...live.tools, [event.callId]: 'done' } }
     case 'retry_scheduled':
       return { ...live, partial: null, retry: { at: event.at, errorCode: event.errorCode } }
+    case 'compaction_started':
+      return { ...live, compacting: true }
+    case 'compaction_finished':
+      return { ...live, compacting: false }
   }
   return live
 }

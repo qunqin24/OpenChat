@@ -180,6 +180,44 @@ describe('applyBatch', () => {
   })
 })
 
+describe('compressing the context', () => {
+  const r = run('r1')
+  const base = (): ConversationLive => ({ run: liveRun(r, [user('q')]) })
+
+  it('is on from compaction_started until compaction_finished', () => {
+    const on = applyBatch(base(), batch(r, 2, [{ type: 'compaction_started' }]))
+    expect(on.run?.compacting).toBe(true)
+    const off = applyBatch(on, batch(r, 3, [{ type: 'compaction_finished' }]))
+    expect(off.run?.compacting).toBe(false)
+  })
+
+  it('ends when the compression failed, and with the run', () => {
+    const on = applyBatch(base(), batch(r, 2, [{ type: 'compaction_started' }]))
+    // A summary-less finish is a failed compression: the status line goes all the same.
+    expect(applyBatch(on, batch(r, 3, [{ type: 'compaction_finished' }])).run?.compacting).toBe(false)
+    // A run that ended in the middle of one (stopped) leaves no status behind.
+    const done = { ...r, status: 'cancelled' as const }
+    expect(applyBatch(on, batch(r, 3, [{ type: 'run_finished', run: done }])).run?.compacting).toBe(false)
+  })
+
+  it('is read from a snapshot, so a page that joins mid-compression shows it', () => {
+    const state = fromSnapshot({ type: 'snapshot', run: r, messages: [user('q')], live: { compacting: true } })
+    expect(state.run?.compacting).toBe(true)
+    expect(fromSnapshot({ type: 'snapshot', run: r, messages: [user('q')] }).run?.compacting).toBe(false)
+  })
+
+  it('is not carried into a run that starts', () => {
+    const r2 = run('r2')
+    const state = applyBatch({ run: liveRun(r, [user('q')], { compacting: true }) }, batch(r2, 1, [started(r2, user('q2'))]))
+    expect(state.run?.compacting).toBe(false)
+  })
+
+  it('does not touch the state without a run: a manual compression is not a run’s', () => {
+    const none = applyBatch(idle, batch(run('00000000-0000-0000-0000-000000000000', { version: 0 }), 0, [{ type: 'compaction_changed' }]))
+    expect(none).toBe(idle)
+  })
+})
+
 describe('fromSnapshot', () => {
   it('is idle without a run', () => {
     expect(fromSnapshot({ type: 'snapshot', messages: [] })).toBe(idle)

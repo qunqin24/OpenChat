@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useEffectEvent } from 'react'
 
+import { setCompaction } from '@/hooks/use-compaction'
 import { refreshNewestMessages } from '@/hooks/use-messages'
 import { API_BASE_URL, appFetch } from '@/lib/api'
 import { useChatPaths } from '@/lib/chat-paths'
@@ -29,6 +30,12 @@ const RECONNECT_DELAYS = [500, 1000, 2000, 5000, 10000, 15000]
  * transcript here drops what is gone; and the rows the event or this tab's own
  * redo names are out of the cache before the batch is applied, so they are not
  * drawn beside the run that replaces them in between.
+ *
+ * The conversation's compressed context rides on the same stream: a run
+ * announces the summary it made (`compaction_finished`), a person's own
+ * compression or its undoing is announced outside any run (`compaction_changed`),
+ * and rows that were deleted may have taken the summary with them, so it is
+ * read again with the transcript (`transcript_changed`).
  *
  * A conversation the server says does not exist — deleted from another tab or
  * device while this page was open — is not a dropped connection: there is
@@ -65,6 +72,9 @@ export function useConversationEvents(conversationId: string | undefined) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all })
       // The model may have kept a note about the person while it ran.
       void queryClient.invalidateQueries({ queryKey: queryKeys.memory.all })
+      // And the run may have compressed the conversation, which a page that
+      // joined it half way did not see happen.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.compaction(conversationId) })
     }
 
     const follow = async () => {
@@ -121,12 +131,24 @@ export function useConversationEvents(conversationId: string | undefined) {
               if (runEvent.type === 'title_changed') {
                 void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all })
               }
+              // The summary a run made is the conversation's now; a failed
+              // compression (no summary) changes nothing but the status line.
+              if (runEvent.type === 'compaction_finished' && runEvent.summary) {
+                setCompaction(queryClient, conversationId, runEvent.summary)
+              }
+              // Made or taken back by a person, here or in another tab.
+              if (runEvent.type === 'compaction_changed') {
+                setCompaction(queryClient, conversationId, runEvent.summary)
+                void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.context(conversationId) })
+              }
               // Rows were deleted - a question edited or an answer regenerated,
               // here or in another tab. The newest page is what changed, so
               // that is what is fetched (and spliced onto the older pages that
               // still hold): never the whole key, which would download every
               // page the reader had opened again.
               if (runEvent.type === 'transcript_changed') {
+                // A summary that ended at a deleted row went with it.
+                void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.compaction(conversationId) })
                 void refreshMessages().then(() => {
                   // A finished run still held live would put its own rows back
                   // over the transcript now (settle leaves a running one be).

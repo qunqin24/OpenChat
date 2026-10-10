@@ -1,4 +1,4 @@
-import type { Message, MessagePart, ToolResultPart } from '@openchat/api-client'
+import type { ContextSummary, Message, MessagePart, ToolResultPart } from '@openchat/api-client'
 
 import { ASK_USER } from './ask-user'
 import type { LiveRun } from './run-state'
@@ -14,10 +14,22 @@ import type { LiveRun } from './run-state'
  * block, keyed by the first of them.
  */
 export type Turn =
-  | { kind: 'user'; key: string; message: Message }
+  | { kind: 'user'; key: string; message: Message; after?: ContextSummary }
   | {
       kind: 'assistant'
       key: string
+      /**
+       * The conversation's summary ends with this reply: the page draws its
+       * divider just after it. (Rows the summary covers are never hidden; it
+       * only marks where it stops.)
+       */
+      after?: ContextSummary
+      /**
+       * The summary ends inside this reply — a compression made between two
+       * tool rounds of one run: the divider is drawn after the response with
+       * this index (counting from 1), among the reply's own parts.
+       */
+      inside?: { index: number; summary: ContextSummary }
       /** Response rows in order; tool rows are folded into `results`. */
       responses: Message[]
       /** Every run that wrote a row of this reply: more than one when it went on after a question. */
@@ -52,7 +64,12 @@ export interface Replacing {
  * does `replacing`, what a redo was just asked for and the server has not
  * started yet.
  */
-export function buildTurns(persisted: Message[], live: LiveRun | null, replacing?: Replacing): Turn[] {
+export function buildTurns(
+  persisted: Message[],
+  live: LiveRun | null,
+  replacing?: Replacing,
+  summary?: ContextSummary,
+): Turn[] {
   // Where the run in flight redoes an answer: after its input, which the list
   // already holds.
   let redone = Infinity
@@ -72,6 +89,9 @@ export function buildTurns(persisted: Message[], live: LiveRun | null, replacing
 
   const turns: Turn[] = []
   let current: AssistantTurn | null = null
+  // How many responses the reply had when the summary's last row was written,
+  // for the reply that holds it.
+  const endsAt = new Map<AssistantTurn, number>()
 
   const assistantTurn = (key: string): AssistantTurn => {
     const turn: AssistantTurn = { kind: 'assistant', key, responses: [], runs: [], results: {}, partial: null, live: null }
@@ -82,7 +102,7 @@ export function buildTurns(persisted: Message[], live: LiveRun | null, replacing
   for (const message of rows) {
     if (message.role === 'user') {
       current = null
-      turns.push({ kind: 'user', key: message.id, message })
+      turns.push({ kind: 'user', key: message.id, message, ...(message.id === summary?.throughMessageId ? { after: summary } : {}) })
       continue
     }
     if (message.role !== 'assistant' && message.role !== 'tool') continue
@@ -103,6 +123,20 @@ export function buildTurns(persisted: Message[], live: LiveRun | null, replacing
         if (part.type === 'tool_result') turn.results[part.callId] = part
       }
     }
+    if (summary && message.id === summary.throughMessageId) endsAt.set(turn, turn.responses.length)
+  }
+
+  // Where the summary stops in a reply: after it when nothing else was said in
+  // it since, and among its parts when the run went on (a compression between
+  // two tool rounds) or is going on - the next thing it says is below the line.
+  const placeSummary = (): Turn[] => {
+    for (const [turn, count] of endsAt) {
+      if (!summary) break
+      const going = turn.live?.run.status === 'running'
+      if (count >= turn.responses.length && !going) turn.after = summary
+      else turn.inside = { index: count, summary }
+    }
+    return turns
   }
 
   if (live) {
@@ -111,14 +145,14 @@ export function buildTurns(persisted: Message[], live: LiveRun | null, replacing
     let last = turns.at(-1)
     // One that continues a reply writes into the block that asked.
     if (!last || last.kind !== 'assistant' || (last.key !== live.run.id && !live.run.continues)) {
-      if (live.run.status !== 'running') return turns
+      if (live.run.status !== 'running') return placeSummary()
       last = assistantTurn(live.run.id)
     }
     if (!last.runs.includes(live.run.id)) last.runs.push(live.run.id)
     last.partial = live.partial
     last.live = live
   }
-  return turns
+  return placeSummary()
 }
 
 /** The answer's plain text, for the copy button: the text of every response. */

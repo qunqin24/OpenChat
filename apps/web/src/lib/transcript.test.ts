@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { ASK_USER } from './ask-user'
-import { assistant, id, liveRun, run, text, toolCallRow, toolResultRow, user } from './testing'
+import { assistant, id, liveRun, run, summary, text, toolCallRow, toolResultRow, user } from './testing'
 import { buildTurns, pendingQuestion, turnText, type AssistantTurn } from './transcript'
 
 const assistantTurns = (turns: ReturnType<typeof buildTurns>) =>
@@ -141,6 +141,73 @@ describe('buildTurns', () => {
     it('hides the whole transcript when `from` is the first question', () => {
       expect(buildTurns([q1, a1, q2, a2], null, { from: q1.id })).toEqual([])
     })
+  })
+})
+
+describe('buildTurns with a summary', () => {
+  const s = (through: string) => summary(through)
+
+  it('marks where a summary ends and hides nothing', () => {
+    const rows = [user('q1'), assistant('a1', id('r1')), user('q2'), assistant('a2', id('r2'))]
+    const turns = buildTurns(rows, null, undefined, s('a1'))
+    expect(turns.map((t) => t.kind)).toEqual(['user', 'assistant', 'user', 'assistant'])
+    expect(turns.map((t) => Boolean(t.after))).toEqual([false, true, false, false])
+    expect(turns[1]).toMatchObject({ after: { throughMessageId: id('a1') } })
+  })
+
+  it('puts the divider after the user turn when the summary ends at a question', () => {
+    // Compressed at the start of a run: the question is the last row, and kept.
+    const turns = buildTurns([user('q1'), assistant('a1', id('r1')), user('q2')], null, undefined, s('q2'))
+    expect(turns.map((t) => Boolean(t.after))).toEqual([false, false, true])
+  })
+
+  it('puts it after the reply that holds the last row, when it is the last thing it said', () => {
+    const rows = [user('q'), toolCallRow('c', id('r1'), 'call-1'), toolResultRow('t', id('r1'), 'call-1')]
+    const [, reply] = buildTurns(rows, null, undefined, s('t'))
+    expect(reply).toMatchObject({ kind: 'assistant', after: { throughMessageId: id('t') } })
+    expect((reply as AssistantTurn).inside).toBeUndefined()
+  })
+
+  it('puts it among the parts of a reply that went on after the compression', () => {
+    // A compression between two tool rounds: the last row covered is a result
+    // in the middle of the reply.
+    const rows = [
+      user('q'),
+      toolCallRow('c1', id('r1'), 'call-1'),
+      toolResultRow('t1', id('r1'), 'call-1'),
+      toolCallRow('c2', id('r1'), 'call-2'),
+      toolResultRow('t2', id('r1'), 'call-2'),
+      assistant('final', id('r1')),
+    ]
+    const turns = buildTurns(rows, null, undefined, s('t1'))
+    const reply = assistantTurns(turns)[0]!
+    expect(reply.after).toBeUndefined()
+    // After the first response, the call that the result answered.
+    expect(reply.inside).toMatchObject({ index: 1, summary: { throughMessageId: id('t1') } })
+  })
+
+  it('keeps the divider above what a running reply says next', () => {
+    const r = run('r1')
+    const q = user('q')
+    const call = toolCallRow('c', r.id, 'call-1')
+    const result = toolResultRow('t', r.id, 'call-1')
+    const turns = buildTurns([q, call, result], liveRun(r, [q, call, result], { partial: [text('streaming')] }), undefined, s('t'))
+    const reply = assistantTurns(turns)[0]!
+    expect(reply.after).toBeUndefined()
+    expect(reply.inside).toMatchObject({ index: 1 })
+  })
+
+  it('draws no divider when the row it ends at is not among the rows', () => {
+    const turns = buildTurns([user('q1'), assistant('a1', id('r1'))], null, undefined, s('gone'))
+    expect(turns.some((t) => t.after || (t.kind === 'assistant' && t.inside))).toBe(false)
+  })
+
+  it('finds the row among the live run’s own', () => {
+    const r = run('r1')
+    const q = user('q')
+    const answer = assistant('a', r.id)
+    const turns = buildTurns([q], liveRun(r, [q, answer]), undefined, s('q'))
+    expect(turns[0]).toMatchObject({ kind: 'user', after: { throughMessageId: id('q') } })
   })
 })
 

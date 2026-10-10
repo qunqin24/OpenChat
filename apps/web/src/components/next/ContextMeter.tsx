@@ -1,6 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
+import { Minimize2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { useCompact, useCompaction } from '@/hooks/use-compaction'
 import { api, unwrap } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
 import { cn } from '@/lib/utils'
@@ -16,6 +20,13 @@ function compact(tokens: number): string {
 const RADIUS = 7
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS
 
+interface ContextMeterProps {
+  conversationId: string
+  limit?: number | null
+  /** The conversation is answering: it cannot be compressed from under the run. */
+  busy?: boolean
+}
+
 /**
  * How full the model's context window is, as a ring beside the model picker.
  * The figure is what the conversation's latest request actually took, as the
@@ -23,14 +34,20 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS
  * against the window of the model chosen now, which the next request goes to.
  * Nothing shows until something has been answered, or for a model whose window
  * is unknown.
+ *
+ * It opens to the same figures and to "compress now": the older conversation
+ * is summarised and the model is sent the summary instead. The ring does not
+ * move until the next request, which is the one that takes less.
  */
-export default function ContextMeter({ conversationId, limit }: { conversationId: string; limit?: number | null }) {
+export default function ContextMeter({ conversationId, limit, busy }: ContextMeterProps) {
   const { t } = useTranslation()
   const usage = useQuery({
     queryKey: queryKeys.conversations.context(conversationId),
     queryFn: async ({ signal }) =>
       unwrap(await api.GET('/conversations/{conversationId}/context', { params: { path: { conversationId } }, signal })),
   })
+  const summary = useCompaction(conversationId)
+  const compress = useCompact(conversationId)
   const used = usage.data?.usedTokens
   if (used == null || !limit) return null
 
@@ -38,23 +55,49 @@ export default function ContextMeter({ conversationId, limit }: { conversationId
   const percent = Math.round(share * 100)
   const level = share >= 0.95 ? 'is-full' : share >= 0.8 ? 'is-high' : undefined
   return (
-    <Tooltip
-      label={t('next.context.label')}
-      hint={t('next.context.hint', { percent, left: 100 - percent, used: compact(used), limit: compact(limit) })}
-    >
-      <span className={cn('n-context-meter', level)} role="img" tabIndex={0} aria-label={t('next.context.aria', { percent })}>
-        <svg viewBox="0 0 18 18" aria-hidden="true">
-          <circle className="n-context-track" cx="9" cy="9" r={RADIUS} />
-          <circle
-            className="n-context-fill"
-            cx="9"
-            cy="9"
-            r={RADIUS}
-            strokeDasharray={CIRCUMFERENCE}
-            strokeDashoffset={CIRCUMFERENCE * (1 - share)}
-          />
-        </svg>
-      </span>
-    </Tooltip>
+    <DropdownMenu>
+      <Tooltip
+        label={t('next.context.label')}
+        hint={t('next.context.hint', { percent, left: 100 - percent, used: compact(used), limit: compact(limit) })}
+        disabled={compress.isPending}
+      >
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className={cn('n-context-meter', level, compress.isPending && 'is-busy')}
+            aria-label={t('next.context.aria', { percent })}
+            data-motion={compress.isPending ? 'essential' : undefined}
+          >
+            <svg viewBox="0 0 18 18" aria-hidden="true">
+              <circle className="n-context-track" cx="9" cy="9" r={RADIUS} />
+              <circle
+                className="n-context-fill"
+                cx="9"
+                cy="9"
+                r={RADIUS}
+                strokeDasharray={CIRCUMFERENCE}
+                strokeDashoffset={CIRCUMFERENCE * (1 - share)}
+              />
+            </svg>
+          </button>
+        </DropdownMenuTrigger>
+      </Tooltip>
+      <DropdownMenuContent className="n-context-menu" align="end" side="top">
+        <div className="n-context-info">
+          <span className="n-context-title">{t('next.context.label')}</span>
+          <span className="n-context-figures">
+            {t('next.context.hint', { percent, left: 100 - percent, used: compact(used), limit: compact(limit) })}
+          </span>
+          {summary && <span className="n-context-note">{t('next.context.compacted')}</span>}
+        </div>
+        <DropdownMenuItem
+          disabled={busy || compress.isPending}
+          onSelect={() => compress.mutate(undefined, { onSuccess: () => toast.success(t('chat.compaction.done')) })}
+        >
+          <Minimize2 aria-hidden="true" />
+          <span>{compress.isPending ? t('next.context.compacting') : t('next.context.compact')}</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

@@ -23,6 +23,23 @@ export function ThinkingOrb() {
 }
 
 /**
+ * The run is compressing the conversation's context before its next request:
+ * the orb and what is happening, in the place the thinking line takes, since
+ * nothing else is moving while it does.
+ */
+export function CompactingLine() {
+  const { t } = useTranslation()
+  return (
+    <div className="n-thinking" role="status">
+      <ThinkingOrb />
+      <span className="n-reasoning-live" data-motion="essential">
+        {t('chat.compaction.running')}
+      </span>
+    </div>
+  )
+}
+
+/**
  * A reply with nothing in it yet: the orb and "Thinking…", worn the same way
  * as the reasoning toggle, so the line carries on into it unchanged when the
  * model starts to think.

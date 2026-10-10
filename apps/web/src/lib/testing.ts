@@ -1,4 +1,4 @@
-import type { BatchEvent, Message, MessagePart, Run, RunEvent } from '@openchat/api-client'
+import type { BatchEvent, ContextSummary, Message, MessagePart, Run, RunEvent } from '@openchat/api-client'
 
 import type { LiveRun } from './run-state'
 
@@ -62,8 +62,21 @@ export function run(name: string, over: Partial<Run> = {}): Run {
   }
 }
 
+/** A conversation's summary, through the message named `through`. */
+export function summary(through: string, over: Partial<ContextSummary> = {}): ContextSummary {
+  return {
+    content: '- the story so far',
+    throughMessageId: id(through),
+    model: 'm',
+    inputTokens: 10,
+    outputTokens: 5,
+    createdAt: '2026-10-10T00:00:00Z',
+    ...over,
+  }
+}
+
 export function liveRun(r: Run, messages: Message[], over: Partial<LiveRun> = {}): LiveRun {
-  return { run: r, messages, partial: null, retry: null, tools: {}, ...over }
+  return { run: r, messages, partial: null, retry: null, tools: {}, compacting: false, ...over }
 }
 
 export function batch(r: Run, version: number, events: RunEvent[]): BatchEvent {

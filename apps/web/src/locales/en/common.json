@@ -63,10 +63,24 @@
       "model_error": "The model service failed. Try again in a moment.",
       "model_auth": "The model service rejected the channel's key. Ask an administrator to check the channel.",
       "model_rate_limited": "The model service is busy (too many requests). Try again shortly.",
-      "context_too_long": "This conversation is too long for the model. Start a new one.",
+      "context_too_long": "This conversation is too long for the model. Compress its context and try again.",
       "internal": "The server failed and this reply was not finished.",
       "tool_markup": "The model wrote its next tool call out as text, so this answer did not finish. Regenerate to try again.",
       "connection_lost": "The connection dropped before the reply was finished. Regenerate to try again."
+    },
+    "compaction": {
+      "divider": "Everything above is compressed into a summary",
+      "summary-label": "Conversation summary",
+      "undo": "Undo compression",
+      "undone": "Compression undone; the model sees the whole conversation again",
+      "running": "Compressing context…",
+      "action": "Compress context",
+      "done": "Context compressed",
+      "error-nothing_to_compact": "There is nothing new to compress.",
+      "error-conversation_busy": "The conversation is answering. Wait for it or stop it first.",
+      "error-compaction_busy": "This conversation is being compressed already. Wait a moment.",
+      "error-compaction_failed": "The model did not write a summary. Try again later.",
+      "error-generic": "Compressing did not work. Try again later."
     },
     "send-error": {
       "conversation_busy": "The previous reply is still being written. Wait for it, or stop it first.",
@@ -293,7 +307,11 @@
     "context": {
       "label": "Context window",
       "hint": "{{percent}}% used ({{left}}% left)\n{{used}} / {{limit}} tokens",
-      "aria": "Context window {{percent}}% used"
+      "aria": "Context window {{percent}}% used",
+      "compact": "Compress now",
+      "compacting": "Compressing…",
+      "compacted": "Earlier messages are compressed into a summary",
+      "compact-hint": "Summarise the older conversation to free up the context window. The original messages stay on screen."
     }
   },
   "auth": {
@@ -641,6 +659,10 @@
         "ask-user-hint": "Lets models put multiple-choice questions to the user, and wait for the answers, when they are blocked on a decision that is the user's to make. On by default; for runs in progress it takes effect at their next request.",
         "ask-user-on": "Asking the user is on",
         "ask-user-off": "Asking the user is off",
+        "compress-context": "Compress context automatically",
+        "compress-context-hint": "When a request would fill more than half of the model's context window (65% once the conversation has a summary), the conversation's own model first summarises the older part, and the model is sent the summary in its place. The original messages stay on screen. Off, requests go out as they are and people can still compress by hand. On by default; runs in progress pick it up at their next request.",
+        "compress-context-on": "Automatic context compression is on",
+        "compress-context-off": "Automatic context compression is off",
         "avatars": "Profile picture uploads",
         "avatars-hint": "Lets people upload a picture of their own in Settings → Account. Off, the button reads \"Not available yet\" and the first letter of the name is shown. Pictures already set stay, and can always be removed.",
         "avatars-on": "Picture uploads are on",
@@ -990,6 +1012,7 @@
       "status-error": "Error",
       "kind-chat": "Chat",
       "kind-title": "Title",
+      "kind-compression": "Compression",
       "from": "From date",
       "to": "To date",
       "search-model": "Search models…",

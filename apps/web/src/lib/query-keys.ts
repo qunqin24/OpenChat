@@ -12,6 +12,8 @@ export const queryKeys = {
     search: (term: string) => [...queryKeys.conversations.all, 'search', term] as const,
     detail: (id: string) => [...queryKeys.conversations.all, 'detail', id] as const,
     context: (id: string) => [...queryKeys.conversations.all, 'context', id] as const,
+    /** The compressed context: summary text of the conversation, so never persisted. */
+    compaction: (id: string) => [...queryKeys.conversations.all, 'compaction', id] as const,
   },
   messages: {
     all: ['messages'] as const,

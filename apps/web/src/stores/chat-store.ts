@@ -131,7 +131,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         ...settled(state, conversationId),
         live: {
           ...state.live,
-          [conversationId]: { run: { run, messages: [input, ...rows], partial: null, retry: null, tools: {} } },
+          [conversationId]: { run: { run, messages: [input, ...rows], partial: null, retry: null, tools: {}, compacting: false } },
         },
       }
     }),

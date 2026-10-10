@@ -63,10 +63,24 @@
       "model_error": "模型服务出错了，请稍后重试。",
       "model_auth": "模型服务拒绝了渠道的密钥，请联系管理员检查渠道配置。",
       "model_rate_limited": "模型服务繁忙（请求过于频繁），请稍后重试。",
-      "context_too_long": "对话太长，超出了模型的上下文上限。请开一个新对话。",
+      "context_too_long": "对话太长，超出了模型的上下文上限。可以压缩上下文后再试。",
       "internal": "服务器内部出错，这次回复没有完成。",
       "tool_markup": "模型把下一步的工具调用写成了文字，这次回答没有完成。可以点重新生成再试一次。",
       "connection_lost": "连接中断，这次回答没有完成。可以点重新生成再试一次。"
+    },
+    "compaction": {
+      "divider": "以上内容已压缩为摘要",
+      "summary-label": "对话摘要",
+      "undo": "撤销压缩",
+      "undone": "已撤销压缩，模型会看到完整的对话",
+      "running": "正在压缩上下文…",
+      "action": "压缩上下文",
+      "done": "上下文已压缩",
+      "error-nothing_to_compact": "没有需要压缩的新内容。",
+      "error-conversation_busy": "对话正在回答，等它结束或先停止。",
+      "error-compaction_busy": "这个对话正在压缩，请稍等。",
+      "error-compaction_failed": "模型没能写出摘要，请稍后再试。",
+      "error-generic": "压缩没有成功，请稍后再试。"
     },
     "send-error": {
       "conversation_busy": "上一条回复还在生成，请等它结束或先停止。",
@@ -293,7 +307,11 @@
     "context": {
       "label": "上下文窗口",
       "hint": "已用 {{percent}}%（剩余 {{left}}%）\n{{used}} / {{limit}} tokens",
-      "aria": "上下文窗口已用 {{percent}}%"
+      "aria": "上下文窗口已用 {{percent}}%",
+      "compact": "立即压缩",
+      "compacting": "正在压缩…",
+      "compacted": "更早的内容已压缩为摘要",
+      "compact-hint": "把较早的对话总结成摘要，腾出上下文窗口。原来的消息仍然显示。"
     }
   },
   "auth": {
@@ -641,6 +659,10 @@
         "ask-user-hint": "开启后，模型可以在遇到只有用户才能决定的事项时，用选择题向用户提问并等待回答。默认开启，对话进行中的运行在下一次请求时生效。",
         "ask-user-on": "向用户提问已开启",
         "ask-user-off": "向用户提问已关闭",
+        "compress-context": "自动压缩上下文",
+        "compress-context-hint": "开启后，一次请求将占用模型上下文窗口一半以上（对话已有摘要时为 65%）时，先用这个对话自己的模型把较早的内容总结成摘要，再把摘要发给模型。原来的消息仍然完整显示。关闭后请求原样发送，用户仍可手动压缩。默认开启，对话进行中的运行在下一次请求时生效。",
+        "compress-context-on": "自动压缩上下文已开启",
+        "compress-context-off": "自动压缩上下文已关闭",
         "avatars": "允许上传头像",
         "avatars-hint": "开启后，用户可以在 设置 → 账户 里上传自己的头像；关闭时按钮显示「暂不可用」，头像显示名字的首字。已经设置的头像不受影响，用户也随时可以移除。",
         "avatars-on": "已允许上传头像",
@@ -990,6 +1012,7 @@
       "status-error": "错误",
       "kind-chat": "对话",
       "kind-title": "标题",
+      "kind-compression": "压缩",
       "from": "开始日期",
       "to": "结束日期",
       "search-model": "搜索模型…",

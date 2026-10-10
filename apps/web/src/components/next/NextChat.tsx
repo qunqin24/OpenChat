@@ -1,11 +1,12 @@
 import { useNavigate } from '@tanstack/react-router'
 import { ArrowDown } from 'lucide-react'
-import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import type { Message, ReasoningEffort } from '@openchat/api-client'
 import { useChatFeatures, useChatModels, useUpdateConversationSettings } from '@/hooks/use-chat-models'
+import { useCompact, useCompaction, useUndoCompaction } from '@/hooks/use-compaction'
 import { useConversationEvents } from '@/hooks/use-conversation-events'
 import { useConversation, useCreateConversation } from '@/hooks/use-conversations'
 import { useAttachments } from '@/hooks/use-attachments'
@@ -28,6 +29,7 @@ import { buildTurns, pendingQuestion } from '@/lib/transcript'
 import { parseQuestions, type AskAnswer } from '@/lib/ask-user'
 import { useChatStore } from '@/stores/chat-store'
 import AskUserDock from './AskUserDock'
+import CompactionDivider from './CompactionDivider'
 import Composer from './Composer'
 import ContextMeter from './ContextMeter'
 import { DropOverlay } from './DropOverlay'
@@ -71,6 +73,9 @@ export function NextChat({ conversationId }: NextChatProps) {
   const regenerate = useRegenerate(conversationId ?? '')
   const editMessage = useEditMessage(conversationId ?? '')
   const answerQuestion = useAnswerQuestion(conversationId ?? '')
+  const summary = useCompaction(conversationId)
+  const compress = useCompact(conversationId ?? '')
+  const undoCompaction = useUndoCompaction(conversationId ?? '')
   const updateSettings = useUpdateConversationSettings()
 
   // Attaches to whatever this conversation is running — including a run that
@@ -178,8 +183,8 @@ export function NextChat({ conversationId }: NextChatProps) {
   )
 
   const turns = useMemo(
-    () => buildTurns(messages.data?.items ?? [], live?.run ?? null, replacing),
-    [messages.data, live, replacing],
+    () => buildTurns(messages.data?.items ?? [], live?.run ?? null, replacing, summary),
+    [messages.data, live, replacing, summary],
   )
 
   // Only the end of a long transcript is drawn: the last turns, then 20 more
@@ -250,6 +255,19 @@ export function NextChat({ conversationId }: NextChatProps) {
       reasoningEffort: canThink ? effort : undefined,
       webSearch: canSearch ? webSearch : undefined,
     })
+  }
+
+  // An answer that failed for the conversation's length: compress the context,
+  // then answer again. A compression that cannot be done says why and stops.
+  const handleCompressAndRetry = () => {
+    compress.mutate(undefined, { onSuccess: () => handleRegenerate() })
+  }
+
+  // Taking the compression back is not offered under a run: it would change
+  // the context in the middle of the run's tool loop.
+  const divider = {
+    onUndo: !working && !outgoing ? () => undoCompaction.mutate() : undefined,
+    undoing: undoCompaction.isPending,
   }
 
   // Any question can be reworded and asked again: the old wording and the turns
@@ -534,7 +552,9 @@ export function NextChat({ conversationId }: NextChatProps) {
       disabled={createConversation.isPending}
       modelSlot={
         <>
-          {conversationId && <ContextMeter conversationId={conversationId} limit={modelById.get(modelId)?.contextLimit} />}
+          {conversationId && (
+            <ContextMeter conversationId={conversationId} limit={modelById.get(modelId)?.contextLimit} busy={working || Boolean(outgoing)} />
+          )}
           {canThink && <ThinkingPicker levels={thinkingLevels} value={effort} onChange={pickEffort} />}
           <ModelPicker models={available} value={modelId} onChange={pickModel} />
         </>
@@ -586,25 +606,30 @@ export function NextChat({ conversationId }: NextChatProps) {
                   )}
                 </div>
               )}
-              {turns.slice(start).map((turn) =>
-                turn.kind === 'user' ? (
-                  <UserMessage
-                    key={turn.key}
-                    message={turn.message}
-                    onEdit={!working && !outgoing ? (content) => editQuestion(turn.message, content) : undefined}
-                  />
-                ) : (
-                  <AssistantTurn
-                    key={turn.key}
-                    turn={turn}
-                    modelId={turnModel(turn) ?? modelId}
-                    model={modelById.get(turnModel(turn) ?? modelId)}
-                    askingCallId={askingCallId}
-                    onOpenQuestion={() => setDismissedCallId(null)}
-                    onRegenerate={turn === last?.answer && !working && !outgoing ? handleRegenerate : undefined}
-                  />
-                ),
-              )}
+              {turns.slice(start).map((turn) => (
+                <Fragment key={turn.key}>
+                  {turn.kind === 'user' ? (
+                    <UserMessage
+                      message={turn.message}
+                      onEdit={!working && !outgoing ? (content) => editQuestion(turn.message, content) : undefined}
+                    />
+                  ) : (
+                    <AssistantTurn
+                      turn={turn}
+                      modelId={turnModel(turn) ?? modelId}
+                      model={modelById.get(turnModel(turn) ?? modelId)}
+                      askingCallId={askingCallId}
+                      onOpenQuestion={() => setDismissedCallId(null)}
+                      onRegenerate={turn === last?.answer && !working && !outgoing ? handleRegenerate : undefined}
+                      onCompress={turn === last?.answer && !working && !outgoing ? handleCompressAndRetry : undefined}
+                      compressing={compress.isPending}
+                      divider={divider}
+                    />
+                  )}
+                  {/* Where the compressed context ends. The messages above are all still here. */}
+                  {turn.after && <CompactionDivider summary={turn.after} {...divider} />}
+                </Fragment>
+              ))}
               {replacing && !outgoing && <PendingReply modelId={modelId} model={modelById.get(modelId)} />}
               {outgoing && (
                 <>

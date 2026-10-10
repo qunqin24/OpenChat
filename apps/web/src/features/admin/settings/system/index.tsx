@@ -43,6 +43,7 @@ export function SettingsSystem() {
   const toggleGenUI = useSystemToggle('generativeUi', 'genui')
   const toggleAskUser = useSystemToggle('askUser', 'ask-user')
   const toggleMemory = useSystemToggle('memory', 'memory')
+  const toggleCompress = useSystemToggle('compressContext', 'compress-context')
   // The account settings read it from the chat's features.
   const toggleAvatars = useSystemToggle('avatarUploads', 'avatars', [queryKeys.features])
   // The sign-in pages offer the register link and the guest button from
@@ -139,6 +140,13 @@ export function SettingsSystem() {
           <SettingRow id="memory" label={t('admin.settings.system.memory')} hint={t('admin.settings.system.memory-hint')}>
             {toggle('memory', data?.memory ?? true, toggleMemory)}
           </SettingRow>
+          <SettingRow
+            id="compress-context"
+            label={t('admin.settings.system.compress-context')}
+            hint={t('admin.settings.system.compress-context-hint')}
+          >
+            {toggle('compress-context', data?.compressContext ?? true, toggleCompress)}
+          </SettingRow>
         </TabsContent>
 
         <TabsContent value="access" className="divide-y">
@@ -225,6 +233,7 @@ type SystemFlag =
   | 'debugLogging'
   | 'allowRegistration'
   | 'registrationApproval'
+  | 'compressContext'
 
 /**
  * A switch saved on its own, as each of these is: the server answers with the

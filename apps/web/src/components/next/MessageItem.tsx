@@ -4,7 +4,6 @@ import { Check, Copy, Pencil, RefreshCw } from 'lucide-react'
 import { Collapsible } from 'radix-ui'
 import { isValidElement, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Streamdown } from 'streamdown'
 
 import { ModelIcon } from '@/components/model-icon'
 import { useStuck } from '@/hooks/use-stuck'
@@ -17,8 +16,9 @@ import { MEMORY_TOOL, memoryChangeOf } from '@/lib/memory-tool'
 import GenUIBlock from './genui/GenUIBlock'
 import MemoryChip from './MemoryChip'
 import MessageAttachments from './MessageAttachments'
-import { markdownComponents, markdownLinkSafety, prepareMarkdown, useMarkdownPlugins } from './markdown-components'
-import { ThinkingLine, ThinkingOrb } from './ThinkingOrb'
+import { Markdown } from './MarkdownText'
+import CompactionDivider from './CompactionDivider'
+import { CompactingLine, ThinkingLine, ThinkingOrb } from './ThinkingOrb'
 import ToolActivity, {
   type ActivityItem,
   type ActivityNote,
@@ -179,21 +179,6 @@ export function AnswerText({ text, streaming }: { text: string; streaming: boole
   )
 }
 
-function Markdown({ text, streaming }: { text: string; streaming: boolean }) {
-  const plugins = useMarkdownPlugins(text)
-  return (
-    <div className="n-markdown">
-      {/* The local typography layer styles the actual Streamdown output;
-          markdown-body keeps the ported table selectors working. */}
-      <div className="markdown-body">
-        <Streamdown className="n-prose" parseIncompleteMarkdown={streaming} components={markdownComponents} plugins={plugins} linkSafety={markdownLinkSafety}>
-          {prepareMarkdown(text)}
-        </Streamdown>
-      </div>
-    </div>
-  )
-}
-
 /**
  * The model's reasoning. Open while it is being written, so the reader can
  * watch the model think; folded away the moment it is done, into how long it
@@ -304,6 +289,15 @@ interface AssistantTurnProps {
   askingCallId?: string | null
   /** Brings the waiting question's panel back over the composer. */
   onOpenQuestion?: () => void
+  /**
+   * The last answer only, when it failed for the conversation's length:
+   * compress the context and answer again. Absent while that cannot be done.
+   */
+  onCompress?: () => void
+  /** The compression `onCompress` starts is under way. */
+  compressing?: boolean
+  /** What the divider drawn inside this reply (`turn.inside`) can do. */
+  divider?: { onUndo?: () => void; undoing?: boolean }
 }
 
 /**
@@ -317,6 +311,9 @@ export function AssistantTurn({
   onRegenerate,
   askingCallId,
   onOpenQuestion,
+  onCompress,
+  compressing,
+  divider,
 }: AssistantTurnProps) {
   const { t } = useTranslation()
   const live = turn.live
@@ -399,13 +396,18 @@ export function AssistantTurn({
     })
 
   const entries: Block[] = []
-  for (const response of turn.responses) {
+  for (const [position, response] of turn.responses.entries()) {
     entries.push(...renderParts(response.parts, response.id, false))
     if (response.stopReason === 'error') {
       entries.push(
         <Notice key={`${response.id}:error`} tone="error">
           {errorText(t, response.errorCode)}
           {response.runId && <ErrorId id={response.runId.slice(0, 8)} />}
+          {response.errorCode === 'context_too_long' && onCompress && (
+            <button type="button" className="n-notice-action" disabled={compressing} onClick={onCompress}>
+              {compressing ? t('next.context.compacting') : t('chat.compaction.action')}
+            </button>
+          )}
         </Notice>,
       )
     } else if (response.stopReason === 'cancelled') {
@@ -419,6 +421,12 @@ export function AssistantTurn({
         <Notice key={`${response.id}:length`} tone="quiet">
           {t('chat.truncated')}
         </Notice>,
+      )
+    }
+    // The conversation's summary ends here, and the run went on from it.
+    if (turn.inside?.index === position + 1) {
+      entries.push(
+        <CompactionDivider key={`${response.id}:compaction`} summary={turn.inside.summary} {...divider} />,
       )
     }
   }
@@ -457,7 +465,9 @@ export function AssistantTurn({
   // or quiet between a round and its next response — and the line says so,
   // rather than reading as a search that is over with a stray caret below it.
   const tail = first >= 0 ? entries[last] : null
+  const compacting = running && Boolean(live?.compacting)
   const thinking =
+    !compacting &&
     first >= 0 &&
     ((running &&
       isFoldBlock(tail) &&
@@ -504,7 +514,7 @@ export function AssistantTurn({
       <div className="n-msg-head">{name}</div>
       <div className="n-msg-body">{blocks}</div>
 
-      {waiting && first < 0 && <ThinkingLine />}
+      {compacting ? <CompactingLine /> : waiting && first < 0 && <ThinkingLine />}
 
       {!running && (text || onRegenerate) && (
         // The last answer keeps its actions in view, as the place to go next.
