@@ -126,6 +126,7 @@ type Querier interface {
 	DeleteCatalogModels(ctx context.Context) error
 	DeleteCatalogProviders(ctx context.Context) error
 	DeleteChannel(ctx context.Context, id uuid.UUID) (int64, error)
+	DeleteContextSummary(ctx context.Context, conversationID uuid.UUID) (int64, error)
 	DeleteExpiredSessions(ctx context.Context) (int64, error)
 	// Deletions that take files with them. An attachment row is the only thing
 	// that says a stored file is wanted, so each statement hands back the storage
@@ -195,6 +196,9 @@ type Querier interface {
 	GetCatalogModel(ctx context.Context, arg GetCatalogModelParams) (GetCatalogModelRow, error)
 	GetChannel(ctx context.Context, id uuid.UUID) (Channel, error)
 	GetChannelModel(ctx context.Context, arg GetChannelModelParams) (ChannelModel, error)
+	// The conversation's summary, with where the last row it covers sits in the
+	// transcript: rows after that place are the ones a request still carries.
+	GetContextSummary(ctx context.Context, conversationID uuid.UUID) (GetContextSummaryRow, error)
 	// Ownership is part of the lookup, not a separate check: a conversation
 	// belonging to someone else must read as "not found", never as "forbidden",
 	// or the response tells a stranger the id exists.
@@ -338,6 +342,15 @@ type Querier interface {
 	// turns the page around. The transcript is every row of the conversation: what
 	// is replaced is deleted, so there is nothing else in it.
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
+	// Rows after a place in the transcript, oldest first: what a summary has not
+	// covered. With no place given, from the start. The rows nearest the end are
+	// kept when there are more than the limit - the same choice a request makes,
+	// which is answered from the end of the conversation.
+	ListMessagesAfter(ctx context.Context, arg ListMessagesAfterParams) ([]Message, error)
+	// Rows after a place in the transcript, oldest first, from the oldest: for
+	// compressing, which reads what has not been covered from where it begins and
+	// stops at the limit, leaving the rest for the next time.
+	ListMessagesFrom(ctx context.Context, arg ListMessagesFromParams) ([]Message, error)
 	ListModelOverrides(ctx context.Context, modelIds []string) ([]ModelOverride, error)
 	// The caller's own uploads that no message has claimed yet.
 	ListPendingAttachments(ctx context.Context, arg ListPendingAttachmentsParams) ([]Attachment, error)
@@ -544,6 +557,9 @@ type Querier interface {
 	// is apart from AdminUpdateUser: nothing here reaches the role or the password.
 	UpdatePersonalization(ctx context.Context, arg UpdatePersonalizationParams) (UpdatePersonalizationRow, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
+	// Writes the conversation's summary, replacing the one it had. The foreign keys
+	// refuse a row that an edit deleted while the summary was being written.
+	UpsertContextSummary(ctx context.Context, arg UpsertContextSummaryParams) (ContextSummary, error)
 	// One statement for the whole list, so a refresh cannot half-apply.
 	//
 	// Two rules are enforced by what this statement does *not* say:

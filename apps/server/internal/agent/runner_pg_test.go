@@ -143,6 +143,13 @@ type fixture struct {
 
 func newFixture(t *testing.T, tools []Tool, steps ...func() (llm.ModelClient, error)) *fixture {
 	t.Helper()
+	return newFixtureWith(t, nil, tools, steps...)
+}
+
+// newFixtureWith is newFixture with a say in the runner's options: tweak
+// changes them before the runner is made.
+func newFixtureWith(t *testing.T, tweak func(*Options), tools []Tool, steps ...func() (llm.ModelClient, error)) *fixture {
+	t.Helper()
 	pool := testPool(t)
 	ctx := context.Background()
 	f := &fixture{t: t, pool: pool, q: sqlc.New(pool), models: &scripted{steps: steps}}
@@ -166,8 +173,11 @@ func newFixture(t *testing.T, tools []Tool, steps ...func() (llm.ModelClient, er
 	hub := NewHub()
 	f.sub = hub.Subscribe(f.conv)
 	t.Cleanup(f.sub.Close)
-	f.runner = NewRunner(pool, hub, f.models, func(context.Context) []Tool { return tools },
-		Options{PartialInterval: 5 * time.Millisecond, MaxRetries: 2})
+	opts := Options{PartialInterval: 5 * time.Millisecond, MaxRetries: 2}
+	if tweak != nil {
+		tweak(&opts)
+	}
+	f.runner = NewRunner(pool, hub, f.models, func(context.Context) []Tool { return tools }, opts)
 	t.Cleanup(func() { _ = f.runner.Shutdown(context.Background()) })
 	return f
 }

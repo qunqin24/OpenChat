@@ -48,6 +48,11 @@ const (
 type Live struct {
 	Generation *LiveGeneration `json:"generation,omitempty"`
 	Tools      []ToolSlot      `json:"tools,omitempty"`
+	// Compacting is set while the conversation's context is being compressed
+	// before a request: work in flight, shown as a status line. It is only
+	// true for the length of one compression (settleCompaction clears what a
+	// process that died left).
+	Compacting bool `json:"compacting,omitempty"`
 }
 
 // LiveGeneration is the response being streamed, as of its last commit.

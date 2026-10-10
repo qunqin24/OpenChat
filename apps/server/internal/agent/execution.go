@@ -89,6 +89,10 @@ type execution struct {
 
 	// files resolves the attachments of each request; used by the run loop only.
 	files *attachmentResolver
+
+	// compression is what the run has done about the size of its context; used
+	// by the run loop only.
+	compression runCompression
 }
 
 // change is the body of one commit. It runs inside the transaction, may append
@@ -325,21 +329,8 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 		return true, ex.failWithRow(code)
 	}
 
-	rows, err := r.q.ListRecentMessages(ctx, sqlc.ListRecentMessagesParams{
-		ConversationID: ex.run.ConversationID,
-		RowLimit:       r.opts.HistoryLimit,
-	})
-	if err != nil {
-		return false, err
-	}
-	messages, err := BuildContext(rows)
-	if err != nil {
-		return false, err
-	}
-	if messages, err = ex.withAttachments(ctx, messages); err != nil {
-		return false, err
-	}
-
+	// What the request offers, and its system prompt, are settled before its
+	// messages: whether the messages fit the window depends on both.
 	offered := r.tools(ctx)
 	if capable, ok := client.(ToolCapable); ok && !capable.CallsTools() {
 		offered = nil
@@ -347,7 +338,41 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 	if !ex.run.WebSearch {
 		offered = withoutWeb(offered)
 	}
-	if system := r.opts.SystemPrompt(ctx, r.now(), offered); system != "" {
+	system := r.opts.SystemPrompt(ctx, r.now(), offered)
+
+	// A process that died while compressing left the flag up.
+	if err := ex.settleCompaction(); err != nil {
+		return false, err
+	}
+	summary, rows, err := LoadContextRows(ctx, r.q, ex.run.ConversationID, r.opts.HistoryLimit)
+	if err != nil {
+		return false, err
+	}
+	// Before every request - the first, and each after a tool round - the
+	// context is compressed if it has grown too large for the window. A failed
+	// compression is the request going out as it is.
+	wrote, stop, err := ex.compress(ctx, client, system, definitions(offered), summary, rows)
+	if err != nil {
+		return false, err
+	}
+	if stop {
+		return false, nil // the loop decides between cancel and shutdown
+	}
+	if wrote {
+		if summary, rows, err = LoadContextRows(ctx, r.q, ex.run.ConversationID, r.opts.HistoryLimit); err != nil {
+			return false, err
+		}
+		ex.compression.compacted = true
+		ex.compression.grownFrom = EstimateRequest(system, summary.Content, rows, definitions(offered))
+	}
+	messages, err := BuildRequestContext(summary, rows)
+	if err != nil {
+		return false, err
+	}
+	if messages, err = ex.withAttachments(ctx, messages); err != nil {
+		return false, err
+	}
+	if system != "" {
 		messages = append([]llm.Message{llm.TextMessage(llm.RoleSystem, system)}, messages...)
 	}
 

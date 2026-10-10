@@ -426,6 +426,17 @@ type ChannelModel struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
+type ContextSummary struct {
+	ConversationID   uuid.UUID          `json:"conversation_id"`
+	ThroughMessageID uuid.UUID          `json:"through_message_id"`
+	KeptMessageID    *uuid.UUID         `json:"kept_message_id"`
+	Content          string             `json:"content"`
+	ModelID          string             `json:"model_id"`
+	InputTokens      int32              `json:"input_tokens"`
+	OutputTokens     int32              `json:"output_tokens"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
 type Conversation struct {
 	ID              uuid.UUID          `json:"id"`
 	UserID          *uuid.UUID         `json:"user_id"`

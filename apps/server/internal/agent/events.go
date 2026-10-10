@@ -92,18 +92,37 @@ type TitleChanged struct{ Title string }
 // follows the question the run answers.
 type TranscriptChanged struct{ From uuid.UUID }
 
-func (RunStarted) isEvent()        {}
-func (RunFinished) isEvent()       {}
-func (GenerationStarted) isEvent() {}
-func (PartStarted) isEvent()       {}
-func (PartDelta) isEvent()         {}
-func (PartEnded) isEvent()         {}
-func (MessageAppended) isEvent()   {}
-func (ToolStarted) isEvent()       {}
-func (ToolFinished) isEvent()      {}
-func (RetryScheduled) isEvent()    {}
-func (TitleChanged) isEvent()      {}
-func (TranscriptChanged) isEvent() {}
+// CompactionStarted: the run is compressing the conversation's context before
+// its next request (see compaction.go). Live.Compacting is set until
+// CompactionFinished.
+type CompactionStarted struct{}
+
+// CompactionFinished: the compression ended. Summary is the conversation's new
+// summary, or nil when the compression failed or found nothing to do, in which
+// case the request went out as it was.
+type CompactionFinished struct{ Summary *Summary }
+
+// CompactionChanged: the conversation's summary was made or removed by
+// something other than a run - a person asked for it, or took it back. Summary
+// is the one it has now, nil for none. Published outside any run (nil run id,
+// version 0), like a title.
+type CompactionChanged struct{ Summary *Summary }
+
+func (CompactionStarted) isEvent()  {}
+func (CompactionFinished) isEvent() {}
+func (CompactionChanged) isEvent()  {}
+func (RunStarted) isEvent()         {}
+func (RunFinished) isEvent()        {}
+func (GenerationStarted) isEvent()  {}
+func (PartStarted) isEvent()        {}
+func (PartDelta) isEvent()          {}
+func (PartEnded) isEvent()          {}
+func (MessageAppended) isEvent()    {}
+func (ToolStarted) isEvent()        {}
+func (ToolFinished) isEvent()       {}
+func (RetryScheduled) isEvent()     {}
+func (TitleChanged) isEvent()       {}
+func (TranscriptChanged) isEvent()  {}
 
 // Batch is the events of one commit. Version is the run's version after it, so
 // a subscriber whose snapshot already reflects that commit can drop it.

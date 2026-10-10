@@ -32,6 +32,9 @@ const (
 	KindChat Kind = "chat"
 	// KindTitle is the background request that names a conversation.
 	KindTitle Kind = "title"
+	// KindCompression is the request that writes a conversation's context
+	// summary, made with the conversation's own model.
+	KindCompression Kind = "compression"
 )
 
 // Status is how a request ended.

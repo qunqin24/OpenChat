@@ -68,8 +68,14 @@ type Options struct {
 	// PartialInterval is how often a streaming response is committed. A crash
 	// loses at most this much of it.
 	PartialInterval time.Duration
-	// HistoryLimit is how many transcript rows a request is built from.
+	// HistoryLimit is how many transcript rows a request is built from: a
+	// safety cap and no more. What keeps a request within the model's window is
+	// compression (Compression); a cap that bit would move the start of the
+	// history with every new row, and with it the prefix a provider caches.
 	HistoryLimit int32
+	// Compression, when set, compresses a request that nears the model's
+	// window before it is made. Nil never compresses on its own.
+	Compression *Compression
 	// ToolConcurrency bounds the calls of one round running at once.
 	ToolConcurrency int
 	// RequestOptions are passed to every model request.
@@ -98,7 +104,7 @@ func (o Options) withDefaults() Options {
 		o.PartialInterval = 150 * time.Millisecond
 	}
 	if o.HistoryLimit <= 0 {
-		o.HistoryLimit = 200
+		o.HistoryLimit = 2000
 	}
 	if o.ToolConcurrency <= 0 {
 		o.ToolConcurrency = 4
@@ -125,6 +131,8 @@ type Runner struct {
 	now    func() time.Time
 	// usage is the ledger of model requests.
 	usage *ledger.Recorder
+	// compactor writes the summaries of long conversations.
+	compactor *Compactor
 
 	base context.Context
 	stop context.CancelCauseFunc
@@ -150,23 +158,29 @@ func NewRunner(pool *pgxpool.Pool, hub *Hub, models ModelResolver, tools ToolSou
 	if tools == nil {
 		tools = func(context.Context) []Tool { return nil }
 	}
+	recorder := ledger.NewRecorder(sqlc.New(pool))
 	return &Runner{
-		pool:   pool,
-		q:      sqlc.New(pool),
-		hub:    hub,
-		models: models,
-		tools:  tools,
-		opts:   opts.withDefaults(),
-		now:    time.Now,
-		usage:  ledger.NewRecorder(sqlc.New(pool)),
-		base:   base,
-		stop:   stop,
-		active: map[uuid.UUID]context.CancelCauseFunc{},
+		pool:      pool,
+		q:         sqlc.New(pool),
+		hub:       hub,
+		models:    models,
+		tools:     tools,
+		opts:      opts.withDefaults(),
+		now:       time.Now,
+		usage:     recorder,
+		compactor: NewCompactor(pool, recorder),
+		base:      base,
+		stop:      stop,
+		active:    map[uuid.UUID]context.CancelCauseFunc{},
 	}
 }
 
 // Hub is where this runner publishes.
 func (r *Runner) Hub() *Hub { return r.hub }
+
+// Compactor is the runner's summary writer, for the compressions that are not
+// part of a run: the ones a person asks for.
+func (r *Runner) Compactor() *Compactor { return r.compactor }
 
 // Start executes a run in the background. Starting one that is already running
 // here is a no-op.
