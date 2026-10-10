@@ -20,6 +20,10 @@ export const Route = createFileRoute('/guest')({
     const status = await queryClient.ensureQueryData(guestStatusQueryOptions).catch(() => ({ enabled: false }))
     // Off: there is nothing here, and the sign-in page is where to go.
     if (!status.enabled) throw redirect({ to: '/login', search: {} })
+    // Opens the browser's storage now rather than on the first message, so the
+    // notice can say early if conversations will not be kept. Loaded here, not
+    // imported, so an account never downloads the guest code.
+    void import('@/lib/guest').then((guest) => guest.startGuest()).catch(() => undefined)
     void queryClient.prefetchInfiniteQuery(conversationsQueryOptions)
     void queryClient.prefetchQuery(chatModelsQueryOptions)
     void queryClient.prefetchQuery(chatFeaturesQueryOptions)

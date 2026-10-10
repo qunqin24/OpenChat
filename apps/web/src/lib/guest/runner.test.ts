@@ -1,5 +1,5 @@
 import type { BatchEvent, ConversationEvent, GuestEndEvent, GuestRunRequest, Message, Run, RunEvent } from '@openchat/api-client'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { GuestHub } from './hub'
 import { buildRunRequest, MAX_FILE_BYTES, MAX_ROWS } from './request'
@@ -66,6 +66,7 @@ function setup(respond: (request: GuestRunRequest, url: string) => Response | Pr
   const h = harness()
   const hub = new GuestHub()
   const requests: GuestRunRequest[] = []
+  const signals: AbortSignal[] = []
   const settled: string[] = []
   const deleted: (string | undefined)[][] = []
   const runner = new GuestRunner({
@@ -78,12 +79,15 @@ function setup(respond: (request: GuestRunRequest, url: string) => Response | Pr
     fetch: async (input, init) => {
       const url = String(input)
       const body = init?.body ? (JSON.parse(String(init.body)) as GuestRunRequest) : ({} as GuestRunRequest)
-      if (url.endsWith('/guest/runs')) requests.push(body)
+      if (url.endsWith('/guest/runs')) {
+        requests.push(body)
+        if (init?.signal) signals.push(init.signal)
+      }
       return respond(body, url)
     },
   })
   const seen: ConversationEvent[] = []
-  return { h, hub, runner, requests, seen, settled, deleted, listen: (id: string) => hub.subscribe(id, (e) => seen.push(e)) }
+  return { h, hub, runner, requests, signals, seen, settled, deleted, listen: (id: string) => hub.subscribe(id, (e) => seen.push(e)) }
 }
 
 describe('a send', () => {
@@ -178,7 +182,15 @@ describe('a send', () => {
     let n = 0
     const t = setup((request) => sse(answered(request.conversationId, request, { runId: `run-${++n}` })))
     const c = await t.h.conversation()
+    // The page asks again the moment it is told the first run finished, which is
+    // before the run's closing frame (the memories, the title) has been read.
+    const finished = new Promise<void>((resolve) =>
+      t.hub.subscribe(c, (e) => {
+        if (e.type === 'batch' && e.events.some((x) => x.type === 'run_finished')) resolve()
+      }),
+    )
     await t.runner.start(c, { action: 'send', content: 'one', attachmentIds: [], id: 'in-1' }, {})
+    await finished
     await t.runner.start(c, { action: 'send', content: 'two', attachmentIds: [], id: 'in-2' }, {})
     const second = t.requests[1]!
     expect(second.memories).toEqual([{ id: 'm1', content: 'Likes tea.', source: 'model' }])
@@ -187,6 +199,100 @@ describe('a send', () => {
     expect(second.messages.map((m) => m.id)).toEqual(['in-1', 'answer-1'])
     expect(second.messages[1]!.providerState).toBe('cHM=')
     await t.runner.settled(c)
+  })
+
+  /** A server that streams the start and then holds the answer until released. */
+  const holding = () => {
+    let release = () => {}
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    return {
+      release: () => release(),
+      respond: (request: GuestRunRequest) => {
+        const frames = answered(request.conversationId, request)
+        return new Response(
+          new ReadableStream({
+            async start(controller) {
+              const encoder = new TextEncoder()
+              const send = (f: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(f)}\n\n`))
+              send(frames[0])
+              await gate
+              frames.slice(1).forEach(send)
+              controller.close()
+            },
+          }),
+        )
+      },
+    }
+  }
+
+  it('refuses a question asked while the conversation is answering, instead of queuing it', async () => {
+    const server = holding()
+    const t = setup(server.respond)
+    const c = await t.h.conversation()
+    await t.runner.start(c, { action: 'send', content: 'one', attachmentIds: [], id: 'in-1' }, {})
+    expect(t.runner.isRunning(c)).toBe(true)
+
+    await expect(t.runner.start(c, { action: 'send', content: 'two', attachmentIds: [], id: 'in-2' }, {})).rejects.toMatchObject({
+      status: 409,
+      code: 'conversation_busy',
+    })
+    // Nothing went to the server, nothing was written.
+    expect(t.requests).toHaveLength(1)
+    expect((await t.h.repo.data(c)).messages.map((m) => m.id)).toEqual(['in-1'])
+
+    server.release()
+    await t.runner.settled(c)
+    // And once it is over, asking works again.
+    await t.runner.start(c, { action: 'send', content: 'two', attachmentIds: [], id: 'in-2' }, {})
+    expect(t.requests).toHaveLength(2)
+    await t.runner.settled(c)
+  })
+
+  it('refuses a second start made while the first is still being taken', async () => {
+    const t = setup((request) => sse(answered(request.conversationId, request)))
+    const c = await t.h.conversation()
+    const [first, second] = await Promise.allSettled([
+      t.runner.start(c, { action: 'send', content: 'one', attachmentIds: [], id: 'in-1' }, {}),
+      t.runner.start(c, { action: 'send', content: 'two', attachmentIds: [], id: 'in-2' }, {}),
+    ])
+    expect(first.status).toBe('fulfilled')
+    expect(second).toMatchObject({ status: 'rejected', reason: { code: 'conversation_busy' } })
+    expect(t.requests).toHaveLength(1)
+    await t.runner.settled(c)
+  })
+
+  it('cancels the server\'s run when the browser could not keep the start', async () => {
+    const server = holding()
+    const t = setup(server.respond)
+    const c = await t.h.conversation()
+    vi.spyOn(t.h.repo, 'runStarted').mockRejectedValue(new Error('storage: quota'))
+
+    await expect(t.runner.start(c, { action: 'send', content: 'one', attachmentIds: [], id: 'in-1' }, {})).rejects.toThrow('quota')
+    expect(t.signals[0]!.aborted).toBe(true)
+    expect(t.runner.isRunning(c)).toBe(false)
+    server.release()
+  })
+
+  it('still tells the page the run is over when the storage fails while it is read', async () => {
+    const t = setup((request) => sse(answered(request.conversationId, request)))
+    const c = await t.h.conversation()
+    t.listen(c)
+    await t.runner.start(c, { action: 'send', content: 'hi', attachmentIds: [], id: 'in-1' }, {})
+    // From here on nothing can be written: the first answer row cannot be kept,
+    // and neither can the failure.
+    vi.spyOn(t.h.repo, 'messageAppended').mockRejectedValue(new Error('storage: gone'))
+    vi.spyOn(t.h.repo, 'runInterrupted').mockRejectedValue(new Error('storage: gone'))
+    await t.runner.settled(c)
+
+    const last = t.seen.at(-1) as BatchEvent
+    expect(last.events).toHaveLength(1)
+    const finished = last.events[0]!
+    expect(finished).toMatchObject({ type: 'run_finished', run: { id: 'run-1', status: 'failed', errorCode: 'connection_lost' } })
+    // Newer than anything told before it, or the page would take it for old news.
+    const told = t.seen.slice(0, -1).flatMap((e) => (e.type === 'batch' ? [e.version] : []))
+    expect(last.version).toBeGreaterThan(Math.max(...told))
+    expect(t.hub.live(c).run?.run.status).toBe('failed')
+    expect(t.signals[0]!.aborted).toBe(true)
   })
 })
 

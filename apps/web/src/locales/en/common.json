@@ -1213,6 +1213,7 @@
   },
   "guest": {
     "notice": "Guest mode: conversations are only saved in this browser",
+    "notice-unsaved": "Guest mode: this browser would not let the page store anything, so conversations are lost when you reload",
     "sign-in": "Sign in",
     "name": "Guest",
     "menu-hint": "Not signed in"

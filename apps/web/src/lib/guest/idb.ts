@@ -48,9 +48,22 @@ function finished(tx: IDBTransaction): Promise<void> {
   })
 }
 
-export function idbStorage(): GuestStorage {
+/** How long opening may take before the database is taken for unavailable. */
+const OPEN_TIMEOUT_MS = 4000
+
+export function idbStorage(): GuestStorage & {
+  /** Opens the database now, to learn whether it can be had; rejects if not. */
+  probe(): Promise<void>
+} {
   let db: Promise<IDBDatabase> | undefined
-  const connect = () => (db ??= open())
+  // An open that failed is not remembered: every later call would otherwise get
+  // the same rejection for the life of the page, though the cause (a blocked
+  // upgrade in another tab, a transient error) may have passed.
+  const connect = () =>
+    (db ??= open().catch((error: unknown) => {
+      db = undefined
+      throw error
+    }))
 
   const all = async <T,>(store: Store): Promise<T[]> => {
     const d = await connect()
@@ -81,6 +94,20 @@ export function idbStorage(): GuestStorage {
   }
 
   return {
+    probe: async () => {
+      // Some browsers (private modes, blocked site data) never answer at all.
+      let timer: ReturnType<typeof setTimeout> | undefined
+      try {
+        await Promise.race([
+          connect(),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error('indexedDB: open timed out')), OPEN_TIMEOUT_MS)
+          }),
+        ])
+      } finally {
+        clearTimeout(timer)
+      }
+    },
     conversations: () => all<StoredConversation>('conversations'),
     conversation: (id) => get<StoredConversation>('conversations', id),
     putConversation: (c) => put('conversations', [c]),

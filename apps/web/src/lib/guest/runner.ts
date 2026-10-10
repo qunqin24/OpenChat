@@ -44,7 +44,19 @@ interface Active {
   controller: AbortController
   /** Resolves when the stream has been read to its end and everything it brought is kept. */
   done: Promise<void>
+  progress: Progress
 }
+
+/** How far a run has got, as the pump learns it. */
+interface Progress {
+  /**
+   * The run has been told finished. Only its closing frame (memories, title) is
+   * still to come, and a question asked now waits for that rather than being refused.
+   */
+  finished: boolean
+}
+
+const busy = () => new GuestError(409, 'conversation_busy', 'this conversation is already answering')
 
 /**
  * Runs a guest's questions. A run is one request to the server (`/guest/runs`)
@@ -56,6 +68,8 @@ interface Active {
  */
 export class GuestRunner {
   private readonly active = new Map<string, Active>()
+  /** Conversations a run is being started for: the time before it is in `active`. */
+  private readonly starting = new Set<string>()
 
   constructor(private readonly deps: RunnerDeps) {}
 
@@ -68,20 +82,39 @@ export class GuestRunner {
    * is in, so the run has an id and the question is kept. The rest is read in
    * the background. A request the server refuses throws its error, and nothing
    * has been written.
+   *
+   * One run at a time per conversation, as on the server: a question asked
+   * while the conversation is answering is refused (`conversation_busy`), not
+   * queued behind the answer to be sent when it ends, unasked.
    */
   async start(
     conversationId: string,
     what: RunAction,
     choice: RunChoice,
   ): Promise<{ run: Run; inputId: string; written: Message[] }> {
+    const current = this.active.get(conversationId)
+    if ((current && !current.progress.finished) || this.starting.has(conversationId)) throw busy()
+    this.starting.add(conversationId)
+    try {
+      // A run that has been told finished is only reading its last frame - the
+      // memories it changed, its title - which is what this one is asked with.
+      await current?.done
+      return await this.begin(conversationId, what, choice)
+    } finally {
+      this.starting.delete(conversationId)
+    }
+  }
+
+  private async begin(
+    conversationId: string,
+    what: RunAction,
+    choice: RunChoice,
+  ): Promise<{ run: Run; inputId: string; written: Message[] }> {
     const { repo, hub } = this.deps
-    // The previous run's last frame - the memories it changed, its title - is
-    // what this one is asked with.
-    await this.active.get(conversationId)?.done
-    if (this.active.has(conversationId)) throw new GuestError(409, 'conversation_busy', 'this conversation is already answering')
+    if (this.active.has(conversationId)) throw busy()
 
     const data = await repo.data(conversationId)
-    if (repo.activeRun(data)) throw new GuestError(409, 'conversation_busy', 'this conversation is already answering')
+    if (repo.activeRun(data)) throw busy()
     const built = await buildRunRequest(
       {
         data,
@@ -121,33 +154,44 @@ export class GuestRunner {
       throw new GuestError(502, 'guest_unreachable', 'the server did not start the run')
     }
 
-    await repo.runStarted(
-      conversationId,
-      {
-        run: started.run,
-        input: started.message,
-        action: built.request.action,
-        replaces: built.input?.replaces,
-        attachments: built.input?.blobs,
-        choice,
-      },
-      this.deps.tab,
-    )
-    if (what.action === 'edit' || what.action === 'regenerate') this.deps.onDeleted?.(conversationId, built.input?.replaces)
     const written: Message[] = []
-    for (const event of first.events) {
-      if (event.type === 'message_appended') {
-        await repo.messageAppended(conversationId, event.message)
-        written.push(event.message)
+    try {
+      await repo.runStarted(
+        conversationId,
+        {
+          run: started.run,
+          input: started.message,
+          action: built.request.action,
+          replaces: built.input?.replaces,
+          attachments: built.input?.blobs,
+          choice,
+        },
+        this.deps.tab,
+      )
+      if (what.action === 'edit' || what.action === 'regenerate') this.deps.onDeleted?.(conversationId, built.input?.replaces)
+      for (const event of first.events) {
+        if (event.type === 'message_appended') {
+          await repo.messageAppended(conversationId, event.message)
+          written.push(event.message)
+        }
       }
+    } catch (error) {
+      // The server has accepted the run but the browser could not keep it (the
+      // storage failed). Nobody is going to read this stream, so the server's
+      // run must not be left generating - and being paid for - with no one to
+      // show it to. Closing the request cancels it.
+      controller.abort()
+      void repo.runInterrupted(conversationId, started.run.id, 'storage_failed').catch(() => undefined)
+      throw error
     }
     hub.publish(conversationId, first)
 
-    const done = this.pump(conversationId, started.run.id, frames, controller).finally(() => {
+    const progress: Progress = { finished: false }
+    const done = this.pump(conversationId, started.run, frames, controller, progress).finally(() => {
       if (this.active.get(conversationId)?.runId === started.run.id) this.active.delete(conversationId)
       this.deps.onSettled?.(conversationId)
     })
-    this.active.set(conversationId, { runId: started.run.id, controller, done })
+    this.active.set(conversationId, { runId: started.run.id, controller, done, progress })
     return { run: started.run, inputId: started.message.id, written }
   }
 
@@ -169,12 +213,16 @@ export class GuestRunner {
 
   private async pump(
     conversationId: string,
-    runId: string,
+    started: Run,
     frames: AsyncIterator<GuestRunEvent>,
     controller: AbortController,
+    progress: Progress,
   ): Promise<void> {
     const { repo, hub } = this.deps
+    const runId = started.id
     const beat = setInterval(() => void repo.heartbeat(conversationId, runId).catch(() => undefined), BEAT_MS)
+    // The newest version told to the page, so that a failure told after it is newer.
+    let version = started.version
     let ended = false
     try {
       for (;;) {
@@ -188,30 +236,67 @@ export class GuestRunner {
         }
         if (frame.type === 'snapshot') {
           for (const message of frame.messages) await repo.messageAppended(conversationId, message)
-          if (frame.run && frame.run.status !== 'running') await repo.runUpdated(conversationId, frame.run)
+          if (frame.run && frame.run.status !== 'running') {
+            await repo.runUpdated(conversationId, frame.run)
+            progress.finished = true
+          }
+          if (frame.run) version = Math.max(version, frame.run.version)
           hub.publish(conversationId, frame)
           continue
         }
         for (const event of frame.events) {
           // Kept before it is told: a page that hears a run finished asks for its rows.
           if (event.type === 'message_appended') await repo.messageAppended(conversationId, event.message)
-          if (event.type === 'run_finished') await repo.runUpdated(conversationId, event.run)
+          if (event.type === 'run_finished') {
+            await repo.runUpdated(conversationId, event.run)
+            progress.finished = true
+          }
           // The context the run compressed is kept as soon as it is told: it
           // ends at a row this page already holds (the rows came first), and a
           // connection lost before the last frame must not lose it.
           if (event.type === 'compaction_finished' && event.summary) await repo.setSummary(conversationId, event.summary)
         }
+        version = Math.max(version, frame.version)
         hub.publish(conversationId, frame)
       }
     } catch (error) {
       if (!controller.signal.aborted) console.warn('guest run stream failed', error)
+      // Whatever went wrong - the connection, or keeping what came - nothing more
+      // will be read: the server's run must not be left going.
+      controller.abort()
     } finally {
       clearInterval(beat)
     }
     if (ended) return
 
-    // The stream ended without its last frame: the connection was lost.
-    const lost = await repo.runInterrupted(conversationId, runId, 'connection_lost').catch(() => null)
+    // The stream ended without its last frame: the connection was lost, or the
+    // storage failed.
+    let lost: Awaited<ReturnType<GuestRepo['runInterrupted']>>
+    try {
+      lost = await repo.runInterrupted(conversationId, runId, 'connection_lost')
+    } catch {
+      // The failure could not be written down either (a storage that fails is
+      // likely to fail again). The page still has to be told the run is over, or
+      // its composer shows Stop for a run nothing is reading. A run that
+      // was already told finished needs no telling again.
+      if (!progress.finished) {
+        progress.finished = true
+        hub.publish(conversationId, {
+          type: 'batch',
+          runId,
+          version: version + 1,
+          events: [
+            {
+              type: 'run_finished',
+              run: { ...started, status: 'failed', errorCode: 'connection_lost', finishedAt: new Date().toISOString(), version: version + 1 },
+            },
+          ],
+        })
+      }
+      return
+    }
+    // Null: the run is over in the repository already (it was told), or its
+    // conversation is gone.
     if (!lost) return
     hub.publish(conversationId, {
       type: 'batch',

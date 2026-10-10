@@ -3,13 +3,13 @@ import type { GuestConfig } from '@openchat/api-client'
 import { API_BASE_URL } from '@/lib/api-base'
 import { queryClient } from '@/lib/query'
 import { queryKeys } from '@/lib/query-keys'
-import { idbStorage } from './idb'
 import { GuestHub } from './hub'
 import { isGuestMode } from './mode'
+import { setStorageKept } from './kept'
+import { openGuestStorage } from './open-storage'
 import { GuestRepo, type PersonalizationLimits } from './repo'
 import { createGuestApi, apiPath } from './router'
 import { GuestRunner } from './runner'
-import { memoryStorage } from './storage'
 
 export { isGuestMode, syncMode, useIsGuest } from './mode'
 
@@ -26,7 +26,7 @@ interface Wired {
   api: ReturnType<typeof createGuestApi>
 }
 
-let wired: Wired | undefined
+let wired: Promise<Wired> | undefined
 let config: { at: number; value: GuestConfig } | undefined
 let configLoad: Promise<GuestConfig> | undefined
 
@@ -54,9 +54,22 @@ async function loadConfig(): Promise<GuestConfig> {
 const limits = (): PersonalizationLimits =>
   config?.value.personalization ?? { memoryAllowed: true, instructionLimit: 1500, memoryLimit: 100, memoryLength: 200 }
 
-function wire(): Wired {
-  if (wired) return wired
-  const storage = typeof indexedDB === 'undefined' ? memoryStorage() : idbStorage()
+/**
+ * The first call opens the storage (and learns whether it can be kept), so it
+ * waits for that; every later one gets the same set.
+ */
+function wire(): Promise<Wired> {
+  return (wired ??= build())
+}
+
+/** Starts guest mode: opens the storage, so the page knows early whether it will be kept. */
+export async function startGuest(): Promise<void> {
+  await wire()
+}
+
+async function build(): Promise<Wired> {
+  const { storage, kept } = await openGuestStorage()
+  setStorageKept(kept)
   const repo = new GuestRepo(storage, { limits })
   const hub = new GuestHub()
   const channel = typeof BroadcastChannel === 'undefined' ? undefined : new BroadcastChannel('openchat-guest')
@@ -100,8 +113,7 @@ function wire(): Wired {
       refreshLists()
     }
   }
-  wired = { repo, hub, runner, api }
-  return wired
+  return { repo, hub, runner, api }
 }
 
 /**
@@ -114,7 +126,7 @@ export const guestFetch: typeof globalThis.fetch = async (input, init) => {
   const request = new Request(input, init)
   const path = apiPath(request.url, API_BASE_URL, window.location.origin)
   if (path !== null) {
-    const answered = await wire().api.handle(request, path)
+    const answered = await (await wire()).api.handle(request, path)
     if (answered) return answered
   }
   return network(request)
@@ -122,7 +134,7 @@ export const guestFetch: typeof globalThis.fetch = async (input, init) => {
 
 /** A file picked for the next message; kept in the page until a message claims it. */
 export async function putPendingFile(id: string, file: File, contentType: string): Promise<void> {
-  await wire().repo.putFile({ id, conversationId: '', blob: file, filename: file.name, contentType, size: file.size })
+  await (await wire()).repo.putFile({ id, conversationId: '', blob: file, filename: file.name, contentType, size: file.size })
 }
 
 /** What the server offers a guest, read ahead of the pages that need it. */
