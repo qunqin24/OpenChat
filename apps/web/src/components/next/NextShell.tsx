@@ -20,6 +20,7 @@ import {
 import { useDeleteConversation } from '@/hooks/use-conversations'
 import { useChatPaths } from '@/lib/chat-paths'
 import { queryKeys } from '@/lib/query-keys'
+import { displayTitle } from '@/lib/titles'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useUIStore } from '@/stores/ui-store'
 import GuestNotice from './GuestNotice'
@@ -162,7 +163,7 @@ export function NextShell() {
               <AlertDialogHeader>
                 <AlertDialogTitle>{t('next.conversation.remove-title')}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  {t('next.conversation.remove-description', { title: pendingDelete?.title ?? '' })}
+                  {t('next.conversation.remove-description', { title: displayTitle(pendingDelete?.title, t) })}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

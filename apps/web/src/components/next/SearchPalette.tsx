@@ -16,6 +16,7 @@ import { useMessages } from '@/hooks/use-messages'
 import { API_BASE_URL } from '@/lib/api'
 import { useChatPaths } from '@/lib/chat-paths'
 import { groupConversations, parseTimestamp } from '@/lib/grouping'
+import { displayTitle, useDisplayTitle } from '@/lib/titles'
 import { buildTurns, type AssistantTurn as Turn } from '@/lib/transcript'
 import { ImageSource, proxiedImages } from './genui/image-source'
 import { AssistantTurn, UserMessage } from './MessageItem'
@@ -73,7 +74,7 @@ export function SearchPalette({
     if (!typed) return conversations
     if (found) return found
     const needle = typed.toLocaleLowerCase()
-    return conversations.filter((c) => (c.title || t('chat.untitled')).toLocaleLowerCase().includes(needle))
+    return conversations.filter((c) => displayTitle(c.title, t).toLocaleLowerCase().includes(needle))
   }, [conversations, typed, found, t])
   // What the list is paging through: the search's pages while there is one.
   const searching = typed !== ''
@@ -199,8 +200,9 @@ interface RowProps {
 
 function PaletteRow({ conversation, term, renaming, onRename, onOpen, onDelete, onMenuClosed }: RowProps) {
   const { t, i18n } = useTranslation()
+  const display = useDisplayTitle()
   const rename = useRenameConversation()
-  const [title, setTitle] = useState(conversation.title)
+  const [title, setTitle] = useState(display(conversation.title))
   const input = useRef<HTMLInputElement>(null)
   // What the menu closes into: a rename, whose field takes the focus, or a
   // delete, whose confirmation opens once focus is back in the search field —
@@ -213,7 +215,7 @@ function PaletteRow({ conversation, term, renaming, onRename, onOpen, onDelete, 
 
   const save = async () => {
     const next = title.trim()
-    if (!next || next === conversation.title) { onRename(false); return }
+    if (!next || next === display(conversation.title)) { onRename(false); return }
     try {
       await rename.mutateAsync({ conversationId: conversation.id, title: next })
       onRename(false)
@@ -254,7 +256,7 @@ function PaletteRow({ conversation, term, renaming, onRename, onOpen, onDelete, 
       ) : (
         <span className="n-palette-text">
           <span className="n-palette-title" dir="auto">
-            <Marked text={conversation.title || t('chat.untitled')} term={term} />
+            <Marked text={display(conversation.title)} term={term} />
           </span>
           {conversation.match && (
             <span className="n-palette-excerpt" dir="auto">
@@ -291,7 +293,7 @@ function PaletteRow({ conversation, term, renaming, onRename, onOpen, onDelete, 
               after.current = null
             }}
           >
-            <DropdownMenuItem onSelect={() => { after.current = 'rename'; setTitle(conversation.title); rename.reset(); onRename(true) }}>
+            <DropdownMenuItem onSelect={() => { after.current = 'rename'; setTitle(display(conversation.title)); rename.reset(); onRename(true) }}>
               <PencilLine /><span>{t('chat.rename')}</span>
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => { after.current = 'delete' }}><Trash2 /><span>{t('chat.delete')}</span></DropdownMenuItem>

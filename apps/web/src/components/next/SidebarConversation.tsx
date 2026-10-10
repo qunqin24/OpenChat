@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 import { useGenerateTitle, useRenameConversation } from '@/hooks/use-conversations'
 import { useChatPaths } from '@/lib/chat-paths'
 import { formatRelative } from '@/lib/grouping'
+import { useDisplayTitle } from '@/lib/titles'
 import { cn } from '@/lib/utils'
 import { ThinkingOrb } from './ThinkingOrb'
 
@@ -26,12 +27,13 @@ interface Props {
 
 export function SidebarConversation({ conversation, active, running = false, onDelete, onNavigate }: Props) {
   const { t } = useTranslation()
+  const display = useDisplayTitle()
   const paths = useChatPaths()
   const rename = useRenameConversation()
   const smartTitle = useGenerateTitle()
   const [menuOpen, setMenuOpen] = useState(false)
   const [editing, setEditing] = useState(false)
-  const [title, setTitle] = useState(conversation.title)
+  const [title, setTitle] = useState(display(conversation.title))
   const input = useRef<HTMLInputElement>(null)
   const link = useRef<HTMLAnchorElement>(null)
 
@@ -40,7 +42,7 @@ export function SidebarConversation({ conversation, active, running = false, onD
   }, [editing])
 
   const startEditing = () => {
-    setTitle(conversation.title)
+    setTitle(display(conversation.title))
     rename.reset()
     setEditing(true)
   }
@@ -55,7 +57,7 @@ export function SidebarConversation({ conversation, active, running = false, onD
         <form className="n-row n-conversation-edit" onSubmit={async (event) => {
           event.preventDefault()
           if (!title.trim() || rename.isPending) return
-          if (title.trim() === conversation.title) { cancelEditing(); return }
+          if (title.trim() === display(conversation.title)) { cancelEditing(); return }
           try {
             await rename.mutateAsync({ conversationId: conversation.id, title: title.trim() })
             cancelEditing()
@@ -100,7 +102,7 @@ export function SidebarConversation({ conversation, active, running = false, onD
             {smartTitle.isPending ? (
               <span className="n-row-label n-reasoning-live" data-motion="essential">{t('chat.smart-title-pending')}</span>
             ) : (
-              <span className="n-row-label" dir="auto">{conversation.title || t('chat.untitled')}</span>
+              <span className="n-row-label" dir="auto">{display(conversation.title)}</span>
             )}
             <span className="n-row-meta">{formatRelative(conversation.updatedAt, t)}</span>
           </Link>

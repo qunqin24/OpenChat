@@ -30,6 +30,7 @@ import { API_BASE_URL } from '@/lib/api'
 import { useChatPaths } from '@/lib/chat-paths'
 import { loadComposerPrefs, saveComposerPrefs } from '@/lib/composer-prefs'
 import { defaultModelId } from '@/lib/model-capacity'
+import { displayTitle } from '@/lib/titles'
 import { acceptAttribute, acceptsOf } from '@/lib/attachments'
 import { isRunning } from '@/lib/run-state'
 import { buildTurns, pendingQuestion } from '@/lib/transcript'
@@ -577,7 +578,7 @@ export function NextChat({ conversationId }: NextChatProps) {
     if (conversationId) void navigate({ to: paths.home })
   }
 
-  const title = conversationId ? (conversation.data?.title ?? '') : t('next.nav.new')
+  const title = conversationId ? displayTitle(conversation.data?.title, t) : t('next.nav.new')
   const modelName = modelById.get(modelId)?.name ?? (modelId || 'OpenChat')
 
   // Exactly one composer for every state; on the empty state it docks beneath
