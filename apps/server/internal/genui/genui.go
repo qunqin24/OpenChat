@@ -31,6 +31,9 @@ type Component struct {
 	Name        string  `json:"name"`
 	Description string  `json:"description"`
 	Params      []Param `json:"params"`
+	// Retired components are no longer taught to the model, but the page still
+	// draws them, so a transcript that used one keeps rendering.
+	Retired bool `json:"retired"`
 }
 
 type Param struct {
@@ -77,15 +80,16 @@ func (c Catalog) Prompt() string {
 	b.WriteString(`## Interface components
 
 When structure would make part of an answer clearer — a few key figures, a
-comparison table, a plan, a specification — you may render that part as
-interface components instead of Markdown. Put them in a fenced code block whose
+chart, a plan, a specification — you may render that part as interface
+components instead of Markdown. A table is not one of them: write tables as
+ordinary Markdown tables, outside any block. Put them in a fenced code block whose
 language is openchat-ui.
 
 Write the answer as prose and drop a block in exactly where its content belongs,
 the way a figure sits in an article: a sentence or a heading, then the block,
 then the prose carries on. Several small blocks spread through an answer are
 better than one large block. Keep each block to one idea — a row of figures, one
-table, one plan — and do not wrap the whole answer, or several unrelated things,
+chart, one plan — and do not wrap the whole answer, or several unrelated things,
 in one Card. Use Card only to group a few things that belong together, such as a
 price with its breakdown. Do not repeat in prose what a block already shows, and
 never mention the block, its syntax or "openchat-ui" to the reader. Use none for
@@ -107,6 +111,9 @@ Inside the block, write one declaration per line:
 Components:
 `)
 	for _, component := range c.Components {
+		if component.Retired {
+			continue
+		}
 		b.WriteString("\n")
 		b.WriteString(signature(component))
 		b.WriteString("\n    ")

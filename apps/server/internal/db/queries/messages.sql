@@ -67,3 +67,16 @@ ORDER BY created_at, id;
 SELECT *
 FROM messages
 WHERE id = $1;
+
+-- name: ToolResultMentions :one
+-- Whether any tool result in the conversation contains the text, for the
+-- image proxy: it serves only addresses a page or search put in front of the
+-- model. jsonb renders strings with only quotes and backslashes escaped, so
+-- an http(s) address matches as written.
+SELECT EXISTS (
+    SELECT 1
+    FROM messages
+    WHERE conversation_id = sqlc.arg('conversation_id')
+      AND role = 'tool'
+      AND position(sqlc.arg('needle')::text IN parts::text) > 0
+) AS found;

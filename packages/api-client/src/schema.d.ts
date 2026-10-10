@@ -762,6 +762,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/conversations/{conversationId}/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A picture an answer shows, fetched for the reader
+         * @description Serves an image a reply's interface components show. Only an address
+         *     that appears in one of this conversation's tool results — a page the
+         *     model read, a search it ran — is fetched, so an answer can show what
+         *     its sources hold and nothing it made up. The server fetches it from
+         *     public addresses only and caches it, so the reader's browser asks no
+         *     third party. 404 when the address is not from this conversation or the
+         *     image cannot be had; the client then leaves the picture out.
+         */
+        get: operations["getConversationImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/models": {
         parameters: {
             query?: never;
@@ -2969,6 +2997,31 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description The icon. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": string;
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getConversationImage: {
+        parameters: {
+            query: {
+                url: string;
+            };
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image. */
             200: {
                 headers: {
                     [name: string]: unknown;

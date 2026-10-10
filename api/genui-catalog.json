@@ -1,10 +1,10 @@
 {
-  "$comment": "The components a model may use in an `openchat-ui` block. The single source of truth: the server builds the system prompt from it and the web app validates and renders against it. `make generate-genui` copies it to both; edit this file, never the copies.",
+  "$comment": "The components a model may use in an `openchat-ui` block. The single source of truth: the server builds the system prompt from it and the web app validates and renders against it. `make generate-genui` copies it to both; edit this file, never the copies. A component marked retired is left out of the model's instructions but still drawn, so transcripts that used it keep rendering.",
   "version": 1,
   "components": [
     {
       "name": "Card",
-      "description": "A raised container for a few closely related things, such as a price with its breakdown, or a small panel: an icon, a title and subtitle and a status Badge in its header, its content, a footer line. Most blocks need no Card; never wrap a whole answer in one. A Grid of Cards with an icon, a title and a subtitle and no children introduces a set of topics, options or features at a glance.",
+      "description": "A raised container for a few closely related things, such as a price with its breakdown, or a small panel: an icon, a title and subtitle and a status Badge in its header, its content, a footer line. Most blocks need no Card; never wrap a whole answer in one. A Grid of Cards with an icon, a title and a subtitle and no children introduces a set of topics, options or features at a glance. With an image, the picture is the card's cover and the title and subtitle sit beneath it; several such Cards in a Carousel scroll sideways. The image follows the Image rule: src must be an image address listed in a web_fetch or web_search result in this conversation (a page lists its images under \"Images on this page\"); never invent or guess one. With none listed, leave pictures out.",
       "params": [
         {
           "name": "children",
@@ -102,6 +102,10 @@
         },
         {
           "name": "footer",
+          "type": "string"
+        },
+        {
+          "name": "image",
           "type": "string"
         }
       ]
@@ -266,7 +270,7 @@
     },
     {
       "name": "Table",
-      "description": "A table. Every row has one cell per column.",
+      "description": "Retired: tables are written as Markdown tables. Kept so answers that already used it still draw.",
       "params": [
         {
           "name": "columns",
@@ -282,7 +286,8 @@
           "name": "caption",
           "type": "string"
         }
-      ]
+      ],
+      "retired": true
     },
     {
       "name": "Chart",
@@ -538,6 +543,96 @@
           "name": "done",
           "type": "boolean",
           "default": false
+        }
+      ]
+    },
+    {
+      "name": "Image",
+      "description": "One picture from a source, with an optional caption. link is the page it came from; its site is shown on the picture. src must be an image address listed in a web_fetch or web_search result in this conversation (a page lists its images under \"Images on this page\"); never invent or guess one. With none listed, leave pictures out.",
+      "params": [
+        {
+          "name": "src",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "alt",
+          "type": "string"
+        },
+        {
+          "name": "caption",
+          "type": "string"
+        },
+        {
+          "name": "link",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "Gallery",
+      "description": "Several pictures in a grid, such as views of a place or examples of a style. Its items are Image components.",
+      "params": [
+        {
+          "name": "items",
+          "type": "nodes",
+          "of": [
+            "Image"
+          ],
+          "required": true
+        },
+        {
+          "name": "columns",
+          "type": "integer",
+          "min": 2,
+          "max": 4,
+          "default": 2
+        }
+      ]
+    },
+    {
+      "name": "Carousel",
+      "description": "A row of Cards the reader scrolls sideways, for options to browse: products, places, articles. Give each Card an image, a title and a subtitle.",
+      "params": [
+        {
+          "name": "items",
+          "type": "nodes",
+          "of": [
+            "Card"
+          ],
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "Article",
+      "description": "One news story or article you read: its headline, a two- or three-sentence summary in your words, the page it is from, and its lead image when the page listed one. Several in a Stack make a news digest. src must be an image address listed in a web_fetch or web_search result in this conversation (a page lists its images under \"Images on this page\"); never invent or guess one. With none listed, leave pictures out.",
+      "params": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "summary",
+          "type": "markdown",
+          "required": true
+        },
+        {
+          "name": "link",
+          "type": "string"
+        },
+        {
+          "name": "image",
+          "type": "string"
+        },
+        {
+          "name": "category",
+          "type": "string"
+        },
+        {
+          "name": "date",
+          "type": "string"
         }
       ]
     },

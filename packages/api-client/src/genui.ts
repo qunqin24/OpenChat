@@ -37,6 +37,8 @@ export interface GenUIComponent {
   name: string
   description: string
   params: GenUIParam[]
+  /** No longer offered to the model; still drawn where a transcript used it. */
+  retired?: boolean
 }
 
 export interface GenUICatalog {

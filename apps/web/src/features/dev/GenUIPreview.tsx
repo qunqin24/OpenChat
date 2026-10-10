@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react'
 
+import { ImageSource } from '@/components/next/genui/image-source'
 import { AnswerText } from '@/components/next/MessageItem'
+
+/** A stand-in picture: a gradient, drawn in place, since this page has no sources. */
+const art = (from: string, to: string) =>
+  `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient></defs><rect width="800" height="500" fill="url(#g)"/></svg>`,
+  )}`
 
 const SAMPLE = `**东京三日游（Tokyo）**的节奏**轻松**，以步行和地铁为主，适合第一次去。先看几个关键数字：
 
@@ -24,17 +31,21 @@ d3 = Step("第三天：银座与台场")
 
 第一天的具体时间和花费如下，午餐是当天主要的开销。
 
-\`\`\`openchat-ui
-root = Table(["时间", "地点", "花费"], [["09:00", "浅草寺", 0], ["12:30", "仲见世通午餐", 1500], ["15:00", "上野公园", 0]], caption: "第一天安排")
-\`\`\`
+| 时间 | 地点 | 花费 |
+| --- | --- | ---: |
+| 09:00 | 浅草寺 | 0 |
+| 12:30 | 仲见世通午餐 | 1500 |
+| 15:00 | 上野公园 | 0 |
 
 ### 出发前
 
 还有两件事没办完，签证最需要抓紧：
 
-\`\`\`openchat-ui
-root = Table(["事项", "负责人", "进度"], [["订机票", "张伟", "100%"], ["订酒店", "李娜", "75%"], ["办签证", "王强", "40%"]])
-\`\`\`
+| 事项 | 负责人 | 进度 |
+| --- | --- | --- |
+| 订机票 | 张伟 | 100% |
+| 订酒店 | 李娜 | 75% |
+| 办签证 | 王强 | 40% |
 
 \`\`\`openchat-ui
 root = Callout("Suica 卡可以坐地铁也能在便利店付款，到机场先办一张。", tone: "info", title: "交通")
@@ -112,6 +123,28 @@ $$
 \\mathrm{Attention}(Q, K, V) = \\mathrm{softmax}\\left(\\frac{QK^T}{\\sqrt{d_k}}\\right)V
 $$
 
+### 图片
+
+\`\`\`openchat-ui
+root = Gallery([g1, g2, g3, g4], columns: 2)
+g1 = Image("${art('#cbd5e1', '#64748b')}", caption: "清水混凝土住宅", link: "https://www.archdaily.com/")
+g2 = Image("${art('#a855f7', '#0ea5e9')}", caption: "赛博朋克街景", link: "https://www.artstation.com/")
+g3 = Image("${art('#38bdf8', '#16a34a')}", caption: "阿尔卑斯湖", link: "https://unsplash.com/")
+g4 = Image("${art('#fbcfe8', '#a5f3fc')}", caption: "3D 几何", link: "https://dribbble.com/")
+\`\`\`
+
+\`\`\`openchat-ui
+root = Carousel([k1, k2, k3, k4])
+k1 = Card(title: "工作设备", subtitle: "简洁高效的工作空间", image: "${art('#e5e7eb', '#a78bfa')}")
+k2 = Card(title: "外设装备", subtitle: "个性化桌面配置", image: "${art('#f97316', '#22d3ee')}")
+k3 = Card(title: "未来桌面", subtitle: "沉浸式多任务工作站", image: "${art('#6d28d9', '#ec4899')}")
+k4 = Card(title: "极简收纳", subtitle: "线缆与桌面整理", image: "${art('#fde68a', '#f59e0b')}")
+\`\`\`
+
+\`\`\`openchat-ui
+root = Article("谷歌推出面向工作的 Gemini 智能体", "谷歌云发布面向企业的 Gemini 智能体，可处理任务管理、内容生成和编程。它的目标已经从聊天助手延伸到**能执行实际任务的数字同事**。", link: "https://cloud.google.com/blog", image: "${art('#0f766e', '#22c55e')}", category: "今日头条 · 人工智能", date: "10 月 8 日")
+\`\`\`
+
 需要的话，我可以按你的预算再调整。`
 
 /**
@@ -148,7 +181,10 @@ export function GenUIPreview() {
             Show all
           </button>
         </div>
-        <AnswerText text={SAMPLE.slice(0, length)} streaming={streaming} />
+        {/* No conversation here: the sample's pictures are drawn in place. */}
+        <ImageSource.Provider value={(src) => (src.startsWith('data:image/') ? src : null)}>
+          <AnswerText text={SAMPLE.slice(0, length)} streaming={streaming} />
+        </ImageSource.Provider>
       </div>
     </div>
   )

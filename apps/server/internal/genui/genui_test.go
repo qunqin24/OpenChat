@@ -46,11 +46,24 @@ func TestPromptListsEveryComponent(t *testing.T) {
 	catalog := Load()
 	prompt := catalog.Prompt()
 	for _, c := range catalog.Components {
+		if c.Retired {
+			continue
+		}
 		if !strings.Contains(prompt, "\n"+signature(c)+"\n") {
 			t.Errorf("prompt does not list %s", signature(c))
 		}
 	}
 	if !strings.Contains(prompt, "```openchat-ui") {
 		t.Error("prompt does not name the block's language")
+	}
+}
+
+func TestRetiredComponentsAreNotTaught(t *testing.T) {
+	prompt := Load().Prompt()
+	if strings.Contains(prompt, "\nTable(") {
+		t.Error("the retired Table component is still in the model's instructions")
+	}
+	if !strings.Contains(prompt, "Markdown tables") {
+		t.Error("the instructions no longer say tables are Markdown")
 	}
 }

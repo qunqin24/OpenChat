@@ -830,3 +830,203 @@
 .prism-next .n-ui-card .n-ui-chart {
   margin-top: 4px;
 }
+
+/* ---- pictures --------------------------------------------------------------
+   Every picture comes from a source the model read, through the server's
+   proxy. Frames hold a fixed shape and crop to it, so pictures of any size
+   line up; one that cannot load takes its frame with it. */
+
+.prism-next .n-ui-image {
+  margin: 0;
+}
+.prism-next .n-ui-image-frame {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--n-ui-tint);
+  box-shadow: inset 0 0 0 1px var(--n-table-rule);
+}
+.prism-next .n-ui-image-frame img {
+  display: block;
+  width: 100%;
+  max-height: 460px;
+  object-fit: cover;
+}
+.prism-next .n-ui-image-caption {
+  margin-top: 8px;
+  color: var(--n-chat-muted);
+  font-size: 13px;
+  line-height: 19px;
+}
+.prism-next .n-ui-source-chip {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  max-width: calc(100% - 20px);
+  overflow: hidden;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  backdrop-filter: blur(6px);
+}
+.prism-next a.n-ui-image-frame:hover img,
+.prism-next a.n-ui-article-media:hover img {
+  filter: brightness(0.96);
+}
+.prism-next :is(.n-ui-image-frame, .n-ui-article-media, .n-ui-card-cover) img {
+  transition: filter 150ms ease;
+}
+
+/* A gallery is a grid of equal tiles. */
+.prism-next .n-ui-gallery {
+  display: grid;
+  grid-template-columns: repeat(var(--n-ui-cols, 2), minmax(0, 1fr));
+  gap: 10px;
+}
+.prism-next .n-ui-gallery .n-ui-image-frame img {
+  aspect-ratio: 4 / 3;
+  height: auto;
+  max-height: none;
+}
+@media (max-width: 640px) {
+  .prism-next .n-ui-gallery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* A card with a cover: the picture on top, flush with the card's corners. */
+.prism-next .n-ui-card.has-image {
+  overflow: hidden;
+  padding-top: 0;
+}
+.prism-next .n-ui-card-cover {
+  margin: 0 -18px 14px;
+  overflow: hidden;
+  background: var(--n-ui-tint);
+}
+.prism-next .n-ui-card-cover img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+}
+
+/* ---- carousel ---------------------------------------------------------------- */
+
+.prism-next .n-ui-scroller {
+  position: relative;
+}
+.prism-next .n-ui-scroller-track {
+  display: flex;
+  gap: 12px;
+  margin: -4px;
+  padding: 4px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+.prism-next .n-ui-scroller-track::-webkit-scrollbar {
+  display: none;
+}
+.prism-next .n-ui-scroller-track > * {
+  flex: 0 0 min(260px, 78%);
+  scroll-snap-align: start;
+}
+.prism-next .n-ui-scroller-arrow {
+  position: absolute;
+  top: calc(50% - 18px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--n-card);
+  box-shadow: var(--n-shadow-card);
+  color: var(--n-chat-heading);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+.prism-next .n-ui-scroller-arrow svg {
+  width: 18px;
+  height: 18px;
+}
+.prism-next .n-ui-scroller-arrow.is-prev {
+  left: -10px;
+}
+.prism-next .n-ui-scroller-arrow.is-next {
+  right: -10px;
+}
+@media (hover: hover) {
+  .prism-next .n-ui-scroller:hover .n-ui-scroller-arrow:not(.is-hidden) {
+    opacity: 1;
+  }
+}
+.prism-next .n-ui-scroller-arrow.is-hidden {
+  pointer-events: none;
+}
+
+/* ---- article ----------------------------------------------------------------- */
+
+.prism-next .n-ui-article {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.prism-next .n-ui-article + .n-ui-article {
+  margin-top: 18px;
+}
+.prism-next .n-ui-article-media {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  margin-bottom: 4px;
+  border-radius: 18px;
+  background: var(--n-ui-tint);
+}
+.prism-next .n-ui-article-media img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+.prism-next .n-ui-article-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.prism-next .n-ui-article-meta .n-ui-source-chip {
+  position: static;
+  background: var(--n-ui-tint);
+  color: var(--n-chat-muted);
+  backdrop-filter: none;
+}
+.prism-next .n-ui-article-date {
+  margin-left: auto;
+  color: var(--n-chat-muted);
+  font-size: 13px;
+}
+.prism-next .n-ui-article-title {
+  margin: 2px 0 0;
+  color: var(--n-chat-heading);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.prism-next .n-ui-article-title a {
+  color: inherit;
+  text-decoration: none;
+}
+.prism-next .n-ui-article-title a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

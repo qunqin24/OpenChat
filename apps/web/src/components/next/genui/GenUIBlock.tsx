@@ -1,15 +1,16 @@
 import { ArrowDownRight, ArrowRight, ArrowUpRight, Check, ChevronDown, CircleAlert, CircleCheck, Info, TriangleAlert } from 'lucide-react'
 import { Collapsible, Tabs as RadixTabs } from 'radix-ui'
-import { useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Streamdown } from 'streamdown'
 
 import { parseBlock } from '@/lib/genui/parse'
 import { resolveBlock, type Cell, type UINode } from '@/lib/genui/resolve'
 import { cn } from '@/lib/utils'
-import { markdownComponents, markdownLinkSafety, markdownPlugins, prepareMarkdown } from '../markdown-components'
+import { markdownComponents, markdownLinkSafety, prepareMarkdown, useMarkdownPlugins } from '../markdown-components'
 import { Chart, type ChartSeries } from './Chart'
 import { CARD_ICONS } from './icons'
+import { MaybeLink, Picture, Scroller, SourceChip } from './media'
 
 interface GenUIBlockProps {
   source: string
@@ -56,9 +57,10 @@ function children(nodes: unknown) {
 }
 
 function Markdown({ text }: { text: string }) {
+  const plugins = useMarkdownPlugins(text)
   return (
     <div className="n-ui-text markdown-body">
-      <Streamdown className="n-prose" components={markdownComponents} plugins={markdownPlugins} linkSafety={markdownLinkSafety}>
+      <Streamdown className="n-prose" components={markdownComponents} plugins={plugins} linkSafety={markdownLinkSafety}>
         {prepareMarkdown(text)}
       </Streamdown>
     </div>
@@ -82,8 +84,9 @@ const renderers: Record<string, (props: Props) => ReactNode> = {
     // above the title.
     const panel = Boolean(body && body.length > 0)
     return (
-      <section className={cn('n-ui-card', `is-${str(p.tone)}`, panel && 'is-panel')}>
-        {Icon && !panel && <Icon className="n-ui-card-icon" aria-hidden="true" />}
+      <section className={cn('n-ui-card', `is-${str(p.tone)}`, panel && 'is-panel', str(p.image) && 'has-image')}>
+        {str(p.image) && <CardCover src={str(p.image)} alt={str(p.title)} />}
+        {Icon && !panel && !str(p.image) && <Icon className="n-ui-card-icon" aria-hidden="true" />}
         {(head || badge || (Icon && panel)) && (
           <header className="n-ui-card-head">
             {Icon && panel && <Icon className="n-ui-card-icon is-inline" aria-hidden="true" />}
@@ -243,7 +246,99 @@ const renderers: Record<string, (props: Props) => ReactNode> = {
   Badge: (p) => <span className={cn('n-ui-badge', `is-${str(p.tone) || 'neutral'}`)}>{str(p.text)}</span>,
   Checklist: (p) => <ChecklistBlock title={str(p.title)} items={(p.items as UINode[] | undefined) ?? []} />,
   Check: (p) => <ChecklistBlock title="" items={[{ key: 'check', component: 'Check', props: p }]} />,
+  Image: (p) => <ImageBlock src={str(p.src)} alt={str(p.alt)} caption={str(p.caption)} link={str(p.link)} />,
+  Gallery: (p) => (
+    <div className="n-ui-gallery" style={{ '--n-ui-cols': Number(p.columns) || 2 } as React.CSSProperties}>
+      {children(p.items)}
+    </div>
+  ),
+  Carousel: (p) => <Scroller>{children(p.items)}</Scroller>,
+  Article: (p) => (
+    <ArticleBlock
+      title={str(p.title)}
+      summary={str(p.summary)}
+      link={str(p.link)}
+      image={str(p.image)}
+      category={str(p.category)}
+      date={str(p.date)}
+    />
+  ),
   Divider: () => <hr className="n-ui-divider" />,
+}
+
+/** A picture from a source, with its site and caption; gone if it will not load. */
+function ImageBlock({ src, alt, caption, link }: { src: string; alt: string; caption: string; link: string }) {
+  const [missing, setMissing] = useState(false)
+  const lose = useCallback(() => setMissing(true), [])
+  if (missing) return null
+  return (
+    <figure className="n-ui-image">
+      <MaybeLink link={link} className="n-ui-image-frame">
+        <Picture src={src} alt={alt || caption} onMissing={lose} />
+        <SourceChip link={link} />
+      </MaybeLink>
+      {caption && <figcaption className="n-ui-image-caption">{caption}</figcaption>}
+    </figure>
+  )
+}
+
+/** A card's cover picture; the card simply has none if it will not load. */
+function CardCover({ src, alt }: { src: string; alt: string }) {
+  const [missing, setMissing] = useState(false)
+  const lose = useCallback(() => setMissing(true), [])
+  if (missing) return null
+  return (
+    <div className="n-ui-card-cover">
+      <Picture src={src} alt={alt} onMissing={lose} />
+    </div>
+  )
+}
+
+/** One story: lead picture with its site, category and date, headline, summary. */
+function ArticleBlock({
+  title,
+  summary,
+  link,
+  image,
+  category,
+  date,
+}: {
+  title: string
+  summary: string
+  link: string
+  image: string
+  category: string
+  date: string
+}) {
+  const [missing, setMissing] = useState(!image)
+  const lose = useCallback(() => setMissing(true), [])
+  return (
+    <article className="n-ui-article">
+      {!missing && (
+        <MaybeLink link={link} className="n-ui-article-media">
+          <Picture src={image} alt={title} onMissing={lose} />
+          <SourceChip link={link} />
+        </MaybeLink>
+      )}
+      {(category || date || (missing && link)) && (
+        <div className="n-ui-article-meta">
+          {category && <span className="n-ui-badge is-info">{category}</span>}
+          {missing && link && <SourceChip link={link} />}
+          {date && <span className="n-ui-article-date">{date}</span>}
+        </div>
+      )}
+      <h3 className="n-ui-article-title">
+        {/^https?:\/\//.test(link) ? (
+          <a href={link} target="_blank" rel="noreferrer">
+            {title}
+          </a>
+        ) : (
+          title
+        )}
+      </h3>
+      <Markdown text={summary} />
+    </article>
+  )
 }
 
 /** Switches between its tabs' content; Radix supplies the keyboard and roles. */

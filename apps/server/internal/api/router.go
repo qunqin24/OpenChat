@@ -81,6 +81,7 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 			r.Post("/conversations/{conversationId}/messages", wrapper.CreateMessage)
 			r.Get("/conversations/{conversationId}/events", wrapper.StreamConversationEvents)
 			r.Post("/conversations/{conversationId}/runs/{runId}/cancel", wrapper.CancelRun)
+			r.Get("/conversations/{conversationId}/images", wrapper.GetConversationImage)
 
 			// Any signed-in user: these are the models a conversation can use,
 			// not the channels behind them.

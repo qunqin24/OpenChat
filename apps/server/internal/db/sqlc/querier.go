@@ -261,6 +261,11 @@ type Querier interface {
 	// Upsert, so a setting added after this database was created still writes.
 	SetSetting(ctx context.Context, arg SetSettingParams) error
 	SoftDeleteConversation(ctx context.Context, arg SoftDeleteConversationParams) (int64, error)
+	// Whether any tool result in the conversation contains the text, for the
+	// image proxy: it serves only addresses a page or search put in front of the
+	// model. jsonb renders strings with only quotes and backslashes escaped, so
+	// an http(s) address matches as written.
+	ToolResultMentions(ctx context.Context, arg ToolResultMentionsParams) (bool, error)
 	TouchConversation(ctx context.Context, id uuid.UUID) error
 	TouchSession(ctx context.Context, id uuid.UUID) error
 	TouchUserSeen(ctx context.Context, id uuid.UUID) error

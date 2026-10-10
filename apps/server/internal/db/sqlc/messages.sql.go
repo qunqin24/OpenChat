@@ -383,3 +383,29 @@ func (q *Queries) ListRunMessages(ctx context.Context, arg ListRunMessagesParams
 	}
 	return items, nil
 }
+
+const toolResultMentions = `-- name: ToolResultMentions :one
+SELECT EXISTS (
+    SELECT 1
+    FROM messages
+    WHERE conversation_id = $1
+      AND role = 'tool'
+      AND position($2::text IN parts::text) > 0
+) AS found
+`
+
+type ToolResultMentionsParams struct {
+	ConversationID uuid.UUID `json:"conversation_id"`
+	Needle         string    `json:"needle"`
+}
+
+// Whether any tool result in the conversation contains the text, for the
+// image proxy: it serves only addresses a page or search put in front of the
+// model. jsonb renders strings with only quotes and backslashes escaped, so
+// an http(s) address matches as written.
+func (q *Queries) ToolResultMentions(ctx context.Context, arg ToolResultMentionsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, toolResultMentions, arg.ConversationID, arg.Needle)
+	var found bool
+	err := row.Scan(&found)
+	return found, err
+}

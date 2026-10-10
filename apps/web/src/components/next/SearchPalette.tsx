@@ -12,8 +12,10 @@ import {
 import { useChatModels } from '@/hooks/use-chat-models'
 import { useRenameConversation } from '@/hooks/use-conversations'
 import { useMessages } from '@/hooks/use-messages'
+import { API_BASE_URL } from '@/lib/api'
 import { groupConversations, parseTimestamp } from '@/lib/grouping'
 import { buildTurns, type AssistantTurn as Turn } from '@/lib/transcript'
+import { ImageSource, proxiedImages } from './genui/image-source'
 import { AssistantTurn, UserMessage } from './MessageItem'
 
 interface Props {
@@ -302,15 +304,17 @@ function Preview({ conversationId }: { conversationId: string | null }) {
         <div className="n-palette-preview-idle">{t('next.search.preview-empty')}</div>
       ) : (
         // Inert: a preview to read, not a transcript to act on.
-        <div className="n-palette-transcript" inert>
-          {turns.map((turn) =>
-            turn.kind === 'user' ? (
-              <UserMessage key={turn.key} message={turn.message} />
-            ) : (
-              <AssistantTurn key={turn.key} turn={turn} modelId={turnModel(turn) ?? ''} model={modelById.get(turnModel(turn) ?? '')} />
-            ),
-          )}
-        </div>
+        <ImageSource.Provider value={proxiedImages(API_BASE_URL, shown)}>
+          <div className="n-palette-transcript" inert>
+            {turns.map((turn) =>
+              turn.kind === 'user' ? (
+                <UserMessage key={turn.key} message={turn.message} />
+              ) : (
+                <AssistantTurn key={turn.key} turn={turn} modelId={turnModel(turn) ?? ''} model={modelById.get(turnModel(turn) ?? '')} />
+              ),
+            )}
+          </div>
+        </ImageSource.Provider>
       )}
     </div>
   )

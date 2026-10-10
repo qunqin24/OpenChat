@@ -928,6 +928,34 @@ paths:
               schema: { type: string, format: binary }
         default: { $ref: "#/components/responses/Error" }
 
+  /conversations/{conversationId}/images:
+    parameters:
+      - { $ref: "#/components/parameters/ConversationId" }
+    get:
+      tags: [messages]
+      summary: A picture an answer shows, fetched for the reader
+      description: |
+        Serves an image a reply's interface components show. Only an address
+        that appears in one of this conversation's tool results — a page the
+        model read, a search it ran — is fetched, so an answer can show what
+        its sources hold and nothing it made up. The server fetches it from
+        public addresses only and caches it, so the reader's browser asks no
+        third party. 404 when the address is not from this conversation or the
+        image cannot be had; the client then leaves the picture out.
+      operationId: getConversationImage
+      parameters:
+        - name: url
+          in: query
+          required: true
+          schema: { type: string, maxLength: 2048 }
+      responses:
+        "200":
+          description: The image.
+          content:
+            image/*:
+              schema: { type: string, format: binary }
+        default: { $ref: "#/components/responses/Error" }
+
   /models:
     get:
       tags: [messages]

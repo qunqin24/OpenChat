@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -104,7 +105,7 @@ func (w WebFetch) Execute(ctx context.Context, raw json.RawMessage) (agent.ToolR
 	if runes := []rune(text); len(runes) > fetchMaxChars {
 		text, truncated = string(runes[:fetchMaxChars]), true
 	}
-	details := fetchDetails{URL: page.url, Title: page.title, Truncated: truncated, Chars: len([]rune(page.text))}
+	details := fetchDetails{URL: page.url, Title: page.title, Truncated: truncated, Chars: len([]rune(page.text)), Images: page.images}
 	if strings.TrimSpace(text) == "" {
 		return agent.ToolResult{
 			Content: fmt.Sprintf("%s was fetched but has no readable text — it is probably rendered by JavaScript. Try another source.", page.url),
@@ -121,21 +122,46 @@ func (w WebFetch) Execute(ctx context.Context, raw json.RawMessage) (agent.ToolR
 	if truncated {
 		fmt.Fprintf(&b, "\n\n[Truncated at %d characters.]", fetchMaxChars)
 	}
+	if len(page.images) > 0 {
+		b.WriteString("\n\nImages on this page, the lead image first:")
+		for _, image := range page.images {
+			if image.Alt != "" {
+				fmt.Fprintf(&b, "\n- %s (%s)", image.URL, image.Alt)
+			} else {
+				fmt.Fprintf(&b, "\n- %s", image.URL)
+			}
+		}
+	}
 	return agent.ToolResult{Content: b.String(), Details: details}, nil
 }
 
 type fetchDetails struct {
-	URL       string `json:"url"`
-	Title     string `json:"title,omitempty"`
-	Truncated bool   `json:"truncated"`
-	Chars     int    `json:"chars"`
+	URL       string      `json:"url"`
+	Title     string      `json:"title,omitempty"`
+	Truncated bool        `json:"truncated"`
+	Chars     int         `json:"chars"`
+	Images    []PageImage `json:"images,omitempty"`
 }
 
 type page struct {
-	url   string
-	title string
-	text  string
+	url    string
+	title  string
+	text   string
+	images []PageImage
 }
+
+// PageImage is a picture on a fetched page: its lead image (og:image) first,
+// then the larger ones in its body. They are listed to the model so it can
+// show one, and only an address listed here — in a tool result of the same
+// conversation — is ever fetched for the page (see the image proxy).
+type PageImage struct {
+	URL string `json:"url"`
+	Alt string `json:"alt,omitempty"`
+}
+
+// pageImagesMax is how many images a page lists: enough for a gallery, few
+// enough not to crowd the model's context.
+const pageImagesMax = 6
 
 func fetch(ctx context.Context, client *http.Client, target string) (page, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
@@ -191,7 +217,7 @@ func fetch(ctx context.Context, client *http.Client, target string) (page, error
 		return page{url: final, text: strings.TrimSpace(string(body))}, nil
 	}
 	title, text := htmlText(string(body))
-	return page{url: final, title: title, text: text}, nil
+	return page{url: final, title: title, text: text, images: htmlImages(string(body), resp.Request.URL)}, nil
 }
 
 // ---------------------------------------------------------------- SSRF guard
@@ -204,7 +230,12 @@ var (
 // guardedClient connects only to public addresses, ignores proxy settings in
 // the environment (a proxy would dial on our behalf, past the check), and
 // re-checks every redirect hop by dialling it through the same guard.
-func guardedClient() *http.Client {
+func guardedClient() *http.Client { return GuardedClient(fetchTimeout) }
+
+// GuardedClient is an HTTP client that connects only to public addresses —
+// see WebFetch for why — giving up after timeout. The image proxy fetches
+// through it too.
+func GuardedClient(timeout time.Duration) *http.Client {
 	dialer := &net.Dialer{
 		Timeout: 10 * time.Second,
 		Control: func(network, address string, _ syscall.RawConn) error {
@@ -229,7 +260,7 @@ func guardedClient() *http.Client {
 	}
 	return &http.Client{
 		Transport: transport,
-		Timeout:   fetchTimeout,
+		Timeout:   timeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= fetchRedirects {
 				return errTooManyRedirects
@@ -331,6 +362,95 @@ func htmlText(source string) (title, text string) {
 		}
 	}
 	return title, strings.Join(lines, "\n")
+}
+
+// htmlImages lists a page's pictures: its declared lead image (og:image or
+// twitter:image) and then <img> elements in the body, as absolute http(s)
+// addresses. Icons, logos, tracking pixels, inline data and SVG are left out:
+// none of them is a picture worth showing, and SVG can carry script.
+func htmlImages(source string, base *url.URL) []PageImage {
+	doc, err := html.Parse(strings.NewReader(source))
+	if err != nil {
+		return nil
+	}
+	var images []PageImage
+	seen := map[string]bool{}
+	add := func(raw, alt string) {
+		if len(images) >= pageImagesMax {
+			return
+		}
+		ref, err := url.Parse(strings.TrimSpace(raw))
+		if err != nil || raw == "" {
+			return
+		}
+		abs := base.ResolveReference(ref)
+		if abs.Scheme != "http" && abs.Scheme != "https" {
+			return
+		}
+		address := abs.String()
+		lower := strings.ToLower(abs.Path)
+		if seen[address] || len(address) > 2048 || strings.HasSuffix(lower, ".svg") || strings.HasSuffix(lower, ".ico") {
+			return
+		}
+		for _, marker := range []string{"logo", "icon", "avatar", "sprite", "pixel", "badge", "emoji", "spacer"} {
+			if strings.Contains(lower, marker) {
+				return
+			}
+		}
+		seen[address] = true
+		images = append(images, PageImage{URL: address, Alt: strings.Join(strings.Fields(alt), " ")})
+	}
+
+	attr := func(n *html.Node, name string) string {
+		for _, a := range n.Attr {
+			if strings.EqualFold(a.Key, name) {
+				return a.Val
+			}
+		}
+		return ""
+	}
+	// The lead image first, wherever its <meta> is.
+	var meta func(n *html.Node)
+	meta = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "meta" {
+			key := strings.ToLower(attr(n, "property") + attr(n, "name"))
+			if key == "og:image" || key == "og:image:url" || key == "og:image:secure_url" || key == "twitter:image" {
+				add(attr(n, "content"), "")
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			meta(c)
+		}
+	}
+	meta(doc)
+	var body func(n *html.Node)
+	body = func(n *html.Node) {
+		if n.Type == html.ElementNode && (n.Data == "nav" || n.Data == "footer" || n.Data == "header" || n.Data == "aside") {
+			return
+		}
+		if n.Type == html.ElementNode && n.Data == "img" {
+			// Small declared sizes are icons and spacers.
+			if w, err := strconv.Atoi(attr(n, "width")); err == nil && w < 200 {
+				return
+			}
+			if h, err := strconv.Atoi(attr(n, "height")); err == nil && h < 120 {
+				return
+			}
+			src := attr(n, "src")
+			// Lazy-loading pages keep the real address aside.
+			for _, lazy := range []string{"data-src", "data-original", "data-lazy-src"} {
+				if v := attr(n, lazy); v != "" {
+					src = v
+				}
+			}
+			add(src, attr(n, "alt"))
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			body(c)
+		}
+	}
+	body(doc)
+	return images
 }
 
 // findTitle is the first <title>, which lives in the <head> the text walk skips.
