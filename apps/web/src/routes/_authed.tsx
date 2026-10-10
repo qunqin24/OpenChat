@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
 import NextShell from '@/components/next/NextShell'
-import { sessionQueryOptions } from '@/features/auth/use-auth'
+import { currentSession } from '@/features/auth/use-auth'
 import { chatFeaturesQueryOptions, chatModelsQueryOptions } from '@/hooks/use-chat-models'
 import { conversationsQueryOptions } from '@/hooks/use-conversations'
 import { adoptQueryCache } from '@/lib/query-persist'
@@ -27,9 +27,10 @@ export const Route = createFileRoute('/_authed')({
     void queryClient.prefetchQuery(chatModelsQueryOptions)
     void queryClient.prefetchQuery(chatFeaturesQueryOptions)
 
-    // `ensureQueryData` reuses the cached session when it is still fresh, so
-    // navigating between protected routes costs no extra request.
-    const session = await queryClient.ensureQueryData(sessionQueryOptions)
+    // A session checked within its stale time is reused, so navigating between
+    // protected routes costs no request; an older one is asked of the server
+    // again, which is how a disabled account or a changed password is noticed.
+    const session = await currentSession(queryClient)
     // Before anything is drawn: a stored cache that is not this account's goes.
     adoptQueryCache(queryClient, session?.id ?? null)
 

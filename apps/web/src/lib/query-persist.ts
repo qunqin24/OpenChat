@@ -1,5 +1,7 @@
 import { dehydrate, hydrate, type DehydratedState, type Query, type QueryClient } from '@tanstack/react-query'
 
+import { resetChatStore } from '@/stores/chat-store'
+
 import { queryKeys } from './query-keys'
 
 /**
@@ -62,10 +64,13 @@ export function restoreQueryCache(client: QueryClient) {
  * belongs to someone else is thrown away, then saving starts for this user.
  */
 export function adoptQueryCache(client: QueryClient, userId: string | null) {
-  if (restoredOwner !== null && restoredOwner !== userId) {
-    for (const prefix of [...always, queryKeys.conversations.all, queryKeys.messages.all]) {
-      client.removeQueries({ queryKey: prefix })
-    }
+  const previous = owner ?? restoredOwner
+  if (previous !== null && previous !== userId) {
+    // Everything, not only what is stored: the memory, personalization and
+    // admin queries of the last account are as much theirs. Only the session
+    // (which the caller has just asked for, and which says who this is) stays.
+    client.removeQueries({ predicate: (query) => query.queryKey[0] !== queryKeys.auth.session[0] })
+    resetChatStore()
     forget()
   }
   restoredOwner = userId

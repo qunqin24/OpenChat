@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
 import { AuthenticatedLayout } from '@/components/shadcn/layout/authenticated-layout'
-import { sessionQueryOptions } from '@/features/auth/use-auth'
+import { currentSession } from '@/features/auth/use-auth'
 
 /**
  * The admin panel sits outside `_authed` because it has its own shell — the
@@ -10,7 +10,7 @@ import { sessionQueryOptions } from '@/features/auth/use-auth'
  */
 export const Route = createFileRoute('/admin')({
   beforeLoad: async ({ context }) => {
-    const session = await context.queryClient.ensureQueryData(sessionQueryOptions)
+    const session = await currentSession(context.queryClient)
     if (!session) {
       // Signing in lands in chat; the admin panel is opened explicitly there.
       throw redirect({ to: '/login' })

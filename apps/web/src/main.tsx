@@ -4,8 +4,9 @@ import { StrictMode, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import '@/lib/i18n'
-import { queryClient } from '@/lib/query'
+import { queryClient, setErrorListener } from '@/lib/query'
 import { persistQueryCache, restoreQueryCache } from '@/lib/query-persist'
+import { leaveIfSessionExpired } from '@/lib/session-expired'
 import { router } from '@/router'
 import { applyTheme, useUIStore } from '@/stores/ui-store'
 
@@ -26,6 +27,8 @@ function App() {
 // Last visit's conversation list and recent chats, shown while they refresh.
 restoreQueryCache(queryClient)
 persistQueryCache(queryClient)
+// A session that ended is noticed by whichever call finds out first.
+setErrorListener((error) => void leaveIfSessionExpired(error, router))
 
 const container = document.getElementById('root')
 if (!container) throw new Error('#root element is missing from index.html')

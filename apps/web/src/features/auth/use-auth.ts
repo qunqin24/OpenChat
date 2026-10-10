@@ -1,8 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/lib/api'
 import { putAvatar, squareAvatar } from '@/lib/avatar'
+import { queryKeys } from '@/lib/query-keys'
 import { forgetQueryCache } from '@/lib/query-persist'
+import { resetChatStore } from '@/stores/chat-store'
 import {
   authApi,
   type ChangePasswordInput,
@@ -18,14 +20,44 @@ import {
  * TanStack Query like any other resource, not in Zustand.
  */
 export const sessionQueryOptions = {
-  queryKey: ['auth', 'session'] as const,
+  queryKey: queryKeys.auth.session,
   queryFn: () => authApi.session(),
   staleTime: 5 * 60_000,
   retry: false,
 }
 
+/**
+ * Who is signed in, for the route guards. A session held for less than its
+ * stale time costs no request; an older one is asked of the server again,
+ * because an account can be disabled or its password changed while a tab sits
+ * open. If that check cannot be made (offline), the last answer stands rather
+ * than the page failing; with no earlier answer there is nothing to fall back to.
+ * (`ensureQueryData` would hand back the old answer however old it was.)
+ */
+export async function currentSession(queryClient: QueryClient): Promise<SessionUser | null> {
+  try {
+    return await queryClient.fetchQuery(sessionQueryOptions)
+  } catch (error) {
+    const held = queryClient.getQueryData<SessionUser | null>(sessionQueryOptions.queryKey)
+    if (held !== undefined) return held
+    throw error
+  }
+}
+
 export function useSession() {
   return useQuery(sessionQueryOptions)
+}
+
+/**
+ * Nothing of whoever was here before - their queries, their chat state, the
+ * copy kept in the browser's storage - may be seen by the next. Used on both
+ * sides of a session: signing out, and signing in (the tab may have held
+ * another account's, or a session that ended without the page being told).
+ */
+function dropEverything(queryClient: QueryClient) {
+  queryClient.clear()
+  resetChatStore()
+  forgetQueryCache()
 }
 
 export function useLogin() {
@@ -34,6 +66,7 @@ export function useLogin() {
   return useMutation({
     mutationFn: (input: LoginInput) => authApi.login(input),
     onSuccess: (user: SessionUser) => {
+      dropEverything(queryClient)
       queryClient.setQueryData(sessionQueryOptions.queryKey, user)
     },
   })
@@ -47,6 +80,7 @@ export function useRegister() {
     onSuccess: (outcome) => {
       // A pending account has no session to remember.
       if (outcome.status === 'signed_in') {
+        dropEverything(queryClient)
         queryClient.setQueryData(sessionQueryOptions.queryKey, outcome.user)
       }
     },
@@ -58,12 +92,7 @@ export function useLogout() {
 
   return useMutation({
     mutationFn: () => authApi.logout(),
-    onSuccess: () => {
-      // Everything cached was scoped to the person signing out, in memory and
-      // in the browser's storage.
-      queryClient.clear()
-      forgetQueryCache()
-    },
+    onSuccess: () => dropEverything(queryClient),
   })
 }
 

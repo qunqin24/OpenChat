@@ -7,7 +7,9 @@ import { setCompaction } from '@/hooks/use-compaction'
 import { refreshNewestMessages } from '@/hooks/use-messages'
 import { API_BASE_URL, appFetch } from '@/lib/api'
 import { useChatPaths } from '@/lib/chat-paths'
+import { refreshConfirmed, refreshThenSettle } from '@/lib/hand-over'
 import { CAPACITY_CODE } from '@/lib/model-capacity'
+import { reportError } from '@/lib/query'
 import { queryKeys } from '@/lib/query-keys'
 import { truncateTranscript, type TranscriptPages } from '@/lib/transcript-pages'
 import { useChatStore } from '@/stores/chat-store'
@@ -60,15 +62,30 @@ export function useConversationEvents(conversationId: string | undefined) {
 
     // Brings the message list up to date: its newest page only, spliced onto
     // the older ones already held. If that fails, the plain refetch of every
-    // page is the fallback.
+    // page is the fallback. True only when one of them actually worked - the
+    // fallback invalidating a query whose refetch then fails is not a refresh.
     const refreshMessages = () =>
-      refreshNewestMessages(queryClient, conversationId).catch(() =>
-        queryClient.invalidateQueries({ queryKey: queryKeys.messages.list(conversationId) }),
-      )
+      refreshConfirmed({
+        refreshNewest: () => refreshNewestMessages(queryClient, conversationId),
+        refetchAll: () =>
+          queryClient.refetchQueries({ queryKey: queryKeys.messages.list(conversationId) }, { throwOnError: true }),
+      })
+
+    // Refreshes the list and, only once that is confirmed, lets the live copy
+    // of `runId` go (see lib/hand-over.ts). A refresh that fails leaves the
+    // answer on screen and is tried again; a later success settles it.
+    const catchUp = (runId?: string, settleRun: (id: string) => void = (id) => settle(conversationId, id)) =>
+      refreshThenSettle({
+        refresh: refreshMessages,
+        settle: settleRun,
+        runId,
+        wait: (ms) => new Promise((resolve) => window.setTimeout(resolve, ms)),
+        cancelled: () => controller.signal.aborted,
+      })
 
     // Hands a finished run over to the query cache.
     const handOver = (runId: string) => {
-      void refreshMessages().then(() => settle(conversationId, runId))
+      void catchUp(runId)
       // The conversation's position in the sidebar and its model may have moved.
       void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all })
       // The model may have kept a note about the person while it ran.
@@ -92,12 +109,29 @@ export function useConversationEvents(conversationId: string | undefined) {
           })) {
             attempt = 0
             if (event.type === 'snapshot') {
-              const before = useChatStore.getState().live[conversationId]?.run
+              const held = useChatStore.getState().live[conversationId]?.run
+              if (held && !event.run) {
+                // The run we were showing ended while we were away: its rows are
+                // only in the message list now. It stays on screen until the
+                // list holds them; then the snapshot (nothing running) replaces
+                // it - unless another run has taken its place meanwhile.
+                const replace = (id: string) => {
+                  if (useChatStore.getState().live[conversationId]?.run?.run.id === id) applySnapshot(conversationId, event)
+                }
+                void catchUp(held.run.id, replace).then((done) => {
+                  // Still showing a run the server says is over, and the list
+                  // cannot be read: better a gap than a Stop button that never goes.
+                  if (!done && held.run.status === 'running') replace(held.run.id)
+                })
+                continue
+              }
               applySnapshot(conversationId, event)
-              // A run that finished while we were away: its rows are only in
-              // the message list now.
-              if (before && before.run.id !== event.run?.id) {
-                void refreshMessages()
+              // Another run than the one held: the one held finished while we
+              // were away, and its rows are only in the list now. Or the same
+              // run, over, after a hand-over that never succeeded.
+              if (held && event.run) {
+                if (held.run.id !== event.run.id) void catchUp()
+                else if (event.run.status !== 'running') void catchUp(event.run.id)
               }
               continue
             }
@@ -155,12 +189,9 @@ export function useConversationEvents(conversationId: string | undefined) {
               if (runEvent.type === 'transcript_changed') {
                 // A summary that ended at a deleted row went with it.
                 void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.compaction(conversationId) })
-                void refreshMessages().then(() => {
-                  // A finished run still held live would put its own rows back
-                  // over the transcript now (settle leaves a running one be).
-                  const held = useChatStore.getState().live[conversationId]?.run?.run.id
-                  if (held) settle(conversationId, held)
-                })
+                // A finished run still held live would put its own rows back over
+                // the transcript now (settle leaves a running one be).
+                void catchUp(useChatStore.getState().live[conversationId]?.run?.run.id)
               }
             }
           }
@@ -168,6 +199,13 @@ export function useConversationEvents(conversationId: string | undefined) {
           if (controller.signal.aborted) return
           if (isOpenChatError(error) && error.status === 404) {
             leave()
+            return
+          }
+          // The session ended (or never was): reconnecting would be refused the
+          // same way for ever. Say so once - that takes the page to sign-in -
+          // and stop.
+          if (isOpenChatError(error) && error.status === 401) {
+            reportError(error)
             return
           }
         }

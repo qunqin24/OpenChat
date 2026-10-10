@@ -24,6 +24,8 @@ export const queryKeys = {
     status: ['guest', 'status'] as const,
   },
   auth: {
+    /** Who is signed in; `null` when nobody is. */
+    session: ['auth', 'session'] as const,
     /** What the sign-in pages offer: registration, guest mode (public). */
     options: ['auth', 'options'] as const,
   },

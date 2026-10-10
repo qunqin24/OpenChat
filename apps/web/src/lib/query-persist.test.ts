@@ -200,6 +200,36 @@ describe('restoreQueryCache', () => {
     expect(store.has(KEY)).toBe(false)
   })
 
+  it('drops what the last account had beyond the stored queries, but not the session', async () => {
+    await save('user-1')
+    const m = await load()
+    const chat = await import('@/stores/chat-store')
+    const c = client()
+    m.restoreQueryCache(c)
+    c.setQueryData(queryKeys.memory.list(), ['theirs'])
+    c.setQueryData(['admin', 'users'], ['theirs'])
+    c.setQueryData(queryKeys.auth.session, { id: 'user-2' })
+    chat.useChatStore.getState().post('c1', { content: 'theirs', attachments: [] })
+    m.adoptQueryCache(c, 'user-2')
+    expect(c.getQueryData(queryKeys.memory.list())).toBeUndefined()
+    expect(c.getQueryData(['admin', 'users'])).toBeUndefined()
+    expect(c.getQueryData(queryKeys.auth.session)).toEqual({ id: 'user-2' })
+    expect(chat.useChatStore.getState().outbox).toEqual({})
+  })
+
+  it('does the same when the account changes without a reload', async () => {
+    const m = await load()
+    const c = client()
+    m.adoptQueryCache(c, 'user-1')
+    c.setQueryData(queryKeys.memory.list(), ['theirs'])
+    m.adoptQueryCache(c, 'user-2')
+    expect(c.getQueryData(queryKeys.memory.list())).toBeUndefined()
+    // The same account again keeps what it has.
+    c.setQueryData(queryKeys.memory.list(), ['mine'])
+    m.adoptQueryCache(c, 'user-2')
+    expect(c.getQueryData(queryKeys.memory.list())).toEqual(['mine'])
+  })
+
   it('drops it when nobody is signed in', async () => {
     await save('user-1')
     const m = await load()
