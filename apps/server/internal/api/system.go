@@ -87,6 +87,9 @@ func (s *Server) systemSettings(ctx context.Context) (SystemSettings, error) {
 	if settings.Memory, err = boolSettingOr(ctx, s.q, memory.SettingEnabled, true); err != nil {
 		return settings, err
 	}
+	if settings.AvatarUploads, err = boolSettingOr(ctx, s.q, settingAvatarUploads, false); err != nil {
+		return settings, err
+	}
 	if settings.TaskModel, err = stringSetting(ctx, s.q, settingTaskModel); err != nil {
 		return settings, err
 	}
@@ -175,6 +178,16 @@ func (s *Server) UpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 			"enabled", *body.AskUser, "actor", auth.MustUser(r.Context()).Email)
 	}
 
+	if body.AvatarUploads != nil {
+		value, _ := json.Marshal(*body.AvatarUploads)
+		if err := s.q.SetSetting(r.Context(), sqlc.SetSettingParams{Key: settingAvatarUploads, Value: value}); err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+		slog.InfoContext(r.Context(), "avatar uploads changed",
+			"enabled", *body.AvatarUploads, "actor", auth.MustUser(r.Context()).Email)
+	}
+
 	if body.Memory != nil {
 		value, _ := json.Marshal(*body.Memory)
 		if err := s.q.SetSetting(r.Context(), sqlc.SetSettingParams{Key: memory.SettingEnabled, Value: value}); err != nil {
@@ -220,6 +233,11 @@ const settingGenerativeUI = "generative_ui"
 // has turned it off: it costs a short tool definition per request and nothing
 // when a model has no question to ask.
 const settingAskUser = "ask_user"
+
+// settingAvatarUploads lets people upload a picture of their own. Off unless
+// an administrator turns it on; without one, the first letter of the name is
+// shown, and a picture already set can still be removed.
+const settingAvatarUploads = "avatar_uploads"
 
 func stringSetting(ctx context.Context, q *sqlc.Queries, key string) (string, error) {
 	raw, err := q.GetSetting(ctx, key)

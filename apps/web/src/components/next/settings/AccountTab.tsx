@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 
 import { MIN_PASSWORD_LENGTH, validateEmail, validateName } from '@/components/auth/validation'
 import { UserAvatar } from '@/components/user-avatar'
+import { useChatFeatures } from '@/hooks/use-chat-models'
 import { isAuthFieldError, type AuthErrorKey } from '@/features/auth'
 import { useChangePassword, useSession, useSetAvatar, useUpdateProfile } from '@/features/auth/use-auth'
 import { AVATAR_TYPES, AvatarFailed } from '@/lib/avatar'
@@ -27,6 +28,8 @@ export function AccountTab() {
 function Profile({ id, name, email, avatarUrl }: { id: string; name: string; email: string; avatarUrl?: string }) {
   const { t } = useTranslation()
   const update = useUpdateProfile()
+  // The administrator's switch, from the chat's features; off until it says.
+  const avatarUploads = useChatFeatures().data?.avatarUploads ?? false
   const [draft, setDraft] = useState({ name, email })
   const [errors, setErrors] = useState<{ name?: AuthErrorKey; email?: AuthErrorKey }>({})
   const dirty = draft.name.trim() !== name || draft.email.trim() !== email
@@ -63,7 +66,7 @@ function Profile({ id, name, email, avatarUrl }: { id: string; name: string; ema
         </div>
 
         <div className="n-settings-profile">
-          <Avatar id={id} name={name} email={email} src={avatarUrl} />
+          <Avatar id={id} name={name} email={email} src={avatarUrl} uploads={avatarUploads} />
           <div className="n-settings-profile-fields">
             <Field
               label={t('settings.account.name')}
@@ -84,7 +87,7 @@ function Profile({ id, name, email, avatarUrl }: { id: string; name: string; ema
           </div>
         </div>
 
-        {AVATAR_UPLOADS && <p className="n-settings-help">{t('settings.account.avatar-hint')}</p>}
+        {avatarUploads && <p className="n-settings-help">{t('settings.account.avatar-hint')}</p>}
 
         <hr className="n-settings-rule" />
         <Password />
@@ -100,18 +103,18 @@ function Profile({ id, name, email, avatarUrl }: { id: string; name: string; ema
 }
 
 /**
- * Whether people may set a picture of their own. Off for now: the button says
- * so and the hint about formats is left out. The server side (`PUT /me/avatar`)
- * is in place; turning this back on is all it takes.
- */
-const AVATAR_UPLOADS = false
-
-/**
  * The account's picture with the two things to do to it. Choosing a file
  * sends it at once (cut to a square first, lib/avatar.ts); the account then has
  * the new picture everywhere it is shown.
  */
-function Avatar({ id, name, email, src }: { id: string; name: string; email: string; src?: string }) {
+function Avatar({ id, name, email, src, uploads }: {
+  id: string
+  name: string
+  email: string
+  src?: string
+  /** Whether the administrator allows uploading; off, the button says so. */
+  uploads: boolean
+}) {
   const { t } = useTranslation()
   const set = useSetAvatar()
   const input = useRef<HTMLInputElement>(null)
@@ -144,10 +147,10 @@ function Avatar({ id, name, email, src }: { id: string; name: string; email: str
       <button
         type="button"
         className="n-settings-soft is-small"
-        disabled={!AVATAR_UPLOADS || set.isPending}
+        disabled={!uploads || set.isPending}
         onClick={() => input.current?.click()}
       >
-        {!AVATAR_UPLOADS
+        {!uploads
           ? t('settings.account.avatar-unavailable')
           : t(src ? 'settings.account.avatar-change' : 'settings.account.avatar-upload')}
       </button>

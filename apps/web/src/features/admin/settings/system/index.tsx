@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 
 import { useChatModels } from '@/hooks/use-chat-models'
 import { api, unwrap } from '@/lib/api'
+import { queryKeys } from '@/lib/query-keys'
 import { adminKeys } from '@/features/admin/use-admin'
 import { Label } from '@/components/shadcn/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/shadcn/ui/select'
@@ -52,6 +53,18 @@ export function SettingsSystem() {
     onSuccess: (next) => {
       queryClient.setQueryData(adminKeys.system(), next)
       toast.success(t(next.memory ? 'admin.settings.system.memory-on' : 'admin.settings.system.memory-off'))
+    },
+    onError: () => toast.error(t('admin.settings.system.save-failed')),
+  })
+
+  const toggleAvatars = useMutation({
+    mutationFn: async (avatarUploads: boolean) =>
+      unwrap(await api.PATCH('/admin/system', { body: { avatarUploads } })),
+    onSuccess: (next) => {
+      queryClient.setQueryData(adminKeys.system(), next)
+      // The account settings read it from the chat's features.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.features })
+      toast.success(t(next.avatarUploads ? 'admin.settings.system.avatars-on' : 'admin.settings.system.avatars-off'))
     },
     onError: () => toast.error(t('admin.settings.system.save-failed')),
   })
@@ -168,6 +181,26 @@ export function SettingsSystem() {
               checked={data?.memory ?? true}
               disabled={toggleMemory.isPending}
               onCheckedChange={(value) => toggleMemory.mutate(value)}
+            />
+          )}
+        </div>
+
+        <div className="flex items-start justify-between gap-6 rounded-lg border p-4">
+          <div className="space-y-1">
+            <Label htmlFor="avatar-uploads" className="text-base">
+              {t('admin.settings.system.avatars')}
+            </Label>
+            <p className="text-muted-foreground text-sm">{t('admin.settings.system.avatars-hint')}</p>
+          </div>
+          {isPending ? (
+            <Skeleton className="h-5 w-8 shrink-0" />
+          ) : (
+            <Switch
+              id="avatar-uploads"
+              className="mt-1 shrink-0"
+              checked={data?.avatarUploads ?? false}
+              disabled={toggleAvatars.isPending}
+              onCheckedChange={(value) => toggleAvatars.mutate(value)}
             />
           )}
         </div>

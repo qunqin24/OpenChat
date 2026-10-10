@@ -2341,9 +2341,12 @@ components:
 
     ChatFeatures:
       type: object
-      required: [webSearch]
+      required: [webSearch, avatarUploads]
       properties:
         webSearch: { type: boolean }
+        avatarUploads:
+          type: boolean
+          description: Whether the account settings offer uploading a picture.
 
     ChatModel:
       type: object
@@ -2804,7 +2807,7 @@ components:
 
     SystemSettings:
       type: object
-      required: [debugLogging, generativeUi, askUser, memory, taskModel,
+      required: [debugLogging, generativeUi, askUser, memory, taskModel, avatarUploads,
                  deletedRetentionDays, unsentUploadHours, orphanFileHours]
       properties:
         deletedRetentionDays:
@@ -2841,6 +2844,12 @@ components:
             multiple-choice questions to the user and wait for the answers.
             On by default. Takes effect at the next model request, including
             for runs in progress.
+        avatarUploads:
+          type: boolean
+          description: |
+            Whether people may upload a picture of their own (`PUT /me/avatar`,
+            403 `avatar_uploads_off` otherwise). Off by default. Removing a
+            picture already set is always allowed.
         memory:
           type: boolean
           description: |
@@ -2863,6 +2872,7 @@ components:
         generativeUi: { type: boolean }
         askUser: { type: boolean }
         memory: { type: boolean }
+        avatarUploads: { type: boolean }
         taskModel:
           type: string
           description: |

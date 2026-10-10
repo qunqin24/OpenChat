@@ -66,12 +66,24 @@ var (
 	errAvatarTooLarge = httpx.NewError(http.StatusRequestEntityTooLarge, "file_too_large",
 		fmt.Sprintf("the picture can be at most %d MiB", avatarMaxBytes>>20))
 	errAvatarUnreadable = httpx.NewError(http.StatusBadRequest, "invalid_image", "the picture could not be read")
+	errAvatarUploadsOff = httpx.NewError(http.StatusForbidden, "avatar_uploads_off",
+		"uploading a picture is turned off on this server")
 )
 
 // UpdateMyAvatar replaces the caller's picture.
 func (s *Server) UpdateMyAvatar(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user := auth.MustUser(ctx)
+
+	allowed, err := boolSettingOr(ctx, s.q, settingAvatarUploads, false)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	if !allowed {
+		httpx.Fail(w, r, errAvatarUploadsOff)
+		return
+	}
 
 	declared, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if !avatarTypes[declared] {

@@ -53,6 +53,19 @@ func newMePG(t *testing.T) *mePG {
 	return &mePG{t: t, pool: pool, q: q, web: web, local: local}
 }
 
+// allowAvatars sets whether pictures may be uploaded, and puts it back after.
+func (m *mePG) allowAvatars(on bool) {
+	m.t.Helper()
+	set := func(on bool) error {
+		value, _ := json.Marshal(on)
+		return m.q.SetSetting(context.Background(), sqlc.SetSettingParams{Key: settingAvatarUploads, Value: value})
+	}
+	if err := set(on); err != nil {
+		m.t.Fatal(err)
+	}
+	m.t.Cleanup(func() { _ = set(false) })
+}
+
 // signedIn makes a user and a session cookie for it.
 func (m *mePG) signedIn(role string) (sqlc.User, *http.Cookie) {
 	m.t.Helper()
@@ -310,8 +323,14 @@ func TestAvatarUploadAndRemoval(t *testing.T) {
 		return u
 	}
 
+	// Off, as it is by default: refused before anything is read.
+	m.allowAvatars(false)
+	res, raw := put(aliceCookie, "image/png", encodePNG(t, pictureOf(8, 8)))
+	refused(res, raw, http.StatusForbidden, "avatar_uploads_off")
+	m.allowAvatars(true)
+
 	// Validation: who may, what type, how big, what it really is.
-	res, raw := put(nil, "image/png", encodePNG(t, pictureOf(8, 8)))
+	res, raw = put(nil, "image/png", encodePNG(t, pictureOf(8, 8)))
 	refused(res, raw, http.StatusUnauthorized, "")
 	res, raw = put(aliceCookie, "text/plain", []byte("hello"))
 	refused(res, raw, http.StatusUnsupportedMediaType, "unsupported_file_type")
@@ -471,6 +490,7 @@ const tinyWebP = "UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA=="
 
 func TestAvatarAcceptsWebP(t *testing.T) {
 	m := newMePG(t)
+	m.allowAvatars(true)
 	_, cookie := m.signedIn("user")
 	raw, err := base64.StdEncoding.DecodeString(tinyWebP)
 	if err != nil {

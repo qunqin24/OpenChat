@@ -581,15 +581,24 @@ func (s *Server) CancelRun(w http.ResponseWriter, r *http.Request, conversationI
 // paging because a list that needs it is not one a person picks from.
 const chatModelLimit = 1000
 
-// GetChatFeatures says what the composer can offer: web search when the
-// administrator has it configured and on.
+// GetChatFeatures says what the chat can offer: web search when the
+// administrator has it configured and on, and uploading a picture when that
+// is allowed.
 func (s *Server) GetChatFeatures(w http.ResponseWriter, r *http.Request) {
 	config, key, err := loadWebSearch(r.Context(), s.q)
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
-	httpx.JSON(w, http.StatusOK, ChatFeatures{WebSearch: config.Enabled && config.searcher(key) != nil})
+	avatars, err := boolSettingOr(r.Context(), s.q, settingAvatarUploads, false)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, ChatFeatures{
+		WebSearch:     config.Enabled && config.searcher(key) != nil,
+		AvatarUploads: avatars,
+	})
 }
 
 // ListChatModels lists what an enabled channel offers, for the model picker.

@@ -1948,6 +1948,8 @@ export interface components {
         };
         ChatFeatures: {
             webSearch: boolean;
+            /** @description Whether the account settings offer uploading a picture. */
+            avatarUploads: boolean;
         };
         ChatModel: {
             /** @description What a conversation stores and a request names. */
@@ -2410,6 +2412,12 @@ export interface components {
              */
             askUser: boolean;
             /**
+             * @description Whether people may upload a picture of their own (`PUT /me/avatar`,
+             *     403 `avatar_uploads_off` otherwise). Off by default. Removing a
+             *     picture already set is always allowed.
+             */
+            avatarUploads: boolean;
+            /**
              * @description The kill switch for personal memory. Off, no conversation reads or
              *     writes memories and the memory tool is not offered; people can still
              *     see and delete theirs, and their custom instructions still apply.
@@ -2429,6 +2437,7 @@ export interface components {
             generativeUi?: boolean;
             askUser?: boolean;
             memory?: boolean;
+            avatarUploads?: boolean;
             /**
              * @description A model an enabled channel offers (400 `model_unavailable`
              *     otherwise), or empty for each conversation's own.
