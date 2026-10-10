@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { useDeleteAllConversations, useExportConversations } from '@/hooks/use-my-data'
+import { useChatPaths } from '@/lib/chat-paths'
 
 /**
  * Taking one's data out and deleting it, as in Open WebUI's Data Controls: a
@@ -13,6 +14,7 @@ import { useDeleteAllConversations, useExportConversations } from '@/hooks/use-m
 export function DataTab() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const paths = useChatPaths()
   const exportAll = useExportConversations()
   const deleteAll = useDeleteAllConversations()
   const [confirming, setConfirming] = useState(false)
@@ -30,7 +32,7 @@ export function DataTab() {
         toast.success(t('settings.data.deleted', { count: result.deleted }))
         // The chat on screen, if any, is one of the deleted: start a new one,
         // with the dialog still open on this tab.
-        void navigate({ to: '/', search: { settings: 'data' } as never, replace: true })
+        void navigate({ to: paths.home, search: { settings: 'data' } as never, replace: true })
       },
       onError: () => {
         setConfirming(false)

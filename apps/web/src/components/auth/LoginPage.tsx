@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { isAuthFieldError, type AuthErrorKey } from '@/features/auth'
 import { useLogin } from '@/features/auth/use-auth'
+import { useGuestStatus } from '@/hooks/use-guest'
 import AuthField from './AuthField'
 import AuthShell from './AuthShell'
 import { validateIdentifier, validatePassword } from './validation'
@@ -15,6 +16,8 @@ export function LoginPage() {
   const navigate = useNavigate()
   const { redirect } = useSearch({ from: '/login' })
   const login = useLogin()
+  // Offered only while the administrator lets guests in.
+  const guest = useGuestStatus()
 
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
@@ -117,6 +120,15 @@ export function LoginPage() {
               {t('auth.register.link')}
             </Link>
           </div>
+
+          {guest.data?.enabled && (
+            <div className="n-auth-guest">
+              <Link className="n-auth-guest-button" to="/guest">
+                {t('auth.login.guest')}
+              </Link>
+              <p className="n-auth-guest-hint">{t('auth.login.guest-hint')}</p>
+            </div>
+          )}
         </div>
       </form>
     </AuthShell>

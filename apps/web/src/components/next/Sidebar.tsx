@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { useTranslation } from 'react-i18next'
 
 import { useConversations, useRunningConversations } from '@/hooks/use-conversations'
+import { useChatPaths } from '@/lib/chat-paths'
 import { groupConversations } from '@/lib/grouping'
 import { cn } from '@/lib/utils'
 import { useUIStore } from '@/stores/ui-store'
@@ -27,6 +28,7 @@ interface SidebarProps {
 export function Sidebar({ collapsed, mobile, onToggle, onNavigate, activeId, onDelete }: SidebarProps) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
+  const paths = useChatPaths()
   const conversations = useConversations()
   const running = useRunningConversations()
   const width = useUIStore((s) => s.sidebarWidth)
@@ -72,12 +74,12 @@ export function Sidebar({ collapsed, mobile, onToggle, onNavigate, activeId, onD
         event.preventDefault()
         setSearchOpen(false)
         onNavigate()
-        void navigate({ to: '/' })
+        void navigate({ to: paths.home })
       }
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [navigate, onNavigate, openSearch])
+  }, [navigate, onNavigate, openSearch, paths.home])
 
   const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = conversations
   useEffect(() => {
@@ -118,7 +120,7 @@ export function Sidebar({ collapsed, mobile, onToggle, onNavigate, activeId, onD
             </header>
             <nav className="n-sidebar-nav" aria-label={t('next.sidebar.navigation')}>
               <Tooltip label={t('next.nav.new')} side="right">
-                <Link className="n-row n-sidebar-nav-row" to="/" activeProps={{ className: '' }} aria-label={t('next.nav.new')} aria-keyshortcuts="Control+Shift+O Meta+Shift+O">
+                <Link className="n-row n-sidebar-nav-row" to={paths.home} activeProps={{ className: '' }} aria-label={t('next.nav.new')} aria-keyshortcuts="Control+Shift+O Meta+Shift+O">
                   <SquarePen aria-hidden="true" />
                 </Link>
               </Tooltip>
@@ -137,7 +139,7 @@ export function Sidebar({ collapsed, mobile, onToggle, onNavigate, activeId, onD
         <div id="chat-sidebar-content" className="n-sidebar-panel" inert={collapsed && !mobile}>
           <div className="n-sidebar-inner">
             <header className="n-sidebar-header">
-              <Link to="/" className="n-sidebar-brand" onClick={(event) => { if (!event.metaKey && !event.ctrlKey) onNavigate() }}>
+              <Link to={paths.home} className="n-sidebar-brand" onClick={(event) => { if (!event.metaKey && !event.ctrlKey) onNavigate() }}>
                 <span className="n-sidebar-logo" aria-hidden="true" />
                 <span className="n-sidebar-brand-label">{t('app.name')}</span>
               </Link>
@@ -150,7 +152,7 @@ export function Sidebar({ collapsed, mobile, onToggle, onNavigate, activeId, onD
 
             <div ref={scroll} className="n-sidebar-scroll" onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 0)}>
               <nav className="n-sidebar-nav" aria-label={t('next.sidebar.navigation')}>
-                <Link className="n-row n-sidebar-nav-row" to="/" activeProps={{ className: '' }} onClick={(event) => { if (!event.metaKey && !event.ctrlKey) onNavigate() }} aria-keyshortcuts="Control+Shift+O Meta+Shift+O">
+                <Link className="n-row n-sidebar-nav-row" to={paths.home} activeProps={{ className: '' }} onClick={(event) => { if (!event.metaKey && !event.ctrlKey) onNavigate() }} aria-keyshortcuts="Control+Shift+O Meta+Shift+O">
                   <SquarePen aria-hidden="true" />
                   <span className="n-row-label">{t('next.nav.new')}</span>
                   <kbd className="n-sidebar-hotkey" aria-hidden="true">{modifier} ⇧ O</kbd>

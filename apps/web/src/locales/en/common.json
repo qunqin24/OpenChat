@@ -62,7 +62,8 @@
       "model_rate_limited": "The model service is busy (too many requests). Try again shortly.",
       "context_too_long": "This conversation is too long for the model. Start a new one.",
       "internal": "The server failed and this reply was not finished.",
-      "tool_markup": "The model wrote its next tool call out as text, so this answer did not finish. Regenerate to try again."
+      "tool_markup": "The model wrote its next tool call out as text, so this answer did not finish. Regenerate to try again.",
+      "connection_lost": "The connection dropped before the reply was finished. Regenerate to try again."
     },
     "send-error": {
       "conversation_busy": "The previous reply is still being written. Wait for it, or stop it first.",
@@ -78,7 +79,10 @@
       "message_not_found": "That message no longer exists.",
       "not_pending": "This question was already answered, skipped, or replaced by a new version.",
       "invalid_answers": "The answers are incomplete. Check each question.",
-      "generic": "Sending failed. Try again."
+      "generic": "Sending failed. Try again.",
+      "guest_ip_limit": "This network has used up its guest requests for the hour. Try again later, or sign in.",
+      "guest_daily_limit": "Guests have used up today's requests. Try again later, or sign in.",
+      "guest_unreachable": "The server could not be reached, so nothing was sent."
     },
     "thinking": {
       "title": "Thinking",
@@ -319,7 +323,9 @@
     "login": {
       "title": "Sign in to {{name}}",
       "action": "Sign in",
-      "no-account": "Don't have an account?"
+      "no-account": "Don't have an account?",
+      "guest": "Continue as guest",
+      "guest-hint": "No account needed. Your conversations stay in this browser."
     },
     "register": {
       "title": "Sign up to {{name}}",
@@ -414,7 +420,7 @@
       "users": {
         "title": "Top spenders",
         "subtitle": "Highest cost first",
-        "anonymous": "Deleted account",
+        "anonymous": "Guest",
         "requests": "{{n}} requests"
       },
       "errors": {
@@ -656,6 +662,23 @@
           "saved": "Data retention saved",
           "whole": "Enter a whole number",
           "range": "Between {{min}} and {{max}}"
+        },
+        "guest": "Guest mode",
+        "guest-hint": "Lets anyone use the chat without an account, from a button on the sign-in page. A guest's conversations, memories and instructions are kept in their own browser; the server holds none of them, and only the model request itself is made here. Off by default.",
+        "guest-on": "Guest mode is on",
+        "guest-off": "Guest mode is off",
+        "guest-limits": {
+          "title": "Guest limits",
+          "hint": "Guest requests are not tied to an account, so they are limited by network address and in total. A title on request counts as a request. 0 means no limit.",
+          "hourly": "Requests per address per hour",
+          "hourly-hint": "One guest on one network address (an IPv6 address counts as its /64) may send this many in an hour. The server has to sit behind a proxy that sets X-Forwarded-For, or the address can be faked.",
+          "daily": "Requests per day, all guests",
+          "daily-hint": "All guests together, over the last 24 hours.",
+          "unit": "requests",
+          "save": "Save",
+          "saved": "Guest limits saved",
+          "whole": "Enter a whole number",
+          "range": "Between {{min}} and {{max}}; 0 is unlimited"
         }
       }
     },
@@ -981,7 +1004,8 @@
         "internal": "Server error"
       },
       "speed-title": "Output speed",
-      "no-duration": "The provider rejected the request at once; no time was spent"
+      "no-duration": "The provider rejected the request at once; no time was spent",
+      "guest": "Guest"
     }
   },
   "settings": {
@@ -1111,5 +1135,11 @@
       "account": "account,username,email,password,avatar",
       "data": "data,export,delete,temporary chat"
     }
+  },
+  "guest": {
+    "notice": "Guest mode: conversations are only saved in this browser",
+    "sign-in": "Sign in",
+    "name": "Guest",
+    "menu-hint": "Not signed in"
   }
 }

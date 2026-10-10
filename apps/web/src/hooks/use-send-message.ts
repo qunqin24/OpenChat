@@ -24,6 +24,9 @@ const SEND_ERRORS = [
   'message_not_found',
   'not_pending',
   'invalid_answers',
+  'guest_ip_limit',
+  'guest_daily_limit',
+  'guest_unreachable',
 ] as const
 
 function useSendError() {

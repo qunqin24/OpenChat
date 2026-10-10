@@ -14,6 +14,7 @@ import { useChatModels } from '@/hooks/use-chat-models'
 import { useConversationSearch, useRenameConversation } from '@/hooks/use-conversations'
 import { useMessages } from '@/hooks/use-messages'
 import { API_BASE_URL } from '@/lib/api'
+import { useChatPaths } from '@/lib/chat-paths'
 import { groupConversations, parseTimestamp } from '@/lib/grouping'
 import { buildTurns, type AssistantTurn as Turn } from '@/lib/transcript'
 import { ImageSource, proxiedImages } from './genui/image-source'
@@ -56,6 +57,7 @@ export function SearchPalette({
 }: Props) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
+  const paths = useChatPaths()
   const [query, setQuery] = useState('')
   const [cursor, setCursor] = useState('')
   const [renaming, setRenaming] = useState<string | null>(null)
@@ -93,8 +95,8 @@ export function SearchPalette({
   const go = (conversationId?: string) => {
     close()
     onNavigate()
-    if (conversationId) void navigate({ to: '/chat/$conversationId', params: { conversationId } })
-    else void navigate({ to: '/' })
+    if (conversationId) void navigate({ to: paths.chat, params: { conversationId } })
+    else void navigate({ to: paths.home })
   }
 
   // The older conversations load as the list is scrolled to its end — and a

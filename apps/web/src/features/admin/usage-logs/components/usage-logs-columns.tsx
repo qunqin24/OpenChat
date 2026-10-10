@@ -101,7 +101,9 @@ export function usageLogsColumns(t: TFunction<'common'>): ColumnDef<UsageLog>[] 
       header: header(t('admin.usage.user')),
       cell: ({ row }) => {
         const log = row.original
-        if (!log.userId) return <span className="text-muted-foreground">{DASH}</span>
+        // No owner: accounts are never deleted, so the request is a guest's - their
+        // rows are deleted when the run ends (users.guest).
+        if (!log.userId) return <span className="text-muted-foreground">{t('admin.usage.guest')}</span>
         return (
           <div className="flex items-center gap-2">
             <UserAvatar

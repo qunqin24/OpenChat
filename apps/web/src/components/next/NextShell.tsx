@@ -16,8 +16,10 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useDeleteConversation } from '@/hooks/use-conversations'
+import { useChatPaths } from '@/lib/chat-paths'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useUIStore } from '@/stores/ui-store'
+import GuestNotice from './GuestNotice'
 import Sidebar from './Sidebar'
 import SettingsDialog from './settings/SettingsDialog'
 
@@ -49,6 +51,7 @@ export function SidebarToggle() {
 export function NextShell() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const paths = useChatPaths()
   const deleteConversation = useDeleteConversation()
 
   const mobile = useIsMobile()
@@ -86,8 +89,8 @@ export function NextShell() {
     const removed = pendingDelete.id
     setPendingDelete(null)
     await deleteConversation.mutateAsync(removed)
-    if (removed === activeId) await navigate({ to: '/' })
-  }, [activeId, deleteConversation, navigate, pendingDelete])
+    if (removed === activeId) await navigate({ to: paths.home })
+  }, [activeId, deleteConversation, navigate, paths.home, pendingDelete])
 
   return (
     <NextShellContext.Provider value={shellContext}>
@@ -119,7 +122,8 @@ export function NextShell() {
             />
           )}
 
-          <div className="n-route-motion">
+          <div className={paths.guest ? 'n-route-motion is-guest' : 'n-route-motion'}>
+            {paths.guest && <GuestNotice />}
             <Outlet />
           </div>
 

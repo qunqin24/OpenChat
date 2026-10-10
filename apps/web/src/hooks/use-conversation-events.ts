@@ -5,6 +5,7 @@ import { useEffect, useEffectEvent } from 'react'
 
 import { refreshNewestMessages } from '@/hooks/use-messages'
 import { API_BASE_URL, appFetch } from '@/lib/api'
+import { useChatPaths } from '@/lib/chat-paths'
 import { queryKeys } from '@/lib/query-keys'
 import { useChatStore } from '@/stores/chat-store'
 
@@ -32,11 +33,12 @@ const RECONNECT_DELAYS = [500, 1000, 2000, 5000, 10000, 15000]
 export function useConversationEvents(conversationId: string | undefined) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const paths = useChatPaths()
 
   // Read at the time it runs, so a new `navigate` does not restart the stream.
   const leave = useEffectEvent(() => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all })
-    void navigate({ to: '/', replace: true })
+    void navigate({ to: paths.home, replace: true })
   })
 
   useEffect(() => {

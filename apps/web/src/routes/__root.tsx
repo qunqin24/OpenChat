@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { AdminProgress } from '@/components/GlobalProgress'
 import { Toaster } from '@/components/Toaster'
 import { dismissBootSplash } from '@/lib/boot'
+import { syncMode } from '@/lib/guest/mode'
 
 export interface RouterContext {
   queryClient: QueryClient
@@ -33,6 +34,9 @@ const QueryDevtools = lazy(() =>
 )
 
 export const Route = createRootRouteWithContext<RouterContext>()({
+  // Before any route's own guard or loader: whether this page is a guest's
+  // decides where their API calls go (lib/guest/mode.ts).
+  beforeLoad: ({ location }) => syncMode(location.pathname),
   component: RootLayout,
   notFoundComponent: NotFound,
 })

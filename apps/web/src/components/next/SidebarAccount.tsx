@@ -1,5 +1,5 @@
-import { useNavigate } from '@tanstack/react-router'
-import { Check, Languages, LogOut, Monitor, Moon, Settings, Sun, UserRound } from 'lucide-react'
+import { Link, useNavigate } from '@tanstack/react-router'
+import { Check, Languages, LogIn, LogOut, Monitor, Moon, Settings, Sun, UserRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { UserAvatar } from '@/components/user-avatar'
 import { useLogout, useSession } from '@/features/auth/use-auth'
+import { useIsGuest } from '@/lib/guest/mode'
 import { supportedLanguages } from '@/lib/i18n'
 import { useSettings } from '@/lib/settings'
 import { useUIStore, type Theme } from '@/stores/ui-store'
@@ -23,13 +24,18 @@ const LANGUAGE_LABELS = { en: 'English', zh: '中文' }
 export function SidebarAccount({ collapsed, onNavigate }: { collapsed: boolean; onNavigate: () => void }) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
-  const { data: session } = useSession()
+  const { data: signedIn } = useSession()
+  const guest = useIsGuest()
   const logout = useLogout()
   const settings = useSettings()
   const theme = useUIStore((s) => s.theme)
   const setTheme = useUIStore((s) => s.setTheme)
   const ThemeIcon = THEMES.find((option) => option.value === theme)?.icon ?? Monitor
 
+  // A guest is no account: a name and a colour of their own, nothing to sign out of.
+  const session = guest
+    ? { id: 'guest', name: t('guest.name'), email: '', avatarUrl: null, role: 'user' as const }
+    : signedIn
   if (!session) return null
   const name = session.name || session.email
 
@@ -81,20 +87,29 @@ export function SidebarAccount({ collapsed, onNavigate }: { collapsed: boolean; 
           </DropdownMenuSubContent>
         </DropdownMenuSub>
         <DropdownMenuSeparator />
-        {session.role === 'admin' && (
+        {!guest && session.role === 'admin' && (
           <DropdownMenuItem onSelect={() => { onNavigate(); void navigate({ to: '/admin' }) }}>
             <UserRound aria-hidden="true" />
             <span>{t('admin.title')}</span>
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem onSelect={async () => {
-          await logout.mutateAsync()
-          onNavigate()
-          await navigate({ to: '/login' })
-        }}>
-          <LogOut aria-hidden="true" />
-          <span>{t('auth.logout')}</span>
-        </DropdownMenuItem>
+        {guest ? (
+          <DropdownMenuItem asChild>
+            <Link to="/login" onClick={onNavigate}>
+              <LogIn aria-hidden="true" />
+              <span>{t('guest.sign-in')}</span>
+            </Link>
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem onSelect={async () => {
+            await logout.mutateAsync()
+            onNavigate()
+            await navigate({ to: '/login' })
+          }}>
+            <LogOut aria-hidden="true" />
+            <span>{t('auth.logout')}</span>
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

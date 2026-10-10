@@ -22,6 +22,7 @@ import {
 } from '@/hooks/use-send-message'
 import { useSession } from '@/features/auth/use-auth'
 import { API_BASE_URL } from '@/lib/api'
+import { useChatPaths } from '@/lib/chat-paths'
 import { loadComposerPrefs, saveComposerPrefs } from '@/lib/composer-prefs'
 import { acceptAttribute, acceptsOf } from '@/lib/attachments'
 import { isRunning } from '@/lib/run-state'
@@ -55,6 +56,7 @@ interface NextChatProps {
 export function NextChat({ conversationId }: NextChatProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const paths = useChatPaths()
 
   const [input, setInput] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -96,7 +98,7 @@ export function NextChat({ conversationId }: NextChatProps) {
   const working = superseded || answerQuestion.isPending
 
   // What the composer was last set to, anywhere, for a new chat to open with.
-  const userId = useSession().data?.id
+  const userId = useSession().data?.id ?? (paths.guest ? 'guest' : undefined)
   const saved = useMemo(() => loadComposerPrefs(userId), [userId])
 
   // The model: what this conversation remembers, else what was picked on the
@@ -478,7 +480,7 @@ export function NextChat({ conversationId }: NextChatProps) {
       // The message moves with it to the conversation's own page.
       post(created.id, item)
       unpost('')
-      await navigate({ to: '/chat/$conversationId', params: { conversationId: created.id } })
+      await navigate({ to: paths.chat, params: { conversationId: created.id } })
     } catch {
       // Nothing was sent: the text comes back, and the files were never let go.
       unpost('')
@@ -498,6 +500,7 @@ export function NextChat({ conversationId }: NextChatProps) {
     input,
     modelId,
     navigate,
+    paths.chat,
     post,
     sendMessage,
     setPendingPrompt,
@@ -533,7 +536,7 @@ export function NextChat({ conversationId }: NextChatProps) {
   const temporaryMode = conversationId ? Boolean(conversation.data?.temporary) : temporaryChat
   const exitTemporary = () => {
     setTemporaryChat(false)
-    if (conversationId) void navigate({ to: '/' })
+    if (conversationId) void navigate({ to: paths.home })
   }
 
   const title = conversationId ? (conversation.data?.title ?? '') : t('next.nav.new')

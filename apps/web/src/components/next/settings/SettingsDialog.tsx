@@ -3,6 +3,7 @@ import { Dialog, Tabs } from 'radix-ui'
 import { lazy, Suspense, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { useIsGuest } from '@/lib/guest/mode'
 import { isSettingsTab, SETTINGS_TABS, useSettings, type SettingsTab } from '@/lib/settings'
 import AccountTab from './AccountTab'
 import DataTab from './DataTab'
@@ -59,14 +60,17 @@ export function SettingsDialog({ host }: { host: HTMLElement | null }) {
 function SettingsBody({ host }: { host: HTMLElement | null }) {
   const { t } = useTranslation()
   const { tab, select } = useSettings()
+  const guest = useIsGuest()
   const [query, setQuery] = useState('')
 
   const needle = query.trim().toLocaleLowerCase()
   const visible = SETTINGS_TABS.filter(
     (id) =>
-      !needle ||
+      // A guest has no account to settle: its tab is not theirs.
+      !(guest && id === 'account') &&
+      (!needle ||
       t(`settings.tabs.${id}`).toLocaleLowerCase().includes(needle) ||
-      t(`settings.keywords.${id}`).toLocaleLowerCase().split(',').some((word) => word.trim().includes(needle)),
+      t(`settings.keywords.${id}`).toLocaleLowerCase().split(',').some((word) => word.trim().includes(needle))),
   )
 
   return (
@@ -81,7 +85,7 @@ function SettingsBody({ host }: { host: HTMLElement | null }) {
       <Tabs.Root
         className="n-settings-layout"
         orientation="vertical"
-        value={tab ?? 'general'}
+        value={guest && tab === 'account' ? 'general' : (tab ?? 'general')}
         onValueChange={(value) => { if (isSettingsTab(value)) select(value) }}
       >
         <div className="n-settings-nav">
@@ -110,7 +114,7 @@ function SettingsBody({ host }: { host: HTMLElement | null }) {
             <PersonalizationTab host={host} />
           </Suspense>
         </Tabs.Content>
-        <Tabs.Content value="account" className="n-settings-panel"><AccountTab /></Tabs.Content>
+        {!guest && <Tabs.Content value="account" className="n-settings-panel"><AccountTab /></Tabs.Content>}
         <Tabs.Content value="data" className="n-settings-panel"><DataTab /></Tabs.Content>
       </Tabs.Root>
     </>

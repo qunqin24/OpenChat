@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as GuestRouteImport } from './routes/guest'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as AuthedIndexRouteImport } from './routes/_authed.index'
@@ -24,11 +25,13 @@ import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminWebSearchRouteImport } from './routes/admin.web-search'
 import { Route as DevGenuiRouteImport } from './routes/dev.genui'
 import { Route as DevLoadingRouteImport } from './routes/dev.loading'
+import { Route as GuestIndexRouteImport } from './routes/guest.index'
 import { Route as AuthedChatConversationIdRouteImport } from './routes/_authed.chat.$conversationId'
 import { Route as AdminSettingsIndexRouteImport } from './routes/admin.settings.index'
 import { Route as AdminSettingsAccountRouteImport } from './routes/admin.settings.account'
 import { Route as AdminSettingsAppearanceRouteImport } from './routes/admin.settings.appearance'
 import { Route as AdminSettingsSystemRouteImport } from './routes/admin.settings.system'
+import { Route as GuestChatConversationIdRouteImport } from './routes/guest.chat.$conversationId'
 
 const AuthedRoute = AuthedRouteImport.update({
   id: '/_authed',
@@ -37,6 +40,11 @@ const AuthedRoute = AuthedRouteImport.update({
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GuestRoute = GuestRouteImport.update({
+  id: '/guest',
+  path: '/guest',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -104,6 +112,11 @@ const DevLoadingRoute = DevLoadingRouteImport.update({
   path: '/dev/loading',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GuestIndexRoute = GuestIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => GuestRoute,
+} as any)
 const AuthedChatConversationIdRoute =
   AuthedChatConversationIdRouteImport.update({
     id: '/chat/$conversationId',
@@ -130,10 +143,16 @@ const AdminSettingsSystemRoute = AdminSettingsSystemRouteImport.update({
   path: '/system',
   getParentRoute: () => AdminSettingsRoute,
 } as any)
+const GuestChatConversationIdRoute = GuestChatConversationIdRouteImport.update({
+  id: '/chat/$conversationId',
+  path: '/chat/$conversationId',
+  getParentRoute: () => GuestRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthedIndexRoute
   '/admin': typeof AdminRouteWithChildren
+  '/guest': typeof GuestRouteWithChildren
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/admin/channels': typeof AdminChannelsRoute
@@ -146,10 +165,12 @@ export interface FileRoutesByFullPath {
   '/dev/genui': typeof DevGenuiRoute
   '/dev/loading': typeof DevLoadingRoute
   '/admin/': typeof AdminIndexRoute
+  '/guest/': typeof GuestIndexRoute
   '/chat/$conversationId': typeof AuthedChatConversationIdRoute
   '/admin/settings/account': typeof AdminSettingsAccountRoute
   '/admin/settings/appearance': typeof AdminSettingsAppearanceRoute
   '/admin/settings/system': typeof AdminSettingsSystemRoute
+  '/guest/chat/$conversationId': typeof GuestChatConversationIdRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -165,16 +186,19 @@ export interface FileRoutesByTo {
   '/dev/loading': typeof DevLoadingRoute
   '/': typeof AuthedIndexRoute
   '/admin': typeof AdminIndexRoute
+  '/guest': typeof GuestIndexRoute
   '/chat/$conversationId': typeof AuthedChatConversationIdRoute
   '/admin/settings/account': typeof AdminSettingsAccountRoute
   '/admin/settings/appearance': typeof AdminSettingsAppearanceRoute
   '/admin/settings/system': typeof AdminSettingsSystemRoute
+  '/guest/chat/$conversationId': typeof GuestChatConversationIdRoute
   '/admin/settings': typeof AdminSettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authed': typeof AuthedRouteWithChildren
   '/admin': typeof AdminRouteWithChildren
+  '/guest': typeof GuestRouteWithChildren
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/admin/channels': typeof AdminChannelsRoute
@@ -188,10 +212,12 @@ export interface FileRoutesById {
   '/dev/loading': typeof DevLoadingRoute
   '/_authed/': typeof AuthedIndexRoute
   '/admin/': typeof AdminIndexRoute
+  '/guest/': typeof GuestIndexRoute
   '/_authed/chat/$conversationId': typeof AuthedChatConversationIdRoute
   '/admin/settings/account': typeof AdminSettingsAccountRoute
   '/admin/settings/appearance': typeof AdminSettingsAppearanceRoute
   '/admin/settings/system': typeof AdminSettingsSystemRoute
+  '/guest/chat/$conversationId': typeof GuestChatConversationIdRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
 }
 export interface FileRouteTypes {
@@ -199,6 +225,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/guest'
     | '/login'
     | '/register'
     | '/admin/channels'
@@ -211,10 +238,12 @@ export interface FileRouteTypes {
     | '/dev/genui'
     | '/dev/loading'
     | '/admin/'
+    | '/guest/'
     | '/chat/$conversationId'
     | '/admin/settings/account'
     | '/admin/settings/appearance'
     | '/admin/settings/system'
+    | '/guest/chat/$conversationId'
     | '/admin/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -230,15 +259,18 @@ export interface FileRouteTypes {
     | '/dev/loading'
     | '/'
     | '/admin'
+    | '/guest'
     | '/chat/$conversationId'
     | '/admin/settings/account'
     | '/admin/settings/appearance'
     | '/admin/settings/system'
+    | '/guest/chat/$conversationId'
     | '/admin/settings'
   id:
     | '__root__'
     | '/_authed'
     | '/admin'
+    | '/guest'
     | '/login'
     | '/register'
     | '/admin/channels'
@@ -252,16 +284,19 @@ export interface FileRouteTypes {
     | '/dev/loading'
     | '/_authed/'
     | '/admin/'
+    | '/guest/'
     | '/_authed/chat/$conversationId'
     | '/admin/settings/account'
     | '/admin/settings/appearance'
     | '/admin/settings/system'
+    | '/guest/chat/$conversationId'
     | '/admin/settings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AuthedRoute: typeof AuthedRouteWithChildren
   AdminRoute: typeof AdminRouteWithChildren
+  GuestRoute: typeof GuestRouteWithChildren
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
   DevGenuiRoute: typeof DevGenuiRoute
@@ -282,6 +317,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/guest': {
+      id: '/guest'
+      path: '/guest'
+      fullPath: '/guest'
+      preLoaderRoute: typeof GuestRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -375,6 +417,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DevLoadingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/guest/': {
+      id: '/guest/'
+      path: '/'
+      fullPath: '/guest/'
+      preLoaderRoute: typeof GuestIndexRouteImport
+      parentRoute: typeof GuestRoute
+    }
     '/_authed/chat/$conversationId': {
       id: '/_authed/chat/$conversationId'
       path: '/chat/$conversationId'
@@ -409,6 +458,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/settings/system'
       preLoaderRoute: typeof AdminSettingsSystemRouteImport
       parentRoute: typeof AdminSettingsRoute
+    }
+    '/guest/chat/$conversationId': {
+      id: '/guest/chat/$conversationId'
+      path: '/chat/$conversationId'
+      fullPath: '/guest/chat/$conversationId'
+      preLoaderRoute: typeof GuestChatConversationIdRouteImport
+      parentRoute: typeof GuestRoute
     }
   }
 }
@@ -468,9 +524,22 @@ const AdminRouteChildren: AdminRouteChildren = {
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
+interface GuestRouteChildren {
+  GuestIndexRoute: typeof GuestIndexRoute
+  GuestChatConversationIdRoute: typeof GuestChatConversationIdRoute
+}
+
+const GuestRouteChildren: GuestRouteChildren = {
+  GuestIndexRoute: GuestIndexRoute,
+  GuestChatConversationIdRoute: GuestChatConversationIdRoute,
+}
+
+const GuestRouteWithChildren = GuestRoute._addFileChildren(GuestRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   AuthedRoute: AuthedRouteWithChildren,
   AdminRoute: AdminRouteWithChildren,
+  GuestRoute: GuestRouteWithChildren,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
   DevGenuiRoute: DevGenuiRoute,

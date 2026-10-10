@@ -18,6 +18,9 @@ export const queryKeys = {
     list: (conversationId: string) => [...queryKeys.messages.all, 'list', conversationId] as const,
   },
   features: ['features'] as const,
+  guest: {
+    status: ['guest', 'status'] as const,
+  },
   memory: {
     all: ['memory'] as const,
     personalization: () => [...queryKeys.memory.all, 'personalization'] as const,

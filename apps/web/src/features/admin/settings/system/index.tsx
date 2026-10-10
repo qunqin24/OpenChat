@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/shadcn/ui/skeleton'
 import { Switch } from '@/components/shadcn/ui/switch'
 import { ContentSection } from '../components/content-section'
+import { GuestLimitsForm } from './guest-limits-form'
 import { RetentionForm } from './retention-form'
 
 /** The task model's select value for "each conversation's own" (Radix Select takes no empty value). */
@@ -65,6 +66,17 @@ export function SettingsSystem() {
       // The account settings read it from the chat's features.
       void queryClient.invalidateQueries({ queryKey: queryKeys.features })
       toast.success(t(next.avatarUploads ? 'admin.settings.system.avatars-on' : 'admin.settings.system.avatars-off'))
+    },
+    onError: () => toast.error(t('admin.settings.system.save-failed')),
+  })
+
+  const toggleGuest = useMutation({
+    mutationFn: async (guestMode: boolean) => unwrap(await api.PATCH('/admin/system', { body: { guestMode } })),
+    onSuccess: (next) => {
+      queryClient.setQueryData(adminKeys.system(), next)
+      // The sign-in page offers the button from this.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.guest.status })
+      toast.success(t(next.guestMode ? 'admin.settings.system.guest-on' : 'admin.settings.system.guest-off'))
     },
     onError: () => toast.error(t('admin.settings.system.save-failed')),
   })
@@ -204,6 +216,28 @@ export function SettingsSystem() {
             />
           )}
         </div>
+
+        <div className="flex items-start justify-between gap-6 rounded-lg border p-4">
+          <div className="space-y-1">
+            <Label htmlFor="guest-mode" className="text-base">
+              {t('admin.settings.system.guest')}
+            </Label>
+            <p className="text-muted-foreground text-sm">{t('admin.settings.system.guest-hint')}</p>
+          </div>
+          {isPending ? (
+            <Skeleton className="h-5 w-8 shrink-0" />
+          ) : (
+            <Switch
+              id="guest-mode"
+              className="mt-1 shrink-0"
+              checked={data?.guestMode ?? false}
+              disabled={toggleGuest.isPending}
+              onCheckedChange={(value) => toggleGuest.mutate(value)}
+            />
+          )}
+        </div>
+
+        {isPending || !data ? <Skeleton className="h-56 w-full" /> : <GuestLimitsForm settings={data} />}
 
         <div className="flex items-start justify-between gap-6 rounded-lg border p-4">
           <div className="space-y-1">

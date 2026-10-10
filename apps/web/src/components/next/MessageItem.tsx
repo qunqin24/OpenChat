@@ -271,6 +271,7 @@ const ERROR_CODES = [
   'context_too_long',
   'internal',
   'tool_markup',
+  'connection_lost',
 ] as const
 
 function errorText(t: TFunction<'common'>, code?: string | null) {
