@@ -1,5 +1,5 @@
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { isAuthFieldError, type AuthErrorKey } from '@/features/auth'
@@ -7,6 +7,7 @@ import { useLogin } from '@/features/auth/use-auth'
 import { useAuthOptions } from '@/hooks/use-auth-options'
 import AuthField from './AuthField'
 import AuthShell from './AuthShell'
+import BannedScreen from './BannedScreen'
 import { validateIdentifier, validatePassword } from './validation'
 
 type Errors = Partial<Record<'identifier' | 'password', AuthErrorKey>>
@@ -62,6 +63,14 @@ export function LoginPage() {
     if (login.error) setDismissedFailure(login.error)
   }
 
+  // A disabled account gets the whole window rather than the form's banner.
+  const banned = formError === 'auth.error.account-disabled'
+  const leaveBanned = useCallback(() => {
+    setDismissedFailure(login.error)
+    setIdentifier('')
+    setPassword('')
+  }, [login.error])
+
   return (
     <AuthShell title={t('auth.login.title', { name: t('app.name') })}>
       <form className="n-auth-form" onSubmit={(event) => void handleSubmit(event)} noValidate>
@@ -101,7 +110,7 @@ export function LoginPage() {
         </div>
 
         <div className="n-auth-actions">
-          {formError && (
+          {formError && !banned && (
             <div className="n-auth-alert" role="alert">
               {t(formError)}
             </div>
@@ -133,6 +142,7 @@ export function LoginPage() {
           )}
         </div>
       </form>
+      {banned && <BannedScreen account={login.variables?.identifier ?? identifier} onBack={leaveBanned} />}
     </AuthShell>
   )
 }

@@ -335,6 +335,16 @@
       "identifier": "Email or username",
       "identifier-placeholder": "Your email or username"
     },
+    "banned": {
+      "title": "You've been banned",
+      "account": "Account",
+      "status": "Status",
+      "status-value": "Banned",
+      "by": "Action by",
+      "by-value": "Administrator",
+      "text": "An administrator has disabled this account, so it cannot sign in. If you think this is a mistake, contact the administrator.",
+      "back": "Back"
+    },
     "login": {
       "title": "Sign in to {{name}}",
       "action": "Sign in",

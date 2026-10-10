@@ -335,6 +335,16 @@
       "identifier": "邮箱或用户名",
       "identifier-placeholder": "输入你的邮箱或用户名"
     },
+    "banned": {
+      "title": "你已被封禁",
+      "account": "账号",
+      "status": "状态",
+      "status-value": "已封禁",
+      "by": "处理方",
+      "by-value": "管理员",
+      "text": "这个账号已被管理员停用，无法登录。如果你认为这是误判，请联系管理员。",
+      "back": "返回"
+    },
     "login": {
       "title": "登录 {{name}}",
       "action": "登录",
