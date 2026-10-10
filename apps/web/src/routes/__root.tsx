@@ -1,12 +1,12 @@
 import type { QueryClient } from '@tanstack/react-query'
-import { createRootRouteWithContext, Outlet, useRouterState } from '@tanstack/react-router'
+import { createRootRouteWithContext, notFound, Outlet, useRouterState } from '@tanstack/react-router'
 import { lazy, Suspense, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { AdminProgress } from '@/components/GlobalProgress'
 import { Toaster } from '@/components/Toaster'
 import { dismissBootSplash } from '@/lib/boot'
-import { syncMode } from '@/lib/guest/mode'
+import { enterPath } from '@/lib/guest/mode'
 
 export interface RouterContext {
   queryClient: QueryClient
@@ -35,8 +35,11 @@ const QueryDevtools = lazy(() =>
 
 export const Route = createRootRouteWithContext<RouterContext>()({
   // Before any route's own guard or loader: whether this page is a guest's
-  // decides where their API calls go (lib/guest/mode.ts).
-  beforeLoad: ({ location }) => syncMode(location.pathname),
+  // decides where their API calls go (lib/guest/mode.ts). A preload (a link
+  // hovered) never changes it: the other mode's page is simply not preloaded.
+  beforeLoad: ({ location, preload }) => {
+    if (!enterPath(location.pathname, preload)) throw notFound()
+  },
   component: RootLayout,
   notFoundComponent: NotFound,
 })

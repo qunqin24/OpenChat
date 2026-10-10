@@ -151,3 +151,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     return pendingPrompt
   },
 }))
+
+/**
+ * Back to a blank page: the state of one person's (or one mode's) chat screen
+ * must not be seen by the next. Used when the account or the guest/account mode
+ * changes, and when the session ends.
+ */
+export function resetChatStore() {
+  useChatStore.setState({ live: {}, outbox: {}, replacing: {}, pendingPrompt: null, temporaryChat: false })
+}

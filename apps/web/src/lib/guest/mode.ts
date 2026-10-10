@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 
 import { queryClient } from '@/lib/query'
 import { forgetQueryCache } from '@/lib/query-persist'
-import { useChatStore } from '@/stores/chat-store'
+import { resetChatStore } from '@/stores/chat-store'
 
 /**
  * Whether the page is a guest's. The pages of a guest live under /guest, and
@@ -34,7 +34,7 @@ export function syncMode(pathname: string) {
   // last visit is the account's to use, and a guest must not see it.
   if (!first || next === 'guest') {
     queryClient.clear()
-    useChatStore.setState({ live: {}, outbox: {}, replacing: {}, pendingPrompt: null, temporaryChat: false })
+    resetChatStore()
   }
   if (next === 'guest') forgetQueryCache()
   listeners.forEach((listener) => listener())
@@ -42,6 +42,23 @@ export function syncMode(pathname: string) {
 
 export function isGuestMode(): boolean {
   return (mode ?? modeOf(window.location.pathname)) === 'guest'
+}
+
+/**
+ * The root route's guard, for the address `pathname` that is about to load.
+ * Returns whether the load may go on.
+ *
+ * Only a real navigation changes the mode. The router also runs the guard to
+ * preload a link the pointer is over, and nobody has gone anywhere: letting
+ * that flip the mode would empty a guest's cache and send their next call to
+ * the account API (and back, from the sign-in page's guest button). A preload
+ * of the other mode's page is refused outright, since its loaders would fill
+ * the shared cache with answers meant for the other mode.
+ */
+export function enterPath(pathname: string, preload: boolean): boolean {
+  if (preload) return modeOf(pathname) === (isGuestMode() ? 'guest' : 'account')
+  syncMode(pathname)
+  return true
 }
 
 const subscribe = (listener: () => void) => {
