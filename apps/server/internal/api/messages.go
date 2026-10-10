@@ -201,6 +201,9 @@ type runChoice struct {
 	// continues is set when the run answers a question the model asked: the
 	// first run of the answer it carries on (see ask_user.go).
 	continues *uuid.UUID
+	// clientIP is set for a guest's run only: the address whose runs are
+	// counted against the guests' concurrency limit (see run_limits.go).
+	clientIP string
 }
 
 // chooseRun settles a run's model, effort and web access from what the request
@@ -258,7 +261,16 @@ func (s *Server) chooseRun(ctx context.Context, conv sqlc.Conversation, model *s
 
 // createRun starts a run on an input inside the caller's transaction, and has
 // the conversation remember the choices it was started with.
+//
+// It first checks the account (or, for a guest, the address) has a slot: how
+// many runs may go at once is bounded, and the count and this insert are one
+// step under a lock held until the transaction ends (run_limits.go). Every way
+// of starting a run comes through here, so none of them can go around it; a
+// refusal is returned for the caller to roll back, with nothing written.
 func createRun(ctx context.Context, q *sqlc.Queries, conv sqlc.Conversation, userID, inputID uuid.UUID, requestID string, c runChoice) (sqlc.Run, error) {
+	if err := admitRun(ctx, q, userID, c.clientIP); err != nil {
+		return sqlc.Run{}, err
+	}
 	params := sqlc.CreateRunParams{
 		ConversationID:  conv.ID,
 		UserID:          userID,
@@ -271,6 +283,9 @@ func createRun(ctx context.Context, q *sqlc.Queries, conv sqlc.Conversation, use
 	}
 	if requestID != "" {
 		params.RequestID = &requestID
+	}
+	if c.clientIP != "" {
+		params.ClientIp = &c.clientIP
 	}
 	run, err := q.CreateRun(ctx, params)
 	if err != nil {

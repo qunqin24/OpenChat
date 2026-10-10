@@ -99,6 +99,12 @@ func (s *Server) systemSettings(ctx context.Context) (SystemSettings, error) {
 	if err := guestSettings(ctx, s.q, &settings); err != nil {
 		return settings, err
 	}
+	if settings.MaxConcurrentRuns, err = intSettingOr(ctx, s.q, settingMaxRuns, defaultMaxRuns); err != nil {
+		return settings, err
+	}
+	if settings.GuestMaxConcurrentRuns, err = intSettingOr(ctx, s.q, settingGuestMaxRuns, defaultGuestMaxRuns); err != nil {
+		return settings, err
+	}
 	switches, err := s.signupSwitches(ctx)
 	if err != nil {
 		return settings, err
@@ -121,6 +127,10 @@ func (s *Server) UpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 
 	// The guest limits likewise: nothing is saved if one of them is out of range.
 	if err := validGuestLimits(body.GuestHourlyLimit, body.GuestDailyLimit); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	if err := validRunLimit(body.MaxConcurrentRuns, body.GuestMaxConcurrentRuns); err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
@@ -226,6 +236,8 @@ func (s *Server) UpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 		{settingGuestMode, body.GuestMode, "guest mode changed"},
 		{settingGuestHourlyLimit, body.GuestHourlyLimit, "guest hourly limit changed"},
 		{settingGuestDailyLimit, body.GuestDailyLimit, "guest daily limit changed"},
+		{settingMaxRuns, body.MaxConcurrentRuns, "concurrent run limit changed"},
+		{settingGuestMaxRuns, body.GuestMaxConcurrentRuns, "guest concurrent run limit changed"},
 	} {
 		var (
 			value []byte

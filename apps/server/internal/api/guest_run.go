@@ -127,7 +127,15 @@ func (s *Server) GuestRun(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, err)
 		return
 	}
-	if err := s.takeGuestRequest(ctx, clientIP(r)); err != nil {
+	ip := clientIP(r)
+	// Before the request is counted against the hourly limit or anything is
+	// stored: an address with all its runs going is told so at once. The
+	// authoritative check is the one createRun makes under a lock.
+	if err := s.guestRunSlotFree(ctx, ip); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	if err := s.takeGuestRequest(ctx, ip); err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
@@ -136,6 +144,7 @@ func (s *Server) GuestRun(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, err)
 		return
 	}
+	plan.choice.clientIP = ip
 	st, err := s.seedGuest(ctx, plan)
 	if err != nil {
 		httpx.Fail(w, r, err)
@@ -556,10 +565,13 @@ type guestRunState struct {
 // conversation, the transcript, the files, the memories, and the run.
 func (s *Server) seedGuest(ctx context.Context, plan *guestPlan) (st *guestRunState, err error) {
 	st = &guestRunState{}
+	// Kept apart from the result: a failure returns a nil state, and the files
+	// written so far still have to be removed.
+	staged := st
 	// The files first: a row is wanted only once the file it names exists.
 	defer func() {
 		if err != nil {
-			s.removeFiles(context.WithoutCancel(ctx), st.stored)
+			s.removeFiles(context.WithoutCancel(ctx), staged.stored)
 		}
 	}()
 	all := make([]*guestFile, 0)
