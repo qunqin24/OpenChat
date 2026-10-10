@@ -26,9 +26,9 @@ const RECONNECT_DELAYS = [500, 1000, 2000, 5000, 10000, 15000]
  * Rows deleted by a redo - a question edited, an answer regenerated, here or in
  * another tab - are announced as `transcript_changed`, in the batch that starts
  * the run that follows. The newest page is fetched again then too, so the
- * transcript here drops what is gone; this tab, if it asked for the redo,
- * has the rows out of its cache before the batch is applied, so they are not
- * drawn again in between.
+ * transcript here drops what is gone; and the rows the event or this tab's own
+ * redo names are out of the cache before the batch is applied, so they are not
+ * drawn beside the run that replaces them in between.
  *
  * A conversation the server says does not exist — deleted from another tab or
  * device while this page was open — is not a dropped connection: there is
@@ -90,10 +90,12 @@ export function useConversationEvents(conversationId: string | undefined) {
               }
               continue
             }
-            if (event.events.some((e) => e.type === 'transcript_changed')) {
-              // The redo this tab asked for, if it did, says what is gone. It is
-              // read before the batch is applied: the run starting ends it.
-              const redo = useChatStore.getState().replacing[conversationId]
+            const changed = event.events.find((e) => e.type === 'transcript_changed')
+            if (changed) {
+              // What is gone: what the event says (an edited question and what
+              // followed it), or the redo this tab asked for. Read before the
+              // batch is applied: the run starting ends the redo.
+              const redo = changed.from ? { from: changed.from } : useChatStore.getState().replacing[conversationId]
               if (redo) {
                 queryClient.setQueryData<TranscriptPages>(queryKeys.messages.list(conversationId), (held) =>
                   truncateTranscript(held, redo),

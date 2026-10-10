@@ -1905,9 +1905,10 @@ export interface components {
          *     so the transcript is no longer the old one with rows added to it. A
          *     client that holds a transcript of the conversation - another tab, say -
          *     fetches its newest page again and drops what it held that the page does
-         *     not contain; nothing in the event says what went, because what the
-         *     transcript is lives in `listMessages`. It comes in the same batch as the
-         *     `run_started` of the run that follows, under that run's id and version.
+         *     not contain; what the transcript is lives in `listMessages`, and the
+         *     event only says early what it can (`from`). It comes in the same batch
+         *     as the `run_started` of the run that follows, under that run's id and
+         *     version.
          */
         TranscriptChangedEvent: {
             /**
@@ -1915,6 +1916,14 @@ export interface components {
              * @enum {string}
              */
             type: "transcript_changed";
+            /**
+             * Format: uuid
+             * @description For an edited question: that message, the first row deleted - it and
+             *     every row after it are gone, which a client can act on before the
+             *     fetch comes back. Absent for a regeneration, whose deleted answer is
+             *     whatever follows the question the run answers.
+             */
+            from?: string;
         };
         ConversationExport: {
             /** @description The shape of this document; 1. */

@@ -86,8 +86,11 @@ type TitleChanged struct{ Title string }
 // everything after it by an edit, an answer by a regeneration; either starts a
 // run, announced in the same batch. The deletion is already committed; a
 // subscriber that holds the transcript fetches it again and drops what it held
-// that is gone.
-type TranscriptChanged struct{}
+// that is gone. From is the first row deleted when a question was edited (that
+// row and every row after it), so a subscriber can drop them at once, before
+// the fetch has come back; nil for a regeneration, whose answer is whatever
+// follows the question the run answers.
+type TranscriptChanged struct{ From uuid.UUID }
 
 func (RunStarted) isEvent()        {}
 func (RunFinished) isEvent()       {}

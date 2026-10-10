@@ -78,16 +78,16 @@ function wire(): Wired {
       refreshLists()
       channel?.postMessage({ conversationId })
     },
-    onDeleted: (conversationId) => channel?.postMessage({ conversationId }),
+    onDeleted: (conversationId, from) => channel?.postMessage({ conversationId, from }),
   })
   const api = createGuestApi({ repo, runner, hub, baseUrl: API_BASE_URL, fetch: network, config: loadConfig })
   // Another tab of the same guest changed a conversation (a run finished, or
   // started over a deletion of rows).
   if (channel) {
-    channel.onmessage = (event: MessageEvent<{ conversationId?: string }>) => {
+    channel.onmessage = (event: MessageEvent<{ conversationId?: string; from?: string }>) => {
       const id = event.data?.conversationId
       // A run this tab is following reports itself.
-      if (id && !runner.isRunning(id)) hub.announceChanged(id)
+      if (id && !runner.isRunning(id)) hub.announceChanged(id, event.data?.from)
       refreshLists()
     }
   }

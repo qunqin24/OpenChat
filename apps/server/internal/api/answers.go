@@ -240,7 +240,7 @@ func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversatio
 	s.removeFiles(context.WithoutCancel(ctx), keys)
 	// Other tabs showing this conversation hold what was deleted; they are told
 	// in the batch that starts the run.
-	s.startRun(conversationId, run, input, agent.TranscriptChanged{})
+	s.startRun(conversationId, run, input, agent.TranscriptChanged{From: messageId})
 
 	page, err := s.messagePage(ctx, []sqlc.Message{input})
 	if err != nil {

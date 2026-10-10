@@ -67,14 +67,14 @@ function setup(respond: (request: GuestRunRequest, url: string) => Response | Pr
   const hub = new GuestHub()
   const requests: GuestRunRequest[] = []
   const settled: string[] = []
-  const deleted: string[] = []
+  const deleted: (string | undefined)[][] = []
   const runner = new GuestRunner({
     repo: h.repo,
     hub,
     baseUrl: '/api/v1',
     tab: 'tab',
     onSettled: (id) => settled.push(id),
-    onDeleted: (id) => deleted.push(id),
+    onDeleted: (id, from) => deleted.push([id, from]),
     fetch: async (input, init) => {
       const url = String(input)
       const body = init?.body ? (JSON.parse(String(init.body)) as GuestRunRequest) : ({} as GuestRunRequest)
@@ -214,7 +214,8 @@ describe('a redo', () => {
     await t.runner.settled(c)
     expect(t.requests.at(-1)!.messages).toEqual([])
     expect(t.requests.at(-1)!.input).toMatchObject({ id: 'in-3', content: 'one, reworded' })
-    expect(t.deleted).toEqual([c])
+    // The edited question is named, so that other pages drop it at once.
+    expect(t.deleted).toEqual([[c, 'in-1']])
 
     expect(await texts(t, c)).toEqual(['user:one, reworded', 'assistant:Hello'])
     const data = await t.h.repo.data(c)

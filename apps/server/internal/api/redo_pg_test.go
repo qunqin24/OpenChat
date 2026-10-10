@@ -322,6 +322,7 @@ func TestRedoIsAnnounced(t *testing.T) {
 
 	sub := b.server.runner.Hub().Subscribe(b.conv.ID)
 	defer sub.Close()
+	var froms []uuid.UUID
 	announced := func() (changed, started int) {
 		batches, resync := sub.Drain()
 		if resync {
@@ -330,9 +331,10 @@ func TestRedoIsAnnounced(t *testing.T) {
 		for _, batch := range batches {
 			var hasChange, hasStart bool
 			for _, event := range batch.Events {
-				switch event.(type) {
+				switch e := event.(type) {
 				case agent.TranscriptChanged:
 					hasChange = true
+					froms = append(froms, e.From)
 				case agent.RunStarted:
 					hasStart = true
 				}
@@ -358,6 +360,10 @@ func TestRedoIsAnnounced(t *testing.T) {
 	if changed, started := announced(); changed != 1 || started != 1 {
 		t.Fatalf("after an edit: %d deletions announced, %d runs started; want 1 and 1", changed, started)
 	}
+	// An edit names the question it deleted from; a regeneration has no such row.
+	if len(froms) != 2 || froms[0] != uuid.Nil || froms[1] != q1.Message.Id {
+		t.Fatalf("the announcements name %v, want none and the edited question %s", froms, q1.Message.Id)
+	}
 	b.send("q2b")
 	if changed, started := announced(); changed != 0 || started != 1 {
 		t.Fatalf("after a message: %d deletions announced, %d runs started; want 0 and 1", changed, started)
@@ -368,8 +374,13 @@ func TestRedoIsAnnounced(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(raw), `"type":"transcript_changed"`) {
+	if !strings.Contains(string(raw), `"type":"transcript_changed"`) || strings.Contains(string(raw), `"from"`) {
 		t.Fatalf("the event on the wire: %s", raw)
+	}
+	from := uuid.New()
+	raw, _ = json.Marshal(toBatchEvent(agent.Batch{Events: []agent.Event{agent.TranscriptChanged{From: from}}}))
+	if !strings.Contains(string(raw), `"from":"`+from.String()+`"`) {
+		t.Fatalf("the event with a question named on the wire: %s", raw)
 	}
 }
 

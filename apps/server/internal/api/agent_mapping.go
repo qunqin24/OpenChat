@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log/slog"
 
+	"github.com/google/uuid"
+
 	"github.com/qunqin/openchat/apps/server/internal/agent"
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin/openchat/apps/server/internal/llm"
@@ -200,7 +202,12 @@ func toRunEvent(event agent.Event) (RunEvent, bool) {
 	case agent.TitleChanged:
 		err = out.FromTitleChangedEvent(TitleChangedEvent{Type: TitleChanged, Title: e.Title})
 	case agent.TranscriptChanged:
-		err = out.FromTranscriptChangedEvent(TranscriptChangedEvent{Type: TranscriptChanged})
+		event := TranscriptChangedEvent{Type: TranscriptChanged}
+		if e.From != uuid.Nil {
+			from := e.From
+			event.From = &from
+		}
+		err = out.FromTranscriptChangedEvent(event)
 	default:
 		return out, false
 	}
