@@ -12,13 +12,15 @@ import { useAttachments } from '@/hooks/use-attachments'
 import { useFileDrop } from '@/hooks/use-file-drop'
 import { useMessages } from '@/hooks/use-messages'
 import { useCancelRun, useSendMessage } from '@/hooks/use-send-message'
+import { API_BASE_URL } from '@/lib/api'
 import { acceptAttribute, acceptsOf } from '@/lib/attachments'
 import { isRunning } from '@/lib/run-state'
 import { buildTurns } from '@/lib/transcript'
 import { useChatStore } from '@/stores/chat-store'
 import Composer from './Composer'
 import { DropOverlay } from './DropOverlay'
-import { AssistantTurn, UserMessage } from './MessageItem'
+import { ImageSource, proxiedImages } from './genui/image-source'
+import { AssistantTurn, PendingReply, UserMessage } from './MessageItem'
 import ModelPicker from './ModelPicker'
 import ThinkingControl from './ThinkingControl'
 import WebSearchToggle from './WebSearchToggle'
@@ -55,6 +57,9 @@ export function NextChat({ conversationId }: NextChatProps) {
 
   const live = useChatStore((s) => (conversationId ? s.live[conversationId] : undefined))
   const setPendingPrompt = useChatStore((s) => s.setPendingPrompt)
+  const outgoing = useChatStore((s) => s.outbox[conversationId ?? ''])
+  const post = useChatStore((s) => s.post)
+  const unpost = useChatStore((s) => s.unpost)
   const takePendingPrompt = useChatStore((s) => s.takePendingPrompt)
 
   const working = isRunning(live) || sendMessage.isPending
@@ -123,11 +128,17 @@ export function NextChat({ conversationId }: NextChatProps) {
     [conversationId, updateSettings],
   )
 
+  // Pictures in answers come through the server, for this conversation only.
+  const images = useMemo(
+    () => (conversationId ? proxiedImages(API_BASE_URL, conversationId) : () => null),
+    [conversationId],
+  )
+
   const turns = useMemo(
     () => buildTurns(messages.data?.items ?? [], live?.run ?? null),
     [messages.data, live],
   )
-  const isEmpty = !conversationId || (!messages.isPending && turns.length === 0)
+  const isEmpty = !outgoing && (!conversationId || (!messages.isPending && turns.length === 0))
 
   // Grows as the reply streams, so the tail-follow below reacts to tokens and
   // not only to new rows.
@@ -157,15 +168,30 @@ export function NextChat({ conversationId }: NextChatProps) {
     // The landing page is its own scrollable document on short screens; opening
     // it at the bottom would hide the model heading and the input above it.
     if (!isEmpty && parked.current) scrollToBottom('auto')
-  }, [isEmpty, turns.length, streamed, scrollToBottom])
+  }, [isEmpty, turns.length, streamed, outgoing, scrollToBottom])
 
   const handleSend = useCallback(async () => {
     const content = input.trim()
     if (!content || attachments.uploading || attachments.failed) return
     const attachmentIds = attachments.ids
     setInput('')
+    // Shown at once, at the bottom, while the request is on its way.
+    const item = {
+      content,
+      attachments: attachments.items
+        .filter((file) => file.id)
+        .map((file) => ({
+          id: file.id!,
+          filename: file.name,
+          contentType: file.kind === 'image' ? 'image/*' : 'application/pdf',
+          size: file.size,
+          url: file.preview ?? '',
+        })),
+    }
+    parked.current = true
 
     if (conversationId) {
+      post(conversationId, item)
       sendMessage.mutate(
         {
           content,
@@ -178,7 +204,10 @@ export function NextChat({ conversationId }: NextChatProps) {
           // The files stay in the composer until the server has taken them, and
           // a refused message comes back as it was written.
           onSuccess: () => attachments.clear(),
-          onError: () => setInput((current) => current || content),
+          onError: () => {
+            unpost(conversationId)
+            setInput((current) => current || content)
+          },
         },
       )
       return
@@ -187,15 +216,20 @@ export function NextChat({ conversationId }: NextChatProps) {
     // No conversation yet: create one with the chosen model, hand the prompt
     // and its uploads to the next route, and let it send once it owns the id.
     setPendingPrompt({ content, attachmentIds })
+    post('', item)
     try {
       const created = await createConversation.mutateAsync({
         ...(modelId ? { model: modelId } : {}),
         ...(canThink && effort !== 'auto' ? { reasoningEffort: effort } : {}),
         ...(canSearch && !webSearch ? { webSearch: false } : {}),
       })
+      // The message moves with it to the conversation's own page.
+      post(created.id, item)
+      unpost('')
       await navigate({ to: '/chat/$conversationId', params: { conversationId: created.id } })
     } catch {
       // Nothing was sent: the text comes back, and the files were never let go.
+      unpost('')
       setPendingPrompt(null)
       setInput((current) => current || content)
       toast.error(t('chat.send-error.generic'))
@@ -212,9 +246,11 @@ export function NextChat({ conversationId }: NextChatProps) {
     input,
     modelId,
     navigate,
+    post,
     sendMessage,
     setPendingPrompt,
     t,
+    unpost,
     webSearch,
   ])
 
@@ -228,7 +264,12 @@ export function NextChat({ conversationId }: NextChatProps) {
     if (!conversationId) return
     const pending = takePendingPrompt()
     if (pending) {
-      sendMessage.mutate(pending, { onError: () => setInput((current) => current || pending.content) })
+      sendMessage.mutate(pending, {
+        onError: () => {
+          unpost(conversationId)
+          setInput((current) => current || pending.content)
+        },
+      })
     }
     // sendMessage is a fresh object each render; the prompt is taken once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -278,27 +319,46 @@ export function NextChat({ conversationId }: NextChatProps) {
       </div>
 
       <div className={isEmpty ? 'n-scroll n-scroll-welcome' : 'n-scroll'} ref={scrollRef} onScroll={handleScroll}>
-        {conversationId && messages.isPending ? (
+        {conversationId && messages.isPending && !outgoing ? (
           <div className="n-loading" role="status" aria-label={t('state.loading')}>
             <span className="n-spinner" />
           </div>
         ) : isEmpty ? (
           <Welcome onPick={setInput} modelName={modelName} model={modelById.get(modelId)} />
         ) : (
-          <div className="n-column n-chat-fade">
-            {turns.map((turn) =>
-              turn.kind === 'user' ? (
-                <UserMessage key={turn.key} message={turn.message} />
-              ) : (
-                <AssistantTurn
-                  key={turn.key}
-                  turn={turn}
-                  modelId={turnModel(turn) ?? modelId}
-                  model={modelById.get(turnModel(turn) ?? modelId)}
-                />
-              ),
-            )}
-          </div>
+          <ImageSource.Provider value={images}>
+            <div className="n-column n-chat-fade">
+              {turns.map((turn) =>
+                turn.kind === 'user' ? (
+                  <UserMessage key={turn.key} message={turn.message} />
+                ) : (
+                  <AssistantTurn
+                    key={turn.key}
+                    turn={turn}
+                    modelId={turnModel(turn) ?? modelId}
+                    model={modelById.get(turnModel(turn) ?? modelId)}
+                  />
+                ),
+              )}
+              {outgoing && (
+                <>
+                  <UserMessage
+                    message={{
+                      id: 'outbox',
+                      conversationId: conversationId ?? '',
+                      role: 'user',
+                      content: outgoing.content,
+                      parts: [],
+                      status: 'complete',
+                      createdAt: '',
+                      attachments: outgoing.attachments,
+                    }}
+                  />
+                  <PendingReply modelId={modelId} model={modelById.get(modelId)} />
+                </>
+              )}
+            </div>
+          </ImageSource.Provider>
         )}
       </div>
 

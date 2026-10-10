@@ -1,26 +1,30 @@
 import type { Conversation, UpdateConversationRequest } from '@openchat/api-client'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
 
 /** The models a conversation can use: whatever an enabled channel offers. */
+export const chatModelsQueryOptions = queryOptions({
+  queryKey: queryKeys.models.list(),
+  queryFn: async ({ signal }) => unwrap(await api.GET('/models', { signal })),
+  // Changes only when an administrator edits a channel.
+  staleTime: 60_000,
+})
+
 export function useChatModels() {
-  return useQuery({
-    queryKey: queryKeys.models.list(),
-    queryFn: async ({ signal }) => unwrap(await api.GET('/models', { signal })),
-    // Changes only when an administrator edits a channel.
-    staleTime: 60_000,
-  })
+  return useQuery(chatModelsQueryOptions)
 }
 
 /** What the composer can offer: web search, when an administrator has it on. */
+export const chatFeaturesQueryOptions = queryOptions({
+  queryKey: queryKeys.features,
+  queryFn: async ({ signal }) => unwrap(await api.GET('/features', { signal })),
+  staleTime: 60_000,
+})
+
 export function useChatFeatures() {
-  return useQuery({
-    queryKey: queryKeys.features,
-    queryFn: async ({ signal }) => unwrap(await api.GET('/features', { signal })),
-    staleTime: 60_000,
-  })
+  return useQuery(chatFeaturesQueryOptions)
 }
 
 /**

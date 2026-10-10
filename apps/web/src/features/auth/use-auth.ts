@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { forgetQueryCache } from '@/lib/query-persist'
 import {
   authApi,
   type ChangePasswordInput,
@@ -53,8 +54,10 @@ export function useLogout() {
   return useMutation({
     mutationFn: () => authApi.logout(),
     onSuccess: () => {
-      // Everything cached was scoped to the person signing out.
+      // Everything cached was scoped to the person signing out, in memory and
+      // in the browser's storage.
       queryClient.clear()
+      forgetQueryCache()
     },
   })
 }

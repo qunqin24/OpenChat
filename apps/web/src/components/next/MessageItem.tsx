@@ -11,7 +11,7 @@ import { splitSegments } from '@/lib/genui/segments'
 import { turnText, type Turn } from '@/lib/transcript'
 import GenUIBlock from './genui/GenUIBlock'
 import MessageAttachments from './MessageAttachments'
-import { markdownComponents, markdownLinkSafety, markdownPlugins, prepareMarkdown } from './markdown-components'
+import { markdownComponents, markdownLinkSafety, prepareMarkdown, useMarkdownPlugins } from './markdown-components'
 import ToolActivity, {
   type ActivityItem,
   type ActivityNote,
@@ -69,12 +69,13 @@ export function AnswerText({ text, streaming }: { text: string; streaming: boole
 }
 
 function Markdown({ text, streaming }: { text: string; streaming: boolean }) {
+  const plugins = useMarkdownPlugins(text)
   return (
     <div className="n-markdown">
       {/* The local typography layer styles the actual Streamdown output;
           markdown-body keeps the ported table selectors working. */}
       <div className="markdown-body">
-        <Streamdown className="n-prose" parseIncompleteMarkdown={streaming} components={markdownComponents} plugins={markdownPlugins} linkSafety={markdownLinkSafety}>
+        <Streamdown className="n-prose" parseIncompleteMarkdown={streaming} components={markdownComponents} plugins={plugins} linkSafety={markdownLinkSafety}>
           {prepareMarkdown(text)}
         </Streamdown>
       </div>
@@ -307,4 +308,29 @@ function isToolBlock(block: Block): block is ToolBlock {
 
 function isFoldBlock(block: Block): block is FoldBlock {
   return typeof block === 'object' && block !== null && 'fold' in block && !isValidElement(block)
+}
+
+/**
+ * The reply to a message that is still on its way to the server: the model's
+ * header and a waiting caret, exactly as a run looks before its first token,
+ * so nothing shifts when the real one takes its place.
+ */
+export function PendingReply({ model, modelId }: { model?: ChatModel; modelId: string }) {
+  const name = model?.name ?? modelId
+  return (
+    <div className="n-msg-assistant">
+      <span className="n-msg-avatar n-msg-mark" aria-hidden="true">
+        <ModelIcon
+          subject="model"
+          className="size-8"
+          providerId={model?.providerId || undefined}
+          family={model?.family || undefined}
+          name={name}
+        />
+      </span>
+      <div className="n-msg-head">{name}</div>
+      <div className="n-msg-body" />
+      <span className="n-caret" />
+    </div>
+  )
 }

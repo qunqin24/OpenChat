@@ -1,6 +1,5 @@
 import { cjk } from '@streamdown/cjk'
-import { code } from '@streamdown/code'
-import { createMathPlugin } from '@streamdown/math'
+import { useEffect, useSyncExternalStore } from 'react'
 import type { Components, LinkSafetyConfig, PluginConfig } from 'streamdown'
 
 import { MarkdownTable } from './MarkdownTable'
@@ -17,14 +16,50 @@ export const markdownComponents: Components = { table: MarkdownTable }
  * count as closing, so the asterisks show and nothing is bold. Models write
  * Chinese exactly like that all the time.
  *
- * `code` highlights code blocks (Shiki, loaded per language on first use).
+ * `code` highlights code blocks (Shiki) and `math` renders `$$…$$` with KaTeX,
+ * its stylesheet and fonts bundled rather than fetched from a CDN. Single-dollar
+ * inline math stays off: answers quote prices in dollars all the time, and
+ * "$999 or $1,099" would turn the words between them into a formula.
  *
- * `math` renders `$$…$$` with KaTeX; its stylesheet and fonts are bundled
- * (main.tsx), not fetched from a CDN. Single-dollar inline math stays off:
- * answers quote prices in dollars all the time, and "$999 or $1,099" would
- * turn the words between them into a formula.
+ * Those two are most of the Markdown code by weight — KaTeX alone is more than
+ * the rest of the chat page — and most answers need neither, so they are
+ * fetched the first time an answer has a code block or a formula, and every
+ * Markdown on the page picks them up then. Until they arrive a code block is
+ * plain and a formula shows as its source, for the moment it takes.
  */
-export const markdownPlugins: PluginConfig = { cjk, code, math: createMathPlugin() }
+let plugins: PluginConfig = { cjk }
+const listeners = new Set<() => void>()
+const loading = { code: false, math: false }
+
+function add(extra: PluginConfig) {
+  plugins = { ...plugins, ...extra }
+  listeners.forEach((listener) => listener())
+}
+
+function ensure(text: string) {
+  if (!loading.code && /```|~~~/.test(text)) {
+    loading.code = true
+    void import('@streamdown/code').then(({ code }) => add({ code }))
+  }
+  if (!loading.math && text.includes('$$')) {
+    loading.math = true
+    void Promise.all([import('@streamdown/math'), import('katex/dist/katex.min.css')]).then(([{ createMathPlugin }]) =>
+      add({ math: createMathPlugin() }),
+    )
+  }
+}
+
+/** The plugins for this text: the ones loaded so far, loading what it needs. */
+export function useMarkdownPlugins(text: string): PluginConfig {
+  useEffect(() => ensure(text), [text])
+  return useSyncExternalStore(
+    (listener) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    () => plugins,
+  )
+}
 
 /**
  * Links open directly in a new tab. Streamdown's own guard puts every link

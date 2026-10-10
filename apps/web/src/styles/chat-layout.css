@@ -238,3 +238,15 @@
 @media (prefers-reduced-motion: reduce) {
   .prism-next .n-chat-fade { animation: none; }
 }
+
+/* A long conversation lays out and paints only the messages near the screen:
+   the browser skips the rest until they scroll close, keeping each one's last
+   measured height (`auto`) so the scrollbar does not jump. The last two — the
+   newest exchange, where the tail-follow reads heights and a reply streams —
+   are always drawn. */
+@supports (content-visibility: auto) {
+  .prism-next .n-chat-fade > :is(.n-msg-user, .n-msg-assistant):not(:nth-last-child(-n + 2)) {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 200px;
+  }
+}
