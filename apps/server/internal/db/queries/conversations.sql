@@ -43,3 +43,30 @@ SET deleted_at = now()
 WHERE id = sqlc.arg('id')
   AND user_id = sqlc.arg('user_id')
   AND deleted_at IS NULL;
+
+-- name: SetConversationModel :one
+-- The model a conversation's next run uses. Remembered per conversation so a
+-- reload, or another device, continues with the same one.
+UPDATE conversations
+SET model = sqlc.arg('model')
+WHERE id = sqlc.arg('id')
+  AND user_id = sqlc.arg('user_id')
+  AND deleted_at IS NULL
+RETURNING *;
+
+-- name: SetConversationReasoning :one
+-- NULL is automatic: the model's own default.
+UPDATE conversations
+SET reasoning_effort = sqlc.narg('reasoning_effort')
+WHERE id = sqlc.arg('id')
+  AND user_id = sqlc.arg('user_id')
+  AND deleted_at IS NULL
+RETURNING *;
+
+-- name: SetConversationWebSearch :one
+UPDATE conversations
+SET web_search = sqlc.arg('web_search')
+WHERE id = sqlc.arg('id')
+  AND user_id = sqlc.arg('user_id')
+  AND deleted_at IS NULL
+RETURNING *;

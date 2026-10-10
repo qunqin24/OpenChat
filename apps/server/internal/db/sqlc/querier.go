@@ -29,13 +29,22 @@ type Querier interface {
 	// `disabled_at` keeps its original value when the account is already disabled,
 	// so re-saving the form does not reset when access was cut off.
 	AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams) (User, error)
+	// The only way a transcript row is written by the agent layer. Rows are never
+	// updated afterwards: a reply still being generated lives in runs.live, and
+	// becomes a row only when it is finished.
+	//
+	// created_at is the wall clock, not now(): now() is the transaction's start, so
+	// two rows written by one commit would tie and fall back to ordering by a
+	// random uuid.
+	AppendEntry(ctx context.Context, arg AppendEntryParams) (Message, error)
 	AppendMessageContent(ctx context.Context, arg AppendMessageContentParams) (Message, error)
-	AttachToMessage(ctx context.Context, arg AttachToMessageParams) error
+	// Claims uploads for a message. Only the caller's own, only unclaimed ones: the
+	// row count is how the caller notices that an id did not qualify.
+	AttachToMessage(ctx context.Context, arg AttachToMessageParams) (int64, error)
 	BulkSetUserDisabled(ctx context.Context, arg BulkSetUserDisabledParams) (int64, error)
 	BulkUpdateUserRole(ctx context.Context, arg BulkUpdateUserRoleParams) (int64, error)
 	CountAdmins(ctx context.Context) (int64, error)
 	CountCatalogModels(ctx context.Context) (int64, error)
-	CountCatalogModelsFiltered(ctx context.Context, arg CountCatalogModelsFilteredParams) (int64, error)
 	CountCatalogProviders(ctx context.Context) (int64, error)
 	// One grouped read for the whole channel list rather than a count per channel.
 	// Channels with nothing enabled are absent rather than zero, which is the same
@@ -52,6 +61,10 @@ type Querier interface {
 	CreateChannel(ctx context.Context, arg CreateChannelParams) (Channel, error)
 	CreateConversation(ctx context.Context, arg CreateConversationParams) (Conversation, error)
 	CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error)
+	CreateRun(ctx context.Context, arg CreateRunParams) (Run, error)
+	// These are the operator's selections at creation, not the endpoint's entire
+	// list. Insert them together with the channel in one transaction.
+	CreateSelectedChannelModels(ctx context.Context, arg CreateSelectedChannelModelsParams) error
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	DeleteCatalogModels(ctx context.Context) error
 	DeleteCatalogProviders(ctx context.Context) error
@@ -61,6 +74,7 @@ type Querier interface {
 	// endpoint no longer listing it; deleting one here would just bring it back on
 	// the next refresh, which reads as the button not working.
 	DeleteManualChannelModel(ctx context.Context, arg DeleteManualChannelModelParams) (int64, error)
+	DeleteModelOverride(ctx context.Context, modelID string) error
 	// Used when someone changes their own password: every session issued under the
 	// old credential goes, except the one asking, so the change does not sign the
 	// person out of the tab they are standing in.
@@ -73,9 +87,18 @@ type Querier interface {
 	DeleteStaleChannelModels(ctx context.Context, arg DeleteStaleChannelModelsParams) (int64, error)
 	DeleteUserSessions(ctx context.Context, userID uuid.UUID) error
 	FinishMessage(ctx context.Context, arg FinishMessageParams) (Message, error)
+	// Terminal. Live state is cleared in the same statement: whatever it held has
+	// already been written as messages by the commit that calls this.
+	FinishRun(ctx context.Context, arg FinishRunParams) (Run, error)
+	// What a conversation that never picked a model is answered with.
+	FirstServedModel(ctx context.Context) (string, error)
+	GetActiveRun(ctx context.Context, conversationID uuid.UUID) (Run, error)
 	// One row per day for the requested window, including days with no activity —
 	// a gap in the series would otherwise draw as a straight line across the chart.
 	GetActivityTrend(ctx context.Context, days int32) ([]GetActivityTrendRow, error)
+	// What the local storage driver's handlers know a file by. The signature in
+	// the URL is what authorises the request, so there is no owner to check.
+	GetAttachmentByStorageKey(ctx context.Context, storageKey string) (Attachment, error)
 	GetCatalogModel(ctx context.Context, arg GetCatalogModelParams) (GetCatalogModelRow, error)
 	GetChannel(ctx context.Context, id uuid.UUID) (Channel, error)
 	GetChannelModel(ctx context.Context, arg GetChannelModelParams) (ChannelModel, error)
@@ -84,6 +107,14 @@ type Querier interface {
 	// or the response tells a stranger the id exists.
 	GetConversation(ctx context.Context, arg GetConversationParams) (Conversation, error)
 	GetDashboardTotals(ctx context.Context) (GetDashboardTotalsRow, error)
+	GetMessage(ctx context.Context, id uuid.UUID) (Message, error)
+	GetModelOverride(ctx context.Context, modelID string) (ModelOverride, error)
+	GetRun(ctx context.Context, id uuid.UUID) (Run, error)
+	GetRunByRequestID(ctx context.Context, arg GetRunByRequestIDParams) (Run, error)
+	// A run's pinned channel, as long as it still serves the model. Anything else
+	// — deleted, disabled, the model switched off — reads as no rows, which is
+	// the run's `no_model`.
+	GetServingChannel(ctx context.Context, arg GetServingChannelParams) (Channel, error)
 	// One round trip for the whole auth check: the session must be unexpired and
 	// the account still enabled.
 	GetSessionUser(ctx context.Context, tokenHash []byte) (GetSessionUserRow, error)
@@ -100,29 +131,17 @@ type Querier interface {
 	GetUserByLogin(ctx context.Context, identifier string) (User, error)
 	InsertCatalogModels(ctx context.Context, arg []InsertCatalogModelsParams) (int64, error)
 	InsertCatalogProviders(ctx context.Context, arg []InsertCatalogProvidersParams) (int64, error)
+	// Writes a setting only when there is none yet, so two processes that both find
+	// it missing cannot overwrite each other's value. Read it back afterwards.
+	InsertSettingIfMissing(ctx context.Context, arg InsertSettingIfMissingParams) error
 	ListAttachmentsByMessages(ctx context.Context, messageIds []uuid.UUID) ([]Attachment, error)
-	// The full-catalogue scope: everything models.dev knows about. Not an
-	// inventory -- it is the pool you read when deciding which channel to add
-	// next, which is why membership here owes nothing to the channels.
-	//
-	// Offset paging, as in ListUsers: the table wants page numbers and a total.
-	//
-	// `enabled` is a left join rather than a column because offering a model is
-	// this installation's decision and the catalogue is a cache of somebody else's
-	// file. What decides it is the channels' own model lists: a model is offered
-	// when some channel that serves it has it switched on. The channels know a
-	// model by its id alone, so a model id served anywhere counts for every
-	// catalogue entry that spells it the same -- `claude-sonnet-4` reads as offered
-	// under both `anthropic` and `amazon-bedrock`. `raw` is deliberately not
-	// selected, being several times the size of everything else here.
-	//
-	// Each capability narrows rather than widens, so asking for two gets models
-	// that have both.
-	ListCatalogModels(ctx context.Context, arg ListCatalogModelsParams) ([]ListCatalogModelsRow, error)
+	// Attachments by id, within one user's scope: what the context builder resolves
+	// a reference through, so a reference to someone else's file reads as missing.
+	ListAttachmentsForUser(ctx context.Context, arg ListAttachmentsForUserParams) ([]Attachment, error)
 	// What models.dev knows about the models one channel lists.
 	//
-	// Deliberately the same column list as ListCatalogModels, so the row converts
-	// to that one and both go through a single mapper. If the two ever diverge this
+	// Deliberately the same column list as ListServedModels, so the row converts to
+	// that one and both go through a single mapper. If the two ever diverge this
 	// stops compiling, which is when you want to hear about it.
 	//
 	// The channel is the authority on which models exist; this only decorates them,
@@ -153,7 +172,27 @@ type Querier interface {
 	ListChannelsServingModels(ctx context.Context, modelIds []string) ([]ListChannelsServingModelsRow, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
-	// The channel scope: the models this installation actually serves.
+	ListModelOverrides(ctx context.Context, modelIds []string) ([]ModelOverride, error)
+	// The caller's own uploads that no message has claimed yet.
+	ListPendingAttachments(ctx context.Context, arg ListPendingAttachmentsParams) ([]Attachment, error)
+	// The newest rows of a conversation, oldest first: the raw material of a model
+	// request. Newest, not oldest — a long conversation is answered from its end.
+	ListRecentMessages(ctx context.Context, arg ListRecentMessagesParams) ([]Message, error)
+	// Every row a run wrote, its input included: what a subscriber's snapshot
+	// carries alongside the run's live state.
+	ListRunMessages(ctx context.Context, arg ListRunMessagesParams) ([]Message, error)
+	// What a process that just started has to pick up.
+	ListRunningRuns(ctx context.Context) ([]Run, error)
+	// The models this installation actually serves -- the whole of what the model
+	// marketplace lists.
+	//
+	// There is deliberately no companion query over catalog_models. The catalogue
+	// is a reference work, not an inventory: what an operator manages is what a
+	// configured channel can reach, and listing thousands of models nothing here
+	// can answer with was a second page that only ever answered a question the
+	// channel form already answers. The catalogue survives as decoration for these
+	// rows. Only models selected by the operator belong in the marketplace;
+	// unselected discoveries stay in the channel's configuration panel.
 	//
 	// A channel's own model list is the authority on which models exist. A relay
 	// serving Claude through an OpenAI-shaped API serves Claude; a provider id
@@ -172,11 +211,11 @@ type Querier interface {
 	//
 	// A capability filter necessarily excludes an uncatalogued model: nothing is
 	// known about what it can do, and answering "it might" is not a filter.
-	// An uncatalogued model has no brand, and the serving channel's is not a
-	// substitute: a relay branded `openai` is exactly the thing that serves models
-	// OpenAI never made, so claiming its brand here would put the wrong mark on
-	// them. Empty is the honest answer, and the card falls back to the model's own
-	// name for its icon.
+	// An uncatalogued model has no brand, and the serving channel's type is not a
+	// substitute: a relay typed `openai-compatible` is exactly the thing that
+	// serves models OpenAI never made, so claiming its vendor here would put the
+	// wrong mark on them. Empty is the honest answer, and the card falls back to
+	// the model's own name for its icon.
 	// By name rather than by brand: half these rows can have no brand to group
 	// under, and sorting on an empty one would herd every uncatalogued model into a
 	// block at the top that looks like a fault.
@@ -185,16 +224,40 @@ type Querier interface {
 	// total, and the row count here stays small enough that the scan is cheap.
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
 	ListUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]User, error)
+	// What a run needs to know about its model: how its thinking is controlled,
+	// how much it may read and write, and what it can do. The catalogue row is
+	// chosen the way ListServedModels chooses it — a provider one of the serving
+	// channels names wins — so the levels a run accepts are the levels the picker
+	// showed. No rows when the catalogue does not know the model.
+	ModelProfile(ctx context.Context, modelID string) (ModelProfileRow, error)
+	// The channel a new run of this model is answered from: the first enabled one
+	// that offers it, in the operator's order. Pinned on the run, so a later change
+	// here affects the next run, never one already going.
+	PickServingChannel(ctx context.Context, modelID string) (uuid.UUID, error)
 	// The first account created becomes the admin: someone has to be able to reach
 	// the admin panel, and there is no other bootstrap path. The decision is made
 	// inside the INSERT so two concurrent registrations cannot both see an empty
 	// table and both claim it.
 	RegisterUser(ctx context.Context, arg RegisterUserParams) (User, error)
-	// The only statement in this file that writes `enabled`. That is the whole
-	// point of the column: whether this installation offers a model is our
-	// decision, and a refresh of somebody else's list is not an occasion to revisit
-	// it.
+	RequestRunCancel(ctx context.Context, arg RequestRunCancelParams) (Run, error)
+	// Replaces the whole override: the settings panel always sends every field,
+	// and a field it sends as null goes back to following the catalogue.
+	SaveModelOverride(ctx context.Context, arg SaveModelOverrideParams) (ModelOverride, error)
+	// One step of a run: a new checkpoint, new live state, or both. Guarded on
+	// `running` so nothing can resurrect a run that already finished.
+	SaveRunState(ctx context.Context, arg SaveRunStateParams) (Run, error)
+	// The only statement in this file that changes `enabled` on a row that already
+	// exists. The inserts set it once, when the row is created and there is no
+	// decision to preserve; a refresh never touches it. That is the whole point of
+	// the column: whether this installation offers a model is our decision, and a
+	// refresh of somebody else's list is not an occasion to revisit it.
 	SetChannelModelEnabled(ctx context.Context, arg SetChannelModelEnabledParams) (ChannelModel, error)
+	// The model a conversation's next run uses. Remembered per conversation so a
+	// reload, or another device, continues with the same one.
+	SetConversationModel(ctx context.Context, arg SetConversationModelParams) (Conversation, error)
+	// NULL is automatic: the model's own default.
+	SetConversationReasoning(ctx context.Context, arg SetConversationReasoningParams) (Conversation, error)
+	SetConversationWebSearch(ctx context.Context, arg SetConversationWebSearchParams) (Conversation, error)
 	// Upsert, so a setting added after this database was created still writes.
 	SetSetting(ctx context.Context, arg SetSettingParams) error
 	SoftDeleteConversation(ctx context.Context, arg SoftDeleteConversationParams) (int64, error)

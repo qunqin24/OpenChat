@@ -17,6 +17,8 @@ export const adminKeys = {
   /** Shared with features/admin/models, which owns the rest of this subtree. */
   catalog: () => [...adminKeys.all, 'catalog'] as const,
   channels: () => [...adminKeys.all, 'channels'] as const,
+  webSearch: () => [...adminKeys.all, 'web-search'] as const,
+  storage: () => [...adminKeys.all, 'storage'] as const,
 }
 
 export function useAdminStats(days = 30) {

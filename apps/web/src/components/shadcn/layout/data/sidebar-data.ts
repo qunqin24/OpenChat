@@ -1,7 +1,7 @@
-import { ArrowLeft, Boxes, LayoutDashboard, Plug, Settings, Users } from 'lucide-react'
+import { ArrowLeft, Boxes, Globe, HardDrive, LayoutDashboard, Plug, Settings, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { IconAperture } from '@/assets/custom/icon-aperture'
+import { IconMark } from '@/assets/custom/icon-mark'
 
 import { type SidebarData } from '../types'
 
@@ -21,7 +21,7 @@ export function useSidebarData(): SidebarData {
     teams: [
       {
         name: 'OpenChat',
-        logo: IconAperture,
+        logo: IconMark,
         plan: t('admin.title'),
       },
     ],
@@ -33,6 +33,8 @@ export function useSidebarData(): SidebarData {
           { title: t('admin.nav.users'), url: '/admin/users', icon: Users },
           { title: t('admin.nav.channels'), url: '/admin/channels', icon: Plug },
           { title: t('admin.nav.models'), url: '/admin/models', icon: Boxes },
+          { title: t('admin.nav.web-search'), url: '/admin/web-search', icon: Globe },
+          { title: t('admin.nav.storage'), url: '/admin/storage', icon: HardDrive },
         ],
       },
       {

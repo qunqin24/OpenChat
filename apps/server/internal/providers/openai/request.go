@@ -252,16 +252,23 @@ func convertPrompt(message llm.Message) (wireMessage, error) {
 // the reference is meaningless to the provider, and quietly dropping it would
 // have the model answer about a file it never saw.
 func attachmentBlock(attachment llm.AttachmentPart) (wireContentBlock, error) {
-	if !strings.HasPrefix(attachment.MediaType, "image/") {
+	isImage := strings.HasPrefix(attachment.MediaType, "image/")
+	if !isImage && attachment.MediaType != "application/pdf" {
 		return wireContentBlock{}, llm.Errorf(llm.ErrorProvider, nil, "openai: this protocol carries no %q attachment", attachment.MediaType)
 	}
-	switch {
-	case attachment.URL != "":
+	if attachment.URL != "" {
+		// A document can only be sent inline here; there is no link form.
+		if !isImage {
+			return wireContentBlock{}, llm.Errorf(llm.ErrorProvider, nil, "openai: a %q attachment has to be inlined, not linked", attachment.MediaType)
+		}
 		return wireContentBlock{Type: "image_url", ImageURL: &wireImageURL{URL: attachment.URL}}, nil
-	case len(attachment.Data) > 0:
-		url := "data:" + attachment.MediaType + ";base64," + base64.StdEncoding.EncodeToString(attachment.Data)
-		return wireContentBlock{Type: "image_url", ImageURL: &wireImageURL{URL: url}}, nil
-	default:
+	}
+	if len(attachment.Data) == 0 {
 		return wireContentBlock{}, llm.Errorf(llm.ErrorProvider, nil, "openai: attachment %q was never resolved", attachment.Ref)
 	}
+	url := "data:" + attachment.MediaType + ";base64," + base64.StdEncoding.EncodeToString(attachment.Data)
+	if isImage {
+		return wireContentBlock{Type: "image_url", ImageURL: &wireImageURL{URL: url}}, nil
+	}
+	return wireContentBlock{Type: "file", File: &wireFile{Filename: attachment.Filename, FileData: url}}, nil
 }

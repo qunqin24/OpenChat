@@ -1,5 +1,5 @@
 // Package api implements the generated ServerInterface on top of the database,
-// the blob store, and the chat provider.
+// the blob store, and the agent runner.
 package api
 
 import (
@@ -8,13 +8,14 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/qunqin/openchat/apps/server/internal/agent"
 	"github.com/qunqin/openchat/apps/server/internal/auth"
-	"github.com/qunqin/openchat/apps/server/internal/chat"
 	"github.com/qunqin/openchat/apps/server/internal/config"
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin/openchat/apps/server/internal/httpx"
@@ -23,23 +24,40 @@ import (
 
 // Server wires the handlers to their dependencies.
 type Server struct {
-	cfg      *config.Config
-	pool     *pgxpool.Pool
-	q        *sqlc.Queries
-	store    *storage.Store
-	provider chat.Provider
+	cfg   *config.Config
+	pool  *pgxpool.Pool
+	q     *sqlc.Queries
+	store blobStore
+	// local is the store's local driver, which is what serves the signed URLs
+	// of files kept on this server's disk. Nil when the store has none.
+	local func() *storage.Local
+	// storageSwitch is the store again when it can be reconfigured while
+	// running, which is what the admin storage settings need; nil otherwise.
+	storageSwitch *storage.Switch
+	// storageMu serializes changes to the storage settings.
+	storageMu sync.Mutex
+	runner    *agent.Runner
 }
 
 var _ ServerInterface = (*Server)(nil)
 
-func NewServer(cfg *config.Config, pool *pgxpool.Pool, store *storage.Store, provider chat.Provider) *Server {
-	return &Server{
-		cfg:      cfg,
-		pool:     pool,
-		q:        sqlc.New(pool),
-		store:    store,
-		provider: provider,
+func NewServer(cfg *config.Config, pool *pgxpool.Pool, store storage.Backend, runner *agent.Runner) *Server {
+	s := &Server{
+		cfg:    cfg,
+		pool:   pool,
+		q:      sqlc.New(pool),
+		store:  store,
+		local:  func() *storage.Local { return nil },
+		runner: runner,
 	}
+	switch store := store.(type) {
+	case *storage.Switch:
+		s.storageSwitch = store
+		s.local = store.Local
+	case *storage.Local:
+		s.local = func() *storage.Local { return store }
+	}
+	return s
 }
 
 // GetHealth reports liveness and, best-effort, database reachability.

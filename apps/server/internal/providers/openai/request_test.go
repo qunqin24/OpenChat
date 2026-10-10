@@ -142,6 +142,24 @@ func TestBuildBodyInlinesAResolvedImageAttachment(t *testing.T) {
 	}
 }
 
+func TestBuildBodyInlinesAResolvedPDFAttachment(t *testing.T) {
+	message := llm.Message{Role: llm.RoleUser, Parts: []llm.Part{
+		llm.TextPart{Text: "summarise"},
+		llm.AttachmentPart{Ref: "att-1", Filename: "report.pdf", MediaType: "application/pdf", Data: []byte("%PDF-1.4")},
+	}}
+
+	got := buildMessages(t, Config{}, message)
+	blocks, ok := got[0]["content"].([]any)
+	if !ok || len(blocks) != 2 {
+		t.Fatalf("content = %v, want a text block and a file block", got[0]["content"])
+	}
+	block := blocks[1].(map[string]any)
+	file := block["file"].(map[string]any)
+	if block["type"] != "file" || file["filename"] != "report.pdf" || !strings.HasPrefix(file["file_data"].(string), "data:application/pdf;base64,") {
+		t.Errorf("file block = %v", block)
+	}
+}
+
 func TestBuildBodyRefusesWhatItCannotFaithfullySend(t *testing.T) {
 	tests := []struct {
 		name string
@@ -156,7 +174,7 @@ func TestBuildBodyRefusesWhatItCannotFaithfullySend(t *testing.T) {
 		{
 			name: "an attachment type this protocol has no block for",
 			req: llm.Request{Model: "m", Messages: []llm.Message{{Role: llm.RoleUser, Parts: []llm.Part{
-				llm.AttachmentPart{Ref: "att-2", MediaType: "application/pdf", Data: []byte("%PDF")},
+				llm.AttachmentPart{Ref: "att-2", MediaType: "audio/mpeg", Data: []byte("ID3")},
 			}}}},
 		},
 		{

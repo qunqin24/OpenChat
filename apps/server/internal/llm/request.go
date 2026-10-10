@@ -43,14 +43,30 @@ const (
 // not something to paper over.
 type ReasoningEffort string
 
+// The levels any provider uses, lowest to highest. A model accepts its own
+// subset, which the catalogue lists (models.dev `reasoning_options`); `none`
+// is an explicit off where a provider has one.
 const (
-	EffortLow    ReasoningEffort = "low"
-	EffortMedium ReasoningEffort = "medium"
-	EffortHigh   ReasoningEffort = "high"
+	EffortNone    ReasoningEffort = "none"
+	EffortMinimal ReasoningEffort = "minimal"
+	EffortLow     ReasoningEffort = "low"
+	EffortMedium  ReasoningEffort = "medium"
+	EffortHigh    ReasoningEffort = "high"
+	EffortXHigh   ReasoningEffort = "xhigh"
+	EffortMax     ReasoningEffort = "max"
 )
 
+// ReasoningOptions asks for thinking in one of the two ways providers offer
+// it. Models of one generation take an effort level, models of another a
+// token budget, and sending the wrong one is a rejected request, so the
+// caller — which has the catalogue — picks; an adapter translates exactly what
+// it is given and never converts one into the other.
 type ReasoningOptions struct {
+	// Effort is a level the model accepts.
 	Effort ReasoningEffort
+	// Budget is a thinking budget in tokens, for models controlled that way.
+	// Ignored when Effort is set.
+	Budget int
 }
 
 // Options are the sampling knobs.

@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -19,14 +20,13 @@ import (
 
 	"github.com/joho/godotenv"
 
+	"github.com/qunqin/openchat/apps/server/internal/agent"
 	"github.com/qunqin/openchat/apps/server/internal/api"
 	"github.com/qunqin/openchat/apps/server/internal/auth"
-	"github.com/qunqin/openchat/apps/server/internal/chat"
 	"github.com/qunqin/openchat/apps/server/internal/config"
 	"github.com/qunqin/openchat/apps/server/internal/db"
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin/openchat/apps/server/internal/logging"
-	"github.com/qunqin/openchat/apps/server/internal/storage"
 )
 
 func main() {
@@ -78,17 +78,25 @@ func run() error {
 		return err
 	}
 
-	store, err := storage.New(ctx, cfg)
+	// Where attachments go is a setting, read from the database and changeable
+	// from the admin panel without a restart.
+	store, err := api.OpenStorage(ctx, pool)
 	if err != nil {
 		return err
 	}
 
-	// Swap this for a real model client when one is wired up.
-	provider := chat.Echo{Delay: 25 * time.Millisecond}
-
 	queries := sqlc.New(pool)
 
-	server := api.NewServer(cfg, pool, store, provider)
+	// The agent layer: runs execute here, in the background, and outlive the
+	// requests that start them.
+	runner := agent.NewRunner(pool, agent.NewHub(), api.NewModelResolver(pool), api.NewToolSource(pool),
+		agent.Options{SystemPrompt: api.NewSystemPrompt(pool), Blobs: store, Modalities: api.NewModalities(pool)})
+	// Runs a previous process left unfinished pick up from their checkpoints.
+	if err := runner.Resume(ctx); err != nil {
+		return err
+	}
+
+	server := api.NewServer(cfg, pool, store, runner)
 	// Before the listener opens, so a server started with debug logging on logs
 	// its own startup in detail — which is when you want it most.
 	server.LoadSettings(ctx)
@@ -101,12 +109,17 @@ func run() error {
 		Handler:           api.NewRouter(cfg, server, auth.NewMiddleware(queries)),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
-		// No WriteTimeout: SSE responses stay open for the length of a reply.
+		// No WriteTimeout: an events stream stays open as long as its page.
+		//
+		// Requests inherit the signal context, so a shutdown ends the open
+		// events streams too. Shutdown waits for connections to go idle, and
+		// a stream never would.
+		BaseContext: func(net.Listener) context.Context { return ctx },
 	}
 
 	errCh := make(chan error, 1)
 	go func() {
-		slog.Info("http server listening", "addr", cfg.HTTPAddr, "env", cfg.Env, "provider", provider.Name())
+		slog.Info("http server listening", "addr", cfg.HTTPAddr, "env", cfg.Env)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
@@ -121,7 +134,13 @@ func run() error {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
-	return srv.Shutdown(shutdownCtx)
+	httpErr := srv.Shutdown(shutdownCtx)
+	// Runs are stopped, not finished: they stay `running` and the next process
+	// resumes them, so a deploy does not cancel anyone's answer.
+	if err := runner.Shutdown(shutdownCtx); err != nil {
+		slog.Warn("runs did not stop in time", "error", err)
+	}
+	return httpErr
 }
 
 func command() string {

@@ -229,6 +229,29 @@ paths:
                 items: { $ref: "#/components/schemas/ChannelTypeInfo" }
         default: { $ref: "#/components/responses/Error" }
 
+  /admin/channels/models/preview:
+    post:
+      tags: [admin]
+      summary: Preview models using an unsaved channel connection
+      description: |
+        Uses the submitted connection without storing a channel or credential.
+        Select models from this response and include them when creating the channel.
+      operationId: previewChannelModels
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChannelConnection" }
+      responses:
+        "200":
+          description: Models advertised by this endpoint, not yet added to the installation
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ChannelModelInput" }
+        default: { $ref: "#/components/responses/Error" }
+
   /admin/channels/{channelId}/models:
     parameters:
       - { name: channelId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -276,9 +299,8 @@ paths:
       tags: [admin]
       summary: Ask the endpoint what models it serves
       description: |
-        Calls the endpoint's own model list with the stored credential — the
-        first time this server makes an outbound request on an operator's
-        behalf. Requires a stored key.
+        Calls the endpoint's own model list with the stored connection.
+        Requires a stored key except for local services such as Ollama.
 
         Models already present keep their enabled state; models the endpoint
         stopped listing are removed, and `manual` entries are left alone.
@@ -356,7 +378,12 @@ paths:
     get:
       tags: [admin]
       summary: Providers in the catalogue
-      description: The source for the provider picker when adding a channel.
+      description: |
+        Every provider models.dev documents, with the number of models it
+        carries. Reference metadata: it is what the `providerId` filter on the
+        served-models listing is expressed in, and it never adds a model to
+        that listing — membership there comes from the channels' own selected
+        models.
       operationId: listCatalogProviders
       responses:
         "200":
@@ -371,7 +398,13 @@ paths:
   /admin/catalog/models:
     get:
       tags: [admin]
-      summary: Browse the model catalogue
+      summary: The models this installation serves
+      description: |
+        Only models explicitly selected (enabled) within a configured channel.
+        Unselected discoveries never appear here. The upstream catalogue is deliberately
+        not browsable here: it is a reference work of thousands of models, most
+        of which nothing configured can answer with, and it reaches this
+        endpoint only as decoration on the rows below.
       operationId: listCatalogModels
       parameters:
         - { $ref: "#/components/parameters/Limit" }
@@ -397,25 +430,48 @@ paths:
               enum: [reasoning, toolCall, attachment, structuredOutput]
         - name: enabled
           in: query
-          description: Restrict to models that are, or are not, switched on here.
+          description: Whether at least one channel with this model selected is enabled.
           schema: { type: boolean }
-        - name: scope
-          in: query
-          description: |
-            `channels` (the default) lists only models a configured channel can
-            actually reach — which is what an operator means by "our models".
-            `all` browses the whole upstream catalogue, which is where you go to
-            find out what a provider offers before adding a channel for it.
-          schema:
-            type: string
-            enum: [channels, all]
-            default: channels
       responses:
         "200":
           description: ok
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CatalogModelPage" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/models/{modelId}/settings:
+    parameters:
+      - { name: modelId, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [admin]
+      summary: Decide how a model is offered
+      description: |
+        Replaces the operator's settings for a model, whichever channels serve
+        it. Every field is sent; null follows the catalogue, so resetting one
+        field is sending it as null. The settings are enforced where requests
+        are made, not only in the picker: a level not allowed is dropped, a
+        model that may not call tools is offered none, and an output limit is
+        sent with every request.
+      operationId: updateModelSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ModelOverride" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ModelOverride" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [admin]
+      summary: Go back to the catalogue for every setting
+      operationId: resetModelSettings
+      responses:
+        "204": { description: reset }
         default: { $ref: "#/components/responses/Error" }
 
   /admin/system:
@@ -445,6 +501,115 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SystemSettings" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/web-search:
+    get:
+      tags: [admin]
+      summary: Web search settings
+      operationId: getWebSearchSettings
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebSearchSettings" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [admin]
+      summary: Change web search settings
+      description: Read by every run at its next request, so a change reaches runs in progress.
+      operationId: updateWebSearchSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateWebSearchSettingsRequest" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebSearchSettings" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/web-search/test:
+    post:
+      tags: [admin]
+      summary: Run one search with the current settings
+      description: |
+        Searches the way a run would — the same depth, result count,
+        compression and blocklist — and reports what came back. A failed search
+        is a 200 with `ok: false`: the request worked, the search did not.
+      operationId: testWebSearch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebSearchTestRequest" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebSearchTestResult" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/storage:
+    get:
+      tags: [admin]
+      summary: File storage settings
+      operationId: getStorageSettings
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StorageSettings" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [admin]
+      summary: Change file storage settings
+      description: |
+        Takes effect at once, with no restart: new uploads go to the chosen
+        driver, and files already stored stay readable from wherever they are.
+        The new drivers are built before they replace the old ones; if that
+        fails the request is a 400 and nothing is saved.
+      operationId: updateStorageSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateStorageSettingsRequest" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StorageSettings" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/storage/test:
+    post:
+      tags: [admin]
+      summary: Try a storage configuration without saving it
+      description: |
+        Merges the body over the stored settings, then writes a small object
+        under `probes/` in the chosen driver, reads it back and deletes it. A
+        configuration that does not work is a 200 with `ok: false`: the request
+        worked, the storage did not.
+      operationId: testStorage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateStorageSettingsRequest" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StorageTestResult" }
         default: { $ref: "#/components/responses/Error" }
 
   /admin/channels:
@@ -645,10 +810,26 @@ paths:
         default: { $ref: "#/components/responses/Error" }
     post:
       tags: [messages]
-      summary: Append a user message and stream the assistant reply
+      summary: Send a message and start a run that answers it
       description: |
-        Responds with `text/event-stream`. Each SSE `data:` frame is a JSON
-        `StreamEvent`. The stream terminates with a `done` event.
+        Writes the user message and starts a run in the background, then
+        returns at once. The answer is not in this response: it is followed on
+        `GET /conversations/{conversationId}/events`, which also serves a reload,
+        a second tab or another device — the run does not depend on this
+        request staying open, and closing the page does not stop it.
+
+        A conversation runs one thing at a time: while a run is going this
+        answers 409 `conversation_busy`. `requestId` makes a retried POST safe —
+        the same id finds the run it already started instead of starting a
+        second one.
+
+        `attachmentIds` are uploads (`POST /files`) of the caller's that no
+        message has claimed. They are refused, before anything is written, with
+        400 `too_many_attachments` (more than 10), `attachments_too_large` (over
+        20 MiB together), `attachment_unsupported` (the run's model does not
+        accept images, or PDFs, per its `inputModalities`) and
+        `attachment_unavailable` (not uploaded, already sent, or not the
+        caller's).
       operationId: createMessage
       requestBody:
         required: true
@@ -656,17 +837,130 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/CreateMessageRequest" }
       responses:
+        "202":
+          description: the message was written and its run started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreateMessageResponse" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /conversations/{conversationId}/events:
+    parameters:
+      - { $ref: "#/components/parameters/ConversationId" }
+    get:
+      tags: [messages]
+      summary: Follow a conversation's runs
+      description: |
+        Responds with `text/event-stream`. Each `data:` frame is one JSON
+        `ConversationEvent`. The first is a `snapshot` — the active run, the
+        messages it has written and its work in flight — and every later frame
+        is a `batch` of events to apply on top of it. Everything described was
+        committed before it was sent.
+
+        A batch whose `version` is not newer than the snapshot's run version is
+        already contained in the snapshot and is dropped. A client that falls
+        too far behind is sent a fresh `snapshot` instead of the batches it
+        missed; one that reconnects starts from a snapshot. Nothing is replayed.
+      operationId: streamConversationEvents
+      responses:
         "200":
-          description: server-sent event stream of StreamEvent frames
+          description: server-sent event stream of ConversationEvent frames
           content:
             text/event-stream:
               schema: { type: string }
+        default: { $ref: "#/components/responses/Error" }
+
+  /conversations/{conversationId}/runs/{runId}/cancel:
+    parameters:
+      - { $ref: "#/components/parameters/ConversationId" }
+      - name: runId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [messages]
+      summary: Stop a run
+      description: |
+        Asks the run to stop and returns. What was generated is kept; the run
+        then finishes as `cancelled`, which the events stream reports.
+        Stopping a run that already finished is a no-op.
+      operationId: cancelRun
+      responses:
+        "202": { description: the run was asked to stop }
+        default: { $ref: "#/components/responses/Error" }
+
+  /features:
+    get:
+      tags: [messages]
+      summary: What the chat can offer right now
+      description: |
+        Server-wide switches the composer depends on. `webSearch` is whether
+        the administrator has web search configured and on, which is when the
+        composer offers its web search switch.
+      operationId: getChatFeatures
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatFeatures" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /favicons/{domain}:
+    get:
+      tags: [messages]
+      summary: A site's icon, for the sources a reply cites
+      description: |
+        Fetched by the server and cached, so a browser showing a reply's
+        sources asks no third party about them. 404 when the site has none;
+        the client then draws its own mark.
+      operationId: getFavicon
+      parameters:
+        - name: domain
+          in: path
+          required: true
+          schema: { type: string, maxLength: 253 }
+      responses:
+        "200":
+          description: The icon.
+          content:
+            image/*:
+              schema: { type: string, format: binary }
+        default: { $ref: "#/components/responses/Error" }
+
+  /models:
+    get:
+      tags: [messages]
+      summary: The models a conversation can use
+      description: |
+        Every model an enabled channel offers. A model offered by several
+        channels appears once; which channel answers is the server's choice.
+      operationId: listChatModels
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ChatModel" }
         default: { $ref: "#/components/responses/Error" }
 
   /files:
     post:
       tags: [files]
       summary: Issue a presigned upload URL for blob storage
+      description: |
+        For a file to attach to a message: the client PUTs the bytes to
+        `uploadUrl` with the same `Content-Type`, then sends the returned `id`
+        in `attachmentIds`. With S3 storage `uploadUrl` is a presigned bucket
+        URL; with the server's local-disk storage it is a path on this API
+        (`/api/v1/files/content/...`, a relative reference unless the server
+        has a public URL configured), signed and valid for 15 minutes. The
+        read URLs in `Attachment.url` follow the same rule. Only PNG, JPEG,
+        WebP and GIF images (5 MiB each) and PDFs (10 MiB) are accepted — 415
+        `unsupported_file_type` otherwise, and 413 `file_too_large` over the
+        size. The upload belongs to the caller; nobody else can attach it.
       operationId: createUpload
       requestBody:
         required: true
@@ -743,13 +1037,31 @@ components:
 
     Conversation:
       type: object
-      required: [id, title, createdAt, updatedAt]
+      required: [id, title, webSearch, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
         title: { type: string }
         model: { type: string, nullable: true }
+        reasoningEffort:
+          $ref: "#/components/schemas/ReasoningEffort"
+        webSearch:
+          type: boolean
+          description: |
+            Whether the conversation's runs may use the web — search and page
+            reading. On by default; the model decides when a question needs it.
+            Has no effect where the server offers no web search.
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+
+    ReasoningEffort:
+      type: string
+      description: |
+        How hard a reasoning model thinks. `auto` sends nothing and leaves the
+        model at its own default. The other values are the levels providers
+        use; each model accepts its own subset, listed as
+        `ChatModel.reasoningEfforts` (from models.dev). A level the model does
+        not offer is dropped, which is the same as `auto`.
+      enum: [auto, none, minimal, low, medium, high, xhigh, max]
 
     ConversationPage:
       type: object
@@ -765,11 +1077,18 @@ components:
       properties:
         title: { type: string, maxLength: 200 }
         model: { type: string }
+        reasoningEffort: { $ref: "#/components/schemas/ReasoningEffort" }
+        webSearch: { type: boolean }
 
     UpdateConversationRequest:
       type: object
       properties:
         title: { type: string, maxLength: 200 }
+        model:
+          type: string
+          description: The model the conversation's next run uses.
+        reasoningEffort: { $ref: "#/components/schemas/ReasoningEffort" }
+        webSearch: { type: boolean }
 
     Attachment:
       type: object
@@ -783,17 +1102,119 @@ components:
 
     Message:
       type: object
-      required: [id, conversationId, role, content, status, createdAt]
+      description: |
+        One immutable transcript row: a user's input, one model response, or
+        one tool result. A reply that called tools is several rows sharing a
+        `runId`.
+      required: [id, conversationId, role, content, parts, status, createdAt]
       properties:
         id: { type: string, format: uuid }
         conversationId: { type: string, format: uuid }
         role: { $ref: "#/components/schemas/Role" }
-        content: { type: string }
+        content:
+          type: string
+          description: The text parts, concatenated. `parts` is the message.
+        parts:
+          type: array
+          items: { $ref: "#/components/schemas/MessagePart" }
         status: { $ref: "#/components/schemas/MessageStatus" }
+        runId: { type: string, format: uuid }
+        stopReason:
+          type: string
+          description: |
+            Assistant messages only. `error` and `cancelled` responses are shown
+            but never sent back to a model.
+          enum: [stop, length, tool_calls, content_filter, cancelled, error]
+        model: { type: string }
+        errorCode:
+          type: string
+          description: Why a failed response failed. A code to localise, never provider text.
+        usage: { $ref: "#/components/schemas/Usage" }
         attachments:
           type: array
           items: { $ref: "#/components/schemas/Attachment" }
         createdAt: { type: string, format: date-time }
+
+    MessagePart:
+      description: |
+        One content block, in OpenChat's internal protocol (`internal/llm`):
+        every upstream format is translated into these by its adapter, so a
+        client renders one shape whatever the model behind it.
+      oneOf:
+        - $ref: "#/components/schemas/TextPart"
+        - $ref: "#/components/schemas/ReasoningPart"
+        - $ref: "#/components/schemas/ToolCallPart"
+        - $ref: "#/components/schemas/ToolResultPart"
+      discriminator:
+        propertyName: type
+        mapping:
+          text: "#/components/schemas/TextPart"
+          reasoning: "#/components/schemas/ReasoningPart"
+          tool_call: "#/components/schemas/ToolCallPart"
+          tool_result: "#/components/schemas/ToolResultPart"
+
+    TextPart:
+      type: object
+      required: [type, text]
+      properties:
+        type: { type: string, const: text }
+        text: { type: string }
+
+    ReasoningPart:
+      type: object
+      required: [type, text]
+      properties:
+        type: { type: string, const: reasoning }
+        text:
+          type: string
+          description: Empty when the provider withheld or encrypted its reasoning.
+        durationMs:
+          type: integer
+          format: int64
+          description: >-
+            How long the model spent on this reasoning, from its first token to
+            its last. Absent when it was not timed (older replies), and while
+            the reasoning is still streaming.
+
+    ToolCallPart:
+      type: object
+      required: [type, id, name, rawArguments]
+      properties:
+        type: { type: string, const: tool_call }
+        id: { type: string }
+        name: { type: string }
+        arguments:
+          type: object
+          additionalProperties: true
+          description: Absent while streaming, and when what the model sent was not valid JSON.
+        rawArguments: { type: string }
+
+    ToolResultPart:
+      type: object
+      required: [type, callId, name, content, status]
+      properties:
+        type: { type: string, const: tool_result }
+        callId: { type: string }
+        name: { type: string }
+        content:
+          type: string
+          description: What the model read.
+        status: { type: string, enum: [succeeded, failed, cancelled, interrupted] }
+        details:
+          type: object
+          additionalProperties: true
+          description: Tool-specific data for display, such as a search's results.
+        durationMs: { type: integer, format: int64 }
+
+    Usage:
+      type: object
+      required: [inputTokens, outputTokens]
+      properties:
+        inputTokens: { type: integer }
+        outputTokens: { type: integer }
+        reasoningTokens: { type: integer }
+        cacheReadTokens: { type: integer }
+        cacheWriteTokens: { type: integer }
 
     MessagePage:
       type: object
@@ -809,55 +1230,271 @@ components:
       required: [content]
       properties:
         content: { type: string, minLength: 1 }
-        model: { type: string }
+        model:
+          type: string
+          description: |
+            The model to answer with, which the conversation also remembers.
+            Absent: the conversation's model, or the first one available.
+        reasoningEffort:
+          $ref: "#/components/schemas/ReasoningEffort"
+          description: For this run, and remembered by the conversation. Absent keeps the conversation's.
+        webSearch:
+          type: boolean
+          description: For this run, and remembered by the conversation. Absent keeps the conversation's.
+        requestId:
+          type: string
+          maxLength: 100
+          description: Chosen by the client; a retry with the same id finds the same run.
         attachmentIds:
           type: array
           items: { type: string, format: uuid }
 
-    StreamEvent:
-      description: One SSE frame emitted by createMessage.
-      oneOf:
-        - $ref: "#/components/schemas/StreamStart"
-        - $ref: "#/components/schemas/StreamDelta"
-        - $ref: "#/components/schemas/StreamDone"
-        - $ref: "#/components/schemas/StreamError"
-      discriminator:
-        propertyName: type
-        # Explicit mapping so generators emit the literal values ("start", …)
-        # rather than inferring them from the schema names.
-        mapping:
-          start: "#/components/schemas/StreamStart"
-          delta: "#/components/schemas/StreamDelta"
-          done: "#/components/schemas/StreamDone"
-          error: "#/components/schemas/StreamError"
-
-    StreamStart:
+    CreateMessageResponse:
       type: object
-      required: [type, messageId]
+      required: [message, run]
       properties:
-        type: { type: string, const: start }
+        message: { $ref: "#/components/schemas/Message" }
+        run: { $ref: "#/components/schemas/Run" }
+
+    Run:
+      type: object
+      description: The work from one input to its final answer.
+      required: [id, conversationId, status, model, version, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        conversationId: { type: string, format: uuid }
+        status: { type: string, enum: [running, completed, failed, cancelled] }
+        model: { type: string }
+        reasoningEffort: { $ref: "#/components/schemas/ReasoningEffort" }
+        errorCode: { type: string }
+        version:
+          type: integer
+          format: int64
+          description: Bumped by every change; see the events stream.
+        createdAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time }
+
+    LiveState:
+      type: object
+      description: A run's work in flight, which is not a message yet.
+      properties:
+        generation:
+          type: object
+          required: [attempt, parts]
+          properties:
+            attempt: { type: integer }
+            parts:
+              type: array
+              items: { $ref: "#/components/schemas/MessagePart" }
+            retry: { $ref: "#/components/schemas/RetryInfo" }
+        tools:
+          type: array
+          items: { $ref: "#/components/schemas/ToolSlot" }
+
+    RetryInfo:
+      type: object
+      required: [at, errorCode]
+      properties:
+        at: { type: string, format: date-time }
+        errorCode: { type: string }
+
+    ToolSlot:
+      type: object
+      required: [callId, name, status]
+      properties:
+        callId: { type: string }
+        name: { type: string }
+        status: { type: string, enum: [pending, running, done] }
         messageId: { type: string, format: uuid }
 
-    StreamDelta:
-      type: object
-      required: [type, text]
-      properties:
-        type: { type: string, const: delta }
-        text: { type: string }
+    ConversationEvent:
+      description: One SSE frame of the events stream.
+      oneOf:
+        - $ref: "#/components/schemas/SnapshotEvent"
+        - $ref: "#/components/schemas/BatchEvent"
+      discriminator:
+        propertyName: type
+        mapping:
+          snapshot: "#/components/schemas/SnapshotEvent"
+          batch: "#/components/schemas/BatchEvent"
 
-    StreamDone:
+    SnapshotEvent:
       type: object
+      description: Replaces everything a client holds about runs in flight.
+      required: [type, messages]
+      properties:
+        type: { type: string, const: snapshot }
+        run:
+          $ref: "#/components/schemas/Run"
+          description: The active run; absent when the conversation is idle.
+        messages:
+          type: array
+          description: Every message the active run has written, its input first.
+          items: { $ref: "#/components/schemas/Message" }
+        live: { $ref: "#/components/schemas/LiveState" }
+
+    BatchEvent:
+      type: object
+      description: The events of one commit, in order.
+      required: [type, runId, version, events]
+      properties:
+        type: { type: string, const: batch }
+        runId: { type: string, format: uuid }
+        version: { type: integer, format: int64 }
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/RunEvent" }
+
+    RunEvent:
+      oneOf:
+        - $ref: "#/components/schemas/RunStartedEvent"
+        - $ref: "#/components/schemas/RunFinishedEvent"
+        - $ref: "#/components/schemas/GenerationStartedEvent"
+        - $ref: "#/components/schemas/PartStartedEvent"
+        - $ref: "#/components/schemas/PartDeltaEvent"
+        - $ref: "#/components/schemas/PartEndedEvent"
+        - $ref: "#/components/schemas/MessageAppendedEvent"
+        - $ref: "#/components/schemas/ToolStartedEvent"
+        - $ref: "#/components/schemas/ToolFinishedEvent"
+        - $ref: "#/components/schemas/RetryScheduledEvent"
+      discriminator:
+        propertyName: type
+        mapping:
+          run_started: "#/components/schemas/RunStartedEvent"
+          run_finished: "#/components/schemas/RunFinishedEvent"
+          generation_started: "#/components/schemas/GenerationStartedEvent"
+          part_started: "#/components/schemas/PartStartedEvent"
+          part_delta: "#/components/schemas/PartDeltaEvent"
+          part_ended: "#/components/schemas/PartEndedEvent"
+          message_appended: "#/components/schemas/MessageAppendedEvent"
+          tool_started: "#/components/schemas/ToolStartedEvent"
+          tool_finished: "#/components/schemas/ToolFinishedEvent"
+          retry_scheduled: "#/components/schemas/RetryScheduledEvent"
+
+    RunStartedEvent:
+      type: object
+      required: [type, run, message]
+      properties:
+        type: { type: string, const: run_started }
+        run: { $ref: "#/components/schemas/Run" }
+        message:
+          $ref: "#/components/schemas/Message"
+          description: The input that started the run.
+
+    RunFinishedEvent:
+      type: object
+      required: [type, run]
+      properties:
+        type: { type: string, const: run_finished }
+        run: { $ref: "#/components/schemas/Run" }
+
+    GenerationStartedEvent:
+      type: object
+      description: A request attempt began producing content; drop any partial from an earlier attempt.
+      required: [type, attempt]
+      properties:
+        type: { type: string, const: generation_started }
+        attempt: { type: integer }
+
+    PartStartedEvent:
+      type: object
+      required: [type, index, part]
+      properties:
+        type: { type: string, const: part_started }
+        index: { type: integer }
+        part: { $ref: "#/components/schemas/MessagePart" }
+
+    PartDeltaEvent:
+      type: object
+      description: Text for a text or reasoning part, raw argument JSON for a tool call.
+      required: [type, index, delta]
+      properties:
+        type: { type: string, const: part_delta }
+        index: { type: integer }
+        delta: { type: string }
+
+    PartEndedEvent:
+      type: object
+      required: [type, index, part]
+      properties:
+        type: { type: string, const: part_ended }
+        index: { type: integer }
+        part: { $ref: "#/components/schemas/MessagePart" }
+
+    MessageAppendedEvent:
+      type: object
+      description: A row was written. An assistant row replaces the partial being built.
       required: [type, message]
       properties:
-        type: { type: string, const: done }
+        type: { type: string, const: message_appended }
         message: { $ref: "#/components/schemas/Message" }
 
-    StreamError:
+    ToolStartedEvent:
       type: object
-      required: [type, error]
+      required: [type, callId, name]
       properties:
-        type: { type: string, const: error }
-        error: { $ref: "#/components/schemas/Error" }
+        type: { type: string, const: tool_started }
+        callId: { type: string }
+        name: { type: string }
+
+    ToolFinishedEvent:
+      type: object
+      required: [type, callId, messageId]
+      properties:
+        type: { type: string, const: tool_finished }
+        callId: { type: string }
+        messageId: { type: string, format: uuid }
+
+    RetryScheduledEvent:
+      type: object
+      required: [type, attempt, at, errorCode]
+      properties:
+        type: { type: string, const: retry_scheduled }
+        attempt: { type: integer }
+        at: { type: string, format: date-time }
+        errorCode: { type: string }
+
+    ChatFeatures:
+      type: object
+      required: [webSearch]
+      properties:
+        webSearch: { type: boolean }
+
+    ChatModel:
+      type: object
+      required:
+        [id, name, providerId, family, reasoning, toolCall, attachment, contextLimit, outputLimit,
+         inputModalities, reasoningEfforts]
+      properties:
+        id:
+          type: string
+          description: What a conversation stores and a request names.
+        name: { type: string }
+        providerId:
+          type: string
+          description: The catalogue's brand for the model, for its icon. Empty when unknown.
+        family: { type: string }
+        reasoning: { type: boolean }
+        toolCall: { type: boolean }
+        attachment: { type: boolean }
+        contextLimit:
+          type: integer
+          format: int64
+          description: Zero when unknown.
+        outputLimit:
+          type: integer
+          format: int64
+          description: Zero when unknown.
+        inputModalities:
+          type: array
+          items: { $ref: "#/components/schemas/InputModality" }
+        reasoningEfforts:
+          type: array
+          description: |
+            The thinking levels this model offers, lowest first, besides
+            `auto`. Empty for a model with no control over its thinking. What
+            the operator allows, within what the model has.
+          items: { $ref: "#/components/schemas/ReasoningEffort" }
 
     CreateUploadRequest:
       type: object
@@ -1037,15 +1674,18 @@ components:
         channels:
           type: array
           description: |
-            The configured channels that can serve this model. Empty means the
-            catalogue knows about it but nothing here can reach it.
+            The configured channels that have this model selected, disabled
+            ones included — each entry's own `enabled` says which those are.
+            Having it selected is what puts a model in this listing, so the
+            array is never empty here and the catalogue alone never contributes
+            a row.
           items: { $ref: "#/components/schemas/ModelChannel" }
         name: { type: string }
         description: { type: string }
         family: { type: string }
         enabled:
           type: boolean
-          description: Whether this installation has switched the model on.
+          description: Whether at least one enabled channel has this model selected.
         attachment: { type: boolean }
         reasoning: { type: boolean }
         toolCall: { type: boolean }
@@ -1062,6 +1702,72 @@ components:
         outputModalities:
           type: array
           items: { type: string }
+        inputLimit: { type: integer, format: int64 }
+        defaults:
+          description: What the catalogue says, before the operator's settings.
+          allOf: [{ $ref: "#/components/schemas/ModelSettings" }]
+        override: { $ref: "#/components/schemas/ModelOverride" }
+        settings:
+          description: How the model is actually offered and called.
+          allOf: [{ $ref: "#/components/schemas/ModelSettings" }]
+
+    ModelKind:
+      type: string
+      description: What a model is for. Only `text` models are offered in chat.
+      enum: [text, image, embedding, rerank]
+
+    InputModality:
+      type: string
+      description: What a model takes besides text.
+      enum: [image, audio, video, pdf]
+
+    ModelSettings:
+      type: object
+      required:
+        [kind, reasoning, toolCall, inputModalities, contextLimit, inputLimit, outputLimit,
+         reasoningEfforts]
+      properties:
+        kind: { $ref: "#/components/schemas/ModelKind" }
+        reasoning: { type: boolean }
+        toolCall: { type: boolean }
+        inputModalities:
+          type: array
+          items: { $ref: "#/components/schemas/InputModality" }
+        contextLimit: { type: integer, format: int64, description: Zero when unknown. }
+        inputLimit: { type: integer, format: int64, description: Zero when unknown. }
+        outputLimit: { type: integer, format: int64, description: Zero when unknown. }
+        reasoningEfforts:
+          type: array
+          description: |
+            The thinking levels offered, lowest first, besides `auto`. In
+            `defaults`, every level the model has.
+          items: { $ref: "#/components/schemas/ReasoningEffort" }
+
+    ModelOverride:
+      type: object
+      description: |
+        The operator's settings for a model. Null follows the catalogue.
+      properties:
+        kind:
+          nullable: true
+          allOf: [{ $ref: "#/components/schemas/ModelKind" }]
+        reasoning: { type: boolean, nullable: true }
+        toolCall: { type: boolean, nullable: true }
+        inputModalities:
+          type: array
+          nullable: true
+          items: { $ref: "#/components/schemas/InputModality" }
+        contextLimit: { type: integer, format: int64, minimum: 1, nullable: true }
+        inputLimit: { type: integer, format: int64, minimum: 1, nullable: true }
+        outputLimit: { type: integer, format: int64, minimum: 1, nullable: true }
+        reasoningEfforts:
+          type: array
+          nullable: true
+          description: |
+            The levels people may choose. Null offers every level the model
+            has; empty offers none. `auto` is always available and is not
+            listed.
+          items: { $ref: "#/components/schemas/ReasoningEffort" }
 
     ModelChannel:
       type: object
@@ -1086,8 +1792,14 @@ components:
 
     SystemSettings:
       type: object
-      required: [debugLogging]
+      required: [debugLogging, generativeUi]
       properties:
+        generativeUi:
+          type: boolean
+          description: |
+            Whether models are taught to answer with interface components
+            (`openchat-ui` blocks). Off by default: the catalogue adds a few
+            thousand tokens to every request's system prompt.
         debugLogging:
           type: boolean
           description: |
@@ -1100,6 +1812,210 @@ components:
       description: Only the fields present are changed.
       properties:
         debugLogging: { type: boolean }
+        generativeUi: { type: boolean }
+
+    WebSearchProvider:
+      type: string
+      description: |
+        The search service. `free` takes the keyless public tiers of Exa,
+        Parallel, Firecrawl and Keenable in turn, moving to the next when one
+        is rate-limiting or failing; it needs no key and suits light use.
+        `tavily` is Tavily's API with the stored key.
+      enum: [free, tavily]
+
+    WebSearchCompression:
+      type: string
+      description: |
+        What a result gives the model, and so how much of its context a search
+        costs. `snippet` is the search service's own excerpt. `truncate` is the
+        page's text cut to `truncateLength` characters. `none` is the page's
+        text whole, still bounded by a hard ceiling per result.
+      enum: [snippet, truncate, none]
+
+    WebSearchDepth:
+      type: string
+      description: |
+        Tavily's search depth. `advanced` finds more relevant excerpts and
+        costs two credits a search instead of one.
+      enum: [basic, advanced]
+
+    WebSearchSettings:
+      type: object
+      required:
+        [enabled, provider, keySet, maxResults, depth, compression, truncateLength, blocklist]
+      properties:
+        enabled:
+          type: boolean
+          description: |
+            Whether runs are offered the web_search tool. Tavily also needs a
+            stored key; without one the tool is not offered.
+        provider: { $ref: "#/components/schemas/WebSearchProvider" }
+        keySet:
+          type: boolean
+          description: Whether an API key is stored. Write-only, like a channel's.
+        keyPreview:
+          type: string
+          description: The key's last four characters, e.g. `…4f2a`.
+        maxResults:
+          type: integer
+          minimum: 1
+          maximum: 20
+          description: Results per search. A model may ask for fewer, never more.
+        depth: { $ref: "#/components/schemas/WebSearchDepth" }
+        compression: { $ref: "#/components/schemas/WebSearchCompression" }
+        truncateLength:
+          type: integer
+          minimum: 200
+          maximum: 20000
+          description: Characters kept per result under `truncate`.
+        blocklist:
+          type: array
+          maxItems: 500
+          description: |
+            Sites no search returns and web_fetch refuses to read. One rule per
+            entry: a domain (`example.com`, which covers its subdomains), a
+            wildcard (`*.example.com`), or a regular expression between slashes
+            (`/\.pdf$/`) matched against the whole URL.
+          items: { type: string, maxLength: 300 }
+
+    UpdateWebSearchSettingsRequest:
+      type: object
+      description: Only the fields present are changed.
+      properties:
+        enabled: { type: boolean }
+        provider: { $ref: "#/components/schemas/WebSearchProvider" }
+        apiKey:
+          type: string
+          maxLength: 500
+          description: The search service's API key. Empty removes the stored one.
+        maxResults: { type: integer, minimum: 1, maximum: 20 }
+        depth: { $ref: "#/components/schemas/WebSearchDepth" }
+        compression: { $ref: "#/components/schemas/WebSearchCompression" }
+        truncateLength: { type: integer, minimum: 200, maximum: 20000 }
+        blocklist:
+          type: array
+          maxItems: 500
+          items: { type: string, maxLength: 300 }
+
+    WebSearchTestRequest:
+      type: object
+      properties:
+        query:
+          type: string
+          maxLength: 300
+          description: What to search for. A fixed query when absent.
+        apiKey:
+          type: string
+          maxLength: 500
+          description: A key to try before saving it. The stored key when absent.
+
+    WebSearchTestResult:
+      type: object
+      required: [ok, latencyMs, results]
+      properties:
+        ok: { type: boolean }
+        latencyMs: { type: integer, format: int64 }
+        error:
+          type: string
+          description: Why the search failed, in English, when it did.
+        results:
+          type: array
+          description: What the model would have been given, after the blocklist.
+          items: { $ref: "#/components/schemas/WebSearchTestHit" }
+        blocked:
+          type: integer
+          description: Results the blocklist removed.
+        servedBy:
+          type: string
+          description: Which service answered, for the free search (exa, parallel, firecrawl, keenable).
+
+    WebSearchTestHit:
+      type: object
+      required: [title, url, content]
+      properties:
+        title: { type: string }
+        url: { type: string }
+        content: { type: string }
+
+    StorageDriver:
+      type: string
+      description: Where new uploads go.
+      enum: [local, s3]
+
+    StorageS3Settings:
+      type: object
+      required: [endpoint, region, bucket, accessKeyId, pathStyle, secretKeySet]
+      properties:
+        endpoint:
+          type: string
+          description: The service's base URL (MinIO, R2, ...). Empty is AWS itself.
+        region: { type: string }
+        bucket: { type: string }
+        accessKeyId: { type: string }
+        pathStyle:
+          type: boolean
+          description: Address the bucket in the URL path rather than the host name. MinIO needs it.
+        secretKeySet:
+          type: boolean
+          description: Whether a secret access key is stored. Write-only, like a channel's key.
+        secretKeyPreview:
+          type: string
+          description: The secret's last four characters, e.g. `…4f2a`.
+
+    StorageSettings:
+      type: object
+      required: [driver, localDir, resolvedLocalDir, publicUrl, s3]
+      properties:
+        driver: { $ref: "#/components/schemas/StorageDriver" }
+        localDir:
+          type: string
+          description: The local driver's directory, as entered. Relative paths are relative to the server's working directory.
+        resolvedLocalDir:
+          type: string
+          description: The `localDir` as an absolute path on the server.
+        publicUrl:
+          type: string
+          description: |
+            The origin the local driver's URLs are issued under. Empty issues
+            them relative, which is right when the web app and the API share an
+            origin.
+        s3: { $ref: "#/components/schemas/StorageS3Settings" }
+
+    UpdateStorageS3Settings:
+      type: object
+      description: Only the fields present are changed.
+      properties:
+        endpoint: { type: string, maxLength: 500 }
+        region: { type: string, maxLength: 100 }
+        bucket: { type: string, maxLength: 255 }
+        accessKeyId: { type: string, maxLength: 500 }
+        secretAccessKey:
+          type: string
+          maxLength: 500
+          description: The secret access key. Absent keeps the stored one; empty removes it.
+        pathStyle: { type: boolean }
+
+    UpdateStorageSettingsRequest:
+      type: object
+      description: Only the fields present are changed.
+      properties:
+        driver: { $ref: "#/components/schemas/StorageDriver" }
+        localDir: { type: string, maxLength: 1000 }
+        publicUrl:
+          type: string
+          maxLength: 500
+          description: An http(s) origin with no path. Empty removes it.
+        s3: { $ref: "#/components/schemas/UpdateStorageS3Settings" }
+
+    StorageTestResult:
+      type: object
+      required: [ok, latencyMs]
+      properties:
+        ok: { type: boolean }
+        latencyMs: { type: integer, format: int64 }
+        error:
+          type: string
+          description: Why the probe failed, in English, when it did.
 
     ChannelType:
       type: string
@@ -1109,16 +2025,24 @@ components:
         choosing a protocol is a question the operator should not have to
         answer, so the type answers it for them. `GET /admin/channel-types`
         carries the full table.
-      enum: [openai, anthropic, gemini, openrouter, deepseek, siliconflow, moonshot, zhipu, dashscope, volcengine, minimax, xai, groq, ollama, openai-compatible]
+      enum: [openai, anthropic, gemini, openrouter, deepseek, siliconflow, moonshot, zhipu, dashscope, volcengine, minimax, xai, groq, ollama, mistral, stepfun, hunyuan, qianfan, mimo, together, fireworks, nvidia, modelscope, cerebras, lmstudio, openai-compatible]
 
     WireApi:
       type: string
-      description: The protocol a channel type speaks. Three adapters, fifteen types.
+      description: The protocol a channel type speaks. Three adapters serve every type.
       enum: [openai, anthropic, gemini]
+
+    ChannelTypeGroup:
+      type: string
+      description: |
+        The tab the channel picker files a vendor under: the model makers
+        themselves, the platforms that host or route other people's models, and
+        servers the operator runs (plus the generic relay).
+      enum: [vendor, platform, custom]
 
     ChannelTypeInfo:
       type: object
-      required: [id, label, wireApi, endpoint, keyHint, iconId]
+      required: [id, label, wireApi, endpoint, keyHint, iconId, group, keyOptional]
       properties:
         id: { $ref: "#/components/schemas/ChannelType" }
         label:
@@ -1135,6 +2059,13 @@ components:
             The brand mark, which is not always the type id: `anthropic` is
             drawn with the Claude mark. Empty when there is no brand to draw.
         doc: { type: string, format: uri }
+        group: { $ref: "#/components/schemas/ChannelTypeGroup" }
+        keyOptional:
+          type: boolean
+          description: |
+            Whether the endpoint is normally reached without a credential — a
+            service on the operator's own machine. The form then lets a model
+            list be fetched with the key left blank.
 
     ChannelModel:
       type: object
@@ -1198,17 +2129,39 @@ components:
         sortOrder: { type: integer }
         createdAt: { type: string, format: date-time }
 
+    ChannelConnection:
+      type: object
+      required: [type]
+      properties:
+        type: { $ref: "#/components/schemas/ChannelType" }
+        baseUrl: { type: string, maxLength: 500 }
+        apiKey: { type: string, maxLength: 500 }
+
+    ChannelModelInput:
+      type: object
+      required: [modelId, displayName, source]
+      properties:
+        modelId: { type: string, minLength: 1, maxLength: 200 }
+        displayName: { type: string, maxLength: 500 }
+        source:
+          type: string
+          enum: [fetched, manual]
+          description: Manual entries survive refreshes even when the endpoint does not advertise them.
+
     CreateChannelRequest:
       type: object
       required: [name, type]
       properties:
         name: { type: string, minLength: 1, maxLength: 80 }
         type: { $ref: "#/components/schemas/ChannelType" }
-        wireApi: { $ref: "#/components/schemas/WireApi" }
-        REMOVE_providerId: { type: string, maxLength: 80 }
         baseUrl: { type: string, maxLength: 500 }
         apiKey: { type: string, maxLength: 500 }
         enabled: { type: boolean, default: true }
+        models:
+          type: array
+          maxItems: 2000
+          description: Selected models, created enabled in the same transaction as the channel.
+          items: { $ref: "#/components/schemas/ChannelModelInput" }
 
     UpdateChannelRequest:
       type: object

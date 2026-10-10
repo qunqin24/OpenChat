@@ -99,6 +99,13 @@ type wireContentBlock struct {
 	Type     string        `json:"type"`
 	Text     string        `json:"text,omitempty"`
 	ImageURL *wireImageURL `json:"image_url,omitempty"`
+	File     *wireFile     `json:"file,omitempty"`
+}
+
+// wireFile is a document sent inline, as a data URL.
+type wireFile struct {
+	Filename string `json:"filename,omitempty"`
+	FileData string `json:"file_data"`
 }
 
 type wireImageURL struct {

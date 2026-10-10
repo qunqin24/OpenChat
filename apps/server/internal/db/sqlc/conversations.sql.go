@@ -15,7 +15,7 @@ import (
 const createConversation = `-- name: CreateConversation :one
 INSERT INTO conversations (user_id, title, model)
 VALUES ($1, $2, $3)
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search
 `
 
 type CreateConversationParams struct {
@@ -35,12 +35,14 @@ func (q *Queries) CreateConversation(ctx context.Context, arg CreateConversation
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.ReasoningEffort,
+		&i.WebSearch,
 	)
 	return i, err
 }
 
 const getConversation = `-- name: GetConversation :one
-SELECT id, user_id, title, model, created_at, updated_at, deleted_at
+SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search
 FROM conversations
 WHERE id = $1
   AND user_id = $2
@@ -66,12 +68,14 @@ func (q *Queries) GetConversation(ctx context.Context, arg GetConversationParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.ReasoningEffort,
+		&i.WebSearch,
 	)
 	return i, err
 }
 
 const listConversations = `-- name: ListConversations :many
-SELECT id, user_id, title, model, created_at, updated_at, deleted_at
+SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search
 FROM conversations
 WHERE user_id = $1
   AND deleted_at IS NULL
@@ -110,6 +114,8 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.ReasoningEffort,
+			&i.WebSearch,
 		); err != nil {
 			return nil, err
 		}
@@ -119,6 +125,105 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 		return nil, err
 	}
 	return items, nil
+}
+
+const setConversationModel = `-- name: SetConversationModel :one
+UPDATE conversations
+SET model = $1
+WHERE id = $2
+  AND user_id = $3
+  AND deleted_at IS NULL
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search
+`
+
+type SetConversationModelParams struct {
+	Model  *string    `json:"model"`
+	ID     uuid.UUID  `json:"id"`
+	UserID *uuid.UUID `json:"user_id"`
+}
+
+// The model a conversation's next run uses. Remembered per conversation so a
+// reload, or another device, continues with the same one.
+func (q *Queries) SetConversationModel(ctx context.Context, arg SetConversationModelParams) (Conversation, error) {
+	row := q.db.QueryRow(ctx, setConversationModel, arg.Model, arg.ID, arg.UserID)
+	var i Conversation
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Title,
+		&i.Model,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.ReasoningEffort,
+		&i.WebSearch,
+	)
+	return i, err
+}
+
+const setConversationReasoning = `-- name: SetConversationReasoning :one
+UPDATE conversations
+SET reasoning_effort = $1
+WHERE id = $2
+  AND user_id = $3
+  AND deleted_at IS NULL
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search
+`
+
+type SetConversationReasoningParams struct {
+	ReasoningEffort *string    `json:"reasoning_effort"`
+	ID              uuid.UUID  `json:"id"`
+	UserID          *uuid.UUID `json:"user_id"`
+}
+
+// NULL is automatic: the model's own default.
+func (q *Queries) SetConversationReasoning(ctx context.Context, arg SetConversationReasoningParams) (Conversation, error) {
+	row := q.db.QueryRow(ctx, setConversationReasoning, arg.ReasoningEffort, arg.ID, arg.UserID)
+	var i Conversation
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Title,
+		&i.Model,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.ReasoningEffort,
+		&i.WebSearch,
+	)
+	return i, err
+}
+
+const setConversationWebSearch = `-- name: SetConversationWebSearch :one
+UPDATE conversations
+SET web_search = $1
+WHERE id = $2
+  AND user_id = $3
+  AND deleted_at IS NULL
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search
+`
+
+type SetConversationWebSearchParams struct {
+	WebSearch bool       `json:"web_search"`
+	ID        uuid.UUID  `json:"id"`
+	UserID    *uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) SetConversationWebSearch(ctx context.Context, arg SetConversationWebSearchParams) (Conversation, error) {
+	row := q.db.QueryRow(ctx, setConversationWebSearch, arg.WebSearch, arg.ID, arg.UserID)
+	var i Conversation
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Title,
+		&i.Model,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.ReasoningEffort,
+		&i.WebSearch,
+	)
+	return i, err
 }
 
 const softDeleteConversation = `-- name: SoftDeleteConversation :execrows
@@ -160,7 +265,7 @@ SET title      = $1,
 WHERE id = $2
   AND user_id = $3
   AND deleted_at IS NULL
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search
 `
 
 type UpdateConversationTitleParams struct {
@@ -180,6 +285,8 @@ func (q *Queries) UpdateConversationTitle(ctx context.Context, arg UpdateConvers
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.ReasoningEffort,
+		&i.WebSearch,
 	)
 	return i, err
 }

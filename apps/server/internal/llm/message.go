@@ -70,6 +70,12 @@ type ReasoningPart struct {
 	// empty: there is nothing to display, but the blob still has to survive the
 	// round trip or the next turn loses the model's own context.
 	Redacted []byte
+
+	// DurationMS is how long the model spent on this block, from its first
+	// token to its last, measured by us as it streamed. Nil when nobody timed
+	// it: rows written before it was recorded, and replies that did not stream.
+	// Never sent to a provider.
+	DurationMS *int64
 }
 
 // ToolCallPart is the model asking for a tool. Arguments and RawArguments are
@@ -123,6 +129,12 @@ type ToolResultPart struct {
 	// Error explains a non-succeeded status to the operator and, once mapped,
 	// to the user. It is not the same string as Content.
 	Error string
+
+	// Details is structured data for the UI — a search's result list, a fetched
+	// page's title. Adapters never send it: what the model reads is Content.
+	Details json.RawMessage
+	// DurationMS is how long the tool ran, when it ran at all. UI only.
+	DurationMS *int64
 }
 
 // AttachmentPart references a file the user attached. It is a reference by

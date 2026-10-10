@@ -199,6 +199,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/channels/models/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview models using an unsaved channel connection
+         * @description Uses the submitted connection without storing a channel or credential.
+         *     Select models from this response and include them when creating the channel.
+         */
+        post: operations["previewChannelModels"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/channels/{channelId}/models": {
         parameters: {
             query?: never;
@@ -236,9 +257,8 @@ export interface paths {
         put?: never;
         /**
          * Ask the endpoint what models it serves
-         * @description Calls the endpoint's own model list with the stored credential — the
-         *     first time this server makes an outbound request on an operator's
-         *     behalf. Requires a stored key.
+         * @description Calls the endpoint's own model list with the stored connection.
+         *     Requires a stored key except for local services such as Ollama.
          *
          *     Models already present keep their enabled state; models the endpoint
          *     stopped listing are removed, and `manual` entries are left alone.
@@ -305,7 +325,11 @@ export interface paths {
         };
         /**
          * Providers in the catalogue
-         * @description The source for the provider picker when adding a channel.
+         * @description Every provider models.dev documents, with the number of models it
+         *     carries. Reference metadata: it is what the `providerId` filter on the
+         *     served-models listing is expressed in, and it never adds a model to
+         *     that listing — membership there comes from the channels' own selected
+         *     models.
          */
         get: operations["listCatalogProviders"];
         put?: never;
@@ -323,11 +347,46 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Browse the model catalogue */
+        /**
+         * The models this installation serves
+         * @description Only models explicitly selected (enabled) within a configured channel.
+         *     Unselected discoveries never appear here. The upstream catalogue is deliberately
+         *     not browsable here: it is a reference work of thousands of models, most
+         *     of which nothing configured can answer with, and it reaches this
+         *     endpoint only as decoration on the rows below.
+         */
         get: operations["listCatalogModels"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/models/{modelId}/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                modelId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Decide how a model is offered
+         * @description Replaces the operator's settings for a model, whichever channels serve
+         *     it. Every field is sent; null follows the catalogue, so resetting one
+         *     field is sending it as null. The settings are enforced where requests
+         *     are made, not only in the picker: a level not allowed is dropped, a
+         *     model that may not call tools is offered none, and an output limit is
+         *     sent with every request.
+         */
+        put: operations["updateModelSettings"];
+        post?: never;
+        /** Go back to the catalogue for every setting */
+        delete: operations["resetModelSettings"];
         options?: never;
         head?: never;
         patch?: never;
@@ -349,6 +408,96 @@ export interface paths {
         head?: never;
         /** Change server-wide settings */
         patch: operations["updateSystemSettings"];
+        trace?: never;
+    };
+    "/admin/web-search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Web search settings */
+        get: operations["getWebSearchSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change web search settings
+         * @description Read by every run at its next request, so a change reaches runs in progress.
+         */
+        patch: operations["updateWebSearchSettings"];
+        trace?: never;
+    };
+    "/admin/web-search/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run one search with the current settings
+         * @description Searches the way a run would — the same depth, result count,
+         *     compression and blocklist — and reports what came back. A failed search
+         *     is a 200 with `ok: false`: the request worked, the search did not.
+         */
+        post: operations["testWebSearch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** File storage settings */
+        get: operations["getStorageSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change file storage settings
+         * @description Takes effect at once, with no restart: new uploads go to the chosen
+         *     driver, and files already stored stay readable from wherever they are.
+         *     The new drivers are built before they replace the old ones; if that
+         *     fails the request is a 400 and nothing is saved.
+         */
+        patch: operations["updateStorageSettings"];
+        trace?: never;
+    };
+    "/admin/storage/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Try a storage configuration without saving it
+         * @description Merges the body over the stored settings, then writes a small object
+         *     under `probes/` in the chosen driver, reads it back and deletes it. A
+         *     configuration that does not work is a 200 with `ok: false`: the request
+         *     worked, the storage did not.
+         */
+        post: operations["testStorage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/admin/channels": {
@@ -486,11 +635,148 @@ export interface paths {
         get: operations["listMessages"];
         put?: never;
         /**
-         * Append a user message and stream the assistant reply
-         * @description Responds with `text/event-stream`. Each SSE `data:` frame is a JSON
-         *     `StreamEvent`. The stream terminates with a `done` event.
+         * Send a message and start a run that answers it
+         * @description Writes the user message and starts a run in the background, then
+         *     returns at once. The answer is not in this response: it is followed on
+         *     `GET /conversations/{conversationId}/events`, which also serves a reload,
+         *     a second tab or another device — the run does not depend on this
+         *     request staying open, and closing the page does not stop it.
+         *
+         *     A conversation runs one thing at a time: while a run is going this
+         *     answers 409 `conversation_busy`. `requestId` makes a retried POST safe —
+         *     the same id finds the run it already started instead of starting a
+         *     second one.
+         *
+         *     `attachmentIds` are uploads (`POST /files`) of the caller's that no
+         *     message has claimed. They are refused, before anything is written, with
+         *     400 `too_many_attachments` (more than 10), `attachments_too_large` (over
+         *     20 MiB together), `attachment_unsupported` (the run's model does not
+         *     accept images, or PDFs, per its `inputModalities`) and
+         *     `attachment_unavailable` (not uploaded, already sent, or not the
+         *     caller's).
          */
         post: operations["createMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/conversations/{conversationId}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Follow a conversation's runs
+         * @description Responds with `text/event-stream`. Each `data:` frame is one JSON
+         *     `ConversationEvent`. The first is a `snapshot` — the active run, the
+         *     messages it has written and its work in flight — and every later frame
+         *     is a `batch` of events to apply on top of it. Everything described was
+         *     committed before it was sent.
+         *
+         *     A batch whose `version` is not newer than the snapshot's run version is
+         *     already contained in the snapshot and is dropped. A client that falls
+         *     too far behind is sent a fresh `snapshot` instead of the batches it
+         *     missed; one that reconnects starts from a snapshot. Nothing is replayed.
+         */
+        get: operations["streamConversationEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/conversations/{conversationId}/runs/{runId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                runId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop a run
+         * @description Asks the run to stop and returns. What was generated is kept; the run
+         *     then finishes as `cancelled`, which the events stream reports.
+         *     Stopping a run that already finished is a no-op.
+         */
+        post: operations["cancelRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What the chat can offer right now
+         * @description Server-wide switches the composer depends on. `webSearch` is whether
+         *     the administrator has web search configured and on, which is when the
+         *     composer offers its web search switch.
+         */
+        get: operations["getChatFeatures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/favicons/{domain}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A site's icon, for the sources a reply cites
+         * @description Fetched by the server and cached, so a browser showing a reply's
+         *     sources asks no third party about them. 404 when the site has none;
+         *     the client then draws its own mark.
+         */
+        get: operations["getFavicon"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The models a conversation can use
+         * @description Every model an enabled channel offers. A model offered by several
+         *     channels appears once; which channel answers is the server's choice.
+         */
+        get: operations["listChatModels"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -506,7 +792,19 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Issue a presigned upload URL for blob storage */
+        /**
+         * Issue a presigned upload URL for blob storage
+         * @description For a file to attach to a message: the client PUTs the bytes to
+         *     `uploadUrl` with the same `Content-Type`, then sends the returned `id`
+         *     in `attachmentIds`. With S3 storage `uploadUrl` is a presigned bucket
+         *     URL; with the server's local-disk storage it is a path on this API
+         *     (`/api/v1/files/content/...`, a relative reference unless the server
+         *     has a public URL configured), signed and valid for 15 minutes. The
+         *     read URLs in `Attachment.url` follow the same rule. Only PNG, JPEG,
+         *     WebP and GIF images (5 MiB each) and PDFs (10 MiB) are accepted — 415
+         *     `unsupported_file_type` otherwise, and 413 `file_too_large` over the
+         *     size. The upload belongs to the caller; nobody else can attach it.
+         */
         post: operations["createUpload"];
         delete?: never;
         options?: never;
@@ -542,11 +840,27 @@ export interface components {
             id: string;
             title: string;
             model?: string | null;
+            reasoningEffort?: components["schemas"]["ReasoningEffort"];
+            /**
+             * @description Whether the conversation's runs may use the web — search and page
+             *     reading. On by default; the model decides when a question needs it.
+             *     Has no effect where the server offers no web search.
+             */
+            webSearch: boolean;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
         };
+        /**
+         * @description How hard a reasoning model thinks. `auto` sends nothing and leaves the
+         *     model at its own default. The other values are the levels providers
+         *     use; each model accepts its own subset, listed as
+         *     `ChatModel.reasoningEfforts` (from models.dev). A level the model does
+         *     not offer is dropped, which is the same as `auto`.
+         * @enum {string}
+         */
+        ReasoningEffort: "auto" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
         ConversationPage: {
             items: components["schemas"]["Conversation"][];
             nextCursor?: string | null;
@@ -554,9 +868,15 @@ export interface components {
         CreateConversationRequest: {
             title?: string;
             model?: string;
+            reasoningEffort?: components["schemas"]["ReasoningEffort"];
+            webSearch?: boolean;
         };
         UpdateConversationRequest: {
             title?: string;
+            /** @description The model the conversation's next run uses. */
+            model?: string;
+            reasoningEffort?: components["schemas"]["ReasoningEffort"];
+            webSearch?: boolean;
         };
         Attachment: {
             /** Format: uuid */
@@ -568,17 +888,104 @@ export interface components {
             /** Format: uri */
             url: string;
         };
+        /**
+         * @description One immutable transcript row: a user's input, one model response, or
+         *     one tool result. A reply that called tools is several rows sharing a
+         *     `runId`.
+         */
         Message: {
             /** Format: uuid */
             id: string;
             /** Format: uuid */
             conversationId: string;
             role: components["schemas"]["Role"];
+            /** @description The text parts, concatenated. `parts` is the message. */
             content: string;
+            parts: components["schemas"]["MessagePart"][];
             status: components["schemas"]["MessageStatus"];
+            /** Format: uuid */
+            runId?: string;
+            /**
+             * @description Assistant messages only. `error` and `cancelled` responses are shown
+             *     but never sent back to a model.
+             * @enum {string}
+             */
+            stopReason?: "stop" | "length" | "tool_calls" | "content_filter" | "cancelled" | "error";
+            model?: string;
+            /** @description Why a failed response failed. A code to localise, never provider text. */
+            errorCode?: string;
+            usage?: components["schemas"]["Usage"];
             attachments?: components["schemas"]["Attachment"][];
             /** Format: date-time */
             createdAt: string;
+        };
+        /**
+         * @description One content block, in OpenChat's internal protocol (`internal/llm`):
+         *     every upstream format is translated into these by its adapter, so a
+         *     client renders one shape whatever the model behind it.
+         */
+        MessagePart: components["schemas"]["TextPart"] | components["schemas"]["ReasoningPart"] | components["schemas"]["ToolCallPart"] | components["schemas"]["ToolResultPart"];
+        TextPart: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "text";
+            text: string;
+        };
+        ReasoningPart: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "reasoning";
+            /** @description Empty when the provider withheld or encrypted its reasoning. */
+            text: string;
+            /**
+             * Format: int64
+             * @description How long the model spent on this reasoning, from its first token to its last. Absent when it was not timed (older replies), and while the reasoning is still streaming.
+             */
+            durationMs?: number;
+        };
+        ToolCallPart: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "tool_call";
+            id: string;
+            name: string;
+            /** @description Absent while streaming, and when what the model sent was not valid JSON. */
+            arguments?: {
+                [key: string]: unknown;
+            };
+            rawArguments: string;
+        };
+        ToolResultPart: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "tool_result";
+            callId: string;
+            name: string;
+            /** @description What the model read. */
+            content: string;
+            /** @enum {string} */
+            status: "succeeded" | "failed" | "cancelled" | "interrupted";
+            /** @description Tool-specific data for display, such as a search's results. */
+            details?: {
+                [key: string]: unknown;
+            };
+            /** Format: int64 */
+            durationMs?: number;
+        };
+        Usage: {
+            inputTokens: number;
+            outputTokens: number;
+            reasoningTokens?: number;
+            cacheReadTokens?: number;
+            cacheWriteTokens?: number;
         };
         MessagePage: {
             items: components["schemas"]["Message"][];
@@ -586,43 +993,219 @@ export interface components {
         };
         CreateMessageRequest: {
             content: string;
+            /**
+             * @description The model to answer with, which the conversation also remembers.
+             *     Absent: the conversation's model, or the first one available.
+             */
             model?: string;
+            /** @description For this run, and remembered by the conversation. Absent keeps the conversation's. */
+            reasoningEffort?: components["schemas"]["ReasoningEffort"];
+            /** @description For this run, and remembered by the conversation. Absent keeps the conversation's. */
+            webSearch?: boolean;
+            /** @description Chosen by the client; a retry with the same id finds the same run. */
+            requestId?: string;
             attachmentIds?: string[];
         };
-        /** @description One SSE frame emitted by createMessage. */
-        StreamEvent: components["schemas"]["StreamStart"] | components["schemas"]["StreamDelta"] | components["schemas"]["StreamDone"] | components["schemas"]["StreamError"];
-        StreamStart: {
+        CreateMessageResponse: {
+            message: components["schemas"]["Message"];
+            run: components["schemas"]["Run"];
+        };
+        /** @description The work from one input to its final answer. */
+        Run: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            conversationId: string;
+            /** @enum {string} */
+            status: "running" | "completed" | "failed" | "cancelled";
+            model: string;
+            reasoningEffort?: components["schemas"]["ReasoningEffort"];
+            errorCode?: string;
+            /**
+             * Format: int64
+             * @description Bumped by every change; see the events stream.
+             */
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            finishedAt?: string;
+        };
+        /** @description A run's work in flight, which is not a message yet. */
+        LiveState: {
+            generation?: {
+                attempt: number;
+                parts: components["schemas"]["MessagePart"][];
+                retry?: components["schemas"]["RetryInfo"];
+            };
+            tools?: components["schemas"]["ToolSlot"][];
+        };
+        RetryInfo: {
+            /** Format: date-time */
+            at: string;
+            errorCode: string;
+        };
+        ToolSlot: {
+            callId: string;
+            name: string;
+            /** @enum {string} */
+            status: "pending" | "running" | "done";
+            /** Format: uuid */
+            messageId?: string;
+        };
+        /** @description One SSE frame of the events stream. */
+        ConversationEvent: components["schemas"]["SnapshotEvent"] | components["schemas"]["BatchEvent"];
+        /** @description Replaces everything a client holds about runs in flight. */
+        SnapshotEvent: {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "start";
+            type: "snapshot";
+            /** @description The active run; absent when the conversation is idle. */
+            run?: components["schemas"]["Run"];
+            /** @description Every message the active run has written, its input first. */
+            messages: components["schemas"]["Message"][];
+            live?: components["schemas"]["LiveState"];
+        };
+        /** @description The events of one commit, in order. */
+        BatchEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "batch";
+            /** Format: uuid */
+            runId: string;
+            /** Format: int64 */
+            version: number;
+            events: components["schemas"]["RunEvent"][];
+        };
+        RunEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["RunFinishedEvent"] | components["schemas"]["GenerationStartedEvent"] | components["schemas"]["PartStartedEvent"] | components["schemas"]["PartDeltaEvent"] | components["schemas"]["PartEndedEvent"] | components["schemas"]["MessageAppendedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"] | components["schemas"]["RetryScheduledEvent"];
+        RunStartedEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "run_started";
+            run: components["schemas"]["Run"];
+            /** @description The input that started the run. */
+            message: components["schemas"]["Message"];
+        };
+        RunFinishedEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "run_finished";
+            run: components["schemas"]["Run"];
+        };
+        /** @description A request attempt began producing content; drop any partial from an earlier attempt. */
+        GenerationStartedEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "generation_started";
+            attempt: number;
+        };
+        PartStartedEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "part_started";
+            index: number;
+            part: components["schemas"]["MessagePart"];
+        };
+        /** @description Text for a text or reasoning part, raw argument JSON for a tool call. */
+        PartDeltaEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "part_delta";
+            index: number;
+            delta: string;
+        };
+        PartEndedEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "part_ended";
+            index: number;
+            part: components["schemas"]["MessagePart"];
+        };
+        /** @description A row was written. An assistant row replaces the partial being built. */
+        MessageAppendedEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "message_appended";
+            message: components["schemas"]["Message"];
+        };
+        ToolStartedEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "tool_started";
+            callId: string;
+            name: string;
+        };
+        ToolFinishedEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "tool_finished";
+            callId: string;
             /** Format: uuid */
             messageId: string;
         };
-        StreamDelta: {
+        RetryScheduledEvent: {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "delta";
-            text: string;
+            type: "retry_scheduled";
+            attempt: number;
+            /** Format: date-time */
+            at: string;
+            errorCode: string;
         };
-        StreamDone: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "done";
-            message: components["schemas"]["Message"];
+        ChatFeatures: {
+            webSearch: boolean;
         };
-        StreamError: {
+        ChatModel: {
+            /** @description What a conversation stores and a request names. */
+            id: string;
+            name: string;
+            /** @description The catalogue's brand for the model, for its icon. Empty when unknown. */
+            providerId: string;
+            family: string;
+            reasoning: boolean;
+            toolCall: boolean;
+            attachment: boolean;
             /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
+             * Format: int64
+             * @description Zero when unknown.
              */
-            type: "error";
-            error: components["schemas"]["Error"];
+            contextLimit: number;
+            /**
+             * Format: int64
+             * @description Zero when unknown.
+             */
+            outputLimit: number;
+            inputModalities: components["schemas"]["InputModality"][];
+            /**
+             * @description The thinking levels this model offers, lowest first, besides
+             *     `auto`. Empty for a model with no control over its thinking. What
+             *     the operator allows, within what the model has.
+             */
+            reasoningEfforts: components["schemas"]["ReasoningEffort"][];
         };
         CreateUploadRequest: {
             filename: string;
@@ -768,14 +1351,17 @@ export interface components {
             providerName: string;
             modelId: string;
             /**
-             * @description The configured channels that can serve this model. Empty means the
-             *     catalogue knows about it but nothing here can reach it.
+             * @description The configured channels that have this model selected, disabled
+             *     ones included — each entry's own `enabled` says which those are.
+             *     Having it selected is what puts a model in this listing, so the
+             *     array is never empty here and the catalogue alone never contributes
+             *     a row.
              */
             channels?: components["schemas"]["ModelChannel"][];
             name: string;
             description?: string;
             family?: string;
-            /** @description Whether this installation has switched the model on. */
+            /** @description Whether at least one enabled channel has this model selected. */
             enabled: boolean;
             attachment: boolean;
             reasoning: boolean;
@@ -799,6 +1385,68 @@ export interface components {
             knowledge?: string;
             inputModalities?: string[];
             outputModalities?: string[];
+            /** Format: int64 */
+            inputLimit?: number;
+            /** @description What the catalogue says, before the operator's settings. */
+            defaults?: components["schemas"]["ModelSettings"];
+            override?: components["schemas"]["ModelOverride"];
+            /** @description How the model is actually offered and called. */
+            settings?: components["schemas"]["ModelSettings"];
+        };
+        /**
+         * @description What a model is for. Only `text` models are offered in chat.
+         * @enum {string}
+         */
+        ModelKind: "text" | "image" | "embedding" | "rerank";
+        /**
+         * @description What a model takes besides text.
+         * @enum {string}
+         */
+        InputModality: "image" | "audio" | "video" | "pdf";
+        ModelSettings: {
+            kind: components["schemas"]["ModelKind"];
+            reasoning: boolean;
+            toolCall: boolean;
+            inputModalities: components["schemas"]["InputModality"][];
+            /**
+             * Format: int64
+             * @description Zero when unknown.
+             */
+            contextLimit: number;
+            /**
+             * Format: int64
+             * @description Zero when unknown.
+             */
+            inputLimit: number;
+            /**
+             * Format: int64
+             * @description Zero when unknown.
+             */
+            outputLimit: number;
+            /**
+             * @description The thinking levels offered, lowest first, besides `auto`. In
+             *     `defaults`, every level the model has.
+             */
+            reasoningEfforts: components["schemas"]["ReasoningEffort"][];
+        };
+        /** @description The operator's settings for a model. Null follows the catalogue. */
+        ModelOverride: {
+            kind?: components["schemas"]["ModelKind"] | null;
+            reasoning?: boolean | null;
+            toolCall?: boolean | null;
+            inputModalities?: components["schemas"]["InputModality"][] | null;
+            /** Format: int64 */
+            contextLimit?: number | null;
+            /** Format: int64 */
+            inputLimit?: number | null;
+            /** Format: int64 */
+            outputLimit?: number | null;
+            /**
+             * @description The levels people may choose. Null offers every level the model
+             *     has; empty offers none. `auto` is always available and is not
+             *     listed.
+             */
+            reasoningEfforts?: components["schemas"]["ReasoningEffort"][] | null;
         };
         ModelChannel: {
             /** Format: uuid */
@@ -816,6 +1464,12 @@ export interface components {
         };
         SystemSettings: {
             /**
+             * @description Whether models are taught to answer with interface components
+             *     (`openchat-ui` blocks). Off by default: the catalogue adds a few
+             *     thousand tokens to every request's system prompt.
+             */
+            generativeUi: boolean;
+            /**
              * @description Whether the server logs at debug level. Takes effect immediately —
              *     no restart — and persists across one, because the fault worth
              *     chasing is usually the intermittent kind.
@@ -825,6 +1479,147 @@ export interface components {
         /** @description Only the fields present are changed. */
         UpdateSystemSettingsRequest: {
             debugLogging?: boolean;
+            generativeUi?: boolean;
+        };
+        /**
+         * @description The search service. `free` takes the keyless public tiers of Exa,
+         *     Parallel, Firecrawl and Keenable in turn, moving to the next when one
+         *     is rate-limiting or failing; it needs no key and suits light use.
+         *     `tavily` is Tavily's API with the stored key.
+         * @enum {string}
+         */
+        WebSearchProvider: "free" | "tavily";
+        /**
+         * @description What a result gives the model, and so how much of its context a search
+         *     costs. `snippet` is the search service's own excerpt. `truncate` is the
+         *     page's text cut to `truncateLength` characters. `none` is the page's
+         *     text whole, still bounded by a hard ceiling per result.
+         * @enum {string}
+         */
+        WebSearchCompression: "snippet" | "truncate" | "none";
+        /**
+         * @description Tavily's search depth. `advanced` finds more relevant excerpts and
+         *     costs two credits a search instead of one.
+         * @enum {string}
+         */
+        WebSearchDepth: "basic" | "advanced";
+        WebSearchSettings: {
+            /**
+             * @description Whether runs are offered the web_search tool. Tavily also needs a
+             *     stored key; without one the tool is not offered.
+             */
+            enabled: boolean;
+            provider: components["schemas"]["WebSearchProvider"];
+            /** @description Whether an API key is stored. Write-only, like a channel's. */
+            keySet: boolean;
+            /** @description The key's last four characters, e.g. `…4f2a`. */
+            keyPreview?: string;
+            /** @description Results per search. A model may ask for fewer, never more. */
+            maxResults: number;
+            depth: components["schemas"]["WebSearchDepth"];
+            compression: components["schemas"]["WebSearchCompression"];
+            /** @description Characters kept per result under `truncate`. */
+            truncateLength: number;
+            /**
+             * @description Sites no search returns and web_fetch refuses to read. One rule per
+             *     entry: a domain (`example.com`, which covers its subdomains), a
+             *     wildcard (`*.example.com`), or a regular expression between slashes
+             *     (`/\.pdf$/`) matched against the whole URL.
+             */
+            blocklist: string[];
+        };
+        /** @description Only the fields present are changed. */
+        UpdateWebSearchSettingsRequest: {
+            enabled?: boolean;
+            provider?: components["schemas"]["WebSearchProvider"];
+            /** @description The search service's API key. Empty removes the stored one. */
+            apiKey?: string;
+            maxResults?: number;
+            depth?: components["schemas"]["WebSearchDepth"];
+            compression?: components["schemas"]["WebSearchCompression"];
+            truncateLength?: number;
+            blocklist?: string[];
+        };
+        WebSearchTestRequest: {
+            /** @description What to search for. A fixed query when absent. */
+            query?: string;
+            /** @description A key to try before saving it. The stored key when absent. */
+            apiKey?: string;
+        };
+        WebSearchTestResult: {
+            ok: boolean;
+            /** Format: int64 */
+            latencyMs: number;
+            /** @description Why the search failed, in English, when it did. */
+            error?: string;
+            /** @description What the model would have been given, after the blocklist. */
+            results: components["schemas"]["WebSearchTestHit"][];
+            /** @description Results the blocklist removed. */
+            blocked?: number;
+            /** @description Which service answered, for the free search (exa, parallel, firecrawl, keenable). */
+            servedBy?: string;
+        };
+        WebSearchTestHit: {
+            title: string;
+            url: string;
+            content: string;
+        };
+        /**
+         * @description Where new uploads go.
+         * @enum {string}
+         */
+        StorageDriver: "local" | "s3";
+        StorageS3Settings: {
+            /** @description The service's base URL (MinIO, R2, ...). Empty is AWS itself. */
+            endpoint: string;
+            region: string;
+            bucket: string;
+            accessKeyId: string;
+            /** @description Address the bucket in the URL path rather than the host name. MinIO needs it. */
+            pathStyle: boolean;
+            /** @description Whether a secret access key is stored. Write-only, like a channel's key. */
+            secretKeySet: boolean;
+            /** @description The secret's last four characters, e.g. `…4f2a`. */
+            secretKeyPreview?: string;
+        };
+        StorageSettings: {
+            driver: components["schemas"]["StorageDriver"];
+            /** @description The local driver's directory, as entered. Relative paths are relative to the server's working directory. */
+            localDir: string;
+            /** @description The `localDir` as an absolute path on the server. */
+            resolvedLocalDir: string;
+            /**
+             * @description The origin the local driver's URLs are issued under. Empty issues
+             *     them relative, which is right when the web app and the API share an
+             *     origin.
+             */
+            publicUrl: string;
+            s3: components["schemas"]["StorageS3Settings"];
+        };
+        /** @description Only the fields present are changed. */
+        UpdateStorageS3Settings: {
+            endpoint?: string;
+            region?: string;
+            bucket?: string;
+            accessKeyId?: string;
+            /** @description The secret access key. Absent keeps the stored one; empty removes it. */
+            secretAccessKey?: string;
+            pathStyle?: boolean;
+        };
+        /** @description Only the fields present are changed. */
+        UpdateStorageSettingsRequest: {
+            driver?: components["schemas"]["StorageDriver"];
+            localDir?: string;
+            /** @description An http(s) origin with no path. Empty removes it. */
+            publicUrl?: string;
+            s3?: components["schemas"]["UpdateStorageS3Settings"];
+        };
+        StorageTestResult: {
+            ok: boolean;
+            /** Format: int64 */
+            latencyMs: number;
+            /** @description Why the probe failed, in English, when it did. */
+            error?: string;
         };
         /**
          * @description The vendor an operator picks. Most of these speak the OpenAI wire
@@ -834,12 +1629,19 @@ export interface components {
          *     carries the full table.
          * @enum {string}
          */
-        ChannelType: "openai" | "anthropic" | "gemini" | "openrouter" | "deepseek" | "siliconflow" | "moonshot" | "zhipu" | "dashscope" | "volcengine" | "minimax" | "xai" | "groq" | "ollama" | "openai-compatible";
+        ChannelType: "openai" | "anthropic" | "gemini" | "openrouter" | "deepseek" | "siliconflow" | "moonshot" | "zhipu" | "dashscope" | "volcengine" | "minimax" | "xai" | "groq" | "ollama" | "mistral" | "stepfun" | "hunyuan" | "qianfan" | "mimo" | "together" | "fireworks" | "nvidia" | "modelscope" | "cerebras" | "lmstudio" | "openai-compatible";
         /**
-         * @description The protocol a channel type speaks. Three adapters, fifteen types.
+         * @description The protocol a channel type speaks. Three adapters serve every type.
          * @enum {string}
          */
         WireApi: "openai" | "anthropic" | "gemini";
+        /**
+         * @description The tab the channel picker files a vendor under: the model makers
+         *     themselves, the platforms that host or route other people's models, and
+         *     servers the operator runs (plus the generic relay).
+         * @enum {string}
+         */
+        ChannelTypeGroup: "vendor" | "platform" | "custom";
         ChannelTypeInfo: {
             id: components["schemas"]["ChannelType"];
             /** @description A brand name, deliberately not translated — it reads the same in both locales. */
@@ -855,6 +1657,13 @@ export interface components {
             iconId: string;
             /** Format: uri */
             doc?: string;
+            group: components["schemas"]["ChannelTypeGroup"];
+            /**
+             * @description Whether the endpoint is normally reached without a credential — a
+             *     service on the operator's own machine. The form then lets a model
+             *     list be fetched with the key left blank.
+             */
+            keyOptional: boolean;
         };
         ChannelModel: {
             /** @description As the endpoint spells it, which is what gets sent back to it. */
@@ -907,15 +1716,29 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        ChannelConnection: {
+            type: components["schemas"]["ChannelType"];
+            baseUrl?: string;
+            apiKey?: string;
+        };
+        ChannelModelInput: {
+            modelId: string;
+            displayName: string;
+            /**
+             * @description Manual entries survive refreshes even when the endpoint does not advertise them.
+             * @enum {string}
+             */
+            source: "fetched" | "manual";
+        };
         CreateChannelRequest: {
             name: string;
             type: components["schemas"]["ChannelType"];
-            wireApi?: components["schemas"]["WireApi"];
-            REMOVE_providerId?: string;
             baseUrl?: string;
             apiKey?: string;
             /** @default true */
             enabled: boolean;
+            /** @description Selected models, created enabled in the same transaction as the channel. */
+            models?: components["schemas"]["ChannelModelInput"][];
         };
         /**
          * @description Only the fields present are changed. An absent `apiKey` keeps the
@@ -1267,6 +2090,31 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    previewChannelModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChannelConnection"];
+            };
+        };
+        responses: {
+            /** @description Models advertised by this endpoint, not yet added to the installation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelModelInput"][];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     listChannelModels: {
         parameters: {
             query?: never;
@@ -1467,15 +2315,8 @@ export interface operations {
                 providerId?: string;
                 /** @description Only models with all of these. */
                 capability?: ("reasoning" | "toolCall" | "attachment" | "structuredOutput")[];
-                /** @description Restrict to models that are, or are not, switched on here. */
+                /** @description Whether at least one channel with this model selected is enabled. */
                 enabled?: boolean;
-                /**
-                 * @description `channels` (the default) lists only models a configured channel can
-                 *     actually reach — which is what an operator means by "our models".
-                 *     `all` browses the whole upstream catalogue, which is where you go to
-                 *     find out what a provider offers before adding a channel for it.
-                 */
-                scope?: "channels" | "all";
             };
             header?: never;
             path?: never;
@@ -1491,6 +2332,54 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CatalogModelPage"];
                 };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateModelSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                modelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelOverride"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelOverride"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    resetModelSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                modelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description reset */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Error"];
         };
@@ -1536,6 +2425,148 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getWebSearchSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebSearchSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateWebSearchSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWebSearchSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebSearchSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    testWebSearch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebSearchTestRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebSearchTestResult"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getStorageSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateStorageSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateStorageSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    testStorage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateStorageSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageTestResult"];
                 };
             };
             default: components["responses"]["Error"];
@@ -1848,13 +2879,123 @@ export interface operations {
             };
         };
         responses: {
-            /** @description server-sent event stream of StreamEvent frames */
+            /** @description the message was written and its run started */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateMessageResponse"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    streamConversationEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description server-sent event stream of ConversationEvent frames */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "text/event-stream": string;
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    cancelRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the run was asked to stop */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getChatFeatures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatFeatures"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getFavicon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                domain: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The icon. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": string;
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listChatModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatModel"][];
                 };
             };
             default: components["responses"]["Error"];

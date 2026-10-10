@@ -186,20 +186,63 @@ func TestBuildBodyRequiresAMaxTokensCeiling(t *testing.T) {
 	})
 }
 
-func TestBuildBodyTurnsReasoningEffortIntoABudgetThatLeavesRoomToAnswer(t *testing.T) {
+func TestBuildBodyAsksForThinkingTheWayTheModelTakesIt(t *testing.T) {
 	messages := []llm.Message{llm.TextMessage(llm.RoleUser, "hi")}
 	temperature := 0.2
 
-	t.Run("a budget that fits is sent as it is", func(t *testing.T) {
+	t.Run("an effort level is adaptive thinking at that effort", func(t *testing.T) {
+		raw, err := buildBody(llm.Request{
+			Model:    "m",
+			Messages: messages,
+			Options:  llm.Options{Temperature: &temperature, Reasoning: &llm.ReasoningOptions{Effort: llm.EffortXHigh}},
+		}, Config{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var body map[string]any
+		if err := json.Unmarshal(raw, &body); err != nil {
+			t.Fatal(err)
+		}
+		thinking, _ := body["thinking"].(map[string]any)
+		if thinking["type"] != "adaptive" || thinking["display"] != "summarized" {
+			t.Errorf("thinking = %v", thinking)
+		}
+		if _, sent := thinking["budget_tokens"]; sent {
+			t.Error("budget_tokens was sent with adaptive thinking; current models reject it")
+		}
+		if config, _ := body["output_config"].(map[string]any); config["effort"] != "xhigh" {
+			t.Errorf("output_config = %v", body["output_config"])
+		}
+		if body["max_tokens"] != float64(adaptiveMaxTokens) {
+			t.Errorf("max_tokens = %v, want the adaptive default", body["max_tokens"])
+		}
+		if _, sent := body["temperature"]; sent {
+			t.Error("temperature was sent alongside thinking, which this API refuses")
+		}
+	})
+
+	t.Run("a budget is extended thinking with that budget", func(t *testing.T) {
 		maxTokens := 32000
 		body := build(t, llm.Request{
 			Model:    "m",
 			Messages: messages,
-			Options:  llm.Options{MaxTokens: &maxTokens, Reasoning: &llm.ReasoningOptions{Effort: llm.EffortHigh}},
+			Options:  llm.Options{MaxTokens: &maxTokens, Reasoning: &llm.ReasoningOptions{Budget: 16384}},
 		}, Config{})
 
-		if body.Thinking["type"] != "enabled" || body.Thinking["budget_tokens"] != float64(thinkingBudgets[llm.EffortHigh]) {
+		if body.Thinking["type"] != "enabled" || body.Thinking["budget_tokens"] != float64(16384) {
 			t.Errorf("thinking = %v", body.Thinking)
+		}
+	})
+
+	t.Run("with no ceiling chosen, the default grows by the budget", func(t *testing.T) {
+		body := build(t, llm.Request{
+			Model:    "m",
+			Messages: messages,
+			Options:  llm.Options{Reasoning: &llm.ReasoningOptions{Budget: 4096}},
+		}, Config{})
+
+		if body.MaxTokens != defaultMaxTokens+4096 {
+			t.Errorf("max_tokens = %d", body.MaxTokens)
 		}
 	})
 
@@ -213,15 +256,13 @@ func TestBuildBodyTurnsReasoningEffortIntoABudgetThatLeavesRoomToAnswer(t *testi
 			Options: llm.Options{
 				MaxTokens:   &maxTokens,
 				Temperature: &temperature,
-				Reasoning:   &llm.ReasoningOptions{Effort: llm.EffortHigh},
+				Reasoning:   &llm.ReasoningOptions{Budget: 16384},
 			},
 		}, Config{})
 
 		if got := body.Thinking["budget_tokens"]; got != float64(maxTokens-minAnswerTokens) {
 			t.Errorf("budget = %v, want %d", got, maxTokens-minAnswerTokens)
 		}
-		// Extended thinking fixes the sampler; this API rejects a temperature
-		// alongside it, so the preference is what gives way, not the request.
 		if _, sent := body.Extra["temperature"]; sent {
 			t.Error("temperature was sent alongside thinking, which this API refuses")
 		}
@@ -232,7 +273,7 @@ func TestBuildBodyTurnsReasoningEffortIntoABudgetThatLeavesRoomToAnswer(t *testi
 		_, err := buildBody(llm.Request{
 			Model:    "m",
 			Messages: messages,
-			Options:  llm.Options{MaxTokens: &maxTokens, Reasoning: &llm.ReasoningOptions{Effort: llm.EffortLow}},
+			Options:  llm.Options{MaxTokens: &maxTokens, Reasoning: &llm.ReasoningOptions{Budget: 1024}},
 		}, Config{})
 		if err == nil {
 			t.Fatal("a budget below the API's own floor was accepted")

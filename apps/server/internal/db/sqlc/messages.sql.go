@@ -12,12 +12,78 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const appendEntry = `-- name: AppendEntry :one
+INSERT INTO messages (conversation_id, role, content, parts, status, run_id,
+                      stop_reason, model, provider, usage, error_code, created_at, updated_at)
+VALUES ($1, $2, $3, $4,
+        $5, $6, $7, $8,
+        $9, $10, $11,
+        clock_timestamp(), clock_timestamp())
+RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
+`
+
+type AppendEntryParams struct {
+	ConversationID uuid.UUID     `json:"conversation_id"`
+	Role           MessageRole   `json:"role"`
+	Content        string        `json:"content"`
+	Parts          []byte        `json:"parts"`
+	Status         MessageStatus `json:"status"`
+	RunID          *uuid.UUID    `json:"run_id"`
+	StopReason     *string       `json:"stop_reason"`
+	Model          *string       `json:"model"`
+	Provider       *string       `json:"provider"`
+	Usage          []byte        `json:"usage"`
+	ErrorCode      *string       `json:"error_code"`
+}
+
+// The only way a transcript row is written by the agent layer. Rows are never
+// updated afterwards: a reply still being generated lives in runs.live, and
+// becomes a row only when it is finished.
+//
+// created_at is the wall clock, not now(): now() is the transaction's start, so
+// two rows written by one commit would tie and fall back to ordering by a
+// random uuid.
+func (q *Queries) AppendEntry(ctx context.Context, arg AppendEntryParams) (Message, error) {
+	row := q.db.QueryRow(ctx, appendEntry,
+		arg.ConversationID,
+		arg.Role,
+		arg.Content,
+		arg.Parts,
+		arg.Status,
+		arg.RunID,
+		arg.StopReason,
+		arg.Model,
+		arg.Provider,
+		arg.Usage,
+		arg.ErrorCode,
+	)
+	var i Message
+	err := row.Scan(
+		&i.ID,
+		&i.ConversationID,
+		&i.Role,
+		&i.Content,
+		&i.Status,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Parts,
+		&i.StopReason,
+		&i.Model,
+		&i.Provider,
+		&i.Usage,
+		&i.ErrorCode,
+		&i.RunID,
+	)
+	return i, err
+}
+
 const appendMessageContent = `-- name: AppendMessageContent :one
 UPDATE messages
 SET content    = content || $1::text,
     updated_at = now()
 WHERE id = $2
-RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at
+RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
 `
 
 type AppendMessageContentParams struct {
@@ -37,6 +103,13 @@ func (q *Queries) AppendMessageContent(ctx context.Context, arg AppendMessageCon
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Parts,
+		&i.StopReason,
+		&i.Model,
+		&i.Provider,
+		&i.Usage,
+		&i.ErrorCode,
+		&i.RunID,
 	)
 	return i, err
 }
@@ -44,7 +117,7 @@ func (q *Queries) AppendMessageContent(ctx context.Context, arg AppendMessageCon
 const createMessage = `-- name: CreateMessage :one
 INSERT INTO messages (conversation_id, role, content, status)
 VALUES ($1, $2, $3, $4)
-RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at
+RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
 `
 
 type CreateMessageParams struct {
@@ -71,6 +144,13 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (M
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Parts,
+		&i.StopReason,
+		&i.Model,
+		&i.Provider,
+		&i.Usage,
+		&i.ErrorCode,
+		&i.RunID,
 	)
 	return i, err
 }
@@ -81,7 +161,7 @@ SET content    = $1,
     status     = $2,
     updated_at = now()
 WHERE id = $3
-RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at
+RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
 `
 
 type FinishMessageParams struct {
@@ -102,12 +182,48 @@ func (q *Queries) FinishMessage(ctx context.Context, arg FinishMessageParams) (M
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Parts,
+		&i.StopReason,
+		&i.Model,
+		&i.Provider,
+		&i.Usage,
+		&i.ErrorCode,
+		&i.RunID,
+	)
+	return i, err
+}
+
+const getMessage = `-- name: GetMessage :one
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
+FROM messages
+WHERE id = $1
+`
+
+func (q *Queries) GetMessage(ctx context.Context, id uuid.UUID) (Message, error) {
+	row := q.db.QueryRow(ctx, getMessage, id)
+	var i Message
+	err := row.Scan(
+		&i.ID,
+		&i.ConversationID,
+		&i.Role,
+		&i.Content,
+		&i.Status,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Parts,
+		&i.StopReason,
+		&i.Model,
+		&i.Provider,
+		&i.Usage,
+		&i.ErrorCode,
+		&i.RunID,
 	)
 	return i, err
 }
 
 const listMessages = `-- name: ListMessages :many
-SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
 FROM messages
 WHERE conversation_id = $1
   AND ($2::timestamptz IS NULL
@@ -146,6 +262,117 @@ func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]M
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Parts,
+			&i.StopReason,
+			&i.Model,
+			&i.Provider,
+			&i.Usage,
+			&i.ErrorCode,
+			&i.RunID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRecentMessages = `-- name: ListRecentMessages :many
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
+FROM (SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
+      FROM messages
+      WHERE conversation_id = $1
+      ORDER BY created_at DESC, id DESC
+      LIMIT $2) recent
+ORDER BY created_at, id
+`
+
+type ListRecentMessagesParams struct {
+	ConversationID uuid.UUID `json:"conversation_id"`
+	RowLimit       int32     `json:"row_limit"`
+}
+
+// The newest rows of a conversation, oldest first: the raw material of a model
+// request. Newest, not oldest — a long conversation is answered from its end.
+func (q *Queries) ListRecentMessages(ctx context.Context, arg ListRecentMessagesParams) ([]Message, error) {
+	rows, err := q.db.Query(ctx, listRecentMessages, arg.ConversationID, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Message{}
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConversationID,
+			&i.Role,
+			&i.Content,
+			&i.Status,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Parts,
+			&i.StopReason,
+			&i.Model,
+			&i.Provider,
+			&i.Usage,
+			&i.ErrorCode,
+			&i.RunID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRunMessages = `-- name: ListRunMessages :many
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
+FROM messages
+WHERE run_id = $1
+   OR id = $2
+ORDER BY created_at, id
+`
+
+type ListRunMessagesParams struct {
+	RunID          *uuid.UUID `json:"run_id"`
+	InputMessageID uuid.UUID  `json:"input_message_id"`
+}
+
+// Every row a run wrote, its input included: what a subscriber's snapshot
+// carries alongside the run's live state.
+func (q *Queries) ListRunMessages(ctx context.Context, arg ListRunMessagesParams) ([]Message, error) {
+	rows, err := q.db.Query(ctx, listRunMessages, arg.RunID, arg.InputMessageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Message{}
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConversationID,
+			&i.Role,
+			&i.Content,
+			&i.Status,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Parts,
+			&i.StopReason,
+			&i.Model,
+			&i.Provider,
+			&i.Usage,
+			&i.ErrorCode,
+			&i.RunID,
 		); err != nil {
 			return nil, err
 		}

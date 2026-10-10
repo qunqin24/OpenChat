@@ -218,6 +218,21 @@ func TestBuildBodyConvertsToolsAndChoice(t *testing.T) {
 	}
 }
 
+func TestBuildBodySendsAThinkingLevelAsALevel(t *testing.T) {
+	body := build(t, llm.Request{
+		Model:    "gemini-3-flash",
+		Messages: []llm.Message{llm.TextMessage(llm.RoleUser, "hi")},
+		Options:  llm.Options{Reasoning: &llm.ReasoningOptions{Effort: llm.EffortMinimal}},
+	})
+	thinking := body["generationConfig"].(map[string]any)["thinkingConfig"].(map[string]any)
+	if thinking["thinkingLevel"] != "minimal" || thinking["includeThoughts"] != true {
+		t.Errorf("thinkingConfig = %v", thinking)
+	}
+	if _, sent := thinking["thinkingBudget"]; sent {
+		t.Error("a budget was sent with a level")
+	}
+}
+
 func TestBuildBodyPutsSamplingKnobsInGenerationConfig(t *testing.T) {
 	temperature := 0.0
 	maxTokens := 2048
@@ -229,7 +244,7 @@ func TestBuildBodyPutsSamplingKnobsInGenerationConfig(t *testing.T) {
 			Temperature: &temperature,
 			MaxTokens:   &maxTokens,
 			Stop:        []string{"END"},
-			Reasoning:   &llm.ReasoningOptions{Effort: llm.EffortHigh},
+			Reasoning:   &llm.ReasoningOptions{Budget: 24576},
 			Extra:       map[string]any{"cachedContent": "cachedContents/abc"},
 		},
 	})
@@ -254,7 +269,7 @@ func TestBuildBodyPutsSamplingKnobsInGenerationConfig(t *testing.T) {
 	if thinking["includeThoughts"] != true {
 		t.Errorf("thinkingConfig = %v", thinking)
 	}
-	if thinking["thinkingBudget"] != float64(thinkingBudgets[llm.EffortHigh]) {
+	if thinking["thinkingBudget"] != float64(24576) {
 		t.Errorf("thinkingBudget = %v", thinking["thinkingBudget"])
 	}
 	if body["cachedContent"] != "cachedContents/abc" {

@@ -12,18 +12,22 @@ import (
 // knob is welcome; quietly redirecting the request to another model, another
 // history or another tool list than the one the run layer authorised is not.
 var reservedKeys = map[string]bool{
-	"model":       true,
-	"messages":    true,
-	"system":      true,
-	"stream":      true,
-	"tools":       true,
-	"tool_choice": true,
-	"max_tokens":  true,
-	"thinking":    true,
+	"model":         true,
+	"messages":      true,
+	"system":        true,
+	"stream":        true,
+	"tools":         true,
+	"tool_choice":   true,
+	"max_tokens":    true,
+	"thinking":      true,
+	"output_config": true,
 }
 
-// Extended thinking is a budget carved out of max_tokens, not a separate
-// allowance, so these three numbers only mean anything next to it.
+// Two ways to ask for thinking, by model generation. Claude 4.6 and later take
+// adaptive thinking with an effort level (`output_config.effort`) and reject a
+// token budget — on the 5 family with a 400. Older models take only a budget,
+// carved out of max_tokens rather than granted beside it, so these numbers
+// only mean anything next to it.
 const (
 	// minThinkingBudget is the API's own floor. Below it the request is
 	// rejected outright.
@@ -32,12 +36,16 @@ const (
 	// minAnswerTokens is what we refuse to let the budget eat. A turn that
 	// thinks up to its entire ceiling has no room left to answer.
 	minAnswerTokens = 512
+
+	// adaptiveMaxTokens is the invented ceiling for an adaptive-thinking turn.
+	// The thinking and the answer share it, and the 4096 that serves a plain
+	// turn is gone before a hard question has been thought through.
+	adaptiveMaxTokens = 32000
 )
 
-var thinkingBudgets = map[llm.ReasoningEffort]int{
-	llm.EffortLow:    minThinkingBudget,
-	llm.EffortMedium: 4096,
-	llm.EffortHigh:   16384,
+// efforts are the levels this API accepts.
+var efforts = map[llm.ReasoningEffort]bool{
+	llm.EffortLow: true, llm.EffortMedium: true, llm.EffortHigh: true, llm.EffortXHigh: true, llm.EffortMax: true,
 }
 
 func buildBody(req llm.Request, cfg Config) ([]byte, error) {
@@ -58,6 +66,17 @@ func buildBody(req llm.Request, cfg Config) ([]byte, error) {
 	maxTokens := cfg.MaxTokens
 	if maxTokens <= 0 {
 		maxTokens = defaultMaxTokens
+		// Nobody chose a ceiling, so the invented one makes room for the
+		// thinking: carved out of the default instead, it would leave the
+		// answer next to nothing.
+		if r := req.Options.Reasoning; r != nil && req.Options.MaxTokens == nil {
+			switch {
+			case r.Effort != "":
+				maxTokens = adaptiveMaxTokens
+			case r.Budget > 0:
+				maxTokens += r.Budget
+			}
+		}
 	}
 	if req.Options.MaxTokens != nil {
 		maxTokens = *req.Options.MaxTokens
@@ -83,12 +102,15 @@ func buildBody(req llm.Request, cfg Config) ([]byte, error) {
 	}
 
 	opts := req.Options
-	thinking, err := convertThinking(opts.Reasoning, maxTokens)
+	thinking, outputConfig, err := convertThinking(opts.Reasoning, maxTokens)
 	if err != nil {
 		return nil, err
 	}
 	if thinking != nil {
 		body["thinking"] = thinking
+	}
+	if outputConfig != nil {
+		body["output_config"] = outputConfig
 	}
 
 	// Extended thinking fixes the sampler: this API rejects a temperature or a
@@ -115,25 +137,38 @@ func buildBody(req llm.Request, cfg Config) ([]byte, error) {
 	return json.Marshal(body)
 }
 
-// convertThinking turns an effort level into a token budget. The budget is
-// clamped to fit under max_tokens rather than rejected against it: an operator
-// who capped max_tokens meant to cap the turn, not to turn thinking off.
-func convertThinking(reasoning *llm.ReasoningOptions, maxTokens int) (map[string]any, error) {
-	if reasoning == nil || reasoning.Effort == "" {
-		return nil, nil
+// convertThinking translates the reasoning request into this API's fields.
+//
+// An effort level becomes adaptive thinking at that effort. Its display is
+// asked for as summarized: the current models default to omitting it, which
+// streams thinking blocks with no text — a long silence in a UI built to show
+// the reasoning.
+//
+// A budget becomes the older extended-thinking form. It is clamped to fit under
+// max_tokens rather than rejected against it: an operator who capped
+// max_tokens meant to cap the turn, not to turn thinking off.
+func convertThinking(reasoning *llm.ReasoningOptions, maxTokens int) (thinking, outputConfig map[string]any, err error) {
+	switch {
+	case reasoning == nil:
+		return nil, nil, nil
+	case reasoning.Effort != "":
+		if !efforts[reasoning.Effort] {
+			return nil, nil, llm.Errorf(llm.ErrorProvider, nil, "anthropic: unknown reasoning effort %q", reasoning.Effort)
+		}
+		return map[string]any{"type": "adaptive", "display": "summarized"},
+			map[string]any{"effort": string(reasoning.Effort)}, nil
+	case reasoning.Budget > 0:
+		budget := reasoning.Budget
+		if limit := maxTokens - minAnswerTokens; budget > limit {
+			budget = limit
+		}
+		if budget < minThinkingBudget {
+			return nil, nil, llm.Errorf(llm.ErrorProvider, nil,
+				"anthropic: max_tokens %d leaves no room to think, at least %d is required", maxTokens, minThinkingBudget+minAnswerTokens)
+		}
+		return map[string]any{"type": "enabled", "budget_tokens": budget}, nil, nil
 	}
-	budget, known := thinkingBudgets[reasoning.Effort]
-	if !known {
-		return nil, llm.Errorf(llm.ErrorProvider, nil, "anthropic: unknown reasoning effort %q", reasoning.Effort)
-	}
-	if limit := maxTokens - minAnswerTokens; budget > limit {
-		budget = limit
-	}
-	if budget < minThinkingBudget {
-		return nil, llm.Errorf(llm.ErrorProvider, nil,
-			"anthropic: max_tokens %d leaves no room to think, at least %d is required", maxTokens, minThinkingBudget+minAnswerTokens)
-	}
-	return map[string]any{"type": "enabled", "budget_tokens": budget}, nil
+	return nil, nil, nil
 }
 
 func convertTools(tools []llm.Tool) []map[string]any {

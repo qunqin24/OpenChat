@@ -56,6 +56,15 @@ func (s *Server) CreateConversation(w http.ResponseWriter, r *http.Request) {
 		title = strings.TrimSpace(*body.Title)
 	}
 
+	var effort *string
+	if body.ReasoningEffort != nil {
+		var ok bool
+		if effort, ok = effortColumn(*body.ReasoningEffort); !ok {
+			httpx.Fail(w, r, errInvalidEffort)
+			return
+		}
+	}
+
 	user := auth.MustUser(r.Context())
 	row, err := s.q.CreateConversation(r.Context(), sqlc.CreateConversationParams{
 		UserID: &user.ID,
@@ -65,6 +74,22 @@ func (s *Server) CreateConversation(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
+	}
+	if effort != nil {
+		if row, err = s.q.SetConversationReasoning(r.Context(), sqlc.SetConversationReasoningParams{
+			ID: row.ID, UserID: &user.ID, ReasoningEffort: effort,
+		}); err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+	}
+	if body.WebSearch != nil && *body.WebSearch != row.WebSearch {
+		if row, err = s.q.SetConversationWebSearch(r.Context(), sqlc.SetConversationWebSearchParams{
+			ID: row.ID, UserID: &user.ID, WebSearch: *body.WebSearch,
+		}); err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
 	}
 	httpx.JSON(w, http.StatusCreated, toConversation(row))
 }
@@ -88,20 +113,71 @@ func (s *Server) UpdateConversation(w http.ResponseWriter, r *http.Request, conv
 		httpx.Fail(w, r, err)
 		return
 	}
-	if body.Title == nil || strings.TrimSpace(*body.Title) == "" {
+	if body.Title == nil && body.Model == nil && body.ReasoningEffort == nil && body.WebSearch == nil {
+		httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "nothing_to_update",
+			"give a title, a model, a reasoning effort or a web search choice"))
+		return
+	}
+	var effort *string
+	if body.ReasoningEffort != nil {
+		var ok bool
+		if effort, ok = effortColumn(*body.ReasoningEffort); !ok {
+			httpx.Fail(w, r, errInvalidEffort)
+			return
+		}
+	}
+	if body.Title != nil && strings.TrimSpace(*body.Title) == "" {
 		httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "invalid_title", "title must not be empty"))
 		return
 	}
+	if body.Model != nil && strings.TrimSpace(*body.Model) == "" {
+		httpx.Fail(w, r, httpx.NewFieldError("model", "model_unavailable", "model must not be empty"))
+		return
+	}
 
-	user := auth.MustUser(r.Context())
-	row, err := s.q.UpdateConversationTitle(r.Context(), sqlc.UpdateConversationTitleParams{
-		ID:     conversationId,
-		UserID: &user.ID,
-		Title:  strings.TrimSpace(*body.Title),
-	})
+	ctx := r.Context()
+	user := auth.MustUser(ctx)
+	row, err := s.q.GetConversation(ctx, sqlc.GetConversationParams{ID: conversationId, UserID: &user.ID})
 	if err != nil {
 		httpx.Fail(w, r, dbErr(err))
 		return
+	}
+	if body.Title != nil {
+		if row, err = s.q.UpdateConversationTitle(ctx, sqlc.UpdateConversationTitleParams{
+			ID:     conversationId,
+			UserID: &user.ID,
+			Title:  strings.TrimSpace(*body.Title),
+		}); err != nil {
+			httpx.Fail(w, r, dbErr(err))
+			return
+		}
+	}
+	if body.Model != nil {
+		// Not checked against what is served: the choice is remembered even
+		// if its channel is briefly off, and the next run says if it still is.
+		model := strings.TrimSpace(*body.Model)
+		if row, err = s.q.SetConversationModel(ctx, sqlc.SetConversationModelParams{
+			ID: conversationId, UserID: &user.ID, Model: &model,
+		}); err != nil {
+			httpx.Fail(w, r, dbErr(err))
+			return
+		}
+	}
+	if body.ReasoningEffort != nil {
+		if row, err = s.q.SetConversationReasoning(ctx, sqlc.SetConversationReasoningParams{
+			ID: conversationId, UserID: &user.ID, ReasoningEffort: effort,
+		}); err != nil {
+			httpx.Fail(w, r, dbErr(err))
+			return
+		}
+	}
+	if body.WebSearch != nil {
+		if row, err = s.q.SetConversationWebSearch(ctx, sqlc.SetConversationWebSearchParams{
+			ID: conversationId, UserID: &user.ID, WebSearch: *body.WebSearch,
+		}); err != nil {
+			httpx.Fail(w, r, dbErr(err))
+			return
+		}
 	}
 	httpx.JSON(w, http.StatusOK, toConversation(row))
 }

@@ -29,6 +29,17 @@ const (
 	ChannelTypeXai              ChannelType = "xai"
 	ChannelTypeGroq             ChannelType = "groq"
 	ChannelTypeOllama           ChannelType = "ollama"
+	ChannelTypeMistral          ChannelType = "mistral"
+	ChannelTypeStepfun          ChannelType = "stepfun"
+	ChannelTypeHunyuan          ChannelType = "hunyuan"
+	ChannelTypeQianfan          ChannelType = "qianfan"
+	ChannelTypeMimo             ChannelType = "mimo"
+	ChannelTypeTogether         ChannelType = "together"
+	ChannelTypeFireworks        ChannelType = "fireworks"
+	ChannelTypeNvidia           ChannelType = "nvidia"
+	ChannelTypeModelscope       ChannelType = "modelscope"
+	ChannelTypeCerebras         ChannelType = "cerebras"
+	ChannelTypeLmstudio         ChannelType = "lmstudio"
 	ChannelTypeOpenaiCompatible ChannelType = "openai-compatible"
 )
 
@@ -155,6 +166,50 @@ func (ns NullMessageStatus) Value() (driver.Value, error) {
 	return string(ns.MessageStatus), nil
 }
 
+type RunStatus string
+
+const (
+	RunStatusRunning   RunStatus = "running"
+	RunStatusCompleted RunStatus = "completed"
+	RunStatusFailed    RunStatus = "failed"
+	RunStatusCancelled RunStatus = "cancelled"
+)
+
+func (e *RunStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = RunStatus(s)
+	case string:
+		*e = RunStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for RunStatus: %T", src)
+	}
+	return nil
+}
+
+type NullRunStatus struct {
+	RunStatus RunStatus `json:"run_status"`
+	Valid     bool      `json:"valid"` // Valid is true if RunStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullRunStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.RunStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.RunStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullRunStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.RunStatus), nil
+}
+
 type UserRole string
 
 const (
@@ -211,6 +266,7 @@ type Attachment struct {
 	ContentType string             `json:"content_type"`
 	SizeBytes   int64              `json:"size_bytes"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UserID      *uuid.UUID         `json:"user_id"`
 }
 
 type CatalogModel struct {
@@ -266,13 +322,15 @@ type ChannelModel struct {
 }
 
 type Conversation struct {
-	ID        uuid.UUID          `json:"id"`
-	UserID    *uuid.UUID         `json:"user_id"`
-	Title     string             `json:"title"`
-	Model     *string            `json:"model"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
+	ID              uuid.UUID          `json:"id"`
+	UserID          *uuid.UUID         `json:"user_id"`
+	Title           string             `json:"title"`
+	Model           *string            `json:"model"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt       pgtype.Timestamptz `json:"deleted_at"`
+	ReasoningEffort *string            `json:"reasoning_effort"`
+	WebSearch       bool               `json:"web_search"`
 }
 
 type Message struct {
@@ -284,6 +342,47 @@ type Message struct {
 	Metadata       []byte             `json:"metadata"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	Parts          []byte             `json:"parts"`
+	StopReason     *string            `json:"stop_reason"`
+	Model          *string            `json:"model"`
+	Provider       *string            `json:"provider"`
+	Usage          []byte             `json:"usage"`
+	ErrorCode      *string            `json:"error_code"`
+	RunID          *uuid.UUID         `json:"run_id"`
+}
+
+type ModelOverride struct {
+	ModelID          string             `json:"model_id"`
+	Kind             *string            `json:"kind"`
+	Reasoning        *bool              `json:"reasoning"`
+	ToolCall         *bool              `json:"tool_call"`
+	InputModalities  []string           `json:"input_modalities"`
+	ContextLimit     *int64             `json:"context_limit"`
+	InputLimit       *int64             `json:"input_limit"`
+	OutputLimit      *int64             `json:"output_limit"`
+	ReasoningEfforts []string           `json:"reasoning_efforts"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Run struct {
+	ID              uuid.UUID          `json:"id"`
+	ConversationID  uuid.UUID          `json:"conversation_id"`
+	UserID          uuid.UUID          `json:"user_id"`
+	InputMessageID  uuid.UUID          `json:"input_message_id"`
+	RequestID       *string            `json:"request_id"`
+	ModelID         string             `json:"model_id"`
+	ChannelID       *uuid.UUID         `json:"channel_id"`
+	Status          RunStatus          `json:"status"`
+	Checkpoint      []byte             `json:"checkpoint"`
+	Live            []byte             `json:"live"`
+	Version         int64              `json:"version"`
+	CancelRequested bool               `json:"cancel_requested"`
+	ErrorCode       *string            `json:"error_code"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	FinishedAt      pgtype.Timestamptz `json:"finished_at"`
+	ReasoningEffort *string            `json:"reasoning_effort"`
+	WebSearch       bool               `json:"web_search"`
 }
 
 type Session struct {

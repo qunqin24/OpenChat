@@ -1,37 +1,86 @@
 import { OpenChatError } from './errors'
-import type { CreateMessageRequest, StreamEvent } from './types'
+import type { ConversationEvent } from './types'
 
-export interface StreamMessageOptions {
+export interface ConversationEventsOptions {
   baseUrl: string
   conversationId: string
-  body: CreateMessageRequest
   signal?: AbortSignal
   headers?: HeadersInit
+  /** Pass 'include' so the browser carries the HttpOnly session cookie. */
+  credentials?: RequestCredentials
+  /**
+   * Milliseconds without a single byte — event or keep-alive — after which
+   * the connection is taken for dead and the stream ends with a
+   * `StreamIdleError`. The server sends a keep-alive every 5 seconds.
+   */
+  idleTimeout?: number
 }
 
 /**
- * POSTs a message and yields the server's SSE frames as they arrive.
+ * The connection went quiet for longer than the server's keep-alives allow.
+ *
+ * A connection can die without closing: the laptop slept, the network
+ * changed, a proxy dropped it. Reading it then waits forever, and the page
+ * sits on half an answer while the run finishes without it. Thrown so the
+ * caller reconnects, which starts from a fresh snapshot.
+ */
+export class StreamIdleError extends Error {
+  constructor(ms: number) {
+    super(`no data on the event stream for ${ms}ms`)
+    this.name = 'StreamIdleError'
+  }
+}
+
+/**
+ * Follows a conversation's runs: yields the server's `snapshot`, then every
+ * `batch` committed after it, until the signal aborts or the connection drops.
  *
  * openapi-fetch cannot model a streaming response body, so this is hand-written
- * against the same contract. Frames are `data: <json>` separated by a blank line.
+ * against the same contract. Frames are `data: <json>` separated by a blank
+ * line; `:` comment frames are keep-alives and are skipped. Reconnecting is the
+ * caller's job — a new connection starts from a fresh snapshot, so there is no
+ * position to resume from.
  */
-export async function* streamMessage(
-  options: StreamMessageOptions,
-): AsyncGenerator<StreamEvent, void, undefined> {
-  const { baseUrl, conversationId, body, signal, headers } = options
+export async function* streamConversationEvents(
+  options: ConversationEventsOptions,
+): AsyncGenerator<ConversationEvent, void, undefined> {
+  const { baseUrl, conversationId, signal, headers, credentials, idleTimeout = 15_000 } = options
 
-  const response = await fetch(
-    `${baseUrl.replace(/\/$/, '')}/conversations/${conversationId}/messages`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...headers },
-      body: JSON.stringify(body),
-      signal,
-    },
-  )
+  // Our own controller, so the watchdog can end a connection the caller did
+  // not; the caller's signal still ends it too.
+  const controller = new AbortController()
+  const abort = () => controller.abort(signal?.reason)
+  if (signal?.aborted) abort()
+  else signal?.addEventListener('abort', abort, { once: true })
 
-  if (!response.ok) throw await OpenChatError.fromResponse(response)
-  if (!response.body) {
+  let idle = false
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const watch = () => {
+    clearTimeout(timer)
+    timer = setTimeout(() => {
+      idle = true
+      controller.abort()
+    }, idleTimeout)
+  }
+
+  watch()
+  let response: Response
+  try {
+    response = await fetch(`${baseUrl.replace(/\/$/, '')}/conversations/${conversationId}/events`, {
+      headers: { Accept: 'text/event-stream', ...headers },
+      signal: controller.signal,
+      credentials,
+    })
+  } catch (error) {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', abort)
+    throw idle ? new StreamIdleError(idleTimeout) : error
+  }
+
+  if (!response.ok || !response.body) {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', abort)
+    if (!response.ok) throw await OpenChatError.fromResponse(response)
     throw new OpenChatError(response.status, {
       code: 'no_stream_body',
       message: 'the response had no readable body',
@@ -43,8 +92,15 @@ export async function* streamMessage(
 
   try {
     while (true) {
-      const { done, value } = await reader.read()
+      let chunk: ReadableStreamReadResult<string>
+      try {
+        chunk = await reader.read()
+      } catch (error) {
+        throw idle ? new StreamIdleError(idleTimeout) : error
+      }
+      const { done, value } = chunk
       if (done) break
+      watch()
 
       buffer += value
       let boundary = buffer.indexOf('\n\n')
@@ -56,16 +112,14 @@ export async function* streamMessage(
         boundary = buffer.indexOf('\n\n')
       }
     }
-
-    // A stream that ends without a trailing blank line still has one last frame.
-    const trailing = parseFrame(buffer)
-    if (trailing) yield trailing
   } finally {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', abort)
     await reader.cancel().catch(() => undefined)
   }
 }
 
-function parseFrame(frame: string): StreamEvent | null {
+function parseFrame(frame: string): ConversationEvent | null {
   const data = frame
     .split('\n')
     .filter((line) => line.startsWith('data:'))
@@ -74,7 +128,7 @@ function parseFrame(frame: string): StreamEvent | null {
 
   if (!data) return null
   try {
-    return JSON.parse(data) as StreamEvent
+    return JSON.parse(data) as ConversationEvent
   } catch {
     return null
   }

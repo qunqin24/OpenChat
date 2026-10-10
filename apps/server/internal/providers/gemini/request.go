@@ -24,13 +24,13 @@ var reservedKeys = map[string]bool{
 	"generation_config":  true,
 }
 
-// thinkingBudgets map an effort level onto this API's own budget. Unlike the
-// Messages API, the budget is *not* carved out of the output ceiling here:
-// thoughts are counted separately, so there is nothing to clamp it against.
-var thinkingBudgets = map[llm.ReasoningEffort]int{
-	llm.EffortLow:    1024,
-	llm.EffortMedium: 8192,
-	llm.EffortHigh:   24576,
+// levels are the thinking levels this API accepts. Gemini 3 models take a
+// level; Gemini 2.5 models take a budget instead, and which one a model takes
+// is the catalogue's to say — the caller sends one or the other. A budget is
+// not clamped against maxOutputTokens: on this protocol thoughts are counted
+// separately, unlike the Messages API.
+var levels = map[llm.ReasoningEffort]bool{
+	llm.EffortMinimal: true, llm.EffortLow: true, llm.EffortMedium: true, llm.EffortHigh: true,
 }
 
 func buildBody(req llm.Request) ([]byte, error) {
@@ -78,14 +78,18 @@ func buildBody(req llm.Request) ([]byte, error) {
 	if len(opts.Stop) > 0 {
 		generation["stopSequences"] = opts.Stop
 	}
-	if opts.Reasoning != nil && opts.Reasoning.Effort != "" {
-		budget, known := thinkingBudgets[opts.Reasoning.Effort]
-		if !known {
-			return nil, llm.Errorf(llm.ErrorProvider, nil, "gemini: unknown reasoning effort %q", opts.Reasoning.Effort)
-		}
+	if r := opts.Reasoning; r != nil {
 		// includeThoughts is what makes the thoughts arrive at all. Without it
 		// the turn is billed for reasoning the user never gets to see.
-		generation["thinkingConfig"] = map[string]any{"includeThoughts": true, "thinkingBudget": budget}
+		switch {
+		case r.Effort != "":
+			if !levels[r.Effort] {
+				return nil, llm.Errorf(llm.ErrorProvider, nil, "gemini: unknown thinking level %q", r.Effort)
+			}
+			generation["thinkingConfig"] = map[string]any{"includeThoughts": true, "thinkingLevel": string(r.Effort)}
+		case r.Budget > 0:
+			generation["thinkingConfig"] = map[string]any{"includeThoughts": true, "thinkingBudget": r.Budget}
+		}
 	}
 	if len(generation) > 0 {
 		body["generationConfig"] = generation

@@ -22,6 +22,21 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for BatchEventType.
+const (
+	Batch BatchEventType = "batch"
+)
+
+// Valid indicates whether the value is a known member of the BatchEventType enum.
+func (e BatchEventType) Valid() bool {
+	switch e {
+	case Batch:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BulkSkipReason.
 const (
 	NotFound BulkSkipReason = "not_found"
@@ -42,16 +57,34 @@ func (e BulkSkipReason) Valid() bool {
 
 // Defines values for ChannelModelSource.
 const (
-	Fetched ChannelModelSource = "fetched"
-	Manual  ChannelModelSource = "manual"
+	ChannelModelSourceFetched ChannelModelSource = "fetched"
+	ChannelModelSourceManual  ChannelModelSource = "manual"
 )
 
 // Valid indicates whether the value is a known member of the ChannelModelSource enum.
 func (e ChannelModelSource) Valid() bool {
 	switch e {
-	case Fetched:
+	case ChannelModelSourceFetched:
 		return true
-	case Manual:
+	case ChannelModelSourceManual:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ChannelModelInputSource.
+const (
+	ChannelModelInputSourceFetched ChannelModelInputSource = "fetched"
+	ChannelModelInputSourceManual  ChannelModelInputSource = "manual"
+)
+
+// Valid indicates whether the value is a known member of the ChannelModelInputSource enum.
+func (e ChannelModelInputSource) Valid() bool {
+	switch e {
+	case ChannelModelInputSourceFetched:
+		return true
+	case ChannelModelInputSourceManual:
 		return true
 	default:
 		return false
@@ -61,17 +94,28 @@ func (e ChannelModelSource) Valid() bool {
 // Defines values for ChannelType.
 const (
 	ChannelTypeAnthropic        ChannelType = "anthropic"
+	ChannelTypeCerebras         ChannelType = "cerebras"
 	ChannelTypeDashscope        ChannelType = "dashscope"
 	ChannelTypeDeepseek         ChannelType = "deepseek"
+	ChannelTypeFireworks        ChannelType = "fireworks"
 	ChannelTypeGemini           ChannelType = "gemini"
 	ChannelTypeGroq             ChannelType = "groq"
+	ChannelTypeHunyuan          ChannelType = "hunyuan"
+	ChannelTypeLmstudio         ChannelType = "lmstudio"
+	ChannelTypeMimo             ChannelType = "mimo"
 	ChannelTypeMinimax          ChannelType = "minimax"
+	ChannelTypeMistral          ChannelType = "mistral"
+	ChannelTypeModelscope       ChannelType = "modelscope"
 	ChannelTypeMoonshot         ChannelType = "moonshot"
+	ChannelTypeNvidia           ChannelType = "nvidia"
 	ChannelTypeOllama           ChannelType = "ollama"
 	ChannelTypeOpenai           ChannelType = "openai"
 	ChannelTypeOpenaiCompatible ChannelType = "openai-compatible"
 	ChannelTypeOpenrouter       ChannelType = "openrouter"
+	ChannelTypeQianfan          ChannelType = "qianfan"
 	ChannelTypeSiliconflow      ChannelType = "siliconflow"
+	ChannelTypeStepfun          ChannelType = "stepfun"
+	ChannelTypeTogether         ChannelType = "together"
 	ChannelTypeVolcengine       ChannelType = "volcengine"
 	ChannelTypeXai              ChannelType = "xai"
 	ChannelTypeZhipu            ChannelType = "zhipu"
@@ -82,17 +126,33 @@ func (e ChannelType) Valid() bool {
 	switch e {
 	case ChannelTypeAnthropic:
 		return true
+	case ChannelTypeCerebras:
+		return true
 	case ChannelTypeDashscope:
 		return true
 	case ChannelTypeDeepseek:
+		return true
+	case ChannelTypeFireworks:
 		return true
 	case ChannelTypeGemini:
 		return true
 	case ChannelTypeGroq:
 		return true
+	case ChannelTypeHunyuan:
+		return true
+	case ChannelTypeLmstudio:
+		return true
+	case ChannelTypeMimo:
+		return true
 	case ChannelTypeMinimax:
 		return true
+	case ChannelTypeMistral:
+		return true
+	case ChannelTypeModelscope:
+		return true
 	case ChannelTypeMoonshot:
+		return true
+	case ChannelTypeNvidia:
 		return true
 	case ChannelTypeOllama:
 		return true
@@ -102,13 +162,55 @@ func (e ChannelType) Valid() bool {
 		return true
 	case ChannelTypeOpenrouter:
 		return true
+	case ChannelTypeQianfan:
+		return true
 	case ChannelTypeSiliconflow:
+		return true
+	case ChannelTypeStepfun:
+		return true
+	case ChannelTypeTogether:
 		return true
 	case ChannelTypeVolcengine:
 		return true
 	case ChannelTypeXai:
 		return true
 	case ChannelTypeZhipu:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ChannelTypeGroup.
+const (
+	Custom   ChannelTypeGroup = "custom"
+	Platform ChannelTypeGroup = "platform"
+	Vendor   ChannelTypeGroup = "vendor"
+)
+
+// Valid indicates whether the value is a known member of the ChannelTypeGroup enum.
+func (e ChannelTypeGroup) Valid() bool {
+	switch e {
+	case Custom:
+		return true
+	case Platform:
+		return true
+	case Vendor:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GenerationStartedEventType.
+const (
+	GenerationStarted GenerationStartedEventType = "generation_started"
+)
+
+// Valid indicates whether the value is a known member of the GenerationStartedEventType enum.
+func (e GenerationStartedEventType) Valid() bool {
+	switch e {
+	case GenerationStarted:
 		return true
 	default:
 		return false
@@ -133,24 +235,228 @@ func (e HealthStatus) Valid() bool {
 	}
 }
 
+// Defines values for InputModality.
+const (
+	InputModalityAudio InputModality = "audio"
+	InputModalityImage InputModality = "image"
+	InputModalityPdf   InputModality = "pdf"
+	InputModalityVideo InputModality = "video"
+)
+
+// Valid indicates whether the value is a known member of the InputModality enum.
+func (e InputModality) Valid() bool {
+	switch e {
+	case InputModalityAudio:
+		return true
+	case InputModalityImage:
+		return true
+	case InputModalityPdf:
+		return true
+	case InputModalityVideo:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageStopReason.
+const (
+	MessageStopReasonCancelled     MessageStopReason = "cancelled"
+	MessageStopReasonContentFilter MessageStopReason = "content_filter"
+	MessageStopReasonError         MessageStopReason = "error"
+	MessageStopReasonLength        MessageStopReason = "length"
+	MessageStopReasonStop          MessageStopReason = "stop"
+	MessageStopReasonToolCalls     MessageStopReason = "tool_calls"
+)
+
+// Valid indicates whether the value is a known member of the MessageStopReason enum.
+func (e MessageStopReason) Valid() bool {
+	switch e {
+	case MessageStopReasonCancelled:
+		return true
+	case MessageStopReasonContentFilter:
+		return true
+	case MessageStopReasonError:
+		return true
+	case MessageStopReasonLength:
+		return true
+	case MessageStopReasonStop:
+		return true
+	case MessageStopReasonToolCalls:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageAppendedEventType.
+const (
+	MessageAppended MessageAppendedEventType = "message_appended"
+)
+
+// Valid indicates whether the value is a known member of the MessageAppendedEventType enum.
+func (e MessageAppendedEventType) Valid() bool {
+	switch e {
+	case MessageAppended:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MessageStatus.
 const (
-	Complete  MessageStatus = "complete"
-	Failed    MessageStatus = "failed"
-	Pending   MessageStatus = "pending"
-	Streaming MessageStatus = "streaming"
+	MessageStatusComplete  MessageStatus = "complete"
+	MessageStatusFailed    MessageStatus = "failed"
+	MessageStatusPending   MessageStatus = "pending"
+	MessageStatusStreaming MessageStatus = "streaming"
 )
 
 // Valid indicates whether the value is a known member of the MessageStatus enum.
 func (e MessageStatus) Valid() bool {
 	switch e {
-	case Complete:
+	case MessageStatusComplete:
 		return true
-	case Failed:
+	case MessageStatusFailed:
 		return true
-	case Pending:
+	case MessageStatusPending:
 		return true
-	case Streaming:
+	case MessageStatusStreaming:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelKind.
+const (
+	ModelKindEmbedding ModelKind = "embedding"
+	ModelKindImage     ModelKind = "image"
+	ModelKindRerank    ModelKind = "rerank"
+	ModelKindText      ModelKind = "text"
+)
+
+// Valid indicates whether the value is a known member of the ModelKind enum.
+func (e ModelKind) Valid() bool {
+	switch e {
+	case ModelKindEmbedding:
+		return true
+	case ModelKindImage:
+		return true
+	case ModelKindRerank:
+		return true
+	case ModelKindText:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PartDeltaEventType.
+const (
+	PartDelta PartDeltaEventType = "part_delta"
+)
+
+// Valid indicates whether the value is a known member of the PartDeltaEventType enum.
+func (e PartDeltaEventType) Valid() bool {
+	switch e {
+	case PartDelta:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PartEndedEventType.
+const (
+	PartEnded PartEndedEventType = "part_ended"
+)
+
+// Valid indicates whether the value is a known member of the PartEndedEventType enum.
+func (e PartEndedEventType) Valid() bool {
+	switch e {
+	case PartEnded:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PartStartedEventType.
+const (
+	PartStarted PartStartedEventType = "part_started"
+)
+
+// Valid indicates whether the value is a known member of the PartStartedEventType enum.
+func (e PartStartedEventType) Valid() bool {
+	switch e {
+	case PartStarted:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReasoningEffort.
+const (
+	ReasoningEffortAuto    ReasoningEffort = "auto"
+	ReasoningEffortHigh    ReasoningEffort = "high"
+	ReasoningEffortLow     ReasoningEffort = "low"
+	ReasoningEffortMax     ReasoningEffort = "max"
+	ReasoningEffortMedium  ReasoningEffort = "medium"
+	ReasoningEffortMinimal ReasoningEffort = "minimal"
+	ReasoningEffortNone    ReasoningEffort = "none"
+	ReasoningEffortXhigh   ReasoningEffort = "xhigh"
+)
+
+// Valid indicates whether the value is a known member of the ReasoningEffort enum.
+func (e ReasoningEffort) Valid() bool {
+	switch e {
+	case ReasoningEffortAuto:
+		return true
+	case ReasoningEffortHigh:
+		return true
+	case ReasoningEffortLow:
+		return true
+	case ReasoningEffortMax:
+		return true
+	case ReasoningEffortMedium:
+		return true
+	case ReasoningEffortMinimal:
+		return true
+	case ReasoningEffortNone:
+		return true
+	case ReasoningEffortXhigh:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReasoningPartType.
+const (
+	ReasoningPartTypeReasoning ReasoningPartType = "reasoning"
+)
+
+// Valid indicates whether the value is a known member of the ReasoningPartType enum.
+func (e ReasoningPartType) Valid() bool {
+	switch e {
+	case ReasoningPartTypeReasoning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RetryScheduledEventType.
+const (
+	RetryScheduled RetryScheduledEventType = "retry_scheduled"
+)
+
+// Valid indicates whether the value is a known member of the RetryScheduledEventType enum.
+func (e RetryScheduledEventType) Valid() bool {
+	switch e {
+	case RetryScheduled:
 		return true
 	default:
 		return false
@@ -181,60 +487,207 @@ func (e Role) Valid() bool {
 	}
 }
 
-// Defines values for StreamDeltaType.
+// Defines values for RunStatus.
 const (
-	Delta StreamDeltaType = "delta"
+	RunStatusCancelled RunStatus = "cancelled"
+	RunStatusCompleted RunStatus = "completed"
+	RunStatusFailed    RunStatus = "failed"
+	RunStatusRunning   RunStatus = "running"
 )
 
-// Valid indicates whether the value is a known member of the StreamDeltaType enum.
-func (e StreamDeltaType) Valid() bool {
+// Valid indicates whether the value is a known member of the RunStatus enum.
+func (e RunStatus) Valid() bool {
 	switch e {
-	case Delta:
+	case RunStatusCancelled:
+		return true
+	case RunStatusCompleted:
+		return true
+	case RunStatusFailed:
+		return true
+	case RunStatusRunning:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for StreamDoneType.
+// Defines values for RunFinishedEventType.
 const (
-	Done StreamDoneType = "done"
+	RunFinished RunFinishedEventType = "run_finished"
 )
 
-// Valid indicates whether the value is a known member of the StreamDoneType enum.
-func (e StreamDoneType) Valid() bool {
+// Valid indicates whether the value is a known member of the RunFinishedEventType enum.
+func (e RunFinishedEventType) Valid() bool {
 	switch e {
-	case Done:
+	case RunFinished:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for StreamErrorType.
+// Defines values for RunStartedEventType.
 const (
-	StreamErrorTypeError StreamErrorType = "error"
+	RunStarted RunStartedEventType = "run_started"
 )
 
-// Valid indicates whether the value is a known member of the StreamErrorType enum.
-func (e StreamErrorType) Valid() bool {
+// Valid indicates whether the value is a known member of the RunStartedEventType enum.
+func (e RunStartedEventType) Valid() bool {
 	switch e {
-	case StreamErrorTypeError:
+	case RunStarted:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for StreamStartType.
+// Defines values for SnapshotEventType.
 const (
-	Start StreamStartType = "start"
+	Snapshot SnapshotEventType = "snapshot"
 )
 
-// Valid indicates whether the value is a known member of the StreamStartType enum.
-func (e StreamStartType) Valid() bool {
+// Valid indicates whether the value is a known member of the SnapshotEventType enum.
+func (e SnapshotEventType) Valid() bool {
 	switch e {
-	case Start:
+	case Snapshot:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StorageDriver.
+const (
+	Local StorageDriver = "local"
+	S3    StorageDriver = "s3"
+)
+
+// Valid indicates whether the value is a known member of the StorageDriver enum.
+func (e StorageDriver) Valid() bool {
+	switch e {
+	case Local:
+		return true
+	case S3:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TextPartType.
+const (
+	TextPartTypeText TextPartType = "text"
+)
+
+// Valid indicates whether the value is a known member of the TextPartType enum.
+func (e TextPartType) Valid() bool {
+	switch e {
+	case TextPartTypeText:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ToolCallPartType.
+const (
+	ToolCallPartTypeToolCall ToolCallPartType = "tool_call"
+)
+
+// Valid indicates whether the value is a known member of the ToolCallPartType enum.
+func (e ToolCallPartType) Valid() bool {
+	switch e {
+	case ToolCallPartTypeToolCall:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ToolFinishedEventType.
+const (
+	ToolFinished ToolFinishedEventType = "tool_finished"
+)
+
+// Valid indicates whether the value is a known member of the ToolFinishedEventType enum.
+func (e ToolFinishedEventType) Valid() bool {
+	switch e {
+	case ToolFinished:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ToolResultPartStatus.
+const (
+	ToolResultPartStatusCancelled   ToolResultPartStatus = "cancelled"
+	ToolResultPartStatusFailed      ToolResultPartStatus = "failed"
+	ToolResultPartStatusInterrupted ToolResultPartStatus = "interrupted"
+	ToolResultPartStatusSucceeded   ToolResultPartStatus = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the ToolResultPartStatus enum.
+func (e ToolResultPartStatus) Valid() bool {
+	switch e {
+	case ToolResultPartStatusCancelled:
+		return true
+	case ToolResultPartStatusFailed:
+		return true
+	case ToolResultPartStatusInterrupted:
+		return true
+	case ToolResultPartStatusSucceeded:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ToolResultPartType.
+const (
+	ToolResult ToolResultPartType = "tool_result"
+)
+
+// Valid indicates whether the value is a known member of the ToolResultPartType enum.
+func (e ToolResultPartType) Valid() bool {
+	switch e {
+	case ToolResult:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ToolSlotStatus.
+const (
+	ToolSlotStatusDone    ToolSlotStatus = "done"
+	ToolSlotStatusPending ToolSlotStatus = "pending"
+	ToolSlotStatusRunning ToolSlotStatus = "running"
+)
+
+// Valid indicates whether the value is a known member of the ToolSlotStatus enum.
+func (e ToolSlotStatus) Valid() bool {
+	switch e {
+	case ToolSlotStatusDone:
+		return true
+	case ToolSlotStatusPending:
+		return true
+	case ToolSlotStatusRunning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ToolStartedEventType.
+const (
+	ToolStarted ToolStartedEventType = "tool_started"
+)
+
+// Valid indicates whether the value is a known member of the ToolStartedEventType enum.
+func (e ToolStartedEventType) Valid() bool {
+	switch e {
+	case ToolStarted:
 		return true
 	default:
 		return false
@@ -253,6 +706,63 @@ func (e UserRole) Valid() bool {
 	case UserRoleAdmin:
 		return true
 	case UserRoleUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WebSearchCompression.
+const (
+	WebSearchCompressionNone     WebSearchCompression = "none"
+	WebSearchCompressionSnippet  WebSearchCompression = "snippet"
+	WebSearchCompressionTruncate WebSearchCompression = "truncate"
+)
+
+// Valid indicates whether the value is a known member of the WebSearchCompression enum.
+func (e WebSearchCompression) Valid() bool {
+	switch e {
+	case WebSearchCompressionNone:
+		return true
+	case WebSearchCompressionSnippet:
+		return true
+	case WebSearchCompressionTruncate:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WebSearchDepth.
+const (
+	Advanced WebSearchDepth = "advanced"
+	Basic    WebSearchDepth = "basic"
+)
+
+// Valid indicates whether the value is a known member of the WebSearchDepth enum.
+func (e WebSearchDepth) Valid() bool {
+	switch e {
+	case Advanced:
+		return true
+	case Basic:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WebSearchProvider.
+const (
+	Free   WebSearchProvider = "free"
+	Tavily WebSearchProvider = "tavily"
+)
+
+// Valid indicates whether the value is a known member of the WebSearchProvider enum.
+func (e WebSearchProvider) Valid() bool {
+	switch e {
+	case Free:
+		return true
+	case Tavily:
 		return true
 	default:
 		return false
@@ -304,24 +814,6 @@ func (e ListCatalogModelsParamsCapability) Valid() bool {
 	}
 }
 
-// Defines values for ListCatalogModelsParamsScope.
-const (
-	All      ListCatalogModelsParamsScope = "all"
-	Channels ListCatalogModelsParamsScope = "channels"
-)
-
-// Valid indicates whether the value is a known member of the ListCatalogModelsParamsScope enum.
-func (e ListCatalogModelsParamsScope) Valid() bool {
-	switch e {
-	case All:
-		return true
-	case Channels:
-		return true
-	default:
-		return false
-	}
-}
-
 // AdminStats defines model for AdminStats.
 type AdminStats struct {
 	Totals AdminTotals  `json:"totals"`
@@ -356,6 +848,17 @@ type Attachment struct {
 // the signal to fall back to initials.
 type AvatarUrl = string
 
+// BatchEvent The events of one commit, in order.
+type BatchEvent struct {
+	Events  []RunEvent         `json:"events"`
+	RunId   openapi_types.UUID `json:"runId"`
+	Type    BatchEventType     `json:"type"`
+	Version int64              `json:"version"`
+}
+
+// BatchEventType defines model for BatchEvent.Type.
+type BatchEventType string
+
 // BulkSkipReason `self` — the caller's own account, which cannot be demoted or disabled.
 // `not_found` — no such account.
 type BulkSkipReason string
@@ -385,18 +888,25 @@ type BulkUpdateUsersRequest struct {
 type CatalogModel struct {
 	Attachment bool `json:"attachment"`
 
-	// Channels The configured channels that can serve this model. Empty means the
-	// catalogue knows about it but nothing here can reach it.
+	// Channels The configured channels that have this model selected, disabled
+	// ones included — each entry's own `enabled` says which those are.
+	// Having it selected is what puts a model in this listing, so the
+	// array is never empty here and the catalogue alone never contributes
+	// a row.
 	Channels     *[]ModelChannel `json:"channels,omitempty"`
 	ContextLimit *int64          `json:"contextLimit,omitempty"`
-	Description  *string         `json:"description,omitempty"`
 
-	// Enabled Whether this installation has switched the model on.
+	// Defaults What the catalogue says, before the operator's settings.
+	Defaults    *ModelSettings `json:"defaults,omitempty"`
+	Description *string        `json:"description,omitempty"`
+
+	// Enabled Whether at least one enabled channel has this model selected.
 	Enabled bool    `json:"enabled"`
 	Family  *string `json:"family,omitempty"`
 
 	// InputCost USD per million input tokens.
 	InputCost       *float64  `json:"inputCost,omitempty"`
+	InputLimit      *int64    `json:"inputLimit,omitempty"`
 	InputModalities *[]string `json:"inputModalities,omitempty"`
 	Knowledge       *string   `json:"knowledge,omitempty"`
 	ModelId         string    `json:"modelId"`
@@ -406,12 +916,18 @@ type CatalogModel struct {
 	OutputCost       *float64  `json:"outputCost,omitempty"`
 	OutputLimit      *int64    `json:"outputLimit,omitempty"`
 	OutputModalities *[]string `json:"outputModalities,omitempty"`
-	ProviderId       string    `json:"providerId"`
-	ProviderName     string    `json:"providerName"`
-	Reasoning        bool      `json:"reasoning"`
-	ReleaseDate      *string   `json:"releaseDate,omitempty"`
-	StructuredOutput bool      `json:"structuredOutput"`
-	ToolCall         bool      `json:"toolCall"`
+
+	// Override The operator's settings for a model. Null follows the catalogue.
+	Override     *ModelOverride `json:"override,omitempty"`
+	ProviderId   string         `json:"providerId"`
+	ProviderName string         `json:"providerName"`
+	Reasoning    bool           `json:"reasoning"`
+	ReleaseDate  *string        `json:"releaseDate,omitempty"`
+
+	// Settings How the model is actually offered and called.
+	Settings         *ModelSettings `json:"settings,omitempty"`
+	StructuredOutput bool           `json:"structuredOutput"`
+	ToolCall         bool           `json:"toolCall"`
 }
 
 // CatalogModelPage defines model for CatalogModelPage.
@@ -487,8 +1003,21 @@ type Channel struct {
 	// carries the full table.
 	Type ChannelType `json:"type"`
 
-	// WireApi The protocol a channel type speaks. Three adapters, fifteen types.
+	// WireApi The protocol a channel type speaks. Three adapters serve every type.
 	WireApi WireApi `json:"wireApi"`
+}
+
+// ChannelConnection defines model for ChannelConnection.
+type ChannelConnection struct {
+	ApiKey  *string `json:"apiKey,omitempty"`
+	BaseUrl *string `json:"baseUrl,omitempty"`
+
+	// Type The vendor an operator picks. Most of these speak the OpenAI wire
+	// protocol and differ only in endpoint and branding — which is the point:
+	// choosing a protocol is a question the operator should not have to
+	// answer, so the type answers it for them. `GET /admin/channel-types`
+	// carries the full table.
+	Type ChannelType `json:"type"`
 }
 
 // ChannelModel defines model for ChannelModel.
@@ -517,6 +1046,18 @@ type ChannelModel struct {
 // model it actually serves.
 type ChannelModelSource string
 
+// ChannelModelInput defines model for ChannelModelInput.
+type ChannelModelInput struct {
+	DisplayName string `json:"displayName"`
+	ModelId     string `json:"modelId"`
+
+	// Source Manual entries survive refreshes even when the endpoint does not advertise them.
+	Source ChannelModelInputSource `json:"source"`
+}
+
+// ChannelModelInputSource Manual entries survive refreshes even when the endpoint does not advertise them.
+type ChannelModelInputSource string
+
 // ChannelModelRefresh defines model for ChannelModelRefresh.
 type ChannelModelRefresh struct {
 	Added int `json:"added"`
@@ -533,12 +1074,22 @@ type ChannelModelRefresh struct {
 // carries the full table.
 type ChannelType string
 
+// ChannelTypeGroup The tab the channel picker files a vendor under: the model makers
+// themselves, the platforms that host or route other people's models, and
+// servers the operator runs (plus the generic relay).
+type ChannelTypeGroup string
+
 // ChannelTypeInfo defines model for ChannelTypeInfo.
 type ChannelTypeInfo struct {
 	Doc *string `json:"doc,omitempty"`
 
 	// Endpoint The default base URL, empty for a type that has none to offer.
 	Endpoint string `json:"endpoint"`
+
+	// Group The tab the channel picker files a vendor under: the model makers
+	// themselves, the platforms that host or route other people's models, and
+	// servers the operator runs (plus the generic relay).
+	Group ChannelTypeGroup `json:"group"`
 
 	// IconId The brand mark, which is not always the type id: `anthropic` is
 	// drawn with the Claude mark. Empty when there is no brand to draw.
@@ -552,11 +1103,48 @@ type ChannelTypeInfo struct {
 	Id      ChannelType `json:"id"`
 	KeyHint string      `json:"keyHint"`
 
+	// KeyOptional Whether the endpoint is normally reached without a credential — a
+	// service on the operator's own machine. The form then lets a model
+	// list be fetched with the key left blank.
+	KeyOptional bool `json:"keyOptional"`
+
 	// Label A brand name, deliberately not translated — it reads the same in both locales.
 	Label string `json:"label"`
 
-	// WireApi The protocol a channel type speaks. Three adapters, fifteen types.
+	// WireApi The protocol a channel type speaks. Three adapters serve every type.
 	WireApi WireApi `json:"wireApi"`
+}
+
+// ChatFeatures defines model for ChatFeatures.
+type ChatFeatures struct {
+	WebSearch bool `json:"webSearch"`
+}
+
+// ChatModel defines model for ChatModel.
+type ChatModel struct {
+	Attachment bool `json:"attachment"`
+
+	// ContextLimit Zero when unknown.
+	ContextLimit int64  `json:"contextLimit"`
+	Family       string `json:"family"`
+
+	// Id What a conversation stores and a request names.
+	Id              string          `json:"id"`
+	InputModalities []InputModality `json:"inputModalities"`
+	Name            string          `json:"name"`
+
+	// OutputLimit Zero when unknown.
+	OutputLimit int64 `json:"outputLimit"`
+
+	// ProviderId The catalogue's brand for the model, for its icon. Empty when unknown.
+	ProviderId string `json:"providerId"`
+	Reasoning  bool   `json:"reasoning"`
+
+	// ReasoningEfforts The thinking levels this model offers, lowest first, besides
+	// `auto`. Empty for a model with no control over its thinking. What
+	// the operator allows, within what the model has.
+	ReasoningEfforts []ReasoningEffort `json:"reasoningEfforts"`
+	ToolCall         bool              `json:"toolCall"`
 }
 
 // Conversation defines model for Conversation.
@@ -564,8 +1152,25 @@ type Conversation struct {
 	CreatedAt time.Time          `json:"createdAt"`
 	Id        openapi_types.UUID `json:"id"`
 	Model     *string            `json:"model,omitempty"`
-	Title     string             `json:"title"`
-	UpdatedAt time.Time          `json:"updatedAt"`
+
+	// ReasoningEffort How hard a reasoning model thinks. `auto` sends nothing and leaves the
+	// model at its own default. The other values are the levels providers
+	// use; each model accepts its own subset, listed as
+	// `ChatModel.reasoningEfforts` (from models.dev). A level the model does
+	// not offer is dropped, which is the same as `auto`.
+	ReasoningEffort *ReasoningEffort `json:"reasoningEffort,omitempty"`
+	Title           string           `json:"title"`
+	UpdatedAt       time.Time        `json:"updatedAt"`
+
+	// WebSearch Whether the conversation's runs may use the web — search and page
+	// reading. On by default; the model decides when a question needs it.
+	// Has no effect where the server offers no web search.
+	WebSearch bool `json:"webSearch"`
+}
+
+// ConversationEvent One SSE frame of the events stream.
+type ConversationEvent struct {
+	union json.RawMessage
 }
 
 // ConversationPage defines model for ConversationPage.
@@ -576,11 +1181,13 @@ type ConversationPage struct {
 
 // CreateChannelRequest defines model for CreateChannelRequest.
 type CreateChannelRequest struct {
-	REMOVEProviderId *string `json:"REMOVE_providerId,omitempty"`
-	ApiKey           *string `json:"apiKey,omitempty"`
-	BaseUrl          *string `json:"baseUrl,omitempty"`
-	Enabled          *bool   `json:"enabled,omitempty"`
-	Name             string  `json:"name"`
+	ApiKey  *string `json:"apiKey,omitempty"`
+	BaseUrl *string `json:"baseUrl,omitempty"`
+	Enabled *bool   `json:"enabled,omitempty"`
+
+	// Models Selected models, created enabled in the same transaction as the channel.
+	Models *[]ChannelModelInput `json:"models,omitempty"`
+	Name   string               `json:"name"`
 
 	// Type The vendor an operator picks. Most of these speak the OpenAI wire
 	// protocol and differ only in endpoint and branding — which is the point:
@@ -588,22 +1195,50 @@ type CreateChannelRequest struct {
 	// answer, so the type answers it for them. `GET /admin/channel-types`
 	// carries the full table.
 	Type ChannelType `json:"type"`
-
-	// WireApi The protocol a channel type speaks. Three adapters, fifteen types.
-	WireApi *WireApi `json:"wireApi,omitempty"`
 }
 
 // CreateConversationRequest defines model for CreateConversationRequest.
 type CreateConversationRequest struct {
 	Model *string `json:"model,omitempty"`
-	Title *string `json:"title,omitempty"`
+
+	// ReasoningEffort How hard a reasoning model thinks. `auto` sends nothing and leaves the
+	// model at its own default. The other values are the levels providers
+	// use; each model accepts its own subset, listed as
+	// `ChatModel.reasoningEfforts` (from models.dev). A level the model does
+	// not offer is dropped, which is the same as `auto`.
+	ReasoningEffort *ReasoningEffort `json:"reasoningEffort,omitempty"`
+	Title           *string          `json:"title,omitempty"`
+	WebSearch       *bool            `json:"webSearch,omitempty"`
 }
 
 // CreateMessageRequest defines model for CreateMessageRequest.
 type CreateMessageRequest struct {
 	AttachmentIds *[]openapi_types.UUID `json:"attachmentIds,omitempty"`
 	Content       string                `json:"content"`
-	Model         *string               `json:"model,omitempty"`
+
+	// Model The model to answer with, which the conversation also remembers.
+	// Absent: the conversation's model, or the first one available.
+	Model *string `json:"model,omitempty"`
+
+	// ReasoningEffort For this run, and remembered by the conversation. Absent keeps the conversation's.
+	ReasoningEffort *ReasoningEffort `json:"reasoningEffort,omitempty"`
+
+	// RequestId Chosen by the client; a retry with the same id finds the same run.
+	RequestId *string `json:"requestId,omitempty"`
+
+	// WebSearch For this run, and remembered by the conversation. Absent keeps the conversation's.
+	WebSearch *bool `json:"webSearch,omitempty"`
+}
+
+// CreateMessageResponse defines model for CreateMessageResponse.
+type CreateMessageResponse struct {
+	// Message One immutable transcript row: a user's input, one model response, or
+	// one tool result. A reply that called tools is several rows sharing a
+	// `runId`.
+	Message Message `json:"message"`
+
+	// Run The work from one input to its final answer.
+	Run Run `json:"run"`
 }
 
 // CreateUploadRequest defines model for CreateUploadRequest.
@@ -637,6 +1272,15 @@ type Error struct {
 	Message string  `json:"message"`
 }
 
+// GenerationStartedEvent A request attempt began producing content; drop any partial from an earlier attempt.
+type GenerationStartedEvent struct {
+	Attempt int                        `json:"attempt"`
+	Type    GenerationStartedEventType `json:"type"`
+}
+
+// GenerationStartedEventType defines model for GenerationStartedEvent.Type.
+type GenerationStartedEventType string
+
 // Health defines model for Health.
 type Health struct {
 	Status  HealthStatus `json:"status"`
@@ -645,6 +1289,19 @@ type Health struct {
 
 // HealthStatus defines model for Health.Status.
 type HealthStatus string
+
+// InputModality What a model takes besides text.
+type InputModality string
+
+// LiveState A run's work in flight, which is not a message yet.
+type LiveState struct {
+	Generation *struct {
+		Attempt int           `json:"attempt"`
+		Parts   []MessagePart `json:"parts"`
+		Retry   *RetryInfo    `json:"retry,omitempty"`
+	} `json:"generation,omitempty"`
+	Tools *[]ToolSlot `json:"tools,omitempty"`
+}
 
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
@@ -655,21 +1312,59 @@ type LoginRequest struct {
 	Password   string `json:"password"`
 }
 
-// Message defines model for Message.
+// Message One immutable transcript row: a user's input, one model response, or
+// one tool result. A reply that called tools is several rows sharing a
+// `runId`.
 type Message struct {
-	Attachments    *[]Attachment      `json:"attachments,omitempty"`
+	Attachments *[]Attachment `json:"attachments,omitempty"`
+
+	// Content The text parts, concatenated. `parts` is the message.
 	Content        string             `json:"content"`
 	ConversationId openapi_types.UUID `json:"conversationId"`
 	CreatedAt      time.Time          `json:"createdAt"`
-	Id             openapi_types.UUID `json:"id"`
-	Role           Role               `json:"role"`
-	Status         MessageStatus      `json:"status"`
+
+	// ErrorCode Why a failed response failed. A code to localise, never provider text.
+	ErrorCode *string             `json:"errorCode,omitempty"`
+	Id        openapi_types.UUID  `json:"id"`
+	Model     *string             `json:"model,omitempty"`
+	Parts     []MessagePart       `json:"parts"`
+	Role      Role                `json:"role"`
+	RunId     *openapi_types.UUID `json:"runId,omitempty"`
+	Status    MessageStatus       `json:"status"`
+
+	// StopReason Assistant messages only. `error` and `cancelled` responses are shown
+	// but never sent back to a model.
+	StopReason *MessageStopReason `json:"stopReason,omitempty"`
+	Usage      *Usage             `json:"usage,omitempty"`
 }
+
+// MessageStopReason Assistant messages only. `error` and `cancelled` responses are shown
+// but never sent back to a model.
+type MessageStopReason string
+
+// MessageAppendedEvent A row was written. An assistant row replaces the partial being built.
+type MessageAppendedEvent struct {
+	// Message One immutable transcript row: a user's input, one model response, or
+	// one tool result. A reply that called tools is several rows sharing a
+	// `runId`.
+	Message Message                  `json:"message"`
+	Type    MessageAppendedEventType `json:"type"`
+}
+
+// MessageAppendedEventType defines model for MessageAppendedEvent.Type.
+type MessageAppendedEventType string
 
 // MessagePage defines model for MessagePage.
 type MessagePage struct {
 	Items      []Message `json:"items"`
 	NextCursor *string   `json:"nextCursor,omitempty"`
+}
+
+// MessagePart One content block, in OpenChat's internal protocol (`internal/llm`):
+// every upstream format is translated into these by its adapter, so a
+// client renders one shape whatever the model behind it.
+type MessagePart struct {
+	union json.RawMessage
 }
 
 // MessageStatus defines model for MessageStatus.
@@ -683,6 +1378,105 @@ type ModelChannel struct {
 	Name    string             `json:"name"`
 }
 
+// ModelKind What a model is for. Only `text` models are offered in chat.
+type ModelKind string
+
+// ModelOverride The operator's settings for a model. Null follows the catalogue.
+type ModelOverride struct {
+	ContextLimit    *int64           `json:"contextLimit,omitempty"`
+	InputLimit      *int64           `json:"inputLimit,omitempty"`
+	InputModalities *[]InputModality `json:"inputModalities,omitempty"`
+	Kind            *ModelKind       `json:"kind,omitempty"`
+	OutputLimit     *int64           `json:"outputLimit,omitempty"`
+	Reasoning       *bool            `json:"reasoning,omitempty"`
+
+	// ReasoningEfforts The levels people may choose. Null offers every level the model
+	// has; empty offers none. `auto` is always available and is not
+	// listed.
+	ReasoningEfforts *[]ReasoningEffort `json:"reasoningEfforts,omitempty"`
+	ToolCall         *bool              `json:"toolCall,omitempty"`
+}
+
+// ModelSettings defines model for ModelSettings.
+type ModelSettings struct {
+	// ContextLimit Zero when unknown.
+	ContextLimit int64 `json:"contextLimit"`
+
+	// InputLimit Zero when unknown.
+	InputLimit      int64           `json:"inputLimit"`
+	InputModalities []InputModality `json:"inputModalities"`
+
+	// Kind What a model is for. Only `text` models are offered in chat.
+	Kind ModelKind `json:"kind"`
+
+	// OutputLimit Zero when unknown.
+	OutputLimit int64 `json:"outputLimit"`
+	Reasoning   bool  `json:"reasoning"`
+
+	// ReasoningEfforts The thinking levels offered, lowest first, besides `auto`. In
+	// `defaults`, every level the model has.
+	ReasoningEfforts []ReasoningEffort `json:"reasoningEfforts"`
+	ToolCall         bool              `json:"toolCall"`
+}
+
+// PartDeltaEvent Text for a text or reasoning part, raw argument JSON for a tool call.
+type PartDeltaEvent struct {
+	Delta string             `json:"delta"`
+	Index int                `json:"index"`
+	Type  PartDeltaEventType `json:"type"`
+}
+
+// PartDeltaEventType defines model for PartDeltaEvent.Type.
+type PartDeltaEventType string
+
+// PartEndedEvent defines model for PartEndedEvent.
+type PartEndedEvent struct {
+	Index int `json:"index"`
+
+	// Part One content block, in OpenChat's internal protocol (`internal/llm`):
+	// every upstream format is translated into these by its adapter, so a
+	// client renders one shape whatever the model behind it.
+	Part MessagePart        `json:"part"`
+	Type PartEndedEventType `json:"type"`
+}
+
+// PartEndedEventType defines model for PartEndedEvent.Type.
+type PartEndedEventType string
+
+// PartStartedEvent defines model for PartStartedEvent.
+type PartStartedEvent struct {
+	Index int `json:"index"`
+
+	// Part One content block, in OpenChat's internal protocol (`internal/llm`):
+	// every upstream format is translated into these by its adapter, so a
+	// client renders one shape whatever the model behind it.
+	Part MessagePart          `json:"part"`
+	Type PartStartedEventType `json:"type"`
+}
+
+// PartStartedEventType defines model for PartStartedEvent.Type.
+type PartStartedEventType string
+
+// ReasoningEffort How hard a reasoning model thinks. `auto` sends nothing and leaves the
+// model at its own default. The other values are the levels providers
+// use; each model accepts its own subset, listed as
+// `ChatModel.reasoningEfforts` (from models.dev). A level the model does
+// not offer is dropped, which is the same as `auto`.
+type ReasoningEffort string
+
+// ReasoningPart defines model for ReasoningPart.
+type ReasoningPart struct {
+	// DurationMs How long the model spent on this reasoning, from its first token to its last. Absent when it was not timed (older replies), and while the reasoning is still streaming.
+	DurationMs *int64 `json:"durationMs,omitempty"`
+
+	// Text Empty when the provider withheld or encrypted its reasoning.
+	Text string            `json:"text"`
+	Type ReasoningPartType `json:"type"`
+}
+
+// ReasoningPartType defines model for ReasoningPart.Type.
+type ReasoningPartType string
+
 // RegisterRequest defines model for RegisterRequest.
 type RegisterRequest struct {
 	Email openapi_types.Email `json:"email"`
@@ -694,8 +1488,77 @@ type RegisterRequest struct {
 	Password string   `json:"password"`
 }
 
+// RetryInfo defines model for RetryInfo.
+type RetryInfo struct {
+	At        time.Time `json:"at"`
+	ErrorCode string    `json:"errorCode"`
+}
+
+// RetryScheduledEvent defines model for RetryScheduledEvent.
+type RetryScheduledEvent struct {
+	At        time.Time               `json:"at"`
+	Attempt   int                     `json:"attempt"`
+	ErrorCode string                  `json:"errorCode"`
+	Type      RetryScheduledEventType `json:"type"`
+}
+
+// RetryScheduledEventType defines model for RetryScheduledEvent.Type.
+type RetryScheduledEventType string
+
 // Role defines model for Role.
 type Role string
+
+// Run The work from one input to its final answer.
+type Run struct {
+	ConversationId openapi_types.UUID `json:"conversationId"`
+	CreatedAt      time.Time          `json:"createdAt"`
+	ErrorCode      *string            `json:"errorCode,omitempty"`
+	FinishedAt     *time.Time         `json:"finishedAt,omitempty"`
+	Id             openapi_types.UUID `json:"id"`
+	Model          string             `json:"model"`
+
+	// ReasoningEffort How hard a reasoning model thinks. `auto` sends nothing and leaves the
+	// model at its own default. The other values are the levels providers
+	// use; each model accepts its own subset, listed as
+	// `ChatModel.reasoningEfforts` (from models.dev). A level the model does
+	// not offer is dropped, which is the same as `auto`.
+	ReasoningEffort *ReasoningEffort `json:"reasoningEffort,omitempty"`
+	Status          RunStatus        `json:"status"`
+
+	// Version Bumped by every change; see the events stream.
+	Version int64 `json:"version"`
+}
+
+// RunStatus defines model for Run.Status.
+type RunStatus string
+
+// RunEvent defines model for RunEvent.
+type RunEvent struct {
+	union json.RawMessage
+}
+
+// RunFinishedEvent defines model for RunFinishedEvent.
+type RunFinishedEvent struct {
+	// Run The work from one input to its final answer.
+	Run  Run                  `json:"run"`
+	Type RunFinishedEventType `json:"type"`
+}
+
+// RunFinishedEventType defines model for RunFinishedEvent.Type.
+type RunFinishedEventType string
+
+// RunStartedEvent defines model for RunStartedEvent.
+type RunStartedEvent struct {
+	// Message The input that started the run.
+	Message Message `json:"message"`
+
+	// Run The work from one input to its final answer.
+	Run  Run                 `json:"run"`
+	Type RunStartedEventType `json:"type"`
+}
+
+// RunStartedEventType defines model for RunStartedEvent.Type.
+type RunStartedEventType string
 
 // SessionUser defines model for SessionUser.
 type SessionUser struct {
@@ -713,46 +1576,69 @@ type SessionUser struct {
 	Role      UserRole            `json:"role"`
 }
 
-// StreamDelta defines model for StreamDelta.
-type StreamDelta struct {
-	Text string          `json:"text"`
-	Type StreamDeltaType `json:"type"`
+// SnapshotEvent Replaces everything a client holds about runs in flight.
+type SnapshotEvent struct {
+	// Live A run's work in flight, which is not a message yet.
+	Live *LiveState `json:"live,omitempty"`
+
+	// Messages Every message the active run has written, its input first.
+	Messages []Message `json:"messages"`
+
+	// Run The active run; absent when the conversation is idle.
+	Run  *Run              `json:"run,omitempty"`
+	Type SnapshotEventType `json:"type"`
 }
 
-// StreamDeltaType defines model for StreamDelta.Type.
-type StreamDeltaType string
+// SnapshotEventType defines model for SnapshotEvent.Type.
+type SnapshotEventType string
 
-// StreamDone defines model for StreamDone.
-type StreamDone struct {
-	Message Message        `json:"message"`
-	Type    StreamDoneType `json:"type"`
+// StorageDriver Where new uploads go.
+type StorageDriver string
+
+// StorageS3Settings defines model for StorageS3Settings.
+type StorageS3Settings struct {
+	AccessKeyId string `json:"accessKeyId"`
+	Bucket      string `json:"bucket"`
+
+	// Endpoint The service's base URL (MinIO, R2, ...). Empty is AWS itself.
+	Endpoint string `json:"endpoint"`
+
+	// PathStyle Address the bucket in the URL path rather than the host name. MinIO needs it.
+	PathStyle bool   `json:"pathStyle"`
+	Region    string `json:"region"`
+
+	// SecretKeyPreview The secret's last four characters, e.g. `…4f2a`.
+	SecretKeyPreview *string `json:"secretKeyPreview,omitempty"`
+
+	// SecretKeySet Whether a secret access key is stored. Write-only, like a channel's key.
+	SecretKeySet bool `json:"secretKeySet"`
 }
 
-// StreamDoneType defines model for StreamDone.Type.
-type StreamDoneType string
+// StorageSettings defines model for StorageSettings.
+type StorageSettings struct {
+	// Driver Where new uploads go.
+	Driver StorageDriver `json:"driver"`
 
-// StreamError defines model for StreamError.
-type StreamError struct {
-	Error Error           `json:"error"`
-	Type  StreamErrorType `json:"type"`
+	// LocalDir The local driver's directory, as entered. Relative paths are relative to the server's working directory.
+	LocalDir string `json:"localDir"`
+
+	// PublicUrl The origin the local driver's URLs are issued under. Empty issues
+	// them relative, which is right when the web app and the API share an
+	// origin.
+	PublicUrl string `json:"publicUrl"`
+
+	// ResolvedLocalDir The `localDir` as an absolute path on the server.
+	ResolvedLocalDir string            `json:"resolvedLocalDir"`
+	S3               StorageS3Settings `json:"s3"`
 }
 
-// StreamErrorType defines model for StreamError.Type.
-type StreamErrorType string
-
-// StreamEvent One SSE frame emitted by createMessage.
-type StreamEvent struct {
-	union json.RawMessage
+// StorageTestResult defines model for StorageTestResult.
+type StorageTestResult struct {
+	// Error Why the probe failed, in English, when it did.
+	Error     *string `json:"error,omitempty"`
+	LatencyMs int64   `json:"latencyMs"`
+	Ok        bool    `json:"ok"`
 }
-
-// StreamStart defines model for StreamStart.
-type StreamStart struct {
-	MessageId openapi_types.UUID `json:"messageId"`
-	Type      StreamStartType    `json:"type"`
-}
-
-// StreamStartType defines model for StreamStart.Type.
-type StreamStartType string
 
 // SystemSettings defines model for SystemSettings.
 type SystemSettings struct {
@@ -760,7 +1646,86 @@ type SystemSettings struct {
 	// no restart — and persists across one, because the fault worth
 	// chasing is usually the intermittent kind.
 	DebugLogging bool `json:"debugLogging"`
+
+	// GenerativeUi Whether models are taught to answer with interface components
+	// (`openchat-ui` blocks). Off by default: the catalogue adds a few
+	// thousand tokens to every request's system prompt.
+	GenerativeUi bool `json:"generativeUi"`
 }
+
+// TextPart defines model for TextPart.
+type TextPart struct {
+	Text string       `json:"text"`
+	Type TextPartType `json:"type"`
+}
+
+// TextPartType defines model for TextPart.Type.
+type TextPartType string
+
+// ToolCallPart defines model for ToolCallPart.
+type ToolCallPart struct {
+	// Arguments Absent while streaming, and when what the model sent was not valid JSON.
+	Arguments    *map[string]interface{} `json:"arguments,omitempty"`
+	Id           string                  `json:"id"`
+	Name         string                  `json:"name"`
+	RawArguments string                  `json:"rawArguments"`
+	Type         ToolCallPartType        `json:"type"`
+}
+
+// ToolCallPartType defines model for ToolCallPart.Type.
+type ToolCallPartType string
+
+// ToolFinishedEvent defines model for ToolFinishedEvent.
+type ToolFinishedEvent struct {
+	CallId    string                `json:"callId"`
+	MessageId openapi_types.UUID    `json:"messageId"`
+	Type      ToolFinishedEventType `json:"type"`
+}
+
+// ToolFinishedEventType defines model for ToolFinishedEvent.Type.
+type ToolFinishedEventType string
+
+// ToolResultPart defines model for ToolResultPart.
+type ToolResultPart struct {
+	CallId string `json:"callId"`
+
+	// Content What the model read.
+	Content string `json:"content"`
+
+	// Details Tool-specific data for display, such as a search's results.
+	Details    *map[string]interface{} `json:"details,omitempty"`
+	DurationMs *int64                  `json:"durationMs,omitempty"`
+	Name       string                  `json:"name"`
+	Status     ToolResultPartStatus    `json:"status"`
+	Type       ToolResultPartType      `json:"type"`
+}
+
+// ToolResultPartStatus defines model for ToolResultPart.Status.
+type ToolResultPartStatus string
+
+// ToolResultPartType defines model for ToolResultPart.Type.
+type ToolResultPartType string
+
+// ToolSlot defines model for ToolSlot.
+type ToolSlot struct {
+	CallId    string              `json:"callId"`
+	MessageId *openapi_types.UUID `json:"messageId,omitempty"`
+	Name      string              `json:"name"`
+	Status    ToolSlotStatus      `json:"status"`
+}
+
+// ToolSlotStatus defines model for ToolSlot.Status.
+type ToolSlotStatus string
+
+// ToolStartedEvent defines model for ToolStartedEvent.
+type ToolStartedEvent struct {
+	CallId string               `json:"callId"`
+	Name   string               `json:"name"`
+	Type   ToolStartedEventType `json:"type"`
+}
+
+// ToolStartedEventType defines model for ToolStartedEvent.Type.
+type ToolStartedEventType string
 
 // TrendPoint defines model for TrendPoint.
 type TrendPoint struct {
@@ -790,7 +1755,17 @@ type UpdateChannelRequest struct {
 
 // UpdateConversationRequest defines model for UpdateConversationRequest.
 type UpdateConversationRequest struct {
-	Title *string `json:"title,omitempty"`
+	// Model The model the conversation's next run uses.
+	Model *string `json:"model,omitempty"`
+
+	// ReasoningEffort How hard a reasoning model thinks. `auto` sends nothing and leaves the
+	// model at its own default. The other values are the levels providers
+	// use; each model accepts its own subset, listed as
+	// `ChatModel.reasoningEfforts` (from models.dev). A level the model does
+	// not offer is dropped, which is the same as `auto`.
+	ReasoningEffort *ReasoningEffort `json:"reasoningEffort,omitempty"`
+	Title           *string          `json:"title,omitempty"`
+	WebSearch       *bool            `json:"webSearch,omitempty"`
 }
 
 // UpdateMeRequest Only the fields present are changed.
@@ -803,9 +1778,35 @@ type UpdateMeRequest struct {
 	Name *Username `json:"name,omitempty"`
 }
 
+// UpdateStorageS3Settings Only the fields present are changed.
+type UpdateStorageS3Settings struct {
+	AccessKeyId *string `json:"accessKeyId,omitempty"`
+	Bucket      *string `json:"bucket,omitempty"`
+	Endpoint    *string `json:"endpoint,omitempty"`
+	PathStyle   *bool   `json:"pathStyle,omitempty"`
+	Region      *string `json:"region,omitempty"`
+
+	// SecretAccessKey The secret access key. Absent keeps the stored one; empty removes it.
+	SecretAccessKey *string `json:"secretAccessKey,omitempty"`
+}
+
+// UpdateStorageSettingsRequest Only the fields present are changed.
+type UpdateStorageSettingsRequest struct {
+	// Driver Where new uploads go.
+	Driver   *StorageDriver `json:"driver,omitempty"`
+	LocalDir *string        `json:"localDir,omitempty"`
+
+	// PublicUrl An http(s) origin with no path. Empty removes it.
+	PublicUrl *string `json:"publicUrl,omitempty"`
+
+	// S3 Only the fields present are changed.
+	S3 *UpdateStorageS3Settings `json:"s3,omitempty"`
+}
+
 // UpdateSystemSettingsRequest Only the fields present are changed.
 type UpdateSystemSettingsRequest struct {
 	DebugLogging *bool `json:"debugLogging,omitempty"`
+	GenerativeUi *bool `json:"generativeUi,omitempty"`
 }
 
 // UpdateUserRequest Only the fields present are changed. Setting `password` signs the
@@ -823,12 +1824,47 @@ type UpdateUserRequest struct {
 	Role     *UserRole `json:"role,omitempty"`
 }
 
+// UpdateWebSearchSettingsRequest Only the fields present are changed.
+type UpdateWebSearchSettingsRequest struct {
+	// ApiKey The search service's API key. Empty removes the stored one.
+	ApiKey    *string   `json:"apiKey,omitempty"`
+	Blocklist *[]string `json:"blocklist,omitempty"`
+
+	// Compression What a result gives the model, and so how much of its context a search
+	// costs. `snippet` is the search service's own excerpt. `truncate` is the
+	// page's text cut to `truncateLength` characters. `none` is the page's
+	// text whole, still bounded by a hard ceiling per result.
+	Compression *WebSearchCompression `json:"compression,omitempty"`
+
+	// Depth Tavily's search depth. `advanced` finds more relevant excerpts and
+	// costs two credits a search instead of one.
+	Depth      *WebSearchDepth `json:"depth,omitempty"`
+	Enabled    *bool           `json:"enabled,omitempty"`
+	MaxResults *int            `json:"maxResults,omitempty"`
+
+	// Provider The search service. `free` takes the keyless public tiers of Exa,
+	// Parallel, Firecrawl and Keenable in turn, moving to the next when one
+	// is rate-limiting or failing; it needs no key and suits light use.
+	// `tavily` is Tavily's API with the stored key.
+	Provider       *WebSearchProvider `json:"provider,omitempty"`
+	TruncateLength *int               `json:"truncateLength,omitempty"`
+}
+
 // Upload defines model for Upload.
 type Upload struct {
 	ExpiresAt time.Time          `json:"expiresAt"`
 	Id        openapi_types.UUID `json:"id"`
 	UploadUrl string             `json:"uploadUrl"`
 	Url       string             `json:"url"`
+}
+
+// Usage defines model for Usage.
+type Usage struct {
+	CacheReadTokens  *int `json:"cacheReadTokens,omitempty"`
+	CacheWriteTokens *int `json:"cacheWriteTokens,omitempty"`
+	InputTokens      int  `json:"inputTokens"`
+	OutputTokens     int  `json:"outputTokens"`
+	ReasoningTokens  *int `json:"reasoningTokens,omitempty"`
 }
 
 // User defines model for User.
@@ -866,7 +1902,97 @@ type UserRole string
 // collide, one account's username would shadow another's address.
 type Username = string
 
-// WireApi The protocol a channel type speaks. Three adapters, fifteen types.
+// WebSearchCompression What a result gives the model, and so how much of its context a search
+// costs. `snippet` is the search service's own excerpt. `truncate` is the
+// page's text cut to `truncateLength` characters. `none` is the page's
+// text whole, still bounded by a hard ceiling per result.
+type WebSearchCompression string
+
+// WebSearchDepth Tavily's search depth. `advanced` finds more relevant excerpts and
+// costs two credits a search instead of one.
+type WebSearchDepth string
+
+// WebSearchProvider The search service. `free` takes the keyless public tiers of Exa,
+// Parallel, Firecrawl and Keenable in turn, moving to the next when one
+// is rate-limiting or failing; it needs no key and suits light use.
+// `tavily` is Tavily's API with the stored key.
+type WebSearchProvider string
+
+// WebSearchSettings defines model for WebSearchSettings.
+type WebSearchSettings struct {
+	// Blocklist Sites no search returns and web_fetch refuses to read. One rule per
+	// entry: a domain (`example.com`, which covers its subdomains), a
+	// wildcard (`*.example.com`), or a regular expression between slashes
+	// (`/\.pdf$/`) matched against the whole URL.
+	Blocklist []string `json:"blocklist"`
+
+	// Compression What a result gives the model, and so how much of its context a search
+	// costs. `snippet` is the search service's own excerpt. `truncate` is the
+	// page's text cut to `truncateLength` characters. `none` is the page's
+	// text whole, still bounded by a hard ceiling per result.
+	Compression WebSearchCompression `json:"compression"`
+
+	// Depth Tavily's search depth. `advanced` finds more relevant excerpts and
+	// costs two credits a search instead of one.
+	Depth WebSearchDepth `json:"depth"`
+
+	// Enabled Whether runs are offered the web_search tool. Tavily also needs a
+	// stored key; without one the tool is not offered.
+	Enabled bool `json:"enabled"`
+
+	// KeyPreview The key's last four characters, e.g. `…4f2a`.
+	KeyPreview *string `json:"keyPreview,omitempty"`
+
+	// KeySet Whether an API key is stored. Write-only, like a channel's.
+	KeySet bool `json:"keySet"`
+
+	// MaxResults Results per search. A model may ask for fewer, never more.
+	MaxResults int `json:"maxResults"`
+
+	// Provider The search service. `free` takes the keyless public tiers of Exa,
+	// Parallel, Firecrawl and Keenable in turn, moving to the next when one
+	// is rate-limiting or failing; it needs no key and suits light use.
+	// `tavily` is Tavily's API with the stored key.
+	Provider WebSearchProvider `json:"provider"`
+
+	// TruncateLength Characters kept per result under `truncate`.
+	TruncateLength int `json:"truncateLength"`
+}
+
+// WebSearchTestHit defines model for WebSearchTestHit.
+type WebSearchTestHit struct {
+	Content string `json:"content"`
+	Title   string `json:"title"`
+	Url     string `json:"url"`
+}
+
+// WebSearchTestRequest defines model for WebSearchTestRequest.
+type WebSearchTestRequest struct {
+	// ApiKey A key to try before saving it. The stored key when absent.
+	ApiKey *string `json:"apiKey,omitempty"`
+
+	// Query What to search for. A fixed query when absent.
+	Query *string `json:"query,omitempty"`
+}
+
+// WebSearchTestResult defines model for WebSearchTestResult.
+type WebSearchTestResult struct {
+	// Blocked Results the blocklist removed.
+	Blocked *int `json:"blocked,omitempty"`
+
+	// Error Why the search failed, in English, when it did.
+	Error     *string `json:"error,omitempty"`
+	LatencyMs int64   `json:"latencyMs"`
+	Ok        bool    `json:"ok"`
+
+	// Results What the model would have been given, after the blocklist.
+	Results []WebSearchTestHit `json:"results"`
+
+	// ServedBy Which service answered, for the free search (exa, parallel, firecrawl, keenable).
+	ServedBy *string `json:"servedBy,omitempty"`
+}
+
+// WireApi The protocol a channel type speaks. Three adapters serve every type.
 type WireApi string
 
 // ConversationId defines model for ConversationId.
@@ -890,21 +2016,12 @@ type ListCatalogModelsParams struct {
 	// Capability Only models with all of these.
 	Capability *[]ListCatalogModelsParamsCapability `form:"capability,omitempty" json:"capability,omitempty"`
 
-	// Enabled Restrict to models that are, or are not, switched on here.
+	// Enabled Whether at least one channel with this model selected is enabled.
 	Enabled *bool `form:"enabled,omitempty" json:"enabled,omitempty"`
-
-	// Scope `channels` (the default) lists only models a configured channel can
-	// actually reach — which is what an operator means by "our models".
-	// `all` browses the whole upstream catalogue, which is where you go to
-	// find out what a provider offers before adding a channel for it.
-	Scope *ListCatalogModelsParamsScope `form:"scope,omitempty" json:"scope,omitempty"`
 }
 
 // ListCatalogModelsParamsCapability defines parameters for ListCatalogModels.
 type ListCatalogModelsParamsCapability string
-
-// ListCatalogModelsParamsScope defines parameters for ListCatalogModels.
-type ListCatalogModelsParamsScope string
 
 // AddChannelModelJSONBody defines parameters for AddChannelModel.
 type AddChannelModelJSONBody struct {
@@ -946,6 +2063,9 @@ type ListMessagesParams struct {
 // CreateChannelJSONRequestBody defines body for CreateChannel for application/json ContentType.
 type CreateChannelJSONRequestBody = CreateChannelRequest
 
+// PreviewChannelModelsJSONRequestBody defines body for PreviewChannelModels for application/json ContentType.
+type PreviewChannelModelsJSONRequestBody = ChannelConnection
+
 // UpdateChannelJSONRequestBody defines body for UpdateChannel for application/json ContentType.
 type UpdateChannelJSONRequestBody = UpdateChannelRequest
 
@@ -954,6 +2074,15 @@ type AddChannelModelJSONRequestBody AddChannelModelJSONBody
 
 // UpdateChannelModelJSONRequestBody defines body for UpdateChannelModel for application/json ContentType.
 type UpdateChannelModelJSONRequestBody UpdateChannelModelJSONBody
+
+// UpdateModelSettingsJSONRequestBody defines body for UpdateModelSettings for application/json ContentType.
+type UpdateModelSettingsJSONRequestBody = ModelOverride
+
+// UpdateStorageSettingsJSONRequestBody defines body for UpdateStorageSettings for application/json ContentType.
+type UpdateStorageSettingsJSONRequestBody = UpdateStorageSettingsRequest
+
+// TestStorageJSONRequestBody defines body for TestStorage for application/json ContentType.
+type TestStorageJSONRequestBody = UpdateStorageSettingsRequest
 
 // UpdateSystemSettingsJSONRequestBody defines body for UpdateSystemSettings for application/json ContentType.
 type UpdateSystemSettingsJSONRequestBody = UpdateSystemSettingsRequest
@@ -966,6 +2095,12 @@ type BulkUpdateUsersJSONRequestBody = BulkUpdateUsersRequest
 
 // UpdateUserJSONRequestBody defines body for UpdateUser for application/json ContentType.
 type UpdateUserJSONRequestBody = UpdateUserRequest
+
+// UpdateWebSearchSettingsJSONRequestBody defines body for UpdateWebSearchSettings for application/json ContentType.
+type UpdateWebSearchSettingsJSONRequestBody = UpdateWebSearchSettingsRequest
+
+// TestWebSearchJSONRequestBody defines body for TestWebSearch for application/json ContentType.
+type TestWebSearchJSONRequestBody = WebSearchTestRequest
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
@@ -991,31 +2126,31 @@ type CreateMessageJSONRequestBody = CreateMessageRequest
 // CreateUploadJSONRequestBody defines body for CreateUpload for application/json ContentType.
 type CreateUploadJSONRequestBody = CreateUploadRequest
 
-// AsStreamStart returns the union data inside the StreamEvent as a StreamStart
-func (t StreamEvent) AsStreamStart() (StreamStart, error) {
-	var body StreamStart
+// AsSnapshotEvent returns the union data inside the ConversationEvent as a SnapshotEvent
+func (t ConversationEvent) AsSnapshotEvent() (SnapshotEvent, error) {
+	var body SnapshotEvent
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromStreamStart overwrites any union data inside the StreamEvent as the provided StreamStart
-func (t *StreamEvent) FromStreamStart(v StreamStart) error {
+// FromSnapshotEvent overwrites any union data inside the ConversationEvent as the provided SnapshotEvent
+func (t *ConversationEvent) FromSnapshotEvent(v SnapshotEvent) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"start"}`))
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"snapshot"}`))
 	t.union = b
 	return err
 }
 
-// MergeStreamStart performs a merge with any union data inside the StreamEvent, using the provided StreamStart
-func (t *StreamEvent) MergeStreamStart(v StreamStart) error {
+// MergeSnapshotEvent performs a merge with any union data inside the ConversationEvent, using the provided SnapshotEvent
+func (t *ConversationEvent) MergeSnapshotEvent(v SnapshotEvent) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"start"}`))
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"snapshot"}`))
 	if err != nil {
 		return err
 	}
@@ -1025,31 +2160,31 @@ func (t *StreamEvent) MergeStreamStart(v StreamStart) error {
 	return err
 }
 
-// AsStreamDelta returns the union data inside the StreamEvent as a StreamDelta
-func (t StreamEvent) AsStreamDelta() (StreamDelta, error) {
-	var body StreamDelta
+// AsBatchEvent returns the union data inside the ConversationEvent as a BatchEvent
+func (t ConversationEvent) AsBatchEvent() (BatchEvent, error) {
+	var body BatchEvent
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromStreamDelta overwrites any union data inside the StreamEvent as the provided StreamDelta
-func (t *StreamEvent) FromStreamDelta(v StreamDelta) error {
+// FromBatchEvent overwrites any union data inside the ConversationEvent as the provided BatchEvent
+func (t *ConversationEvent) FromBatchEvent(v BatchEvent) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"delta"}`))
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"batch"}`))
 	t.union = b
 	return err
 }
 
-// MergeStreamDelta performs a merge with any union data inside the StreamEvent, using the provided StreamDelta
-func (t *StreamEvent) MergeStreamDelta(v StreamDelta) error {
+// MergeBatchEvent performs a merge with any union data inside the ConversationEvent, using the provided BatchEvent
+func (t *ConversationEvent) MergeBatchEvent(v BatchEvent) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"delta"}`))
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"batch"}`))
 	if err != nil {
 		return err
 	}
@@ -1059,75 +2194,7 @@ func (t *StreamEvent) MergeStreamDelta(v StreamDelta) error {
 	return err
 }
 
-// AsStreamDone returns the union data inside the StreamEvent as a StreamDone
-func (t StreamEvent) AsStreamDone() (StreamDone, error) {
-	var body StreamDone
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromStreamDone overwrites any union data inside the StreamEvent as the provided StreamDone
-func (t *StreamEvent) FromStreamDone(v StreamDone) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"done"}`))
-	t.union = b
-	return err
-}
-
-// MergeStreamDone performs a merge with any union data inside the StreamEvent, using the provided StreamDone
-func (t *StreamEvent) MergeStreamDone(v StreamDone) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"done"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsStreamError returns the union data inside the StreamEvent as a StreamError
-func (t StreamEvent) AsStreamError() (StreamError, error) {
-	var body StreamError
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromStreamError overwrites any union data inside the StreamEvent as the provided StreamError
-func (t *StreamEvent) FromStreamError(v StreamError) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"error"}`))
-	t.union = b
-	return err
-}
-
-// MergeStreamError performs a merge with any union data inside the StreamEvent, using the provided StreamError
-func (t *StreamEvent) MergeStreamError(v StreamError) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"error"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t StreamEvent) Discriminator() (string, error) {
+func (t ConversationEvent) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"type"`
 	}
@@ -1135,31 +2202,589 @@ func (t StreamEvent) Discriminator() (string, error) {
 	return discriminator.Discriminator, err
 }
 
-func (t StreamEvent) ValueByDiscriminator() (interface{}, error) {
+func (t ConversationEvent) ValueByDiscriminator() (interface{}, error) {
 	discriminator, err := t.Discriminator()
 	if err != nil {
 		return nil, err
 	}
 	switch discriminator {
-	case "delta":
-		return t.AsStreamDelta()
-	case "done":
-		return t.AsStreamDone()
-	case "error":
-		return t.AsStreamError()
-	case "start":
-		return t.AsStreamStart()
+	case "batch":
+		return t.AsBatchEvent()
+	case "snapshot":
+		return t.AsSnapshotEvent()
 	default:
 		return nil, errors.New("unknown discriminator value: " + discriminator)
 	}
 }
 
-func (t StreamEvent) MarshalJSON() ([]byte, error) {
+func (t ConversationEvent) MarshalJSON() ([]byte, error) {
 	b, err := t.union.MarshalJSON()
 	return b, err
 }
 
-func (t *StreamEvent) UnmarshalJSON(b []byte) error {
+func (t *ConversationEvent) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsTextPart returns the union data inside the MessagePart as a TextPart
+func (t MessagePart) AsTextPart() (TextPart, error) {
+	var body TextPart
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTextPart overwrites any union data inside the MessagePart as the provided TextPart
+func (t *MessagePart) FromTextPart(v TextPart) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"text"}`))
+	t.union = b
+	return err
+}
+
+// MergeTextPart performs a merge with any union data inside the MessagePart, using the provided TextPart
+func (t *MessagePart) MergeTextPart(v TextPart) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"text"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsReasoningPart returns the union data inside the MessagePart as a ReasoningPart
+func (t MessagePart) AsReasoningPart() (ReasoningPart, error) {
+	var body ReasoningPart
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromReasoningPart overwrites any union data inside the MessagePart as the provided ReasoningPart
+func (t *MessagePart) FromReasoningPart(v ReasoningPart) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"reasoning"}`))
+	t.union = b
+	return err
+}
+
+// MergeReasoningPart performs a merge with any union data inside the MessagePart, using the provided ReasoningPart
+func (t *MessagePart) MergeReasoningPart(v ReasoningPart) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"reasoning"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsToolCallPart returns the union data inside the MessagePart as a ToolCallPart
+func (t MessagePart) AsToolCallPart() (ToolCallPart, error) {
+	var body ToolCallPart
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromToolCallPart overwrites any union data inside the MessagePart as the provided ToolCallPart
+func (t *MessagePart) FromToolCallPart(v ToolCallPart) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"tool_call"}`))
+	t.union = b
+	return err
+}
+
+// MergeToolCallPart performs a merge with any union data inside the MessagePart, using the provided ToolCallPart
+func (t *MessagePart) MergeToolCallPart(v ToolCallPart) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"tool_call"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsToolResultPart returns the union data inside the MessagePart as a ToolResultPart
+func (t MessagePart) AsToolResultPart() (ToolResultPart, error) {
+	var body ToolResultPart
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromToolResultPart overwrites any union data inside the MessagePart as the provided ToolResultPart
+func (t *MessagePart) FromToolResultPart(v ToolResultPart) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"tool_result"}`))
+	t.union = b
+	return err
+}
+
+// MergeToolResultPart performs a merge with any union data inside the MessagePart, using the provided ToolResultPart
+func (t *MessagePart) MergeToolResultPart(v ToolResultPart) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"tool_result"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t MessagePart) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"type"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t MessagePart) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "reasoning":
+		return t.AsReasoningPart()
+	case "text":
+		return t.AsTextPart()
+	case "tool_call":
+		return t.AsToolCallPart()
+	case "tool_result":
+		return t.AsToolResultPart()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t MessagePart) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *MessagePart) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsRunStartedEvent returns the union data inside the RunEvent as a RunStartedEvent
+func (t RunEvent) AsRunStartedEvent() (RunStartedEvent, error) {
+	var body RunStartedEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromRunStartedEvent overwrites any union data inside the RunEvent as the provided RunStartedEvent
+func (t *RunEvent) FromRunStartedEvent(v RunStartedEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"run_started"}`))
+	t.union = b
+	return err
+}
+
+// MergeRunStartedEvent performs a merge with any union data inside the RunEvent, using the provided RunStartedEvent
+func (t *RunEvent) MergeRunStartedEvent(v RunStartedEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"run_started"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsRunFinishedEvent returns the union data inside the RunEvent as a RunFinishedEvent
+func (t RunEvent) AsRunFinishedEvent() (RunFinishedEvent, error) {
+	var body RunFinishedEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromRunFinishedEvent overwrites any union data inside the RunEvent as the provided RunFinishedEvent
+func (t *RunEvent) FromRunFinishedEvent(v RunFinishedEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"run_finished"}`))
+	t.union = b
+	return err
+}
+
+// MergeRunFinishedEvent performs a merge with any union data inside the RunEvent, using the provided RunFinishedEvent
+func (t *RunEvent) MergeRunFinishedEvent(v RunFinishedEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"run_finished"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsGenerationStartedEvent returns the union data inside the RunEvent as a GenerationStartedEvent
+func (t RunEvent) AsGenerationStartedEvent() (GenerationStartedEvent, error) {
+	var body GenerationStartedEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromGenerationStartedEvent overwrites any union data inside the RunEvent as the provided GenerationStartedEvent
+func (t *RunEvent) FromGenerationStartedEvent(v GenerationStartedEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"generation_started"}`))
+	t.union = b
+	return err
+}
+
+// MergeGenerationStartedEvent performs a merge with any union data inside the RunEvent, using the provided GenerationStartedEvent
+func (t *RunEvent) MergeGenerationStartedEvent(v GenerationStartedEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"generation_started"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsPartStartedEvent returns the union data inside the RunEvent as a PartStartedEvent
+func (t RunEvent) AsPartStartedEvent() (PartStartedEvent, error) {
+	var body PartStartedEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromPartStartedEvent overwrites any union data inside the RunEvent as the provided PartStartedEvent
+func (t *RunEvent) FromPartStartedEvent(v PartStartedEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"part_started"}`))
+	t.union = b
+	return err
+}
+
+// MergePartStartedEvent performs a merge with any union data inside the RunEvent, using the provided PartStartedEvent
+func (t *RunEvent) MergePartStartedEvent(v PartStartedEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"part_started"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsPartDeltaEvent returns the union data inside the RunEvent as a PartDeltaEvent
+func (t RunEvent) AsPartDeltaEvent() (PartDeltaEvent, error) {
+	var body PartDeltaEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromPartDeltaEvent overwrites any union data inside the RunEvent as the provided PartDeltaEvent
+func (t *RunEvent) FromPartDeltaEvent(v PartDeltaEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"part_delta"}`))
+	t.union = b
+	return err
+}
+
+// MergePartDeltaEvent performs a merge with any union data inside the RunEvent, using the provided PartDeltaEvent
+func (t *RunEvent) MergePartDeltaEvent(v PartDeltaEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"part_delta"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsPartEndedEvent returns the union data inside the RunEvent as a PartEndedEvent
+func (t RunEvent) AsPartEndedEvent() (PartEndedEvent, error) {
+	var body PartEndedEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromPartEndedEvent overwrites any union data inside the RunEvent as the provided PartEndedEvent
+func (t *RunEvent) FromPartEndedEvent(v PartEndedEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"part_ended"}`))
+	t.union = b
+	return err
+}
+
+// MergePartEndedEvent performs a merge with any union data inside the RunEvent, using the provided PartEndedEvent
+func (t *RunEvent) MergePartEndedEvent(v PartEndedEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"part_ended"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsMessageAppendedEvent returns the union data inside the RunEvent as a MessageAppendedEvent
+func (t RunEvent) AsMessageAppendedEvent() (MessageAppendedEvent, error) {
+	var body MessageAppendedEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromMessageAppendedEvent overwrites any union data inside the RunEvent as the provided MessageAppendedEvent
+func (t *RunEvent) FromMessageAppendedEvent(v MessageAppendedEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"message_appended"}`))
+	t.union = b
+	return err
+}
+
+// MergeMessageAppendedEvent performs a merge with any union data inside the RunEvent, using the provided MessageAppendedEvent
+func (t *RunEvent) MergeMessageAppendedEvent(v MessageAppendedEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"message_appended"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsToolStartedEvent returns the union data inside the RunEvent as a ToolStartedEvent
+func (t RunEvent) AsToolStartedEvent() (ToolStartedEvent, error) {
+	var body ToolStartedEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromToolStartedEvent overwrites any union data inside the RunEvent as the provided ToolStartedEvent
+func (t *RunEvent) FromToolStartedEvent(v ToolStartedEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"tool_started"}`))
+	t.union = b
+	return err
+}
+
+// MergeToolStartedEvent performs a merge with any union data inside the RunEvent, using the provided ToolStartedEvent
+func (t *RunEvent) MergeToolStartedEvent(v ToolStartedEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"tool_started"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsToolFinishedEvent returns the union data inside the RunEvent as a ToolFinishedEvent
+func (t RunEvent) AsToolFinishedEvent() (ToolFinishedEvent, error) {
+	var body ToolFinishedEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromToolFinishedEvent overwrites any union data inside the RunEvent as the provided ToolFinishedEvent
+func (t *RunEvent) FromToolFinishedEvent(v ToolFinishedEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"tool_finished"}`))
+	t.union = b
+	return err
+}
+
+// MergeToolFinishedEvent performs a merge with any union data inside the RunEvent, using the provided ToolFinishedEvent
+func (t *RunEvent) MergeToolFinishedEvent(v ToolFinishedEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"tool_finished"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsRetryScheduledEvent returns the union data inside the RunEvent as a RetryScheduledEvent
+func (t RunEvent) AsRetryScheduledEvent() (RetryScheduledEvent, error) {
+	var body RetryScheduledEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromRetryScheduledEvent overwrites any union data inside the RunEvent as the provided RetryScheduledEvent
+func (t *RunEvent) FromRetryScheduledEvent(v RetryScheduledEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"retry_scheduled"}`))
+	t.union = b
+	return err
+}
+
+// MergeRetryScheduledEvent performs a merge with any union data inside the RunEvent, using the provided RetryScheduledEvent
+func (t *RunEvent) MergeRetryScheduledEvent(v RetryScheduledEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"retry_scheduled"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t RunEvent) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"type"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t RunEvent) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "generation_started":
+		return t.AsGenerationStartedEvent()
+	case "message_appended":
+		return t.AsMessageAppendedEvent()
+	case "part_delta":
+		return t.AsPartDeltaEvent()
+	case "part_ended":
+		return t.AsPartEndedEvent()
+	case "part_started":
+		return t.AsPartStartedEvent()
+	case "retry_scheduled":
+		return t.AsRetryScheduledEvent()
+	case "run_finished":
+		return t.AsRunFinishedEvent()
+	case "run_started":
+		return t.AsRunStartedEvent()
+	case "tool_finished":
+		return t.AsToolFinishedEvent()
+	case "tool_started":
+		return t.AsToolStartedEvent()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t RunEvent) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *RunEvent) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
@@ -1172,7 +2797,7 @@ type ServerInterface interface {
 	// RefreshCatalog Refresh the catalogue from models.dev
 	// (POST /admin/catalog)
 	RefreshCatalog(w http.ResponseWriter, r *http.Request)
-	// ListCatalogModels Browse the model catalogue
+	// ListCatalogModels The models this installation serves
 	// (GET /admin/catalog/models)
 	ListCatalogModels(w http.ResponseWriter, r *http.Request, params ListCatalogModelsParams)
 	// ListCatalogProviders Providers in the catalogue
@@ -1187,6 +2812,9 @@ type ServerInterface interface {
 	// CreateChannel Add a channel
 	// (POST /admin/channels)
 	CreateChannel(w http.ResponseWriter, r *http.Request)
+	// PreviewChannelModels Preview models using an unsaved channel connection
+	// (POST /admin/channels/models/preview)
+	PreviewChannelModels(w http.ResponseWriter, r *http.Request)
 	// DeleteChannel Remove a channel
 	// (DELETE /admin/channels/{channelId})
 	DeleteChannel(w http.ResponseWriter, r *http.Request, channelId openapi_types.UUID)
@@ -1208,9 +2836,24 @@ type ServerInterface interface {
 	// UpdateChannelModel Offer this model, or stop offering it
 	// (PATCH /admin/channels/{channelId}/models/{modelId})
 	UpdateChannelModel(w http.ResponseWriter, r *http.Request, channelId openapi_types.UUID, modelId string)
+	// ResetModelSettings Go back to the catalogue for every setting
+	// (DELETE /admin/models/{modelId}/settings)
+	ResetModelSettings(w http.ResponseWriter, r *http.Request, modelId string)
+	// UpdateModelSettings Decide how a model is offered
+	// (PUT /admin/models/{modelId}/settings)
+	UpdateModelSettings(w http.ResponseWriter, r *http.Request, modelId string)
 	// GetAdminStats Dashboard totals and activity trend
 	// (GET /admin/stats)
 	GetAdminStats(w http.ResponseWriter, r *http.Request, params GetAdminStatsParams)
+	// GetStorageSettings File storage settings
+	// (GET /admin/storage)
+	GetStorageSettings(w http.ResponseWriter, r *http.Request)
+	// UpdateStorageSettings Change file storage settings
+	// (PATCH /admin/storage)
+	UpdateStorageSettings(w http.ResponseWriter, r *http.Request)
+	// TestStorage Try a storage configuration without saving it
+	// (POST /admin/storage/test)
+	TestStorage(w http.ResponseWriter, r *http.Request)
 	// GetSystemSettings Server-wide settings
 	// (GET /admin/system)
 	GetSystemSettings(w http.ResponseWriter, r *http.Request)
@@ -1229,6 +2872,15 @@ type ServerInterface interface {
 	// UpdateUser Change an account's role or enabled state
 	// (PATCH /admin/users/{userId})
 	UpdateUser(w http.ResponseWriter, r *http.Request, userId openapi_types.UUID)
+	// GetWebSearchSettings Web search settings
+	// (GET /admin/web-search)
+	GetWebSearchSettings(w http.ResponseWriter, r *http.Request)
+	// UpdateWebSearchSettings Change web search settings
+	// (PATCH /admin/web-search)
+	UpdateWebSearchSettings(w http.ResponseWriter, r *http.Request)
+	// TestWebSearch Run one search with the current settings
+	// (POST /admin/web-search/test)
+	TestWebSearch(w http.ResponseWriter, r *http.Request)
 	// Login Start a session
 	// (POST /auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
@@ -1262,18 +2914,33 @@ type ServerInterface interface {
 	// UpdateConversation Rename or update a conversation
 	// (PATCH /conversations/{conversationId})
 	UpdateConversation(w http.ResponseWriter, r *http.Request, conversationId ConversationId)
+	// StreamConversationEvents Follow a conversation's runs
+	// (GET /conversations/{conversationId}/events)
+	StreamConversationEvents(w http.ResponseWriter, r *http.Request, conversationId ConversationId)
 	// ListMessages List messages in a conversation
 	// (GET /conversations/{conversationId}/messages)
 	ListMessages(w http.ResponseWriter, r *http.Request, conversationId ConversationId, params ListMessagesParams)
-	// CreateMessage Append a user message and stream the assistant reply
+	// CreateMessage Send a message and start a run that answers it
 	// (POST /conversations/{conversationId}/messages)
 	CreateMessage(w http.ResponseWriter, r *http.Request, conversationId ConversationId)
+	// CancelRun Stop a run
+	// (POST /conversations/{conversationId}/runs/{runId}/cancel)
+	CancelRun(w http.ResponseWriter, r *http.Request, conversationId ConversationId, runId openapi_types.UUID)
+	// GetFavicon A site's icon, for the sources a reply cites
+	// (GET /favicons/{domain})
+	GetFavicon(w http.ResponseWriter, r *http.Request, domain string)
+	// GetChatFeatures What the chat can offer right now
+	// (GET /features)
+	GetChatFeatures(w http.ResponseWriter, r *http.Request)
 	// CreateUpload Issue a presigned upload URL for blob storage
 	// (POST /files)
 	CreateUpload(w http.ResponseWriter, r *http.Request)
 	// GetHealth Liveness probe
 	// (GET /healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+	// ListChatModels The models a conversation can use
+	// (GET /models)
+	ListChatModels(w http.ResponseWriter, r *http.Request)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -1292,7 +2959,7 @@ func (_ Unimplemented) RefreshCatalog(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// ListCatalogModels Browse the model catalogue
+// ListCatalogModels The models this installation serves
 // (GET /admin/catalog/models)
 func (_ Unimplemented) ListCatalogModels(w http.ResponseWriter, r *http.Request, params ListCatalogModelsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -1319,6 +2986,12 @@ func (_ Unimplemented) ListChannels(w http.ResponseWriter, r *http.Request) {
 // CreateChannel Add a channel
 // (POST /admin/channels)
 func (_ Unimplemented) CreateChannel(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PreviewChannelModels Preview models using an unsaved channel connection
+// (POST /admin/channels/models/preview)
+func (_ Unimplemented) PreviewChannelModels(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1364,9 +3037,39 @@ func (_ Unimplemented) UpdateChannelModel(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ResetModelSettings Go back to the catalogue for every setting
+// (DELETE /admin/models/{modelId}/settings)
+func (_ Unimplemented) ResetModelSettings(w http.ResponseWriter, r *http.Request, modelId string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateModelSettings Decide how a model is offered
+// (PUT /admin/models/{modelId}/settings)
+func (_ Unimplemented) UpdateModelSettings(w http.ResponseWriter, r *http.Request, modelId string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // GetAdminStats Dashboard totals and activity trend
 // (GET /admin/stats)
 func (_ Unimplemented) GetAdminStats(w http.ResponseWriter, r *http.Request, params GetAdminStatsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetStorageSettings File storage settings
+// (GET /admin/storage)
+func (_ Unimplemented) GetStorageSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateStorageSettings Change file storage settings
+// (PATCH /admin/storage)
+func (_ Unimplemented) UpdateStorageSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// TestStorage Try a storage configuration without saving it
+// (POST /admin/storage/test)
+func (_ Unimplemented) TestStorage(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1403,6 +3106,24 @@ func (_ Unimplemented) BulkUpdateUsers(w http.ResponseWriter, r *http.Request) {
 // UpdateUser Change an account's role or enabled state
 // (PATCH /admin/users/{userId})
 func (_ Unimplemented) UpdateUser(w http.ResponseWriter, r *http.Request, userId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetWebSearchSettings Web search settings
+// (GET /admin/web-search)
+func (_ Unimplemented) GetWebSearchSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateWebSearchSettings Change web search settings
+// (PATCH /admin/web-search)
+func (_ Unimplemented) UpdateWebSearchSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// TestWebSearch Run one search with the current settings
+// (POST /admin/web-search/test)
+func (_ Unimplemented) TestWebSearch(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1472,15 +3193,39 @@ func (_ Unimplemented) UpdateConversation(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// StreamConversationEvents Follow a conversation's runs
+// (GET /conversations/{conversationId}/events)
+func (_ Unimplemented) StreamConversationEvents(w http.ResponseWriter, r *http.Request, conversationId ConversationId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ListMessages List messages in a conversation
 // (GET /conversations/{conversationId}/messages)
 func (_ Unimplemented) ListMessages(w http.ResponseWriter, r *http.Request, conversationId ConversationId, params ListMessagesParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// CreateMessage Append a user message and stream the assistant reply
+// CreateMessage Send a message and start a run that answers it
 // (POST /conversations/{conversationId}/messages)
 func (_ Unimplemented) CreateMessage(w http.ResponseWriter, r *http.Request, conversationId ConversationId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CancelRun Stop a run
+// (POST /conversations/{conversationId}/runs/{runId}/cancel)
+func (_ Unimplemented) CancelRun(w http.ResponseWriter, r *http.Request, conversationId ConversationId, runId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetFavicon A site's icon, for the sources a reply cites
+// (GET /favicons/{domain})
+func (_ Unimplemented) GetFavicon(w http.ResponseWriter, r *http.Request, domain string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetChatFeatures What the chat can offer right now
+// (GET /features)
+func (_ Unimplemented) GetChatFeatures(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1493,6 +3238,12 @@ func (_ Unimplemented) CreateUpload(w http.ResponseWriter, r *http.Request) {
 // GetHealth Liveness probe
 // (GET /healthz)
 func (_ Unimplemented) GetHealth(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListChatModels The models a conversation can use
+// (GET /models)
+func (_ Unimplemented) ListChatModels(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1620,19 +3371,6 @@ func (siw *ServerInterfaceWrapper) ListCatalogModels(w http.ResponseWriter, r *h
 		return
 	}
 
-	// ------------- Optional query parameter "scope" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "scope", r.URL.Query(), &params.Scope, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "scope"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scope", Err: err})
-		}
-		return
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListCatalogModels(w, r, params)
 	}))
@@ -1691,6 +3429,20 @@ func (siw *ServerInterfaceWrapper) CreateChannel(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateChannel(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewChannelModels operation middleware
+func (siw *ServerInterfaceWrapper) PreviewChannelModels(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewChannelModels(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1900,6 +3652,58 @@ func (siw *ServerInterfaceWrapper) UpdateChannelModel(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// ResetModelSettings operation middleware
+func (siw *ServerInterfaceWrapper) ResetModelSettings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "modelId" -------------
+	var modelId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "modelId", chi.URLParam(r, "modelId"), &modelId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "modelId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResetModelSettings(w, r, modelId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateModelSettings operation middleware
+func (siw *ServerInterfaceWrapper) UpdateModelSettings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "modelId" -------------
+	var modelId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "modelId", chi.URLParam(r, "modelId"), &modelId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "modelId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateModelSettings(w, r, modelId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetAdminStats operation middleware
 func (siw *ServerInterfaceWrapper) GetAdminStats(w http.ResponseWriter, r *http.Request) {
 
@@ -1924,6 +3728,48 @@ func (siw *ServerInterfaceWrapper) GetAdminStats(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetAdminStats(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetStorageSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetStorageSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetStorageSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateStorageSettings operation middleware
+func (siw *ServerInterfaceWrapper) UpdateStorageSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateStorageSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestStorage operation middleware
+func (siw *ServerInterfaceWrapper) TestStorage(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestStorage(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2065,6 +3911,48 @@ func (siw *ServerInterfaceWrapper) UpdateUser(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateUser(w, r, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetWebSearchSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetWebSearchSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWebSearchSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateWebSearchSettings operation middleware
+func (siw *ServerInterfaceWrapper) UpdateWebSearchSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateWebSearchSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestWebSearch operation middleware
+func (siw *ServerInterfaceWrapper) TestWebSearch(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestWebSearch(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2296,6 +4184,32 @@ func (siw *ServerInterfaceWrapper) UpdateConversation(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// StreamConversationEvents operation middleware
+func (siw *ServerInterfaceWrapper) StreamConversationEvents(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ConversationId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", chi.URLParam(r, "conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StreamConversationEvents(w, r, conversationId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListMessages operation middleware
 func (siw *ServerInterfaceWrapper) ListMessages(w http.ResponseWriter, r *http.Request) {
 
@@ -2377,6 +4291,81 @@ func (siw *ServerInterfaceWrapper) CreateMessage(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// CancelRun operation middleware
+func (siw *ServerInterfaceWrapper) CancelRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ConversationId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", chi.URLParam(r, "conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "runId" -------------
+	var runId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runId", chi.URLParam(r, "runId"), &runId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelRun(w, r, conversationId, runId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetFavicon operation middleware
+func (siw *ServerInterfaceWrapper) GetFavicon(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "domain" -------------
+	var domain string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "domain", chi.URLParam(r, "domain"), &domain, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "domain", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetFavicon(w, r, domain)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetChatFeatures operation middleware
+func (siw *ServerInterfaceWrapper) GetChatFeatures(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetChatFeatures(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateUpload operation middleware
 func (siw *ServerInterfaceWrapper) CreateUpload(w http.ResponseWriter, r *http.Request) {
 
@@ -2396,6 +4385,20 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListChatModels operation middleware
+func (siw *ServerInterfaceWrapper) ListChatModels(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListChatModels(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2552,6 +4555,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/admin/channel-types", wrapper.ListChannelTypes)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/channels/models/preview", wrapper.PreviewChannelModels)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/channels/{channelId}/models", wrapper.ListChannelModels)
 	})
 	r.Group(func(r chi.Router) {
@@ -2579,10 +4585,34 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/admin/catalog/models", wrapper.ListCatalogModels)
 	})
 	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/admin/models/{modelId}/settings", wrapper.ResetModelSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/admin/models/{modelId}/settings", wrapper.UpdateModelSettings)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/system", wrapper.GetSystemSettings)
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/admin/system", wrapper.UpdateSystemSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/web-search", wrapper.GetWebSearchSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/admin/web-search", wrapper.UpdateWebSearchSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/web-search/test", wrapper.TestWebSearch)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/storage", wrapper.GetStorageSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/admin/storage", wrapper.UpdateStorageSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/storage/test", wrapper.TestStorage)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/channels", wrapper.ListChannels)
@@ -2624,6 +4654,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/conversations/{conversationId}/messages", wrapper.CreateMessage)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/conversations/{conversationId}/events", wrapper.StreamConversationEvents)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/conversations/{conversationId}/runs/{runId}/cancel", wrapper.CancelRun)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/features", wrapper.GetChatFeatures)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/favicons/{domain}", wrapper.GetFavicon)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/models", wrapper.ListChatModels)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/files", wrapper.CreateUpload)
 	})
 
@@ -2635,127 +4680,248 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"/w==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,
