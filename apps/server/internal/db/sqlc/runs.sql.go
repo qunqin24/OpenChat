@@ -284,13 +284,17 @@ func (q *Queries) ListAnswers(ctx context.Context, inputs []uuid.UUID) ([]ListAn
 }
 
 const listRunningRuns = `-- name: ListRunningRuns :many
-SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, superseded, continues
+SELECT runs.id, runs.conversation_id, runs.user_id, runs.input_message_id, runs.request_id, runs.model_id, runs.channel_id, runs.status, runs.checkpoint, runs.live, runs.version, runs.cancel_requested, runs.error_code, runs.created_at, runs.updated_at, runs.finished_at, runs.reasoning_effort, runs.web_search, runs.superseded, runs.continues
 FROM runs
-WHERE status = 'running'
-ORDER BY created_at
+         JOIN users ON users.id = runs.user_id
+WHERE runs.status = 'running'
+  AND NOT users.guest
+ORDER BY runs.created_at
 `
 
-// What a process that just started has to pick up.
+// What a process that just started has to pick up. A guest's run is not one:
+// the request that was following it is gone with the process that died, and
+// the sweep for guests deletes what is left (guest.sql).
 func (q *Queries) ListRunningRuns(ctx context.Context) ([]Run, error) {
 	rows, err := q.db.Query(ctx, listRunningRuns)
 	if err != nil {

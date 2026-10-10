@@ -208,6 +208,12 @@ func (l *Local) Put(key string, r io.Reader, limit int64) (int64, error) {
 	return n, nil
 }
 
+// PutObject stores data as the object; see Put for how it is written.
+func (l *Local) PutObject(_ context.Context, key, _ string, data []byte) error {
+	_, err := l.Put(key, bytes.NewReader(data), int64(len(data)))
+	return err
+}
+
 // Open returns the object's file, for a handler that serves it.
 func (l *Local) Open(key string) (*os.File, error) {
 	if err := checkKey(key); err != nil {

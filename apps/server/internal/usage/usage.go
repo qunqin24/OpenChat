@@ -64,7 +64,8 @@ func NewRecorder(q *sqlc.Queries) *Recorder { return &Recorder{q: q} }
 type Call struct {
 	Kind Kind
 	// UserID is whose request it is: a run's user, or a conversation's owner
-	// for its title.
+	// for its title. The zero value is nobody's - a guest's title, which has
+	// no account to charge - and is recorded as no owner.
 	UserID         uuid.UUID
 	ConversationID *uuid.UUID
 	RunID          *uuid.UUID
@@ -132,7 +133,7 @@ func (m *Meter) End(ctx context.Context, resp llm.ModelResponse, err error) {
 		CreatedAt:      pgtype.Timestamptz{Time: m.started, Valid: true},
 		Kind:           string(m.call.Kind),
 		Status:         string(StatusOK),
-		UserID:         &m.call.UserID,
+		UserID:         owner(m.call.UserID),
 		ConversationID: m.call.ConversationID,
 		RunID:          m.call.RunID,
 		ChannelID:      m.call.ChannelID,
@@ -305,4 +306,12 @@ func clean(message string) string {
 		message = string(runes[:maxMessageRunes]) + "…"
 	}
 	return message
+}
+
+// owner is the ledger's user for a call: none for the zero value.
+func owner(id uuid.UUID) *uuid.UUID {
+	if id == uuid.Nil {
+		return nil
+	}
+	return &id
 }

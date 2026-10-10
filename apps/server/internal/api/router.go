@@ -54,6 +54,23 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 		r.Post("/auth/register", wrapper.Register)
 		r.Post("/auth/login", wrapper.Login)
 
+		// ---- guest ------------------------------------------------------
+		// No session: a guest has no account. The status is always there, for
+		// the sign-in page to read; the rest answers 404 while the
+		// administrator has guest mode off. Every endpoint that could cost
+		// something is counted against the guest limits (guest.go).
+		r.Get("/guest/status", wrapper.GetGuestStatus)
+		r.Group(func(r chi.Router) {
+			r.Use(s.requireGuestMode)
+
+			r.Get("/guest/config", wrapper.GetGuestConfig)
+			r.Post("/guest/runs", wrapper.GuestRun)
+			r.Post("/guest/runs/{runId}/cancel", wrapper.CancelGuestRun)
+			r.Post("/guest/title", wrapper.GuestTitle)
+			r.Get("/guest/favicons/{domain}", wrapper.GetGuestFavicon)
+			r.Get("/guest/images", wrapper.GetGuestImage)
+		})
+
 		// ---- signed URL -------------------------------------------------
 		// Where the local storage driver's upload and download URLs lead. Always
 		// mounted, because the driver can be switched on while the server runs;

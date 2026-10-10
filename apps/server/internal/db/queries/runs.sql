@@ -32,11 +32,15 @@ WHERE conversation_id = $1
   AND status = 'running';
 
 -- name: ListRunningRuns :many
--- What a process that just started has to pick up.
-SELECT *
+-- What a process that just started has to pick up. A guest's run is not one:
+-- the request that was following it is gone with the process that died, and
+-- the sweep for guests deletes what is left (guest.sql).
+SELECT runs.*
 FROM runs
-WHERE status = 'running'
-ORDER BY created_at;
+         JOIN users ON users.id = runs.user_id
+WHERE runs.status = 'running'
+  AND NOT users.guest
+ORDER BY runs.created_at;
 
 -- name: SaveRunState :one
 -- One step of a run: a new checkpoint, new live state, or both. Guarded on

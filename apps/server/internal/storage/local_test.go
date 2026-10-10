@@ -247,3 +247,27 @@ func TestLocalURLs(t *testing.T) {
 		t.Error("a store without a secret was accepted")
 	}
 }
+
+// PutObject is how the server stores bytes it holds itself (a guest's files):
+// the object is whole afterwards, replaces an earlier one, and an empty one is
+// still an object.
+func TestLocalPutObject(t *testing.T) {
+	l := newTestLocal(t)
+	ctx := context.Background()
+	key := "uploads/guest/2026/10/10/a.png"
+	if err := l.PutObject(ctx, key, "image/png", []byte("first")); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.PutObject(ctx, key, "image/png", []byte("second")); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := l.Read(ctx, key, 1<<20); err != nil || string(got) != "second" {
+		t.Errorf("Read = %q, %v", got, err)
+	}
+	if err := l.PutObject(ctx, "uploads/guest/empty", "", nil); err != nil || !l.Has("uploads/guest/empty") {
+		t.Errorf("an empty object: %v", err)
+	}
+	if err := l.PutObject(ctx, "../outside", "", []byte("x")); !errors.Is(err, ErrInvalidKey) {
+		t.Errorf("a key outside the directory: %v", err)
+	}
+}

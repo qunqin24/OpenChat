@@ -299,6 +299,11 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 	}
 
 	client, err := r.models.Client(ctx, ex.run.ChannelID, ex.run.ModelID)
+	if err != nil && ctx.Err() != nil {
+		// Stopped (or shutting down) while the model was being looked up: that
+		// is no failure of the model, and the loop ends the run as it should.
+		return false, nil
+	}
 	if err != nil {
 		code := CodeModelError
 		if errors.Is(err, ErrNoModel) {

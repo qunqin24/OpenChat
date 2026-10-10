@@ -54,6 +54,13 @@ func (f *fakeS3) Read(_ context.Context, key string, _ int64) ([]byte, error) {
 	return data, nil
 }
 
+func (f *fakeS3) PutObject(_ context.Context, key, _ string, data []byte) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.blobs[key] = data
+	return nil
+}
+
 func (f *fakeS3) Delete(_ context.Context, key string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -133,6 +140,32 @@ func TestSwitchRoutesNewUploadsToTheCurrentDriver(t *testing.T) {
 	}
 	if put, _ = sw.PresignPut(ctx, "uploads/a.png", "image/png", time.Minute); !strings.HasPrefix(put, ContentPath) {
 		t.Errorf("PresignPut after switching back = %q", put)
+	}
+}
+
+// PutObject (a guest's files) goes where an upload would: to the current driver.
+func TestSwitchPutObjectGoesToTheCurrentDriver(t *testing.T) {
+	sw, fake := newTestSwitch(t)
+	ctx := context.Background()
+	dir := filepath.Join(t.TempDir(), "files")
+
+	if err := sw.Apply(ctx, localSettings(dir)); err != nil {
+		t.Fatal(err)
+	}
+	if err := sw.PutObject(ctx, "uploads/a", "image/png", []byte("on disk")); err != nil {
+		t.Fatal(err)
+	}
+	if !sw.Local().Has("uploads/a") {
+		t.Error("the object is not on the disk under the local driver")
+	}
+	if err := sw.Apply(ctx, s3Settings(dir)); err != nil {
+		t.Fatal(err)
+	}
+	if err := sw.PutObject(ctx, "uploads/b", "image/png", []byte("in the bucket")); err != nil {
+		t.Fatal(err)
+	}
+	if string(fake.blobs["uploads/b"]) != "in the bucket" {
+		t.Error("the object is not in the bucket under the S3 driver")
 	}
 }
 

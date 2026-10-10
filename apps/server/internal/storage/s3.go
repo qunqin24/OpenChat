@@ -5,6 +5,7 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -28,6 +29,10 @@ type Backend interface {
 	ObjectURL(key string) string
 	Size(ctx context.Context, key string) (int64, error)
 	Read(ctx context.Context, key string, limit int64) ([]byte, error)
+	// PutObject stores bytes the server holds itself, as opposed to the ones a
+	// browser uploads to a presigned URL: a guest's attachments, which come
+	// inside the request that uses them. An existing object is replaced.
+	PutObject(ctx context.Context, key, contentType string, data []byte) error
 	// Delete removes an object. One that is not there is not an error.
 	Delete(ctx context.Context, key string) error
 }
@@ -120,6 +125,18 @@ func (s *Store) PresignGet(ctx context.Context, key string, ttl time.Duration) (
 		return "", fmt.Errorf("storage: presign get %q: %w", key, err)
 	}
 	return req.URL, nil
+}
+
+// PutObject uploads data as the object.
+func (s *Store) PutObject(ctx context.Context, key, contentType string, data []byte) error {
+	input := &s3.PutObjectInput{Bucket: &s.bucket, Key: &key, Body: bytes.NewReader(data)}
+	if contentType != "" {
+		input.ContentType = &contentType
+	}
+	if _, err := s.client.PutObject(ctx, input); err != nil {
+		return fmt.Errorf("storage: put %q: %w", key, err)
+	}
+	return nil
 }
 
 // ErrTooLarge is an object bigger than the limit a read was given.

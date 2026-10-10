@@ -138,10 +138,9 @@ func (s *Server) GetConversationImage(w http.ResponseWriter, r *http.Request, co
 		httpx.Fail(w, r, err)
 		return
 	}
-	address := strings.TrimSpace(params.Url)
-	target, err := url.Parse(address)
-	if err != nil || (target.Scheme != "http" && target.Scheme != "https") || target.Host == "" || len(address) > 2048 {
-		httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "invalid_url", "not an http or https address"))
+	address, err := imageAddress(params.Url)
+	if err != nil {
+		httpx.Fail(w, r, err)
 		return
 	}
 	found, err := s.q.ToolResultMentions(ctx, sqlc.ToolResultMentionsParams{ConversationID: conversationId, Needle: address})
@@ -153,7 +152,23 @@ func (s *Server) GetConversationImage(w http.ResponseWriter, r *http.Request, co
 		httpx.Fail(w, r, httpx.NewError(http.StatusNotFound, "image_not_found", "no source in this conversation lists that image"))
 		return
 	}
-	entry := images.get(ctx, address)
+	serveImage(w, r, address)
+}
+
+// imageAddress checks that what was asked for is an http or https address.
+func imageAddress(raw string) (string, error) {
+	address := strings.TrimSpace(raw)
+	target, err := url.Parse(address)
+	if err != nil || (target.Scheme != "http" && target.Scheme != "https") || target.Host == "" || len(address) > 2048 {
+		return "", httpx.NewError(http.StatusBadRequest, "invalid_url", "not an http or https address")
+	}
+	return address, nil
+}
+
+// serveImage fetches an address through the guarded, cached client and writes
+// it, or answers 404 for one that cannot be had.
+func serveImage(w http.ResponseWriter, r *http.Request, address string) {
+	entry := images.get(r.Context(), address)
 	if entry.body == nil {
 		// A picture that cannot be had now is asked about again later, not on
 		// every render of the answer.

@@ -433,6 +433,11 @@ type Conversation struct {
 	CurrentInputID  *uuid.UUID         `json:"current_input_id"`
 }
 
+type GuestRequest struct {
+	Ip        string             `json:"ip"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type MemoryEvent struct {
 	ID             uuid.UUID          `json:"id"`
 	UserID         uuid.UUID          `json:"user_id"`
@@ -558,6 +563,7 @@ type User struct {
 	MemoryEnabled     bool               `json:"memory_enabled"`
 	MemoryLearn       bool               `json:"memory_learn"`
 	AvatarKey         *string            `json:"avatar_key"`
+	Guest             bool               `json:"guest"`
 }
 
 type UserMemory struct {

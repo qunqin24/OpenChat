@@ -108,6 +108,10 @@ func (s *Server) CleanupNow(ctx context.Context) {
 		return len(keys), keys, err
 	})
 
+	// Guests left behind by a process that died mid-run, and the request counts
+	// no limit looks at any more.
+	s.sweepGuests(ctx, now.Add(-guestStaleAfter))
+
 	s.sweepOrphanFiles(ctx, now.Add(-keep.orphanFiles))
 
 	if _, err := s.notes().PurgeEvents(ctx); err != nil {

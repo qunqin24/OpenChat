@@ -71,11 +71,7 @@ func (s *Server) AnswerQuestion(w http.ResponseWriter, r *http.Request, conversa
 		}
 		answers = append(answers, tools.Answer{Selected: a.Selected, Other: other})
 	}
-	out, err := asked.questions.Result(answers)
-	if errors.Is(err, tools.ErrInvalidAnswers) {
-		httpx.Fail(w, r, httpx.NewFieldError("answers", "invalid_answers", err.Error()))
-		return
-	}
+	result, err := answerPart(asked.questions, callId, answers)
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
@@ -92,11 +88,6 @@ func (s *Server) AnswerQuestion(w http.ResponseWriter, r *http.Request, conversa
 		head = *asked.run.Continues
 	}
 	choice.continues = &head
-
-	result := llm.ToolResultPart{CallID: callId, Name: agent.ToolAskUser, Content: out.Content, Status: llm.ToolSucceeded}
-	if details, err := json.Marshal(out.Details); err == nil {
-		result.Details = details
-	}
 
 	var (
 		run     sqlc.Run
@@ -118,19 +109,7 @@ func (s *Server) AnswerQuestion(w http.ResponseWriter, r *http.Request, conversa
 			return err
 		}
 		var err error
-		run, err = createRun(ctx, q, conv, user.ID, asked.run.InputMessageID, requestID, choice)
-		if err != nil {
-			return err
-		}
-		parts := []llm.Part{result}
-		written, err = q.AppendEntry(ctx, sqlc.AppendEntryParams{
-			ConversationID: conversationId,
-			Role:           sqlc.MessageRoleTool,
-			Content:        agent.PlainText(parts),
-			Parts:          agent.EncodeParts(parts),
-			Status:         sqlc.MessageStatusComplete,
-			RunID:          &run.ID,
-		})
+		run, written, err = startAnswerRun(ctx, q, conv, user.ID, asked.run.InputMessageID, requestID, choice, result)
 		return err
 	})
 	if err != nil {
@@ -151,6 +130,42 @@ func (s *Server) AnswerQuestion(w http.ResponseWriter, r *http.Request, conversa
 		return
 	}
 	httpx.JSON(w, http.StatusAccepted, AnswerQuestionResponse{Message: page.Items[0], Result: toMessage(written, nil), Run: toRun(run)})
+}
+
+// answerPart checks the answers against the questions asked and gives the tool
+// result they are recorded as. A reply that does not fit is a 400.
+func answerPart(questions tools.Questions, callID string, answers []tools.Answer) (llm.ToolResultPart, error) {
+	out, err := questions.Result(answers)
+	if errors.Is(err, tools.ErrInvalidAnswers) {
+		return llm.ToolResultPart{}, httpx.NewFieldError("answers", "invalid_answers", err.Error())
+	}
+	if err != nil {
+		return llm.ToolResultPart{}, err
+	}
+	result := llm.ToolResultPart{CallID: callID, Name: agent.ToolAskUser, Content: out.Content, Status: llm.ToolSucceeded}
+	if details, err := json.Marshal(out.Details); err == nil {
+		result.Details = details
+	}
+	return result, nil
+}
+
+// startAnswerRun starts the run that carries on from an answered question and
+// writes the answer as its first row, inside the caller's transaction.
+func startAnswerRun(ctx context.Context, q *sqlc.Queries, conv sqlc.Conversation, userID, inputID uuid.UUID, requestID string, choice runChoice, result llm.ToolResultPart) (sqlc.Run, sqlc.Message, error) {
+	run, err := createRun(ctx, q, conv, userID, inputID, requestID, choice)
+	if err != nil {
+		return run, sqlc.Message{}, err
+	}
+	parts := []llm.Part{result}
+	written, err := q.AppendEntry(ctx, sqlc.AppendEntryParams{
+		ConversationID: conv.ID,
+		Role:           sqlc.MessageRoleTool,
+		Content:        agent.PlainText(parts),
+		Parts:          agent.EncodeParts(parts),
+		Status:         sqlc.MessageStatusComplete,
+		RunID:          &run.ID,
+	})
+	return run, written, err
 }
 
 // asking is a question waiting for its answer.

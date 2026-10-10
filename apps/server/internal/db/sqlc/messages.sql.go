@@ -13,31 +13,35 @@ import (
 )
 
 const appendEntry = `-- name: AppendEntry :one
-INSERT INTO messages (conversation_id, role, content, parts, status, run_id,
+INSERT INTO messages (id, conversation_id, role, content, parts, status, run_id,
                       stop_reason, model, provider, usage, error_code, edit_of, parent_input_id,
                       created_at, updated_at)
-VALUES ($1, $2, $3, $4,
-        $5, $6, $7, $8,
-        $9, $10, $11, $12,
-        $13,
-        clock_timestamp(), clock_timestamp())
+VALUES (COALESCE($1::uuid, gen_random_uuid()),
+        $2, $3, $4, $5,
+        $6, $7, $8, $9,
+        $10, $11, $12, $13,
+        $14,
+        COALESCE($15::timestamptz, clock_timestamp()),
+        COALESCE($15::timestamptz, clock_timestamp()))
 RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, edit_of, parent_input_id, shown_at
 `
 
 type AppendEntryParams struct {
-	ConversationID uuid.UUID     `json:"conversation_id"`
-	Role           MessageRole   `json:"role"`
-	Content        string        `json:"content"`
-	Parts          []byte        `json:"parts"`
-	Status         MessageStatus `json:"status"`
-	RunID          *uuid.UUID    `json:"run_id"`
-	StopReason     *string       `json:"stop_reason"`
-	Model          *string       `json:"model"`
-	Provider       *string       `json:"provider"`
-	Usage          []byte        `json:"usage"`
-	ErrorCode      *string       `json:"error_code"`
-	EditOf         *uuid.UUID    `json:"edit_of"`
-	ParentInputID  *uuid.UUID    `json:"parent_input_id"`
+	ID             *uuid.UUID         `json:"id"`
+	ConversationID uuid.UUID          `json:"conversation_id"`
+	Role           MessageRole        `json:"role"`
+	Content        string             `json:"content"`
+	Parts          []byte             `json:"parts"`
+	Status         MessageStatus      `json:"status"`
+	RunID          *uuid.UUID         `json:"run_id"`
+	StopReason     *string            `json:"stop_reason"`
+	Model          *string            `json:"model"`
+	Provider       *string            `json:"provider"`
+	Usage          []byte             `json:"usage"`
+	ErrorCode      *string            `json:"error_code"`
+	EditOf         *uuid.UUID         `json:"edit_of"`
+	ParentInputID  *uuid.UUID         `json:"parent_input_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 // The only way a transcript row is written by the agent layer. Rows are never
@@ -51,8 +55,13 @@ type AppendEntryParams struct {
 // A user message is written with the input it follows (`parent_input_id`, null
 // for a conversation's first) and then made the conversation's current leaf
 // with SetCurrentInput; no other row has a parent.
+//
+// `id` and `created_at` are for guest mode, which writes a transcript the
+// browser kept, under the ids and in the order the browser has it; every other
+// caller leaves both out.
 func (q *Queries) AppendEntry(ctx context.Context, arg AppendEntryParams) (Message, error) {
 	row := q.db.QueryRow(ctx, appendEntry,
+		arg.ID,
 		arg.ConversationID,
 		arg.Role,
 		arg.Content,
@@ -66,6 +75,7 @@ func (q *Queries) AppendEntry(ctx context.Context, arg AppendEntryParams) (Messa
 		arg.ErrorCode,
 		arg.EditOf,
 		arg.ParentInputID,
+		arg.CreatedAt,
 	)
 	var i Message
 	err := row.Scan(

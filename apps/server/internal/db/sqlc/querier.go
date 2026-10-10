@@ -41,6 +41,10 @@ type Querier interface {
 	// A user message is written with the input it follows (`parent_input_id`, null
 	// for a conversation's first) and then made the conversation's current leaf
 	// with SetCurrentInput; no other row has a parent.
+	//
+	// `id` and `created_at` are for guest mode, which writes a transcript the
+	// browser kept, under the ids and in the order the browser has it; every other
+	// caller leaves both out.
 	AppendEntry(ctx context.Context, arg AppendEntryParams) (Message, error)
 	AppendMessageContent(ctx context.Context, arg AppendMessageContentParams) (Message, error)
 	// Claims uploads for a message. Only the caller's own, only unclaimed ones: the
@@ -60,6 +64,9 @@ type Querier interface {
 	// answer a caller reading a map gets for free.
 	CountEnabledChannelModels(ctx context.Context) ([]CountEnabledChannelModelsRow, error)
 	CountEnabledChannelModelsFor(ctx context.Context, channelID uuid.UUID) (int64, error)
+	// How many requests this address has made in the last hour, and everyone in
+	// the last day.
+	CountGuestRequests(ctx context.Context, ip string) (CountGuestRequestsRow, error)
 	CountMemories(ctx context.Context, userID uuid.UUID) (int64, error)
 	// The total behind ListServedModels; see the comments there. Counting `served`
 	// rather than channel_models is what keeps a model served by three channels
@@ -72,6 +79,25 @@ type Querier interface {
 	// older code — gets Chat Completions rather than a constraint violation.
 	CreateChannel(ctx context.Context, arg CreateChannelParams) (Channel, error)
 	CreateConversation(ctx context.Context, arg CreateConversationParams) (Conversation, error)
+	// A file the browser sent with a question, under the id its message refers to.
+	CreateGuestAttachment(ctx context.Context, arg CreateGuestAttachmentParams) (Attachment, error)
+	// The conversation under the id the browser knows it by, with the memory
+	// snapshot the browser kept from its first run (NULL: this is the first).
+	CreateGuestConversation(ctx context.Context, arg CreateGuestConversationParams) (Conversation, error)
+	// The run that asked a question, standing in for the one the browser answers:
+	// the run that goes on after an answer `continues` it, and says so by its id.
+	// The stub holds no rows (the question is a transcript row of the shape older
+	// conversations have) and is never executed.
+	CreateGuestStubRun(ctx context.Context, arg CreateGuestStubRunParams) (Run, error)
+	// Guest mode. A guest has no account: each run is executed against rows that
+	// are written when the request arrives and deleted when it ends (see
+	// api/guest_run.go). Everything here is either that write, that delete, or the
+	// counting behind the limits an administrator sets.
+	// The throwaway owner of one run's rows. No password and no session: it can
+	// never sign in, and the queries behind sign-in, the user list and the user
+	// counts leave `guest` rows out. The personalization is the guest's own, kept
+	// in their browser and sent with the request.
+	CreateGuestUser(ctx context.Context, arg CreateGuestUserParams) (User, error)
 	CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error)
 	CreateRun(ctx context.Context, arg CreateRunParams) (Run, error)
 	// These are the operator's selections at creation, not the endpoint's entire
@@ -94,6 +120,13 @@ type Querier interface {
 	// NULL). SKIP LOCKED lets servers run this at once without waiting on each
 	// other, and a batch keeps one pass from holding a million rows.
 	DeleteExpiredTemporaryConversations(ctx context.Context, arg DeleteExpiredTemporaryConversationsParams) ([]DeleteExpiredTemporaryConversationsRow, error)
+	// The end of a run: the user goes, and the conversation, transcript, runs,
+	// attachments and memories go with it by cascade. The usage ledger keeps its
+	// rows with the user (and conversation, and run) set to NULL - an account is
+	// never deleted otherwise, so a request without an owner is a guest's. The
+	// storage keys of the attachments are handed back in the same statement, for
+	// the files to be removed after (api/cleanup.go does the same for chats).
+	DeleteGuestUser(ctx context.Context, id *uuid.UUID) ([]string, error)
 	// Only a manual row can be deleted by hand. A fetched row is removed by the
 	// endpoint no longer listing it; deleting one here would just bring it back on
 	// the next refresh, which reads as the button not working.
@@ -113,6 +146,11 @@ type Querier interface {
 	// row was never the endpoint's to mention, so its absence says nothing about
 	// it.
 	DeleteStaleChannelModels(ctx context.Context, arg DeleteStaleChannelModelsParams) (int64, error)
+	// Guests whose run should long be over: the process that made them died before
+	// it could clean up. Same shape as the other cleanup statements - one DELETE
+	// with the age in its WHERE clause, the storage keys handed back, SKIP LOCKED
+	// so servers can sweep at once.
+	DeleteStaleGuestUsers(ctx context.Context, arg DeleteStaleGuestUsersParams) ([]DeleteStaleGuestUsersRow, error)
 	// Uploads no message ever claimed: the user attached a file and never sent, or
 	// the send failed. Anything this old has no request in flight that could still
 	// claim it.
@@ -155,7 +193,8 @@ type Querier interface {
 	// One row per bucket from `since` to now, empty ones included: a gap in the
 	// series would draw as a straight line across the chart.
 	GetDashboardTrend(ctx context.Context, arg GetDashboardTrendParams) ([]GetDashboardTrendRow, error)
-	// Who spends the most. Requests with no owner (a deleted account) group as one.
+	// Who spends the most. Requests with no owner group as one: they are guests'
+	// (an account is never deleted, and a guest is deleted when its run ends).
 	GetDashboardUsers(ctx context.Context, arg GetDashboardUsersParams) ([]GetDashboardUsersRow, error)
 	// The dashboard: operational figures from the usage ledger over a window, each
 	// a single pass over the rows from `since` on.
@@ -206,6 +245,7 @@ type Querier interface {
 	InputOnPath(ctx context.Context, arg InputOnPathParams) (bool, error)
 	InsertCatalogModels(ctx context.Context, arg []InsertCatalogModelsParams) (int64, error)
 	InsertCatalogProviders(ctx context.Context, arg []InsertCatalogProvidersParams) (int64, error)
+	InsertGuestRequest(ctx context.Context, ip string) error
 	InsertMemory(ctx context.Context, arg InsertMemoryParams) (UserMemory, error)
 	InsertMemoryEvent(ctx context.Context, arg InsertMemoryEventParams) (MemoryEvent, error)
 	// Writes a setting only when there is none yet, so two processes that both find
@@ -215,6 +255,7 @@ type Querier interface {
 	// to ten places, so a float's tail (0.30000000000000004) never reaches the
 	// ledger.
 	InsertUsageLog(ctx context.Context, arg InsertUsageLogParams) error
+	IsGuestUser(ctx context.Context, id uuid.UUID) (bool, error)
 	// How much of the model's window the conversation's latest answered request
 	// took: everything it was sent, cached or not, plus what it wrote, which the
 	// next request carries back.
@@ -286,7 +327,9 @@ type Querier interface {
 	// The caller's listed conversations with a run in progress; at most one run
 	// per conversation is (runs_one_active_per_conversation), so no duplicates.
 	ListRunningConversations(ctx context.Context, userID *uuid.UUID) ([]uuid.UUID, error)
-	// What a process that just started has to pick up.
+	// What a process that just started has to pick up. A guest's run is not one:
+	// the request that was following it is gone with the process that died, and
+	// the sweep for guests deletes what is left (guest.sql).
 	ListRunningRuns(ctx context.Context) ([]Run, error)
 	// The models this installation actually serves -- the whole of what the model
 	// marketplace lists.
@@ -348,6 +391,9 @@ type Querier interface {
 	// leaf — a message, an edit, a switch of branch — queues here, and reads the
 	// leaf the one before it left.
 	LockConversation(ctx context.Context, id uuid.UUID) (Conversation, error)
+	// Held until the transaction ends, so that counting and then recording a
+	// request is one step: two requests at the limit cannot both be let through.
+	LockGuestRequests(ctx context.Context) error
 	// Serialises writers of one person's list for the length of the transaction, so
 	// two adds at the cap cannot both pass the count.
 	LockMemoryList(ctx context.Context, userID string) error
@@ -376,11 +422,18 @@ type Querier interface {
 	// recoverable by an operator for the retention period, then goes with its
 	// messages, runs and attachments. Same shape as the temporary-chat statement.
 	PurgeDeletedConversations(ctx context.Context, arg PurgeDeletedConversationsParams) ([]PurgeDeletedConversationsRow, error)
+	// Nothing counts a request for more than a day.
+	PurgeGuestRequests(ctx context.Context, before pgtype.Timestamptz) (int64, error)
 	// The first account created becomes the admin: someone has to be able to reach
 	// the admin panel, and there is no other bootstrap path. The decision is made
 	// inside the INSERT so two concurrent registrations cannot both see an empty
-	// table and both claim it.
+	// table and both claim it. A guest (a user row that exists for one run, see
+	// guest.sql) is not an account and does not count.
 	RegisterUser(ctx context.Context, arg RegisterUserParams) (User, error)
+	// Stop pressed in the guest's page. A guest's run is named by its id alone,
+	// which only the page that started it was told, and only a guest's run can be
+	// reached this way.
+	RequestGuestRunCancel(ctx context.Context, id uuid.UUID) (Run, error)
 	RequestRunCancel(ctx context.Context, arg RequestRunCancelParams) (Run, error)
 	// Replaces the whole override: the settings panel always sends every field,
 	// and a field it sends as null goes back to following the catalogue.

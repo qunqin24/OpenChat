@@ -66,31 +66,24 @@ func (s *Server) titleConversation(run sqlc.Run) {
 	defer cancel()
 	log := slog.With("conversation_id", run.ConversationID, "run_id", run.ID)
 
+	// A guest's conversation is named by the request that ran it (guest_run.go),
+	// which hands the title to the browser that keeps the conversation.
+	if guest, err := s.q.IsGuestUser(ctx, run.UserID); err != nil || guest {
+		return
+	}
 	conv, err := s.q.GetConversation(ctx, sqlc.GetConversationParams{ID: run.ConversationID, UserID: &run.UserID})
 	// A temporary chat is never named: it is gone in a day and not in the list.
 	if err != nil || conv.Title != defaultTitle || conv.Temporary {
 		return
 	}
-	rows, err := s.q.ListRunMessages(ctx, sqlc.ListRunMessagesParams{RunID: &run.ID, InputMessageID: run.InputMessageID})
+	exchange, err := s.exchangeOf(ctx, run)
 	if err != nil {
 		log.Warn("title: read the exchange", "error", err)
 		return
 	}
-	var question, answer strings.Builder
-	for _, row := range rows {
-		switch row.Role {
-		case sqlc.MessageRoleUser:
-			question.WriteString(row.Content)
-		case sqlc.MessageRoleAssistant:
-			answer.WriteString(row.Content)
-		}
-	}
-	if strings.TrimSpace(question.String()) == "" {
+	if exchange == "" {
 		return
 	}
-
-	exchange := "<user>\n" + clip(question.String(), titleInputCap) + "\n</user>\n<assistant>\n" +
-		clip(answer.String(), titleAnswerCap) + "\n</assistant>"
 	title, err := s.generateTitle(ctx, run.UserID, run.ConversationID, run.ModelID, run.ChannelID, exchange)
 	if err != nil {
 		log.Warn("title: generate", "error", err)
@@ -112,6 +105,29 @@ func (s *Server) titleConversation(run sqlc.Run) {
 	})
 }
 
+// exchangeOf is a run's question and answer as the title prompt reads them, or
+// "" when there is no question to name the conversation by.
+func (s *Server) exchangeOf(ctx context.Context, run sqlc.Run) (string, error) {
+	rows, err := s.q.ListRunMessages(ctx, sqlc.ListRunMessagesParams{RunID: &run.ID, InputMessageID: run.InputMessageID})
+	if err != nil {
+		return "", err
+	}
+	var question, answer strings.Builder
+	for _, row := range rows {
+		switch row.Role {
+		case sqlc.MessageRoleUser:
+			question.WriteString(row.Content)
+		case sqlc.MessageRoleAssistant:
+			answer.WriteString(row.Content)
+		}
+	}
+	if strings.TrimSpace(question.String()) == "" {
+		return "", nil
+	}
+	return "<user>\n" + clip(question.String(), titleInputCap) + "\n</user>\n<assistant>\n" +
+		clip(answer.String(), titleAnswerCap) + "\n</assistant>", nil
+}
+
 // errNoTitle is a model that answered with nothing usable as a title.
 var errNoTitle = errors.New("the model gave no title")
 
@@ -131,10 +147,17 @@ func (s *Server) generateTitle(ctx context.Context, userID, conversationID uuid.
 		return "", err
 	}
 	maxTokens := 4096 // room for a reasoning model's thinking before the title; a Claude 5 model thinks even at its least effort
+	// Without a conversation (a guest's title on request) the request has
+	// neither an owner nor one to be listed under in the ledger.
+	var ledgerConversation *uuid.UUID
+	session := ""
+	if conversationID != uuid.Nil {
+		ledgerConversation, session = &conversationID, conversationID.String()
+	}
 	meter := s.usage.Begin(ledger.Call{
 		Kind:           ledger.KindTitle,
 		UserID:         userID,
-		ConversationID: &conversationID,
+		ConversationID: ledgerConversation,
 		ChannelID:      &channelID,
 		ModelID:        modelID,
 	}, nil)
@@ -145,7 +168,7 @@ func (s *Server) generateTitle(ctx context.Context, userID, conversationID uuid.
 			llm.TextMessage(llm.RoleUser, transcript),
 		},
 		Options: llm.Options{MaxTokens: &maxTokens, Reasoning: leastThinking(ctx, s.q, modelID)},
-		Session: conversationID.String(),
+		Session: session,
 	}, meter.Wrap(nil))
 	meter.End(ctx, resp, err)
 	if err != nil {

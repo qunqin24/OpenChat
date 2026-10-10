@@ -200,6 +200,11 @@ func (sw *Switch) PresignGet(ctx context.Context, key string, ttl time.Duration)
 	return sw.holding(key).PresignGet(ctx, key, ttl)
 }
 
+// PutObject stores the bytes with the driver that is current, like an upload.
+func (sw *Switch) PutObject(ctx context.Context, key, contentType string, data []byte) error {
+	return sw.current().PutObject(ctx, key, contentType, data)
+}
+
 func (sw *Switch) Size(ctx context.Context, key string) (int64, error) {
 	return sw.holding(key).Size(ctx, key)
 }

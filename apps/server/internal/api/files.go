@@ -36,6 +36,8 @@ type blobStore interface {
 	PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error)
 	ObjectURL(key string) string
 	Size(ctx context.Context, key string) (int64, error)
+	// PutObject stores bytes the server received itself (a guest's files).
+	PutObject(ctx context.Context, key, contentType string, data []byte) error
 	// Delete removes a stored file; the cleanup passes use it once the row that
 	// wanted the file is gone.
 	Delete(ctx context.Context, key string) error

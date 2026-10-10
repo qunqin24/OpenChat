@@ -44,14 +44,20 @@ LIMIT sqlc.arg('row_limit');
 -- A user message is written with the input it follows (`parent_input_id`, null
 -- for a conversation's first) and then made the conversation's current leaf
 -- with SetCurrentInput; no other row has a parent.
-INSERT INTO messages (conversation_id, role, content, parts, status, run_id,
+--
+-- `id` and `created_at` are for guest mode, which writes a transcript the
+-- browser kept, under the ids and in the order the browser has it; every other
+-- caller leaves both out.
+INSERT INTO messages (id, conversation_id, role, content, parts, status, run_id,
                       stop_reason, model, provider, usage, error_code, edit_of, parent_input_id,
                       created_at, updated_at)
-VALUES (sqlc.arg('conversation_id'), sqlc.arg('role'), sqlc.arg('content'), sqlc.arg('parts'),
+VALUES (COALESCE(sqlc.narg('id')::uuid, gen_random_uuid()),
+        sqlc.arg('conversation_id'), sqlc.arg('role'), sqlc.arg('content'), sqlc.arg('parts'),
         sqlc.arg('status'), sqlc.narg('run_id'), sqlc.narg('stop_reason'), sqlc.narg('model'),
         sqlc.narg('provider'), sqlc.narg('usage'), sqlc.narg('error_code'), sqlc.narg('edit_of'),
         sqlc.narg('parent_input_id'),
-        clock_timestamp(), clock_timestamp())
+        COALESCE(sqlc.narg('created_at')::timestamptz, clock_timestamp()),
+        COALESCE(sqlc.narg('created_at')::timestamptz, clock_timestamp()))
 RETURNING *;
 
 -- name: ListRunMessages :many

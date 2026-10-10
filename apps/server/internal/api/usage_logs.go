@@ -111,6 +111,12 @@ func (s *Server) ListUsageLogs(w http.ResponseWriter, r *http.Request, params Li
 }
 
 func (s *Server) toUsageLog(ctx context.Context, row sqlc.ListUsageLogsRow) UsageLog {
+	// A request of a guest still being answered has an owner in the table and
+	// none here (the query leaves guests out of its join): it reads as one whose
+	// account is gone, which in this app means a guest's.
+	if row.UserName == nil {
+		row.UserID = nil
+	}
 	out := UsageLog{
 		Id:               row.ID,
 		CreatedAt:        row.CreatedAt.Time,

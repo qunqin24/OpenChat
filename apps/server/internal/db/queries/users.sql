@@ -2,10 +2,11 @@
 -- The first account created becomes the admin: someone has to be able to reach
 -- the admin panel, and there is no other bootstrap path. The decision is made
 -- inside the INSERT so two concurrent registrations cannot both see an empty
--- table and both claim it.
+-- table and both claim it. A guest (a user row that exists for one run, see
+-- guest.sql) is not an account and does not count.
 INSERT INTO users (email, name, password_hash, role)
 VALUES ($1, $2, $3,
-        CASE WHEN (SELECT count(*) FROM users) = 0
+        CASE WHEN (SELECT count(*) FROM users WHERE NOT guest) = 0
                  THEN 'admin'::user_role
              ELSE 'user'::user_role END)
 RETURNING *;
@@ -26,14 +27,16 @@ WHERE id = $1;
 -- error. Addresses win, so nobody's username can shadow somebody's email.
 SELECT *
 FROM users
-WHERE lower(email) = lower(sqlc.arg('identifier')::text)
-   OR lower(name) = lower(sqlc.arg('identifier')::text)
+WHERE NOT guest
+  AND (lower(email) = lower(sqlc.arg('identifier')::text)
+    OR lower(name) = lower(sqlc.arg('identifier')::text))
 ORDER BY (lower(email) = lower(sqlc.arg('identifier')::text)) DESC
 LIMIT 1;
 
 -- name: CountUsers :one
 SELECT count(*)
-FROM users;
+FROM users
+WHERE NOT guest;
 
 -- name: TouchUserSeen :exec
 UPDATE users
@@ -45,7 +48,8 @@ WHERE id = $1;
 -- total, and the row count here stays small enough that the scan is cheap.
 SELECT *
 FROM users
-WHERE (sqlc.narg('search')::text IS NULL
+WHERE NOT guest
+  AND (sqlc.narg('search')::text IS NULL
     OR email ILIKE '%' || sqlc.narg('search')::text || '%'
     OR name ILIKE '%' || sqlc.narg('search')::text || '%')
 ORDER BY created_at DESC, id DESC
@@ -54,7 +58,8 @@ LIMIT sqlc.arg('row_limit') OFFSET sqlc.arg('row_offset');
 -- name: CountUsersFiltered :one
 SELECT count(*)
 FROM users
-WHERE (sqlc.narg('search')::text IS NULL
+WHERE NOT guest
+  AND (sqlc.narg('search')::text IS NULL
     OR email ILIKE '%' || sqlc.narg('search')::text || '%'
     OR name ILIKE '%' || sqlc.narg('search')::text || '%');
 

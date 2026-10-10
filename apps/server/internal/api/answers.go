@@ -53,7 +53,14 @@ var (
 // caller holds the conversation (LockConversation), so the leaf it read is the
 // leaf it replaces.
 func appendInput(ctx context.Context, q *sqlc.Queries, conversationID uuid.UUID, parent *uuid.UUID, content string, parts []llm.Part, editOf *uuid.UUID) (sqlc.Message, error) {
+	return appendInputAs(ctx, q, conversationID, parent, content, parts, editOf, nil)
+}
+
+// appendInputAs is appendInput under an id of the caller's choosing, which is
+// how a guest's message gets the id its browser already gave it.
+func appendInputAs(ctx context.Context, q *sqlc.Queries, conversationID uuid.UUID, parent *uuid.UUID, content string, parts []llm.Part, editOf, id *uuid.UUID) (sqlc.Message, error) {
 	input, err := q.AppendEntry(ctx, sqlc.AppendEntryParams{
+		ID:             id,
 		ConversationID: conversationID,
 		Role:           sqlc.MessageRoleUser,
 		Content:        content,

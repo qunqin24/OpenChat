@@ -127,6 +127,9 @@ SELECT l.id,
        l.status,
        l.error_code,
        l.error_message,
+       -- The join leaves a guest out (users.guest), so a guest's request has no
+       -- user_name here, as once the guest is deleted it has no user_id at all:
+       -- the page labels a request without an owner a guest's.
        l.user_id,
        u.name                          AS user_name,
        u.email                         AS user_email,
@@ -150,7 +153,7 @@ SELECT l.id,
        l.first_token_ms,
        l.duration_ms
 FROM usage_logs l
-         LEFT JOIN users u ON u.id = l.user_id
+         LEFT JOIN users u ON u.id = l.user_id AND NOT u.guest
 WHERE ($1::timestamptz IS NULL
     OR (l.created_at, l.id) < ($1::timestamptz, $2::uuid))
   AND ($3::uuid IS NULL OR l.user_id = $3::uuid)

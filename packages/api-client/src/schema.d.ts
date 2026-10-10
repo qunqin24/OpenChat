@@ -1279,6 +1279,173 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/guest/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whether guests are let in
+         * @description Public and always there, so the sign-in page knows whether to offer
+         *     "continue as guest".
+         */
+        get: operations["getGuestStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/guest/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What the chat offers a guest
+         * @description The models an ordinary user sees (those kept for administrators are
+         *     left out), the composer's features and the personalization limits - the
+         *     three things a signed-in chat reads from `/models`, `/features` and
+         *     `/me/personalization`, in one answer a guest can get without a session.
+         *     404 `not_found` while guest mode is off.
+         */
+        get: operations["getGuestConfig"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/guest/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer a guest's message, stateless
+         * @description The one request that needs a model. The body carries everything the
+         *     server would have read from a database: the conversation's path as the
+         *     browser holds it, the new message (or which answer to redo, or the
+         *     answers to a question), the guest's custom instructions and memories.
+         *     The server writes them as rows of a user that exists for this request
+         *     alone, runs the agent on them exactly as for an account, and deletes
+         *     them when the stream ends. The response is the conversation's events
+         *     (`BatchEvent`, as `GET /conversations/{id}/events` sends them, from
+         *     `run_started` on) with the rows under the ids the browser sent, then a
+         *     last `GuestEndEvent` with what the browser has to keep.
+         *
+         *     Refused before anything is written, as JSON: 429 `guest_ip_limit` and
+         *     `guest_daily_limit` (the administrator's limits), 409 `no_models`,
+         *     400 `model_unavailable` and the attachment errors of `createMessage`,
+         *     400 `invalid_answers`, 409 `not_pending` for an answer to a question
+         *     that is not the last row. Closing the connection stops the run.
+         */
+        post: operations["guestRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/guest/runs/{runId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop a guest's run
+         * @description Asks the run to stop; what it generated is kept and the stream ends as
+         *     for any run. The run's id was only told to the page that started it.
+         */
+        post: operations["cancelGuestRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/guest/title": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Name a guest's conversation
+         * @description The task model reads the last exchanges the browser sends and answers
+         *     with a title. Counts against the guest limits like a run.
+         */
+        post: operations["guestTitle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/guest/favicons/{domain}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A site's icon, for a guest
+         * @description The same as `getFavicon`, without a session.
+         */
+        get: operations["getGuestFavicon"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/guest/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A picture an answer shows, fetched for a guest
+         * @description As `getConversationImage`, but a guest has no conversation on the
+         *     server to check the address against: any public image address is
+         *     served, from public addresses only, and each client is limited in how
+         *     often it can ask.
+         */
+        get: operations["getGuestImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/files": {
         parameters: {
             query?: never;
@@ -1469,6 +1636,15 @@ export interface components {
              * @description User messages only. The first version of the question this one rewords.
              */
             editOf?: string;
+            /**
+             * @description Guest streams only, on assistant rows. What a provider wants back
+             *     with this response that is not for display - a reasoning
+             *     signature, redacted reasoning - kept opaque. The server never gives
+             *     it to a signed-in browser, which has no use for it; a guest's
+             *     browser keeps the transcript, so it has to hold it for the next
+             *     request (`GuestMessage.providerState`). Absent elsewhere.
+             */
+            providerState?: string;
             /** Format: date-time */
             createdAt: string;
         };
@@ -2376,7 +2552,162 @@ export interface components {
             page: number;
             limit: number;
         };
+        GuestStatus: {
+            enabled: boolean;
+        };
+        GuestConfig: {
+            models: components["schemas"]["ChatModel"][];
+            features: components["schemas"]["ChatFeatures"];
+            personalization: {
+                /** @description The administrator's memory switch (`SystemSettings.memory`). */
+                memoryAllowed: boolean;
+                instructionLimit: number;
+                memoryLimit: number;
+                memoryLength: number;
+            };
+        };
+        GuestAttachment: {
+            /** Format: uuid */
+            id: string;
+            filename: string;
+            contentType: string;
+            /** Format: int64 */
+            size: number;
+            /**
+             * Format: byte
+             * @description The file, base64. Left out for the files that no longer fit what a
+             *     request can carry (the newest are sent, as the model gets the newest);
+             *     the model is told those were not included, as for an account.
+             */
+            data?: string;
+        };
+        /**
+         * @description A row of the conversation as the guest's browser holds it. Assistant
+         *     and tool rows are what the server sent back earlier (`Message`).
+         */
+        GuestMessage: {
+            /** Format: uuid */
+            id: string;
+            role: components["schemas"]["Role"];
+            content: string;
+            parts: components["schemas"]["MessagePart"][];
+            /** @description The `Message.providerState` the row came with; used in place of `parts` when sent. */
+            providerState?: string;
+            /** @enum {string} */
+            stopReason?: "stop" | "length" | "tool_calls" | "content_filter" | "cancelled" | "error";
+            model?: string;
+            errorCode?: string;
+            usage?: components["schemas"]["Usage"];
+            attachments?: components["schemas"]["GuestAttachment"][];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        GuestMemory: {
+            /** Format: uuid */
+            id: string;
+            content: string;
+            source?: components["schemas"]["MemorySource"];
+        };
+        GuestRunRequest: {
+            /**
+             * @description `send`: `input` is a new message after `messages` (also an edit:
+             *     `editOf` names the question it rewords, and `messages` ends
+             *     before that question). `regenerate`: answer the last message of
+             *     `messages` again. `answer`: `callId` and `answers` are the reply to
+             *     the question the last row of `messages` asks.
+             * @enum {string}
+             */
+            action: "send" | "regenerate" | "answer";
+            /** Format: uuid */
+            conversationId: string;
+            temporary?: boolean;
+            /** @description The conversation has a title already; none is generated after the run. */
+            titled?: boolean;
+            /**
+             * @description The branch shown, root to leaf, in order, with each question's one
+             *     answer that is shown. For `send` it stops before `input`; for
+             *     `regenerate` it ends with the question and without the answer being
+             *     redone.
+             */
+            messages: components["schemas"]["GuestMessage"][];
+            /** @description For `send`. */
+            input?: components["schemas"]["GuestMessage"];
+            /**
+             * Format: uuid
+             * @description For `send` that rewords a question; echoed on the input's events.
+             */
+            editOf?: string;
+            callId?: string;
+            answers?: {
+                selected: string[];
+                other?: string;
+            }[];
+            /**
+             * Format: uuid
+             * @description For `answer`. The run that began the reply the question is part of.
+             */
+            continues?: string;
+            model?: string;
+            reasoningEffort?: components["schemas"]["ReasoningEffort"];
+            webSearch?: boolean;
+            aboutYou?: string;
+            responseStyle?: string;
+            memoryEnabled?: boolean;
+            memories?: components["schemas"]["GuestMemory"][];
+            /**
+             * @description The conversation's snapshot from `GuestEndEvent`, sent back so the
+             *     system prompt is the same bytes at every turn. Absent on its first run.
+             */
+            memorySnapshot?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * @description The last frame of a guest's run: what the browser has to keep, because
+         *     the server keeps nothing. Sent after `run_finished`.
+         */
+        GuestEndEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "guest_end";
+            run: components["schemas"]["Run"];
+            memorySnapshot: {
+                [key: string]: unknown;
+            } | null;
+            /** @description The guest's memories now - the model's memory tool may have changed them. */
+            memories: components["schemas"]["Memory"][];
+            /** @description What the model changed during this run, for the undo list. */
+            memoryEvents: components["schemas"]["MemoryEvent"][];
+            /** @description Set when the conversation was given a title after this run. */
+            title?: string;
+        };
+        /** @description One SSE frame of a guest run. */
+        GuestRunEvent: components["schemas"]["SnapshotEvent"] | components["schemas"]["BatchEvent"] | components["schemas"]["GuestEndEvent"];
+        GuestTitleRequest: {
+            messages: {
+                /** @enum {string} */
+                role: "user" | "assistant";
+                content: string;
+            }[];
+            /** @description The conversation's model, used when no task model is set. */
+            model?: string;
+        };
+        GuestTitle: {
+            title: string;
+        };
         SystemSettings: {
+            /**
+             * @description Whether anyone may use the chat without an account. A guest's
+             *     conversations are kept in their own browser; the server holds none
+             *     of them. Off by default.
+             */
+            guestMode: boolean;
+            /** @description Requests one address may make as a guest per hour; 0 is unlimited. */
+            guestHourlyLimit: number;
+            /** @description Requests all guests together may make per day (the last 24 hours); 0 is unlimited. */
+            guestDailyLimit: number;
             /**
              * @description How many days a conversation a user deleted is kept before it is
              *     removed for good, with its messages and files. Until then the
@@ -2438,6 +2769,11 @@ export interface components {
             askUser?: boolean;
             memory?: boolean;
             avatarUploads?: boolean;
+            guestMode?: boolean;
+            /** @description 0 to 100000 (400 `invalid_guest_limit` otherwise); 0 is unlimited. */
+            guestHourlyLimit?: number;
+            /** @description 0 to 10000000 (400 `invalid_guest_limit` otherwise); 0 is unlimited. */
+            guestDailyLimit?: number;
             /**
              * @description A model an enabled channel offers (400 `model_unavailable`
              *     otherwise), or empty for each conversation's own.
@@ -4683,6 +5019,165 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChatModel"][];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getGuestStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuestStatus"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getGuestConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuestConfig"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    guestRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuestRunRequest"];
+            };
+        };
+        responses: {
+            /** @description The events of the run, as server-sent events. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["GuestRunEvent"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    cancelGuestRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description asked */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    guestTitle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuestTitleRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuestTitle"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getGuestFavicon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                domain: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The icon. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": string;
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getGuestImage: {
+        parameters: {
+            query: {
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": string;
                 };
             };
             default: components["responses"]["Error"];

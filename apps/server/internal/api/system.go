@@ -93,6 +93,9 @@ func (s *Server) systemSettings(ctx context.Context) (SystemSettings, error) {
 	if settings.TaskModel, err = stringSetting(ctx, s.q, settingTaskModel); err != nil {
 		return settings, err
 	}
+	if err := guestSettings(ctx, s.q, &settings); err != nil {
+		return settings, err
+	}
 	keep := retentionOf(ctx, s.q)
 	settings.DeletedRetentionDays = int(keep.deleted / (24 * time.Hour))
 	settings.UnsentUploadHours = int(keep.unsentUploads / time.Hour)
@@ -103,6 +106,12 @@ func (s *Server) systemSettings(ctx context.Context) (SystemSettings, error) {
 func (s *Server) UpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 	var body UpdateSystemSettingsRequest
 	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+
+	// The guest limits likewise: nothing is saved if one of them is out of range.
+	if err := validGuestLimits(body.GuestHourlyLimit, body.GuestDailyLimit); err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
@@ -186,6 +195,40 @@ func (s *Server) UpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		slog.InfoContext(r.Context(), "avatar uploads changed",
 			"enabled", *body.AvatarUploads, "actor", auth.MustUser(r.Context()).Email)
+	}
+
+	for _, g := range []struct {
+		key   string
+		value any
+		log   string
+	}{
+		{settingGuestMode, body.GuestMode, "guest mode changed"},
+		{settingGuestHourlyLimit, body.GuestHourlyLimit, "guest hourly limit changed"},
+		{settingGuestDailyLimit, body.GuestDailyLimit, "guest daily limit changed"},
+	} {
+		var (
+			value []byte
+			shown any
+		)
+		switch v := g.value.(type) {
+		case *bool:
+			if v == nil {
+				continue
+			}
+			value, _ = json.Marshal(*v)
+			shown = *v
+		case *int:
+			if v == nil {
+				continue
+			}
+			value, _ = json.Marshal(*v)
+			shown = *v
+		}
+		if err := s.q.SetSetting(r.Context(), sqlc.SetSettingParams{Key: g.key, Value: value}); err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+		slog.InfoContext(r.Context(), g.log, "value", shown, "actor", auth.MustUser(r.Context()).Email)
 	}
 
 	if body.Memory != nil {
