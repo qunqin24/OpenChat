@@ -682,30 +682,9 @@
 .prism-next .n-palette-preview .n-msg-assistant:first-child {
   margin-top: 0;
 }
-.prism-next .n-caret {
-  display: inline-block;
-  width: 9px;
-  height: 9px;
-  margin-left: 1px;
-  border-radius: 50%;
-  background: var(--n-text);
-  vertical-align: middle;
-  animation: n-caret-pulse 1.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
-}
 @keyframes n-spin {
   to {
     transform: rotate(360deg);
-  }
-}
-@keyframes n-caret-pulse {
-  0%,
-  100% {
-    opacity: 0.28;
-    transform: scale(0.82);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1);
   }
 }
 @keyframes n-fade-in {

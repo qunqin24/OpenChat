@@ -8,6 +8,7 @@ import { useStuck } from '@/hooks/use-stuck'
 import { API_BASE_URL } from '@/lib/api'
 import { siteName } from '@/lib/urls'
 import { cn } from '@/lib/utils'
+import { ThinkingOrb } from './ThinkingOrb'
 
 export type ToolStatus = 'pending' | 'running' | ToolResultPart['status']
 
@@ -95,10 +96,13 @@ export function ToolActivity({ items, thinking = false }: { items: ActivityItem[
         onClick={() => setOpen(!open)}
       >
         <span className="n-activity-icon">
-          {active || thinking ? (
+          {active ? (
             // Opacity, not movement, and kept under reduced motion: a frozen
             // indicator cannot be told apart from a stuck one.
             <span className="n-activity-pulse" data-motion="essential" role="status" aria-label={t('chat.tool.running')} />
+          ) : thinking ? (
+            // The same mark as thinking anywhere else, between rounds too.
+            <span role="status" aria-label={t('chat.reasoning.live')}><ThinkingOrb /></span>
           ) : (
             stepIcon(steps[steps.length - 1]!.call.name)
           )}

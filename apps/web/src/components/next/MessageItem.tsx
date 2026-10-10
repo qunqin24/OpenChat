@@ -18,6 +18,7 @@ import GenUIBlock from './genui/GenUIBlock'
 import MemoryChip from './MemoryChip'
 import MessageAttachments from './MessageAttachments'
 import { markdownComponents, markdownLinkSafety, prepareMarkdown, useMarkdownPlugins } from './markdown-components'
+import { ThinkingLine, ThinkingOrb } from './ThinkingOrb'
 import ToolActivity, {
   type ActivityItem,
   type ActivityNote,
@@ -230,9 +231,12 @@ function Reasoning({ text, streaming, durationMs }: { text: string; streaming: b
     <Collapsible.Root className="n-reasoning" open={open && Boolean(text)} onOpenChange={setOpen}>
       <Collapsible.Trigger ref={toggle} className="n-reasoning-toggle" data-stuck={stuck || undefined}>
         {streaming ? (
-          <span className="n-reasoning-live" data-motion="essential">
-            {t('chat.reasoning.live')}
-          </span>
+          <>
+            <ThinkingOrb />
+            <span className="n-reasoning-live" data-motion="essential">
+              {t('chat.reasoning.live')}
+            </span>
+          </>
         ) : seconds === null ? (
           t('chat.reasoning.done')
         ) : (
@@ -531,7 +535,7 @@ export function AssistantTurn({
       <div className="n-msg-head">{name}</div>
       <div className="n-msg-body">{blocks}</div>
 
-      {waiting && first < 0 && <span className="n-caret" />}
+      {waiting && first < 0 && <ThinkingLine />}
 
       {!running && (text || onRegenerate || versions) && (
         // The last answer keeps its actions in view, as the place to go next.
@@ -565,7 +569,7 @@ function isFoldBlock(block: Block): block is FoldBlock {
 
 /**
  * The reply to a message that is still on its way to the server: the model's
- * header and a waiting caret, exactly as a run looks before its first token,
+ * header and the thinking line, exactly as a run looks before its first token,
  * so nothing shifts when the real one takes its place.
  */
 export function PendingReply({ model, modelId }: { model?: ChatModel; modelId: string }) {
@@ -583,7 +587,7 @@ export function PendingReply({ model, modelId }: { model?: ChatModel; modelId: s
       </span>
       <div className="n-msg-head">{name}</div>
       <div className="n-msg-body" />
-      <span className="n-caret" />
+      <ThinkingLine />
     </div>
   )
 }
