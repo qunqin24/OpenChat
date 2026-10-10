@@ -26,10 +26,12 @@ export interface GuestStorage {
 
   messages(conversationId: string): Promise<StoredMessage[]>
   putMessages(messages: StoredMessage[]): Promise<void>
+  deleteMessages(ids: string[]): Promise<void>
 
   runs(conversationId: string): Promise<StoredRun[]>
   allRuns(): Promise<StoredRun[]>
   putRuns(runs: StoredRun[]): Promise<void>
+  deleteRuns(ids: string[]): Promise<void>
 
   blob(id: string): Promise<StoredBlob | undefined>
   putBlob(blob: StoredBlob): Promise<void>
@@ -83,10 +85,12 @@ export function memoryStorage(): GuestStorage {
 
     messages: async (id) => of(messages, id).map(copy),
     putMessages: async (rows) => rows.forEach((m) => messages.set(m.id, copy(m))),
+    deleteMessages: async (ids) => ids.forEach((id) => messages.delete(id)),
 
     runs: async (id) => of(runs, id).map(copy),
     allRuns: async () => [...runs.values()].map(copy),
     putRuns: async (rows) => rows.forEach((r) => runs.set(r.id, copy(r))),
+    deleteRuns: async (ids) => ids.forEach((id) => runs.delete(id)),
 
     blob: async (id) => blobs.get(id),
     putBlob: async (b) => void blobs.set(b.id, b),

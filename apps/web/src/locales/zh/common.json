@@ -74,10 +74,9 @@
       "attachment_unsupported": "所选模型不支持这类文件，请移除文件或换一个模型。",
       "attachment_unavailable": "有文件没有上传成功或已经发送过，请移除后重新添加。",
       "nothing_to_answer": "这个对话里还没有可以回答的消息。",
-      "not_latest": "只能切换最后一条回答的版本。",
-      "not_on_path": "这条提问已不在当前显示的分支上。",
+      "not_latest": "只能重新生成最后一条回答。",
       "message_not_found": "这条消息已经不存在了。",
-      "not_pending": "这个问题已经回答过、被跳过，或被重新生成替换了。",
+      "not_pending": "这个问题已经回答过、被跳过，或已被删除。",
       "invalid_answers": "回答不完整，请检查每个问题。",
       "generic": "发送失败，请重试。",
       "guest_ip_limit": "这个网络本小时的游客请求次数已用完，请稍后再试，或登录后继续使用。",
@@ -109,18 +108,6 @@
       "label": "联网",
       "on-hint": "联网已开启：模型会在需要时搜索和读取网页。点击关闭",
       "off-hint": "联网已关闭：模型只用已有知识回答。点击开启"
-    },
-    "question-version": {
-      "label": "提问版本",
-      "previous": "上一个提问版本",
-      "next": "下一个提问版本",
-      "error": "切换提问版本失败，请重试。"
-    },
-    "version": {
-      "label": "回答版本",
-      "previous": "上一个版本",
-      "next": "下一个版本",
-      "error": "切换回答版本失败，请重试。"
     },
     "ask": {
       "label": "需要你的选择",
@@ -1114,7 +1101,7 @@
     "data": {
       "temporary": "临时聊天在创建 24 小时后自动删除。",
       "export-title": "导出所有对话",
-      "export-desc": "下载一份 JSON 文件，包含你保留的所有对话，以及每个对话当前所在分支上的消息。临时聊天、工具调用的过程不在其中。",
+      "export-desc": "下载一份 JSON 文件，包含你保留的所有对话，以及每个对话的消息。临时聊天、工具调用的过程不在其中。",
       "export-button": "导出",
       "exporting": "正在导出…",
       "export-done": "导出完成",

@@ -31,49 +31,43 @@ export type Turn =
 export type AssistantTurn = Extract<Turn, { kind: 'assistant' }>
 
 /**
- * What a redo hides until the server has started it: the last answer's runs
- * (regenerating), or a question and everything after it (editing — an edited
- * question starts a new branch, and what followed the old wording is off it).
+ * What a redo hides until the server has started it and the cache has caught up
+ * with what it deleted: with `from`, that message and every row after it (an
+ * edited question and what followed it); with `after`, every row after that
+ * message (the last question's answer, being regenerated).
  */
 export interface Replacing {
-  runs?: string[]
   from?: string
+  after?: string
 }
 
 /**
  * Merges the persisted rows with the run in flight and groups them into turns.
  * Rows the live run holds that the message list already has are not repeated.
  *
- * A run in flight can be redoing something the list still holds: answering
- * the same question again (its input is in the list), or an edit of any
- * question on the branch (its input is new, `editOf` that question's first
- * version). Regenerating leaves out the old answer; an edit leaves out the old
- * wording and every turn after it, which are off the new branch. So does
- * `replacing`, what a redo was just asked for and the server has not started
- * yet.
+ * A run in flight can be answering a question the list still holds an answer
+ * to: a regeneration deleted that answer on the server, and the list has not
+ * been fetched again yet. The run's input is in the list then, and whatever
+ * follows it, other than the run's own rows, is the answer that is gone. So
+ * does `replacing`, what a redo was just asked for and the server has not
+ * started yet.
  */
 export function buildTurns(persisted: Message[], live: LiveRun | null, replacing?: Replacing): Turn[] {
-  const seen = new Set(persisted.map((m) => m.id))
-  const input = live?.messages[0]
-  let from = Infinity
+  // Where the run in flight redoes an answer: after its input, which the list
+  // already holds.
+  let redone = Infinity
   // A run that goes on after a question is no redo: the reply before it stays.
-  if (input?.role === 'user' && !live?.run.continues) {
+  const input = live?.messages[0]
+  if (live && input?.role === 'user' && !live.run.continues) {
     const same = persisted.findIndex((m) => m.id === input.id)
-    if (same >= 0) from = same + 1
-    else if (input.editOf) {
-      const edited = persisted.findIndex((m) => m.role === 'user' && (m.editOf ?? m.id) === input.editOf)
-      if (edited >= 0) from = edited
-    }
+    if (same >= 0) redone = same + 1
   }
-  const cut = replacing?.from ? persisted.findIndex((m) => m.id === replacing.from) : -1
-  const kept = persisted.filter(
-    (m, i) =>
-      !(
-        (m.runId && replacing?.runs?.includes(m.runId)) ||
-        (cut >= 0 && i >= cut) ||
-        (i >= from && m.runId !== live?.run.id)
-      ),
-  )
+  // Where a redo just asked for starts.
+  const target = replacing?.from ?? replacing?.after
+  const at = target ? persisted.findIndex((m) => m.id === target) : -1
+  const asked = at < 0 ? Infinity : replacing?.from ? at : at + 1
+  const kept = persisted.filter((m, i) => i < asked && (i < redone || m.runId === live?.run.id))
+  const seen = new Set(kept.map((m) => m.id))
   const rows = [...kept, ...(live?.messages ?? []).filter((m) => !seen.has(m.id))]
 
   const turns: Turn[] = []

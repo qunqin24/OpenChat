@@ -14,11 +14,9 @@ import { useMessages } from '@/hooks/use-messages'
 import {
   useAnswerQuestion,
   useCancelRun,
-  useChooseAnswer,
   useEditMessage,
   useRegenerate,
   useSendMessage,
-  useSwitchVersion,
 } from '@/hooks/use-send-message'
 import { useSession } from '@/features/auth/use-auth'
 import { API_BASE_URL } from '@/lib/api'
@@ -71,9 +69,7 @@ export function NextChat({ conversationId }: NextChatProps) {
   const sendMessage = useSendMessage(conversationId ?? '')
   const cancelRun = useCancelRun(conversationId ?? '')
   const regenerate = useRegenerate(conversationId ?? '')
-  const chooseAnswer = useChooseAnswer(conversationId ?? '')
   const editMessage = useEditMessage(conversationId ?? '')
-  const switchVersion = useSwitchVersion(conversationId ?? '')
   const answerQuestion = useAnswerQuestion(conversationId ?? '')
   const updateSettings = useUpdateConversationSettings()
 
@@ -200,14 +196,13 @@ export function NextChat({ conversationId }: NextChatProps) {
   const start = Math.max(floor, topIndex >= 0 ? topIndex : turns.length - TURN_STEP)
   const anchor = useRef<{ el: HTMLElement; top: number } | null>(null)
 
-  // The last answer can be asked for again, and its versions stepped through:
-  // only the last, as an earlier one has later turns built on it.
+  // The last answer can be asked for again: only the last, as asking for an
+  // earlier one again would delete the turns after it.
   const last = useMemo(() => {
     const answer = turns.at(-1)
     const input = [...turns].reverse().find((turn) => turn.kind === 'user')
     if (answer?.kind !== 'assistant' || input?.kind !== 'user') return null
-    const runs = input.message.versions ?? []
-    return { answer, inputId: input.message.id, runs, at: runs.indexOf(answer.key) }
+    return { answer, inputId: input.message.id }
   }, [turns])
 
   // The question the last reply ended on, if nobody has answered or written past it.
@@ -250,16 +245,15 @@ export function NextChat({ conversationId }: NextChatProps) {
     if (!last) return
     parked.current = true
     regenerate.mutate({
-      replacing: last.answer.runs,
+      inputId: last.inputId,
       model: modelId || undefined,
       reasoningEffort: canThink ? effort : undefined,
       webSearch: canSearch ? webSearch : undefined,
     })
   }
 
-  // Any question can be reworded and asked again: the new wording starts a
-  // branch, and the turns after the old one leave the transcript (they stay on
-  // the server, behind the question's version pager).
+  // Any question can be reworded and asked again: the old wording and the turns
+  // after it are deleted, and the new wording goes on the end.
   const editQuestion = (message: Message, content: string) => {
     parked.current = true
     editMessage.mutate({
@@ -270,20 +264,6 @@ export function NextChat({ conversationId }: NextChatProps) {
       reasoningEffort: canThink ? effort : undefined,
       webSearch: canSearch ? webSearch : undefined,
     })
-  }
-
-  // The versions of a question: stepping to one shows it with the turns that
-  // followed it, as that branch was left.
-  const pickQuestion = (message: Message, index: number) => {
-    const messageId = message.branches?.[index]
-    if (!messageId) return
-    parked.current = true
-    switchVersion.mutate({ messageId })
-  }
-
-  const pickAnswer = (index: number) => {
-    const runId = last?.runs[index]
-    if (runId) chooseAnswer.mutate({ runId, inputId: last.inputId })
   }
 
   const isEmpty = !outgoing && (!conversationId || (!messages.isPending && turns.length === 0))
@@ -606,20 +586,12 @@ export function NextChat({ conversationId }: NextChatProps) {
                   )}
                 </div>
               )}
-              {turns.slice(start).map((turn) => {
-                const pager = turn.kind === 'user' ? versionsOf(turn.message) : undefined
-                return turn.kind === 'user' ? (
+              {turns.slice(start).map((turn) =>
+                turn.kind === 'user' ? (
                   <UserMessage
                     key={turn.key}
                     message={turn.message}
                     onEdit={!working && !outgoing ? (content) => editQuestion(turn.message, content) : undefined}
-                    versions={
-                      pager && {
-                        ...pager,
-                        busy: working || switchVersion.isPending,
-                        onPick: (to) => pickQuestion(turn.message, to),
-                      }
-                    }
                   />
                 ) : (
                   <AssistantTurn
@@ -630,14 +602,9 @@ export function NextChat({ conversationId }: NextChatProps) {
                     askingCallId={askingCallId}
                     onOpenQuestion={() => setDismissedCallId(null)}
                     onRegenerate={turn === last?.answer && !working && !outgoing ? handleRegenerate : undefined}
-                    versions={
-                      turn === last?.answer && last.at >= 0 && last.runs.length > 1
-                        ? { index: last.at, count: last.runs.length, onPick: pickAnswer, busy: working || chooseAnswer.isPending }
-                        : undefined
-                    }
                   />
-                )
-              })}
+                ),
+              )}
               {replacing && !outgoing && <PendingReply modelId={modelId} model={modelById.get(modelId)} />}
               {outgoing && (
                 <>
@@ -690,13 +657,6 @@ export function NextChat({ conversationId }: NextChatProps) {
       {temporaryMode && <TemporaryBar onExit={exitTemporary} />}
     </main>
   )
-}
-
-/** Where a question is among its versions, if it has others. */
-function versionsOf(message: Message) {
-  const branches = message.branches
-  const index = branches?.indexOf(message.id) ?? -1
-  return branches && branches.length > 1 && index >= 0 ? { index, count: branches.length } : undefined
 }
 
 /** The model a reply was answered with: its run's, or its rows'. */

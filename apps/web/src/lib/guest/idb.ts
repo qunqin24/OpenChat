@@ -71,10 +71,12 @@ export function idbStorage(): GuestStorage {
     for (const row of rows) tx.objectStore(store).put(row)
     await finished(tx)
   }
-  const remove = async (store: Store, key: string) => {
+  const remove = async (store: Store, key: string) => removeMany(store, [key])
+  const removeMany = async (store: Store, keys: string[]) => {
+    if (keys.length === 0) return
     const d = await connect()
     const tx = d.transaction(store, 'readwrite')
-    tx.objectStore(store).delete(key)
+    for (const key of keys) tx.objectStore(store).delete(key)
     await finished(tx)
   }
 
@@ -101,10 +103,12 @@ export function idbStorage(): GuestStorage {
 
     messages: (id) => byConversation<StoredMessage>('messages', id),
     putMessages: (rows) => put('messages', rows),
+    deleteMessages: (ids) => removeMany('messages', ids),
 
     runs: (id) => byConversation<StoredRun>('runs', id),
     allRuns: () => all<StoredRun>('runs'),
     putRuns: (rows) => put('runs', rows),
+    deleteRuns: (ids) => removeMany('runs', ids),
 
     blob: (id) => get<StoredBlob>('blobs', id),
     putBlob: (b) => put('blobs', [b]),

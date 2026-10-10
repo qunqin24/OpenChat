@@ -31,13 +31,11 @@ describe('the conversation list', () => {
     expect((await h.repo.listConversations({})).items[0]!.title).toBe('chat 0, renamed')
   })
 
-  it('searches titles and everything said, on any branch, with the passage around the hit', async () => {
+  it('searches titles and everything said, with the passage around the hit', async () => {
     const h = harness()
     const a = await h.conversation({ title: 'Trip to Lisbon' })
     const b = await h.conversation({ title: 'Untitled' })
     const q = await h.turn(b, { ask: 'how do I cook a risotto with mushrooms', answer: 'Stir it slowly.' })
-    // Said on a branch that is no longer shown.
-    await h.turn(b, { ask: 'something else', answer: 'different', parent: null, editOf: q.input.id })
 
     const byTitle = await h.repo.listConversations({ search: 'lisbon' })
     expect(byTitle.items.map((c) => c.id)).toEqual([a])
@@ -47,6 +45,11 @@ describe('the conversation list', () => {
     expect(byWords.items.map((c) => c.id)).toEqual([b])
     expect(byWords.items[0]!.match).toMatchObject({ messageId: q.input.id, role: 'user' })
     expect(byWords.items[0]!.match!.excerpt).toContain('risotto')
+
+    // What was edited away was deleted, so it is not found any more.
+    await h.turn(b, { ask: 'something else', answer: 'different', replaces: q.input.id })
+    expect((await h.repo.listConversations({ search: 'risotto' })).items).toEqual([])
+    expect((await h.repo.listConversations({ search: 'different' })).items.map((c) => c.id)).toEqual([b])
   })
 
   it('cuts an excerpt to the words around the first hit', () => {
@@ -238,7 +241,7 @@ describe('personalization and memory', () => {
 })
 
 describe('the data page', () => {
-  it('exports the branch shown as text, with file names and without tool rows', async () => {
+  it('exports the conversation as text, with file names and without tool rows', async () => {
     const h = harness()
     const c = await h.conversation({ title: 'Export me' })
     await h.turn(c, { ask: 'q1', answer: 'a1', tools: true })

@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next'
 import type { ChatModel, Message, MessagePart } from '@openchat/api-client'
-import { Check, ChevronLeft, ChevronRight, Copy, Pencil, RefreshCw } from 'lucide-react'
+import { Check, Copy, Pencil, RefreshCw } from 'lucide-react'
 import { Collapsible } from 'radix-ui'
 import { isValidElement, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -49,19 +49,9 @@ function CopyButton({ content }: { content: string }) {
 /**
  * User turns render as a right-aligned bubble with no avatar. Any of them can
  * be edited in place (`onEdit`): the bubble becomes a field, and sending it
- * asks the question again in the new words, as a branch beside the old one.
- * A question that has other versions carries a pager to step between them
- * (`versions`), each with the turns that followed it.
+ * asks the question again in the new words, replacing it and the turns after it.
  */
-export function UserMessage({
-  message,
-  onEdit,
-  versions,
-}: {
-  message: Message
-  onEdit?: (content: string) => void
-  versions?: AnswerVersions
-}) {
+export function UserMessage({ message, onEdit }: { message: Message; onEdit?: (content: string) => void }) {
   const { t } = useTranslation()
   const [draft, setDraft] = useState<string | null>(null)
   const files = message.attachments && message.attachments.length > 0 && <MessageAttachments items={message.attachments} />
@@ -91,7 +81,6 @@ export function UserMessage({
       {files}
       <div className="n-bubble">{message.content}</div>
       <div className="n-actions">
-        {versions && <VersionPager {...versions} scope="question-version" />}
         <CopyButton content={message.content} />
         {onEdit && (
           <button type="button" className="n-icon-btn sm" aria-label={t('chat.edit')} onClick={() => setDraft(message.content)}>
@@ -106,8 +95,8 @@ export function UserMessage({
 /**
  * The question being reworded: a field the size of what is in it, Enter to
  * send and Escape to put it back, as in the composer. Unchanged wording sends
- * too — it is asked again, as a new version, with whatever model and settings
- * the composer has now. Held back only when empty, or while the conversation
+ * too — it is asked again, with whatever model and settings the composer has
+ * now. Held back only when empty, or while the conversation
  * is busy (no `onSubmit`).
  */
 function EditField({
@@ -279,15 +268,6 @@ function errorText(t: TFunction<'common'>, code?: string | null) {
   return known ? t(`chat.error.${known}`) : t('chat.error.model_error')
 }
 
-/** The versions of an answer or of a question, and which of them is shown. */
-export interface AnswerVersions {
-  /** Zero-based position of the answer shown. */
-  index: number
-  count: number
-  onPick: (index: number) => void
-  busy: boolean
-}
-
 interface AssistantTurnProps {
   turn: Extract<Turn, { kind: 'assistant' }>
   /** The catalogue's entry for the model, for its name and mark. */
@@ -295,48 +275,10 @@ interface AssistantTurnProps {
   modelId: string
   /** The last answer only: answer again. Absent while that cannot be done. */
   onRegenerate?: () => void
-  /** The last answer only, once it has more than one version. */
-  versions?: AnswerVersions
   /** The call id of the model's question this reply is waiting on, if it is. */
   askingCallId?: string | null
   /** Brings the waiting question's panel back over the composer. */
   onOpenQuestion?: () => void
-}
-
-/** ‹ 2 / 3 › — steps through an input's answers, or a question's versions. */
-function VersionPager({
-  index,
-  count,
-  onPick,
-  busy,
-  scope = 'version',
-}: AnswerVersions & { scope?: 'version' | 'question-version' }) {
-  const { t } = useTranslation()
-  return (
-    <div className="n-pager" role="group" aria-label={t(`chat.${scope}.label`)}>
-      <button
-        type="button"
-        className="n-pager-btn"
-        aria-label={t(`chat.${scope}.previous`)}
-        disabled={busy || index === 0}
-        onClick={() => onPick(index - 1)}
-      >
-        <ChevronLeft className="h-3.5 w-3.5" />
-      </button>
-      <span className="n-pager-count">
-        {index + 1} / {count}
-      </span>
-      <button
-        type="button"
-        className="n-pager-btn"
-        aria-label={t(`chat.${scope}.next`)}
-        disabled={busy || index === count - 1}
-        onClick={() => onPick(index + 1)}
-      >
-        <ChevronRight className="h-3.5 w-3.5" />
-      </button>
-    </div>
-  )
 }
 
 /**
@@ -348,7 +290,6 @@ export function AssistantTurn({
   model,
   modelId,
   onRegenerate,
-  versions,
   askingCallId,
   onOpenQuestion,
 }: AssistantTurnProps) {
@@ -539,10 +480,9 @@ export function AssistantTurn({
 
       {waiting && first < 0 && <ThinkingLine />}
 
-      {!running && (text || onRegenerate || versions) && (
+      {!running && (text || onRegenerate) && (
         // The last answer keeps its actions in view, as the place to go next.
         <div className={onRegenerate ? 'n-actions always' : 'n-actions'}>
-          {versions && <VersionPager {...versions} />}
           {text && <CopyButton content={text} />}
           {onRegenerate && (
             <button type="button" className="n-icon-btn sm" aria-label={t('chat.regenerate')} onClick={onRegenerate}>

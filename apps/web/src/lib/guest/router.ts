@@ -4,7 +4,7 @@ import { GuestError, notFound } from './errors'
 import { eventStream, type GuestHub } from './hub'
 import type { GuestRepo } from './repo'
 import type { GuestRunner } from './runner'
-import { transcriptOf } from './tree'
+import { transcriptOf } from './transcript'
 
 /**
  * The API a guest's page calls, answered in the page. Everything the signed-in
@@ -74,7 +74,7 @@ export function createGuestApi(deps: GuestApiDeps) {
     const data = await repo.data(conversationId)
     const row = data.messages.find((m) => m.id === messageId)
     if (!row) throw notFound()
-    const [message] = await repo.rowsOf(conversationId, [row])
+    const [message] = await repo.rowsOf([row])
     if (!message) throw notFound()
     return message
   }
@@ -227,30 +227,12 @@ export function createGuestApi(deps: GuestApiDeps) {
     },
     {
       method: 'POST',
-      pattern: new RegExp(`^/conversations/${id}/messages/${id}/switch$`),
-      handler: async ({ params, query }) => {
-        const page = await repo.switchVersion(params[0]!, params[1]!, query.has('limit') ? Number(query.get('limit')) : undefined)
-        announce(params[0]!)
-        return ok(page)
-      },
-    },
-    {
-      method: 'POST',
       pattern: new RegExp(`^/conversations/${id}/runs/${id}/cancel$`),
       handler: async ({ params }) => {
         await repo.getConversation(params[0]!)
         // A run whose stream this page does not hold (it was reloaded) is gone with it.
         if (runner.isRunning(params[0]!)) await runner.cancel(params[1]!).catch(() => undefined)
         return empty(202)
-      },
-    },
-    {
-      method: 'POST',
-      pattern: new RegExp(`^/conversations/${id}/runs/${id}/choose$`),
-      handler: async ({ params }) => {
-        const page = await repo.chooseAnswer(params[0]!, params[1]!)
-        announce(params[0]!)
-        return ok(page)
       },
     },
 
@@ -328,14 +310,7 @@ export function createGuestApi(deps: GuestApiDeps) {
     },
   ]
 
-  /** Tells the guest's other tabs that the branch shown here moved (BroadcastChannel; set by the wiring). */
-  let announce: (conversationId: string) => void = () => {}
-
   return {
-    setAnnouncer(fn: (conversationId: string) => void) {
-      announce = fn
-    },
-
     /** Answers a request for `path` (after the API's base URL), or null if the server is to. */
     async handle(request: Request, path: string): Promise<Response | null> {
       const url = new URL(request.url, 'http://local.invalid')

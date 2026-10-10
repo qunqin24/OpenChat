@@ -3,10 +3,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { PAGE_SIZE, spliceNewest, type TranscriptPages } from '@/hooks/use-messages'
 import { api, unwrap } from '@/lib/api'
 import type { AskAnswer } from '@/lib/ask-user'
 import { queryKeys } from '@/lib/query-keys'
+import { truncateTranscript, type TranscriptPages } from '@/lib/transcript-pages'
 import { useChatStore } from '@/stores/chat-store'
 
 /** Server error codes a send can fail with that have their own wording. */
@@ -20,7 +20,6 @@ const SEND_ERRORS = [
   'attachment_unavailable',
   'nothing_to_answer',
   'not_latest',
-  'not_on_path',
   'message_not_found',
   'not_pending',
   'invalid_answers',
@@ -61,7 +60,7 @@ export function useSendMessage(conversationId: string) {
   const onError = useSendError()
 
   return useMutation({
-    // Shown in the transcript itself (the outbox, a waiting reply, the pager).
+    // Shown in the transcript itself (the outbox, a waiting reply).
     meta: { silent: true },
     mutationFn: async ({
       content,
@@ -91,28 +90,46 @@ export function useSendMessage(conversationId: string) {
 }
 
 /**
+ * Takes the rows a redo deleted out of the cached transcript, for the moment
+ * between the server having done it and the fetch that shows the same. The
+ * events stream gets there first when it can (`use-conversation-events.ts`).
+ */
+export function useForgetDeleted(conversationId: string) {
+  const queryClient = useQueryClient()
+  return (target: { from?: string; after?: string }) =>
+    queryClient.setQueryData<TranscriptPages>(queryKeys.messages.list(conversationId), (held) =>
+      truncateTranscript(held, target),
+    )
+}
+
+/**
  * Answers the last message again, with the model and settings the composer
- * has now. The answer it replaces is kept as a version to switch back to.
- * Until the server has taken it, the old answer is hidden and a waiting reply
- * shown in its place, the way a sent message shows at once.
+ * has now. The answer it replaces is deleted, not kept. Until the server has
+ * taken it, the old answer is hidden and a waiting reply shown in its place,
+ * the way a sent message shows at once.
  */
 export function useRegenerate(conversationId: string) {
   const startRun = useChatStore((s) => s.startRun)
   const redo = useChatStore((s) => s.redo)
+  const forget = useForgetDeleted(conversationId)
   const onError = useSendError()
 
   return useMutation({
-    // Shown in the transcript itself (the outbox, a waiting reply, the pager).
+    // Shown in the transcript itself (the outbox, a waiting reply).
     meta: { silent: true },
-    mutationFn: async ({ replacing: _, ...choice }: RunChoice & { replacing: string[] }) =>
+    mutationFn: async ({ inputId: _, ...choice }: RunChoice & { inputId: string }) =>
       unwrap(
         await api.POST('/conversations/{conversationId}/regenerate', {
           params: { path: { conversationId } },
           body: { requestId: crypto.randomUUID(), ...choiceBody(choice) },
         }),
       ),
-    onMutate: ({ replacing }) => redo(conversationId, { runs: replacing }),
-    onSuccess: (response) => startRun(conversationId, response.run, response.message),
+    // The answer is the rows after the question it answers.
+    onMutate: ({ inputId }) => redo(conversationId, { after: inputId }),
+    onSuccess: (response) => {
+      forget({ after: response.message.id })
+      startRun(conversationId, response.run, response.message)
+    },
     onError: (error) => {
       redo(conversationId, null)
       onError(error)
@@ -121,21 +138,22 @@ export function useRegenerate(conversationId: string) {
 }
 
 /**
- * Asks a question again in new words — any question on the branch shown. The
- * new wording starts a branch beside the old one, which is kept (with what
- * followed it) to switch back to. Until the server has taken it, the old
- * wording and the turns after it are hidden and the new wording shown with a
- * waiting reply, the way a sent message shows at once.
+ * Asks a question again in new words — any question in the conversation. The
+ * old wording and everything after it are deleted, and the new wording goes
+ * on the end. Until the server has taken it, the old wording and the turns
+ * after it are hidden and the new wording shown with a waiting reply, the way
+ * a sent message shows at once.
  */
 export function useEditMessage(conversationId: string) {
   const startRun = useChatStore((s) => s.startRun)
   const redo = useChatStore((s) => s.redo)
   const post = useChatStore((s) => s.post)
   const unpost = useChatStore((s) => s.unpost)
+  const forget = useForgetDeleted(conversationId)
   const onError = useSendError()
 
   return useMutation({
-    // Shown in the transcript itself (the outbox, a waiting reply, the pager).
+    // Shown in the transcript itself (the outbox, a waiting reply).
     meta: { silent: true },
     mutationFn: async ({
       messageId,
@@ -158,7 +176,10 @@ export function useEditMessage(conversationId: string) {
       redo(conversationId, { from: messageId })
       post(conversationId, { content, attachments })
     },
-    onSuccess: (response) => startRun(conversationId, response.run, response.message),
+    onSuccess: (response, { messageId }) => {
+      forget({ from: messageId })
+      startRun(conversationId, response.run, response.message)
+    },
     onError: (error) => {
       redo(conversationId, null)
       unpost(conversationId)
@@ -192,82 +213,10 @@ export function useAnswerQuestion(conversationId: string) {
   })
 }
 
-/**
- * Shows another answer to the last question. The server answers with the
- * question and that answer's rows, which take the place of the turn in the
- * cached transcript: no refetch, so the switch costs one round trip.
- */
-export function useChooseAnswer(conversationId: string) {
-  const { t } = useTranslation()
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    // Shown in the transcript itself (the outbox, a waiting reply, the pager).
-    meta: { silent: true },
-    mutationFn: async ({ runId }: { runId: string; inputId: string }) =>
-      unwrap(
-        await api.POST('/conversations/{conversationId}/runs/{runId}/choose', {
-          params: { path: { conversationId, runId } },
-        }),
-      ),
-    onSuccess: (chosen, { inputId }) => {
-      // A finished run still held live would put its own rows back.
-      const held = useChatStore.getState().live[conversationId]?.run?.run.id
-      if (held) useChatStore.getState().settle(conversationId, held)
-      queryClient.setQueryData<TranscriptPages>(queryKeys.messages.list(conversationId), (held) => {
-        if (!held) return held
-        // The turn is the transcript's last, so its input is in the newest
-        // page — unless the turn straddles a page edge, in which case the page
-        // it starts in becomes the newest.
-        const at = held.pages.findIndex((p) => p.items.some((m) => m.id === inputId))
-        const page = held.pages[at]
-        if (!page) return held
-        const items = [...page.items.slice(0, page.items.findIndex((m) => m.id === inputId)), ...chosen.items]
-        return {
-          pages: [{ ...page, items }, ...held.pages.slice(at + 1)],
-          pageParams: [undefined, ...held.pageParams.slice(at + 1)],
-        }
-      })
-    },
-    onError: () => toast.error(t('chat.version.error')),
-  })
-}
-
-/**
- * Shows another version of a question and the branch under it. The server
- * answers with the newest page of the branch now shown, which replaces the
- * newest rows the client holds (`spliceNewest`): the turns shared with the
- * branch just left stay, and the older pages the reader opened with them.
- */
-export function useSwitchVersion(conversationId: string) {
-  const { t } = useTranslation()
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    // Shown in the transcript itself (the pager).
-    meta: { silent: true },
-    mutationFn: async ({ messageId }: { messageId: string }) =>
-      unwrap(
-        await api.POST('/conversations/{conversationId}/messages/{messageId}/switch', {
-          params: { path: { conversationId, messageId }, query: { limit: PAGE_SIZE } },
-        }),
-      ),
-    onSuccess: (page) => {
-      // A finished run still held live would put its own rows back.
-      const held = useChatStore.getState().live[conversationId]?.run?.run.id
-      if (held) useChatStore.getState().settle(conversationId, held)
-      queryClient.setQueryData<TranscriptPages>(queryKeys.messages.list(conversationId), (current) =>
-        spliceNewest(current, page),
-      )
-    },
-    onError: () => toast.error(t('chat.question-version.error')),
-  })
-}
-
 /** Stops a run. What it generated so far is kept. */
 export function useCancelRun(conversationId: string) {
   return useMutation({
-    // Shown in the transcript itself (the outbox, a waiting reply, the pager).
+    // Shown in the transcript itself (the waiting reply).
     meta: { silent: true },
     mutationFn: async (runId: string) =>
       unwrap(

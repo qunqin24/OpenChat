@@ -53,13 +53,13 @@ export class GuestHub {
     }
   }
 
-  /** A batch of events that no run wrote: another page changed the branch shown. */
-  announceBranch(conversationId: string) {
+  /** A batch of events that no run wrote: another page changed the conversation (deleted rows, or finished a run). */
+  announceChanged(conversationId: string) {
     const batch: BatchEvent = {
       type: 'batch',
       runId: '00000000-0000-0000-0000-000000000000',
       version: 0,
-      events: [{ type: 'branch_changed' }],
+      events: [{ type: 'transcript_changed' }],
     }
     this.publish(conversationId, batch)
   }

@@ -44,9 +44,9 @@ interface ChatState {
 
   /**
    * Each conversation's redo — the last answer regenerated, or a question
-   * edited (with the turns after it, which leave the branch shown) — until the
-   * server has started the new run: what is being replaced is hidden from the
-   * click on, not a round trip later.
+   * edited (with the turns after it) — until the server has started the new
+   * run: what is being deleted is hidden from the click on, not a round trip
+   * later.
    */
   replacing: Record<string, Replacing>
   redo: (conversationId: string, target: Replacing | null) => void

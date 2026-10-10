@@ -7,6 +7,7 @@ import { refreshNewestMessages } from '@/hooks/use-messages'
 import { API_BASE_URL, appFetch } from '@/lib/api'
 import { useChatPaths } from '@/lib/chat-paths'
 import { queryKeys } from '@/lib/query-keys'
+import { truncateTranscript, type TranscriptPages } from '@/lib/transcript-pages'
 import { useChatStore } from '@/stores/chat-store'
 
 /** Reconnect delays, in ms: quick at first, then backing off to a ceiling. */
@@ -22,9 +23,12 @@ const RECONNECT_DELAYS = [500, 1000, 2000, 5000, 10000, 15000]
  * older pages the reader has opened are immutable and stay), and only then is
  * the live copy dropped, so the answer never disappears in between.
  *
- * Another tab switching to a version of a question, or editing one, is
- * announced as `branch_changed`; the newest page is fetched again then too, so
- * the transcript here follows the branch the conversation now shows.
+ * Rows deleted by a redo - a question edited, an answer regenerated, here or in
+ * another tab - are announced as `transcript_changed`, in the batch that starts
+ * the run that follows. The newest page is fetched again then too, so the
+ * transcript here drops what is gone; this tab, if it asked for the redo,
+ * has the rows out of its cache before the batch is applied, so they are not
+ * drawn again in between.
  *
  * A conversation the server says does not exist — deleted from another tab or
  * device while this page was open — is not a dropped connection: there is
@@ -86,6 +90,16 @@ export function useConversationEvents(conversationId: string | undefined) {
               }
               continue
             }
+            if (event.events.some((e) => e.type === 'transcript_changed')) {
+              // The redo this tab asked for, if it did, says what is gone. It is
+              // read before the batch is applied: the run starting ends it.
+              const redo = useChatStore.getState().replacing[conversationId]
+              if (redo) {
+                queryClient.setQueryData<TranscriptPages>(queryKeys.messages.list(conversationId), (held) =>
+                  truncateTranscript(held, redo),
+                )
+              }
+            }
             applyBatch(conversationId, event)
             for (const runEvent of event.events) {
               if (runEvent.type === 'run_finished') {
@@ -105,15 +119,15 @@ export function useConversationEvents(conversationId: string | undefined) {
               if (runEvent.type === 'title_changed') {
                 void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all })
               }
-              // The branch shown moved — a version was switched to or a
-              // question edited, here or in another tab. The newest page is
-              // what changed, so that is what is fetched (and spliced onto
-              // the older pages that still hold): never the whole key, which
-              // would download every page the reader had opened again.
-              if (runEvent.type === 'branch_changed') {
+              // Rows were deleted - a question edited or an answer regenerated,
+              // here or in another tab. The newest page is what changed, so
+              // that is what is fetched (and spliced onto the older pages that
+              // still hold): never the whole key, which would download every
+              // page the reader had opened again.
+              if (runEvent.type === 'transcript_changed') {
                 void refreshMessages().then(() => {
                   // A finished run still held live would put its own rows back
-                  // over the branch now shown (settle leaves a running one be).
+                  // over the transcript now (settle leaves a running one be).
                   const held = useChatStore.getState().live[conversationId]?.run?.run.id
                   if (held) settle(conversationId, held)
                 })

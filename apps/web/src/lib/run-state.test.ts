@@ -50,16 +50,6 @@ describe('applyBatch', () => {
       expect(state.run?.messages[0]?.attachments).toEqual([attachment])
     })
 
-    it('keeps versions and branches too', () => {
-      const r = run('r1')
-      const sent = user('q', { versions: [id('r0'), r.id], branches: [id('q'), id('q2')] })
-      const held: ConversationLive = { run: liveRun(r, [sent]) }
-      const state = applyBatch(held, batch(r, 2, [started(r, user('q'))]))
-      const message = state.run?.messages[0]
-      expect(message?.versions).toEqual([id('r0'), r.id])
-      expect(message?.branches).toEqual([id('q'), id('q2')])
-    })
-
     it('does not invent attachments the held copy lacked', () => {
       const r = run('r1')
       const held: ConversationLive = { run: liveRun(r, [user('q', { attachments: [] })]) }

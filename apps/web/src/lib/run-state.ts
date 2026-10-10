@@ -75,18 +75,10 @@ function applyEvent(live: LiveRun | null, event: RunEvent): LiveRun | null {
   if (event.type === 'run_started') {
     // The event's copy of the question carries no attachments: their links are
     // signed per reader, which an event shared by every subscriber cannot be.
-    // The copy the send response gave us has them, so it is kept — and its
-    // versions and branches, which an event shared by every subscriber cannot
-    // carry either.
+    // The copy the send response gave us has them, so it is kept.
     const held = live?.run.id === event.run.id ? live.messages.find((m) => m.id === event.message.id) : undefined
-    const message = held
-      ? {
-          ...event.message,
-          ...(held.attachments?.length ? { attachments: held.attachments } : {}),
-          ...(held.versions ? { versions: held.versions } : {}),
-          ...(held.branches ? { branches: held.branches } : {}),
-        }
-      : event.message
+    const message =
+      held && held.attachments?.length ? { ...event.message, attachments: held.attachments } : event.message
     return { run: event.run, messages: [message], partial: null, retry: null, tools: {} }
   }
   // Anything else belongs to a run we are holding; a stray event for one we

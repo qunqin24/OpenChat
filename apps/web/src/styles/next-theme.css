@@ -287,11 +287,10 @@
   display: flex;
   gap: 2px;
 }
-/* The pager of a message's versions stays in view, so there is always a sign
-   that the message has others; the buttons beside it (copy, edit, regenerate)
-   come with the pointer or with keyboard focus. The same on a question and on
-   an answer. */
-.prism-next .n-actions > :not(.n-pager) {
+/* The buttons of a message (copy, edit, regenerate) come with the pointer or
+   with keyboard focus; on the last answer they stay in view, as the place to
+   go next. */
+.prism-next .n-actions > * {
   opacity: 0;
   transition: opacity 150ms cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -300,42 +299,6 @@
 .prism-next .n-actions:focus-within > *,
 .prism-next .n-actions.always > * {
   opacity: 1;
-}
-.prism-next .n-pager {
-  display: flex;
-  align-items: center;
-  gap: 1px;
-  margin-right: 4px;
-  color: var(--n-text-2);
-  font-size: 12px;
-  user-select: none;
-}
-.prism-next .n-pager-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  transition: background-color 120ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.prism-next .n-pager-btn:not(:disabled):hover {
-  background: var(--n-hover);
-  color: var(--n-text);
-}
-.prism-next .n-pager-btn:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-.prism-next .n-pager-count {
-  min-width: 26px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
 }
 .prism-next .n-suggest-head {
   display: flex;

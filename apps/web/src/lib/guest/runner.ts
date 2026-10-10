@@ -32,6 +32,8 @@ export interface RunnerDeps {
   tab: string
   /** The run, or its title and memories, are kept: queries over them are stale. */
   onSettled?: (conversationId: string) => void
+  /** Rows were deleted by a redo that has started: other pages showing the conversation hold them. */
+  onDeleted?: (conversationId: string) => void
 }
 
 /** How often a run says it is still being followed. */
@@ -125,12 +127,13 @@ export class GuestRunner {
         run: started.run,
         input: started.message,
         action: built.request.action,
-        parentInputId: built.input?.parentInputId,
+        replaces: built.input?.replaces,
         attachments: built.input?.blobs,
         choice,
       },
       this.deps.tab,
     )
+    if (what.action === 'edit' || what.action === 'regenerate') this.deps.onDeleted?.(conversationId)
     const written: Message[] = []
     for (const event of first.events) {
       if (event.type === 'message_appended') {

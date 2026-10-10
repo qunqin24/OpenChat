@@ -10,7 +10,7 @@ import { harness } from './testing'
 // The runner against a server that is a script: what it streams back is kept
 // before it is told, the last frame is kept, a lost connection is a failed run,
 // a refusal writes nothing. And the request it builds says what the server
-// needs to run the branch shown.
+// needs to run the conversation.
 
 const sse = (frames: unknown[]) =>
   new Response(
@@ -29,20 +29,23 @@ const iso = (n: number) => new Date(Date.parse('2026-10-11T00:00:00Z') + n * 100
 /** What the server streams for a send that is answered. */
 function answered(conversationId: string, request: GuestRunRequest, opts: { end?: boolean; runId?: string } = {}): unknown[] {
   const runId = opts.runId ?? 'run-1'
-  const input = request.input!
+  // Later runs happen later, as the server's clock has it.
+  const k = ((Number(runId.replace('run-', '')) || 1) - 1) * 10
+  // A regeneration has no new question: the server answers the last one it was sent.
+  const input = request.input ?? [...request.messages].reverse().find((m) => m.role === 'user')!
   const run = (status: Run['status'], version: number): Run => ({
-    id: runId, conversationId, status, model: 'model-a', version, createdAt: iso(1),
-    ...(status === 'running' ? {} : { finishedAt: iso(5) }),
+    id: runId, conversationId, status, model: 'model-a', version, createdAt: iso(k + 1),
+    ...(status === 'running' ? {} : { finishedAt: iso(k + 5) }),
   })
   const row: Message = {
-    id: 'answer-1', conversationId, role: 'assistant', content: 'Hello', status: 'complete', runId, createdAt: iso(4),
+    id: `answer-${runId.replace('run-', '')}`, conversationId, role: 'assistant', content: 'Hello', status: 'complete', runId, createdAt: iso(k + 4),
     stopReason: 'stop', parts: [{ type: 'text', text: 'Hello' }], model: 'model-a', providerState: 'cHM=',
     usage: { inputTokens: 5, outputTokens: 2 },
   }
   const frames: unknown[] = [
     {
       type: 'batch', runId, version: 1,
-      events: [{ type: 'run_started', run: run('running', 1), message: { ...input, conversationId, status: 'complete', createdAt: iso(2), attachments: undefined } }],
+      events: [{ type: 'run_started', run: run('running', 1), message: { ...input, conversationId, status: 'complete', createdAt: iso(k + 2), attachments: undefined } }],
     },
     { type: 'batch', runId, version: 2, events: [{ type: 'generation_started', attempt: 1 }, { type: 'part_started', index: 0, part: { type: 'text', text: '' } }, { type: 'part_delta', index: 0, delta: 'Hel' }] },
     { type: 'batch', runId, version: 3, events: [{ type: 'message_appended', message: row }, { type: 'run_finished', run: run('completed', 3) }] },
@@ -64,12 +67,14 @@ function setup(respond: (request: GuestRunRequest, url: string) => Response | Pr
   const hub = new GuestHub()
   const requests: GuestRunRequest[] = []
   const settled: string[] = []
+  const deleted: string[] = []
   const runner = new GuestRunner({
     repo: h.repo,
     hub,
     baseUrl: '/api/v1',
     tab: 'tab',
     onSettled: (id) => settled.push(id),
+    onDeleted: (id) => deleted.push(id),
     fetch: async (input, init) => {
       const url = String(input)
       const body = init?.body ? (JSON.parse(String(init.body)) as GuestRunRequest) : ({} as GuestRunRequest)
@@ -78,7 +83,7 @@ function setup(respond: (request: GuestRunRequest, url: string) => Response | Pr
     },
   })
   const seen: ConversationEvent[] = []
-  return { h, hub, runner, requests, seen, settled, listen: (id: string) => hub.subscribe(id, (e) => seen.push(e)) }
+  return { h, hub, runner, requests, seen, settled, deleted, listen: (id: string) => hub.subscribe(id, (e) => seen.push(e)) }
 }
 
 describe('a send', () => {
@@ -91,7 +96,7 @@ describe('a send', () => {
     expect(started.run.id).toBe('run-1')
     expect(started.inputId).toBe('in-1')
     // Kept as soon as the server has taken it.
-    expect((await t.h.repo.data(c)).conversation.currentInputId).toBe('in-1')
+    expect((await t.h.repo.data(c)).messages.map((m) => m.id)).toEqual(['in-1'])
 
     await t.runner.settled(c)
     const page = await t.h.repo.listMessages(c, {})
@@ -185,6 +190,71 @@ describe('a send', () => {
   })
 })
 
+describe('a redo', () => {
+  /** A server that answers each request as a new run (run-1, run-2, ...). */
+  const serving = () => {
+    let n = 0
+    return setup((request) => sse(answered(request.conversationId, request, { runId: `run-${++n}` })))
+  }
+  const texts = async (t: ReturnType<typeof setup>, c: string) =>
+    (await t.h.repo.listMessages(c, {})).items.map((m) => `${m.role}:${m.content}`)
+
+  it('deletes an edited question and everything after it once the server has taken the new one', async () => {
+    const t = serving()
+    const c = await t.h.conversation()
+    t.listen(c)
+    await t.runner.start(c, { action: 'send', content: 'one', attachmentIds: [], id: 'in-1' }, {})
+    await t.runner.settled(c)
+    await t.runner.start(c, { action: 'send', content: 'two', attachmentIds: [], id: 'in-2' }, {})
+    await t.runner.settled(c)
+    expect(await texts(t, c)).toEqual(['user:one', 'assistant:Hello', 'user:two', 'assistant:Hello'])
+
+    // In-1 reworded: the server is asked with nothing before it, and other pages are told.
+    await t.runner.start(c, { action: 'edit', content: 'one, reworded', messageId: 'in-1', id: 'in-3' }, {})
+    await t.runner.settled(c)
+    expect(t.requests.at(-1)!.messages).toEqual([])
+    expect(t.requests.at(-1)!.input).toMatchObject({ id: 'in-3', content: 'one, reworded' })
+    expect(t.deleted).toEqual([c])
+
+    expect(await texts(t, c)).toEqual(['user:one, reworded', 'assistant:Hello'])
+    const data = await t.h.repo.data(c)
+    // Nothing of the questions that went is left: not their rows, not their runs.
+    expect(data.messages.map((m) => m.id).sort()).toEqual(['answer-3', 'in-3'])
+    expect(data.runs.map((r) => r.inputId)).toEqual(['in-3'])
+  })
+
+  it('deletes the old answer, runs and rows, when an answer is made again', async () => {
+    const t = serving()
+    const c = await t.h.conversation()
+    await t.runner.start(c, { action: 'send', content: 'one', attachmentIds: [], id: 'in-1' }, {})
+    await t.runner.settled(c)
+    expect((await t.h.repo.data(c)).runs.map((r) => r.id)).toEqual(['run-1'])
+
+    await t.runner.start(c, { action: 'regenerate' }, {})
+    await t.runner.settled(c)
+    // The question is asked again on its own.
+    expect(t.requests.at(-1)!.messages.map((m) => m.id)).toEqual(['in-1'])
+    expect(await texts(t, c)).toEqual(['user:one', 'assistant:Hello'])
+    const data = await t.h.repo.data(c)
+    expect(data.runs.map((r) => r.id)).toEqual(['run-2'])
+    expect(data.messages).toHaveLength(2)
+  })
+
+  it('keeps the old rows when the server refuses the redo', async () => {
+    let refuse = false
+    const t = setup((request) =>
+      refuse ? Response.json({ code: 'no_models', message: 'none' }, { status: 409 }) : sse(answered(request.conversationId, request)),
+    )
+    const c = await t.h.conversation()
+    await t.runner.start(c, { action: 'send', content: 'one', attachmentIds: [], id: 'in-1' }, {})
+    await t.runner.settled(c)
+    refuse = true
+    await expect(t.runner.start(c, { action: 'edit', content: 'x', messageId: 'in-1', id: 'in-2' }, {})).rejects.toMatchObject({ code: 'no_models' })
+    await expect(t.runner.start(c, { action: 'regenerate' }, {})).rejects.toMatchObject({ code: 'no_models' })
+    expect(await texts(t, c)).toEqual(['user:one', 'assistant:Hello'])
+  })
+})
+
 describe('the guest API', () => {
   it('answers the contract\'s routes from the page and leaves the rest to the network', async () => {
     const t = setup((request) => sse(answered(request.conversationId, request)))
@@ -244,24 +314,24 @@ describe('the request', () => {
     readBlob: (id: string) => h.repo.file(id),
   })
 
-  it('carries the branch shown and what the model is asked, for each action', async () => {
+  it('carries the conversation and what the model is asked, for each action', async () => {
     const h = harness()
     const c = await h.conversation()
-    const q1 = await h.turn(c, { ask: 'q1', answer: 'a1' })
+    await h.turn(c, { ask: 'q1', answer: 'a1' })
     const q2 = await h.turn(c, { ask: 'q2', answer: 'a2' })
 
     const send = await buildRunRequest({ ...(await base(h, c)), model: 'm', webSearch: false }, { action: 'send', content: 'q3', id: 'new', attachmentIds: [] })
     expect(send.request).toMatchObject({ action: 'send', conversationId: c, model: 'm', webSearch: false, aboutYou: 'Ada', titled: false })
     expect(send.request.messages.map((m) => m.content)).toEqual(['q1', 'a1', 'q2', 'a2'])
     expect(send.request.input).toMatchObject({ id: 'new', content: 'q3' })
-    expect(send.input).toMatchObject({ id: 'new', parentInputId: q2.input.id })
+    expect(send.input).toMatchObject({ id: 'new' })
+    expect(send.input?.replaces).toBeUndefined()
 
-    // An edit ends the branch before the question, and says which it rewords.
+    // An edit ends the request before the question, and says which it replaces.
     const edit = await buildRunRequest(await base(h, c), { action: 'edit', content: 'q2 again', messageId: q2.input.id, id: 'edit' })
     expect(edit.request.action).toBe('send')
     expect(edit.request.messages.map((m) => m.content)).toEqual(['q1', 'a1'])
-    expect(edit.request.editOf).toBe(q2.input.id)
-    expect(edit.input?.parentInputId).toBe(q1.input.id)
+    expect(edit.input?.replaces).toBe(q2.input.id)
     await expect(buildRunRequest(await base(h, c), { action: 'edit', content: 'x', messageId: 'nope', id: 'e' })).rejects.toMatchObject({ code: 'message_not_found' })
 
     // Regenerating asks for the last question again, without its answer.
@@ -299,7 +369,7 @@ describe('the request', () => {
     await h.repo.runStarted(c, {
       run: { id: 'r1', conversationId: c, status: 'completed', model: 'm', version: 2, createdAt: h.tick() },
       input: { id: 'm1', conversationId: c, role: 'user', content: 'one', parts: [], status: 'complete', createdAt: h.tick() },
-      action: 'send', parentInputId: null, attachments: first.input!.blobs, choice: {},
+      action: 'send', attachments: first.input!.blobs, choice: {},
     }, 't')
     const second = await buildRunRequest(await base(h, c), { action: 'send', content: 'two', id: 'm2', attachmentIds: ['new'] })
 

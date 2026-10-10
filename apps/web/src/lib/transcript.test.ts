@@ -92,30 +92,6 @@ describe('buildTurns', () => {
       expect(replies.map((t) => t.responses.map((m) => m.id))).toEqual([[fresh.id]])
     })
 
-    it('drops the old wording and everything after it when a question is edited', () => {
-      const q1 = user('q1')
-      const a1 = assistant('a1', id('r1'))
-      const q2 = user('q2')
-      const a2 = assistant('a2', id('r2'))
-      const q3 = user('q3')
-      const a3 = assistant('a3', id('r3'))
-      const edited = user('q2b', { editOf: q2.id })
-      const r4 = run('r4')
-      const turns = buildTurns([q1, a1, q2, a2, q3, a3], liveRun(r4, [edited]))
-      expect(turns.map((t) => (t.kind === 'user' ? t.message.id : t.key))).toEqual([q1.id, id('r1'), edited.id, r4.id])
-    })
-
-    it('finds the edited question through its first version', () => {
-      // q2 is already the second wording: its `editOf` is the first one's id.
-      const q1 = user('q1')
-      const a1 = assistant('a1', id('r1'))
-      const q2b = user('q2b', { editOf: id('q2') })
-      const a2b = assistant('a2b', id('r2'))
-      const edited = user('q2c', { editOf: id('q2') })
-      const turns = buildTurns([q1, a1, q2b, a2b], liveRun(run('r3'), [edited]))
-      expect(turns.map((t) => (t.kind === 'user' ? t.message.id : t.key))).toEqual([q1.id, id('r1'), edited.id, id('r3')])
-    })
-
     it('leaves the reply before a question alone when the run continues it', () => {
       const q = user('q')
       const asked = toolCallRow('ask', id('r1'), 'call-ask', ASK_USER, { questions: [] })
@@ -137,9 +113,20 @@ describe('buildTurns', () => {
     const q2 = user('q2')
     const a2 = assistant('a2', id('r2'))
 
-    it('hides the rows of the runs being regenerated', () => {
-      const turns = buildTurns([q1, a1, q2, a2], null, { runs: [id('r2')] })
+    it('hides the rows after the question being answered again', () => {
+      const turns = buildTurns([q1, a1, q2, a2], null, { after: q2.id })
       expect(turns.map((t) => (t.kind === 'user' ? t.message.id : t.key))).toEqual([q1.id, id('r1'), q2.id])
+    })
+
+    it('hides nothing when `after` is not in the list', () => {
+      expect(buildTurns([q1, a1], null, { after: id('nope') })).toHaveLength(2)
+    })
+
+    it('shows the run that follows a redo and not the rows it deleted', () => {
+      const edited = user('q2b')
+      const r3 = run('r3')
+      const turns = buildTurns([q1, a1, q2, a2], liveRun(r3, [edited]), { from: q2.id })
+      expect(turns.map((t) => (t.kind === 'user' ? t.message.id : t.key))).toEqual([q1.id, id('r1'), edited.id, r3.id])
     })
 
     it('hides the question named by `from` and everything after it', () => {

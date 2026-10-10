@@ -74,10 +74,9 @@
       "attachment_unsupported": "The selected model does not accept this kind of file. Remove it or pick another model.",
       "attachment_unavailable": "A file did not upload, or was already sent. Remove it and add it again.",
       "nothing_to_answer": "There is no message in this conversation to answer.",
-      "not_latest": "Only the last answer can be switched.",
-      "not_on_path": "That question is no longer on the branch being shown.",
+      "not_latest": "Only the last answer can be generated again.",
       "message_not_found": "That message no longer exists.",
-      "not_pending": "This question was already answered, skipped, or replaced by a new version.",
+      "not_pending": "This question was already answered, skipped, or deleted.",
       "invalid_answers": "The answers are incomplete. Check each question.",
       "generic": "Sending failed. Try again.",
       "guest_ip_limit": "This network has used up its guest requests for the hour. Try again later, or sign in.",
@@ -109,18 +108,6 @@
       "label": "Web",
       "on-hint": "Web on: the model searches and reads pages when it needs to. Click to turn off",
       "off-hint": "Web off: the model answers from what it knows. Click to turn on"
-    },
-    "question-version": {
-      "label": "Question versions",
-      "previous": "Previous version of the question",
-      "next": "Next version of the question",
-      "error": "Could not switch to that version. Please try again."
-    },
-    "version": {
-      "label": "Answer versions",
-      "previous": "Previous version",
-      "next": "Next version",
-      "error": "Could not switch versions. Please try again."
     },
     "ask": {
       "label": "Needs your choice",
@@ -1114,7 +1101,7 @@
     "data": {
       "temporary": "Temporary chats are deleted 24 hours after they start.",
       "export-title": "Export all chats",
-      "export-desc": "Downloads a JSON file with every chat you keep and, for each, the messages on the branch it shows. Temporary chats and the tool calls behind answers are not in it.",
+      "export-desc": "Downloads a JSON file with every chat you keep and, for each, its messages. Temporary chats and the tool calls behind answers are not in it.",
       "export-button": "Export",
       "exporting": "Exporting…",
       "export-done": "Export ready",

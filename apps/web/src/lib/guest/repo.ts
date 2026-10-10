@@ -16,6 +16,7 @@ import type {
 } from '@openchat/api-client'
 
 import { GuestError, notFound } from './errors'
+import { isBranched, pruneBranches } from './legacy'
 import {
   addMemory,
   MAX_CONTENT,
@@ -27,22 +28,7 @@ import {
   undoEvent,
 } from './memory'
 import type { GuestStorage } from './storage'
-import {
-  answersOf,
-  byRow,
-  chooseAnswer,
-  encodeCursor,
-  onPath,
-  pageOf,
-  pathHasVersionOf,
-  pickBranchLeaf,
-  rowKey,
-  runRows,
-  setCurrentInput,
-  siblingsOf,
-  timeKey,
-  transcriptOf,
-} from './tree'
+import { byRow, deletedBy, encodeCursor, pageOf, rowKey, timeKey, transcriptOf } from './transcript'
 import type { ConversationData, StoredBlob, StoredConversation, StoredMessage, StoredPersonalization, StoredRun } from './types'
 
 /** What a new conversation is called until it is titled; the server's default too. */
@@ -83,8 +69,8 @@ export interface StartedRun {
   /** The question the run answers, as the server wrote it. */
   input: Message
   action: 'send' | 'regenerate' | 'answer'
-  /** For a new question: the one it follows (a conversation's first follows none). */
-  parentInputId?: string | null
+  /** For a question that rewords another: the one it replaces. That question and every row after it are deleted. */
+  replaces?: string
   /** For a new question: the files it carries. */
   attachments?: StoredBlob[]
   /** What the composer asked this run for, which the conversation remembers. */
@@ -100,6 +86,7 @@ export class GuestRepo {
   private readonly limits: () => PersonalizationLimits
   private chains = new Map<string, Promise<unknown>>()
   private swept = 0
+  private migration?: Promise<void>
   private urls = new Map<string, string>()
 
   constructor(storage: GuestStorage, options: RepoOptions = {}) {
@@ -137,8 +124,37 @@ export class GuestRepo {
     )
   }
 
+  /**
+   * Data kept by a version with branches is brought to a line before anything
+   * reads it (legacy.ts), once per page load.
+   */
+  private migrated(): Promise<void> {
+    this.migration ??= this.pruneBranched().catch((error) => {
+      console.warn('guest data: pruning branches failed', error)
+      this.migration = undefined
+    })
+    return this.migration
+  }
+
+  private async pruneBranched() {
+    for (const c of await this.storage.conversations()) {
+      if (!isBranched(c)) continue
+      const [messages, runs] = await Promise.all([this.storage.messages(c.id), this.storage.runs(c.id)])
+      const pruned = pruneBranches(c, messages, runs)
+      await this.storage.putMessages(pruned.messages)
+      await this.storage.putRuns(pruned.runs)
+      await this.storage.deleteMessages(pruned.deletedMessages)
+      await this.storage.deleteRuns(pruned.deletedRuns)
+      for (const id of pruned.deletedFiles) await this.storage.deleteBlob(id)
+      // Last: until then the conversation still reads as branched, and a page
+      // that died half way through is pruned again, to the same result.
+      await this.storage.putConversation(pruned.conversation)
+    }
+  }
+
   /** Temporary chats are gone a day after they were made; checked as the data is read, at most once a minute. */
   private async expire() {
+    await this.migrated()
     const at = this.now().getTime()
     if (at - this.swept < 60_000) return
     this.swept = at
@@ -155,7 +171,7 @@ export class GuestRepo {
 
   private toConversation(c: StoredConversation): Conversation {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { currentInputId: _a, memorySnapshot: _b, ...rest } = c
+    const { memorySnapshot: _b, ...rest } = c
     return { ...rest, reasoningEffort: rest.reasoningEffort ?? 'auto' }
   }
 
@@ -179,24 +195,15 @@ export class GuestRepo {
     return out
   }
 
-  /**
-   * Rows for a client: each with its files, and each question with the
-   * versions of its answer and of the question itself (messagePage).
-   */
-  private async messagePage(data: ConversationData, rows: StoredMessage[]): Promise<Message[]> {
+  /** Rows for a client: each with its files. */
+  private async messagePage(rows: StoredMessage[]): Promise<Message[]> {
     const attached = await this.attachmentsOf(rows)
     return rows.map((row) => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { parentInputId: _p, shownAt: _s, attachments: _a, providerState: _ps, ...message } = row
+      const { attachments: _a, providerState: _ps, ...message } = row
       const out: Message = { ...message }
       const files = attached.get(row.id)
       if (files) out.attachments = files
-      if (row.role === 'user') {
-        const versions = answersOf(data.runs, row.id).map((r) => r.id)
-        if (versions.length > 1) out.versions = versions
-        const branches = siblingsOf(data.messages, row).map((m) => m.id)
-        if (branches.length > 1) out.branches = branches
-      }
       return out
     })
   }
@@ -214,7 +221,6 @@ export class GuestRepo {
       const needle = search.toLocaleLowerCase()
       const kept: StoredConversation[] = []
       for (const c of rows) {
-        // Every branch is searched: what was said on a branch not on show was still said.
         const found = (await this.storage.messages(c.id))
           .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.content.toLocaleLowerCase().includes(needle))
           .sort(byRow)
@@ -258,7 +264,6 @@ export class GuestRepo {
       temporary: body.temporary === true,
       createdAt: at,
       updatedAt: at,
-      currentInputId: null,
       memorySnapshot: null,
     }
     await this.storage.putConversation(conversation)
@@ -344,12 +349,12 @@ export class GuestRepo {
   async listMessages(id: string, params: { before?: string; limit?: number }): Promise<MessagePage> {
     const data = await this.load(id)
     const page = pageOf(transcriptOf(data), params.before, Math.min(Math.max(params.limit ?? 50, 1), 100))
-    return { items: await this.messagePage(data, page.items), olderCursor: page.olderCursor }
+    return { items: await this.messagePage(page.items), olderCursor: page.olderCursor }
   }
 
   /** A question's rows as the contract gives them, for the response to a send. */
-  async rowsOf(id: string, rows: StoredMessage[]): Promise<Message[]> {
-    return this.messagePage(await this.load(id), rows)
+  async rowsOf(rows: StoredMessage[]): Promise<Message[]> {
+    return this.messagePage(rows)
   }
 
   /** The active run, if there is one (the repaired view). */
@@ -357,94 +362,66 @@ export class GuestRepo {
     return data.runs.find((r) => r.status === 'running')
   }
 
-  async switchVersion(id: string, messageId: string, limit?: number): Promise<MessagePage> {
-    return this.serial(id, async () => {
-      const data = await this.load(id)
-      const target = data.messages.find((m) => m.id === messageId && m.role === 'user')
-      if (!target) throw new GuestError(404, 'message_not_found', 'no such message in this conversation')
-      // Nothing is running while the branch moves: a run writes under the leaf
-      // it was started on, and the reader would be looking elsewhere.
-      if (this.activeRun(data)) throw busy()
-      if (!pathHasVersionOf(data, target.parentInputId ?? null)) throw notOnPath()
-      if (!onPath(data, target.id)) {
-        const leaf = pickBranchLeaf(data.messages, target.id)
-        const moved = setCurrentInput(data, leaf, this.now().getTime())
-        await this.storage.putConversation(moved.conversation)
-        await this.storage.putMessages(moved.messages.filter((m) => m.id === leaf))
-        data.conversation = moved.conversation
-        data.messages = moved.messages
-      }
-      const page = pageOf(transcriptOf(data), undefined, Math.min(Math.max(limit ?? 50, 1), 100))
-      return { items: await this.messagePage(data, page.items), olderCursor: page.olderCursor }
-    })
-  }
-
-  async chooseAnswer(id: string, runId: string): Promise<MessagePage> {
-    return this.serial(id, async () => {
-      const data = await this.load(id)
-      const run = data.runs.find((r) => r.id === runId)
-      if (!run) throw new GuestError(404, 'run_not_found', 'no such run in this conversation')
-      if (data.conversation.currentInputId !== run.inputId) {
-        throw new GuestError(409, 'not_latest', "only the last message's answer can be switched")
-      }
-      if (this.activeRun(data)) throw busy()
-      data.runs = chooseAnswer(data.runs, run.inputId, run.id)
-      await this.storage.putRuns(data.runs.filter((r) => r.inputId === run.inputId))
-      return { items: await this.messagePage(data, runRows(data, run.id, run.inputId)), olderCursor: null }
-    })
-  }
-
   // --------------------------------------------------------------- run writes
 
-  /** The model, effort and web choice the next run starts from, and what the conversation holds of the memory snapshot. */
+  /**
+   * A run has started: its question is kept (a new one, or the one being
+   * answered again), its run too, and what the run replaces is deleted - for a
+   * reworded question, the question it replaces and every row after it; for
+   * a regeneration, the old answer, every run of it included. The new rows are
+   * written before the old are deleted, so a page that dies between the two
+   * leaves a conversation that reads as before.
+   */
   async runStarted(conversationId: string, started: StartedRun, tab: string): Promise<void> {
     return this.serial(conversationId, async () => {
       const data = await this.load(conversationId)
       const { run, input } = started
       const at = this.now().toISOString()
-      let messages: StoredMessage[] = []
-      let runs = data.runs
-      let conversation = data.conversation
+      let question: StoredMessage | undefined
 
       if (started.action === 'send') {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { attachments: _a, versions: _v, branches: _b, ...row } = input
+        const { attachments: _a, ...row } = input
         const files = (started.attachments ?? []).map(({ id, filename, contentType, size }) => ({ id, filename, contentType, size }))
-        const stored: StoredMessage = {
-          ...row,
-          parentInputId: started.parentInputId ?? null,
-          ...(files.length ? { attachments: files } : {}),
-        }
-        const moved = setCurrentInput({ ...data, messages: [...data.messages, stored] }, stored.id, this.now().getTime())
-        conversation = moved.conversation
-        messages = moved.messages.filter((m) => m.id === stored.id)
+        question = { ...row, ...(files.length ? { attachments: files } : {}) }
         // The files were the page's to pick; now they are the conversation's.
         for (const blob of started.attachments ?? []) await this.storage.putBlob({ ...blob, conversationId })
-      } else if (started.action === 'regenerate') {
-        // Every answer so far steps aside (a run still going is refused before this).
-        runs = chooseAnswer(runs, input.id, null)
       }
 
-      const stored: StoredRun = { ...run, inputId: input.id, superseded: false, tab, heartbeatAt: this.now().getTime() }
-      runs = [...runs.filter((r) => r.id !== run.id), stored]
-      await this.storage.putRuns(runs.filter((r) => r.inputId === input.id))
-      if (messages.length) await this.storage.putMessages(messages)
+      const redo = started.replaces ? { from: started.replaces } : started.action === 'regenerate' ? { after: input.id } : undefined
+      const gone = redo ? deletedBy(data.messages, redo) : []
+      const goneIds = new Set(gone.map((m) => m.id))
 
+      const stored: StoredRun = { ...run, inputId: input.id, tab, heartbeatAt: this.now().getTime() }
+      await this.storage.putRuns([stored])
+      if (question) await this.storage.putMessages([question])
       const next: StoredConversation = {
-        ...conversation,
+        ...data.conversation,
         model: run.model,
         updatedAt: at,
         ...(started.choice.reasoningEffort ? { reasoningEffort: started.choice.reasoningEffort } : {}),
         ...(started.choice.webSearch !== undefined ? { webSearch: started.choice.webSearch } : {}),
       }
       await this.storage.putConversation(next)
+
+      if (gone.length > 0 || redo) {
+        // A regeneration deletes every run of the question, those that carried on after a question included.
+        const runs = data.runs.filter((r) => goneIds.has(r.inputId) || (started.action === 'regenerate' && r.inputId === input.id))
+        await this.storage.deleteMessages([...goneIds])
+        await this.storage.deleteRuns(runs.map((r) => r.id))
+        // The files of the questions that went, except those the new question carries.
+        const carried = new Set(question?.attachments?.map((f) => f.id))
+        for (const message of gone) {
+          for (const file of message.attachments ?? []) if (!carried.has(file.id)) await this.storage.deleteBlob(file.id)
+        }
+      }
     })
   }
 
   async messageAppended(conversationId: string, message: Message): Promise<void> {
     return this.serial(conversationId, async () => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { attachments: _a, versions: _v, branches: _b, ...row } = message
+      const { attachments: _a, ...row } = message
       await this.storage.putMessages([row])
     })
   }
@@ -616,7 +593,7 @@ export class GuestRepo {
 
   // ------------------------------------------------------------ the data page
 
-  /** The kept conversations as one document (ConversationExport): the text of the branch shown, and the names of the files. */
+  /** The kept conversations as one document (ConversationExport): the text, and the names of the files. */
   async export() {
     const now = this.now()
     const conversations = (await this.storage.conversations()).filter((c) => !c.temporary)
@@ -642,10 +619,6 @@ export class GuestRepo {
     return { version: 1, exportedAt: now.toISOString(), conversations: out }
   }
 }
-
-const busy = () =>
-  new GuestError(409, 'conversation_busy', 'this conversation is already answering; wait for it or stop it first')
-const notOnPath = () => new GuestError(409, 'not_on_path', 'that message is not on the branch being shown')
 
 const EXCERPT_BEFORE = 24
 const EXCERPT_AFTER = 96

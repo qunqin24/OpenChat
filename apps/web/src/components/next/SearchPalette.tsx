@@ -323,9 +323,9 @@ function Preview({ conversationId, term }: { conversationId: string | null; term
   const modelById = useMemo(() => new Map((models.data ?? []).map((m) => [m.id, m])), [models.data])
 
   // To the end, where the conversation left off — or, for a search, to the
-  // first place the words appear on the branch on show, marked with the CSS
-  // highlight API so the transcript's own DOM is left alone. A match on a
-  // branch not on show has nothing to mark, and the end is where it stays.
+  // first place the words appear, marked with the CSS highlight API so the
+  // transcript's own DOM is left alone. A match that is not drawn has nothing
+  // to mark, and the end is where it stays.
   useLayoutEffect(() => {
     const el = scroll.current
     if (!el) return

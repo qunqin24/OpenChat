@@ -21,10 +21,8 @@ export interface TurnOptions {
   ask?: string
   answer?: string
   action?: StartedRun['action']
-  /** For a new question: which one it follows (default: the conversation's current one). */
-  parent?: string | null
-  /** For an edit: the question it rewords. */
-  editOf?: string
+  /** For an edit: the question it replaces, which goes with everything after it. */
+  replaces?: string
   /** For a regeneration or an answer: the question it is about. */
   input?: string
   continues?: string
@@ -64,7 +62,6 @@ export function harness(): Harness {
         parts: [{ type: 'text', text: over.ask ?? 'question' }],
         status: 'complete',
         createdAt: tick(),
-        ...(over.editOf ? { editOf: over.editOf } : {}),
       }
     } else {
       const found = data.messages.find((m) => m.id === over.input)
@@ -86,7 +83,7 @@ export function harness(): Harness {
         run,
         input,
         action,
-        parentInputId: over.parent === undefined ? data.conversation.currentInputId : over.parent,
+        ...(over.replaces ? { replaces: over.replaces } : {}),
         choice: {},
       },
       'tab',

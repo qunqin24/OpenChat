@@ -9,13 +9,13 @@ import type {
 
 import { GuestError } from './errors'
 import { DEFAULT_TITLE } from './repo'
-import { transcriptOf } from './tree'
+import { transcriptOf } from './transcript'
 import type { ConversationData, StoredBlob, StoredMessage, StoredPersonalization } from './types'
 
 /**
  * What a guest's run is asked with. The server keeps nothing between requests,
  * so each carries what an account's run would have read from the database: the
- * branch shown, the new question (or which answer to make again, or the answers
+ * conversation, the new question (or which answer to make again, or the answers
  * to the model's question), the person's instructions and memories, and the
  * memory snapshot the system prompt was rendered from.
  */
@@ -43,8 +43,11 @@ export type RunAction =
 
 export interface BuiltRun {
   request: GuestRunRequest
-  /** The question being asked, as the page will keep it once the run starts. */
-  input?: { id: string; parentInputId: string | null; blobs: StoredBlob[] }
+  /**
+   * The question being asked, as the page will keep it once the run starts;
+   * `replaces` is the question a reworded one takes the place of.
+   */
+  input?: { id: string; replaces?: string; blobs: StoredBlob[] }
 }
 
 const invalid = (code: string, message: string, status = 400) => new GuestError(status, code, message)
@@ -64,7 +67,6 @@ export async function buildRunRequest(params: RunParams, what: RunAction): Promi
   let history: StoredMessage[] = rows
   let input: BuiltRun['input']
   let inputRow: StoredMessage | undefined
-  let editOf: string | undefined
   const extra: Partial<GuestRunRequest> = {}
 
   switch (what.action) {
@@ -74,27 +76,23 @@ export async function buildRunRequest(params: RunParams, what: RunAction): Promi
         throw invalid('attachment_unavailable', 'a file was never uploaded, was already sent, or is not yours', 400)
       }
       const files = blobs as StoredBlob[]
-      input = { id: what.id, parentInputId: data.conversation.currentInputId, blobs: files }
+      input = { id: what.id, blobs: files }
       inputRow = userRow(what.id, what.content, files)
       break
     }
     case 'edit': {
+      // The question and everything after it are not part of what the new wording is asked from.
       const at = rows.findIndex((m) => m.id === what.messageId && m.role === 'user')
-      if (at < 0) {
-        throw data.messages.some((m) => m.id === what.messageId && m.role === 'user')
-          ? invalid('not_on_path', 'that message is not on the branch being shown', 409)
-          : invalid('message_not_found', 'no such message in this conversation', 404)
-      }
+      if (at < 0) throw invalid('message_not_found', 'no such message in this conversation', 404)
       const edited = rows[at]!
       history = rows.slice(0, at)
-      editOf = edited.editOf ?? edited.id
       // An edit changes what was asked, not what was attached: the question keeps its files.
       const files: StoredBlob[] = []
       for (const file of edited.attachments ?? []) {
         const blob = await params.readBlob(file.id)
         if (blob) files.push(blob)
       }
-      input = { id: what.id, parentInputId: edited.parentInputId ?? null, blobs: files }
+      input = { id: what.id, replaces: edited.id, blobs: files }
       inputRow = userRow(what.id, what.content, files)
       break
     }
@@ -139,7 +137,6 @@ export async function buildRunRequest(params: RunParams, what: RunAction): Promi
     titled: data.conversation.title !== DEFAULT_TITLE,
     messages,
     ...(inputRow ? { input: await toGuestMessage(inputRow, sent, params.readBlob) } : {}),
-    ...(editOf ? { editOf } : {}),
     ...extra,
     ...(params.model ? { model: params.model } : {}),
     ...(params.reasoningEffort ? { reasoningEffort: params.reasoningEffort } : {}),

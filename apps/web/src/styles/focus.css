@@ -41,11 +41,6 @@
   border-radius: 999px;
 }
 
-/* 20px square with a 5px fill, not a pill like the other icon buttons. */
-.prism-next .n-pager-btn:focus-visible {
-  border-radius: 5px;
-}
-
 .n-menu-item:focus-visible {
   border-radius: 8px;
 }
