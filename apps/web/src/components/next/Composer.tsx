@@ -69,7 +69,8 @@ export function Composer({
   }, [value, expanded])
 
   const canUpload = !!attach?.accept
-  const canSend = value.trim().length > 0 && !disabled && !attach?.blocked
+  // Not while an answer is being made: Enter must not queue a second message behind it.
+  const canSend = value.trim().length > 0 && !disabled && !working && !attach?.blocked
 
   // Images copied from elsewhere paste in as files.
   const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {

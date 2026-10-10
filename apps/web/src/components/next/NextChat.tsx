@@ -434,6 +434,18 @@ export function NextChat({ conversationId }: NextChatProps) {
   const handleSend = useCallback(async () => {
     const content = input.trim()
     if (!content || attachments.uploading || attachments.failed) return
+    // An answer is being made, or a message is on its way: one at a time, as the
+    // server says (`conversation_busy`). Read from the store, not from this
+    // render, so a second Enter in the same moment finds the first.
+    const now = useChatStore.getState()
+    if (
+      working ||
+      createConversation.isPending ||
+      now.outbox[conversationId ?? ''] ||
+      (conversationId && isRunning(now.live[conversationId]))
+    ) {
+      return
+    }
     // The model is at its cap: nothing is sent, and nothing is made for it (a
     // new chat would otherwise be created only to be refused). The list may be
     // a minute old, or kept from an earlier visit, so it is asked again before
@@ -528,6 +540,7 @@ export function NextChat({ conversationId }: NextChatProps) {
     paths.chat,
     post,
     sendMessage,
+    working,
     setPendingPrompt,
     setTemporaryChat,
     t,

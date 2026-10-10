@@ -67,6 +67,7 @@ const choiceBody = ({ model, reasoningEffort, webSearch }: RunChoice) => ({
  */
 export function useSendMessage(conversationId: string) {
   const startRun = useChatStore((s) => s.startRun)
+  const unpost = useChatStore((s) => s.unpost)
   const onError = useSendError()
 
   return useMutation({
@@ -95,7 +96,14 @@ export function useSendMessage(conversationId: string) {
         }),
       ),
     onSuccess: (response) => startRun(conversationId, response.run, response.message),
-    onError,
+    // Here and not in the call's own `onError`: that one is skipped when the
+    // page that made the call is gone, and a message sent just before switching
+    // conversations would stay in the transcript as a bubble with a reply that
+    // never comes. (The same goes for the prompt carried over from the empty screen.)
+    onError: (error) => {
+      unpost(conversationId)
+      onError(error)
+    },
   })
 }
 
