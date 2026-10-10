@@ -97,17 +97,25 @@ var channelTypes = []channelTypeDef{
 		Compat: openai.Compat{EchoReasoning: true, Thinking: openai.ThinkingSwitch}},
 	{ID: "moonshot", Label: "月之暗面 Moonshot", WireApi: "openai", Group: Vendor,
 		Endpoint: "https://api.moonshot.cn/v1", KeyHint: "sk-…", IconID: "moonshot",
-		Compat: openai.Compat{EchoReasoning: true, Thinking: openai.ThinkingMoonshot}},
+		// Two sites with separate accounts: platform.moonshot.cn and platform.moonshot.ai.
+		Regions: []ChannelRegion{{Id: Cn, Endpoint: "https://api.moonshot.cn/v1"}, {Id: Global, Endpoint: "https://api.moonshot.ai/v1"}},
+		Compat:  openai.Compat{EchoReasoning: true, Thinking: openai.ThinkingMoonshot}},
 	{ID: "zhipu", Label: "智谱 GLM", WireApi: "openai", Group: Vendor,
 		Endpoint: "https://open.bigmodel.cn/api/paas/v4", KeyHint: "…", IconID: "zhipu",
+		// Two sites with separate accounts: open.bigmodel.cn and z.ai (docs.z.ai/api-reference/introduction).
+		Regions: []ChannelRegion{{Id: Cn, Endpoint: "https://open.bigmodel.cn/api/paas/v4"}, {Id: Global, Endpoint: "https://api.z.ai/api/paas/v4"}},
 		// clear_thinking:false makes GLM-4.6+ read the reasoning we send back;
 		// by default it drops it (docs.z.ai/guides/capabilities/thinking-mode).
 		Compat: openai.Compat{EchoReasoning: true, Thinking: openai.ThinkingGLM}},
 	{ID: "dashscope", Label: "阿里云百炼 DashScope", WireApi: "openai", Group: Vendor,
 		Endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1", KeyHint: "sk-…", IconID: "qwen",
-		Compat: openai.Compat{EchoReasoning: true, MaxCompletionTokens: true, Thinking: openai.ThinkingDashScope}},
+		// Two sites with separate accounts: Beijing and Singapore (help.aliyun.com/en/model-studio/base-url).
+		Regions: []ChannelRegion{{Id: Cn, Endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1"}, {Id: Global, Endpoint: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"}},
+		Compat:  openai.Compat{EchoReasoning: true, MaxCompletionTokens: true, Thinking: openai.ThinkingDashScope}},
 	{ID: "volcengine", Label: "火山方舟 Volcengine", WireApi: "openai", Group: Vendor,
 		Endpoint: "https://ark.cn-beijing.volces.com/api/v3", KeyHint: "…", IconID: "volcengine",
+		// Two sites with separate accounts: Volcengine Ark in China, BytePlus ModelArk elsewhere.
+		Regions: []ChannelRegion{{Id: Cn, Endpoint: "https://ark.cn-beijing.volces.com/api/v3"}, {Id: Global, Endpoint: "https://ark.ap-southeast.bytepluses.com/api/v3"}},
 		// ModelArk's deep-reasoning guide says to keep reasoning_content in
 		// the history of a multi-turn conversation and let the model decide
 		// whether to read it (docs.byteplus.com/en/docs/ModelArk/1449737,
@@ -134,7 +142,10 @@ var channelTypes = []channelTypeDef{
 	{ID: "mistral", Label: "Mistral AI", WireApi: "openai", Group: Vendor,
 		Endpoint: "https://api.mistral.ai/v1", KeyHint: "…", IconID: "mistral"},
 	{ID: "stepfun", Label: "阶跃星辰 StepFun", WireApi: "openai", Group: Vendor,
-		Endpoint: "https://api.stepfun.com/v1", KeyHint: "…", IconID: "stepfun"},
+		Endpoint: "https://api.stepfun.com/v1", KeyHint: "…", IconID: "stepfun",
+		// Two sites with separate accounts: stepfun.com and stepfun.ai.
+		Regions: []ChannelRegion{{Id: Cn, Endpoint: "https://api.stepfun.com/v1"}, {Id: Global, Endpoint: "https://api.stepfun.ai/v1"}},
+	},
 	{ID: "hunyuan", Label: "腾讯混元 Hunyuan", WireApi: "openai", Group: Vendor,
 		Endpoint: "https://api.hunyuan.cloud.tencent.com/v1", KeyHint: "sk-…", IconID: "hunyuan"},
 	{ID: "qianfan", Label: "百度千帆 Qianfan", WireApi: "openai", Group: Vendor,
@@ -155,7 +166,10 @@ var channelTypes = []channelTypeDef{
 		// whichever model is routed to, and goes back unmodified.
 		Compat: openai.Compat{Thinking: openai.ThinkingOpenRouter, ReasoningDetails: true}},
 	{ID: "siliconflow", Label: "硅基流动 SiliconFlow", WireApi: "openai", Group: Platform,
-		Endpoint: "https://api.siliconflow.cn/v1", KeyHint: "sk-…", IconID: "siliconcloud"},
+		Endpoint: "https://api.siliconflow.cn/v1", KeyHint: "sk-…", IconID: "siliconcloud",
+		// Two sites with separate accounts: siliconflow.cn and siliconflow.com (docs.siliconflow.com/en/userguide/quickstart).
+		Regions: []ChannelRegion{{Id: Cn, Endpoint: "https://api.siliconflow.cn/v1"}, {Id: Global, Endpoint: "https://api.siliconflow.com/v1"}},
+	},
 	{ID: "groq", Label: "Groq", WireApi: "openai", Group: Platform,
 		Endpoint: "https://api.groq.com/openai/v1", KeyHint: "gsk_…", IconID: "groq"},
 	{ID: "together", Label: "Together AI", WireApi: "openai", Group: Platform,

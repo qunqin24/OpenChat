@@ -1,6 +1,7 @@
 package api
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/qunqin/openchat/apps/server/internal/providers/openai"
@@ -124,5 +125,36 @@ func TestChannelTypesCarryTheirVendorsQuirks(t *testing.T) {
 
 	if compatFor("nope") != (openai.Compat{}) {
 		t.Error("an unknown type got a compat")
+	}
+}
+
+// A vendor's sites: the first is the type's own endpoint (the form chooses it
+// by leaving the base URL blank), each site once, every address https.
+func TestChannelRegionsStartWithTheEndpoint(t *testing.T) {
+	withRegions := 0
+	for _, def := range channelTypes {
+		if len(def.Regions) == 0 {
+			continue
+		}
+		withRegions++
+		if len(def.Regions) < 2 {
+			t.Errorf("%s: one region is no choice", def.ID)
+		}
+		if def.Regions[0].Endpoint != def.Endpoint {
+			t.Errorf("%s: first region %q is not the endpoint %q", def.ID, def.Regions[0].Endpoint, def.Endpoint)
+		}
+		seen := map[ChannelRegionId]bool{}
+		for _, region := range def.Regions {
+			if seen[region.Id] {
+				t.Errorf("%s: region %s twice", def.ID, region.Id)
+			}
+			seen[region.Id] = true
+			if !strings.HasPrefix(region.Endpoint, "https://") {
+				t.Errorf("%s: region %s endpoint %q is not https", def.ID, region.Id, region.Endpoint)
+			}
+		}
+	}
+	if withRegions < 7 {
+		t.Errorf("%d types offer sites, want MiniMax, Moonshot, Zhipu, DashScope, Volcengine, SiliconFlow and StepFun", withRegions)
 	}
 }
