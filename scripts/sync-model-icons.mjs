@@ -13,9 +13,10 @@
  *   - Serving them ourselves keeps the page from telling a CDN who is looking
  *     at it — the same call the self-hosted fonts make.
  *
- * The list of what to copy is not kept here. It is read out of the two maps in
- * `apps/web/src/components/model-icon.tsx`, which is the file that decides
- * which mark a provider gets — one list, one place to edit.
+ * The list of what to copy is not kept here. It is read out of the three maps
+ * in `apps/web/src/components/model-icon.tsx`, which is the file that decides
+ * which mark a provider, a vendor or a model family gets — one list, one place
+ * to edit.
  *
  * Run: pnpm sync:model-icons
  */
@@ -56,6 +57,7 @@ const component = readFileSync(componentPath, 'utf8')
 const wanted = [
   ...new Set([
     ...iconNamesFrom(component, 'PROVIDER_ICONS'),
+    ...iconNamesFrom(component, 'BRAND_ICONS'),
     ...iconNamesFrom(component, 'FAMILY_ICONS'),
   ]),
 ].sort()
@@ -99,6 +101,15 @@ for (const name of wanted) {
 
   let svg = readFileSync(from, 'utf8')
   const inherits = svg.includes('currentColor')
+
+  // Lobe sizes its marks for inline use: `width="1em" height="1em"` on the
+  // root. Inside an <img> that becomes a 16px intrinsic size, and WebKit
+  // rasterises an SVG image at its intrinsic size before scaling it, so every
+  // mark drawn larger than 16px came out soft. Without them the viewBox alone
+  // gives the aspect ratio, and the image is drawn at the size it is shown.
+  svg = svg.replace(/^<svg\b[^>]*>/, (tag) =>
+    tag.replace(/\s(?:width|height)="[^"]*"/g, '').replace(/\sstyle="[^"]*"/, ''),
+  )
 
   if (name.endsWith('-color')) {
     if (inherits) {

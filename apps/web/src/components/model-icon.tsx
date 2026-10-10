@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
  * named below are vendored into `public/model-icons/`, by
  * `scripts/sync-model-icons.mjs` — the upstream package ships 906 of them and
  * bundling the lot to show a few dozen would be absurd. That script reads the
- * two maps in this file, so this file is the single list of what gets copied:
+ * three maps in this file, so this file is the single list of what gets copied:
  * add a mapping, re-run `pnpm sync:model-icons`.
  *
  * They are served from our own origin rather than a CDN, for the same reason
@@ -132,6 +132,51 @@ const PROVIDER_ICONS: Record<string, string> = {
 }
 
 /**
+ * Vendor brand -> icon file name, for callers that know neither a models.dev
+ * provider id nor a model family.
+ *
+ * The channel form is the one that does: what an operator picks there is a
+ * vendor, and `channelTypeDef.IconID` on the server names the brand it should
+ * be drawn with — `anthropic` the channel type is drawn with the Claude mark,
+ * `dashscope` with Qwen's. Those names are brands, not provider ids, so they
+ * cannot go through `PROVIDER_ICONS`: `gemini`, `zhipu`, `moonshot` and
+ * `siliconcloud` are all spelled differently by models.dev (`google`,
+ * `zhipuai`, `moonshotai`, `siliconflow`), and looking them up there is how
+ * half the vendor list ended up as bare letters.
+ *
+ * Kept here rather than as a file name on the server so that this file stays
+ * the single list of what gets vendored, and so that which brands have colour
+ * artwork is answered in the same place for every caller.
+ */
+const BRAND_ICONS: Record<string, string> = {
+  openai: 'openai',
+  claude: 'claude-color',
+  gemini: 'gemini-color',
+  openrouter: 'openrouter-color',
+  deepseek: 'deepseek-color',
+  siliconcloud: 'siliconcloud-color',
+  moonshot: 'moonshot',
+  zhipu: 'zhipu-color',
+  qwen: 'qwen-color',
+  volcengine: 'volcengine-color',
+  minimax: 'minimax-color',
+  grok: 'grok',
+  groq: 'groq',
+  ollama: 'ollama',
+  mistral: 'mistral-color',
+  stepfun: 'stepfun-color',
+  hunyuan: 'hunyuan-color',
+  wenxin: 'wenxin-color',
+  mimo: 'xiaomimimo',
+  together: 'together-color',
+  fireworks: 'fireworks-color',
+  nvidia: 'nvidia-color',
+  modelscope: 'modelscope-color',
+  cerebras: 'cerebras-color',
+  lmstudio: 'lmstudio',
+}
+
+/**
  * Model family root -> icon file name, consulted only when the provider has no
  * mark of its own. Resellers are the majority of the catalogue: without this a
  * card for Qwen-on-Nebius would be a bare letter, and the model's own brand is
@@ -197,17 +242,44 @@ function isMonochrome(icon: string): boolean {
   return !icon.endsWith('-color')
 }
 
-function resolveIcon(providerId: string, family?: string): string | undefined {
-  return PROVIDER_ICONS[providerId] ?? (family ? FAMILY_ICONS[familyRoot(family)] : undefined)
+/**
+ * Brand first, because a caller that names one has been told exactly which mark
+ * to draw; then the provider; then the model's own family, which is the best
+ * hint left once the provider is a reseller nobody has a mark for.
+ */
+function resolveIcon(
+  brand?: string,
+  providerId?: string,
+  family?: string,
+  subject: 'vendor' | 'model' = 'vendor',
+): string | undefined {
+  if (brand && BRAND_ICONS[brand]) return BRAND_ICONS[brand]
+  const familyIcon = family ? FAMILY_ICONS[familyRoot(family)] : undefined
+  // Standing for a model, the model's own mark wins: Claude Sonnet is drawn
+  // with Claude's mark, not with Anthropic's, which says who sells it.
+  if (subject === 'model' && familyIcon) return familyIcon
+  if (providerId && PROVIDER_ICONS[providerId]) return PROVIDER_ICONS[providerId]
+  return familyIcon
 }
 
 type ModelIconProps = {
+  /**
+   * A vendor brand, as `ChannelTypeInfo.iconId` spells it. Wins over the two
+   * below: a caller supplying one has been told which mark to draw.
+   */
+  brand?: string
   /** models.dev provider id, e.g. `anthropic`, `amazon-bedrock`. */
-  providerId: string
+  providerId?: string
   /** models.dev model family; a sharper mark than a reseller's own. */
   family?: string
   /** Falls back to its first character when no mark is known. */
   name?: string
+  /**
+   * What the mark stands for. `vendor` (the default) prefers the provider's
+   * mark; `model` prefers the model family's — an avatar for Claude Sonnet is
+   * Claude's mark even when Anthropic, or a reseller, serves it.
+   */
+  subject?: 'vendor' | 'model'
   className?: string
 }
 
@@ -219,8 +291,8 @@ type ModelIconProps = {
  * The styling here leans on neither design system's tokens — it is plain
  * black/white alpha — so the component stays usable from the chat side too.
  */
-export function ModelIcon({ providerId, family, name, className }: ModelIconProps) {
-  const icon = resolveIcon(providerId, family)
+export function ModelIcon({ brand, providerId, family, name, subject, className }: ModelIconProps) {
+  const icon = resolveIcon(brand, providerId, family, subject)
   // A file can go missing if the map moves ahead of the last icon sync; the
   // letter is a better answer than a broken image. Remembering which name
   // failed rather than a bare flag means a different model reusing this
@@ -233,7 +305,7 @@ export function ModelIcon({ providerId, family, name, className }: ModelIconProp
   )
 
   if (!icon || icon === failedIcon) {
-    const letter = (name ?? providerId).trim().charAt(0).toUpperCase()
+    const letter = (name ?? providerId ?? brand ?? '').trim().charAt(0).toUpperCase()
     return (
       <span
         className={cn(
@@ -257,7 +329,12 @@ export function ModelIcon({ providerId, family, name, className }: ModelIconProp
       width={32}
       height={32}
       onError={() => setFailedIcon(icon)}
-      className={cn(box, 'p-1', isMonochrome(icon) && 'dark:invert')}
+      // No inset. There is no background behind the mark to hold it off, and a
+      // fixed one ate half of a `size-4` box — which is how the marks in the
+      // channel picker came out visibly smaller than the letters beside them.
+      // The mark now fills whatever box the caller asked for, which is also
+      // what the letter below does, so the two states are the same size.
+      className={cn(box, isMonochrome(icon) && 'dark:invert')}
     />
   )
 }

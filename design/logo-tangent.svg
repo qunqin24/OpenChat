@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Thirty circles sharing one tangent point; hairlines, brightening outward. -->
+  <rect width="512" height="512" rx="112" fill="#0A0B0D"/>
+  <g stroke-width="1.8">
+    <circle cx="394.00" cy="256" r="8.00" stroke="#E8ECF2" stroke-opacity="0.25"/>
+    <circle cx="389.10" cy="256" r="12.90" stroke="#E8ECF2" stroke-opacity="0.28"/>
+    <circle cx="384.21" cy="256" r="17.79" stroke="#E8ECF2" stroke-opacity="0.30"/>
+    <circle cx="379.31" cy="256" r="22.69" stroke="#E8ECF2" stroke-opacity="0.33"/>
+    <circle cx="374.41" cy="256" r="27.59" stroke="#E8ECF2" stroke-opacity="0.35"/>
+    <circle cx="369.52" cy="256" r="32.48" stroke="#E8ECF2" stroke-opacity="0.38"/>
+    <circle cx="364.62" cy="256" r="37.38" stroke="#E8ECF2" stroke-opacity="0.41"/>
+    <circle cx="359.72" cy="256" r="42.28" stroke="#E8ECF2" stroke-opacity="0.43"/>
+    <circle cx="354.83" cy="256" r="47.17" stroke="#E8ECF2" stroke-opacity="0.46"/>
+    <circle cx="349.93" cy="256" r="52.07" stroke="#E8ECF2" stroke-opacity="0.48"/>
+    <circle cx="345.03" cy="256" r="56.97" stroke="#E8ECF2" stroke-opacity="0.51"/>
+    <circle cx="340.14" cy="256" r="61.86" stroke="#E8ECF2" stroke-opacity="0.53"/>
+    <circle cx="335.24" cy="256" r="66.76" stroke="#E8ECF2" stroke-opacity="0.56"/>
+    <circle cx="330.34" cy="256" r="71.66" stroke="#E8ECF2" stroke-opacity="0.59"/>
+    <circle cx="325.45" cy="256" r="76.55" stroke="#E8ECF2" stroke-opacity="0.61"/>
+    <circle cx="320.55" cy="256" r="81.45" stroke="#E8ECF2" stroke-opacity="0.64"/>
+    <circle cx="315.66" cy="256" r="86.34" stroke="#E8ECF2" stroke-opacity="0.66"/>
+    <circle cx="310.76" cy="256" r="91.24" stroke="#E8ECF2" stroke-opacity="0.69"/>
+    <circle cx="305.86" cy="256" r="96.14" stroke="#E8ECF2" stroke-opacity="0.72"/>
+    <circle cx="300.97" cy="256" r="101.03" stroke="#E8ECF2" stroke-opacity="0.74"/>
+    <circle cx="296.07" cy="256" r="105.93" stroke="#E8ECF2" stroke-opacity="0.77"/>
+    <circle cx="291.17" cy="256" r="110.83" stroke="#E8ECF2" stroke-opacity="0.79"/>
+    <circle cx="286.28" cy="256" r="115.72" stroke="#E8ECF2" stroke-opacity="0.82"/>
+    <circle cx="281.38" cy="256" r="120.62" stroke="#E8ECF2" stroke-opacity="0.84"/>
+    <circle cx="276.48" cy="256" r="125.52" stroke="#E8ECF2" stroke-opacity="0.87"/>
+    <circle cx="271.59" cy="256" r="130.41" stroke="#E8ECF2" stroke-opacity="0.90"/>
+    <circle cx="266.69" cy="256" r="135.31" stroke="#E8ECF2" stroke-opacity="0.92"/>
+    <circle cx="261.79" cy="256" r="140.21" stroke="#E8ECF2" stroke-opacity="0.95"/>
+    <circle cx="256.90" cy="256" r="145.10" stroke="#E8ECF2" stroke-opacity="0.97"/>
+    <circle cx="252.00" cy="256" r="150.00" stroke="#E8ECF2" stroke-opacity="1.00"/>
+  </g>
+</svg>
