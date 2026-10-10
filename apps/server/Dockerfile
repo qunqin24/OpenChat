@@ -38,11 +38,18 @@ COPY apps/server/ .
 # Over the placeholder the repo keeps there so `go build` works without a web
 # build: this is what `go:embed all:dist` picks up.
 COPY --from=web /repo/apps/server/internal/webui/dist ./internal/webui/dist
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/openchat ./cmd/openchat
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/openchat ./cmd/openchat \
+ && mkdir -p /out/data
 
 # ---- runtime -----------------------------------------------------------------
 FROM gcr.io/distroless/static-debian12:nonroot
-COPY --from=build /out/openchat /openchat
+# The local storage driver writes to ./data, relative to the working directory:
+# here /app/data, made in the build stage (distroless has no shell to mkdir)
+# and owned by the user the server runs as. Mount a volume on it; a new named
+# volume takes this ownership from the image.
+WORKDIR /app
+COPY --from=build --chown=nonroot:nonroot /out/data /app/data
+COPY --from=build /out/openchat /app/openchat
 EXPOSE 8080
 USER nonroot:nonroot
-ENTRYPOINT ["/openchat"]
+ENTRYPOINT ["/app/openchat"]

@@ -1,0 +1,11 @@
+# HTTPS for OpenChat. Caddy gets and renews the certificate for $DOMAIN on its
+# own; the domain's DNS must point at this server, with ports 80 and 443 open.
+{$DOMAIN} {
+	encode zstd gzip
+	# Caddy sets X-Forwarded-For to the visitor's address and replaces what a
+	# client sent there, which is what the server's per-IP guest limit reads.
+	reverse_proxy openchat:8080 {
+		# Server-sent events (answers streaming in) must not be buffered.
+		flush_interval -1
+	}
+}
