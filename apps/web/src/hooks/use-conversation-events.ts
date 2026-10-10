@@ -4,7 +4,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useEffectEvent } from 'react'
 
 import { refreshNewestMessages } from '@/hooks/use-messages'
-import { API_BASE_URL } from '@/lib/api'
+import { API_BASE_URL, appFetch } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
 import { useChatStore } from '@/stores/chat-store'
 
@@ -70,6 +70,8 @@ export function useConversationEvents(conversationId: string | undefined) {
             conversationId,
             credentials: 'include',
             signal: controller.signal,
+            // A guest's events are made in the page; an account's come from the server.
+            fetch: appFetch,
           })) {
             attempt = 0
             if (event.type === 'snapshot') {

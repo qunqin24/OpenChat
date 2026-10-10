@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
-import { api, API_BASE_URL, unwrap } from '@/lib/api'
+import { api, API_BASE_URL, appFetch, unwrap } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
 
 /**
@@ -25,7 +25,7 @@ export function useExportConversations() {
     // The button says it is working.
     meta: { silent: true },
     mutationFn: async () => {
-      const response = await fetch(`${API_BASE_URL}/me/export`, { credentials: 'include' })
+      const response = await appFetch(`${API_BASE_URL}/me/export`, { credentials: 'include' })
       if (!response.ok) throw new Error(`export failed: ${response.status}`)
       const name = exportName(response)
       const url = URL.createObjectURL(await response.blob())

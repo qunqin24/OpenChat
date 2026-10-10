@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 
 import { useStuck } from '@/hooks/use-stuck'
 import { API_BASE_URL } from '@/lib/api'
+import { isGuestMode } from '@/lib/guest/mode'
 import { siteName } from '@/lib/urls'
 import { cn } from '@/lib/utils'
 import { ThinkingOrb } from './ThinkingOrb'
@@ -195,7 +196,7 @@ export function SourceMark({ url }: { url: string }) {
       {letter}
       {!failed && domain && (
         <img
-          src={`${API_BASE_URL}/favicons/${encodeURIComponent(domain)}`}
+          src={`${API_BASE_URL}${isGuestMode() ? '/guest' : ''}/favicons/${encodeURIComponent(domain)}`}
           alt=""
           loading="lazy"
           decoding="async"

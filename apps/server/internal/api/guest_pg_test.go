@@ -409,7 +409,9 @@ func TestGuestModeOffAndModels(t *testing.T) {
 	if _, err := h.q.SaveModelOverride(context.Background(), sqlc.SaveModelOverrideParams{ModelID: hidden, AdminOnly: true}); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _, _ = h.pool.Exec(context.Background(), "DELETE FROM model_overrides WHERE model_id = $1", hidden) })
+	t.Cleanup(func() {
+		_, _ = h.pool.Exec(context.Background(), "DELETE FROM model_overrides WHERE model_id = $1", hidden)
+	})
 	_, config = get("/guest/config")
 	for _, m := range config["models"].([]any) {
 		if m.(map[string]any)["id"] == hidden {
