@@ -33,7 +33,11 @@ export function GuestLimitsForm({ settings }: { settings: SystemSettings }) {
 
   const form = useForm<z.input<typeof schema>, unknown, Values>({
     resolver: zodResolver(schema),
-    values: { guestHourlyLimit: settings.guestHourlyLimit, guestDailyLimit: settings.guestDailyLimit },
+    values: {
+      guestHourlyLimit: settings.guestHourlyLimit,
+      guestDailyLimit: settings.guestDailyLimit,
+      guestMaxConcurrentRuns: settings.guestMaxConcurrentRuns,
+    },
   })
 
   const save = useMutation({
@@ -46,8 +50,9 @@ export function GuestLimitsForm({ settings }: { settings: SystemSettings }) {
   })
 
   const fields = [
-    { name: 'guestHourlyLimit', label: 'hourly', hint: 'hourly-hint' },
-    { name: 'guestDailyLimit', label: 'daily', hint: 'daily-hint' },
+    { name: 'guestHourlyLimit', label: 'hourly', hint: 'hourly-hint', unit: 'unit' },
+    { name: 'guestDailyLimit', label: 'daily', hint: 'daily-hint', unit: 'unit' },
+    { name: 'guestMaxConcurrentRuns', label: 'runs', hint: 'runs-hint', unit: 'runs-unit' },
   ] as const
 
   return (
@@ -76,7 +81,7 @@ export function GuestLimitsForm({ settings }: { settings: SystemSettings }) {
                         value={field.value as number | string}
                       />
                     </FormControl>
-                    <span className="text-muted-foreground text-sm">{t('admin.settings.system.guest-limits.unit')}</span>
+                    <span className="text-muted-foreground text-sm">{t(`admin.settings.system.guest-limits.${item.unit}`)}</span>
                   </div>
                   <FormDescription>{t(`admin.settings.system.guest-limits.${item.hint}`)}</FormDescription>
                   <FormMessage />

@@ -103,7 +103,8 @@
       "guest_ip_limit": "This network has used up its guest requests for the hour. Try again later, or sign in.",
       "guest_daily_limit": "Guests have used up today's requests. Try again later, or sign in.",
       "guest_unreachable": "The server could not be reached, so nothing was sent.",
-      "model_capacity_reached": "This model has reached its maximum capacity."
+      "model_capacity_reached": "This model has reached its maximum capacity.",
+      "too_many_runs": "Too many answers are being written at once. Wait for one to finish, or stop one, and try again."
     },
     "thinking": {
       "title": "Thinking",
@@ -684,6 +685,18 @@
         "memory-on": "Personal memory turned on",
         "memory-off": "Personal memory turned off",
         "save-failed": "Couldn't save the setting. Try again.",
+        "run-limit": {
+          "title": "Answers at once",
+          "intro": "An account can have the model writing answers in several conversations at the same time. Each one keeps spending money, so this limits how many.",
+          "label": "Answers at once per account",
+          "hint": "Counted across all the account's conversations. Past it, sending, regenerating, editing and answering a question are refused (try again shortly) and nothing is written. A finished or stopped answer frees its slot at once. Administrators are exempt. 0 is unlimited; the default is 3.",
+          "unit": "answers",
+          "save": "Save",
+          "saved": "Answer limit saved",
+          "required": "Enter a number; 0 means no limit",
+          "whole": "Enter a whole number",
+          "range": "Between 0 and {{max}}; 0 is unlimited"
+        },
         "retention": {
           "title": "Data retention",
           "hint": "The server cleans up every 10 minutes. These are how long each kind of data is kept before it goes.",
@@ -719,6 +732,9 @@
           "hourly-hint": "One guest on one network address (an IPv6 address counts as its /64) may send this many in an hour. The server has to sit behind a proxy that sets X-Forwarded-For, or the address can be faked.",
           "daily": "Requests per day, all guests",
           "daily-hint": "All guests together, over the last 24 hours.",
+          "runs": "Answers at once per address",
+          "runs-hint": "Counted per the same network address as the hourly limit. A guest's answer exists only while its request is open, so closing the page frees the slot. 0 is unlimited; the default is 2.",
+          "runs-unit": "answers",
           "unit": "requests",
           "save": "Save",
           "saved": "Guest limits saved",
@@ -1063,6 +1079,8 @@
       "cache-write-price": "cache write",
       "tier-standard": "Standard",
       "price-hint": "USD per 1M tokens, input / output, as priced when the request was made",
+      "estimated": "Est.",
+      "estimated-hint": "The provider did not report this request's usage (it was stopped, cut off, or the provider reports none), so the token counts and cost are the server's estimate, which errs high. Whatever the provider did report is kept as it is.",
       "sum-requests": "Requests",
       "sum-errors": "{{n}} failed",
       "sum-input": "Input tokens",

@@ -193,10 +193,26 @@ export function usageLogsColumns(t: TFunction<'common'>): ColumnDef<UsageLog>[] 
       header: header(t('admin.usage.cost')),
       cell: ({ row }) => {
         const log = row.original
-        if (log.status === 'error' || log.cost == null) {
+        // A failed request has a cost too when it was estimated: it was taken
+        // up and billed before it broke.
+        if (log.cost == null) {
           return <span className="text-muted-foreground">{DASH}</span>
         }
-        return <span className="font-mono text-sm tabular-nums">{formatUsd(log.cost)}</span>
+        return (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="font-mono text-sm tabular-nums">{formatUsd(log.cost)}</span>
+            {log.estimated && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="outline" className="text-muted-foreground px-1.5 py-0 text-[11px]" tabIndex={0}>
+                    {t('admin.usage.estimated')}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">{t('admin.usage.estimated-hint')}</TooltipContent>
+              </Tooltip>
+            )}
+          </span>
+        )
       },
       enableSorting: false,
     },

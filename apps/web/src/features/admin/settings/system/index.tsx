@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn/ui
 import { ContentSection } from '../components/content-section'
 import { GuestLimitsForm } from './guest-limits-form'
 import { RetentionForm } from './retention-form'
+import { RunLimitForm } from './run-limit-form'
 import { SYSTEM_TABS, type SystemTab } from './tabs'
 
 const route = getRouteApi('/admin/settings/system')
@@ -147,6 +148,14 @@ export function SettingsSystem() {
           >
             {toggle('compress-context', data?.compressContext ?? true, toggleCompress)}
           </SettingRow>
+          {/* One form of its own, like the other numbers: it is saved with a button, not on change. */}
+          <div className="py-4">
+            <div className="space-y-1">
+              <div className="text-sm font-medium">{t('admin.settings.system.run-limit.title')}</div>
+              <p className="text-muted-foreground text-sm">{t('admin.settings.system.run-limit.intro')}</p>
+            </div>
+            {isPending || !data ? <Skeleton className="my-4 h-28 w-full" /> : <RunLimitForm settings={data} />}
+          </div>
         </TabsContent>
 
         <TabsContent value="access" className="divide-y">

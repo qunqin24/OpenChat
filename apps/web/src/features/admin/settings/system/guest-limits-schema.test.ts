@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { guestLimitsSchema, MAX_HOURLY } from './guest-limits-schema'
+import { guestLimitsSchema, MAX_HOURLY, MAX_RUNS } from './guest-limits-schema'
 
 const schema = guestLimitsSchema({
   required: 'required',
@@ -8,8 +8,8 @@ const schema = guestLimitsSchema({
   range: (max) => `0-${max}`,
 })
 
-const parse = (guestHourlyLimit: unknown, guestDailyLimit: unknown = 0) =>
-  schema.safeParse({ guestHourlyLimit, guestDailyLimit })
+const parse = (guestHourlyLimit: unknown, guestDailyLimit: unknown = 0, guestMaxConcurrentRuns: unknown = 2) =>
+  schema.safeParse({ guestHourlyLimit, guestDailyLimit, guestMaxConcurrentRuns })
 
 const message = (result: ReturnType<typeof parse>) => (result.success ? undefined : result.error.issues[0]?.message)
 
@@ -36,5 +36,11 @@ describe('the guest limit fields', () => {
     expect(message(parse('abc'))).toBe('whole')
     expect(message(parse('-1'))).toBe(`0-${MAX_HOURLY}`)
     expect(message(parse(String(MAX_HOURLY + 1)))).toBe(`0-${MAX_HOURLY}`)
+  })
+
+  it('holds the concurrent-runs field to the same rules', () => {
+    expect(message(parse(0, 0, ''))).toBe('required')
+    expect(parse(0, 0, '0')).toMatchObject({ success: true, data: { guestMaxConcurrentRuns: 0 } })
+    expect(message(parse(0, 0, String(MAX_RUNS + 1)))).toBe(`0-${MAX_RUNS}`)
   })
 })
