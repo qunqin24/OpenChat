@@ -483,6 +483,15 @@ func TestManualCompactionCoversTheWholeConversation(t *testing.T) {
 		if body := f.models.reqs[0].Messages[1].Text(); strings.Contains(body, "q2</user>") || !strings.Contains(body, "q1</user>") {
 			t.Fatalf("history:\n%s", body)
 		}
+
+		// Again, while the answer still fails: nothing to add, and the question
+		// stays out of the summary so that answering it leaves the summary be.
+		if _, err := f.runner.Compactor().Compact(ctx, f.compactParams(ModeManual)); !errors.Is(err, ErrNothingToCompact) {
+			t.Fatalf("compressing again over a failure: %v", err)
+		}
+		if again := f.summary(); again.ThroughID != q2.ID || again.Content != "EARLIER" {
+			t.Fatalf("the summary changed: %+v", again)
+		}
 	})
 }
 

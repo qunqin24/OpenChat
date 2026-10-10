@@ -199,6 +199,14 @@ func (c *Compactor) Compact(ctx context.Context, p CompactParams) (*Summary, err
 			keep = carried // no new question since: the old one is still the one
 		}
 	case ModeManual:
+		// Only failures since a summary that kept the question: nothing to add,
+		// and folding the question into the summary would take it from the
+		// answer that is to follow it.
+		if lastUser < 0 && carried != nil {
+			if tail, err := BuildContext(rows); err == nil && len(tail) == 0 {
+				return nil, ErrNothingToCompact
+			}
+		}
 		// A question with no answer to go with it stays out of the summary.
 		if lastUser >= 0 {
 			if tail, err := BuildContext(rows[lastUser+1:]); err == nil && len(tail) == 0 {
