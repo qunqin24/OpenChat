@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { ArrowDown } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -5,7 +6,12 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import type { Message, ReasoningEffort } from '@openchat/api-client'
-import { useChatFeatures, useChatModels, useUpdateConversationSettings } from '@/hooks/use-chat-models'
+import {
+  chatModelsQueryOptions,
+  useChatFeatures,
+  useChatModels,
+  useUpdateConversationSettings,
+} from '@/hooks/use-chat-models'
 import { useCompact, useCompaction, useUndoCompaction } from '@/hooks/use-compaction'
 import { useConversationEvents } from '@/hooks/use-conversation-events'
 import { useConversation, useCreateConversation } from '@/hooks/use-conversations'
@@ -23,6 +29,7 @@ import { useSession } from '@/features/auth/use-auth'
 import { API_BASE_URL } from '@/lib/api'
 import { useChatPaths } from '@/lib/chat-paths'
 import { loadComposerPrefs, saveComposerPrefs } from '@/lib/composer-prefs'
+import { defaultModelId } from '@/lib/model-capacity'
 import { acceptAttribute, acceptsOf } from '@/lib/attachments'
 import { isRunning } from '@/lib/run-state'
 import { buildTurns, pendingQuestion } from '@/lib/transcript'
@@ -56,6 +63,7 @@ interface NextChatProps {
 export function NextChat({ conversationId }: NextChatProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const paths = useChatPaths()
 
   const [input, setInput] = useState('')
@@ -107,14 +115,19 @@ export function NextChat({ conversationId }: NextChatProps) {
   // only while it is still offered, since a model an administrator has taken
   // away (or kept for administrators) would only be refused. Until the list
   // arrives the conversation's own is trusted, so the picker does not flicker.
+  //
+  // A model at its spending cap is still offered (the picker shows it
+  // disabled), so a conversation's own or a deliberate pick keeps it: swapping
+  // the model under someone would answer a question with something they did not
+  // choose. Only the last two, which nobody chose for this chat, steer around a
+  // cap (defaultModelId), and sending on a capped model says why it cannot.
   const available = useMemo(() => models.data ?? [], [models.data])
   const [draftModel, setDraftModel] = useState<string>()
   const modelById = useMemo(() => new Map(available.map((m) => [m.id, m])), [available])
   const offered = (id: string | null | undefined) =>
     id && (models.data === undefined || modelById.has(id)) ? id : undefined
-  const lastModel = saved.model && modelById.has(saved.model) ? saved.model : undefined
   const modelId =
-    offered(conversation.data?.model) ?? offered(draftModel) ?? lastModel ?? available[0]?.id ?? ''
+    offered(conversation.data?.model) ?? offered(draftModel) ?? defaultModelId(available, saved.model)
 
   // Files: only what the selected model takes. With none that does, the button
   // and the drop zone say so rather than going quiet.
@@ -421,6 +434,18 @@ export function NextChat({ conversationId }: NextChatProps) {
   const handleSend = useCallback(async () => {
     const content = input.trim()
     if (!content || attachments.uploading || attachments.failed) return
+    // The model is at its cap: nothing is sent, and nothing is made for it (a
+    // new chat would otherwise be created only to be refused). The list may be
+    // a minute old, or kept from an earlier visit, so it is asked again before
+    // refusing - the cap may have been raised since.
+    if (modelById.get(modelId)?.atCapacity) {
+      const fresh = await queryClient.fetchQuery({ ...chatModelsQueryOptions, staleTime: 0 }).catch(() => undefined)
+      // Could not be asked: let the server decide, as it always does.
+      if (fresh?.find((m) => m.id === modelId)?.atCapacity) {
+        toast.error(t('chat.send-error.model_capacity_reached'), { id: 'model-capacity' })
+        return
+      }
+    }
     const attachmentIds = attachments.ids
     setInput('')
     // Shown at once, at the bottom, while the request is on its way.
@@ -496,8 +521,10 @@ export function NextChat({ conversationId }: NextChatProps) {
     createConversation,
     effort,
     input,
+    modelById,
     modelId,
     navigate,
+    queryClient,
     paths.chat,
     post,
     sendMessage,

@@ -543,6 +543,42 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* A model at its spending cap: its name with the reason beneath, in the one
+   item that is taller than a line. The item takes no pointer events (it is
+   disabled), so the reason is written out rather than left to a tooltip. */
+.n-model-menu .n-menu-item.is-at-capacity {
+  height: auto;
+  min-height: 27px;
+  padding-block: 4px;
+}
+.n-model-menu .n-model-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.n-model-menu .n-model-text > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.n-model-menu .n-model-text > small {
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: normal;
+  opacity: 0.8;
+}
+/* On the trigger, beside the name of a selected model that is at its cap. */
+.prism-next .n-model-trigger > .n-model-full {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 6%);
+  font-size: 11px;
+  line-height: 18px;
+}
+.dark .prism-next .n-model-trigger > .n-model-full {
+  background: rgb(255 255 255 / 10%);
+}
 
 @keyframes n-agent-pulse {
   0%,

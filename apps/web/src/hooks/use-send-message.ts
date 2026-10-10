@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 
 import { api, unwrap } from '@/lib/api'
 import type { AskAnswer } from '@/lib/ask-user'
+import { CAPACITY_CODE } from '@/lib/model-capacity'
 import { queryKeys } from '@/lib/query-keys'
 import { truncateTranscript, type TranscriptPages } from '@/lib/transcript-pages'
 import { useChatStore } from '@/stores/chat-store'
@@ -14,6 +15,7 @@ const SEND_ERRORS = [
   'conversation_busy',
   'no_models',
   'model_unavailable',
+  'model_capacity_reached',
   'too_many_attachments',
   'attachments_too_large',
   'attachment_unsupported',
@@ -30,6 +32,7 @@ const SEND_ERRORS = [
 
 function useSendError() {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   return (error: Error) => {
     const code = isOpenChatError(error) ? error.code : ''
     const known = SEND_ERRORS.find((c) => c === code)
@@ -38,6 +41,9 @@ function useSendError() {
     toast.error(known ? t(`chat.send-error.${known}`) : t('chat.send-error.generic'), {
       description: requestId ? t('chat.error-id', { id: requestId }) : undefined,
     })
+    // The picker learned of the cap too late: its list says the model has room.
+    // Fetch it again so the model shows as unavailable, not as a trap.
+    if (code === CAPACITY_CODE) void queryClient.invalidateQueries({ queryKey: queryKeys.models.all })
   }
 }
 

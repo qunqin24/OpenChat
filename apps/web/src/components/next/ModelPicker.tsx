@@ -37,7 +37,7 @@ export function ModelPicker({ models, value, onChange, disabled }: ModelPickerPr
           className="n-model-trigger"
           disabled={disabled || models.length === 0}
           aria-label={t('chat.model.pick')}
-          title={label}
+          title={selected?.atCapacity ? `${label} - ${t('chat.model.at-capacity')}` : label}
         >
           {selected && (
             <ModelIcon
@@ -49,6 +49,7 @@ export function ModelPicker({ models, value, onChange, disabled }: ModelPickerPr
             />
           )}
           <span>{label}</span>
+          {selected?.atCapacity && <span className="n-model-full">{t('chat.model.full')}</span>}
           <ChevronDown aria-hidden="true" />
         </button>
       </DropdownMenuTrigger>
@@ -57,7 +58,16 @@ export function ModelPicker({ models, value, onChange, disabled }: ModelPickerPr
           <span className="n-menu-label-text">{t('chat.model.pick')}</span>
         </DropdownMenuLabel>
         {models.map((model) => (
-          <DropdownMenuItem key={model.id} onSelect={() => onChange(model.id)}>
+          // A model at its spending cap stays in the list, disabled, with the
+          // reason under its name: hiding it would leave people wondering
+          // where it went. (A disabled item takes no pointer events, so a
+          // tooltip would never show - the hint is written out.)
+          <DropdownMenuItem
+            key={model.id}
+            disabled={model.atCapacity}
+            className={model.atCapacity ? 'is-at-capacity' : undefined}
+            onSelect={() => onChange(model.id)}
+          >
             <ModelIcon
               subject="model"
               className="size-4 rounded-sm"
@@ -65,7 +75,14 @@ export function ModelPicker({ models, value, onChange, disabled }: ModelPickerPr
               family={model.family || undefined}
               name={model.name}
             />
-            <span title={model.id}>{model.name}</span>
+            {model.atCapacity ? (
+              <span className="n-model-text" title={model.id}>
+                <span>{model.name}</span>
+                <small>{t('chat.model.at-capacity')}</small>
+              </span>
+            ) : (
+              <span title={model.id}>{model.name}</span>
+            )}
             {model.id === value && <Check className="n-menu-check" aria-hidden="true" />}
           </DropdownMenuItem>
         ))}

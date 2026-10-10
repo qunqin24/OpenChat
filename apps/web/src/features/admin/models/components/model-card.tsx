@@ -18,6 +18,7 @@ import { Button } from '@/components/shadcn/ui/button'
 import { Card } from '@/components/shadcn/ui/card'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/shadcn/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { formatMoney, usedRatio } from '../capacity'
 import { formatCost, formatTokenLimit } from '../format'
 import { type CatalogModel } from '../use-catalog'
 import { ModelSettingsPanel } from './model-settings-panel'
@@ -32,6 +33,9 @@ const CAPABILITIES = [
   { key: 'attachment', label: 'admin.models.cap-attachment', icon: Paperclip },
   { key: 'structuredOutput', label: 'admin.models.cap-structured', icon: Braces },
 ] as const
+
+/** Override fields that show on the card in their own way, not as "customised". */
+const OWN_BADGE = new Set(['adminOnly', 'capacity', 'capacityPeriod', 'capacityAdminExempt'])
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -65,10 +69,13 @@ export function ModelCard({ model }: { model: CatalogModel }) {
   const capabilities = CAPABILITIES.filter((capability) => has(capability.key))
   const contextLimit = settings?.contextLimit || model.contextLimit
   const outputLimit = settings?.outputLimit || model.outputLimit
-  // Keeping a model for administrators has its own badge, so it does not
-  // also count as "customised".
-  const { adminOnly, ...rest } = model.override ?? {}
-  const customized = Object.values(rest).some((value) => value !== undefined && value !== null)
+  // Keeping a model for administrators has its own badge, and a spending cap
+  // its own meter, so neither also counts as "customised".
+  const { adminOnly, capacity: capLimit, capacityPeriod } = model.override ?? {}
+  const customized = Object.entries(model.override ?? {}).some(
+    ([key, value]) => !OWN_BADGE.has(key) && value !== undefined && value !== null,
+  )
+  const capacity = model.capacity && capLimit != null ? model.capacity : undefined
   const kind = settings?.kind ?? 'text'
 
   // Only channels where the operator selected this model are included.
@@ -185,6 +192,34 @@ export function ModelCard({ model }: { model: CatalogModel }) {
           />
           <Stat label={t('admin.models.cost')} value={cost ?? '—'} />
         </dl>
+      )}
+
+      {capacity && capLimit != null && (
+        <div className="px-4 pt-3" data-testid="capacity-meter">
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <span className={cn('tabular-nums', capacity.atCapacity ? 'text-destructive font-medium' : 'text-muted-foreground')}>
+              {t(`admin.models.capacity-${capacityPeriod ?? 'total'}`, {
+                spent: formatMoney(capacity.spent, true),
+                cap: formatMoney(capLimit, true),
+              })}
+            </span>
+            {capacity.atCapacity && (
+              <span className="text-destructive shrink-0 font-medium">{t('admin.models.capacity-reached')}</span>
+            )}
+          </div>
+          <div
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(usedRatio(capacity.spent, capLimit) * 100)}
+            className="bg-muted mt-1.5 h-1 w-full overflow-hidden rounded-full"
+          >
+            <div
+              className={cn('h-full rounded-full', capacity.atCapacity ? 'bg-destructive' : 'bg-primary/60')}
+              style={{ width: `${usedRatio(capacity.spent, capLimit) * 100}%` }}
+            />
+          </div>
+        </div>
       )}
 
       {/* The channels are the caveat on the status above: a model whose only

@@ -38,7 +38,9 @@
     },
     "model": {
       "pick": "Choose a model",
-      "none": "No models available"
+      "none": "No models available",
+      "at-capacity": "This model has reached its maximum capacity.",
+      "full": "Full"
     },
     "tool": {
       "generic": "Tool: {{name}}",
@@ -66,7 +68,8 @@
       "context_too_long": "This conversation is too long for the model. Compress its context and try again.",
       "internal": "The server failed and this reply was not finished.",
       "tool_markup": "The model wrote its next tool call out as text, so this answer did not finish. Regenerate to try again.",
-      "connection_lost": "The connection dropped before the reply was finished. Regenerate to try again."
+      "connection_lost": "The connection dropped before the reply was finished. Regenerate to try again.",
+      "model_capacity_reached": "This model has reached its maximum capacity."
     },
     "compaction": {
       "divider": "Everything above is compressed into a summary",
@@ -98,7 +101,8 @@
       "generic": "Sending failed. Try again.",
       "guest_ip_limit": "This network has used up its guest requests for the hour. Try again later, or sign in.",
       "guest_daily_limit": "Guests have used up today's requests. Try again later, or sign in.",
-      "guest_unreachable": "The server could not be reached, so nothing was sent."
+      "guest_unreachable": "The server could not be reached, so nothing was sent.",
+      "model_capacity_reached": "This model has reached its maximum capacity."
     },
     "thinking": {
       "title": "Thinking",
@@ -870,8 +874,37 @@
         "save-failed": "Could not save, please try again",
         "reasoning-hint": "Off offers no thinking levels; people can only use Auto.",
         "modalities-hint": "What the model takes as input; text always.",
-        "no-default": "The metadata has no figure for this."
-      }
+        "no-default": "The metadata has no figure for this.",
+        "section-capacity": "Capacity",
+        "capacity": "Spending cap (USD)",
+        "capacity-placeholder": "No cap",
+        "capacity-hint": "Once this model's spend in the period reaches this amount it can no longer be used. Requests from every user, guests included, count. Leave empty for no cap.",
+        "capacity-invalid": "Enter an amount above 0, with at most 6 decimals",
+        "capacity-period": "Period",
+        "period-total": "Total",
+        "period-monthly": "Monthly",
+        "period-daily": "Daily",
+        "period-total-hint": "Adds up from a starting point and never clears by itself; \"Recalculate\" restarts it any time.",
+        "period-monthly-hint": "Clears at the start of each calendar month, in the time zone the server runs in.",
+        "period-daily-hint": "Clears at the start of each day, in the time zone the server runs in.",
+        "capacity-exempt": "Don't limit administrators",
+        "capacity-exempt-hint": "While on, administrators can keep using the model once it reaches the cap, and their spend still counts. Off applies the cap to everyone, administrators included.",
+        "capacity-spent-total": "{{spent}} / {{cap}} used in total",
+        "capacity-spent-monthly": "{{spent}} / {{cap}} used this month",
+        "capacity-spent-daily": "{{spent}} / {{cap}} used today",
+        "capacity-since": "Counting since {{date}}",
+        "capacity-reached": "At capacity",
+        "capacity-recalc": "Recalculate",
+        "capacity-recalc-title": "Recalculate the total spend?",
+        "capacity-recalc-desc": "Counting restarts from now: earlier spend no longer counts against the cap, and a model that has reached it is usable again at once. The usage log is untouched.",
+        "capacity-recalc-done": "Counting again from now",
+        "capacity-no-price": "The catalogue has no input or output price for this model (or lists it as free), so its spend is always 0 and the cap can never trigger. Relays and models the catalogue does not list often look like this.",
+        "capacity-reset-note": "\"Restore defaults\" also removes the cap and its recalculation point."
+      },
+      "capacity-total": "Total {{spent}} / {{cap}}",
+      "capacity-monthly": "This month {{spent}} / {{cap}}",
+      "capacity-daily": "Today {{spent}} / {{cap}}",
+      "capacity-reached": "At capacity"
     },
     "web-search": {
       "title": "Web search",

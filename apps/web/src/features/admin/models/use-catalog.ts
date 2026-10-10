@@ -13,6 +13,8 @@ export type ModelSettings = Schemas['ModelSettings']
 export type ModelOverride = Schemas['ModelOverride']
 export type ModelKind = Schemas['ModelKind']
 export type InputModality = Schemas['InputModality']
+export type CapacityPeriod = Schemas['CapacityPeriod']
+export type ModelCapacity = Schemas['ModelCapacity']
 
 /**
  * Nested under `admin` so the broad invalidation the user mutations already do
@@ -149,6 +151,22 @@ export function useResetModelSettings() {
     mutationFn: async (modelId: string) =>
       unwrap(
         await api.DELETE('/admin/models/{modelId}/settings', { params: { path: { modelId } } }),
+      ),
+    onSuccess: invalidate,
+  })
+}
+
+/**
+ * Counts a model's total spending cap again from now. Moves the marketplace
+ * (the card's figure) and the chat picker (a model that was at its cap is
+ * usable again at once).
+ */
+export function useResetModelCapacity() {
+  const invalidate = useInvalidateModels()
+  return useMutation({
+    mutationFn: async (modelId: string) =>
+      unwrap(
+        await api.POST('/admin/models/{modelId}/capacity/reset', { params: { path: { modelId } } }),
       ),
     onSuccess: invalidate,
   })

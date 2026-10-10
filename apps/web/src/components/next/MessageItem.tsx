@@ -268,6 +268,7 @@ const ERROR_CODES = [
   'model_auth',
   'model_rate_limited',
   'context_too_long',
+  'model_capacity_reached',
   'internal',
   'tool_markup',
   'connection_lost',

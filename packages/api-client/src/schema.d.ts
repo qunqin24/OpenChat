@@ -466,13 +466,44 @@ export interface paths {
          *     field is sending it as null. The settings are enforced where requests
          *     are made, not only in the picker: a level not allowed is dropped, a
          *     model that may not call tools is offered none, an output limit is
-         *     sent with every request, and an administrators-only model is neither
-         *     listed for nor answered to anyone else.
+         *     sent with every request, an administrators-only model is neither
+         *     listed for nor answered to anyone else, and a model that has reached
+         *     its spending cap is refused (409 `model_capacity_reached`), before a
+         *     run starts and again before each request inside one.
          */
         put: operations["updateModelSettings"];
         post?: never;
-        /** Go back to the catalogue for every setting */
+        /**
+         * Go back to the catalogue for every setting
+         * @description Also removes the model's spending cap (and its starting point): a cap is
+         *     one of the operator's settings, and "every setting" includes it. The
+         *     spend stays in the usage log.
+         */
         delete: operations["resetModelSettings"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/models/{modelId}/capacity/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                modelId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Count a model's total spending cap again from now
+         * @description Moves the starting point of a `total` cap to now, so the spend counted
+         *     against it is zero again. The usage log is untouched. Saving the model's
+         *     settings does not move the starting point.
+         */
+        post: operations["resetModelCapacity"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -874,6 +905,12 @@ export interface paths {
          *     accept images, or PDFs, per its `inputModalities`) and
          *     `attachment_unavailable` (not uploaded, already sent, or not the
          *     caller's).
+         *
+         *     A model that has reached its spending cap (see `ModelOverride.capacity`)
+         *     is refused, also before anything is written, with 409
+         *     `model_capacity_reached` — unless the caller is an administrator and the
+         *     cap exempts them. The other ways of starting a run (regenerate, edit,
+         *     answering a question) refuse it the same way.
          */
         post: operations["createMessage"];
         delete?: never;
@@ -1313,6 +1350,8 @@ export interface paths {
          * The models a conversation can use
          * @description Every model an enabled channel offers. A model offered by several
          *     channels appears once; which channel answers is the server's choice.
+         *     A model at its spending cap is listed with `atCapacity` set for a
+         *     caller who is refused it, so the picker can show why it is unavailable.
          */
         get: operations["listChatModels"];
         put?: never;
@@ -1392,7 +1431,8 @@ export interface paths {
          *
          *     Refused before anything is written, as JSON: 429 `guest_ip_limit` and
          *     `guest_daily_limit` (the administrator's limits), 409 `no_models`,
-         *     400 `model_unavailable` and the attachment errors of `createMessage`,
+         *     400 `model_unavailable`, 409 `model_capacity_reached` (a guest is never
+         *     exempt from a cap) and the attachment errors of `createMessage`,
          *     400 `invalid_answers`, 409 `not_pending` for an answer to a question
          *     that is not the last row. Closing the connection stops the run.
          */
@@ -1712,7 +1752,11 @@ export interface components {
              */
             stopReason?: "stop" | "length" | "tool_calls" | "content_filter" | "cancelled" | "error";
             model?: string;
-            /** @description Why a failed response failed. A code to localise, never provider text. */
+            /**
+             * @description Why a failed response failed. A code to localise, never provider
+             *     text. `model_capacity_reached` is a run stopped before a request
+             *     because its model's spending cap had been reached.
+             */
             errorCode?: string;
             usage?: components["schemas"]["Usage"];
             attachments?: components["schemas"]["Attachment"][];
@@ -2261,6 +2305,12 @@ export interface components {
         ChatModel: {
             /** @description What a conversation stores and a request names. */
             id: string;
+            /**
+             * @description The model has reached its spending cap and the caller is refused it
+             *     (409 `model_capacity_reached`). Never true for an administrator the
+             *     cap exempts. Listed anyway, so the picker can show it disabled.
+             */
+            atCapacity: boolean;
             name: string;
             /** @description The catalogue's brand for the model, for its icon. Empty when unknown. */
             providerId: string;
@@ -2638,6 +2688,8 @@ export interface components {
             /** @description What the catalogue says, before the operator's settings. */
             defaults?: components["schemas"]["ModelSettings"];
             override?: components["schemas"]["ModelOverride"];
+            /** @description The spend against the model's cap; absent when it has none. */
+            capacity?: components["schemas"]["ModelCapacity"];
             /** @description How the model is actually offered and called. */
             settings?: components["schemas"]["ModelSettings"];
         };
@@ -2690,6 +2742,22 @@ export interface components {
              *     absent is the same as false.
              */
             adminOnly?: boolean;
+            /**
+             * Format: double
+             * @description A spending cap in USD (at most six decimals; 400 `invalid_capacity`
+             *     otherwise). Once what the model has cost in the cap's period (every
+             *     logged request for it counts, whoever made it) reaches this, it is
+             *     refused to everyone it applies to. Null or absent is no cap, and the
+             *     two fields below then go back to their defaults.
+             */
+            capacity?: number | null;
+            capacityPeriod?: components["schemas"]["CapacityPeriod"];
+            /**
+             * @description While true (absent is true), administrators can go on using a
+             *     capped model; their spend still counts. False applies the cap to
+             *     everyone.
+             */
+            capacityAdminExempt?: boolean;
             kind?: components["schemas"]["ModelKind"] | null;
             reasoning?: boolean | null;
             toolCall?: boolean | null;
@@ -2706,6 +2774,37 @@ export interface components {
              *     listed.
              */
             reasoningEfforts?: components["schemas"]["ReasoningEffort"][] | null;
+        };
+        /**
+         * @description What a spending cap counts. `total` is everything since the cap's
+         *     starting point (`POST /admin/models/{modelId}/capacity/reset` moves it
+         *     to now; before any reset it is the first request ever logged);
+         *     `monthly` and `daily` start over at the beginning of each calendar
+         *     month or day in the server's time zone (`TZ`). Absent is `total`.
+         * @enum {string}
+         */
+        CapacityPeriod: "total" | "monthly" | "daily";
+        /**
+         * @description How much of a model's spending cap is used. Only on a model that has a
+         *     cap.
+         */
+        ModelCapacity: {
+            /**
+             * Format: double
+             * @description USD spent in the current period.
+             */
+            spent: number;
+            /**
+             * Format: date-time
+             * @description Where the period being counted began. Null for a `total` cap that
+             *     was never recalculated: all the model's history counts.
+             */
+            windowStart?: string | null;
+            /**
+             * @description The cap is reached, for anyone it applies to (administrators the
+             *     cap exempts can still use the model).
+             */
+            atCapacity: boolean;
         };
         ModelChannel: {
             /** Format: uuid */
@@ -4154,6 +4253,27 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description reset */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    resetModelCapacity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                modelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the count starts again from now */
             204: {
                 headers: {
                     [name: string]: unknown;

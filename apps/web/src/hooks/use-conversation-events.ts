@@ -7,6 +7,7 @@ import { setCompaction } from '@/hooks/use-compaction'
 import { refreshNewestMessages } from '@/hooks/use-messages'
 import { API_BASE_URL, appFetch } from '@/lib/api'
 import { useChatPaths } from '@/lib/chat-paths'
+import { CAPACITY_CODE } from '@/lib/model-capacity'
 import { queryKeys } from '@/lib/query-keys'
 import { truncateTranscript, type TranscriptPages } from '@/lib/transcript-pages'
 import { useChatStore } from '@/stores/chat-store'
@@ -116,6 +117,11 @@ export function useConversationEvents(conversationId: string | undefined) {
             for (const runEvent of event.events) {
               if (runEvent.type === 'run_finished') {
                 handOver(runEvent.run.id)
+                // Stopped because the model reached its cap: the picker is
+                // behind, and should show the model as unavailable.
+                if (runEvent.run.errorCode === CAPACITY_CODE) {
+                  void queryClient.invalidateQueries({ queryKey: queryKeys.models.all })
+                }
                 // The composer's meter reads the request that run just made.
                 void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.context(conversationId) })
               }

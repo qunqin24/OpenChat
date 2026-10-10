@@ -1,12 +1,13 @@
 import type { ReasoningEffort } from '@openchat/api-client'
 import { zodResolver } from '@hookform/resolvers/zod'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
 import { ModelIcon } from '@/components/model-icon'
+import { ConfirmDialog } from '@/components/shadcn/confirm-dialog'
 import { Badge } from '@/components/shadcn/ui/badge'
 import { Button } from '@/components/shadcn/ui/button'
 import { Checkbox } from '@/components/shadcn/ui/checkbox'
@@ -36,8 +37,12 @@ import {
   SheetTitle,
 } from '@/components/shadcn/ui/sheet'
 import { Switch } from '@/components/shadcn/ui/switch'
+import { cn } from '@/lib/utils'
 import { PanelSection } from '../../channels/components/panel-section'
+import { capacityText, formatMoney, parseCapacity, PERIODS, usedRatio } from '../capacity'
+import { formatSyncedAt } from '../format'
 import {
+  useResetModelCapacity,
   useResetModelSettings,
   useUpdateModelSettings,
   type CatalogModel,
@@ -152,6 +157,11 @@ function SettingsForm({ model, onOpenChange }: Omit<ModelSettingsPanelProps, 'op
     })
   const schema = z.object({
     forMembers: z.boolean(),
+    capacity: z
+      .string()
+      .refine((value) => parseCapacity(value).ok, { message: t('admin.models.settings.capacity-invalid') }),
+    capacityPeriod: z.enum(PERIODS),
+    capacityAdminExempt: z.boolean(),
     kind: z.enum(['text', 'image', 'embedding', 'rerank']),
     reasoning: z.boolean(),
     toolCall: z.boolean(),
@@ -167,6 +177,9 @@ function SettingsForm({ model, onOpenChange }: Omit<ModelSettingsPanelProps, 'op
     resolver: zodResolver(schema),
     defaultValues: {
       forMembers: !override.adminOnly,
+      capacity: capacityText(override.capacity),
+      capacityPeriod: override.capacityPeriod ?? 'total',
+      capacityAdminExempt: override.capacityAdminExempt ?? true,
       kind: settings.kind,
       reasoning: settings.reasoning,
       toolCall: settings.toolCall,
@@ -181,6 +194,10 @@ function SettingsForm({ model, onOpenChange }: Omit<ModelSettingsPanelProps, 'op
   const reasoning = useWatch({ control: form.control, name: 'reasoning' })
   const toolCall = useWatch({ control: form.control, name: 'toolCall' })
   const forMembers = useWatch({ control: form.control, name: 'forMembers' })
+  const capacityField = useWatch({ control: form.control, name: 'capacity' })
+  const capacityPeriod = useWatch({ control: form.control, name: 'capacityPeriod' })
+  const capacityExempt = useWatch({ control: form.control, name: 'capacityAdminExempt' })
+  const capped = capacityField.trim() !== '' && parseCapacity(capacityField).ok
 
   // A model the catalogue gives no levels can still be vouched for: the
   // operator picks from every level, and they are sent as efforts.
@@ -200,8 +217,14 @@ function SettingsForm({ model, onOpenChange }: Omit<ModelSettingsPanelProps, 'op
       return value === defaults[field] ? null : value
     }
     const efforts = EFFORTS.filter((e) => values.reasoningEfforts.includes(e))
+    const cap = parseCapacity(values.capacity)
     return {
       adminOnly: !values.forMembers,
+      // The period and the exemption mean nothing without a cap; the server
+      // writes their defaults back when there is none.
+      capacity: cap.ok ? cap.value : null,
+      capacityPeriod: values.capacityPeriod,
+      capacityAdminExempt: values.capacityAdminExempt,
       kind: values.kind === defaults.kind ? null : values.kind,
       reasoning: values.reasoning === defaults.reasoning ? null : values.reasoning,
       toolCall: values.toolCall === defaults.toolCall ? null : values.toolCall,
@@ -236,7 +259,7 @@ function SettingsForm({ model, onOpenChange }: Omit<ModelSettingsPanelProps, 'op
   }
 
   // A capability switch, in the bordered row the settings pages use.
-  const switchRow = (name: 'forMembers' | 'reasoning' | 'toolCall', label: string, hint: string, modified: boolean) => (
+  const switchRow = (name: 'forMembers' | 'reasoning' | 'toolCall' | 'capacityAdminExempt', label: string, hint: string, modified: boolean) => (
     <FormField
       control={form.control}
       name={name}
@@ -377,6 +400,79 @@ function SettingsForm({ model, onOpenChange }: Omit<ModelSettingsPanelProps, 'op
               />
             </PanelSection>
 
+            <PanelSection title={t('admin.models.settings.section-capacity')}>
+              <FormField
+                control={form.control}
+                name="capacity"
+                render={({ field }) => (
+                  <FormItem>
+                    <FieldLabel modified={field.value.trim() !== ''}>{t('admin.models.settings.capacity')}</FieldLabel>
+                    <FormControl>
+                      <Input
+                        inputMode="decimal"
+                        className="w-[200px]"
+                        placeholder={t('admin.models.settings.capacity-placeholder')}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>{t('admin.models.settings.capacity-hint')}</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {capped && (
+                <>
+                  <FormField
+                    control={form.control}
+                    name="capacityPeriod"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FieldLabel modified={field.value !== 'total'}>
+                          {t('admin.models.settings.capacity-period')}
+                        </FieldLabel>
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <FormControl>
+                            <SelectTrigger className="w-[200px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {PERIODS.map((period) => (
+                              <SelectItem key={period} value={period}>
+                                {t(`admin.models.settings.period-${period}`)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>{t(`admin.models.settings.period-${capacityPeriod}-hint`)}</FormDescription>
+                      </FormItem>
+                    )}
+                  />
+                  {switchRow(
+                    'capacityAdminExempt',
+                    t('admin.models.settings.capacity-exempt'),
+                    t('admin.models.settings.capacity-exempt-hint'),
+                    !capacityExempt,
+                  )}
+                </>
+              )}
+
+              <CapacityStatus model={model} />
+
+              {/* Without a price the ledger logs no cost, so nothing ever counts
+                  against the cap. Said whether or not a cap is set yet: this is
+                  the moment to find out, not after it failed to stop anything. */}
+              {(model.inputCost === undefined || model.outputCost === undefined) && (
+                <p className="text-muted-foreground rounded-lg border border-dashed p-3 text-xs">
+                  {t('admin.models.settings.capacity-no-price')}
+                </p>
+              )}
+              {model.override?.capacity != null && (
+                <p className="text-muted-foreground text-xs">{t('admin.models.settings.capacity-reset-note')}</p>
+              )}
+            </PanelSection>
+
             <PanelSection title={t('admin.models.settings.section-thinking')}>
               {reasoning ? (
                 <FormField
@@ -465,6 +561,82 @@ function SettingsForm({ model, onOpenChange }: Omit<ModelSettingsPanelProps, 'op
         </div>
       </SheetFooter>
     </>
+  )
+}
+
+/**
+ * What the model's cap has used so far, as saved (not as being typed): the
+ * figure, a bar, and for a total cap the "recalculate" that starts the count
+ * again from now.
+ */
+function CapacityStatus({ model }: { model: CatalogModel }) {
+  const { t, i18n } = useTranslation()
+  const recalc = useResetModelCapacity()
+  const [confirming, setConfirming] = useState(false)
+  const status = model.capacity
+  const limit = model.override?.capacity
+  if (!status || limit == null) return null
+  const period = model.override?.capacityPeriod ?? 'total'
+
+  const restart = async () => {
+    try {
+      await recalc.mutateAsync(model.modelId)
+      toast.success(t('admin.models.settings.capacity-recalc-done'))
+      setConfirming(false)
+    } catch {
+      toast.error(t('admin.models.settings.save-failed'))
+    }
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border p-3" data-testid="capacity-status">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium tabular-nums">
+          {t(`admin.models.settings.capacity-spent-${period}`, {
+            spent: formatMoney(status.spent),
+            cap: formatMoney(limit),
+          })}
+        </span>
+        {status.atCapacity && (
+          <Badge variant="destructive" className="font-normal">
+            {t('admin.models.settings.capacity-reached')}
+          </Badge>
+        )}
+      </div>
+      <div
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(usedRatio(status.spent, limit) * 100)}
+        className="bg-muted h-1.5 w-full overflow-hidden rounded-full"
+      >
+        <div
+          className={cn('h-full rounded-full', status.atCapacity ? 'bg-destructive' : 'bg-primary')}
+          style={{ width: `${usedRatio(status.spent, limit) * 100}%` }}
+        />
+      </div>
+      {period === 'total' && (
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-muted-foreground text-xs">
+            {status.windowStart
+              ? t('admin.models.settings.capacity-since', { date: formatSyncedAt(status.windowStart, i18n.language) })
+              : ''}
+          </span>
+          <Button type="button" variant="outline" size="sm" onClick={() => setConfirming(true)}>
+            {t('admin.models.settings.capacity-recalc')}
+          </Button>
+        </div>
+      )}
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={t('admin.models.settings.capacity-recalc-title')}
+        desc={t('admin.models.settings.capacity-recalc-desc')}
+        confirmText={t('admin.models.settings.capacity-recalc')}
+        isLoading={recalc.isPending}
+        handleConfirm={() => void restart()}
+      />
+    </div>
   )
 }
 
