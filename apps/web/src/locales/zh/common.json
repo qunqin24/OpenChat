@@ -528,7 +528,7 @@
       "approve": "批准",
       "done": "已更新 {{n}} 个账号",
       "skipped": "{{n}} 个被跳过",
-      "failed": "无法更新所选账号",
+      "users-failed": "无法更新所选账号",
       "entity-channel": "渠道",
       "delete": "删除",
       "channels-updated": "已更新 {{n}} 个渠道",

@@ -45,7 +45,7 @@ export function UsersBulkActions<TData>({ table }: UsersBulkActionsProps<TData>)
       toast.success(parts.join(' · '))
     } catch {
       // As the row actions do: say so, and leave the selection for another try.
-      toast.error(t('admin.bulk.failed'))
+      toast.error(t('admin.bulk.users-failed'))
     }
   }
 
