@@ -37,13 +37,15 @@ import (
 //     it would let one configured model spend under several names, or a cap
 //     be missed for a relay that echoes nothing.
 //   - The ledger is written when a request ends, so a request in flight is not
-//     in the sum yet. The check before each request therefore overshoots by at
-//     most the requests already running when it passed - one per concurrent
-//     run - not by a whole tool loop.
+//     in the sum yet. The check before a run starts and before each request
+//     therefore sees only what has ended; what is out is held back separately
+//     (spend_reserve.go), and how many runs can be out at once is bounded
+//     (run_limits.go). What is left over is the output of requests in flight.
 //
 // A model whose requests carry no cost (no input or output price in the
-// catalogue, or a provider that reports no usage) has a sum of zero: its cap
-// can never trigger. The settings panel says so.
+// catalogue) has a sum of zero: its cap can never trigger. The settings panel
+// says so. A request whose provider reported no usage is not such a request: it
+// is estimated and priced like the rest (usage.Meter).
 
 // errModelCapacity is the refusal of a model that has reached its cap. It is
 // 409, not 403: nothing is wrong with the caller, the model is unavailable

@@ -334,8 +334,9 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 	// run's first - so a long tool loop stops at the cap. A run stopped here
 	// ends with an empty failed response carrying the code, as for a model
 	// that is gone. What it costs to go on is not known until the request ends
-	// (the ledger is written then), so the overshoot is the requests already
-	// in flight when this passed, not the rest of the loop.
+	// (the ledger is written then), so this sees only what has ended; the
+	// request itself is held back against the cap just before it is made
+	// (meter.Reserve below), which is what stops requests that start together.
 	if check := r.opts.Capacity; check != nil {
 		reached, err := check(ctx, ex.run.UserID, ex.run.ModelID)
 		if err != nil && ctx.Err() != nil {
