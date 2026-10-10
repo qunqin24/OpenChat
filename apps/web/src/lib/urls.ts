@@ -6,3 +6,18 @@ export function siteName(url: string): string {
     return url
   }
 }
+
+/**
+ * Whether a URL is safe to put in a link: http or https. Addresses come out of
+ * tool results - web pages the model read - so a `javascript:` or `data:` one
+ * must never become an `href`.
+ */
+export function isHttpUrl(url: unknown): url is string {
+  if (typeof url !== 'string') return false
+  try {
+    const { protocol } = new URL(url)
+    return protocol === 'http:' || protocol === 'https:'
+  } catch {
+    return false
+  }
+}

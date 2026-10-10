@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useContext, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { smoothScrollBehavior } from '@/lib/motion'
 import { siteName } from '@/lib/urls'
 import { cn } from '@/lib/utils'
 import { ImageSource } from './image-source'
@@ -84,7 +85,7 @@ export function Scroller({ children }: { children: ReactNode }) {
 
   const page = (direction: 1 | -1) => {
     const el = track.current
-    if (el) el.scrollBy({ left: direction * el.clientWidth * 0.8, behavior: 'smooth' })
+    if (el) el.scrollBy({ left: direction * el.clientWidth * 0.8, behavior: smoothScrollBehavior() })
   }
 
   return (

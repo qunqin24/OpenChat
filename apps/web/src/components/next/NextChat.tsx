@@ -30,6 +30,7 @@ import { API_BASE_URL } from '@/lib/api'
 import { useChatPaths } from '@/lib/chat-paths'
 import { loadComposerPrefs, saveComposerPrefs } from '@/lib/composer-prefs'
 import { defaultModelId } from '@/lib/model-capacity'
+import { smoothScrollBehavior } from '@/lib/motion'
 import { displayTitle } from '@/lib/titles'
 import { acceptAttribute, acceptsOf } from '@/lib/attachments'
 import { isRunning } from '@/lib/run-state'
@@ -307,7 +308,7 @@ export function NextChat({ conversationId }: NextChatProps) {
     0,
   )
 
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = smoothScrollBehavior()) => {
     const el = scrollRef.current
     if (!el) return
     el.scrollTo({ top: el.scrollHeight, behavior })

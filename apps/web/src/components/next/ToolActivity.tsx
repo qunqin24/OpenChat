@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { useStuck } from '@/hooks/use-stuck'
 import { API_BASE_URL } from '@/lib/api'
 import { isGuestMode } from '@/lib/guest/mode'
-import { siteName } from '@/lib/urls'
+import { isHttpUrl, siteName } from '@/lib/urls'
 import { cn } from '@/lib/utils'
 import { ThinkingOrb } from './ThinkingOrb'
 
@@ -167,11 +167,15 @@ function Step({ step }: { step: ToolActivityStep }) {
             {hits.length > STEP_SOURCES && <span className="n-activity-more">+{hits.length - STEP_SOURCES}</span>}
           </div>
         )}
-        {fetched?.url && (
-          <a className="n-activity-link" href={fetched.url} target="_blank" rel="noreferrer">
-            {fetched.title || fetched.url}
-          </a>
-        )}
+        {fetched?.url &&
+          (isHttpUrl(fetched.url) ? (
+            <a className="n-activity-link" href={fetched.url} target="_blank" rel="noreferrer">
+              {fetched.title || fetched.url}
+            </a>
+          ) : (
+            // Not a web address: shown, never linked.
+            <span className="n-activity-link">{fetched.title || fetched.url}</span>
+          ))}
         {/* A failure's explanation is the text the model read; it is written
             for the model, in English, but it is the only account of what
             went wrong. */}
@@ -250,9 +254,9 @@ function callArguments(call: ToolCallPart): Record<string, unknown> {
 function searchHits(result?: ToolResultPart): SearchHit[] {
   const results = (result?.details as { results?: unknown } | undefined)?.results
   if (!Array.isArray(results)) return []
+  // Only http(s) addresses: these are pages the model read, and each becomes a link.
   return results.filter(
-    (hit): hit is SearchHit =>
-      typeof hit === 'object' && hit !== null && typeof (hit as SearchHit).url === 'string',
+    (hit): hit is SearchHit => typeof hit === 'object' && hit !== null && isHttpUrl((hit as SearchHit).url),
   )
 }
 
