@@ -335,6 +335,9 @@
       "identifier": "邮箱或用户名",
       "identifier-placeholder": "输入你的邮箱或用户名"
     },
+    "overlay": {
+      "admin": "管理员：{{name}}"
+    },
     "pending": {
       "title": "账号等待审批",
       "subtitle": "请联系管理员开通",

@@ -776,3 +776,68 @@ func TestPurgeAuthAttempts(t *testing.T) {
 		t.Errorf("rows left %d (%v), want the two within the hour", left, err)
 	}
 }
+
+// An account that cannot sign in is told whom to ask - the longest-standing
+// enabled administrator - but only once the password is proved, and on the
+// 202 of a registration waiting for approval.
+func TestRefusedAccountsAreToldTheAdmin(t *testing.T) {
+	h := newSignupHarness(t)
+	h.modes(true, true)
+	// The first account: an administrator, and the one to contact.
+	h.register("10.0.0.1", "founder")
+	// A later administrator, and an earlier one that is disabled: neither.
+	h.user(sqlc.UserRoleAdmin, false, false)
+	if _, err := h.pool.Exec(context.Background(),
+		`UPDATE users SET created_at = now() - interval '1 year', disabled_at = now()
+		 WHERE id = $1`, h.user(sqlc.UserRoleAdmin, false, false).ID); err != nil {
+		t.Fatal(err)
+	}
+
+	type refusal struct {
+		Code    string `json:"code"`
+		Details struct {
+			Admin *AdminContact `json:"admin"`
+		} `json:"details"`
+	}
+	wantFounder := func(what string, admin *AdminContact) {
+		t.Helper()
+		if admin == nil || admin.Name != "founder" || admin.Email != "founder@test.invalid" {
+			t.Errorf("%s: admin %+v, want founder", what, admin)
+		}
+	}
+
+	rec := h.register("10.0.0.2", "waiting")
+	var pending RegisterPending
+	if err := json.Unmarshal(rec.Body.Bytes(), &pending); err != nil || rec.Code != http.StatusAccepted {
+		t.Fatalf("register: %d %s", rec.Code, rec.Body)
+	}
+	wantFounder("the registration's 202", pending.Admin)
+
+	var body refusal
+	rec = h.login("10.0.0.3", "waiting", signupPassword)
+	_ = json.Unmarshal(rec.Body.Bytes(), &body)
+	if body.Code != "pending_approval" {
+		t.Fatalf("pending login: %d %s", rec.Code, rec.Body)
+	}
+	wantFounder("pending_approval", body.Details.Admin)
+
+	// Wrong password: nothing about the account, and no contact.
+	rec = h.login("10.0.0.3", "waiting", "not the password")
+	if strings.Contains(rec.Body.String(), "founder") {
+		t.Errorf("a wrong password was told the admin: %s", rec.Body)
+	}
+
+	disabled := h.user(sqlc.UserRoleUser, false, true)
+	body = refusal{}
+	rec = h.login("10.0.0.4", disabled.Email, signupPassword)
+	_ = json.Unmarshal(rec.Body.Bytes(), &body)
+	if body.Code != "account_disabled" {
+		t.Fatalf("disabled login: %d %s", rec.Code, rec.Body)
+	}
+	wantFounder("account_disabled", body.Details.Admin)
+
+	// The shared error is not changed by attaching a contact to a copy.
+	if errPendingApproval.Details != nil || errAccountDisabled.Details != nil {
+		t.Error("the shared refusal errors were mutated")
+	}
+}

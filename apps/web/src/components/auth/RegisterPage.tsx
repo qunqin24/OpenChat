@@ -2,7 +2,7 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { isAuthFieldError, type AuthErrorKey } from '@/features/auth'
+import { isAuthFieldError, type AdminContact, type AuthErrorKey } from '@/features/auth'
 import { useLogin, useRegister } from '@/features/auth/use-auth'
 import { useAuthOptions } from '@/hooks/use-auth-options'
 import AuthField from './AuthField'
@@ -33,6 +33,8 @@ export function RegisterPage() {
   // Registered, but an administrator has to approve the account before it can
   // sign in: there is no session, so the page says so instead of moving on.
   const [waiting, setWaiting] = useState(false)
+  // Whom the 202 said to ask; a later check-again's refusal may name someone newer.
+  const [registeredContact, setRegisteredContact] = useState<AdminContact | undefined>()
 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -68,6 +70,7 @@ export function RegisterPage() {
     try {
       const outcome = await register.mutateAsync({ email, name, password })
       if (outcome.status === 'pending') {
+        setRegisteredContact(outcome.admin)
         setWaiting(true)
         return
       }
@@ -121,6 +124,7 @@ export function RegisterPage() {
   // Registered in approval mode: the form stays behind a frosted cover saying
   // so, as the login page does for an account that is not approved yet.
   const refused = isAuthFieldError(login.error) ? login.error.key : null
+  const contact = (isAuthFieldError(login.error) ? login.error.admin : undefined) ?? registeredContact
   const toLogin = () => void navigate({ to: '/login' })
   const checkAgain = async () => {
     try {
@@ -205,9 +209,9 @@ export function RegisterPage() {
       </form>
       {waiting &&
         (refused === 'auth.error.account-disabled' ? (
-          <BannedScreen onBack={toLogin} />
+          <BannedScreen admin={contact} onBack={toLogin} />
         ) : (
-          <PendingScreen check={checkAgain} onBack={toLogin} />
+          <PendingScreen admin={contact} check={checkAgain} onBack={toLogin} />
         ))}
     </AuthShell>
   )

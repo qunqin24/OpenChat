@@ -67,6 +67,7 @@ export function LoginPage() {
   // administrator - gets the whole window rather than the form's banner.
   const banned = formError === 'auth.error.account-disabled'
   const pending = formError === 'auth.error.pending-approval'
+  const contact = isAuthFieldError(failure) ? failure.admin : undefined
   const leaveOverlay = useCallback(() => {
     setDismissedFailure(login.error)
     setIdentifier('')
@@ -160,8 +161,8 @@ export function LoginPage() {
           )}
         </div>
       </form>
-      {banned && <BannedScreen onBack={leaveOverlay} />}
-      {pending && <PendingScreen check={checkAgain} onBack={leaveOverlay} />}
+      {banned && <BannedScreen admin={contact} onBack={leaveOverlay} />}
+      {pending && <PendingScreen admin={contact} check={checkAgain} onBack={leaveOverlay} />}
     </AuthShell>
   )
 }

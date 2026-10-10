@@ -2,7 +2,11 @@ package api
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 	"net/http"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/qunqin/openchat/apps/server/internal/httpx"
 )
@@ -36,7 +40,34 @@ var (
 		"registration is closed; ask an administrator for an account")
 	errPendingApproval = httpx.NewError(http.StatusForbidden, "pending_approval",
 		"this account is waiting for an administrator's approval")
+	errAccountDisabled = httpx.NewError(http.StatusForbidden, "account_disabled",
+		"this account has been disabled")
 )
+
+// contactAdmin is who an account that cannot sign in is told to ask, or nil
+// when there is no enabled administrator or it cannot be read - the answer
+// then just has no contact; it never fails the request over it.
+func (s *Server) contactAdmin(ctx context.Context) *AdminContact {
+	row, err := s.q.GetContactAdmin(ctx)
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			slog.WarnContext(ctx, "read the administrator to contact", "error", err)
+		}
+		return nil
+	}
+	return &AdminContact{Name: row.Name, Email: row.Email}
+}
+
+// refusedAccount is base (pending_approval, account_disabled) with who to ask
+// in details.admin. Only answered once the password is proved, so the contact
+// goes to the account's owner and to nobody guessing. A copy: base is shared.
+func (s *Server) refusedAccount(ctx context.Context, base *httpx.APIError) *httpx.APIError {
+	refusal := *base
+	if admin := s.contactAdmin(ctx); admin != nil {
+		refusal.Details = map[string]any{"admin": admin}
+	}
+	return &refusal
+}
 
 // signupSwitches are the two switches as stored.
 type signupSwitches struct {

@@ -238,6 +238,32 @@ func (q *Queries) CountUsersFiltered(ctx context.Context, arg CountUsersFiltered
 	return count, err
 }
 
+const getContactAdmin = `-- name: GetContactAdmin :one
+SELECT name, email
+FROM users
+WHERE role = 'admin'
+  AND disabled_at IS NULL
+  AND NOT pending
+  AND NOT guest
+ORDER BY created_at, id
+LIMIT 1
+`
+
+type GetContactAdminRow struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+// Who an account that cannot sign in (waiting for approval, or disabled) is
+// told to contact: the longest-standing administrator still enabled - on most
+// instances the one who installed it.
+func (q *Queries) GetContactAdmin(ctx context.Context) (GetContactAdminRow, error) {
+	row := q.db.QueryRow(ctx, getContactAdmin)
+	var i GetContactAdminRow
+	err := row.Scan(&i.Name, &i.Email)
+	return i, err
+}
+
 const getUser = `-- name: GetUser :one
 SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending
 FROM users

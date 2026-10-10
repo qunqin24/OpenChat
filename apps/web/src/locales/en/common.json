@@ -335,6 +335,9 @@
       "identifier": "Email or username",
       "identifier-placeholder": "Your email or username"
     },
+    "overlay": {
+      "admin": "Admin: {{name}}"
+    },
     "pending": {
       "title": "Account activation pending",
       "subtitle": "Contact the administrator for access",

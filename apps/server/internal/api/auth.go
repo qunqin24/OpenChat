@@ -142,7 +142,7 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 
 	// Waiting for an administrator: nothing to sign in to, so no session.
 	if user.Pending {
-		httpx.JSON(w, http.StatusAccepted, RegisterPending{Status: PendingApproval})
+		httpx.JSON(w, http.StatusAccepted, RegisterPending{Status: PendingApproval, Admin: s.contactAdmin(r.Context())})
 		return
 	}
 
@@ -211,11 +211,11 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	// Only now is the state of the account told: someone who does not know the
 	// password learns nothing about it. A rejected sign-up is disabled, and says so.
 	if user.DisabledAt.Valid {
-		httpx.Fail(w, r, httpx.NewError(http.StatusForbidden, "account_disabled", "this account has been disabled"))
+		httpx.Fail(w, r, s.refusedAccount(r.Context(), errAccountDisabled))
 		return
 	}
 	if user.Pending {
-		httpx.Fail(w, r, errPendingApproval)
+		httpx.Fail(w, r, s.refusedAccount(r.Context(), errPendingApproval))
 		return
 	}
 

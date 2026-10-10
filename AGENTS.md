@@ -123,7 +123,7 @@ grep -rn -- "--n-\|prism-next" apps/web/src/features/admin apps/web/src/componen
 
 ## 认证
 
-HttpOnly Cookie 会话，库里只存 token 的 SHA-256；前端从不接触 token，靠 `/auth/session` 判断登录状态，API 客户端必须 `credentials: 'include'`。用户名不能含 `@`（数据库约束保证，登录框同时接受用户名和邮箱）。第一个注册的账号成为管理员（见下「注册」）；最后一个启用的管理员不能被降级或停用。停用账号或改密码会清掉其会话，已开着的页面下一次请求得到 401 就被带去登录页（见前端约定）。用停用或待审批的账号登录（密码对了服务端才说 `account_disabled` / `pending_approval`）时，登录页不显示一行红字，而是盖上全屏的毛玻璃覆盖层（`components/auth/AccountOverlay.tsx`，照搬 OpenWebUI 的 `AccountPending.svelte`）：「你已被封禁」，或「账号等待审批」加「再次检查」（用刚才的账号密码再登录一次，批准了就直接进去）。「返回」或 Esc 回到清空的表单。自助接口（`PATCH /auth/me`、`POST /auth/password`）刻意不带角色和停用字段。不做账号删除，停用即可。
+HttpOnly Cookie 会话，库里只存 token 的 SHA-256；前端从不接触 token，靠 `/auth/session` 判断登录状态，API 客户端必须 `credentials: 'include'`。用户名不能含 `@`（数据库约束保证，登录框同时接受用户名和邮箱）。第一个注册的账号成为管理员（见下「注册」）；最后一个启用的管理员不能被降级或停用。停用账号或改密码会清掉其会话，已开着的页面下一次请求得到 401 就被带去登录页（见前端约定）。用停用或待审批的账号登录（密码对了服务端才说 `account_disabled` / `pending_approval`）时，登录页不显示一行红字，而是盖上全屏的毛玻璃覆盖层（`components/auth/AccountOverlay.tsx`，照搬 OpenWebUI 的 `AccountPending.svelte`）：「你已被封禁」，或「账号等待审批」加「再次检查」（用刚才的账号密码再登录一次，批准了就直接进去）。「返回」或 Esc 回到清空的表单。两种拒绝（和审批模式注册的 202）都带上要联系的管理员（`details.admin` / `RegisterPending.admin`：最早创建、仍启用的管理员的名字和邮箱，`GetContactAdmin`），覆盖层照 OpenWebUI 显示「管理员：名字（邮箱）」；只有证明了密码（或刚注册）的人才拿得到，密码错时什么都不给。自助接口（`PATCH /auth/me`、`POST /auth/password`）刻意不带角色和停用字段。不做账号删除，停用即可。
 
 ### 注册与审批
 

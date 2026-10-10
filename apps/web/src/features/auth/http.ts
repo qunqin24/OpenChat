@@ -1,6 +1,7 @@
 import { api } from '@/lib/api'
 import {
   AuthFieldError,
+  type AdminContact,
   type AuthApi,
   type AuthErrorKey,
   type SessionUser,
@@ -36,6 +37,14 @@ const SERVER_ERRORS: Record<string, AuthErrorKey> = {
 interface ServerError {
   code?: string
   field?: AuthFieldError['field']
+  details?: { admin?: unknown }
+}
+
+/** details.admin when it has the shape of an AdminContact; anything else is no contact. */
+function adminOf(value: unknown): AdminContact | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const { name, email } = value as Record<string, unknown>
+  return typeof name === 'string' && typeof email === 'string' ? { name, email } : undefined
 }
 
 /** Failures of the whole attempt rather than of one input: shown as the form's banner. */
@@ -58,7 +67,7 @@ function toAuthError(error: unknown): AuthFieldError {
       ? 'auth.error.password-wrong'
       : (SERVER_ERRORS[body.code ?? ''] ?? 'auth.error.unknown')
 
-  return new AuthFieldError(field, key)
+  return new AuthFieldError(field, key, adminOf(body.details?.admin))
 }
 
 export function createHttpAuthApi(): AuthApi {
@@ -81,7 +90,9 @@ export function createHttpAuthApi(): AuthApi {
       const { data, error, response } = await api.POST('/auth/register', { body: input })
       if (error) throw toAuthError(error)
       // 202: created, but an administrator has to approve it first. No session.
-      if (response.status === 202) return { status: 'pending' }
+      if (response.status === 202) {
+        return { status: 'pending', admin: adminOf((data as { admin?: unknown } | undefined)?.admin) }
+      }
       return { status: 'signed_in', user: data as SessionUser }
     },
 

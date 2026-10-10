@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import type { AdminContact } from '@/features/auth'
+
 /**
  * A frosted cover over the whole window for an account that exists but cannot
  * sign in: waiting for approval, or disabled. A port of OpenWebUI's
  * pending-account overlay (src/lib/components/layout/Overlay/AccountPending.svelte):
  * the page blurred behind, a centred `max-w-md` column, a two-line
- * `text-2xl font-normal` title, `text-sm` body, one white pill button and a
- * small underlined link under it.
+ * `text-2xl font-normal` title, `text-sm` body, the administrator to contact,
+ * one white pill button and a small underlined link under it.
  *
  * The server says `pending_approval` or `account_disabled` only after the
  * password checks out, so neither tells anything to someone guessing.
@@ -16,6 +18,7 @@ function AccountOverlay({
   title,
   subtitle,
   text,
+  admin,
   status,
   action,
   secondary,
@@ -24,6 +27,7 @@ function AccountOverlay({
   title: string
   subtitle: string
   text: string
+  admin?: AdminContact
   /** A line under the body, e.g. the outcome of checking again. */
   status?: ReactNode
   action: { label: string; onClick: () => void; busy?: boolean }
@@ -61,6 +65,7 @@ function AccountOverlay({
         <p id="n-account-overlay-text" className="n-account-overlay-text">
           {text}
         </p>
+        {admin && <AdminLine admin={admin} />}
         {status && (
           <p className="n-account-overlay-status" role="status">
             {status}
@@ -88,14 +93,33 @@ function AccountOverlay({
   )
 }
 
+/**
+ * `mt-4 text-sm font-normal text-center`: "Admin: name (email)", the email a
+ * mailto link. The server sends it only to someone who proved the password of
+ * the account (or just registered it).
+ */
+function AdminLine({ admin }: { admin: AdminContact }) {
+  const { t } = useTranslation()
+  return (
+    <p className="n-account-overlay-admin">
+      {t('auth.overlay.admin', { name: admin.name })} (
+      <a className="n-account-overlay-mail" href={`mailto:${admin.email}`}>
+        {admin.email}
+      </a>
+      )
+    </p>
+  )
+}
+
 /** Signing in to a disabled account. "Back" returns to an empty form. */
-export function BannedScreen({ onBack }: { onBack: () => void }) {
+export function BannedScreen({ admin, onBack }: { admin?: AdminContact; onBack: () => void }) {
   const { t } = useTranslation()
   return (
     <AccountOverlay
       title={t('auth.banned.title')}
       subtitle={t('auth.banned.subtitle')}
       text={t('auth.banned.text')}
+      admin={admin}
       action={{ label: t('auth.banned.back'), onClick: onBack }}
       onEscape={onBack}
     />
@@ -109,7 +133,15 @@ export function BannedScreen({ onBack }: { onBack: () => void }) {
  * if not, the screen stays and says so. `check` resolves whether or not it got
  * in; the caller moves on (or swaps to the banned screen) itself.
  */
-export function PendingScreen({ check, onBack }: { check: () => Promise<void>; onBack: () => void }) {
+export function PendingScreen({
+  admin,
+  check,
+  onBack,
+}: {
+  admin?: AdminContact
+  check: () => Promise<void>
+  onBack: () => void
+}) {
   const { t } = useTranslation()
   const [checking, setChecking] = useState(false)
   const [checked, setChecked] = useState(false)
@@ -129,6 +161,7 @@ export function PendingScreen({ check, onBack }: { check: () => Promise<void>; o
       title={t('auth.pending.title')}
       subtitle={t('auth.pending.subtitle')}
       text={t('auth.pending.text')}
+      admin={admin}
       status={checked && !checking ? t('auth.pending.still') : undefined}
       action={{ label: t('auth.pending.check'), onClick: () => void checkAgain(), busy: checking }}
       secondary={{ label: t('auth.pending.back'), onClick: onBack }}

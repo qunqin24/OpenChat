@@ -19,7 +19,15 @@ export interface RegisterInput {
  * What registering came to. The account either works at once (and the server
  * has signed it in), or is waiting for an administrator and has no session.
  */
-export type RegisterOutcome = { status: 'signed_in'; user: SessionUser } | { status: 'pending' }
+/** Who an account that cannot sign in is told to ask; see AdminContact in the contract. */
+export interface AdminContact {
+  name: string
+  email: string
+}
+
+export type RegisterOutcome =
+  | { status: 'signed_in'; user: SessionUser }
+  | { status: 'pending'; admin?: AdminContact }
 
 /** Only the fields present are changed. */
 export interface UpdateProfileInput {
@@ -87,12 +95,15 @@ export class AuthFieldError extends Error {
     | 'currentPassword'
     | 'newPassword'
   readonly key: AuthErrorKey
+  /** On pending_approval and account_disabled: whom to ask, when the server named someone. */
+  readonly admin?: AdminContact
 
-  constructor(field: AuthFieldError['field'], key: AuthErrorKey) {
+  constructor(field: AuthFieldError['field'], key: AuthErrorKey, admin?: AdminContact) {
     super(key)
     this.name = 'AuthFieldError'
     this.field = field
     this.key = key
+    this.admin = admin
   }
 }
 

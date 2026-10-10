@@ -89,7 +89,9 @@ export interface paths {
          * @description Wrong credentials of every kind (no such account included) are one
          *     401 `invalid_credentials`. Once the password is right, an account
          *     waiting for approval is 403 `pending_approval` and a disabled one 403
-         *     `account_disabled`; neither gets a session.
+         *     `account_disabled`; neither gets a session. Both carry
+         *     `details.admin` (an `AdminContact`) - who to ask - when there is an
+         *     enabled administrator; only someone with the right password sees it.
          *
          *     Failed attempts are counted: 10 per client address per 15 minutes, and
          *     5 per client address and identifier per 15 minutes. Beyond either, 429
@@ -2401,6 +2403,17 @@ export interface components {
         RegisterPending: {
             /** @enum {string} */
             status: "pending_approval";
+            admin?: components["schemas"]["AdminContact"];
+        };
+        /**
+         * @description The administrator an account that cannot sign in is told to contact:
+         *     the longest-standing enabled one. Given only to someone who has just
+         *     proved the password of such an account (or registered it), as OpenWebUI
+         *     shows its admin on the pending-account screen.
+         */
+        AdminContact: {
+            name: string;
+            email: string;
         };
         /**
          * @description `pending` is a registered account waiting for an administrator;

@@ -412,6 +412,19 @@
   color: oklch(0.92 0 0); /* --color-gray-200 */
 }
 
+/* `mt-4 text-sm font-normal text-center`: "Admin: name (email)". */
+.n-account-overlay-admin {
+  margin: 16px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.n-account-overlay-mail {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 /* What checking again found. */
 .n-account-overlay-status {
   margin: 12px 0 0;

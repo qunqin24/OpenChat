@@ -126,6 +126,19 @@ SET name          = COALESCE(sqlc.narg('name')::text, name),
 WHERE id = sqlc.arg('id')
 RETURNING *;
 
+-- name: GetContactAdmin :one
+-- Who an account that cannot sign in (waiting for approval, or disabled) is
+-- told to contact: the longest-standing administrator still enabled - on most
+-- instances the one who installed it.
+SELECT name, email
+FROM users
+WHERE role = 'admin'
+  AND disabled_at IS NULL
+  AND NOT pending
+  AND NOT guest
+ORDER BY created_at, id
+LIMIT 1;
+
 -- name: CountAdmins :one
 SELECT count(*)
 FROM users

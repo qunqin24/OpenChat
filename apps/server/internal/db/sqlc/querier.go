@@ -204,6 +204,10 @@ type Querier interface {
 	GetCatalogModel(ctx context.Context, arg GetCatalogModelParams) (GetCatalogModelRow, error)
 	GetChannel(ctx context.Context, id uuid.UUID) (Channel, error)
 	GetChannelModel(ctx context.Context, arg GetChannelModelParams) (ChannelModel, error)
+	// Who an account that cannot sign in (waiting for approval, or disabled) is
+	// told to contact: the longest-standing administrator still enabled - on most
+	// instances the one who installed it.
+	GetContactAdmin(ctx context.Context) (GetContactAdminRow, error)
 	// The conversation's summary, with where the last row it covers sits in the
 	// transcript: rows after that place are the ones a request still carries.
 	GetContextSummary(ctx context.Context, conversationID uuid.UUID) (GetContextSummaryRow, error)
