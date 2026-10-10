@@ -346,7 +346,8 @@
 .prism-next .n-sidebar .n-row-running {
   display: inline-flex;
   flex-shrink: 0;
-  margin-inline-end: 8px;
+  /* The row's 8px gap less 2: the orb sits with the title, not apart from it. */
+  margin-inline-end: -2px;
 }
 .prism-next .n-sidebar .n-row-running .n-orb {
   color: var(--n-sidebar-text);
