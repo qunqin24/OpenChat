@@ -131,3 +131,7 @@ make build        # 先建 web（含 .br/.gz 预压缩），拷进 apps/server/i
 | `make check` | lint + test + build（CI 跑的就是这个） |
 | `make generate` | 重新生成 sqlc 和 API 契约 |
 | `make reset` | 清空本地 Postgres / MinIO 数据卷并重启 |
+
+## 许可证
+
+[MIT](LICENSE)

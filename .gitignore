@@ -21,3 +21,6 @@ coverage/
 !apps/server/internal/webui/dist/
 apps/server/internal/webui/dist/*
 !apps/server/internal/webui/dist/.gitkeep
+
+# Claude Code worktrees
+.claude/worktrees/

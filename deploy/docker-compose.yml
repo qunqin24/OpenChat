@@ -1,9 +1,10 @@
 # Production: Postgres and OpenChat, with Caddy in front for HTTPS.
 #
 #   cp deploy/.env.example deploy/.env      # then edit it
-#   docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+#   docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
 #
-# Run from the repository root: the image is built from the whole repo.
+# Run from the repository root. The app image is pulled from GitHub's
+# registry; add --build to build it from this checkout instead.
 # Attachments are kept on the `openchat-data` volume (the local storage driver);
 # switch to S3 later in 后台 → 文件存储 without touching this file.
 name: openchat
@@ -26,10 +27,13 @@ services:
       retries: 10
 
   openchat:
+    # The image the release workflow publishes for every version tag. Pin a
+    # version (…/openchat:1.0.0) to choose when to upgrade; `--build` builds
+    # this checkout instead.
+    image: ${OPENCHAT_IMAGE:-ghcr.io/qunqin24/openchat:latest}
     build:
       context: ..
       dockerfile: apps/server/Dockerfile
-    image: openchat:latest
     restart: unless-stopped
     depends_on:
       postgres:
