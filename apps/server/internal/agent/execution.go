@@ -169,9 +169,9 @@ func (ex *execution) fail(err error) {
 	if err == nil {
 		return
 	}
-	slog.Error("run failed", "run_id", ex.run.ID, "error", err)
+	ex.logger().Error("run failed", "error", err)
 	if commitErr := ex.failWithRow(CodeInternal); commitErr != nil {
-		slog.Error("record run failure", "run_id", ex.run.ID, "error", commitErr)
+		ex.logger().Error("record run failure", "error", commitErr)
 	}
 }
 
@@ -186,6 +186,17 @@ func (ex *execution) failWithRow(code string) error {
 		}
 		return []Event{MessageAppended{Message: msg}}, &finish{status: sqlc.RunStatusFailed, code: code}, nil
 	})
+}
+
+// logger is the log as this run writes it: every line says which run, in
+// which conversation, for whom, on which model and channel — the questions a
+// failure report starts with, answered without a database lookup.
+func (ex *execution) logger() *slog.Logger {
+	attrs := []any{"run_id", ex.run.ID, "conversation_id", ex.run.ConversationID, "user_id", ex.run.UserID, "model", ex.run.ModelID}
+	if ex.run.ChannelID != nil {
+		attrs = append(attrs, "channel_id", *ex.run.ChannelID)
+	}
+	return slog.With(attrs...)
 }
 
 // appendMessage writes one transcript row of this run.
@@ -309,7 +320,7 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 		if errors.Is(err, ErrNoModel) {
 			code = CodeNoModel
 		} else {
-			slog.Error("resolve model", "run_id", ex.run.ID, "error", err)
+			ex.logger().Error("resolve model", "error", err)
 		}
 		return true, ex.failWithRow(code)
 	}
@@ -408,7 +419,7 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 func (ex *execution) requestFailed(resp llm.ModelResponse, streamErr error) (bool, error) {
 	r := ex.r
 	code := errorCode(streamErr)
-	slog.Warn("model request failed", "run_id", ex.run.ID, "attempt", ex.cp.Attempt, "code", code, "error", streamErr)
+	ex.logger().Warn("model request failed", "attempt", ex.cp.Attempt, "code", code, "error", streamErr)
 
 	if retryable(streamErr) && ex.cp.Attempt <= r.opts.MaxRetries {
 		at := r.now().Add(retryDelay(ex.cp.Attempt))
@@ -674,7 +685,7 @@ func (ex *execution) runCall(ctx context.Context, slot ToolSlot, tool Tool) erro
 		if errors.As(execErr, &toolErr) {
 			message = toolErr.Message
 		} else {
-			slog.Warn("tool failed", "run_id", ex.run.ID, "tool", slot.Name, "error", execErr)
+			ex.logger().Warn("tool failed", "tool", slot.Name, "error", execErr)
 		}
 		result = failedResult(slot.CallID, slot.Name, message, llm.ToolFailed)
 	default:
@@ -930,8 +941,7 @@ func (s *partialStream) noticePause() {
 	now := s.ex.r.now()
 	if !s.lastEvent.IsZero() {
 		if gap := now.Sub(s.lastEvent); gap >= streamPause {
-			slog.Warn("model stream paused", "run_id", s.ex.run.ID, "model", s.ex.run.ModelID,
-				"seconds", gap.Round(100*time.Millisecond).Seconds())
+			s.ex.logger().Warn("model stream paused", "seconds", gap.Round(100*time.Millisecond).Seconds())
 		}
 	}
 	s.lastEvent = now
@@ -1022,12 +1032,12 @@ func (s *partialStream) flush() {
 	// Nothing reaches the page until this commit does, so a slow one is the
 	// answer pausing on screen while the model keeps going.
 	if took := time.Since(started); took >= slowPartialCommit {
-		slog.Warn("slow partial commit", "run_id", s.ex.run.ID, "ms", took.Milliseconds())
+		s.ex.logger().Warn("slow partial commit", "ms", took.Milliseconds())
 	}
 	if err != nil {
 		// The final commit carries the whole response regardless; a missed
 		// partial costs only liveness.
-		slog.Warn("commit partial response", "run_id", s.ex.run.ID, "error", err)
+		s.ex.logger().Warn("commit partial response", "error", err)
 	}
 }
 

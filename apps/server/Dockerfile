@@ -57,6 +57,9 @@ WORKDIR /app
 # What /healthz and the logs report; the release workflow passes the tag.
 ARG APP_VERSION=dev
 ENV APP_VERSION=$APP_VERSION
+# A copy of the log on the data volume, rotated at 20 MB with 5 kept: the
+# container's own log goes when the container is replaced, as on an upgrade.
+ENV LOG_FILE=/app/data/logs/openchat.log
 COPY --from=build --chown=nonroot:nonroot /out/data /app/data
 COPY --from=build /out/openchat /app/openchat
 EXPOSE 8080

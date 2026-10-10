@@ -33,7 +33,11 @@ function useSendError() {
   return (error: Error) => {
     const code = isOpenChatError(error) ? error.code : ''
     const known = SEND_ERRORS.find((c) => c === code)
-    toast.error(known ? t(`chat.send-error.${known}`) : t('chat.send-error.generic'))
+    // The request's id under the message, for a report that finds its lines.
+    const requestId = isOpenChatError(error) ? error.requestId : undefined
+    toast.error(known ? t(`chat.send-error.${known}`) : t('chat.send-error.generic'), {
+      description: requestId ? t('chat.error-id', { id: requestId }) : undefined,
+    })
   }
 }
 

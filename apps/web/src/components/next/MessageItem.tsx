@@ -252,6 +252,31 @@ function Notice({ tone, children }: { tone: 'error' | 'quiet'; children: ReactNo
   )
 }
 
+/**
+ * The failed run's id, shortened, to quote when reporting it: every line the
+ * server logged about the run carries the full id, which this is the start of.
+ * A click copies it.
+ */
+function ErrorId({ id }: { id: string }) {
+  const { t } = useTranslation()
+  const [copied, setCopied] = useState(false)
+  return (
+    <button
+      type="button"
+      className="n-error-id"
+      title={t('chat.error-id-copy')}
+      onClick={async () => {
+        if (await copyClipboard(id)) {
+          setCopied(true)
+          window.setTimeout(() => setCopied(false), 1500)
+        }
+      }}
+    >
+      {copied ? t('chat.error-id-copied') : t('chat.error-id', { id })}
+    </button>
+  )
+}
+
 const ERROR_CODES = [
   'no_model',
   'model_error',
@@ -380,6 +405,7 @@ export function AssistantTurn({
       entries.push(
         <Notice key={`${response.id}:error`} tone="error">
           {errorText(t, response.errorCode)}
+          {response.runId && <ErrorId id={response.runId.slice(0, 8)} />}
         </Notice>,
       )
     } else if (response.stopReason === 'cancelled') {

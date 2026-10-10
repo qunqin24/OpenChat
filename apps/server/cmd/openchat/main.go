@@ -158,5 +158,9 @@ func setupLogging(cfg *config.Config) {
 	// Development used to start at Debug. It starts at Info now, in both
 	// environments, so that the switch in the admin panel is what turns detail
 	// on — a toggle that changes nothing where you develop is not a toggle.
-	logging.Setup(cfg.IsProduction())
+	logging.Setup(cfg.IsProduction(), logging.File{
+		Path:     cfg.LogFile,
+		MaxBytes: int64(cfg.LogFileMB) << 20,
+		Keep:     cfg.LogFileKeep,
+	})
 }

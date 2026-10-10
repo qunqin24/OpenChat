@@ -9,9 +9,18 @@
 # switch to S3 later in 后台 → 文件存储 without touching this file.
 name: openchat
 
+# Docker keeps a container's output without limit by default, which fills the
+# disk in the end. Each service keeps at most 5 × 20 MB.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
   postgres:
     image: postgres:18-alpine
+    logging: *logging
     restart: unless-stopped
     environment:
       POSTGRES_USER: openchat
@@ -31,6 +40,7 @@ services:
     # version (…/openchat:1.0.0) to choose when to upgrade; `--build` builds
     # this checkout instead.
     image: ${OPENCHAT_IMAGE:-ghcr.io/qunqin24/openchat:latest}
+    logging: *logging
     build:
       context: ..
       dockerfile: apps/server/Dockerfile
@@ -54,6 +64,7 @@ services:
 
   caddy:
     image: caddy:2-alpine
+    logging: *logging
     restart: unless-stopped
     depends_on:
       - openchat

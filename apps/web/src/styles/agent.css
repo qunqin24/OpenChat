@@ -379,6 +379,21 @@
 .prism-next .n-notice.is-error {
   color: var(--n-err);
 }
+/* The error's id after its message: quiet, and a button only to copy it. */
+.prism-next .n-error-id {
+  margin-inline-start: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--n-text-3);
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.prism-next .n-error-id:hover {
+  color: var(--n-text-2);
+}
 
 /* ---- welcome mark ------------------------------------------------------- */
 

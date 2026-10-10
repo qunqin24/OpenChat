@@ -17,6 +17,13 @@ type Config struct {
 	CORSOrigins     []string
 
 	DatabaseURL string
+
+	// LogFile, when set, gets a copy of the log as JSON lines, started over
+	// at LogFileMB megabytes with LogFileKeep earlier files kept. The Docker
+	// image sets it to a file on the data volume, which outlives the container.
+	LogFile     string
+	LogFileMB   int
+	LogFileKeep int
 }
 
 // Load reads configuration from the environment, applying defaults that are
@@ -29,6 +36,9 @@ func Load() (*Config, error) {
 		ShutdownTimeout: envDuration("SHUTDOWN_TIMEOUT", 15*time.Second),
 		CORSOrigins:     envList("CORS_ORIGINS", []string{"http://localhost:5173"}),
 		DatabaseURL:     env("DATABASE_URL", "postgres://openchat:openchat@localhost:5432/openchat?sslmode=disable"),
+		LogFile:         env("LOG_FILE", ""),
+		LogFileMB:       envInt("LOG_FILE_MAX_MB", 20),
+		LogFileKeep:     envInt("LOG_FILE_KEEP", 5),
 	}
 
 	if c.DatabaseURL == "" {
@@ -45,6 +55,18 @@ func env(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func envInt(key string, fallback int) int {
+	v, ok := os.LookupEnv(key)
+	if !ok || v == "" {
+		return fallback
+	}
+	var n int
+	if _, err := fmt.Sscan(v, &n); err != nil || n < 1 {
+		return fallback
+	}
+	return n
 }
 
 func envDuration(key string, fallback time.Duration) time.Duration {

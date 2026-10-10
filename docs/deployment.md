@@ -359,6 +359,37 @@ docker compose -f deploy/docker-compose.yml logs -f postgres   # 数据库
 
 后台 → 系统 里有“调试模式”开关，打开后按 debug 级别输出，立即生效，不用重启。日志量很大，也可能包含请求细节，排查完请关掉。
 
+**日志存在哪、保留多久**
+
+- 每个容器的输出最多保留 5 个 20 MB（`deploy/docker-compose.yml` 里的 `x-logging`），不会写满硬盘。但容器被替换（更新镜像）时，`docker compose logs` 里之前的内容就没了。
+- 应用另外把同样的日志写一份到数据卷里的 `logs/openchat.log`，按 20 MB 轮转、保留 5 个旧文件（`openchat.log.1` … `.5`），**更新之后也还在**。环境变量 `LOG_FILE`、`LOG_FILE_MAX_MB`、`LOG_FILE_KEEP` 可以改位置和大小。
+
+```bash
+# 看数据卷里的日志（包括更新前的）
+docker run --rm -v openchat_openchat-data:/data alpine ls -l /data/logs
+docker run --rm -v openchat_openchat-data:/data alpine tail -n 200 /data/logs/openchat.log
+```
+
+**按用户反馈的错误编号查**
+
+每一行日志都是 JSON，带上能串起来的编号：
+
+| 字段 | 是什么 |
+|---|---|
+| `request_id` | 一次请求的编号。发消息等操作失败时，提示里显示的「错误编号」就是它 |
+| `run_id` | 一次回答的编号。回答失败时消息下面显示的「错误编号」是它的前 8 位 |
+| `user_id` / `conversation_id` | 是谁、在哪个对话；游客的请求带 `guest: true` |
+| `model` / `channel_id` | 回答用的模型和渠道（回答相关的行） |
+
+```bash
+# 用户报来「错误编号 3f9a1c2e」：找出这次回答的所有日志
+docker run --rm -v openchat_openchat-data:/data alpine grep -h '3f9a1c2e' /data/logs/openchat.log /data/logs/openchat.log.1
+# 某个用户最近的请求
+docker compose -f deploy/docker-compose.yml logs openchat | grep '"user_id":"<用户 id>"'
+```
+
+模型服务返回的原始报错只写在服务端日志里（`model request failed`、`run failed` 这几行），界面上只显示翻译过的提示。也可以先去 后台 → 使用日志，按「失败」筛选，看每次失败请求的模型、渠道、错误码和简短原因。
+
 ### 附件上传失败（用了 S3）
 
 多半是桶没有配 CORS，见[把附件切到 S3](#把附件切到-s3)。先用后台里的“测试连接”确认密钥和桶本身是通的。

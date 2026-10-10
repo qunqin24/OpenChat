@@ -10,6 +10,9 @@
     "settings": "设置"
   },
   "chat": {
+    "error-id-copied": "已复制",
+    "error-id": "错误编号 {{id}}",
+    "error-id-copy": "点击复制错误编号，反馈问题时附上它",
     "placeholder": "发送消息…",
     "send": "发送",
     "stop": "停止",

@@ -359,6 +359,37 @@ docker compose -f deploy/docker-compose.yml logs -f postgres   # the database
 
 Admin → System has a "Debug mode" switch. It logs at debug level, takes effect at once without a restart, produces a lot of output and may include request details, so turn it off when you are done.
 
+**Where logs are kept, and for how long**
+
+- Each container keeps at most 5 × 20 MB of output (`x-logging` in `deploy/docker-compose.yml`), so the disk does not fill. But when a container is replaced (an image update), what `docker compose logs` showed before is gone.
+- The app also writes the same log to `logs/openchat.log` on the data volume, rotated at 20 MB with 5 earlier files kept (`openchat.log.1` … `.5`), and **it survives updates**. `LOG_FILE`, `LOG_FILE_MAX_MB` and `LOG_FILE_KEEP` change where and how much.
+
+```bash
+# The log on the data volume (including from before an update)
+docker run --rm -v openchat_openchat-data:/data alpine ls -l /data/logs
+docker run --rm -v openchat_openchat-data:/data alpine tail -n 200 /data/logs/openchat.log
+```
+
+**Finding what a user reported by its error ID**
+
+Every log line is JSON and carries ids that tie lines together:
+
+| Field | What it is |
+|---|---|
+| `request_id` | One request. A failed action (sending, for example) shows it as the "Error ID" |
+| `run_id` | One answer. A failed answer shows the first 8 characters as its "Error ID" |
+| `user_id` / `conversation_id` | Who, and in which conversation; guest requests carry `guest: true` |
+| `model` / `channel_id` | The model and channel an answer used (on answer lines) |
+
+```bash
+# A user reports "Error ID 3f9a1c2e": every line about that answer
+docker run --rm -v openchat_openchat-data:/data alpine grep -h '3f9a1c2e' /data/logs/openchat.log /data/logs/openchat.log.1
+# One user's recent requests
+docker compose -f deploy/docker-compose.yml logs openchat | grep '"user_id":"<user id>"'
+```
+
+A model provider's own error text is only in the server log (the `model request failed` and `run failed` lines); the chat shows a translated message. Admin → Usage logs, filtered to failures, shows each failed request's model, channel, error code and a short reason.
+
 ### Attachment uploads fail (with S3)
 
 Most likely the bucket has no CORS rules; see [Switching attachments to S3](#switching-attachments-to-s3). Use "Test connection" in the admin panel first to confirm that the keys and the bucket themselves work.

@@ -34,7 +34,11 @@ export function unwrap<T>(result: {
   response: Response
 }): T {
   if (result.error !== undefined) {
-    throw new OpenChatError(result.response.status, result.error as ApiError)
+    throw new OpenChatError(
+      result.response.status,
+      result.error as ApiError,
+      result.response.headers.get('X-Request-Id') ?? undefined,
+    )
   }
   return result.data as T
 }

@@ -10,6 +10,9 @@
     "settings": "Settings"
   },
   "chat": {
+    "error-id": "Error ID {{id}}",
+    "error-id-copy": "Click to copy the error ID, and include it when reporting the problem",
+    "error-id-copied": "Copied",
     "placeholder": "Send a message…",
     "send": "Send",
     "stop": "Stop",

@@ -17,6 +17,7 @@ import (
 
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin/openchat/apps/server/internal/httpx"
+	"github.com/qunqin/openchat/apps/server/internal/logging"
 	"github.com/qunqin/openchat/apps/server/internal/memory"
 )
 
@@ -69,6 +70,7 @@ func (s *Server) requireGuestMode(next http.Handler) http.Handler {
 			httpx.Fail(w, r, httpx.ErrNotFound)
 			return
 		}
+		logging.Annotate(r.Context(), slog.Bool("guest", true))
 		next.ServeHTTP(w, r)
 	})
 }

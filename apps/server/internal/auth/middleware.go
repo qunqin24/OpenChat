@@ -9,6 +9,7 @@ import (
 
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin/openchat/apps/server/internal/httpx"
+	"github.com/qunqin/openchat/apps/server/internal/logging"
 )
 
 // Middleware turns the session cookie into a user on the request context.
@@ -51,6 +52,8 @@ func (m *Middleware) Require(next http.Handler) http.Handler {
 
 		ctx := WithUser(r.Context(), row.User)
 		ctx = WithSessionID(ctx, row.SessionID)
+		// From here on every line this request logs says whose it was.
+		logging.Annotate(ctx, slog.String("user_id", row.User.ID.String()))
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

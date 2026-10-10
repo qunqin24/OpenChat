@@ -7,14 +7,18 @@ export class OpenChatError extends Error {
   /** Set when one input caused the failure, so a form can blame that field. */
   readonly field?: string
   readonly details?: Record<string, unknown>
+  /** The server's id for the request (X-Request-Id): what to quote in a bug
+   *  report, and what finds the request's lines in the server log. */
+  readonly requestId?: string
 
-  constructor(status: number, body: ApiError) {
+  constructor(status: number, body: ApiError, requestId?: string) {
     super(body.message)
     this.name = 'OpenChatError'
     this.status = status
     this.code = body.code
     this.field = body.field
     this.details = body.details
+    this.requestId = requestId || undefined
   }
 
   static async fromResponse(response: Response): Promise<OpenChatError> {
@@ -24,7 +28,7 @@ export class OpenChatError extends Error {
     } catch {
       // Non-JSON error body (proxy, gateway); keep the status-text fallback.
     }
-    return new OpenChatError(response.status, body)
+    return new OpenChatError(response.status, body, response.headers.get('X-Request-Id') ?? undefined)
   }
 }
 
