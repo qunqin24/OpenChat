@@ -38,10 +38,6 @@ type Querier interface {
 	// two rows written by one commit would tie and fall back to ordering by a
 	// random uuid.
 	//
-	// A user message is written with the input it follows (`parent_input_id`, null
-	// for a conversation's first) and then made the conversation's current leaf
-	// with SetCurrentInput; no other row has a parent.
-	//
 	// `id` and `created_at` are for guest mode, which writes a transcript the
 	// browser kept, under the ids and in the order the browser has it; every other
 	// caller leaves both out.
@@ -52,10 +48,6 @@ type Querier interface {
 	AttachToMessage(ctx context.Context, arg AttachToMessageParams) (int64, error)
 	BulkSetUserDisabled(ctx context.Context, arg BulkSetUserDisabledParams) (int64, error)
 	BulkUpdateUserRole(ctx context.Context, arg BulkUpdateUserRoleParams) (int64, error)
-	// Shows one of an input's answers and hides the rest; with no run to keep,
-	// hides them all, ahead of a new one. A run that continues another is part of
-	// that answer and goes or stays with it.
-	ChooseAnswer(ctx context.Context, arg ChooseAnswerParams) error
 	CountAdmins(ctx context.Context) (int64, error)
 	CountCatalogModels(ctx context.Context) (int64, error)
 	CountCatalogProviders(ctx context.Context) (int64, error)
@@ -106,6 +98,12 @@ type Querier interface {
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	DeleteAllMemories(ctx context.Context, userID uuid.UUID) error
 	DeleteAllMemoryEvents(ctx context.Context, userID uuid.UUID) error
+	// Deletes the answer to a question: every run on it - the ones that carry on
+	// after a question the model asked included - and every row that follows it.
+	// A question is only regenerated while it is the last one, so what follows it
+	// is its answer. Files hang on user messages only, so there are none to hand
+	// back.
+	DeleteAnswerTo(ctx context.Context, arg DeleteAnswerToParams) error
 	DeleteCatalogModels(ctx context.Context) error
 	DeleteCatalogProviders(ctx context.Context) error
 	DeleteChannel(ctx context.Context, id uuid.UUID) (int64, error)
@@ -155,6 +153,15 @@ type Querier interface {
 	// the send failed. Anything this old has no request in flight that could still
 	// claim it.
 	DeleteStaleUploads(ctx context.Context, arg DeleteStaleUploadsParams) ([]string, error)
+	// Deletes the row given and every row after it in the conversation, except
+	// one to keep (the question that replaces the first of them, written before
+	// this runs). That is what editing a question does: it and everything after
+	// it is gone for good. The runs of the questions deleted go with them
+	// (runs.input_message_id cascades), while a run's other rows only lose their
+	// run_id, which is why every row is deleted by its place and not by its run.
+	// Hands back the storage keys of the files that were attached, in the same
+	// statement, for the caller to delete once this commits (cleanup.go).
+	DeleteTranscriptFrom(ctx context.Context, arg DeleteTranscriptFromParams) ([]string, error)
 	DeleteUserSessions(ctx context.Context, userID uuid.UUID) error
 	FinishMessage(ctx context.Context, arg FinishMessageParams) (Message, error)
 	// Terminal. Live state is cleared in the same statement: whatever it held has
@@ -177,9 +184,6 @@ type Querier interface {
 	GetConversationMemoryState(ctx context.Context, arg GetConversationMemoryStateParams) (GetConversationMemoryStateRow, error)
 	// The snapshot, with the row locked: the tool adds to it as memories are saved.
 	GetConversationSnapshotForUpdate(ctx context.Context, arg GetConversationSnapshotForUpdateParams) (GetConversationSnapshotForUpdateRow, error)
-	// The conversation's last user message on the branch shown: the one a
-	// regenerated answer answers, and where a new message is appended.
-	GetCurrentInput(ctx context.Context, id uuid.UUID) (Message, error)
 	// Per upstream, to show which one is failing or slow. A channel is its id and
 	// the name it had: deleting one keeps its history under the name, with no id.
 	GetDashboardChannels(ctx context.Context, arg GetDashboardChannelsParams) ([]GetDashboardChannelsRow, error)
@@ -212,8 +216,10 @@ type Querier interface {
 	// window before, the one the figures are compared with. Worked out here, in
 	// the database's time zone, so the buckets of the trend line up with it.
 	GetDashboardWindow(ctx context.Context, arg GetDashboardWindowParams) (GetDashboardWindowRow, error)
-	// A user message of the conversation, wherever it is in the tree.
+	// A user message of the conversation.
 	GetInput(ctx context.Context, arg GetInputParams) (Message, error)
+	// The conversation's last user message: the one a regenerated answer answers.
+	GetLastInput(ctx context.Context, conversationID uuid.UUID) (Message, error)
 	GetMemory(ctx context.Context, arg GetMemoryParams) (UserMemory, error)
 	GetMemoryEventForUpdate(ctx context.Context, arg GetMemoryEventForUpdateParams) (MemoryEvent, error)
 	GetMessage(ctx context.Context, id uuid.UUID) (Message, error)
@@ -242,7 +248,6 @@ type Querier interface {
 	// row the planner returned first, which is the wrong account rather than an
 	// error. Addresses win, so nobody's username can shadow somebody's email.
 	GetUserByLogin(ctx context.Context, identifier string) (User, error)
-	InputOnPath(ctx context.Context, arg InputOnPathParams) (bool, error)
 	InsertCatalogModels(ctx context.Context, arg []InsertCatalogModelsParams) (int64, error)
 	InsertCatalogProviders(ctx context.Context, arg []InsertCatalogProvidersParams) (int64, error)
 	InsertGuestRequest(ctx context.Context, ip string) error
@@ -260,10 +265,6 @@ type Querier interface {
 	// took: everything it was sent, cached or not, plus what it wrote, which the
 	// next request carries back.
 	LatestContextTokens(ctx context.Context, conversationID *uuid.UUID) (LatestContextTokensRow, error)
-	// Every run that answered each of these inputs, oldest first: their versions.
-	// An answer that stopped to ask a question and went on is one version, named by
-	// the run that began it.
-	ListAnswers(ctx context.Context, inputs []uuid.UUID) ([]ListAnswersRow, error)
 	ListAttachmentsByMessages(ctx context.Context, messageIds []uuid.UUID) ([]Attachment, error)
 	// Attachments by id, within one user's scope: what the context builder resolves
 	// a reference through, so a reference to someone else's file reads as missing.
@@ -309,16 +310,15 @@ type Querier interface {
 	ListMemoryEvents(ctx context.Context, arg ListMemoryEventsParams) ([]MemoryEvent, error)
 	// A page of the transcript from its end: the newest rows, or with a cursor the
 	// rows older than it. Newest first, so the limit keeps the end; the caller
-	// turns the page around. The transcript is the branch shown (see
-	// conversation_transcript), so the cursor walks back along it.
+	// turns the page around. The transcript is every row of the conversation: what
+	// is replaced is deleted, so there is nothing else in it.
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
 	ListModelOverrides(ctx context.Context, modelIds []string) ([]ModelOverride, error)
 	// The caller's own uploads that no message has claimed yet.
 	ListPendingAttachments(ctx context.Context, arg ListPendingAttachmentsParams) ([]Attachment, error)
-	// The newest rows of the branch shown, oldest first: the raw material of a
+	// The newest rows of the conversation, oldest first: the raw material of a
 	// model request. Newest, not oldest — a long conversation is answered from its
-	// end. Only the path counts as history: what followed a version set aside by an
-	// edit is not, and neither is an answer that was regenerated.
+	// end.
 	ListRecentMessages(ctx context.Context, arg ListRecentMessagesParams) ([]Message, error)
 	// Every row a run wrote, its input included: what a subscriber's snapshot
 	// carries alongside the run's live state. The runs that continue it (the answer
@@ -368,7 +368,7 @@ type Querier interface {
 	// under, and sorting on an empty one would herd every uncatalogued model into a
 	// block at the top that looks like a fault.
 	ListServedModels(ctx context.Context, arg ListServedModelsParams) ([]ListServedModelsRow, error)
-	// The branch shown, oldest first and whole, for an export. Tool results are
+	// The conversation, oldest first and whole, for an export. Tool results are
 	// left out: they are the model's working, and some are whole web pages.
 	ListTranscript(ctx context.Context, conversationID uuid.UUID) ([]Message, error)
 	// Newest first, by keyset on (created_at, id): the order of usage_logs_created_idx,
@@ -383,13 +383,9 @@ type Querier interface {
 	// total, and the row count here stays small enough that the scan is cheap.
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
 	ListUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]User, error)
-	// For each of these user messages, the versions of its question: every user
-	// message with the same parent (itself included), oldest first. Roots have no
-	// parent, so a conversation's first questions are found among its own.
-	ListVersions(ctx context.Context, ids []uuid.UUID) ([]ListVersionsRow, error)
-	// Held until the transaction ends: whatever moves the conversation's current
-	// leaf — a message, an edit, a switch of branch — queues here, and reads the
-	// leaf the one before it left.
+	// Held until the transaction ends: whatever changes what the conversation
+	// holds - a message, an edit, a regeneration - queues here, and reads the
+	// conversation as the one before it left it.
 	LockConversation(ctx context.Context, id uuid.UUID) (Conversation, error)
 	// Held until the transaction ends, so that counting and then recording a
 	// request is one step: two requests at the limit cannot both be let through.
@@ -407,13 +403,9 @@ type Querier interface {
 	// channels names wins — so the levels a run accepts are the levels the picker
 	// showed. No rows when the catalogue does not know the model.
 	ModelProfile(ctx context.Context, modelID string) (ModelProfileRow, error)
-	// Whether the branch shown passes through a version of this question: a
-	// message with the same parent, itself included. Those are the only messages
-	// the reader can switch to.
-	PathHasVersionOf(ctx context.Context, arg PathHasVersionOfParams) (bool, error)
-	// Where the reader lands when switching to this question: the end of the
-	// branch below it that was last the one shown.
-	PickBranchLeaf(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	// Hands the files of one message to another: an edited question's files go to
+	// the question that replaces it.
+	MoveAttachments(ctx context.Context, arg MoveAttachmentsParams) error
 	// The channel a new run of this model is answered from: the first enabled one
 	// that offers it, in the operator's order. Pinned on the run, so a later change
 	// here affects the next run, never one already going.
@@ -443,8 +435,7 @@ type Querier interface {
 	SaveRunState(ctx context.Context, arg SaveRunStateParams) (Run, error)
 	// The caller's conversations whose title or any message's text contains the
 	// pattern (an ILIKE pattern, escaped by the caller), newest first, each with
-	// the latest message that matched. Every branch is searched: what was said on
-	// a branch not on show was still said. Reasoning and tool rows are not words
+	// the latest message that matched. Reasoning and tool rows are not words
 	// the person wrote or read as the answer, so only user and assistant text.
 	// A conversation found by its title alone has no hit: empty strings, not NULLs.
 	SearchConversations(ctx context.Context, arg SearchConversationsParams) ([]SearchConversationsRow, error)
@@ -463,9 +454,6 @@ type Querier interface {
 	// overwrite each other, and the loser reads the winner's.
 	SetConversationSnapshot(ctx context.Context, arg SetConversationSnapshotParams) ([]byte, error)
 	SetConversationWebSearch(ctx context.Context, arg SetConversationWebSearchParams) (Conversation, error)
-	// Moves the reader to this user message, a leaf of the conversation, and notes
-	// that it was the branch shown just now (see PickBranchLeaf).
-	SetCurrentInput(ctx context.Context, arg SetCurrentInputParams) error
 	// A generated title, only over the default one: a conversation the user has
 	// renamed in the meantime keeps their name. Not a change of activity, so the
 	// conversation keeps its place in the list.

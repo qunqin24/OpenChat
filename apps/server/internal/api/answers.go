@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	"github.com/qunqin/openchat/apps/server/internal/agent"
@@ -20,62 +19,60 @@ import (
 
 // Answering a message again, as it was asked or reworded.
 //
-// A conversation is a tree of questions (messages.parent_input_id) and the
-// reader is on one path through it, ending at the conversation's current leaf.
-// Two things can be redone, and they are different moves:
+// A conversation is a line of rows in the order they were written, and what is
+// replaced is gone: nothing is kept to go back to. Two things can be redone,
+// and both delete before they write, in the transaction that starts the run
+// and under the conversation's lock (LockConversation), so that nothing else
+// sees the conversation between the two:
 //
-//   - An answer. Regenerating starts another run on the same input and marks
-//     the earlier ones superseded, which takes their rows out of the transcript
-//     and out of every later model request without touching them. The reader
-//     can switch back (ChooseAnswer), but only on the last input of the path —
-//     an earlier one has later turns built on the answer it shows, and swapping
-//     that answer out from under them would leave the conversation answering
-//     things nobody said.
-//   - A question. Editing any question on the path writes the new wording as a
-//     sibling (same parent, edit_of the first version) and moves the leaf to
-//     it. What followed the old wording is not deleted, only left off the path;
-//     switching to a version (SwitchVersion) puts the reader back on the branch
-//     under it, as it was left.
+//   - An answer. Regenerating deletes the rows after the last question and the
+//     runs that made them - the runs that carried on after a question the model
+//     asked included - and starts another run on the same question.
+//   - A question. Editing any question deletes it and every row after it, and
+//     writes the new wording at the end as a message of its own, which a run
+//     answers as if the conversation were picked up again from there. The files
+//     the question carried move to the new message; those of the questions
+//     deleted with it are removed once the transaction has committed.
+//
+// Both refuse a conversation that is answering: the run being written would be
+// deleted from under itself.
 
 var (
 	errNothingToAnswer = httpx.NewError(http.StatusNotFound, "nothing_to_answer",
 		"this conversation has no message to answer")
-	errRunNotFound = httpx.NewError(http.StatusNotFound, "run_not_found", "no such run in this conversation")
-	errNotLatest   = httpx.NewError(http.StatusConflict, "not_latest",
-		"only the last message's answer can be switched")
+	errNotLatest = httpx.NewError(http.StatusConflict, "not_latest",
+		"only the last message's answer can be redone")
 	errMessageNotFound = httpx.NewError(http.StatusNotFound, "message_not_found", "no such message in this conversation")
-	errNotOnPath       = httpx.NewError(http.StatusConflict, "not_on_path",
-		"that message is not on the branch being shown")
 )
 
-// appendInput writes a user message after `parent` (the input it follows, nil
-// for a conversation's first) and makes it the conversation's current leaf. The
-// caller holds the conversation (LockConversation), so the leaf it read is the
-// leaf it replaces.
-func appendInput(ctx context.Context, q *sqlc.Queries, conversationID uuid.UUID, parent *uuid.UUID, content string, parts []llm.Part, editOf *uuid.UUID) (sqlc.Message, error) {
-	return appendInputAs(ctx, q, conversationID, parent, content, parts, editOf, nil)
-}
-
-// appendInputAs is appendInput under an id of the caller's choosing, which is
-// how a guest's message gets the id its browser already gave it.
-func appendInputAs(ctx context.Context, q *sqlc.Queries, conversationID uuid.UUID, parent *uuid.UUID, content string, parts []llm.Part, editOf, id *uuid.UUID) (sqlc.Message, error) {
-	input, err := q.AppendEntry(ctx, sqlc.AppendEntryParams{
+// appendInput writes a user message at the end of a conversation, under the
+// id of the caller's choosing if it has one (which is how a guest's message
+// gets the id its browser already gave it).
+func appendInput(ctx context.Context, q *sqlc.Queries, conversationID uuid.UUID, id *uuid.UUID, content string, parts []llm.Part) (sqlc.Message, error) {
+	return q.AppendEntry(ctx, sqlc.AppendEntryParams{
 		ID:             id,
 		ConversationID: conversationID,
 		Role:           sqlc.MessageRoleUser,
 		Content:        content,
 		Parts:          agent.EncodeParts(parts),
 		Status:         sqlc.MessageStatusComplete,
-		EditOf:         editOf,
-		ParentInputID:  parent,
 	})
-	if err != nil {
-		return input, err
-	}
-	return input, q.SetCurrentInput(ctx, sqlc.SetCurrentInputParams{ConversationID: conversationID, InputID: &input.ID})
 }
 
-// RegenerateAnswer starts another run on the last user message of the branch shown.
+// requireIdle refuses a conversation that is answering, with the conversation
+// held: a run is started only by a request that holds it, so what is seen here
+// stays true until the caller commits.
+func requireIdle(ctx context.Context, q *sqlc.Queries, conversationID uuid.UUID) error {
+	if _, err := q.GetActiveRun(ctx, conversationID); err == nil {
+		return errConversationBusy
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	return nil
+}
+
+// RegenerateAnswer deletes the answer to the last user message and starts
+// another run on it.
 func (s *Server) RegenerateAnswer(w http.ResponseWriter, r *http.Request, conversationId ConversationId) {
 	ctx := r.Context()
 	user := auth.MustUser(ctx)
@@ -96,7 +93,7 @@ func (s *Server) RegenerateAnswer(w http.ResponseWriter, r *http.Request, conver
 		return
 	}
 
-	input, err := s.q.GetCurrentInput(ctx, conversationId)
+	input, err := s.q.GetLastInput(ctx, conversationId)
 	if errors.Is(err, pgx.ErrNoRows) {
 		httpx.Fail(w, r, errNothingToAnswer)
 		return
@@ -114,13 +111,22 @@ func (s *Server) RegenerateAnswer(w http.ResponseWriter, r *http.Request, conver
 	var run sqlc.Run
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
-		if err := stillCurrent(ctx, q, conversationId, input.ID); err != nil {
+		if _, err := q.LockConversation(ctx, conversationId); err != nil {
 			return err
 		}
-		// Every answer so far steps aside. A run still going is not among
-		// them for long: the one-active-run index refuses the insert below and
-		// takes this back with it.
-		if err := q.ChooseAnswer(ctx, sqlc.ChooseAnswerParams{InputID: input.ID}); err != nil {
+		if err := requireIdle(ctx, q, conversationId); err != nil {
+			return err
+		}
+		// The question was looked up before the lock: a message sent since is
+		// the last now, and the answer the caller meant to redo is not.
+		last, err := q.GetLastInput(ctx, conversationId)
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && last.ID != input.ID) {
+			return errNotLatest
+		}
+		if err != nil {
+			return err
+		}
+		if err := q.DeleteAnswerTo(ctx, sqlc.DeleteAnswerToParams{ConversationID: conversationId, InputID: input.ID}); err != nil {
 			return err
 		}
 		run, err = createRun(ctx, q, conv, user.ID, input.ID, requestID, choice)
@@ -130,7 +136,8 @@ func (s *Server) RegenerateAnswer(w http.ResponseWriter, r *http.Request, conver
 		s.failRun(w, r, conversationId, requestID, err)
 		return
 	}
-	s.startRun(conversationId, run, input)
+	// Other tabs hold the answer that was just deleted.
+	s.startRun(conversationId, run, input, agent.TranscriptChanged{})
 
 	page, err := s.messagePage(ctx, []sqlc.Message{input})
 	if err != nil {
@@ -140,86 +147,9 @@ func (s *Server) RegenerateAnswer(w http.ResponseWriter, r *http.Request, conver
 	httpx.JSON(w, http.StatusAccepted, CreateMessageResponse{Message: page.Items[0], Run: toRun(run)})
 }
 
-// ChooseAnswer shows another answer to the last question of the branch shown.
-func (s *Server) ChooseAnswer(w http.ResponseWriter, r *http.Request, conversationId ConversationId, runId openapi_types.UUID) {
-	ctx := r.Context()
-	if err := s.conversationExists(ctx, conversationId); err != nil {
-		httpx.Fail(w, r, err)
-		return
-	}
-	run, err := s.q.GetRun(ctx, runId)
-	if errors.Is(err, pgx.ErrNoRows) || (err == nil && run.ConversationID != conversationId) {
-		httpx.Fail(w, r, errRunNotFound)
-		return
-	}
-	if err != nil {
-		httpx.Fail(w, r, err)
-		return
-	}
-
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		q := s.q.WithTx(tx)
-		if err := stillCurrent(ctx, q, conversationId, run.InputMessageID); err != nil {
-			return err
-		}
-		if err := q.ChooseAnswer(ctx, sqlc.ChooseAnswerParams{Keep: &run.ID, InputID: run.InputMessageID}); err != nil {
-			return err
-		}
-		// Checked after the update, which waits on a regenerate that got to
-		// these rows first: a run started meanwhile is the answer being
-		// written, and hiding it is not this request's call.
-		if _, err := q.GetActiveRun(ctx, conversationId); err == nil {
-			return errConversationBusy
-		} else if !errors.Is(err, pgx.ErrNoRows) {
-			return err
-		}
-		return nil
-	})
-	if err != nil {
-		httpx.Fail(w, r, err)
-		return
-	}
-
-	s.announceBranch(conversationId)
-
-	rows, err := s.q.ListRunMessages(ctx, sqlc.ListRunMessagesParams{RunID: &run.ID, InputMessageID: run.InputMessageID})
-	if err != nil {
-		httpx.Fail(w, r, err)
-		return
-	}
-	page, err := s.messagePage(ctx, rows)
-	if err != nil {
-		httpx.Fail(w, r, err)
-		return
-	}
-	httpx.JSON(w, http.StatusOK, page)
-}
-
-// announceBranch tells the conversation's other followers (another tab, say)
-// that the transcript they hold is no longer the one shown. Sent after the
-// change committed, in a batch of its own under no run: it is no step of any,
-// and a client applies it whatever run state it holds.
-func (s *Server) announceBranch(conversationID uuid.UUID) {
-	s.runner.Hub().Publish(conversationID, agent.Batch{Events: []agent.Event{agent.BranchChanged{}}})
-}
-
-// stillCurrent is the check that an input is still the end of the branch shown,
-// made with the conversation held: the handlers look before they lock, and
-// another request may have moved the leaf in between.
-func stillCurrent(ctx context.Context, q *sqlc.Queries, conversationID, inputID uuid.UUID) error {
-	locked, err := q.LockConversation(ctx, conversationID)
-	if err != nil {
-		return err
-	}
-	if locked.CurrentInputID == nil || *locked.CurrentInputID != inputID {
-		return errNotLatest
-	}
-	return nil
-}
-
-// EditMessage asks a question again in new words: a new user message beside
-// the one edited, the conversation's new leaf, and the run that answers it.
-// Any question on the branch shown can be edited, not only the last.
+// EditMessage asks a question again in new words: the question and everything
+// after it are deleted, the new wording is written at the end, and a run
+// answers it. Any question can be edited, not only the last.
 func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversationId ConversationId, messageId openapi_types.UUID) {
 	ctx := r.Context()
 	user := auth.MustUser(ctx)
@@ -244,10 +174,8 @@ func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversatio
 		httpx.JSON(w, http.StatusAccepted, found)
 		return
 	}
-
-	edited, err := s.pathInput(ctx, conversationId, messageId)
-	if err != nil {
-		httpx.Fail(w, r, err)
+	if _, err := s.q.GetInput(ctx, sqlc.GetInputParams{ID: messageId, ConversationID: conversationId}); err != nil {
+		httpx.Fail(w, r, inputErr(err))
 		return
 	}
 	choice, err := s.chooseRun(ctx, conv, body.Model, body.ReasoningEffort, body.WebSearch)
@@ -256,36 +184,48 @@ func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversatio
 		return
 	}
 
-	// The new wording, and the files the question carried: an edit changes
-	// what was asked, not what was attached. They stay claimed by the first
-	// version and are resolved by reference, as any message's are.
-	parts := []llm.Part{llm.TextPart{Text: content}}
-	if old, err := agent.DecodeParts(edited.Parts); err == nil {
-		for _, part := range old {
-			if file, ok := part.(llm.AttachmentPart); ok {
-				parts = append(parts, file)
-			}
-		}
-	}
-	root := rootOf(edited)
-
 	var (
 		input sqlc.Message
 		run   sqlc.Run
+		keys  []string
 	)
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
-		// Held, then looked at again: a switch of branch queued ahead of this
-		// may have taken the question off the path. A run still going is
-		// refused below, as when sending.
 		if _, err := q.LockConversation(ctx, conversationId); err != nil {
 			return err
 		}
-		if _, err := s.pathInputWith(ctx, q, conversationId, messageId); err != nil {
+		if err := requireIdle(ctx, q, conversationId); err != nil {
 			return err
 		}
-		var err error
-		input, err = appendInput(ctx, q, conversationId, edited.ParentInputID, content, parts, &root)
+		// Read again with the conversation held: an edit queued ahead of this
+		// may have deleted the question.
+		edited, err := q.GetInput(ctx, sqlc.GetInputParams{ID: messageId, ConversationID: conversationId})
+		if err != nil {
+			return inputErr(err)
+		}
+
+		// The new wording, and the files the question carried: an edit changes
+		// what was asked, not what was attached.
+		parts := []llm.Part{llm.TextPart{Text: content}}
+		if old, err := agent.DecodeParts(edited.Parts); err == nil {
+			for _, part := range old {
+				if file, ok := part.(llm.AttachmentPart); ok {
+					parts = append(parts, file)
+				}
+			}
+		}
+		input, err = appendInput(ctx, q, conversationId, nil, content, parts)
+		if err != nil {
+			return err
+		}
+		// The files change hands before the rows are deleted, or they would
+		// go with the question they were attached to.
+		if err := q.MoveAttachments(ctx, sqlc.MoveAttachmentsParams{FromID: &edited.ID, ToID: &input.ID}); err != nil {
+			return err
+		}
+		keys, err = q.DeleteTranscriptFrom(ctx, sqlc.DeleteTranscriptFromParams{
+			ConversationID: conversationId, FromCreatedAt: edited.CreatedAt, FromID: edited.ID, KeepID: input.ID,
+		})
 		if err != nil {
 			return err
 		}
@@ -296,9 +236,11 @@ func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversatio
 		s.failRun(w, r, conversationId, requestID, err)
 		return
 	}
-	// The edit moves the leaf onto the new wording; other tabs showing this
-	// conversation are told in the same batch that starts the run.
-	s.startRun(conversationId, run, input, agent.BranchChanged{})
+	// Rows are gone, so the files they named are wanted by nobody.
+	s.removeFiles(context.WithoutCancel(ctx), keys)
+	// Other tabs showing this conversation hold what was deleted; they are told
+	// in the batch that starts the run.
+	s.startRun(conversationId, run, input, agent.TranscriptChanged{})
 
 	page, err := s.messagePage(ctx, []sqlc.Message{input})
 	if err != nil {
@@ -308,164 +250,25 @@ func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversatio
 	httpx.JSON(w, http.StatusAccepted, CreateMessageResponse{Message: page.Items[0], Run: toRun(run)})
 }
 
-// pathInput is a user message of the conversation that is on the branch shown:
-// 404 for one that is not the conversation's, 409 for one that is off the path.
-func (s *Server) pathInput(ctx context.Context, conversationID uuid.UUID, messageID uuid.UUID) (sqlc.Message, error) {
-	return s.pathInputWith(ctx, s.q, conversationID, messageID)
-}
-
-func (s *Server) pathInputWith(ctx context.Context, q *sqlc.Queries, conversationID uuid.UUID, messageID uuid.UUID) (sqlc.Message, error) {
-	input, err := q.GetInput(ctx, sqlc.GetInputParams{ID: messageID, ConversationID: conversationID})
+// inputErr is the error for a user message that is not there.
+func inputErr(err error) error {
 	if errors.Is(err, pgx.ErrNoRows) {
-		return input, errMessageNotFound
+		return errMessageNotFound
 	}
-	if err != nil {
-		return input, err
-	}
-	on, err := q.InputOnPath(ctx, sqlc.InputOnPathParams{ConversationID: conversationID, ID: messageID})
-	if err != nil {
-		return input, err
-	}
-	if !on {
-		return input, errNotOnPath
-	}
-	return input, nil
+	return err
 }
 
-// SwitchVersion moves the conversation to another version of a question and,
-// with it, to the branch that was last worked on below that version.
-func (s *Server) SwitchVersion(w http.ResponseWriter, r *http.Request, conversationId ConversationId, messageId openapi_types.UUID, params SwitchVersionParams) {
-	ctx := r.Context()
-	if err := s.conversationExists(ctx, conversationId); err != nil {
-		httpx.Fail(w, r, err)
-		return
-	}
-	target, err := s.q.GetInput(ctx, sqlc.GetInputParams{ID: messageId, ConversationID: conversationId})
-	if errors.Is(err, pgx.ErrNoRows) {
-		httpx.Fail(w, r, errMessageNotFound)
-		return
-	}
-	if err != nil {
-		httpx.Fail(w, r, err)
-		return
-	}
-
-	moved := false
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		q := s.q.WithTx(tx)
-		// Nothing is running while the branch moves: a run writes under the
-		// leaf it was started on, and the reader would be looking elsewhere.
-		if _, err := q.LockConversation(ctx, conversationId); err != nil {
-			return err
-		}
-		if _, err := q.GetActiveRun(ctx, conversationId); err == nil {
-			return errConversationBusy
-		} else if !errors.Is(err, pgx.ErrNoRows) {
-			return err
-		}
-		// Only a version of a question on the path can be switched to: the
-		// pager offers nothing else, and a question deep in another branch
-		// would land the reader somewhere they have no way back from.
-		found, err := q.PathHasVersionOf(ctx, sqlc.PathHasVersionOfParams{
-			ConversationID: conversationId, ParentInputID: target.ParentInputID,
-		})
-		if err != nil {
-			return err
-		}
-		if !found {
-			return errNotOnPath
-		}
-		on, err := q.InputOnPath(ctx, sqlc.InputOnPathParams{ConversationID: conversationId, ID: target.ID})
-		if err != nil || on {
-			return err // already there: the same branch is shown again
-		}
-		leaf, err := q.PickBranchLeaf(ctx, target.ID)
-		if err != nil {
-			return err
-		}
-		moved = true
-		return q.SetCurrentInput(ctx, sqlc.SetCurrentInputParams{ConversationID: conversationId, InputID: &leaf})
-	})
-	if err != nil {
-		httpx.Fail(w, r, err)
-		return
-	}
-	if moved {
-		s.announceBranch(conversationId)
-	}
-
-	page, err := s.transcriptPage(ctx, conversationId, pgtype.Timestamptz{}, nil, clampLimit(params.Limit))
-	if err != nil {
-		httpx.Fail(w, r, err)
-		return
-	}
-	httpx.JSON(w, http.StatusOK, page)
-}
-
-// messagePage maps rows for a client: each with its files, and each question
-// with its answers' versions and the versions of the question itself.
+// messagePage maps rows for a client, each with its files.
 func (s *Server) messagePage(ctx context.Context, rows []sqlc.Message) (MessagePage, error) {
 	page := MessagePage{Items: make([]Message, 0, len(rows))}
 	attached, err := s.attachmentsFor(ctx, rows)
 	if err != nil {
 		return page, err
 	}
-	answers, branches, err := s.questionVersions(ctx, rows)
-	if err != nil {
-		return page, err
-	}
 	for _, row := range rows {
-		m := toMessage(row, attached[row.ID])
-		if runs := answers[row.ID]; len(runs) > 1 {
-			m.Versions = &runs
-		}
-		if siblings := branches[row.ID]; len(siblings) > 1 {
-			m.Branches = &siblings
-		}
-		page.Items = append(page.Items, m)
+		page.Items = append(page.Items, toMessage(row, attached[row.ID]))
 	}
 	return page, nil
-}
-
-// rootOf is the first version of a question: the message itself, or the one it
-// is an edit of.
-func rootOf(m sqlc.Message) uuid.UUID {
-	if m.EditOf != nil {
-		return *m.EditOf
-	}
-	return m.ID
-}
-
-// questionVersions looks up, for each user message among rows, every run that
-// answered it (oldest first) and every version of the question — itself and
-// its siblings, oldest first.
-func (s *Server) questionVersions(ctx context.Context, rows []sqlc.Message) (answers, branches map[uuid.UUID][]uuid.UUID, err error) {
-	var ids []uuid.UUID
-	for _, row := range rows {
-		if row.Role == sqlc.MessageRoleUser {
-			ids = append(ids, row.ID)
-		}
-	}
-	if len(ids) == 0 {
-		return nil, nil, nil
-	}
-	found, err := s.q.ListAnswers(ctx, ids)
-	if err != nil {
-		return nil, nil, err
-	}
-	answers = make(map[uuid.UUID][]uuid.UUID, len(ids))
-	for _, a := range found {
-		answers[a.Input] = append(answers[a.Input], a.ID)
-	}
-	versions, err := s.q.ListVersions(ctx, ids)
-	if err != nil {
-		return nil, nil, err
-	}
-	branches = make(map[uuid.UUID][]uuid.UUID, len(ids))
-	for _, v := range versions {
-		branches[v.MessageID] = append(branches[v.MessageID], v.VersionID)
-	}
-	return answers, branches, nil
 }
 
 // trimmed is an optional string's value without surrounding space, or "".

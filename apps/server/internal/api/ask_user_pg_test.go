@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/qunqin/openchat/apps/server/internal/agent"
@@ -426,15 +428,12 @@ func TestAskUserAnswerContinuesTheReply(t *testing.T) {
 			if resp.Run.Continues == nil || *resp.Run.Continues != first.Run.Id {
 				t.Fatalf("continues = %v, want %s", resp.Run.Continues, first.Run.Id)
 			}
-			if resp.Message.Id != first.Message.Id || resp.Message.Versions != nil && len(*resp.Message.Versions) > 1 {
-				t.Fatalf("the continuation answers %s with versions %v", resp.Message.Id, resp.Message.Versions)
+			if resp.Message.Id != first.Message.Id {
+				t.Fatalf("the continuation answers %s, not %s", resp.Message.Id, first.Message.Id)
 			}
 
 			items := h.transcript()
 			equal(t, "transcript", shape(t, items), []string{"user:text", "assistant:call", "tool:result", "assistant:text"})
-			if v := items[0].Versions; v != nil && len(*v) > 1 {
-				t.Fatalf("the continuation counts as a version of the turn: %v", *v)
-			}
 			raw, _ := json.Marshal(items[2].Parts[0])
 			var result struct {
 				CallID, Content, Status string
@@ -520,10 +519,10 @@ func TestAskUserTypedMessageSkipsTheQuestion(t *testing.T) {
 	}
 }
 
-// Regenerating, or editing the question, takes the pending question away with
-// the answer it was part of: it is a version to switch back to, not a card in
-// the transcript, and it can no longer be answered.
-func TestAskUserRedoingTheTurnHidesThePendingQuestion(t *testing.T) {
+// Regenerating, or editing the question, deletes the pending question with the
+// answer it was part of: it is not a card in the transcript any more, and it
+// can no longer be answered.
+func TestAskUserRedoingTheTurnDeletesThePendingQuestion(t *testing.T) {
 	reply := func(n int) string {
 		switch n {
 		case 1:
@@ -546,26 +545,19 @@ func TestAskUserRedoingTheTurnHidesThePendingQuestion(t *testing.T) {
 			t.Fatal("the regenerated run did not ask")
 		}
 
-		items := h.transcript()
-		equal(t, "transcript", shape(t, items), []string{"user:text", "assistant:call"})
-		if v := items[0].Versions; v == nil || len(*v) != 2 {
-			t.Fatalf("versions = %v, want the two asks", v)
-		}
+		equal(t, "transcript", shape(t, h.transcript()), []string{"user:text", "assistant:call"})
 		if strings.Contains(h.body(2), "call_ask_1") {
-			t.Fatal("the hidden question reached the regenerated request")
+			t.Fatal("the deleted question reached the regenerated request")
 		}
-		// The first version's question is no longer the one waiting.
+		if _, err := h.q.GetRun(context.Background(), first.Run.Id); !errors.Is(err, pgx.ErrNoRows) {
+			t.Fatalf("the run that asked is still there (%v)", err)
+		}
+		// The first ask is gone: only the second can be answered.
 		if rec := h.answer("call_ask_1", answersJSON); rec.Code != http.StatusConflict {
-			t.Fatalf("answering the hidden question: %d %s", rec.Code, rec.Body)
+			t.Fatalf("answering the deleted question: %d %s", rec.Code, rec.Body)
 		}
-		// Switching back to it makes it the one waiting again.
-		rec = httptest.NewRecorder()
-		h.server.ChooseAnswer(rec, h.request(http.MethodPost, ""), h.conv.ID, first.Run.Id)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("choose: %d %s", rec.Code, rec.Body)
-		}
-		if _, status := h.answered("call_ask_1", answersJSON); status != sqlc.RunStatusCompleted {
-			t.Fatalf("answering the first version: the continuation ended %s", status)
+		if _, status := h.answered("call_ask_2", answersJSON); status != sqlc.RunStatusCompleted {
+			t.Fatalf("answering the second ask: the continuation ended %s", status)
 		}
 	})
 
@@ -588,9 +580,9 @@ func TestAskUserRedoingTheTurnHidesThePendingQuestion(t *testing.T) {
 	})
 }
 
-// A reply that asked and went on is one version: regenerating hides both runs,
-// and choosing it back brings both back.
-func TestAskUserContinuationIsPartOfTheVersion(t *testing.T) {
+// A reply that asked and went on is one answer: regenerating deletes both runs
+// and everything they wrote.
+func TestAskUserContinuationGoesWithTheAnswer(t *testing.T) {
 	h := newAskHarness(t, openAIWire, func(n int) string {
 		if n == 1 {
 			return openAIWire.ask("call_ask_1", questionsJSON)
@@ -598,7 +590,8 @@ func TestAskUserContinuationIsPartOfTheVersion(t *testing.T) {
 		return openAIWire.text(fmt.Sprintf("answer %d", n))
 	})
 	first, _ := h.send("plan")
-	h.answered("call_ask_1", answersJSON)
+	continued, _ := h.answered("call_ask_1", answersJSON)
+	equal(t, "before", shape(t, h.transcript()), []string{"user:text", "assistant:call", "tool:result", "assistant:text"})
 
 	rec := httptest.NewRecorder()
 	h.server.RegenerateAnswer(rec, h.request(http.MethodPost, `{}`), h.conv.ID)
@@ -606,21 +599,15 @@ func TestAskUserContinuationIsPartOfTheVersion(t *testing.T) {
 	h.accepted(rec, &again)
 	h.settle(again.Run.Id)
 
-	items := h.transcript()
-	equal(t, "after regenerating", shape(t, items), []string{"user:text", "assistant:text"})
-	if v := items[0].Versions; v == nil || len(*v) != 2 || (*v)[0] != first.Run.Id {
-		t.Fatalf("versions = %v, want the asking run and the regenerated one", v)
+	equal(t, "after regenerating", shape(t, h.transcript()), []string{"user:text", "assistant:text"})
+	var runs, rows int
+	if err := h.pool.QueryRow(context.Background(), `SELECT count(*) FROM runs WHERE id = ANY ($1)`,
+		[]uuid.UUID{first.Run.Id, continued.Run.Id}).Scan(&runs); err != nil || runs != 0 {
+		t.Fatalf("%d of the old answer's runs remain (%v)", runs, err)
 	}
-
-	rec = httptest.NewRecorder()
-	h.server.ChooseAnswer(rec, h.request(http.MethodPost, ""), h.conv.ID, first.Run.Id)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("choose: %d %s", rec.Code, rec.Body)
+	if err := h.pool.QueryRow(context.Background(), `SELECT count(*) FROM messages WHERE conversation_id = $1`, h.conv.ID).Scan(&rows); err != nil || rows != 2 {
+		t.Fatalf("%d rows in the conversation (%v), want the question and the new answer", rows, err)
 	}
-	var chosen MessagePage
-	_ = json.Unmarshal(rec.Body.Bytes(), &chosen)
-	equal(t, "chosen rows", shape(t, chosen.Items), []string{"user:text", "assistant:call", "tool:result", "assistant:text"})
-	equal(t, "transcript after choosing", shape(t, h.transcript()), []string{"user:text", "assistant:call", "tool:result", "assistant:text"})
 }
 
 // The administrator's switch decides whether the tool is offered, and is on

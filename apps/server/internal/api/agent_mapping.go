@@ -25,7 +25,6 @@ func toMessage(row sqlc.Message, attachments []Attachment) Message {
 		RunId:          row.RunID,
 		Model:          row.Model,
 		ErrorCode:      row.ErrorCode,
-		EditOf:         row.EditOf,
 		CreatedAt:      row.CreatedAt.Time,
 	}
 	if parts, err := agent.DecodeParts(row.Parts); err != nil {
@@ -200,8 +199,8 @@ func toRunEvent(event agent.Event) (RunEvent, bool) {
 		err = out.FromRetryScheduledEvent(RetryScheduledEvent{Type: RetryScheduled, Attempt: e.Attempt, At: e.At, ErrorCode: e.ErrorCode})
 	case agent.TitleChanged:
 		err = out.FromTitleChangedEvent(TitleChangedEvent{Type: TitleChanged, Title: e.Title})
-	case agent.BranchChanged:
-		err = out.FromBranchChangedEvent(BranchChangedEvent{Type: BranchChanged})
+	case agent.TranscriptChanged:
+		err = out.FromTranscriptChangedEvent(TranscriptChangedEvent{Type: TranscriptChanged})
 	default:
 		return out, false
 	}

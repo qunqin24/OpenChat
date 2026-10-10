@@ -28,8 +28,7 @@ LIMIT sqlc.arg('row_limit');
 -- name: SearchConversations :many
 -- The caller's conversations whose title or any message's text contains the
 -- pattern (an ILIKE pattern, escaped by the caller), newest first, each with
--- the latest message that matched. Every branch is searched: what was said on
--- a branch not on show was still said. Reasoning and tool rows are not words
+-- the latest message that matched. Reasoning and tool rows are not words
 -- the person wrote or read as the answer, so only user and assistant text.
 -- A conversation found by its title alone has no hit: empty strings, not NULLs.
 SELECT c.*,
@@ -134,22 +133,10 @@ WHERE id = sqlc.arg('id')
 RETURNING *;
 
 -- name: LockConversation :one
--- Held until the transaction ends: whatever moves the conversation's current
--- leaf — a message, an edit, a switch of branch — queues here, and reads the
--- leaf the one before it left.
+-- Held until the transaction ends: whatever changes what the conversation
+-- holds - a message, an edit, a regeneration - queues here, and reads the
+-- conversation as the one before it left it.
 SELECT *
 FROM conversations
 WHERE id = $1
 FOR UPDATE;
-
--- name: SetCurrentInput :exec
--- Moves the reader to this user message, a leaf of the conversation, and notes
--- that it was the branch shown just now (see PickBranchLeaf).
-WITH shown AS (
-    UPDATE messages
-        SET shown_at = clock_timestamp()
-        WHERE messages.id = sqlc.arg('input_id')
-            AND messages.conversation_id = sqlc.arg('conversation_id'))
-UPDATE conversations
-SET current_input_id = sqlc.arg('input_id')
-WHERE conversations.id = sqlc.arg('conversation_id');

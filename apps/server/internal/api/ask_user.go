@@ -26,11 +26,10 @@ import (
 // the reader sees one reply, and regenerating or editing it takes both away.
 //
 // Which question can be answered is a question about the transcript, not about
-// a flag: it is the last visible row, an assistant row of a run that is
-// awaiting input, calling ask_user with that id. Anything written after it —
-// the user typing a message instead, an answer — makes it a question that was
-// skipped or answered, and anything hidden by a redo is not visible to begin
-// with. An unanswered call that is skipped is closed off when the next request
+// a flag: it is the last row, an assistant row of a run that is awaiting
+// input, calling ask_user with that id. Anything written after it — the user
+// typing a message instead, an answer — makes it a question that was skipped
+// or answered, and one deleted by a redo is not there to be found. An unanswered call that is skipped is closed off when the next request
 // is built (agent.BuildContext), so nothing is written to it.
 
 var errNotPending = httpx.NewError(http.StatusConflict, "not_pending",
@@ -95,14 +94,16 @@ func (s *Server) AnswerQuestion(w http.ResponseWriter, r *http.Request, conversa
 	)
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
-		// A switch of branch queued ahead of this may have taken the question
-		// off the path; it is looked for again below, with the conversation held.
+		// An edit or a regeneration queued ahead of this may have deleted the
+		// question; it is looked for again below, with the conversation held.
 		if _, err := q.LockConversation(ctx, conversationId); err != nil {
 			return err
 		}
 		// Two answers to one question queue here, and the second finds the
 		// first's and is refused.
-		if _, err := q.LockRun(ctx, asked.run.ID); err != nil {
+		if _, err := q.LockRun(ctx, asked.run.ID); errors.Is(err, pgx.ErrNoRows) {
+			return errNotPending
+		} else if err != nil {
 			return err
 		}
 		if _, err := pendingQuestion(ctx, q, conversationId, callId); err != nil {

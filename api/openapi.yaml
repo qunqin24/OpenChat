@@ -790,7 +790,7 @@ paths:
           in: query
           description: |
             Only conversations whose title or any message's text contains this,
-            ignoring case — every branch, not only the one on show. A
+            ignoring case. A
             conversation found by what was said in it carries `match`. Keep it
             the same while following `nextCursor`.
           schema: { type: string, maxLength: 200 }
@@ -990,16 +990,18 @@ paths:
       tags: [messages]
       summary: Ask a question again, reworded
       description: |
-        Starts a new branch from any question on the branch shown. The new
-        wording is written as a new user message with the same parent as the
-        one edited — a sibling, `editOf` the first version of the question —
-        and becomes the conversation's current leaf; a run answers it, with the
-        model, effort and web choice given, as sending does, and sees only the
-        messages before it. What followed the edited question is not deleted:
-        it is off the branch shown and comes back when the question's
-        `branches` pager is switched back (`switchVersion`). The new message
-        carries the edited one's files. 409 `not_on_path` when the message is
-        not on the branch shown, `conversation_busy` while a run is going.
+        Replaces a question, and everything after it, with the question reworded.
+        The message edited and every message after it (answers, tool results and
+        the questions that followed) are deleted for good, and the new wording is
+        written at the end of what is left as a new user message, which a run
+        answers with the model, effort and web choice given, as sending does. It
+        sees only the messages before it. Nothing is kept to go back to. The new
+        message carries the edited one's files; those of the messages deleted
+        with it are removed. Any question can be edited, not only the last.
+        409 `conversation_busy` while a run is going; 404 `message_not_found`
+        when the message is not a user message of the conversation. The
+        conversation's other followers (another tab) are told with a
+        `transcript_changed` event in the batch that starts the run.
       operationId: editMessage
       requestBody:
         required: true
@@ -1014,40 +1016,6 @@ paths:
               schema: { $ref: "#/components/schemas/CreateMessageResponse" }
         default: { $ref: "#/components/responses/Error" }
 
-  /conversations/{conversationId}/messages/{messageId}/switch:
-    parameters:
-      - { $ref: "#/components/parameters/ConversationId" }
-      - name: messageId
-        in: path
-        required: true
-        schema: { type: string, format: uuid }
-    post:
-      tags: [messages]
-      summary: Show another version of a question, and the branch under it
-      description: |
-        Moves the conversation to another version of a question (a message of
-        the branch shown's `branches`, see `Message.branches`): the shown
-        branch then runs through that version and on to the end of the branch
-        under it that was last worked on, so the turns that followed it come
-        back, and the ones that followed the version just left are set aside.
-        Every later request is built from, and every page of messages is read
-        along, the new branch.
-
-        Responds with the newest page of the new branch (as `listMessages`
-        without `before`), which replaces the transcript the client holds.
-        409 `not_on_path` when the message is not a version of a question on
-        the branch shown, `conversation_busy` while a run is going.
-      operationId: switchVersion
-      parameters:
-        - { $ref: "#/components/parameters/Limit" }
-      responses:
-        "200":
-          description: the newest page of the branch now shown, oldest first
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/MessagePage" }
-        default: { $ref: "#/components/responses/Error" }
-
   /conversations/{conversationId}/regenerate:
     parameters:
       - { $ref: "#/components/parameters/ConversationId" }
@@ -1055,12 +1023,15 @@ paths:
       tags: [messages]
       summary: Answer the last message again
       description: |
-        Starts another run on the last user message of the branch shown, with the
+        Deletes the answer to the last user message - every row after it, and
+        the runs that made them, those that carried on after a question the
+        model asked included - and starts another run on that message, with the
         model, effort and web choice given (else the conversation's, which it
-        then remembers, as sending does). The answer it replaces is kept as a
-        version (`Message.versions`, `chooseAnswer`) but is no longer shown or
-        sent to a model. Followed on the events stream like any run; 409
-        `conversation_busy` while one is going, 404 `nothing_to_answer` in a
+        then remembers, as sending does). The old answer is gone, not kept.
+        Followed on the events stream like any run, which also tells the
+        conversation's other followers (`transcript_changed`); 409
+        `conversation_busy` while one is going, `not_latest` when a message
+        was added since the caller looked, 404 `nothing_to_answer` in a
         conversation with no message.
       operationId: regenerateAnswer
       requestBody:
@@ -1098,7 +1069,7 @@ paths:
 
         Only the question at the end of the transcript can be answered: 409
         `not_pending` for one already answered, one the user wrote past, one
-        whose answer was redone, or a call that is not an `ask_user` waiting
+        whose answer was deleted, or a call that is not an `ask_user` waiting
         for its answer. 409 `conversation_busy` while a run is going; 400
         `invalid_answers` when the answers do not fit the questions.
       operationId: answerQuestion
@@ -1160,33 +1131,6 @@ paths:
         "202": { description: the run was asked to stop }
         default: { $ref: "#/components/responses/Error" }
 
-  /conversations/{conversationId}/runs/{runId}/choose:
-    parameters:
-      - { $ref: "#/components/parameters/ConversationId" }
-      - name: runId
-        in: path
-        required: true
-        schema: { type: string, format: uuid }
-    post:
-      tags: [messages]
-      summary: Show another version of the last answer
-      description: |
-        Makes this run the answer shown — and the one a later message builds
-        on — in place of the other versions of the same input (see
-        `Message.versions`). Only the last turn of the branch shown can
-        switch: an earlier one has later turns built on the version it shows,
-        so it answers 409 `not_latest`, as it does while a run is going
-        (`conversation_busy`). Responds with the run's input, then the run's
-        rows: together they replace the turn the client holds.
-      operationId: chooseAnswer
-      responses:
-        "200":
-          description: the run's question, then its rows, oldest first
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/MessagePage" }
-        default: { $ref: "#/components/responses/Error" }
-
   /me/avatar:
     put:
       tags: [auth]
@@ -1234,9 +1178,8 @@ paths:
       summary: Download your conversations
       description: |
         Every conversation of yours that is kept (not deleted, not temporary)
-        with the messages of the branch it shows — the text of what was asked
-        and answered, with the names of the files sent, not tool traces or
-        other branches. Written as it is read, one conversation at a time, so
+        with its messages - the text of what was asked and answered, with the
+        names of the files sent, not tool traces. Written as it is read, one conversation at a time, so
         the size of the history does not decide the memory this takes. Always
         the caller's own; there is no way to name another account.
       operationId: exportMyConversations
@@ -1545,7 +1488,7 @@ paths:
       summary: Answer a guest's message, stateless
       description: |
         The one request that needs a model. The body carries everything the
-        server would have read from a database: the conversation's path as the
+        server would have read from a database: the conversation as the
         browser holds it, the new message (or which answer to redo, or the
         answers to a question), the guest's custom instructions and memories.
         The server writes them as rows of a user that exists for this request
@@ -1892,28 +1835,6 @@ components:
         attachments:
           type: array
           items: { $ref: "#/components/schemas/Attachment" }
-        versions:
-          type: array
-          description: |
-            User messages whose question was answered more than once, by
-            regenerating: every run that answered it, oldest first. One of them
-            is shown — the `runId` of the rows that follow — and the others are
-            kept to switch back to (`chooseAnswer`).
-          items: { type: string, format: uuid }
-        branches:
-          type: array
-          description: |
-            User messages whose question has other versions (it was asked
-            again in new words, `editMessage`): the message and its siblings —
-            the messages that follow the same parent — oldest first. One of
-            them is on the branch shown and the others are kept, with what
-            followed them, to switch to (`switchVersion`). Absent when the
-            question has only one version.
-          items: { type: string, format: uuid }
-        editOf:
-          type: string
-          format: uuid
-          description: User messages only. The first version of the question this one rewords.
         providerState:
           type: string
           description: |
@@ -2140,7 +2061,7 @@ components:
           description: |
             Set on the run that goes on after a question was answered: the run
             that began the answer (never a middle one). Its rows show in the
-            same reply, and the two are one version of the turn.
+            same reply.
         version:
           type: integer
           format: int64
@@ -2235,7 +2156,7 @@ components:
         - $ref: "#/components/schemas/ToolFinishedEvent"
         - $ref: "#/components/schemas/RetryScheduledEvent"
         - $ref: "#/components/schemas/TitleChangedEvent"
-        - $ref: "#/components/schemas/BranchChangedEvent"
+        - $ref: "#/components/schemas/TranscriptChangedEvent"
       discriminator:
         propertyName: type
         mapping:
@@ -2250,7 +2171,7 @@ components:
           tool_finished: "#/components/schemas/ToolFinishedEvent"
           retry_scheduled: "#/components/schemas/RetryScheduledEvent"
           title_changed: "#/components/schemas/TitleChangedEvent"
-          branch_changed: "#/components/schemas/BranchChangedEvent"
+          transcript_changed: "#/components/schemas/TranscriptChangedEvent"
 
     RunStartedEvent:
       type: object
@@ -2347,22 +2268,20 @@ components:
         type: { type: string, const: title_changed }
         title: { type: string }
 
-    BranchChangedEvent:
+    TranscriptChangedEvent:
       type: object
       description: |
-        The transcript the conversation shows changed without a run having
-        written it: another version of a question was switched to
-        (`switchVersion`), another answer to the last question was chosen
-        (`chooseAnswer`), or a question was edited (`editMessage`, which also
-        starts a run, announced in the same batch). A client that holds a
-        transcript of the conversation — another tab, say — fetches its newest
-        page again; nothing in the event says what changed, because what the
-        transcript now is lives in `listMessages`. For a switch or a choice it
-        comes in a batch of its own, under the nil run id and version 0, so it
-        is no step of any run.
+        Rows the conversation showed were deleted (`editMessage` removes a
+        question and what followed it, `regenerateAnswer` removes the answer),
+        so the transcript is no longer the old one with rows added to it. A
+        client that holds a transcript of the conversation - another tab, say -
+        fetches its newest page again and drops what it held that the page does
+        not contain; nothing in the event says what went, because what the
+        transcript is lives in `listMessages`. It comes in the same batch as the
+        `run_started` of the run that follows, under that run's id and version.
       required: [type]
       properties:
-        type: { type: string, const: branch_changed }
+        type: { type: string, const: transcript_changed }
 
     ConversationExport:
       type: object
@@ -2386,7 +2305,7 @@ components:
         updatedAt: { type: string, format: date-time }
         messages:
           type: array
-          description: The branch shown, oldest first.
+          description: The conversation, oldest first.
           items: { $ref: "#/components/schemas/ExportedMessage" }
 
     ExportedMessage:
@@ -3062,9 +2981,8 @@ components:
           enum: [send, regenerate, answer]
           description: |
             `send`: `input` is a new message after `messages` (also an edit:
-            `editOf` names the question it rewords, and `messages` ends
-            before that question). `regenerate`: answer the last message of
-            `messages` again. `answer`: `callId` and `answers` are the reply to
+            `messages` ends before the question it rewords). `regenerate`:
+            answer the last message of `messages` again. `answer`: `callId` and `answers` are the reply to
             the question the last row of `messages` asks.
         conversationId: { type: string, format: uuid }
         temporary: { type: boolean }
@@ -3074,18 +2992,13 @@ components:
         messages:
           type: array
           description: |
-            The branch shown, root to leaf, in order, with each question's one
-            answer that is shown. For `send` it stops before `input`; for
+            The conversation, in order. For `send` it stops before `input`; for
             `regenerate` it ends with the question and without the answer being
             redone.
           items: { $ref: "#/components/schemas/GuestMessage" }
         input:
           description: For `send`.
           allOf: [{ $ref: "#/components/schemas/GuestMessage" }]
-        editOf:
-          type: string
-          format: uuid
-          description: For `send` that rewords a question; echoed on the input's events.
         callId: { type: string }
         answers:
           type: array

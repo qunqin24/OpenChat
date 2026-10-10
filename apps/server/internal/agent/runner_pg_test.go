@@ -191,27 +191,18 @@ func (f *fixture) admit(text string) sqlc.Run {
 	return run
 }
 
-// appendInput writes a user message after the conversation's current leaf and
-// becomes the new one, as the handlers do.
+// appendInput writes a user message at the end of the conversation, as the
+// handlers do.
 func (f *fixture) appendInput(text string) sqlc.Message {
 	f.t.Helper()
-	ctx := context.Background()
-	var parent *uuid.UUID
-	if leaf, err := f.q.GetCurrentInput(ctx, f.conv); err == nil {
-		parent = &leaf.ID
-	}
-	input, err := f.q.AppendEntry(ctx, sqlc.AppendEntryParams{
+	input, err := f.q.AppendEntry(context.Background(), sqlc.AppendEntryParams{
 		ConversationID: f.conv,
 		Role:           sqlc.MessageRoleUser,
 		Content:        text,
 		Parts:          EncodeParts([]llm.Part{llm.TextPart{Text: text}}),
 		Status:         sqlc.MessageStatusComplete,
-		ParentInputID:  parent,
 	})
 	if err != nil {
-		f.t.Fatal(err)
-	}
-	if err := f.q.SetCurrentInput(ctx, sqlc.SetCurrentInputParams{ConversationID: f.conv, InputID: &input.ID}); err != nil {
 		f.t.Fatal(err)
 	}
 	return input

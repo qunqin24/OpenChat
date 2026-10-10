@@ -430,12 +430,15 @@ type Conversation struct {
 	WebSearch       bool               `json:"web_search"`
 	MemorySnapshot  []byte             `json:"memory_snapshot"`
 	Temporary       bool               `json:"temporary"`
-	CurrentInputID  *uuid.UUID         `json:"current_input_id"`
 }
 
 type GuestRequest struct {
 	Ip        string             `json:"ip"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type LinearKeep struct {
+	ID interface{} `json:"id"`
 }
 
 type MemoryEvent struct {
@@ -467,9 +470,6 @@ type Message struct {
 	Usage          []byte             `json:"usage"`
 	ErrorCode      *string            `json:"error_code"`
 	RunID          *uuid.UUID         `json:"run_id"`
-	EditOf         *uuid.UUID         `json:"edit_of"`
-	ParentInputID  *uuid.UUID         `json:"parent_input_id"`
-	ShownAt        pgtype.Timestamptz `json:"shown_at"`
 }
 
 type ModelOverride struct {
@@ -505,7 +505,6 @@ type Run struct {
 	FinishedAt      pgtype.Timestamptz `json:"finished_at"`
 	ReasoningEffort *string            `json:"reasoning_effort"`
 	WebSearch       bool               `json:"web_search"`
-	Superseded      bool               `json:"superseded"`
 	Continues       *uuid.UUID         `json:"continues"`
 }
 

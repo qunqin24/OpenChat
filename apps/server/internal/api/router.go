@@ -119,11 +119,9 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 			r.Post("/conversations/{conversationId}/messages", wrapper.CreateMessage)
 			r.Get("/conversations/{conversationId}/events", wrapper.StreamConversationEvents)
 			r.Post("/conversations/{conversationId}/messages/{messageId}/edit", wrapper.EditMessage)
-			r.Post("/conversations/{conversationId}/messages/{messageId}/switch", wrapper.SwitchVersion)
 			r.Post("/conversations/{conversationId}/regenerate", wrapper.RegenerateAnswer)
 			r.Post("/conversations/{conversationId}/tool-calls/{callId}/answer", wrapper.AnswerQuestion)
 			r.Post("/conversations/{conversationId}/runs/{runId}/cancel", wrapper.CancelRun)
-			r.Post("/conversations/{conversationId}/runs/{runId}/choose", wrapper.ChooseAnswer)
 			r.Get("/conversations/{conversationId}/images", wrapper.GetConversationImage)
 
 			// Any signed-in user: these are the models a conversation can use,

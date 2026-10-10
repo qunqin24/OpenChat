@@ -14,16 +14,15 @@ import (
 
 const appendEntry = `-- name: AppendEntry :one
 INSERT INTO messages (id, conversation_id, role, content, parts, status, run_id,
-                      stop_reason, model, provider, usage, error_code, edit_of, parent_input_id,
+                      stop_reason, model, provider, usage, error_code,
                       created_at, updated_at)
 VALUES (COALESCE($1::uuid, gen_random_uuid()),
         $2, $3, $4, $5,
         $6, $7, $8, $9,
-        $10, $11, $12, $13,
-        $14,
-        COALESCE($15::timestamptz, clock_timestamp()),
-        COALESCE($15::timestamptz, clock_timestamp()))
-RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, edit_of, parent_input_id, shown_at
+        $10, $11, $12,
+        COALESCE($13::timestamptz, clock_timestamp()),
+        COALESCE($13::timestamptz, clock_timestamp()))
+RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
 `
 
 type AppendEntryParams struct {
@@ -39,8 +38,6 @@ type AppendEntryParams struct {
 	Provider       *string            `json:"provider"`
 	Usage          []byte             `json:"usage"`
 	ErrorCode      *string            `json:"error_code"`
-	EditOf         *uuid.UUID         `json:"edit_of"`
-	ParentInputID  *uuid.UUID         `json:"parent_input_id"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
@@ -51,10 +48,6 @@ type AppendEntryParams struct {
 // created_at is the wall clock, not now(): now() is the transaction's start, so
 // two rows written by one commit would tie and fall back to ordering by a
 // random uuid.
-//
-// A user message is written with the input it follows (`parent_input_id`, null
-// for a conversation's first) and then made the conversation's current leaf
-// with SetCurrentInput; no other row has a parent.
 //
 // `id` and `created_at` are for guest mode, which writes a transcript the
 // browser kept, under the ids and in the order the browser has it; every other
@@ -73,8 +66,6 @@ func (q *Queries) AppendEntry(ctx context.Context, arg AppendEntryParams) (Messa
 		arg.Provider,
 		arg.Usage,
 		arg.ErrorCode,
-		arg.EditOf,
-		arg.ParentInputID,
 		arg.CreatedAt,
 	)
 	var i Message
@@ -94,9 +85,6 @@ func (q *Queries) AppendEntry(ctx context.Context, arg AppendEntryParams) (Messa
 		&i.Usage,
 		&i.ErrorCode,
 		&i.RunID,
-		&i.EditOf,
-		&i.ParentInputID,
-		&i.ShownAt,
 	)
 	return i, err
 }
@@ -106,7 +94,7 @@ UPDATE messages
 SET content    = content || $1::text,
     updated_at = now()
 WHERE id = $2
-RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, edit_of, parent_input_id, shown_at
+RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
 `
 
 type AppendMessageContentParams struct {
@@ -133,9 +121,6 @@ func (q *Queries) AppendMessageContent(ctx context.Context, arg AppendMessageCon
 		&i.Usage,
 		&i.ErrorCode,
 		&i.RunID,
-		&i.EditOf,
-		&i.ParentInputID,
-		&i.ShownAt,
 	)
 	return i, err
 }
@@ -143,7 +128,7 @@ func (q *Queries) AppendMessageContent(ctx context.Context, arg AppendMessageCon
 const createMessage = `-- name: CreateMessage :one
 INSERT INTO messages (conversation_id, role, content, status)
 VALUES ($1, $2, $3, $4)
-RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, edit_of, parent_input_id, shown_at
+RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
 `
 
 type CreateMessageParams struct {
@@ -177,11 +162,89 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (M
 		&i.Usage,
 		&i.ErrorCode,
 		&i.RunID,
-		&i.EditOf,
-		&i.ParentInputID,
-		&i.ShownAt,
 	)
 	return i, err
+}
+
+const deleteAnswerTo = `-- name: DeleteAnswerTo :exec
+WITH rows AS (
+    DELETE FROM messages
+        USING messages question
+        WHERE question.id = $1
+            AND messages.conversation_id = $2
+            AND messages.role <> 'user'
+            AND (messages.created_at, messages.id) > (question.created_at, question.id)
+        RETURNING messages.id)
+DELETE
+FROM runs
+WHERE runs.input_message_id = $1
+`
+
+type DeleteAnswerToParams struct {
+	InputID        uuid.UUID `json:"input_id"`
+	ConversationID uuid.UUID `json:"conversation_id"`
+}
+
+// Deletes the answer to a question: every run on it - the ones that carry on
+// after a question the model asked included - and every row that follows it.
+// A question is only regenerated while it is the last one, so what follows it
+// is its answer. Files hang on user messages only, so there are none to hand
+// back.
+func (q *Queries) DeleteAnswerTo(ctx context.Context, arg DeleteAnswerToParams) error {
+	_, err := q.db.Exec(ctx, deleteAnswerTo, arg.InputID, arg.ConversationID)
+	return err
+}
+
+const deleteTranscriptFrom = `-- name: DeleteTranscriptFrom :many
+WITH gone AS (
+    DELETE FROM messages
+        WHERE messages.conversation_id = $1
+            AND (messages.created_at, messages.id) >= ($2::timestamptz, $3::uuid)
+            AND messages.id <> $4::uuid
+        RETURNING messages.id)
+SELECT a.storage_key
+FROM attachments a
+WHERE a.message_id IN (SELECT id FROM gone)
+`
+
+type DeleteTranscriptFromParams struct {
+	ConversationID uuid.UUID          `json:"conversation_id"`
+	FromCreatedAt  pgtype.Timestamptz `json:"from_created_at"`
+	FromID         uuid.UUID          `json:"from_id"`
+	KeepID         uuid.UUID          `json:"keep_id"`
+}
+
+// Deletes the row given and every row after it in the conversation, except
+// one to keep (the question that replaces the first of them, written before
+// this runs). That is what editing a question does: it and everything after
+// it is gone for good. The runs of the questions deleted go with them
+// (runs.input_message_id cascades), while a run's other rows only lose their
+// run_id, which is why every row is deleted by its place and not by its run.
+// Hands back the storage keys of the files that were attached, in the same
+// statement, for the caller to delete once this commits (cleanup.go).
+func (q *Queries) DeleteTranscriptFrom(ctx context.Context, arg DeleteTranscriptFromParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, deleteTranscriptFrom,
+		arg.ConversationID,
+		arg.FromCreatedAt,
+		arg.FromID,
+		arg.KeepID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var storage_key string
+		if err := rows.Scan(&storage_key); err != nil {
+			return nil, err
+		}
+		items = append(items, storage_key)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const finishMessage = `-- name: FinishMessage :one
@@ -190,7 +253,7 @@ SET content    = $1,
     status     = $2,
     updated_at = now()
 WHERE id = $3
-RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, edit_of, parent_input_id, shown_at
+RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
 `
 
 type FinishMessageParams struct {
@@ -218,50 +281,12 @@ func (q *Queries) FinishMessage(ctx context.Context, arg FinishMessageParams) (M
 		&i.Usage,
 		&i.ErrorCode,
 		&i.RunID,
-		&i.EditOf,
-		&i.ParentInputID,
-		&i.ShownAt,
-	)
-	return i, err
-}
-
-const getCurrentInput = `-- name: GetCurrentInput :one
-SELECT messages.id, messages.conversation_id, messages.role, messages.content, messages.status, messages.metadata, messages.created_at, messages.updated_at, messages.parts, messages.stop_reason, messages.model, messages.provider, messages.usage, messages.error_code, messages.run_id, messages.edit_of, messages.parent_input_id, messages.shown_at
-FROM messages
-         JOIN conversations c ON c.current_input_id = messages.id
-WHERE c.id = $1
-`
-
-// The conversation's last user message on the branch shown: the one a
-// regenerated answer answers, and where a new message is appended.
-func (q *Queries) GetCurrentInput(ctx context.Context, id uuid.UUID) (Message, error) {
-	row := q.db.QueryRow(ctx, getCurrentInput, id)
-	var i Message
-	err := row.Scan(
-		&i.ID,
-		&i.ConversationID,
-		&i.Role,
-		&i.Content,
-		&i.Status,
-		&i.Metadata,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Parts,
-		&i.StopReason,
-		&i.Model,
-		&i.Provider,
-		&i.Usage,
-		&i.ErrorCode,
-		&i.RunID,
-		&i.EditOf,
-		&i.ParentInputID,
-		&i.ShownAt,
 	)
 	return i, err
 }
 
 const getInput = `-- name: GetInput :one
-SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, edit_of, parent_input_id, shown_at
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
 FROM messages
 WHERE id = $1
   AND conversation_id = $2
@@ -273,7 +298,7 @@ type GetInputParams struct {
 	ConversationID uuid.UUID `json:"conversation_id"`
 }
 
-// A user message of the conversation, wherever it is in the tree.
+// A user message of the conversation.
 func (q *Queries) GetInput(ctx context.Context, arg GetInputParams) (Message, error) {
 	row := q.db.QueryRow(ctx, getInput, arg.ID, arg.ConversationID)
 	var i Message
@@ -293,15 +318,45 @@ func (q *Queries) GetInput(ctx context.Context, arg GetInputParams) (Message, er
 		&i.Usage,
 		&i.ErrorCode,
 		&i.RunID,
-		&i.EditOf,
-		&i.ParentInputID,
-		&i.ShownAt,
+	)
+	return i, err
+}
+
+const getLastInput = `-- name: GetLastInput :one
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
+FROM messages
+WHERE conversation_id = $1
+  AND role = 'user'
+ORDER BY created_at DESC, id DESC
+LIMIT 1
+`
+
+// The conversation's last user message: the one a regenerated answer answers.
+func (q *Queries) GetLastInput(ctx context.Context, conversationID uuid.UUID) (Message, error) {
+	row := q.db.QueryRow(ctx, getLastInput, conversationID)
+	var i Message
+	err := row.Scan(
+		&i.ID,
+		&i.ConversationID,
+		&i.Role,
+		&i.Content,
+		&i.Status,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Parts,
+		&i.StopReason,
+		&i.Model,
+		&i.Provider,
+		&i.Usage,
+		&i.ErrorCode,
+		&i.RunID,
 	)
 	return i, err
 }
 
 const getMessage = `-- name: GetMessage :one
-SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, edit_of, parent_input_id, shown_at
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
 FROM messages
 WHERE id = $1
 `
@@ -325,34 +380,14 @@ func (q *Queries) GetMessage(ctx context.Context, id uuid.UUID) (Message, error)
 		&i.Usage,
 		&i.ErrorCode,
 		&i.RunID,
-		&i.EditOf,
-		&i.ParentInputID,
-		&i.ShownAt,
 	)
 	return i, err
 }
 
-const inputOnPath = `-- name: InputOnPath :one
-SELECT EXISTS (SELECT 1 FROM conversation_path($1) AS p WHERE p = $2::uuid) AS on_path
-`
-
-type InputOnPathParams struct {
-	ConversationID uuid.UUID `json:"conversation_id"`
-	ID             uuid.UUID `json:"id"`
-}
-
-func (q *Queries) InputOnPath(ctx context.Context, arg InputOnPathParams) (bool, error) {
-	row := q.db.QueryRow(ctx, inputOnPath, arg.ConversationID, arg.ID)
-	var on_path bool
-	err := row.Scan(&on_path)
-	return on_path, err
-}
-
 const listMessages = `-- name: ListMessages :many
-SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, edit_of, parent_input_id, shown_at
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
 FROM messages
 WHERE messages.conversation_id = $1
-  AND messages.id IN (SELECT conversation_transcript($1))
   AND ($2::timestamptz IS NULL
     OR (created_at, id) < ($2::timestamptz, $3::uuid))
 ORDER BY created_at DESC, id DESC
@@ -368,8 +403,8 @@ type ListMessagesParams struct {
 
 // A page of the transcript from its end: the newest rows, or with a cursor the
 // rows older than it. Newest first, so the limit keeps the end; the caller
-// turns the page around. The transcript is the branch shown (see
-// conversation_transcript), so the cursor walks back along it.
+// turns the page around. The transcript is every row of the conversation: what
+// is replaced is deleted, so there is nothing else in it.
 func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error) {
 	rows, err := q.db.Query(ctx, listMessages,
 		arg.ConversationID,
@@ -400,9 +435,6 @@ func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]M
 			&i.Usage,
 			&i.ErrorCode,
 			&i.RunID,
-			&i.EditOf,
-			&i.ParentInputID,
-			&i.ShownAt,
 		); err != nil {
 			return nil, err
 		}
@@ -415,11 +447,10 @@ func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]M
 }
 
 const listRecentMessages = `-- name: ListRecentMessages :many
-SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, edit_of, parent_input_id, shown_at
-FROM (SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, edit_of, parent_input_id, shown_at
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
+FROM (SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
       FROM messages
       WHERE messages.conversation_id = $1
-        AND messages.id IN (SELECT conversation_transcript($1))
       ORDER BY created_at DESC, id DESC
       LIMIT $2) recent
 ORDER BY created_at, id
@@ -430,10 +461,9 @@ type ListRecentMessagesParams struct {
 	RowLimit       int32     `json:"row_limit"`
 }
 
-// The newest rows of the branch shown, oldest first: the raw material of a
+// The newest rows of the conversation, oldest first: the raw material of a
 // model request. Newest, not oldest — a long conversation is answered from its
-// end. Only the path counts as history: what followed a version set aside by an
-// edit is not, and neither is an answer that was regenerated.
+// end.
 func (q *Queries) ListRecentMessages(ctx context.Context, arg ListRecentMessagesParams) ([]Message, error) {
 	rows, err := q.db.Query(ctx, listRecentMessages, arg.ConversationID, arg.RowLimit)
 	if err != nil {
@@ -459,9 +489,6 @@ func (q *Queries) ListRecentMessages(ctx context.Context, arg ListRecentMessages
 			&i.Usage,
 			&i.ErrorCode,
 			&i.RunID,
-			&i.EditOf,
-			&i.ParentInputID,
-			&i.ShownAt,
 		); err != nil {
 			return nil, err
 		}
@@ -474,7 +501,7 @@ func (q *Queries) ListRecentMessages(ctx context.Context, arg ListRecentMessages
 }
 
 const listRunMessages = `-- name: ListRunMessages :many
-SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, edit_of, parent_input_id, shown_at
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
 FROM messages
 WHERE messages.run_id = $1
    OR messages.run_id IN (SELECT r.id FROM runs r WHERE r.continues = $1)
@@ -515,9 +542,6 @@ func (q *Queries) ListRunMessages(ctx context.Context, arg ListRunMessagesParams
 			&i.Usage,
 			&i.ErrorCode,
 			&i.RunID,
-			&i.EditOf,
-			&i.ParentInputID,
-			&i.ShownAt,
 		); err != nil {
 			return nil, err
 		}
@@ -530,15 +554,14 @@ func (q *Queries) ListRunMessages(ctx context.Context, arg ListRunMessagesParams
 }
 
 const listTranscript = `-- name: ListTranscript :many
-SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, edit_of, parent_input_id, shown_at
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
 FROM messages
 WHERE messages.conversation_id = $1
-  AND messages.id IN (SELECT conversation_transcript($1))
   AND messages.role <> 'tool'
 ORDER BY created_at, id
 `
 
-// The branch shown, oldest first and whole, for an export. Tool results are
+// The conversation, oldest first and whole, for an export. Tool results are
 // left out: they are the model's working, and some are whole web pages.
 func (q *Queries) ListTranscript(ctx context.Context, conversationID uuid.UUID) ([]Message, error) {
 	rows, err := q.db.Query(ctx, listTranscript, conversationID)
@@ -565,9 +588,6 @@ func (q *Queries) ListTranscript(ctx context.Context, conversationID uuid.UUID) 
 			&i.Usage,
 			&i.ErrorCode,
 			&i.RunID,
-			&i.EditOf,
-			&i.ParentInputID,
-			&i.ShownAt,
 		); err != nil {
 			return nil, err
 		}
@@ -579,94 +599,22 @@ func (q *Queries) ListTranscript(ctx context.Context, conversationID uuid.UUID) 
 	return items, nil
 }
 
-const listVersions = `-- name: ListVersions :many
-SELECT m.id AS message_id, s.id AS version_id
-FROM messages m
-         CROSS JOIN LATERAL (SELECT x.id, x.created_at
-                             FROM messages x
-                             WHERE x.parent_input_id = m.parent_input_id
-                             UNION ALL
-                             SELECT x.id, x.created_at
-                             FROM messages x
-                             WHERE m.parent_input_id IS NULL
-                               AND x.conversation_id = m.conversation_id
-                               AND x.role = 'user'
-                               AND x.parent_input_id IS NULL) s
-WHERE m.id = ANY ($1::uuid[])
-ORDER BY m.id, s.created_at, s.id
+const moveAttachments = `-- name: MoveAttachments :exec
+UPDATE attachments
+SET message_id = $1
+WHERE message_id = $2
 `
 
-type ListVersionsRow struct {
-	MessageID uuid.UUID `json:"message_id"`
-	VersionID uuid.UUID `json:"version_id"`
+type MoveAttachmentsParams struct {
+	ToID   *uuid.UUID `json:"to_id"`
+	FromID *uuid.UUID `json:"from_id"`
 }
 
-// For each of these user messages, the versions of its question: every user
-// message with the same parent (itself included), oldest first. Roots have no
-// parent, so a conversation's first questions are found among its own.
-func (q *Queries) ListVersions(ctx context.Context, ids []uuid.UUID) ([]ListVersionsRow, error) {
-	rows, err := q.db.Query(ctx, listVersions, ids)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListVersionsRow{}
-	for rows.Next() {
-		var i ListVersionsRow
-		if err := rows.Scan(&i.MessageID, &i.VersionID); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const pathHasVersionOf = `-- name: PathHasVersionOf :one
-SELECT EXISTS (SELECT 1
-               FROM messages m
-               WHERE m.id IN (SELECT conversation_path($1))
-                 AND m.parent_input_id IS NOT DISTINCT FROM $2::uuid) AS found
-`
-
-type PathHasVersionOfParams struct {
-	ConversationID uuid.UUID  `json:"conversation_id"`
-	ParentInputID  *uuid.UUID `json:"parent_input_id"`
-}
-
-// Whether the branch shown passes through a version of this question: a
-// message with the same parent, itself included. Those are the only messages
-// the reader can switch to.
-func (q *Queries) PathHasVersionOf(ctx context.Context, arg PathHasVersionOfParams) (bool, error) {
-	row := q.db.QueryRow(ctx, pathHasVersionOf, arg.ConversationID, arg.ParentInputID)
-	var found bool
-	err := row.Scan(&found)
-	return found, err
-}
-
-const pickBranchLeaf = `-- name: PickBranchLeaf :one
-WITH RECURSIVE below (id) AS (SELECT $1::uuid
-                              UNION
-                              SELECT m.id
-                              FROM messages m
-                                       JOIN below ON m.parent_input_id = below.id)
-SELECT b.id::uuid AS id
-FROM below b
-         JOIN messages q ON q.id = b.id
-WHERE NOT EXISTS (SELECT 1 FROM messages c WHERE c.parent_input_id = b.id)
-ORDER BY q.shown_at DESC NULLS LAST, q.created_at DESC, b.id DESC
-LIMIT 1
-`
-
-// Where the reader lands when switching to this question: the end of the
-// branch below it that was last the one shown.
-func (q *Queries) PickBranchLeaf(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, pickBranchLeaf, id)
-	var id_2 uuid.UUID
-	err := row.Scan(&id_2)
-	return id_2, err
+// Hands the files of one message to another: an edited question's files go to
+// the question that replaces it.
+func (q *Queries) MoveAttachments(ctx context.Context, arg MoveAttachmentsParams) error {
+	_, err := q.db.Exec(ctx, moveAttachments, arg.ToID, arg.FromID)
+	return err
 }
 
 const toolResultMentions = `-- name: ToolResultMentions :one

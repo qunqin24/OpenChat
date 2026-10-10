@@ -77,7 +77,7 @@ const createGuestConversation = `-- name: CreateGuestConversation :one
 INSERT INTO conversations (id, user_id, title, model, reasoning_effort, web_search, temporary, memory_snapshot)
 VALUES ($1, $2, $3, $4, $5,
         $6, $7, $8::jsonb)
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, current_input_id
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary
 `
 
 type CreateGuestConversationParams struct {
@@ -117,7 +117,6 @@ func (q *Queries) CreateGuestConversation(ctx context.Context, arg CreateGuestCo
 		&i.WebSearch,
 		&i.MemorySnapshot,
 		&i.Temporary,
-		&i.CurrentInputID,
 	)
 	return i, err
 }
@@ -126,7 +125,7 @@ const createGuestStubRun = `-- name: CreateGuestStubRun :one
 INSERT INTO runs (id, conversation_id, user_id, input_message_id, model_id, channel_id, status, finished_at)
 VALUES ($1, $2, $3, $4,
         $5, $6, 'awaiting_input', now())
-RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, superseded, continues
+RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues
 `
 
 type CreateGuestStubRunParams struct {
@@ -171,7 +170,6 @@ func (q *Queries) CreateGuestStubRun(ctx context.Context, arg CreateGuestStubRun
 		&i.FinishedAt,
 		&i.ReasoningEffort,
 		&i.WebSearch,
-		&i.Superseded,
 		&i.Continues,
 	)
 	return i, err
@@ -368,7 +366,7 @@ SET cancel_requested = true,
 WHERE runs.id = $1
   AND runs.status = 'running'
   AND runs.user_id IN (SELECT users.id FROM users WHERE users.guest)
-RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, superseded, continues
+RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues
 `
 
 // Stop pressed in the guest's page. A guest's run is named by its id alone,
@@ -396,7 +394,6 @@ func (q *Queries) RequestGuestRunCancel(ctx context.Context, id uuid.UUID) (Run,
 		&i.FinishedAt,
 		&i.ReasoningEffort,
 		&i.WebSearch,
-		&i.Superseded,
 		&i.Continues,
 	)
 	return i, err

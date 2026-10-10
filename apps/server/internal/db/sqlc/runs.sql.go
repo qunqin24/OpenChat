@@ -11,32 +11,13 @@ import (
 	"github.com/google/uuid"
 )
 
-const chooseAnswer = `-- name: ChooseAnswer :exec
-UPDATE runs
-SET superseded = (COALESCE(continues, id) IS DISTINCT FROM $1::uuid)
-WHERE input_message_id = $2
-`
-
-type ChooseAnswerParams struct {
-	Keep    *uuid.UUID `json:"keep"`
-	InputID uuid.UUID  `json:"input_id"`
-}
-
-// Shows one of an input's answers and hides the rest; with no run to keep,
-// hides them all, ahead of a new one. A run that continues another is part of
-// that answer and goes or stays with it.
-func (q *Queries) ChooseAnswer(ctx context.Context, arg ChooseAnswerParams) error {
-	_, err := q.db.Exec(ctx, chooseAnswer, arg.Keep, arg.InputID)
-	return err
-}
-
 const createRun = `-- name: CreateRun :one
 INSERT INTO runs (conversation_id, user_id, input_message_id, request_id, model_id, channel_id, reasoning_effort,
                   web_search, continues)
 VALUES ($1, $2, $3,
         $4, $5, $6, $7,
         $8, $9)
-RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, superseded, continues
+RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues
 `
 
 type CreateRunParams struct {
@@ -83,7 +64,6 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 		&i.FinishedAt,
 		&i.ReasoningEffort,
 		&i.WebSearch,
-		&i.Superseded,
 		&i.Continues,
 	)
 	return i, err
@@ -99,7 +79,7 @@ SET status      = $1,
     finished_at = now()
 WHERE id = $3
   AND status = 'running'
-RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, superseded, continues
+RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues
 `
 
 type FinishRunParams struct {
@@ -132,14 +112,13 @@ func (q *Queries) FinishRun(ctx context.Context, arg FinishRunParams) (Run, erro
 		&i.FinishedAt,
 		&i.ReasoningEffort,
 		&i.WebSearch,
-		&i.Superseded,
 		&i.Continues,
 	)
 	return i, err
 }
 
 const getActiveRun = `-- name: GetActiveRun :one
-SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, superseded, continues
+SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues
 FROM runs
 WHERE conversation_id = $1
   AND status = 'running'
@@ -167,14 +146,13 @@ func (q *Queries) GetActiveRun(ctx context.Context, conversationID uuid.UUID) (R
 		&i.FinishedAt,
 		&i.ReasoningEffort,
 		&i.WebSearch,
-		&i.Superseded,
 		&i.Continues,
 	)
 	return i, err
 }
 
 const getRun = `-- name: GetRun :one
-SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, superseded, continues
+SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues
 FROM runs
 WHERE id = $1
 `
@@ -201,14 +179,13 @@ func (q *Queries) GetRun(ctx context.Context, id uuid.UUID) (Run, error) {
 		&i.FinishedAt,
 		&i.ReasoningEffort,
 		&i.WebSearch,
-		&i.Superseded,
 		&i.Continues,
 	)
 	return i, err
 }
 
 const getRunByRequestID = `-- name: GetRunByRequestID :one
-SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, superseded, continues
+SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues
 FROM runs
 WHERE conversation_id = $1
   AND request_id = $2
@@ -241,50 +218,13 @@ func (q *Queries) GetRunByRequestID(ctx context.Context, arg GetRunByRequestIDPa
 		&i.FinishedAt,
 		&i.ReasoningEffort,
 		&i.WebSearch,
-		&i.Superseded,
 		&i.Continues,
 	)
 	return i, err
 }
 
-const listAnswers = `-- name: ListAnswers :many
-SELECT r.input_message_id AS input, r.id
-FROM runs r
-WHERE r.input_message_id = ANY ($1::uuid[])
-  AND r.continues IS NULL
-ORDER BY r.created_at, r.id
-`
-
-type ListAnswersRow struct {
-	Input uuid.UUID `json:"input"`
-	ID    uuid.UUID `json:"id"`
-}
-
-// Every run that answered each of these inputs, oldest first: their versions.
-// An answer that stopped to ask a question and went on is one version, named by
-// the run that began it.
-func (q *Queries) ListAnswers(ctx context.Context, inputs []uuid.UUID) ([]ListAnswersRow, error) {
-	rows, err := q.db.Query(ctx, listAnswers, inputs)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListAnswersRow{}
-	for rows.Next() {
-		var i ListAnswersRow
-		if err := rows.Scan(&i.Input, &i.ID); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listRunningRuns = `-- name: ListRunningRuns :many
-SELECT runs.id, runs.conversation_id, runs.user_id, runs.input_message_id, runs.request_id, runs.model_id, runs.channel_id, runs.status, runs.checkpoint, runs.live, runs.version, runs.cancel_requested, runs.error_code, runs.created_at, runs.updated_at, runs.finished_at, runs.reasoning_effort, runs.web_search, runs.superseded, runs.continues
+SELECT runs.id, runs.conversation_id, runs.user_id, runs.input_message_id, runs.request_id, runs.model_id, runs.channel_id, runs.status, runs.checkpoint, runs.live, runs.version, runs.cancel_requested, runs.error_code, runs.created_at, runs.updated_at, runs.finished_at, runs.reasoning_effort, runs.web_search, runs.continues
 FROM runs
          JOIN users ON users.id = runs.user_id
 WHERE runs.status = 'running'
@@ -323,7 +263,6 @@ func (q *Queries) ListRunningRuns(ctx context.Context) ([]Run, error) {
 			&i.FinishedAt,
 			&i.ReasoningEffort,
 			&i.WebSearch,
-			&i.Superseded,
 			&i.Continues,
 		); err != nil {
 			return nil, err
@@ -337,7 +276,7 @@ func (q *Queries) ListRunningRuns(ctx context.Context) ([]Run, error) {
 }
 
 const lockRun = `-- name: LockRun :one
-SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, superseded, continues
+SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues
 FROM runs
 WHERE id = $1
 FOR UPDATE
@@ -367,7 +306,6 @@ func (q *Queries) LockRun(ctx context.Context, id uuid.UUID) (Run, error) {
 		&i.FinishedAt,
 		&i.ReasoningEffort,
 		&i.WebSearch,
-		&i.Superseded,
 		&i.Continues,
 	)
 	return i, err
@@ -380,7 +318,7 @@ SET cancel_requested = true,
 WHERE id = $1
   AND conversation_id = $2
   AND status = 'running'
-RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, superseded, continues
+RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues
 `
 
 type RequestRunCancelParams struct {
@@ -410,7 +348,6 @@ func (q *Queries) RequestRunCancel(ctx context.Context, arg RequestRunCancelPara
 		&i.FinishedAt,
 		&i.ReasoningEffort,
 		&i.WebSearch,
-		&i.Superseded,
 		&i.Continues,
 	)
 	return i, err
@@ -424,7 +361,7 @@ SET checkpoint = $1,
     updated_at = now()
 WHERE id = $3
   AND status = 'running'
-RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, superseded, continues
+RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues
 `
 
 type SaveRunStateParams struct {
@@ -457,7 +394,6 @@ func (q *Queries) SaveRunState(ctx context.Context, arg SaveRunStateParams) (Run
 		&i.FinishedAt,
 		&i.ReasoningEffort,
 		&i.WebSearch,
-		&i.Superseded,
 		&i.Continues,
 	)
 	return i, err

@@ -25,7 +25,7 @@ const exportBatch = 50
 // document, as it reads them.
 //
 // A conversation at a time is all that is ever in memory: its row, the text of
-// the branch it shows, and the names of the files its questions carried. The
+// it, and the names of the files its questions carried. The
 // document is the contract's ConversationExport, assembled by hand around the
 // conversations so that none of them waits on the others.
 func (s *Server) ExportMyConversations(w http.ResponseWriter, r *http.Request) {
@@ -124,7 +124,7 @@ func (s *Server) exportPage(r *http.Request, userID uuid.UUID, at pgtype.Timesta
 	return out, nil
 }
 
-// exportConversation is one conversation's row with the text of its branch.
+// exportConversation is one conversation's row with its text.
 func (s *Server) exportConversation(r *http.Request, conv sqlc.Conversation) (ExportedConversation, error) {
 	ctx := r.Context()
 	rows, err := s.q.ListTranscript(ctx, conv.ID)
@@ -132,14 +132,10 @@ func (s *Server) exportConversation(r *http.Request, conv sqlc.Conversation) (Ex
 		return ExportedConversation{}, err
 	}
 
-	// The files a question carried. An edited question shows those of the
-	// question it rewords, which still holds them (see attachmentsFor).
+	// The files a question carried.
 	ids := make([]uuid.UUID, 0, len(rows))
 	for _, row := range rows {
 		ids = append(ids, row.ID)
-		if row.EditOf != nil {
-			ids = append(ids, *row.EditOf)
-		}
 	}
 	files := map[uuid.UUID][]sqlc.Attachment{}
 	if len(ids) > 0 {
@@ -178,9 +174,6 @@ func (s *Server) exportConversation(r *http.Request, conv sqlc.Conversation) (Ex
 			msg.Model = row.Model
 		}
 		held := files[row.ID]
-		if row.EditOf != nil {
-			held = files[*row.EditOf]
-		}
 		if row.Role == sqlc.MessageRoleUser && len(held) > 0 {
 			names := make([]exportedFile, 0, len(held))
 			for _, f := range held {

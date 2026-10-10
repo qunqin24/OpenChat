@@ -45,7 +45,7 @@ func (s *Server) ListMessages(w http.ResponseWriter, r *http.Request, conversati
 	httpx.JSON(w, http.StatusOK, page)
 }
 
-// transcriptPage is a page of the branch shown, from its end: the newest rows,
+// transcriptPage is a page of the conversation, from its end: the newest rows,
 // or with a cursor the rows older than it.
 func (s *Server) transcriptPage(ctx context.Context, conversationID uuid.UUID, cursorAt pgtype.Timestamptz, cursorID *uuid.UUID, limit int32) (MessagePage, error) {
 	rows, err := s.q.ListMessages(ctx, sqlc.ListMessagesParams{
@@ -154,13 +154,13 @@ func (s *Server) CreateMessage(w http.ResponseWriter, r *http.Request, conversat
 	)
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
-		// The message follows the leaf as it is now, not as it was read above:
-		// a switch of branch may have been queued ahead of this.
-		locked, err := q.LockConversation(ctx, conversationId)
-		if err != nil {
+		// Held, so that the message is written after whatever an edit or a
+		// regeneration queued ahead of this deleted.
+		if _, err := q.LockConversation(ctx, conversationId); err != nil {
 			return err
 		}
-		input, err = appendInput(ctx, q, locked.ID, locked.CurrentInputID, content, inputParts(content, files), nil)
+		var err error
+		input, err = appendInput(ctx, q, conversationId, nil, content, inputParts(content, files))
 		if err != nil {
 			return err
 		}
@@ -617,14 +617,9 @@ func (s *Server) attachmentsFor(ctx context.Context, rows []sqlc.Message) (map[u
 	if len(rows) == 0 {
 		return nil, nil
 	}
-	// An edited question shows the files of the question it rewords, which
-	// still holds them.
 	ids := make([]uuid.UUID, 0, len(rows))
 	for _, row := range rows {
 		ids = append(ids, row.ID)
-		if row.EditOf != nil {
-			ids = append(ids, *row.EditOf)
-		}
 	}
 
 	found, err := s.q.ListAttachmentsByMessages(ctx, ids)
@@ -645,11 +640,6 @@ func (s *Server) attachmentsFor(ctx context.Context, rows []sqlc.Message) (map[u
 			return nil, err
 		}
 		out[*a.MessageID] = append(out[*a.MessageID], signed...)
-	}
-	for _, row := range rows {
-		if row.EditOf != nil {
-			out[row.ID] = out[*row.EditOf]
-		}
 	}
 	return out, nil
 }

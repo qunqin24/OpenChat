@@ -115,7 +115,7 @@ func (m *mePG) conversation(user sqlc.User, title, question string, temporary bo
 	if err != nil {
 		m.t.Fatal(err)
 	}
-	if _, err := appendInput(ctx, m.q, conv.ID, nil, question, nil, nil); err != nil {
+	if _, err := appendInput(ctx, m.q, conv.ID, nil, question, nil); err != nil {
 		m.t.Fatal(err)
 	}
 	return conv
@@ -239,10 +239,10 @@ func TestExportAndDeleteAllAreTheCallersOwn(t *testing.T) {
 	}
 }
 
-// The export is the branch shown, as text: answers, not tool traces or the
-// versions set aside.
-func TestExportFollowsTheBranchShown(t *testing.T) {
-	b := newBranching(t)
+// The export is the conversation as text: answers, not tool traces or what
+// an edit deleted.
+func TestExportIsTheConversationAsItIs(t *testing.T) {
+	b := newRedoing(t)
 	q1, _ := b.send("q1")
 	b.send("q2")
 	b.edit(q1.Message.Id, "q1b")
@@ -266,7 +266,7 @@ func TestExportFollowsTheBranchShown(t *testing.T) {
 	for _, m := range mine.Messages {
 		got = append(got, string(m.Role)+":"+m.Content)
 	}
-	same(t, "exported branch", got, []string{"user:q1b", "assistant:re: q1b"})
+	same(t, "exported", got, []string{"user:q1b", "assistant:re: q1b"})
 	if mine.Messages[1].Model == nil || *mine.Messages[1].Model == "" {
 		t.Errorf("the answer carries no model: %+v", mine.Messages[1])
 	}

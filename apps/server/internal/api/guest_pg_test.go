@@ -619,28 +619,26 @@ func TestGuestAskUserAndRegenerate(t *testing.T) {
 	h.noGuestRows(conv)
 }
 
-func TestGuestEditKeepsBranchOut(t *testing.T) {
+// An edit is a send that ends before the question it rewords: the browser has
+// already deleted that question and what followed it, and the server is told
+// nothing else.
+func TestGuestEditIsASendBeforeTheQuestion(t *testing.T) {
 	h := newGuestHarness(t)
 	conv := uuid.New()
-	u1, a1, original, edited := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	u1, a1, edited := uuid.New(), uuid.New(), uuid.New()
 	now := time.Now()
-	// The question being edited is not in the request: the branch ends before it.
 	frames := h.run(map[string]any{
 		"action": "send", "conversationId": conv, "model": h.model, "titled": true,
 		"messages": []any{userRow(u1, "First", now.Add(-time.Hour)), assistantRow(a1, "Reply", now.Add(-time.Hour+time.Second))},
 		"input":    userRow(edited, "Second, reworded", now),
-		"editOf":   original,
 	})
 	started := frames.find("run_started")
 	if frames.status != http.StatusOK || started == nil {
 		t.Fatalf("edit: %d %v", frames.status, frames.error)
 	}
-	if got := started["message"].(map[string]any)["editOf"]; got != original.String() {
-		t.Errorf("the input does not say what it rewords: %v", got)
-	}
 	// The model is sent the first exchange and the reworded question, only.
 	body := h.requests()[0]
-	if !strings.Contains(body, "Second, reworded") || !strings.Contains(body, "Reply") || strings.Contains(body, "original") {
+	if !strings.Contains(body, "Second, reworded") || !strings.Contains(body, "Reply") {
 		t.Errorf("request: %s", body)
 	}
 	h.noGuestRows(conv)

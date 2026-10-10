@@ -40,9 +40,11 @@ import (
 // stream ends. Cascades remove the rest; the files are removed after.
 //
 // The rows are written in the shape older conversations have, before runs
-// existed: user messages chained by parent_input_id, the other rows without a
-// run, ordered by time. conversation_transcript reads that shape, so the
-// transcript the model is sent is exactly what an account's would be.
+// existed: the rows of the transcript without a run, ordered by time. A
+// conversation is its rows in order, so the transcript the model is sent is
+// exactly what an account's would be. An edit needs nothing of the server:
+// the browser has already deleted the question and what followed it, and its
+// request ends before the new wording.
 
 const (
 	// guestBodyLimit bounds a request: the path with its tool results, and the
@@ -588,23 +590,15 @@ func (s *Server) seedGuest(ctx context.Context, plan *guestPlan) (st *guestRunSt
 			}
 		}
 
-		// The transcript, in order. The user messages chain through
-		// parent_input_id; the others have no run and are read by their time.
-		var leaf *uuid.UUID
+		// The transcript, in order; the rows have no run and are read by their time.
 		var lastInput sqlc.Message
 		for _, row := range plan.rows {
-			written, err := writeGuestRow(ctx, q, st.conv.ID, userID, row, leaf)
+			written, err := writeGuestRow(ctx, q, st.conv.ID, userID, row)
 			if err != nil {
 				return err
 			}
 			if row.role == sqlc.MessageRoleUser {
-				id := row.id
-				leaf, lastInput = &id, written
-			}
-		}
-		if leaf != nil {
-			if err := q.SetCurrentInput(ctx, sqlc.SetCurrentInputParams{ConversationID: st.conv.ID, InputID: leaf}); err != nil {
-				return err
+				lastInput = written
 			}
 		}
 
@@ -612,7 +606,7 @@ func (s *Server) seedGuest(ctx context.Context, plan *guestPlan) (st *guestRunSt
 		case "send":
 			in := plan.input
 			id := in.id
-			if st.input, err = appendInputAs(ctx, q, st.conv.ID, leaf, in.content, in.parts, nil, &id); err != nil {
+			if st.input, err = appendInput(ctx, q, st.conv.ID, &id, in.content, in.parts); err != nil {
 				return err
 			}
 			if err := attachGuestFiles(ctx, q, st.input.ID, userID, in.files); err != nil {
@@ -653,7 +647,7 @@ func (s *Server) seedGuest(ctx context.Context, plan *guestPlan) (st *guestRunSt
 }
 
 // writeGuestRow writes one row of the browser's transcript.
-func writeGuestRow(ctx context.Context, q *sqlc.Queries, conversationID, userID uuid.UUID, row guestRow, parent *uuid.UUID) (sqlc.Message, error) {
+func writeGuestRow(ctx context.Context, q *sqlc.Queries, conversationID, userID uuid.UUID, row guestRow) (sqlc.Message, error) {
 	id := row.id
 	params := sqlc.AppendEntryParams{
 		ID:             &id,
@@ -667,9 +661,6 @@ func writeGuestRow(ctx context.Context, q *sqlc.Queries, conversationID, userID 
 		Usage:          row.usage,
 		ErrorCode:      row.code,
 		CreatedAt:      pgtype.Timestamptz{Time: row.at, Valid: true},
-	}
-	if row.role == sqlc.MessageRoleUser {
-		params.ParentInputID = parent
 	}
 	written, err := q.AppendEntry(ctx, params)
 	if err != nil {
@@ -875,11 +866,9 @@ func (s *Server) guestEnd(ctx context.Context, st *guestRunState, title string) 
 	return end, nil
 }
 
-// sendGuestBatch maps a batch for a guest. It differs from an account's in two
-// things: an assistant row carries its provider state, which the browser must
-// hold since the server will not, and the input of an edit says which
-// question it rewords - the row in the database cannot, as that question is
-// not there.
+// sendGuestBatch maps a batch for a guest. It differs from an account's in one
+// thing: an assistant row carries its provider state, which the browser must
+// hold since the server will not.
 func sendGuestBatch(sse *httpx.SSEWriter, batch agent.Batch, plan *guestPlan) error {
 	events := make([]RunEvent, 0, len(batch.Events))
 	for _, event := range batch.Events {
@@ -895,11 +884,7 @@ func guestRunEvent(event agent.Event, plan *guestPlan) (RunEvent, bool) {
 	var out RunEvent
 	switch e := event.(type) {
 	case agent.RunStarted:
-		message := toMessage(e.Input, nil)
-		if plan.req.EditOf != nil && plan.input != nil && e.Input.ID == plan.input.id {
-			message.EditOf = plan.req.EditOf
-		}
-		return out, out.FromRunStartedEvent(RunStartedEvent{Type: RunStarted, Run: toRun(e.Run), Message: message}) == nil
+		return out, out.FromRunStartedEvent(RunStartedEvent{Type: RunStarted, Run: toRun(e.Run), Message: toMessage(e.Input, nil)}) == nil
 	case agent.MessageAppended:
 		message := toMessage(e.Message, nil)
 		message.ProviderState = providerState(e.Message)
@@ -934,9 +919,6 @@ func (s *Server) sendGuestSnapshot(ctx context.Context, sse *httpx.SSEWriter, ru
 	for _, row := range rows {
 		message := toMessage(row, nil)
 		message.ProviderState = providerState(row)
-		if plan.req.EditOf != nil && plan.input != nil && row.ID == plan.input.id {
-			message.EditOf = plan.req.EditOf
-		}
 		snapshot.Messages = append(snapshot.Messages, message)
 	}
 	return sse.Event(snapshot)

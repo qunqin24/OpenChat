@@ -793,52 +793,20 @@ export interface paths {
         put?: never;
         /**
          * Ask a question again, reworded
-         * @description Starts a new branch from any question on the branch shown. The new
-         *     wording is written as a new user message with the same parent as the
-         *     one edited — a sibling, `editOf` the first version of the question —
-         *     and becomes the conversation's current leaf; a run answers it, with the
-         *     model, effort and web choice given, as sending does, and sees only the
-         *     messages before it. What followed the edited question is not deleted:
-         *     it is off the branch shown and comes back when the question's
-         *     `branches` pager is switched back (`switchVersion`). The new message
-         *     carries the edited one's files. 409 `not_on_path` when the message is
-         *     not on the branch shown, `conversation_busy` while a run is going.
+         * @description Replaces a question, and everything after it, with the question reworded.
+         *     The message edited and every message after it (answers, tool results and
+         *     the questions that followed) are deleted for good, and the new wording is
+         *     written at the end of what is left as a new user message, which a run
+         *     answers with the model, effort and web choice given, as sending does. It
+         *     sees only the messages before it. Nothing is kept to go back to. The new
+         *     message carries the edited one's files; those of the messages deleted
+         *     with it are removed. Any question can be edited, not only the last.
+         *     409 `conversation_busy` while a run is going; 404 `message_not_found`
+         *     when the message is not a user message of the conversation. The
+         *     conversation's other followers (another tab) are told with a
+         *     `transcript_changed` event in the batch that starts the run.
          */
         post: operations["editMessage"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/conversations/{conversationId}/messages/{messageId}/switch": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                conversationId: components["parameters"]["ConversationId"];
-                messageId: string;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Show another version of a question, and the branch under it
-         * @description Moves the conversation to another version of a question (a message of
-         *     the branch shown's `branches`, see `Message.branches`): the shown
-         *     branch then runs through that version and on to the end of the branch
-         *     under it that was last worked on, so the turns that followed it come
-         *     back, and the ones that followed the version just left are set aside.
-         *     Every later request is built from, and every page of messages is read
-         *     along, the new branch.
-         *
-         *     Responds with the newest page of the new branch (as `listMessages`
-         *     without `before`), which replaces the transcript the client holds.
-         *     409 `not_on_path` when the message is not a version of a question on
-         *     the branch shown, `conversation_busy` while a run is going.
-         */
-        post: operations["switchVersion"];
         delete?: never;
         options?: never;
         head?: never;
@@ -858,12 +826,15 @@ export interface paths {
         put?: never;
         /**
          * Answer the last message again
-         * @description Starts another run on the last user message of the branch shown, with the
+         * @description Deletes the answer to the last user message - every row after it, and
+         *     the runs that made them, those that carried on after a question the
+         *     model asked included - and starts another run on that message, with the
          *     model, effort and web choice given (else the conversation's, which it
-         *     then remembers, as sending does). The answer it replaces is kept as a
-         *     version (`Message.versions`, `chooseAnswer`) but is no longer shown or
-         *     sent to a model. Followed on the events stream like any run; 409
-         *     `conversation_busy` while one is going, 404 `nothing_to_answer` in a
+         *     then remembers, as sending does). The old answer is gone, not kept.
+         *     Followed on the events stream like any run, which also tells the
+         *     conversation's other followers (`transcript_changed`); 409
+         *     `conversation_busy` while one is going, `not_latest` when a message
+         *     was added since the caller looked, 404 `nothing_to_answer` in a
          *     conversation with no message.
          */
         post: operations["regenerateAnswer"];
@@ -898,7 +869,7 @@ export interface paths {
          *
          *     Only the question at the end of the transcript can be answered: 409
          *     `not_pending` for one already answered, one the user wrote past, one
-         *     whose answer was redone, or a call that is not an `ask_user` waiting
+         *     whose answer was deleted, or a call that is not an `ask_user` waiting
          *     for its answer. 409 `conversation_busy` while a run is going; 400
          *     `invalid_answers` when the answers do not fit the questions.
          */
@@ -965,35 +936,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/conversations/{conversationId}/runs/{runId}/choose": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                conversationId: components["parameters"]["ConversationId"];
-                runId: string;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Show another version of the last answer
-         * @description Makes this run the answer shown — and the one a later message builds
-         *     on — in place of the other versions of the same input (see
-         *     `Message.versions`). Only the last turn of the branch shown can
-         *     switch: an earlier one has later turns built on the version it shows,
-         *     so it answers 409 `not_latest`, as it does while a run is going
-         *     (`conversation_busy`). Responds with the run's input, then the run's
-         *     rows: together they replace the turn the client holds.
-         */
-        post: operations["chooseAnswer"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/me/avatar": {
         parameters: {
             query?: never;
@@ -1031,9 +973,8 @@ export interface paths {
         /**
          * Download your conversations
          * @description Every conversation of yours that is kept (not deleted, not temporary)
-         *     with the messages of the branch it shows — the text of what was asked
-         *     and answered, with the names of the files sent, not tool traces or
-         *     other branches. Written as it is read, one conversation at a time, so
+         *     with its messages - the text of what was asked and answered, with the
+         *     names of the files sent, not tool traces. Written as it is read, one conversation at a time, so
          *     the size of the history does not decide the memory this takes. Always
          *     the caller's own; there is no way to name another account.
          */
@@ -1336,7 +1277,7 @@ export interface paths {
         /**
          * Answer a guest's message, stateless
          * @description The one request that needs a model. The body carries everything the
-         *     server would have read from a database: the conversation's path as the
+         *     server would have read from a database: the conversation as the
          *     browser holds it, the new message (or which answer to redo, or the
          *     answers to a question), the guest's custom instructions and memories.
          *     The server writes them as rows of a user that exists for this request
@@ -1616,27 +1557,6 @@ export interface components {
             usage?: components["schemas"]["Usage"];
             attachments?: components["schemas"]["Attachment"][];
             /**
-             * @description User messages whose question was answered more than once, by
-             *     regenerating: every run that answered it, oldest first. One of them
-             *     is shown — the `runId` of the rows that follow — and the others are
-             *     kept to switch back to (`chooseAnswer`).
-             */
-            versions?: string[];
-            /**
-             * @description User messages whose question has other versions (it was asked
-             *     again in new words, `editMessage`): the message and its siblings —
-             *     the messages that follow the same parent — oldest first. One of
-             *     them is on the branch shown and the others are kept, with what
-             *     followed them, to switch to (`switchVersion`). Absent when the
-             *     question has only one version.
-             */
-            branches?: string[];
-            /**
-             * Format: uuid
-             * @description User messages only. The first version of the question this one rewords.
-             */
-            editOf?: string;
-            /**
              * @description Guest streams only, on assistant rows. What a provider wants back
              *     with this response that is not for display - a reasoning
              *     signature, redacted reasoning - kept opaque. The server never gives
@@ -1804,7 +1724,7 @@ export interface components {
              * Format: uuid
              * @description Set on the run that goes on after a question was answered: the run
              *     that began the answer (never a middle one). Its rows show in the
-             *     same reply, and the two are one version of the turn.
+             *     same reply.
              */
             continues?: string;
             /**
@@ -1870,7 +1790,7 @@ export interface components {
             version: number;
             events: components["schemas"]["RunEvent"][];
         };
-        RunEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["RunFinishedEvent"] | components["schemas"]["GenerationStartedEvent"] | components["schemas"]["PartStartedEvent"] | components["schemas"]["PartDeltaEvent"] | components["schemas"]["PartEndedEvent"] | components["schemas"]["MessageAppendedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"] | components["schemas"]["RetryScheduledEvent"] | components["schemas"]["TitleChangedEvent"] | components["schemas"]["BranchChangedEvent"];
+        RunEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["RunFinishedEvent"] | components["schemas"]["GenerationStartedEvent"] | components["schemas"]["PartStartedEvent"] | components["schemas"]["PartDeltaEvent"] | components["schemas"]["PartEndedEvent"] | components["schemas"]["MessageAppendedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"] | components["schemas"]["RetryScheduledEvent"] | components["schemas"]["TitleChangedEvent"] | components["schemas"]["TranscriptChangedEvent"];
         RunStartedEvent: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -1980,23 +1900,21 @@ export interface components {
             title: string;
         };
         /**
-         * @description The transcript the conversation shows changed without a run having
-         *     written it: another version of a question was switched to
-         *     (`switchVersion`), another answer to the last question was chosen
-         *     (`chooseAnswer`), or a question was edited (`editMessage`, which also
-         *     starts a run, announced in the same batch). A client that holds a
-         *     transcript of the conversation — another tab, say — fetches its newest
-         *     page again; nothing in the event says what changed, because what the
-         *     transcript now is lives in `listMessages`. For a switch or a choice it
-         *     comes in a batch of its own, under the nil run id and version 0, so it
-         *     is no step of any run.
+         * @description Rows the conversation showed were deleted (`editMessage` removes a
+         *     question and what followed it, `regenerateAnswer` removes the answer),
+         *     so the transcript is no longer the old one with rows added to it. A
+         *     client that holds a transcript of the conversation - another tab, say -
+         *     fetches its newest page again and drops what it held that the page does
+         *     not contain; nothing in the event says what went, because what the
+         *     transcript is lives in `listMessages`. It comes in the same batch as the
+         *     `run_started` of the run that follows, under that run's id and version.
          */
-        BranchChangedEvent: {
+        TranscriptChangedEvent: {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "branch_changed";
+            type: "transcript_changed";
         };
         ConversationExport: {
             /** @description The shape of this document; 1. */
@@ -2015,7 +1933,7 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
-            /** @description The branch shown, oldest first. */
+            /** @description The conversation, oldest first. */
             messages: components["schemas"]["ExportedMessage"][];
         };
         ExportedMessage: {
@@ -2611,9 +2529,8 @@ export interface components {
         GuestRunRequest: {
             /**
              * @description `send`: `input` is a new message after `messages` (also an edit:
-             *     `editOf` names the question it rewords, and `messages` ends
-             *     before that question). `regenerate`: answer the last message of
-             *     `messages` again. `answer`: `callId` and `answers` are the reply to
+             *     `messages` ends before the question it rewords). `regenerate`:
+             *     answer the last message of `messages` again. `answer`: `callId` and `answers` are the reply to
              *     the question the last row of `messages` asks.
              * @enum {string}
              */
@@ -2624,19 +2541,13 @@ export interface components {
             /** @description The conversation has a title already; none is generated after the run. */
             titled?: boolean;
             /**
-             * @description The branch shown, root to leaf, in order, with each question's one
-             *     answer that is shown. For `send` it stops before `input`; for
+             * @description The conversation, in order. For `send` it stops before `input`; for
              *     `regenerate` it ends with the question and without the answer being
              *     redone.
              */
             messages: components["schemas"]["GuestMessage"][];
             /** @description For `send`. */
             input?: components["schemas"]["GuestMessage"];
-            /**
-             * Format: uuid
-             * @description For `send` that rewords a question; echoed on the input's events.
-             */
-            editOf?: string;
             callId?: string;
             answers?: {
                 selected: string[];
@@ -4221,7 +4132,7 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 /**
                  * @description Only conversations whose title or any message's text contains this,
-                 *     ignoring case — every branch, not only the one on show. A
+                 *     ignoring case. A
                  *     conversation found by what was said in it carries `match`. Keep it
                  *     the same while following `nextCursor`.
                  */
@@ -4490,32 +4401,6 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    switchVersion: {
-        parameters: {
-            query?: {
-                limit?: components["parameters"]["Limit"];
-            };
-            header?: never;
-            path: {
-                conversationId: components["parameters"]["ConversationId"];
-                messageId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description the newest page of the branch now shown, oldest first */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MessagePage"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
     regenerateAnswer: {
         parameters: {
             query?: never;
@@ -4612,30 +4497,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    chooseAnswer: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                conversationId: components["parameters"]["ConversationId"];
-                runId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description the run's question, then its rows, oldest first */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MessagePage"];
-                };
             };
             default: components["responses"]["Error"];
         };

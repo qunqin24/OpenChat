@@ -59,7 +59,7 @@ func (s *Server) searchConversations(w http.ResponseWriter, r *http.Request, use
 			ID: row.ID, UserID: row.UserID, Title: row.Title, Model: row.Model,
 			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, DeletedAt: row.DeletedAt,
 			ReasoningEffort: row.ReasoningEffort, WebSearch: row.WebSearch,
-			MemorySnapshot: row.MemorySnapshot, Temporary: row.Temporary, CurrentInputID: row.CurrentInputID,
+			MemorySnapshot: row.MemorySnapshot, Temporary: row.Temporary,
 		})
 		if id, err := uuid.Parse(row.HitID); err == nil {
 			conv.Match = &ConversationMatch{

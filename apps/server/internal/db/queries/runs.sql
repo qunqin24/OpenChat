@@ -76,21 +76,3 @@ WHERE id = sqlc.arg('id')
   AND conversation_id = sqlc.arg('conversation_id')
   AND status = 'running'
 RETURNING *;
-
--- name: ChooseAnswer :exec
--- Shows one of an input's answers and hides the rest; with no run to keep,
--- hides them all, ahead of a new one. A run that continues another is part of
--- that answer and goes or stays with it.
-UPDATE runs
-SET superseded = (COALESCE(continues, id) IS DISTINCT FROM sqlc.narg('keep')::uuid)
-WHERE input_message_id = sqlc.arg('input_id');
-
--- name: ListAnswers :many
--- Every run that answered each of these inputs, oldest first: their versions.
--- An answer that stopped to ask a question and went on is one version, named by
--- the run that began it.
-SELECT r.input_message_id AS input, r.id
-FROM runs r
-WHERE r.input_message_id = ANY (sqlc.arg('inputs')::uuid[])
-  AND r.continues IS NULL
-ORDER BY r.created_at, r.id;
