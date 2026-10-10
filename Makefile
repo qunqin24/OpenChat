@@ -66,7 +66,7 @@ migration: ## Create a migration: make migration name=add_users
 ## ---------------------------------------------------------- code  gen ------
 
 .PHONY: generate
-generate: generate-sql generate-api ## Regenerate everything
+generate: generate-sql generate-api generate-genui ## Regenerate everything
 
 .PHONY: generate-sql
 generate-sql: ## Regenerate sqlc code from internal/db/queries
@@ -76,6 +76,10 @@ generate-sql: ## Regenerate sqlc code from internal/db/queries
 generate-api: ## Regenerate the Go server + TypeScript client from api/openapi.yaml
 	cd $(SERVER) && go tool oapi-codegen -config oapi-codegen.yaml ../../api/openapi.yaml
 	pnpm --filter @openchat/api-client generate
+
+.PHONY: generate-genui
+generate-genui: ## Copy the generative UI catalogue (api/genui-catalog.json) to server and client
+	node scripts/sync-genui-catalog.mjs
 
 ## ----------------------------------------------------------- verify --------
 

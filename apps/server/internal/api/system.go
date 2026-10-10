@@ -35,7 +35,11 @@ func (s *Server) LoadSettings(ctx context.Context) {
 }
 
 func (s *Server) boolSetting(ctx context.Context, key string) (bool, error) {
-	raw, err := s.q.GetSetting(ctx, key)
+	return boolSetting(ctx, s.q, key)
+}
+
+func boolSetting(ctx context.Context, q *sqlc.Queries, key string) (bool, error) {
+	raw, err := q.GetSetting(ctx, key)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return false, nil
@@ -50,9 +54,24 @@ func (s *Server) boolSetting(ctx context.Context, key string) (bool, error) {
 }
 
 func (s *Server) GetSystemSettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := s.systemSettings(r.Context())
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, settings)
+}
+
+func (s *Server) systemSettings(ctx context.Context) (SystemSettings, error) {
 	// Read the live level rather than the column: they agree, and if they ever
 	// disagree the one that matters is the one actually filtering log lines.
-	httpx.JSON(w, http.StatusOK, SystemSettings{DebugLogging: logging.Debug()})
+	settings := SystemSettings{DebugLogging: logging.Debug()}
+	generativeUI, err := boolSetting(ctx, s.q, settingGenerativeUI)
+	if err != nil {
+		return settings, err
+	}
+	settings.GenerativeUi = generativeUI
+	return settings, nil
 }
 
 func (s *Server) UpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
@@ -82,5 +101,40 @@ func (s *Server) UpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 			"enabled", *body.DebugLogging, "actor", auth.MustUser(r.Context()).Email)
 	}
 
-	httpx.JSON(w, http.StatusOK, SystemSettings{DebugLogging: logging.Debug()})
+	if body.GenerativeUi != nil {
+		value, _ := json.Marshal(*body.GenerativeUi)
+		if err := s.q.SetSetting(r.Context(), sqlc.SetSettingParams{Key: settingGenerativeUI, Value: value}); err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+		slog.InfoContext(r.Context(), "generative ui changed",
+			"enabled", *body.GenerativeUi, "actor", auth.MustUser(r.Context()).Email)
+	}
+
+	settings, err := s.systemSettings(r.Context())
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, settings)
+}
+
+// settingGenerativeUI turns interface components on: with it, every request's
+// system prompt teaches the openchat-ui block. Off by default — it costs a few
+// thousand prompt tokens on every request whether or not a reply uses it.
+const settingGenerativeUI = "generative_ui"
+
+func stringSetting(ctx context.Context, q *sqlc.Queries, key string) (string, error) {
+	raw, err := q.GetSetting(ctx, key)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", nil
+		}
+		return "", err
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return "", err
+	}
+	return value, nil
 }

@@ -1,0 +1,550 @@
+{
+  "$comment": "The components a model may use in an `openchat-ui` block. The single source of truth: the server builds the system prompt from it and the web app validates and renders against it. `make generate-genui` copies it to both; edit this file, never the copies.",
+  "version": 1,
+  "components": [
+    {
+      "name": "Card",
+      "description": "A raised container for a few closely related things, such as a price with its breakdown, or a small panel: an icon, a title and subtitle and a status Badge in its header, its content, a footer line. Most blocks need no Card; never wrap a whole answer in one. A Grid of Cards with an icon, a title and a subtitle and no children introduces a set of topics, options or features at a glance.",
+      "params": [
+        {
+          "name": "children",
+          "type": "nodes"
+        },
+        {
+          "name": "title",
+          "type": "string"
+        },
+        {
+          "name": "tone",
+          "type": "enum",
+          "values": [
+            "plain",
+            "muted",
+            "accent"
+          ],
+          "default": "plain"
+        },
+        {
+          "name": "icon",
+          "type": "enum",
+          "values": [
+            "brain",
+            "code",
+            "shield",
+            "palette",
+            "rocket",
+            "lightbulb",
+            "book",
+            "graduation-cap",
+            "briefcase",
+            "chart",
+            "trending-up",
+            "wallet",
+            "globe",
+            "map-pin",
+            "calendar",
+            "clock",
+            "users",
+            "heart",
+            "star",
+            "zap",
+            "cpu",
+            "database",
+            "server",
+            "cloud",
+            "lock",
+            "mail",
+            "message",
+            "phone",
+            "camera",
+            "music",
+            "film",
+            "plane",
+            "car",
+            "home",
+            "shopping-cart",
+            "gift",
+            "coffee",
+            "utensils",
+            "leaf",
+            "sun",
+            "wrench",
+            "settings",
+            "search",
+            "file-text",
+            "flag",
+            "target",
+            "trophy",
+            "sparkles",
+            "package",
+            "smartphone",
+            "monitor",
+            "building",
+            "scale",
+            "stethoscope",
+            "dumbbell",
+            "newspaper",
+            "link",
+            "check",
+            "alert"
+          ]
+        },
+        {
+          "name": "subtitle",
+          "type": "string"
+        },
+        {
+          "name": "badge",
+          "type": "node",
+          "of": [
+            "Badge"
+          ]
+        },
+        {
+          "name": "footer",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "Stack",
+      "description": "Lays its children out vertically.",
+      "params": [
+        {
+          "name": "children",
+          "type": "nodes",
+          "required": true
+        },
+        {
+          "name": "gap",
+          "type": "enum",
+          "values": [
+            "sm",
+            "md",
+            "lg"
+          ],
+          "default": "md"
+        }
+      ]
+    },
+    {
+      "name": "Row",
+      "description": "Lays its children out side by side; wraps on narrow screens.",
+      "params": [
+        {
+          "name": "children",
+          "type": "nodes",
+          "required": true
+        },
+        {
+          "name": "gap",
+          "type": "enum",
+          "values": [
+            "sm",
+            "md",
+            "lg"
+          ],
+          "default": "md"
+        }
+      ]
+    },
+    {
+      "name": "Grid",
+      "description": "Lays its children out in equal columns; collapses to one column on narrow screens.",
+      "params": [
+        {
+          "name": "children",
+          "type": "nodes",
+          "required": true
+        },
+        {
+          "name": "columns",
+          "type": "integer",
+          "min": 1,
+          "max": 4,
+          "default": 2
+        }
+      ]
+    },
+    {
+      "name": "Heading",
+      "description": "A section heading.",
+      "params": [
+        {
+          "name": "text",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "level",
+          "type": "integer",
+          "min": 1,
+          "max": 3,
+          "default": 2
+        }
+      ]
+    },
+    {
+      "name": "Text",
+      "description": "A paragraph of Markdown: bold, italics, links, inline code and lists are allowed.",
+      "params": [
+        {
+          "name": "text",
+          "type": "markdown",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "Callout",
+      "description": "A highlighted note: a tip, a warning, a key takeaway.",
+      "params": [
+        {
+          "name": "text",
+          "type": "markdown",
+          "required": true
+        },
+        {
+          "name": "tone",
+          "type": "enum",
+          "values": [
+            "info",
+            "success",
+            "warning",
+            "danger"
+          ],
+          "default": "info"
+        },
+        {
+          "name": "title",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "Stat",
+      "description": "One key figure with its label, for dashboards and summaries. trend is the direction of the change; tone says whether that change is good or bad news (more bugs is up but bad).",
+      "params": [
+        {
+          "name": "label",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "value",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "change",
+          "type": "string"
+        },
+        {
+          "name": "trend",
+          "type": "enum",
+          "values": [
+            "up",
+            "down",
+            "flat"
+          ]
+        },
+        {
+          "name": "tone",
+          "type": "enum",
+          "values": [
+            "good",
+            "bad",
+            "neutral"
+          ],
+          "default": "neutral"
+        },
+        {
+          "name": "hint",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "Table",
+      "description": "A table. Every row has one cell per column.",
+      "params": [
+        {
+          "name": "columns",
+          "type": "strings",
+          "required": true
+        },
+        {
+          "name": "rows",
+          "type": "cells",
+          "required": true
+        },
+        {
+          "name": "caption",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "Chart",
+      "description": "A chart of numbers: line or area for a trend over time, bar to compare amounts, donut or pie for shares of a whole. labels are the x-axis categories (or the slices); each Series is one line or one set of bars with a value per label. A donut or pie uses the first Series only. Use real figures from the conversation or your sources; say in caption when they are illustrative.",
+      "params": [
+        {
+          "name": "kind",
+          "type": "enum",
+          "values": [
+            "line",
+            "area",
+            "bar",
+            "donut",
+            "pie"
+          ],
+          "required": true
+        },
+        {
+          "name": "labels",
+          "type": "strings",
+          "required": true
+        },
+        {
+          "name": "series",
+          "type": "nodes",
+          "of": [
+            "Series"
+          ],
+          "required": true
+        },
+        {
+          "name": "title",
+          "type": "string"
+        },
+        {
+          "name": "caption",
+          "type": "string"
+        },
+        {
+          "name": "unit",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "Series",
+      "description": "One series of a Chart: its name and one value per label.",
+      "params": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "values",
+          "type": "numbers",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "KeyValues",
+      "description": "A list of label–value pairs, for specifications and details.",
+      "params": [
+        {
+          "name": "pairs",
+          "type": "pairs",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "Steps",
+      "description": "An ordered procedure or plan. Its items are Step components.",
+      "params": [
+        {
+          "name": "items",
+          "type": "nodes",
+          "of": [
+            "Step"
+          ],
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "Step",
+      "description": "One step of a Steps list.",
+      "params": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "detail",
+          "type": "markdown"
+        },
+        {
+          "name": "status",
+          "type": "enum",
+          "values": [
+            "done",
+            "current",
+            "todo"
+          ],
+          "default": "todo"
+        }
+      ]
+    },
+    {
+      "name": "Timeline",
+      "description": "Events in time order. Its items are Event components.",
+      "params": [
+        {
+          "name": "items",
+          "type": "nodes",
+          "of": [
+            "Event"
+          ],
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "Event",
+      "description": "One entry of a Timeline.",
+      "params": [
+        {
+          "name": "time",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "detail",
+          "type": "markdown"
+        }
+      ]
+    },
+    {
+      "name": "Tags",
+      "description": "A row of short labels.",
+      "params": [
+        {
+          "name": "items",
+          "type": "strings",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "Tabs",
+      "description": "Alternative views of one subject the reader switches between, such as an overview, performance and security of a product. Its items are Tab components.",
+      "params": [
+        {
+          "name": "items",
+          "type": "nodes",
+          "of": [
+            "Tab"
+          ],
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "Tab",
+      "description": "One tab of Tabs: a short label and what it shows.",
+      "params": [
+        {
+          "name": "label",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "children",
+          "type": "nodes",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "Details",
+      "description": "Supporting detail folded away behind its title until the reader opens it: a long derivation, the full list, the fine print.",
+      "params": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "children",
+          "type": "nodes",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "Badge",
+      "description": "A short coloured status label, such as Done, In progress, Failed or Beta. Several sit in a Row.",
+      "params": [
+        {
+          "name": "text",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "tone",
+          "type": "enum",
+          "values": [
+            "neutral",
+            "info",
+            "success",
+            "warning",
+            "danger"
+          ],
+          "default": "neutral"
+        }
+      ]
+    },
+    {
+      "name": "Checklist",
+      "description": "A to-do list with its progress. Its items are Check components.",
+      "params": [
+        {
+          "name": "items",
+          "type": "nodes",
+          "of": [
+            "Check"
+          ],
+          "required": true
+        },
+        {
+          "name": "title",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "Check",
+      "description": "One item of a Checklist.",
+      "params": [
+        {
+          "name": "text",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "done",
+          "type": "boolean",
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "Divider",
+      "description": "A horizontal rule between sections.",
+      "params": []
+    }
+  ]
+}

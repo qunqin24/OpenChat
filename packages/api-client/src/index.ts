@@ -3,6 +3,7 @@ import createClient from 'openapi-fetch'
 import type { paths } from './schema'
 
 export * from './errors'
+export * from './genui'
 export * from './stream'
 export * from './types'
 export type { paths, components } from './schema'

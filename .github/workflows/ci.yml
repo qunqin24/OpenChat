@@ -43,8 +43,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @openchat/api-client generate
+      - run: node scripts/sync-genui-catalog.mjs
       - name: Generated client is up to date
-        run: git diff --exit-code packages/api-client/src/schema.d.ts
+        run: git diff --exit-code packages/api-client/src/schema.d.ts packages/api-client/src/genui-catalog.gen.json apps/server/internal/genui/catalog.gen.json
       - run: pnpm -r typecheck
       - run: pnpm --filter @openchat/web lint
       - run: pnpm --filter @openchat/web build

@@ -22,6 +22,16 @@ export function SettingsSystem() {
     queryFn: async ({ signal }) => unwrap(await api.GET('/admin/system', { signal })),
   })
 
+  const toggleGenUI = useMutation({
+    mutationFn: async (generativeUi: boolean) =>
+      unwrap(await api.PATCH('/admin/system', { body: { generativeUi } })),
+    onSuccess: (next) => {
+      queryClient.setQueryData(adminKeys.system(), next)
+      toast.success(t(next.generativeUi ? 'admin.settings.system.genui-on' : 'admin.settings.system.genui-off'))
+    },
+    onError: () => toast.error(t('admin.users.update-failed')),
+  })
+
   const update = useMutation({
     mutationFn: async (debugLogging: boolean) =>
       unwrap(await api.PATCH('/admin/system', { body: { debugLogging } })),
@@ -37,27 +47,49 @@ export function SettingsSystem() {
       title={t('admin.settings.system.title')}
       desc={t('admin.settings.system.subtitle')}
     >
-      <div className="flex items-start justify-between gap-6 rounded-lg border p-4">
-        <div className="space-y-1">
-          <Label htmlFor="debug-logging" className="text-base">
-            {t('admin.settings.system.debug')}
-          </Label>
-          <p className="text-muted-foreground text-sm">
-            {t('admin.settings.system.debug-hint')}
-          </p>
+      <div className="space-y-4">
+        <div className="flex items-start justify-between gap-6 rounded-lg border p-4">
+          <div className="space-y-1">
+            <Label htmlFor="debug-logging" className="text-base">
+              {t('admin.settings.system.debug')}
+            </Label>
+            <p className="text-muted-foreground text-sm">
+              {t('admin.settings.system.debug-hint')}
+            </p>
+          </div>
+
+          {isPending ? (
+            <Skeleton className="h-5 w-8 shrink-0" />
+          ) : (
+            <Switch
+              id="debug-logging"
+              className="mt-1 shrink-0"
+              checked={data?.debugLogging ?? false}
+              disabled={update.isPending}
+              onCheckedChange={(value) => update.mutate(value)}
+            />
+          )}
         </div>
 
-        {isPending ? (
-          <Skeleton className="h-5 w-8 shrink-0" />
-        ) : (
-          <Switch
-            id="debug-logging"
-            className="mt-1 shrink-0"
-            checked={data?.debugLogging ?? false}
-            disabled={update.isPending}
-            onCheckedChange={(value) => update.mutate(value)}
-          />
-        )}
+        <div className="flex items-start justify-between gap-6 rounded-lg border p-4">
+          <div className="space-y-1">
+            <Label htmlFor="generative-ui" className="text-base">
+              {t('admin.settings.system.genui')}
+            </Label>
+            <p className="text-muted-foreground text-sm">{t('admin.settings.system.genui-hint')}</p>
+          </div>
+          {isPending ? (
+            <Skeleton className="h-5 w-8 shrink-0" />
+          ) : (
+            <Switch
+              id="generative-ui"
+              className="mt-1 shrink-0"
+              checked={data?.generativeUi ?? false}
+              disabled={toggleGenUI.isPending}
+              onCheckedChange={(value) => toggleGenUI.mutate(value)}
+            />
+          )}
+        </div>
       </div>
     </ContentSection>
   )

@@ -1,0 +1,832 @@
+/**
+ * Generative UI: the components an `openchat-ui` block draws with. Built on the
+ * chat surface's `--n-*` tokens, so a block follows the theme like the prose
+ * around it and reads as part of the answer, not an embedded page.
+ */
+
+.prism-next .n-ui {
+  width: 100%;
+  /* Blocks sit inside prose like figures in an article, so they get a figure's
+     breathing room above and below rather than a paragraph's. */
+  margin: 14px 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--n-text);
+}
+
+.prism-next .n-ui-pending {
+  height: 72px;
+  border-radius: 14px;
+  background: var(--n-panel);
+  animation: n-agent-pulse 1.4s ease-in-out infinite;
+}
+
+.prism-next .n-ui-fallback summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--n-text-2);
+}
+.prism-next .n-ui-fallback pre {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--n-panel);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ---- layout -------------------------------------------------------------- */
+
+/* Surfaces are lifted with the theme's card shadow rather than outlined: a
+   hairline around every card and table reads as a form, not an answer. */
+.prism-next .n-ui-card {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: var(--n-card);
+  box-shadow: var(--n-shadow-card);
+}
+.prism-next .n-ui-card.is-muted {
+  background: var(--n-ui-tint);
+  box-shadow: none;
+}
+.prism-next .n-ui-card.is-accent {
+  box-shadow: var(--n-shadow-card-hover);
+}
+/* An icon sits above the title, in the muted ink, at the size of a heading's
+   cap height times two: a mark that names the card, not a picture. */
+.prism-next .n-ui-card-icon {
+  width: 22px;
+  height: 22px;
+  margin: 2px 0 14px;
+  color: var(--n-chat-muted);
+  stroke-width: 1.75;
+}
+.prism-next .n-ui-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.prism-next .n-ui-card-head:not(:last-child) {
+  margin-bottom: 10px;
+}
+.prism-next .n-ui-card-titles {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.prism-next .n-ui-card-badge {
+  flex-shrink: 0;
+}
+/* A panel's header is set off from its content by a rule. */
+.prism-next .n-ui-card.is-panel > .n-ui-card-head {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--n-table-rule);
+}
+.prism-next .n-ui-card-icon.is-inline {
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  color: var(--n-chat-heading);
+}
+.prism-next .n-ui-card.is-panel .n-ui-card-subtitle {
+  font-size: 12px;
+  line-height: 18px;
+}
+.prism-next .n-ui-card-footer {
+  margin-top: 14px;
+  color: var(--n-chat-muted);
+  font-size: 12px;
+}
+.prism-next .n-ui-card-title {
+  margin: 0;
+  color: var(--n-chat-heading);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+}
+.prism-next .n-ui-card-subtitle {
+  margin: 0;
+  color: var(--n-chat-muted);
+  font-size: 14px;
+  line-height: 21px;
+}
+
+.prism-next .n-ui-stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.prism-next .n-ui-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+.prism-next .n-ui-row > * {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+/* Badges are labels, not columns: they keep their own width in a row. */
+.prism-next .n-ui-row > .n-ui-badge {
+  flex: 0 0 auto;
+}
+.prism-next .n-ui-row:has(> .n-ui-badge) {
+  align-items: center;
+}
+.prism-next :is(.n-ui-stack, .n-ui-row).is-sm {
+  gap: 6px;
+}
+.prism-next :is(.n-ui-stack, .n-ui-row).is-md {
+  gap: 12px;
+}
+.prism-next :is(.n-ui-stack, .n-ui-row).is-lg {
+  gap: 20px;
+}
+
+.prism-next .n-ui-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--n-ui-cols, 2), minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 640px) {
+  .prism-next .n-ui-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.prism-next .n-ui-divider {
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid var(--n-line);
+}
+
+/* ---- text ---------------------------------------------------------------- */
+
+.prism-next .n-ui-heading {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.prism-next .n-ui-heading.is-l1 {
+  font-size: 18px;
+}
+.prism-next .n-ui-heading.is-l2 {
+  font-size: 16px;
+}
+.prism-next .n-ui-heading.is-l3 {
+  font-size: 14px;
+  color: var(--n-text-2);
+}
+.prism-next .n-ui-text > :first-child {
+  margin-top: 0;
+}
+.prism-next .n-ui-text > :last-child {
+  margin-bottom: 0;
+}
+
+.prism-next .n-ui-callout {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--n-ui-tint);
+}
+.prism-next .n-ui-callout-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 3px;
+  color: var(--n-text-2);
+}
+.prism-next .n-ui-callout.is-success .n-ui-callout-icon {
+  color: var(--n-ok);
+}
+.prism-next .n-ui-callout.is-warning .n-ui-callout-icon {
+  color: #d97706;
+}
+.prism-next .n-ui-callout.is-danger .n-ui-callout-icon {
+  color: var(--n-err);
+}
+.prism-next .n-ui-callout-body {
+  min-width: 0;
+}
+.prism-next .n-ui-callout-title {
+  font-weight: 600;
+}
+
+/* ---- data ---------------------------------------------------------------- */
+
+/* A figure in its own small frame, so a row of them reads as a dashboard. */
+.prism-next .n-ui-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--n-card);
+  box-shadow: inset 0 0 0 1px var(--n-table-rule);
+}
+.prism-next .n-ui-stat-label,
+.prism-next .n-ui-stat-hint {
+  font-size: 12px;
+  color: var(--n-text-2);
+}
+.prism-next .n-ui-stat-value {
+  color: var(--n-chat-heading);
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+}
+.prism-next .n-ui-stat-change {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--n-text-2);
+}
+.prism-next .n-ui-stat-change svg {
+  width: 13px;
+  height: 13px;
+}
+/* Colour is good or bad news, not direction: more bugs goes up and is bad. */
+.prism-next .n-ui-stat-change.is-good {
+  color: var(--n-ok);
+}
+.prism-next .n-ui-stat-change.is-bad {
+  color: var(--n-err);
+}
+
+/* The table's frame, header and rows are drawn in chat-table.css, shared with
+   Markdown tables; only what is particular to interface tables is here. */
+.prism-next .n-ui-table .is-number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.prism-next .n-ui-table .is-progress {
+  width: 32%;
+  min-width: 160px;
+}
+
+.prism-next .n-ui-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.prism-next .n-ui-progress-track {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--n-hover-strong);
+}
+.prism-next .n-ui-progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--n-chat-strong);
+  transition: width 400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.prism-next .n-ui-progress.is-complete .n-ui-progress-fill {
+  background: var(--n-ok);
+}
+.prism-next .n-ui-progress-label {
+  min-width: 3.5em;
+  color: var(--n-chat-body);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.prism-next .n-ui-kv {
+  margin: 0;
+}
+.prism-next .n-ui-kv-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 30%) 1fr;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--n-line);
+}
+.prism-next .n-ui-kv-row:last-child {
+  border-bottom: 0;
+}
+.prism-next .n-ui-kv dt {
+  color: var(--n-text-2);
+}
+.prism-next .n-ui-kv dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.prism-next .n-ui-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.prism-next .n-ui-tag {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--n-panel);
+  font-size: 12px;
+}
+
+/* ---- sequences ----------------------------------------------------------- */
+
+.prism-next :is(.n-ui-steps, .n-ui-timeline) {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.prism-next .n-ui-step {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding-bottom: 14px;
+}
+.prism-next .n-ui-step:last-child {
+  padding-bottom: 0;
+}
+/* The rail between markers. */
+.prism-next .n-ui-step:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  top: 22px;
+  bottom: 2px;
+  left: 8.5px;
+  width: 1px;
+  background: var(--n-line);
+}
+.prism-next .n-ui-step-marker {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  border: 1.5px solid var(--n-text-3);
+  border-radius: 999px;
+}
+.prism-next .n-ui-step.is-current .n-ui-step-marker {
+  border-color: var(--n-text);
+  box-shadow: inset 0 0 0 3px var(--n-bg), inset 0 0 0 9px var(--n-text);
+}
+.prism-next .n-ui-step.is-done .n-ui-step-marker {
+  border: 0;
+  color: var(--n-text);
+}
+.prism-next .n-ui-step.is-done .n-ui-step-marker svg {
+  width: 18px;
+  height: 18px;
+}
+.prism-next .n-ui-step-body {
+  min-width: 0;
+}
+.prism-next .n-ui-step-title,
+.prism-next .n-ui-event-title {
+  font-weight: 600;
+}
+.prism-next .n-ui-step.is-todo .n-ui-step-title {
+  color: var(--n-text-2);
+}
+
+.prism-next .n-ui-event {
+  display: grid;
+  grid-template-columns: minmax(72px, 22%) 1fr;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--n-line);
+}
+.prism-next .n-ui-event:last-child {
+  border-bottom: 0;
+}
+.prism-next .n-ui-event-time {
+  color: var(--n-text-2);
+  font-variant-numeric: tabular-nums;
+}
+.prism-next .n-ui-event-body {
+  min-width: 0;
+}
+
+/* ---- charts --------------------------------------------------------------- */
+
+.prism-next .n-ui {
+  --n-chart-1: #4f9bfa;
+  --n-chart-2: #6cc57f;
+  --n-chart-3: #ee8b57;
+  --n-chart-4: #f2c94c;
+  --n-chart-5: #a78bfa;
+  --n-chart-6: #f472b6;
+  --n-chart-7: #2dd4bf;
+  --n-chart-8: #94a3b8;
+  --n-chart-9: #a3e635;
+  --n-chart-10: #fb7185;
+}
+.dark .prism-next .n-ui {
+  --n-chart-1: #60a5fa;
+  --n-chart-2: #74d68a;
+  --n-chart-3: #f59e6b;
+  --n-chart-4: #f5d061;
+  --n-chart-5: #b69cff;
+  --n-chart-6: #f78bc6;
+  --n-chart-7: #3ee0c9;
+  --n-chart-8: #a8b4c4;
+  --n-chart-9: #b5ec4f;
+  --n-chart-10: #fd8a9b;
+}
+.prism-next .n-ui-chart {
+  margin: 0;
+  padding: 16px 18px 14px;
+  border-radius: 16px;
+  background: var(--n-card);
+  box-shadow: inset 0 0 0 1px var(--n-table-rule);
+}
+.prism-next .n-ui-chart-title {
+  margin-bottom: 10px;
+  color: var(--n-chat-heading);
+  font-size: 15px;
+  font-weight: 600;
+}
+.prism-next .n-ui-chart-frame {
+  position: relative;
+  width: 100%;
+  min-height: 1px;
+}
+.prism-next .n-ui-chart-plot {
+  position: relative;
+}
+.prism-next .n-ui-chart svg {
+  display: block;
+  overflow: visible;
+}
+.prism-next .n-ui-chart-grid {
+  stroke: var(--n-table-rule);
+  stroke-dasharray: 3 4;
+}
+.prism-next .n-ui-chart-tick {
+  fill: var(--n-chat-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.prism-next .n-ui-chart-line {
+  fill: none;
+  stroke-width: 2.25;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.prism-next .n-ui-chart-area {
+  fill-opacity: 0.14;
+}
+.prism-next .n-ui-chart-dot {
+  stroke: var(--n-card);
+  stroke-width: 1.5;
+  transition: r 120ms ease;
+}
+.prism-next .n-ui-chart-guide {
+  stroke: var(--n-line);
+  stroke-dasharray: 2 3;
+}
+.prism-next :is(.n-ui-chart-bar, .n-ui-chart-slice) {
+  transition: opacity 150ms ease;
+}
+.prism-next .n-ui-chart-slice {
+  stroke: var(--n-card);
+  stroke-width: 2;
+  cursor: default;
+}
+.prism-next :is(.n-ui-chart-bar, .n-ui-chart-slice).is-dim {
+  opacity: 0.4;
+}
+.prism-next .n-ui-chart-hit {
+  fill: transparent;
+}
+.prism-next .n-ui-chart-tip {
+  position: absolute;
+  z-index: 1;
+  min-width: 96px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--n-card);
+  box-shadow: var(--n-shadow-card);
+  font-size: 12px;
+  line-height: 18px;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+.prism-next .n-ui-chart-tip-label {
+  margin-bottom: 2px;
+  color: var(--n-chat-muted);
+}
+.prism-next .n-ui-chart-tip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.prism-next .n-ui-chart-tip-name {
+  color: var(--n-chat-muted);
+}
+.prism-next .n-ui-chart-tip-value {
+  margin-left: auto;
+  color: var(--n-chat-heading);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.prism-next .n-ui-chart-swatch {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+.prism-next .n-ui-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 18px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--n-chat-body);
+  font-size: 13px;
+}
+.prism-next .n-ui-chart-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: opacity 150ms ease;
+}
+.prism-next .n-ui-chart-legend li.is-dim {
+  opacity: 0.45;
+}
+.prism-next .n-ui-chart-caption {
+  margin: 10px 0 0;
+  color: var(--n-chat-muted);
+  font-size: 12px;
+}
+.prism-next .n-ui-chart-round {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 0;
+}
+.prism-next .n-ui-chart-center {
+  position: absolute;
+  top: calc(50% + 4px);
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 110px;
+  text-align: center;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+.prism-next .n-ui-chart-center-value {
+  color: var(--n-chat-heading);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.prism-next .n-ui-chart-center-label {
+  color: var(--n-chat-body);
+  font-size: 12px;
+}
+.prism-next .n-ui-chart-center-sub {
+  color: var(--n-chat-muted);
+  font-size: 11px;
+}
+
+/* ---- tabs ------------------------------------------------------------------ */
+
+.prism-next .n-ui-tabs {
+  padding: 8px;
+  border-radius: 16px;
+  background: var(--n-card);
+  box-shadow: inset 0 0 0 1px var(--n-table-rule);
+}
+.prism-next .n-ui-tabs-list {
+  display: grid;
+  grid-template-columns: repeat(var(--n-ui-tabs, 3), minmax(0, 1fr));
+  gap: 4px;
+}
+.prism-next .n-ui-tabs-trigger {
+  height: 34px;
+  padding: 0 12px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--n-chat-muted);
+  font: inherit;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+.prism-next .n-ui-tabs-trigger:hover {
+  color: var(--n-chat-body);
+}
+.prism-next .n-ui-tabs-trigger[data-state='active'] {
+  background: var(--n-ui-tint);
+  color: var(--n-chat-heading);
+  font-weight: 600;
+}
+.prism-next .n-ui-tabs-panel {
+  padding: 14px 10px 8px;
+  outline: none;
+}
+
+/* ---- details ------------------------------------------------------------- */
+
+.prism-next .n-ui-details {
+  border-radius: 14px;
+  background: var(--n-card);
+  box-shadow: inset 0 0 0 1px var(--n-table-rule);
+}
+.prism-next .n-ui-details-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--n-chat-heading);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.prism-next .n-ui-details-trigger:hover {
+  background: var(--n-ui-tint);
+}
+.prism-next .n-ui-details-chevron {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--n-chat-muted);
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.prism-next .n-ui-details-trigger[data-state='open'] .n-ui-details-chevron {
+  transform: rotate(180deg);
+}
+.prism-next .n-ui-details-content {
+  overflow: hidden;
+}
+.prism-next .n-ui-details-content[data-state='open'] {
+  animation: n-ui-details-open 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.prism-next .n-ui-details-content[data-state='closed'] {
+  animation: n-ui-details-close 180ms cubic-bezier(0.4, 0, 1, 1);
+}
+@keyframes n-ui-details-open {
+  from { height: 0; opacity: 0; }
+  to { height: var(--radix-collapsible-content-height); opacity: 1; }
+}
+@keyframes n-ui-details-close {
+  from { height: var(--radix-collapsible-content-height); opacity: 1; }
+  to { height: 0; opacity: 0; }
+}
+.prism-next .n-ui-details-body {
+  padding: 2px 16px 14px;
+}
+
+/* ---- badges ------------------------------------------------------------------ */
+
+.prism-next .n-ui-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.prism-next .n-ui-badge.is-neutral { background: var(--n-ui-tint); color: var(--n-chat-body); }
+.prism-next .n-ui-badge.is-info { background: #e8f1fe; color: #1d64d8; }
+.prism-next .n-ui-badge.is-success { background: #e6f6eb; color: #18794e; }
+.prism-next .n-ui-badge.is-warning { background: #fff0e5; color: #c2410c; }
+.prism-next .n-ui-badge.is-danger { background: #fde8e8; color: #c81e1e; }
+.dark .prism-next .n-ui-badge.is-info { background: rgb(96 165 250 / 16%); color: #93c5fd; }
+.dark .prism-next .n-ui-badge.is-success { background: rgb(74 222 128 / 14%); color: #86efac; }
+.dark .prism-next .n-ui-badge.is-warning { background: rgb(251 146 60 / 15%); color: #fdba74; }
+.dark .prism-next .n-ui-badge.is-danger { background: rgb(248 113 113 / 15%); color: #fca5a5; }
+
+/* ---- checklist ------------------------------------------------------------- */
+
+.prism-next .n-ui-checklist {
+  padding: 14px 16px 16px;
+  border-radius: 16px;
+  background: var(--n-card);
+  box-shadow: inset 0 0 0 1px var(--n-table-rule);
+}
+.prism-next .n-ui-checklist-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.prism-next .n-ui-checklist-title {
+  color: var(--n-chat-heading);
+  font-size: 15px;
+  font-weight: 600;
+}
+.prism-next .n-ui-checklist-count {
+  margin-left: auto;
+  color: var(--n-chat-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.prism-next .n-ui-checklist-items {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.prism-next .n-ui-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 36px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--n-chat-body);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.prism-next .n-ui-check-box {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1.5px var(--n-line);
+  transition: background-color 150ms ease, box-shadow 150ms ease;
+}
+.prism-next .n-ui-check-box svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 3;
+}
+.prism-next .n-ui-check.is-done .n-ui-check-box {
+  background: var(--n-chat-heading);
+  box-shadow: none;
+  color: var(--n-card);
+}
+.prism-next .n-ui-checklist-bar {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--n-ui-tint);
+}
+.prism-next .n-ui-checklist-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--n-chat-heading);
+  transition: width 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ---- maths ------------------------------------------------------------------ */
+
+/* KaTeX's display formulas centre on their own line and scroll, rather than
+   overflow, when one is wider than the column. */
+.prism-next .n-markdown .katex-display {
+  margin: 16px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 0;
+}
+.prism-next .n-markdown .katex {
+  font-size: 1.08em;
+}
+
+/* Inside a card the card is the frame: figures and charts drop their own. */
+.prism-next .n-ui-card :is(.n-ui-stat, .n-ui-chart) {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.prism-next .n-ui-card .n-ui-chart {
+  margin-top: 4px;
+}
