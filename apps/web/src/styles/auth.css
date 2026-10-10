@@ -245,6 +245,16 @@
   line-height: 20px;
 }
 
+/* What the page says in place of the form: registration done but waiting for an
+   administrator, or registration closed. Plain text in the page's own colour,
+   centred like the title - not an error. */
+.n-auth-notice {
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 20px;
+  text-align: center;
+}
+
 /* `bg-gray-700/5 hover:bg-gray-700/10 dark:bg-gray-100/5
    dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white
    transition w-full rounded-full font-normal text-sm py-2.5

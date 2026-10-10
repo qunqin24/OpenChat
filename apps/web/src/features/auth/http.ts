@@ -26,6 +26,10 @@ const SERVER_ERRORS: Record<string, AuthErrorKey> = {
   name_invalid: 'auth.error.name-invalid',
   password_short: 'auth.error.password-short',
   account_disabled: 'auth.error.account-disabled',
+  pending_approval: 'auth.error.pending-approval',
+  registration_closed: 'auth.error.registration-closed',
+  login_rate_limited: 'auth.error.login-rate-limited',
+  register_rate_limited: 'auth.error.register-rate-limited',
   nothing_to_update: 'auth.error.nothing-to-update',
 }
 
@@ -34,9 +38,17 @@ interface ServerError {
   field?: AuthFieldError['field']
 }
 
+/** Failures of the whole attempt rather than of one input: shown as the form's banner. */
+const FORM_LEVEL = new Set([
+  'pending_approval',
+  'registration_closed',
+  'login_rate_limited',
+  'register_rate_limited',
+])
+
 function toAuthError(error: unknown): AuthFieldError {
   const body = (error ?? {}) as ServerError
-  const field = body.field ?? 'password'
+  const field = FORM_LEVEL.has(body.code ?? '') ? 'form' : (body.field ?? 'password')
 
   // The server reuses `invalid_credentials` for "that is not your current
   // password", which reads wrong on a settings form; the field it blames is
@@ -66,9 +78,11 @@ export function createHttpAuthApi(): AuthApi {
     },
 
     async register(input) {
-      const { data, error } = await api.POST('/auth/register', { body: input })
+      const { data, error, response } = await api.POST('/auth/register', { body: input })
       if (error) throw toAuthError(error)
-      return data as SessionUser
+      // 202: created, but an administrator has to approve it first. No session.
+      if (response.status === 202) return { status: 'pending' }
+      return { status: 'signed_in', user: data as SessionUser }
     },
 
     async logout() {

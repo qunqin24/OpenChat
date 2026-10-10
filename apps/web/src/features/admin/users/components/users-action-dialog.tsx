@@ -108,6 +108,8 @@ function UserForm({
       email: z.email(t('admin.users.form.email-invalid')),
       role: z.enum(['admin', 'user']),
       enabled: z.boolean(),
+      // Only offered for an account that is waiting; off leaves it waiting.
+      approve: z.boolean(),
       password: z.string(),
       confirmPassword: z.string(),
     })
@@ -147,6 +149,7 @@ function UserForm({
       email: user?.email ?? '',
       role: user?.role ?? 'user',
       enabled: !user?.disabled,
+      approve: false,
       password: '',
       confirmPassword: '',
     },
@@ -170,6 +173,7 @@ function UserForm({
           ...(values.email !== user.email ? { email: values.email } : {}),
           ...(values.role !== user.role ? { role: values.role } : {}),
           ...(values.enabled !== wasEnabled ? { disabled: !values.enabled } : {}),
+          ...(user.pending && values.approve ? { approved: true } : {}),
           ...(values.password ? { password: values.password } : {}),
         })
         toast.success(t('admin.users.updated'))
@@ -288,6 +292,27 @@ function UserForm({
                 </FormItem>
               )}
             />
+
+            {user?.pending && (
+              <FormField
+                control={form.control}
+                name="approve"
+                render={({ field }) => (
+                  <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
+                    <FormLabel className="col-span-2">{t('admin.users.pending')}</FormLabel>
+                    <div className="col-span-4 flex items-center gap-3">
+                      <FormControl>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                      <span className="text-muted-foreground text-sm">{t('admin.users.approve')}</span>
+                    </div>
+                    <FormDescription className="col-span-4 col-start-3 text-xs">
+                      {t('admin.users.pending-hint')}
+                    </FormDescription>
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}

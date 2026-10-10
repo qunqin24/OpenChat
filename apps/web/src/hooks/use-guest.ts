@@ -1,12 +1,14 @@
-import { queryOptions, useQuery } from '@tanstack/react-query'
+import { queryOptions } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
 
 /**
- * Whether guests are let in: the administrator's switch. Public, so the sign-in
- * page can read it without a session, and it is the one guest call that is
- * answered whether or not the switch is on.
+ * Whether guests are let in: the administrator's switch. Public, and the one
+ * guest call that is answered whether or not the switch is on. The /guest
+ * routes check it before they open; the sign-in pages read the same switch
+ * from `/auth/options` (hooks/use-auth-options.ts) along with what else they
+ * offer.
  */
 export const guestStatusQueryOptions = queryOptions({
   queryKey: queryKeys.guest.status,
@@ -15,7 +17,3 @@ export const guestStatusQueryOptions = queryOptions({
   staleTime: 30_000,
   retry: false,
 })
-
-export function useGuestStatus() {
-  return useQuery(guestStatusQueryOptions)
-}

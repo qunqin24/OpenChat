@@ -2,6 +2,7 @@ import { createFileRoute, redirect } from '@tanstack/react-router'
 
 import LoginPage from '@/components/auth/LoginPage'
 import { sessionQueryOptions } from '@/features/auth/use-auth'
+import { authOptionsQueryOptions } from '@/hooks/use-auth-options'
 
 /** Login resumes a chat, never an admin page saved in a previous return URL. */
 function chatReturnPath(value: unknown): string | undefined {
@@ -25,7 +26,12 @@ export const Route = createFileRoute('/login')({
   }),
   beforeLoad: async ({ context, search }) => {
     // Use the same chat-only destination as the successful form submission.
-    const session = await context.queryClient.ensureQueryData(sessionQueryOptions)
+    const [session] = await Promise.all([
+      context.queryClient.ensureQueryData(sessionQueryOptions),
+      // For the page to read (the registration link, the guest button); not
+      // worth holding it back for if it cannot be had.
+      context.queryClient.ensureQueryData(authOptionsQueryOptions).catch(() => undefined),
+    ])
     if (session) throw redirect({ to: search.redirect ?? '/' })
   },
   component: LoginPage,

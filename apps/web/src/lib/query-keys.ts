@@ -21,6 +21,10 @@ export const queryKeys = {
   guest: {
     status: ['guest', 'status'] as const,
   },
+  auth: {
+    /** What the sign-in pages offer: registration, guest mode (public). */
+    options: ['auth', 'options'] as const,
+  },
   memory: {
     all: ['memory'] as const,
     personalization: () => [...queryKeys.memory.all, 'personalization'] as const,

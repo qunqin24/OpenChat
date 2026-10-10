@@ -85,13 +85,17 @@ export function usersColumns(t: TFunction<'common'>, currentUserId?: string): Co
     {
       id: 'status',
       meta: { title: t('admin.users.status') },
-      accessorFn: (row) => (row.disabled ? 'disabled' : 'enabled'),
+      accessorFn: (row) => (row.disabled ? 'disabled' : row.pending ? 'pending' : 'enabled'),
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title={t('admin.users.status')} />
       ),
       cell: ({ row }) =>
         row.original.disabled ? (
           <Badge variant="destructive">{t('admin.users.disabled')}</Badge>
+        ) : row.original.pending ? (
+          <Badge variant="secondary" className="bg-amber-500/15 text-amber-700 dark:text-amber-400">
+            {t('admin.users.pending')}
+          </Badge>
         ) : (
           <Badge variant="outline">{t('admin.users.enabled')}</Badge>
         ),

@@ -1,4 +1,4 @@
-import type { User } from '@openchat/api-client'
+import type { User, UserStatus } from '@openchat/api-client'
 import {
   flexRender,
   getCoreRowModel,
@@ -47,16 +47,22 @@ export function UsersTable() {
   // feeds it.
   const search = String(columnFilters.find((filter) => filter.id === 'name')?.value ?? '')
 
+  // The status filter is the server's too (its `status` parameter), so that
+  // "pending" lists every account waiting, not just those on this page.
+  const statusFilter = columnFilters.find((filter) => filter.id === 'status')?.value
+  const status = useMemo(() => (Array.isArray(statusFilter) ? (statusFilter as UserStatus[]) : []), [statusFilter])
+
   const { data, isPending, isError } = useAdminUsers({
     page: pagination.pageIndex + 1,
     search,
     limit: pagination.pageSize,
+    status,
   })
 
-  // A narrowed search can leave the cursor past the last page.
+  // A narrowed search or filter can leave the cursor past the last page.
   useEffect(() => {
     setPagination((current) => (current.pageIndex === 0 ? current : { ...current, pageIndex: 0 }))
-  }, [search])
+  }, [search, status])
 
   const rows = useMemo(() => data?.items ?? [], [data])
   const columns = useMemo(() => usersColumns(t, session?.id), [t, session?.id])

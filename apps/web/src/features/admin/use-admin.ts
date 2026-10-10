@@ -5,6 +5,7 @@ import type {
   DashboardRange,
   UpdateChannelRequest,
   UpdateUserRequest,
+  UserStatus,
 } from '@openchat/api-client'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -13,7 +14,8 @@ import { api, unwrap } from '@/lib/api'
 export const adminKeys = {
   all: ['admin'] as const,
   dashboard: (range: DashboardRange) => [...adminKeys.all, 'dashboard', range] as const,
-  users: (page: number, search: string) => [...adminKeys.all, 'users', page, search] as const,
+  users: (page: number, search: string, status: readonly UserStatus[] = []) =>
+    [...adminKeys.all, 'users', page, search, status] as const,
   system: () => [...adminKeys.all, 'system'] as const,
   /** Shared with features/admin/models, which owns the rest of this subtree. */
   catalog: () => [...adminKeys.all, 'catalog'] as const,
@@ -40,17 +42,27 @@ export function useAdminUsers({
   page,
   search,
   limit = 20,
+  status = [],
 }: {
   page: number
   search: string
   limit?: number
+  /** Only accounts in one of these states; none means all of them. */
+  status?: readonly UserStatus[]
 }) {
   return useQuery({
-    queryKey: adminKeys.users(page, search),
+    queryKey: adminKeys.users(page, search, status),
     queryFn: async ({ signal }) =>
       unwrap(
         await api.GET('/admin/users', {
-          params: { query: { page, limit, ...(search ? { search } : {}) } },
+          params: {
+            query: {
+              page,
+              limit,
+              ...(search ? { search } : {}),
+              ...(status.length > 0 ? { status: [...status] } : {}),
+            },
+          },
           signal,
         }),
       ),

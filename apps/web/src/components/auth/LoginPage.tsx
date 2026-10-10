@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { isAuthFieldError, type AuthErrorKey } from '@/features/auth'
 import { useLogin } from '@/features/auth/use-auth'
-import { useGuestStatus } from '@/hooks/use-guest'
+import { useAuthOptions } from '@/hooks/use-auth-options'
 import AuthField from './AuthField'
 import AuthShell from './AuthShell'
 import { validateIdentifier, validatePassword } from './validation'
@@ -16,8 +16,8 @@ export function LoginPage() {
   const navigate = useNavigate()
   const { redirect } = useSearch({ from: '/login' })
   const login = useLogin()
-  // Offered only while the administrator lets guests in.
-  const guest = useGuestStatus()
+  // The registration link and the guest button are the administrator's to offer.
+  const options = useAuthOptions()
 
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
@@ -114,14 +114,16 @@ export function LoginPage() {
             )}
           </button>
 
-          <div className="n-auth-switch">
-            {t('auth.login.no-account')}{' '}
-            <Link className="n-auth-link" to="/register">
-              {t('auth.register.link')}
-            </Link>
-          </div>
+          {options.registration && (
+            <div className="n-auth-switch">
+              {t('auth.login.no-account')}{' '}
+              <Link className="n-auth-link" to="/register">
+                {t('auth.register.link')}
+              </Link>
+            </div>
+          )}
 
-          {guest.data?.enabled && (
+          {options.guest && (
             <div className="n-auth-guest">
               <Link className="n-auth-guest-button" to="/guest">
                 {t('auth.login.guest')}

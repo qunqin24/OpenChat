@@ -1,5 +1,5 @@
 import type { User } from '@openchat/api-client'
-import { MoreHorizontal, UserCheck, UserPen, UserX } from 'lucide-react'
+import { MoreHorizontal, UserCheck, UserPen, UserRoundCheck, UserX } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -28,6 +28,11 @@ type UsersRowActionsProps = {
  * here on purpose — removing a user would cascade away every conversation they
  * own — so the second item disables instead, which cuts off access now and is
  * reversible from the same menu.
+ *
+ * An account that signed itself up and is waiting for a decision also gets
+ * "approve", and its disable item reads "reject": rejecting is disabling, so a
+ * rejected sign-up is an ordinary disabled account that can be enabled again
+ * (and then is back among those waiting).
  */
 export function UsersRowActions({ user, isSelf }: UsersRowActionsProps) {
   const { t } = useTranslation()
@@ -35,11 +40,26 @@ export function UsersRowActions({ user, isSelf }: UsersRowActionsProps) {
   const [editing, setEditing] = useState(false)
   const [confirming, setConfirming] = useState(false)
 
+  // Waiting for a decision: not yet disabled (a rejected sign-up is disabled,
+  // and from then on is an ordinary disabled account, which can be enabled).
+  const awaiting = user.pending && !user.disabled
+
   const setDisabled = async (disabled: boolean) => {
     try {
       await updateUser.mutateAsync({ userId: user.id, disabled })
-      toast.success(t(disabled ? 'admin.users.disabled-done' : 'admin.users.enabled-done'))
+      toast.success(
+        t(disabled ? (awaiting ? 'admin.users.reject-done' : 'admin.users.disabled-done') : 'admin.users.enabled-done'),
+      )
       setConfirming(false)
+    } catch {
+      toast.error(t('admin.users.update-failed'))
+    }
+  }
+
+  const approve = async () => {
+    try {
+      await updateUser.mutateAsync({ userId: user.id, approved: true })
+      toast.success(t('admin.users.approve-done'))
     } catch {
       toast.error(t('admin.users.update-failed'))
     }
@@ -66,6 +86,15 @@ export function UsersRowActions({ user, isSelf }: UsersRowActionsProps) {
             </DropdownMenuShortcut>
           </DropdownMenuItem>
 
+          {user.pending && (
+            <DropdownMenuItem onClick={() => void approve()}>
+              {t('admin.users.approve')}
+              <DropdownMenuShortcut>
+                <UserRoundCheck size={16} />
+              </DropdownMenuShortcut>
+            </DropdownMenuItem>
+          )}
+
           <DropdownMenuSeparator />
 
           {user.disabled ? (
@@ -81,7 +110,7 @@ export function UsersRowActions({ user, isSelf }: UsersRowActionsProps) {
               disabled={isSelf}
               onClick={() => setConfirming(true)}
             >
-              {t('admin.users.disable')}
+              {t(awaiting ? 'admin.users.reject' : 'admin.users.disable')}
               <DropdownMenuShortcut>
                 <UserX size={16} />
               </DropdownMenuShortcut>
@@ -100,10 +129,10 @@ export function UsersRowActions({ user, isSelf }: UsersRowActionsProps) {
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title={t('admin.users.disable')}
-        desc={t('admin.users.disable-confirm', { name: user.name })}
+        title={t(awaiting ? 'admin.users.reject' : 'admin.users.disable')}
+        desc={t(awaiting ? 'admin.users.reject-confirm' : 'admin.users.disable-confirm', { name: user.name })}
         cancelBtnText={t('admin.ui.cancel')}
-        confirmText={t('admin.users.disable')}
+        confirmText={t(awaiting ? 'admin.users.reject' : 'admin.users.disable')}
         destructive
         isLoading={updateUser.isPending}
         handleConfirm={() => void setDisabled(true)}

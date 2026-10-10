@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { isAuthFieldError, type AuthErrorKey } from '@/features/auth'
 import { useRegister } from '@/features/auth/use-auth'
+import { useAuthOptions } from '@/hooks/use-auth-options'
 import AuthField from './AuthField'
 import AuthShell from './AuthShell'
 import { validateEmail, validateName, validatePassword } from './validation'
@@ -25,6 +26,10 @@ export function RegisterPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const register = useRegister()
+  const options = useAuthOptions()
+  // Registered, but an administrator has to approve the account before it can
+  // sign in: there is no session, so the page says so instead of moving on.
+  const [waiting, setWaiting] = useState(false)
 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -58,7 +63,11 @@ export function RegisterPage() {
 
     submittingRef.current = true
     try {
-      await register.mutateAsync({ email, name, password })
+      const outcome = await register.mutateAsync({ email, name, password })
+      if (outcome.status === 'pending') {
+        setWaiting(true)
+        return
+      }
       await navigate({ to: '/' })
     } catch {
       // Rendered from `register.error` below.
@@ -89,6 +98,36 @@ export function RegisterPage() {
   const dismissFailure = (field: FormField) => {
     if (failure && failureField === field) setDismissedField({ failure, field })
     if (failure && !failureField) setDismissedFormFailure(failure)
+  }
+
+  if (waiting) {
+    return (
+      <AuthShell title={t('auth.register.pending-title')}>
+        <p className="n-auth-notice" role="status">
+          {t('auth.register.pending')}
+        </p>
+        <div className="n-auth-switch">
+          <Link className="n-auth-link" to="/login">
+            {t('auth.register.to-login')}
+          </Link>
+        </div>
+      </AuthShell>
+    )
+  }
+
+  if (!options.registration) {
+    return (
+      <AuthShell title={t('auth.register.closed-title')}>
+        <p className="n-auth-notice" role="status">
+          {t('auth.register.closed')}
+        </p>
+        <div className="n-auth-switch">
+          <Link className="n-auth-link" to="/login">
+            {t('auth.register.to-login')}
+          </Link>
+        </div>
+      </AuthShell>
+    )
   }
 
   return (

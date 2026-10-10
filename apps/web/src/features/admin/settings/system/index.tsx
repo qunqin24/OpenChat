@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { useChatModels } from '@/hooks/use-chat-models'
 import { api, unwrap } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
+import { cn } from '@/lib/utils'
 import { adminKeys } from '@/features/admin/use-admin'
 import { Label } from '@/components/shadcn/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/shadcn/ui/select'
@@ -44,8 +45,11 @@ export function SettingsSystem() {
   const toggleMemory = useSystemToggle('memory', 'memory')
   // The account settings read it from the chat's features.
   const toggleAvatars = useSystemToggle('avatarUploads', 'avatars', [queryKeys.features])
-  // The sign-in page offers the button from this.
-  const toggleGuest = useSystemToggle('guestMode', 'guest', [queryKeys.guest.status])
+  // The sign-in pages offer the register link and the guest button from
+  // these (and the /guest routes check guest mode).
+  const toggleRegistration = useSystemToggle('allowRegistration', 'allow-registration', [queryKeys.auth.options])
+  const toggleApproval = useSystemToggle('registrationApproval', 'approval', [queryKeys.auth.options])
+  const toggleGuest = useSystemToggle('guestMode', 'guest', [queryKeys.guest.status, queryKeys.auth.options])
   const toggleDebug = useSystemToggle('debugLogging', '')
 
   // What enabled channels offer — the same list the chat's model picker shows.
@@ -138,6 +142,33 @@ export function SettingsSystem() {
         </TabsContent>
 
         <TabsContent value="access" className="divide-y">
+          <SettingRow
+            id="allow-registration"
+            label={t('admin.settings.system.allow-registration')}
+            hint={t('admin.settings.system.allow-registration-hint')}
+          >
+            {toggle('allow-registration', data?.allowRegistration ?? true, toggleRegistration)}
+          </SettingRow>
+          {/* Only matters while registration is allowed: dimmed and unclickable
+              otherwise, still showing what it will be once registration is back. */}
+          <SettingRow
+            id="registration-approval"
+            label={t('admin.settings.system.approval')}
+            hint={t('admin.settings.system.approval-hint')}
+            className={data && !data.allowRegistration ? 'opacity-50' : undefined}
+          >
+            {isPending ? (
+              loading()
+            ) : (
+              <Switch
+                id="registration-approval"
+                className="mt-0.5 shrink-0"
+                checked={data?.registrationApproval ?? true}
+                disabled={toggleApproval.isPending || !data?.allowRegistration}
+                onCheckedChange={(value) => toggleApproval.mutate(value)}
+              />
+            )}
+          </SettingRow>
           <SettingRow id="guest-mode" label={t('admin.settings.system.guest')} hint={t('admin.settings.system.guest-hint')}>
             {toggle('guest-mode', data?.guestMode ?? false, toggleGuest)}
           </SettingRow>
@@ -159,9 +190,21 @@ export function SettingsSystem() {
  * One setting as a line of the list: what it is on the left, its control on
  * the right, the lines divided by rules rather than each boxed in a card.
  */
-function SettingRow({ id, label, hint, children }: { id: string; label: string; hint: string; children: ReactNode }) {
+function SettingRow({
+  id,
+  label,
+  hint,
+  className,
+  children,
+}: {
+  id: string
+  label: string
+  hint: string
+  className?: string
+  children: ReactNode
+}) {
   return (
-    <div className="flex items-start justify-between gap-6 py-4">
+    <div className={cn('flex items-start justify-between gap-6 py-4', className)}>
       <div className="space-y-1">
         <Label htmlFor={id} className="text-sm font-medium">
           {label}
@@ -173,7 +216,15 @@ function SettingRow({ id, label, hint, children }: { id: string; label: string; 
   )
 }
 
-type SystemFlag = 'generativeUi' | 'askUser' | 'memory' | 'avatarUploads' | 'guestMode' | 'debugLogging'
+type SystemFlag =
+  | 'generativeUi'
+  | 'askUser'
+  | 'memory'
+  | 'avatarUploads'
+  | 'guestMode'
+  | 'debugLogging'
+  | 'allowRegistration'
+  | 'registrationApproval'
 
 /**
  * A switch saved on its own, as each of these is: the server answers with the

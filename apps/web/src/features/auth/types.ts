@@ -15,6 +15,12 @@ export interface RegisterInput {
   password: string
 }
 
+/**
+ * What registering came to. The account either works at once (and the server
+ * has signed it in), or is waiting for an administrator and has no session.
+ */
+export type RegisterOutcome = { status: 'signed_in'; user: SessionUser } | { status: 'pending' }
+
 /** Only the fields present are changed. */
 export interface UpdateProfileInput {
   name?: string
@@ -37,7 +43,7 @@ export interface AuthApi {
   /** Resolves to null when there is no valid session. */
   session(): Promise<SessionUser | null>
   login(input: LoginInput): Promise<SessionUser>
-  register(input: RegisterInput): Promise<SessionUser>
+  register(input: RegisterInput): Promise<RegisterOutcome>
   logout(): Promise<void>
   /** Self-service: cannot reach role or enabled state, by contract. */
   updateProfile(input: UpdateProfileInput): Promise<SessionUser>
@@ -62,6 +68,10 @@ export type AuthErrorKey =
   | 'auth.error.password-required'
   | 'auth.error.password-short'
   | 'auth.error.account-disabled'
+  | 'auth.error.pending-approval'
+  | 'auth.error.registration-closed'
+  | 'auth.error.login-rate-limited'
+  | 'auth.error.register-rate-limited'
   | 'auth.error.password-wrong'
   | 'auth.error.nothing-to-update'
   | 'auth.error.unknown'
@@ -69,6 +79,7 @@ export type AuthErrorKey =
 /** Field-level failures the forms surface next to the offending input. */
 export class AuthFieldError extends Error {
   readonly field:
+    | 'form'
     | 'identifier'
     | 'email'
     | 'name'

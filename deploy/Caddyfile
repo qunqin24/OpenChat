@@ -2,9 +2,15 @@
 # own; the domain's DNS must point at this server, with ports 80 and 443 open.
 {$DOMAIN} {
 	encode zstd gzip
-	# Caddy sets X-Forwarded-For to the visitor's address and replaces what a
-	# client sent there, which is what the server's per-IP guest limit reads.
+	# The server reads the visitor's address for its per-IP limits (guests,
+	# sign-in and sign-up attempts). Caddy sets X-Forwarded-For to the visitor's
+	# address and replaces what a client sent there; but the server prefers
+	# True-Client-IP and X-Real-IP when they are present, and Caddy would pass a
+	# visitor's own copies through - letting anyone pick the address they are
+	# counted as. So the first is dropped and the second set from the connection.
 	reverse_proxy openchat:8080 {
+		header_up -True-Client-IP
+		header_up X-Real-IP {remote_host}
 		# Server-sent events (answers streaming in) must not be buffered.
 		flush_interval -1
 	}

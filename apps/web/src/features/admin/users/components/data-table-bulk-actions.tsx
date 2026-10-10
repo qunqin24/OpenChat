@@ -1,6 +1,6 @@
 import type { User } from '@openchat/api-client'
 import { type Table } from '@tanstack/react-table'
-import { Shield, ShieldOff, UserCheck, UserX } from 'lucide-react'
+import { Shield, ShieldOff, UserCheck, UserRoundCheck, UserX } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -18,7 +18,8 @@ type UsersBulkActionsProps<TData> = {
  * endpoint, which applies the change in one transaction and reports back which
  * accounts it refused to touch (your own, or one that no longer exists).
  *
- * Deleting accounts is deliberately absent: there is no such endpoint, and
+ * "Approve" lets in the selected accounts that are waiting (the others are left
+ * as they are, and the count says how many were). Deleting accounts is deliberately absent: there is no such endpoint, and
  * removing a user would cascade away every conversation they own. Disabling is
  * the reversible equivalent.
  */
@@ -28,7 +29,7 @@ export function UsersBulkActions<TData>({ table }: UsersBulkActionsProps<TData>)
 
   const selected = table.getFilteredSelectedRowModel().rows.map((row) => row.original as User)
 
-  const apply = async (body: { role?: User['role']; disabled?: boolean }) => {
+  const apply = async (body: { role?: User['role']; disabled?: boolean; approved?: boolean }) => {
     if (selected.length === 0) return
 
     const result = await bulkUpdate.mutateAsync({
@@ -44,6 +45,7 @@ export function UsersBulkActions<TData>({ table }: UsersBulkActionsProps<TData>)
   }
 
   const actions = [
+    { key: 'approve', icon: UserRoundCheck, body: { approved: true }, variant: 'secondary' as const },
     { key: 'promote', icon: Shield, body: { role: 'admin' as const }, variant: 'secondary' as const },
     { key: 'demote', icon: ShieldOff, body: { role: 'user' as const }, variant: 'secondary' as const },
     { key: 'enable', icon: UserCheck, body: { disabled: false }, variant: 'secondary' as const },

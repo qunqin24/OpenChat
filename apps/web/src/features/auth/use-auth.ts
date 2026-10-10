@@ -44,8 +44,11 @@ export function useRegister() {
 
   return useMutation({
     mutationFn: (input: RegisterInput) => authApi.register(input),
-    onSuccess: (user: SessionUser) => {
-      queryClient.setQueryData(sessionQueryOptions.queryKey, user)
+    onSuccess: (outcome) => {
+      // A pending account has no session to remember.
+      if (outcome.status === 'signed_in') {
+        queryClient.setQueryData(sessionQueryOptions.queryKey, outcome.user)
+      }
     },
   })
 }
