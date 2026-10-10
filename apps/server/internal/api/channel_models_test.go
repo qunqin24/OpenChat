@@ -56,12 +56,18 @@ func TestOnlyOneQueryTogglesAModel(t *testing.T) {
 		"SetChannelModelEnabled": true,
 		// The insert sets it once, for a model an operator typed in by hand.
 		"AddManualChannelModel": true,
+		// Creation enables only the models explicitly selected in the form.
+		"CreateSelectedChannelModels": true,
 		// Reads, not writes.
 		"ListChannelModels":            true,
 		"GetChannelModel":              true,
 		"CountEnabledChannelModels":    true,
 		"CountEnabledChannelModelsFor": true,
 		"ListCatalogModelsForChannel":  true,
+		// Model routing for runs: which channel answers, and whether it still may.
+		"PickServingChannel": true,
+		"FirstServedModel":   true,
+		"GetServingChannel":  true,
 	}
 
 	for name, body := range namedChannelModelQueries(t) {

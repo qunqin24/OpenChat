@@ -51,7 +51,7 @@ export function channelsColumns(
       cell: ({ row }) => (
         <span className="flex items-center gap-2">
           <ModelIcon
-            providerId={byId.get(row.original.type)?.iconId ?? ''}
+            brand={byId.get(row.original.type)?.iconId}
             name={row.original.type}
             className="size-5"
           />

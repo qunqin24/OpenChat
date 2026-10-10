@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"net/http"
 	"strings"
 
@@ -195,46 +194,9 @@ func (s *Server) RefreshChannelModels(w http.ResponseWriter, r *http.Request, ch
 		return
 	}
 
-	// Before the request, not after it fails: a channel with no key has nothing
-	// to authenticate with, and sending an unauthenticated request would tell a
-	// third party that this installation exists for no benefit at all.
-	if strings.TrimSpace(channel.ApiKey) == "" {
-		httpx.Fail(w, r, errChannelKeyMissing)
-		return
-	}
-
-	// The protocol comes from the type, never from a column: storing both would
-	// let them disagree, and a channel speaking the wrong protocol to a real
-	// endpoint is the failure that follows.
-	wireApi, ok := wireApiFor(ChannelType(channel.Type))
-	if !ok {
-		httpx.Fail(w, r, httpx.NewError(http.StatusInternalServerError, "channel_type_unknown", "unknown channel type"))
-		return
-	}
-
-	lister, err := modellist.For(modellist.Kind(wireApi), modellist.Config{
-		BaseURL: channel.BaseUrl,
-		APIKey:  channel.ApiKey,
-	})
+	models, err := discoverChannelModels(r.Context(), ChannelType(channel.Type), channel.BaseUrl, channel.ApiKey)
 	if err != nil {
-		s.logChannelFailure(r, channel, err)
-		httpx.Fail(w, r, refreshError(err))
-		return
-	}
-
-	models, err := lister.List(r.Context())
-	if err != nil {
-		s.logChannelFailure(r, channel, err)
-		httpx.Fail(w, r, refreshError(err))
-		return
-	}
-
-	// An endpoint that lists nothing is far likelier to be misconfigured than
-	// to be serving no models, and storing that answer would prune every
-	// fetched row — taking the operator's enabled set with it, irreversibly.
-	// Refusing costs a retry; believing it costs the configuration.
-	if len(models) == 0 {
-		httpx.Fail(w, r, errChannelListedNothing)
+		httpx.Fail(w, r, err)
 		return
 	}
 
@@ -356,7 +318,7 @@ func (s *Server) catalogForChannel(
 		// Both queries select the same columns, so one mapper serves both. If
 		// they ever diverge this stops compiling, which is when you want to
 		// hear about it.
-		model := toCatalogModel(sqlc.ListCatalogModelsRow(entry))
+		model := toCatalogModel(sqlc.ListServedModelsRow(entry))
 		decorations[entry.ModelID] = &model
 	}
 	return decorations, nil
@@ -423,16 +385,4 @@ func statusText(code int) string {
 		return strings.ToLower(text)
 	}
 	return "an unexpected status"
-}
-
-// logChannelFailure records what the operator is not told.
-//
-// The channel is named by id and type, never by key: modellist builds its
-// errors to be safe to print, and this is the one place that prints them.
-func (s *Server) logChannelFailure(r *http.Request, channel sqlc.Channel, err error) {
-	slog.WarnContext(r.Context(), "channel model refresh",
-		"error", err,
-		"channel_id", channel.ID,
-		"type", string(channel.Type),
-	)
 }

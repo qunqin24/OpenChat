@@ -1,4 +1,4 @@
-import type { components } from '@openchat/api-client'
+import { OpenChatError, type components } from '@openchat/api-client'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/lib/api'
@@ -9,6 +9,27 @@ type Schemas = components['schemas']
 
 export type ChannelModel = Schemas['ChannelModel']
 export type ChannelModelRefresh = Schemas['ChannelModelRefresh']
+export type ChannelConnection = Schemas['ChannelConnection']
+export type ChannelModelInput = Schemas['ChannelModelInput']
+
+// Previews are ephemeral and may contain an unsaved credential. Keep the
+// request outside Query's mutation cache; closing the panel aborts it.
+export async function previewChannelModels(connection: ChannelConnection, signal: AbortSignal) {
+  return unwrap(await api.POST('/admin/channels/models/preview', { body: connection, signal }))
+}
+
+export function channelModelErrorKey(error: unknown) {
+  if (error instanceof OpenChatError) {
+    switch (error.code) {
+      case 'channel_key_missing': return 'admin.channels.models-enter-key' as const
+      case 'channel_key_rejected': return 'admin.channels.models-key-rejected' as const
+      case 'channel_base_url_invalid': return 'admin.channels.models-invalid-url' as const
+      case 'channel_listed_nothing': return 'admin.channels.models-list-empty' as const
+      case 'channel_unreachable': return 'admin.channels.models-unreachable' as const
+    }
+  }
+  return 'admin.channels.models-fetch-failed' as const
+}
 
 /**
  * A channel's models live under the channel's own key, because that is what

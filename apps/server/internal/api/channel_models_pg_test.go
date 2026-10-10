@@ -2,7 +2,11 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -154,5 +158,101 @@ func TestStoreChannelModels(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("enabled count = %d, want the manual row alone", count)
+	}
+}
+
+func TestCreateChannelWithSelectedModels(t *testing.T) {
+	pool := channelTestPool(t)
+	ctx := context.Background()
+	server := &Server{pool: pool, q: sqlc.New(pool)}
+	body := `{"name":"selected models","type":"openai","apiKey":"write-only-key","models":[
+		{"modelId":"chosen","displayName":"Chosen model","source":"fetched"},
+		{"modelId":"private/model","displayName":"","source":"manual"}
+	]}`
+	response := httptest.NewRecorder()
+	server.CreateChannel(response, httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body)))
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if strings.Contains(response.Body.String(), "write-only-key") {
+		t.Fatal("create returned a credential")
+	}
+	var channel Channel
+	if err := json.Unmarshal(response.Body.Bytes(), &channel); err != nil {
+		t.Fatal(err)
+	}
+	if channel.ModelCount != 2 {
+		t.Fatalf("modelCount = %d", channel.ModelCount)
+	}
+	rows, err := server.q.ListChannelModels(ctx, channel.Id)
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("rows = %+v, err = %v", rows, err)
+	}
+	for _, row := range rows {
+		if !row.Enabled || (row.Source == "fetched") != row.FetchedAt.Valid {
+			t.Errorf("incorrect selected model state: %+v", row)
+		}
+	}
+
+	// A failure after the channel INSERT must roll that INSERT back as well.
+	_, err = pool.Exec(ctx, `ALTER TABLE channel_models ADD CONSTRAINT reject_test_model CHECK (model_id <> 'reject-for-test')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), `ALTER TABLE channel_models DROP CONSTRAINT reject_test_model`)
+	})
+	body = `{"name":"must roll back","type":"openai","models":[
+		{"modelId":"reject-for-test","displayName":"","source":"manual"}
+	]}`
+	response = httptest.NewRecorder()
+	server.CreateChannel(response, httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body)))
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("failed insert status = %d", response.Code)
+	}
+	channels, err := server.q.ListChannels(ctx)
+	if err != nil || len(channels) != 1 || channels[0].ID != channel.Id {
+		t.Fatalf("failed create left a channel: %+v, err = %v", channels, err)
+	}
+}
+
+// An endpoint answering with an empty list must not be allowed to prune what is
+// stored. The guard sits upstream of the transaction, so nothing is read or
+// written; running it against Postgres proves the rows survive the failure.
+func TestRefreshWithEmptyUpstreamLeavesModelsAlone(t *testing.T) {
+	pool := channelTestPool(t)
+	ctx := context.Background()
+	server := &Server{pool: pool, q: sqlc.New(pool)}
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	}))
+	defer upstream.Close()
+
+	channel, err := server.q.CreateChannel(ctx, sqlc.CreateChannelParams{
+		Name: "empty answer", Type: sqlc.ChannelTypeOpenai,
+		BaseUrl: upstream.URL + "/v1", ApiKey: "stored-key", Enabled: true,
+	})
+	if err != nil {
+		t.Fatalf("create channel: %v", err)
+	}
+	if _, err := server.q.AddManualChannelModel(ctx, sqlc.AddManualChannelModelParams{
+		ChannelID: channel.ID, ModelID: "manual-kept",
+	}); err != nil {
+		t.Fatalf("seed manual: %v", err)
+	}
+	if _, err := server.storeChannelModels(ctx, channel.ID, []modellist.Model{{ID: "fetched-kept"}}); err != nil {
+		t.Fatalf("seed fetched: %v", err)
+	}
+
+	response := httptest.NewRecorder()
+	server.RefreshChannelModels(response, httptest.NewRequest(http.MethodPost, "/", nil), channel.ID)
+	if response.Code != http.StatusBadGateway || !strings.Contains(response.Body.String(), "channel_listed_nothing") {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+
+	rows, err := server.q.ListChannelModels(ctx, channel.ID)
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("rows = %+v, err = %v; want both left untouched", rows, err)
 	}
 }

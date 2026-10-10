@@ -96,6 +96,36 @@ func (q *Queries) CountEnabledChannelModelsFor(ctx context.Context, channelID uu
 	return count, err
 }
 
+const createSelectedChannelModels = `-- name: CreateSelectedChannelModels :exec
+INSERT INTO channel_models (channel_id, model_id, display_name, source, enabled, fetched_at)
+SELECT $1, ids.model_id, names.display_name, sources.source, true,
+       CASE WHEN sources.source = 'fetched' THEN now() END
+FROM unnest($2::text[]) WITH ORDINALITY AS ids(model_id, n)
+         JOIN unnest($3::text[]) WITH ORDINALITY AS names(display_name, n)
+              ON names.n = ids.n
+         JOIN unnest($4::text[]) WITH ORDINALITY AS sources(source, n)
+              ON sources.n = ids.n
+`
+
+type CreateSelectedChannelModelsParams struct {
+	ChannelID    uuid.UUID `json:"channel_id"`
+	ModelIds     []string  `json:"model_ids"`
+	DisplayNames []string  `json:"display_names"`
+	Sources      []string  `json:"sources"`
+}
+
+// These are the operator's selections at creation, not the endpoint's entire
+// list. Insert them together with the channel in one transaction.
+func (q *Queries) CreateSelectedChannelModels(ctx context.Context, arg CreateSelectedChannelModelsParams) error {
+	_, err := q.db.Exec(ctx, createSelectedChannelModels,
+		arg.ChannelID,
+		arg.ModelIds,
+		arg.DisplayNames,
+		arg.Sources,
+	)
+	return err
+}
+
 const deleteManualChannelModel = `-- name: DeleteManualChannelModel :execrows
 DELETE
 FROM channel_models
@@ -144,6 +174,24 @@ func (q *Queries) DeleteStaleChannelModels(ctx context.Context, arg DeleteStaleC
 	return result.RowsAffected(), nil
 }
 
+const firstServedModel = `-- name: FirstServedModel :one
+SELECT cm.model_id
+FROM channel_models cm
+         JOIN channels c ON c.id = cm.channel_id
+WHERE cm.enabled
+  AND c.enabled
+ORDER BY c.sort_order, c.created_at, cm.model_id
+LIMIT 1
+`
+
+// What a conversation that never picked a model is answered with.
+func (q *Queries) FirstServedModel(ctx context.Context) (string, error) {
+	row := q.db.QueryRow(ctx, firstServedModel)
+	var model_id string
+	err := row.Scan(&model_id)
+	return model_id, err
+}
+
 const getChannelModel = `-- name: GetChannelModel :one
 SELECT channel_id, model_id, display_name, source, enabled, fetched_at, created_at
 FROM channel_models
@@ -171,6 +219,41 @@ func (q *Queries) GetChannelModel(ctx context.Context, arg GetChannelModelParams
 	return i, err
 }
 
+const getServingChannel = `-- name: GetServingChannel :one
+SELECT c.id, c.name, c.base_url, c.api_key, c.enabled, c.sort_order, c.created_at, c.updated_at, c.type
+FROM channels c
+         JOIN channel_models cm ON cm.channel_id = c.id
+WHERE c.id = $1
+  AND cm.model_id = $2
+  AND c.enabled
+  AND cm.enabled
+`
+
+type GetServingChannelParams struct {
+	ChannelID uuid.UUID `json:"channel_id"`
+	ModelID   string    `json:"model_id"`
+}
+
+// A run's pinned channel, as long as it still serves the model. Anything else
+// — deleted, disabled, the model switched off — reads as no rows, which is
+// the run's `no_model`.
+func (q *Queries) GetServingChannel(ctx context.Context, arg GetServingChannelParams) (Channel, error) {
+	row := q.db.QueryRow(ctx, getServingChannel, arg.ChannelID, arg.ModelID)
+	var i Channel
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.BaseUrl,
+		&i.ApiKey,
+		&i.Enabled,
+		&i.SortOrder,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Type,
+	)
+	return i, err
+}
+
 const listCatalogModelsForChannel = `-- name: ListCatalogModelsForChannel :many
 SELECT DISTINCT ON (m.model_id) m.provider_id,
        m.model_id,
@@ -183,6 +266,7 @@ SELECT DISTINCT ON (m.model_id) m.provider_id,
        m.structured_output,
        m.context_limit,
        m.output_limit,
+       coalesce((m.raw -> 'limit' ->> 'input')::numeric::bigint, 0)::bigint AS input_limit,
        m.input_cost::double precision  AS input_cost,
        m.output_cost::double precision AS output_cost,
        m.release_date,
@@ -190,7 +274,8 @@ SELECT DISTINCT ON (m.model_id) m.provider_id,
        m.input_modalities,
        m.output_modalities,
        p.name                          AS provider_name,
-       coalesce(s.enabled, false)      AS enabled
+       coalesce(s.enabled, false)      AS enabled,
+       coalesce(m.raw -> 'reasoning_options', '[]'::jsonb)::jsonb AS reasoning_options
 FROM catalog_models m
          JOIN catalog_providers p ON p.id = m.provider_id
          LEFT JOIN LATERAL (SELECT bool_or(cm.enabled) AS enabled
@@ -217,6 +302,7 @@ type ListCatalogModelsForChannelRow struct {
 	StructuredOutput bool     `json:"structured_output"`
 	ContextLimit     int64    `json:"context_limit"`
 	OutputLimit      int64    `json:"output_limit"`
+	InputLimit       int64    `json:"input_limit"`
 	InputCost        float64  `json:"input_cost"`
 	OutputCost       float64  `json:"output_cost"`
 	ReleaseDate      string   `json:"release_date"`
@@ -225,12 +311,13 @@ type ListCatalogModelsForChannelRow struct {
 	OutputModalities []string `json:"output_modalities"`
 	ProviderName     string   `json:"provider_name"`
 	Enabled          bool     `json:"enabled"`
+	ReasoningOptions []byte   `json:"reasoning_options"`
 }
 
 // What models.dev knows about the models one channel lists.
 //
-// Deliberately the same column list as ListCatalogModels, so the row converts
-// to that one and both go through a single mapper. If the two ever diverge this
+// Deliberately the same column list as ListServedModels, so the row converts to
+// that one and both go through a single mapper. If the two ever diverge this
 // stops compiling, which is when you want to hear about it.
 //
 // The channel is the authority on which models exist; this only decorates them,
@@ -262,6 +349,7 @@ func (q *Queries) ListCatalogModelsForChannel(ctx context.Context, arg ListCatal
 			&i.StructuredOutput,
 			&i.ContextLimit,
 			&i.OutputLimit,
+			&i.InputLimit,
 			&i.InputCost,
 			&i.OutputCost,
 			&i.ReleaseDate,
@@ -270,6 +358,7 @@ func (q *Queries) ListCatalogModelsForChannel(ctx context.Context, arg ListCatal
 			&i.OutputModalities,
 			&i.ProviderName,
 			&i.Enabled,
+			&i.ReasoningOptions,
 		); err != nil {
 			return nil, err
 		}
@@ -318,6 +407,27 @@ func (q *Queries) ListChannelModels(ctx context.Context, channelID uuid.UUID) ([
 	return items, nil
 }
 
+const pickServingChannel = `-- name: PickServingChannel :one
+SELECT c.id
+FROM channel_models cm
+         JOIN channels c ON c.id = cm.channel_id
+WHERE cm.model_id = $1
+  AND cm.enabled
+  AND c.enabled
+ORDER BY c.sort_order, c.created_at
+LIMIT 1
+`
+
+// The channel a new run of this model is answered from: the first enabled one
+// that offers it, in the operator's order. Pinned on the run, so a later change
+// here affects the next run, never one already going.
+func (q *Queries) PickServingChannel(ctx context.Context, modelID string) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, pickServingChannel, modelID)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const setChannelModelEnabled = `-- name: SetChannelModelEnabled :one
 UPDATE channel_models
 SET enabled = $1
@@ -332,10 +442,11 @@ type SetChannelModelEnabledParams struct {
 	ModelID   string    `json:"model_id"`
 }
 
-// The only statement in this file that writes `enabled`. That is the whole
-// point of the column: whether this installation offers a model is our
-// decision, and a refresh of somebody else's list is not an occasion to revisit
-// it.
+// The only statement in this file that changes `enabled` on a row that already
+// exists. The inserts set it once, when the row is created and there is no
+// decision to preserve; a refresh never touches it. That is the whole point of
+// the column: whether this installation offers a model is our decision, and a
+// refresh of somebody else's list is not an occasion to revisit it.
 func (q *Queries) SetChannelModelEnabled(ctx context.Context, arg SetChannelModelEnabledParams) (ChannelModel, error) {
 	row := q.db.QueryRow(ctx, setChannelModelEnabled, arg.Enabled, arg.ChannelID, arg.ModelID)
 	var i ChannelModel

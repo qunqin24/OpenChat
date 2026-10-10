@@ -1,12 +1,13 @@
-import type { Channel } from '@openchat/api-client'
+import { OpenChatError, type Channel } from '@openchat/api-client'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ExternalLink } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
+import { ModelIcon } from '@/components/model-icon'
 import { PasswordInput } from '@/components/shadcn/password-input'
 import { Button } from '@/components/shadcn/ui/button'
 import {
@@ -29,9 +30,12 @@ import {
 import { Input } from '@/components/shadcn/ui/input'
 import { Switch } from '@/components/shadcn/ui/switch'
 import { useCreateChannel, useUpdateChannel } from '@/features/admin/use-admin'
-import { ChannelTypeSelect } from './channel-type-select'
+import { ChannelProviderPicker } from './channel-provider-picker'
 import { ChannelModelsSection } from './channel-models-section'
+import { ChannelModelPicker } from './channel-model-picker'
+import type { ChannelModelInput } from '../use-channel-models'
 import { PanelSection } from './panel-section'
+import { cn } from '@/lib/utils'
 import { DEFAULT_CHANNEL_TYPE, useChannelTypes, type ChannelType } from '../channel-types'
 
 type ChannelsActionPanelProps = {
@@ -91,6 +95,12 @@ export function ChannelsActionPanel({ channel, open, onOpenChange }: ChannelsAct
  * a question they should never have to answer. A type answers it: the server's
  * table maps each vendor to its protocol, its default endpoint and its key
  * format, so picking "OpenRouter" settles all three.
+ *
+ * Creating starts on the vendor picker rather than the fields: the vendor is
+ * the one choice everything after it depends on, and a grid of logos with a
+ * search box finds it faster than a dropdown of thirty names. The fields stay
+ * mounted, only hidden, while the picker is up — so going back to change the
+ * vendor never costs the operator what they had typed.
  */
 function ChannelForm({
   channel,
@@ -109,12 +119,11 @@ function ChannelForm({
   const schema = z.object({
     name: z.string().trim().min(1).max(80),
     // Required, and the one field here the server acts on: it picks the adapter
-    // that talks to the endpoint. The picker only ever emits one of these three,
-    // so the enum is a statement of what the contract allows rather than a check
-    // anyone is expected to fail.
-    // Not an enum of our own: the server owns the list, and a copy here would
-    // reject a type it had just started offering. `custom` keeps the union from
-    // the contract without restating its members.
+    // that talks to the endpoint. Not an enum of our own — the server owns the
+    // list, and a copy here would reject a type it had just started offering.
+    // `custom` keeps the union from the contract without restating its members;
+    // the picker only ever emits one of them, so this is a statement of what the
+    // contract allows rather than a check anyone is expected to fail.
     type: z.custom<ChannelType>((value) => typeof value === 'string' && value.length > 0),
     baseUrl: z.string().trim(),
     apiKey: z.string(),
@@ -134,24 +143,85 @@ function ChannelForm({
     },
   })
 
+  // Which half of the sheet is showing. A new channel opens on the picker; an
+  // existing one already has a vendor, so it opens on the fields and the picker
+  // is reached through "Change".
+  const [step, setStep] = useState<'picker' | 'form'>(isEdit ? 'form' : 'picker')
+  // The default type above only keeps the form valid; it is not a choice. The
+  // picker marks a vendor "current" and offers "back" only once one is chosen.
+  const [chosen, setChosen] = useState(isEdit)
+  const changeButton = useRef<HTMLButtonElement>(null)
+  const refocusChange = useRef(false)
+
+  // Coming back from the picker, focus goes to the control that opened it —
+  // after the fields are visible again, which is why this is an effect and not
+  // part of the handler: focusing an element that is still `display: none` does
+  // nothing.
+  useEffect(() => {
+    if (step === 'form' && refocusChange.current) {
+      refocusChange.current = false
+      changeButton.current?.focus()
+    }
+  }, [step])
+
   const pending = createChannel.isPending || updateChannel.isPending
 
   // A blank field means "keep the stored key", which leaves no way to say
   // "remove it" — the two are the same empty string. This carries the second
   // meaning, so both stay expressible without a magic value in the input.
   const [clearKey, setClearKey] = useState(false)
+  const [selectedModels, setSelectedModels] = useState<ChannelModelInput[]>([])
+  const [connectionRevision, setConnectionRevision] = useState(0)
+  // Raised by the picker while a preview is in flight. Create waits on it so a
+  // slow retry cannot be submitted with the selection the previous one left.
+  const [modelsFetching, setModelsFetching] = useState(false)
+  // A list fetched with the previous key or URL must never be submitted as a
+  // selection for a different endpoint. Remounting aborts an old preview and
+  // drops what it had selected.
+  const resetModelSelection = () => {
+    setSelectedModels([])
+    setModelsFetching(false)
+    setConnectionRevision((revision) => revision + 1)
+  }
 
   // useWatch rather than form.watch(): the latter returns a fresh function the
   // React compiler refuses to memoise around.
   const name = useWatch({ control: form.control, name: 'name' })
   const selectedType = useWatch({ control: form.control, name: 'type' })
+  const baseUrl = useWatch({ control: form.control, name: 'baseUrl' })
+  const apiKey = useWatch({ control: form.control, name: 'apiKey' })
 
   const types = channelTypes.data ?? []
   // Undefined only while the table is still loading, in which case the hints
   // below simply do not appear yet.
   const selected = types.find((type) => type.id === selectedType)
 
+  // Choosing a vendor settles the type, discards the model list fetched for the
+  // previous one, and names the channel after the vendor when the operator has
+  // not named it themselves. "Not named it themselves" is a blank field or one
+  // still holding the previous vendor's label — a name they typed is theirs.
+  const chooseType = (next: ChannelType) => {
+    if (next !== selectedType) {
+      form.setValue('type', next, { shouldDirty: true })
+      resetModelSelection()
+    }
+    const nextLabel = types.find((type) => type.id === next)?.label
+    const previousLabel = chosen ? selected?.label : undefined
+    const currentName = form.getValues('name').trim()
+    if (nextLabel && (currentName === '' || currentName === previousLabel)) {
+      form.setValue('name', nextLabel, { shouldDirty: true })
+    }
+    setChosen(true)
+    refocusChange.current = true
+    setStep('form')
+  }
+
   const submit = async (values: z.output<typeof schema>) => {
+    // Guarded here as well as on the footer button: a submit can arrive without
+    // a click on it — Enter inside the form, or a programmatic call — and the
+    // body must not run while a request it would race is still pending.
+    if (pending || modelsFetching) return
+    if (!isEdit && selectedModels.length === 0) return
     try {
       if (isEdit) {
         await updateChannel.mutateAsync({
@@ -159,8 +229,9 @@ function ChannelForm({
           // Only what actually moved, so a no-op save is a no-op request.
           ...(values.name !== channel.name ? { name: values.name } : {}),
           ...(values.type !== channel.type ? { type: values.type } : {}),
-          // Compared against `?? ''` because the channel may carry no brand at
-          // all, and an empty string is how this field says "stop claiming one".
+          // Compared against `?? ''` because the channel may carry no explicit
+          // endpoint, and an empty string is how this field says "use the
+          // vendor's default".
           ...(values.baseUrl !== (channel.baseUrl ?? '') ? { baseUrl: values.baseUrl } : {}),
           ...(values.enabled !== channel.enabled ? { enabled: values.enabled } : {}),
           // The load-bearing line: the property exists only when the admin
@@ -175,31 +246,64 @@ function ChannelForm({
           name: values.name,
           type: values.type,
           enabled: values.enabled,
+          models: selectedModels,
           ...(values.baseUrl ? { baseUrl: values.baseUrl } : {}),
           ...(values.apiKey ? { apiKey: values.apiKey } : {}),
         })
         toast.success(t('admin.channels.created'))
       }
       onOpenChange(false)
-    } catch {
-      // Nothing the contract blames on a single input, so there is no field to
-      // point at — a toast it is.
-      toast.error(t('admin.users.update-failed'))
+    } catch (error) {
+      // `models_invalid` is the one failure the picker can be blamed for — it
+      // is the contract's cap or a duplicate id. Everything else is a connection
+      // or database fault with no field to point at.
+      const key =
+        error instanceof OpenChatError && error.code === 'models_invalid'
+          ? 'admin.channels.models-invalid'
+          : isEdit
+            ? 'admin.channels.update-failed'
+            : 'admin.channels.create-failed'
+      toast.error(t(key))
     }
   }
 
   return (
     <>
+      {step === 'picker' && (
+        <ChannelProviderPicker
+          types={types}
+          isPending={channelTypes.isPending}
+          current={chosen ? selectedType : undefined}
+          onSelect={chooseType}
+          onBack={
+            chosen
+              ? () => {
+                  refocusChange.current = true
+                  setStep('form')
+                }
+              : undefined
+          }
+        />
+      )}
+
       {/* The scroll container holds both the form and the model list, but only
-          the fields are inside the `<form>` element. The list mutates on its own
-          — every switch, every removal is a request of its own that has nothing
-          to do with Save — and nesting its inputs in the form would put a stray
-          Enter one keystroke away from submitting the channel. */}
-      <div className="flex-1 space-y-6 overflow-y-auto px-4 py-1">
+          the fields are inside the `<form>` element. The list behaves differently
+          by mode — editing mutates a saved channel with a request per switch,
+          creating keeps a draft picker — and in both cases nesting its inputs in
+          the form would put a stray Enter one keystroke away from submitting the
+          channel. */}
+      <div
+        className={cn(
+          'flex flex-1 flex-col gap-6 overflow-y-auto px-4 py-1',
+          // Hidden rather than unmounted, so the fields and the model selection
+          // survive a trip to the picker.
+          step === 'picker' && 'hidden',
+        )}
+      >
         <Form {...form}>
           <form
             id="channels-action-form"
-            className="space-y-6"
+            className="flex flex-col gap-6"
             onSubmit={form.handleSubmit((values) => void submit(values))}
           >
             <PanelSection title={t('admin.channels.section-connection')}>
@@ -210,34 +314,41 @@ function ChannelForm({
                   <FormItem>
                     <FormLabel>{t('admin.channels.name')}</FormLabel>
                     <FormControl>
-                      <Input autoComplete="off" {...field} />
+                      <Input autoComplete="off" maxLength={80} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('admin.channels.type')}</FormLabel>
-                    <FormControl>
-                      <ChannelTypeSelect
-                        types={types}
-                        isPending={channelTypes.isPending}
-                        value={field.value}
-                        onChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormDescription className="text-xs">
-                      {t('admin.channels.type-hint')}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* Not a FormField: there is nothing to type or validate, and a
+                  label pointing at the button would replace its name with
+                  "Type". The group is named instead. */}
+              <div className="space-y-2" role="group" aria-labelledby="channels-type-label">
+                <div id="channels-type-label" className="text-sm leading-none font-medium">
+                  {t('admin.channels.type')}
+                </div>
+                <div className="flex items-center gap-3 rounded-lg border p-3">
+                  <ModelIcon
+                    brand={selected?.iconId}
+                    name={selected?.label ?? selectedType}
+                    className="size-8"
+                  />
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                    {selected?.label ?? selectedType}
+                  </span>
+                  <Button
+                    ref={changeButton}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => setStep('picker')}
+                  >
+                    {t('admin.channels.type-change')}
+                  </Button>
+                </div>
+              </div>
 
               <FormField
                 control={form.control}
@@ -256,6 +367,10 @@ function ChannelForm({
                         // the field shows what it will fall back to.
                         placeholder={selected?.endpoint || t('admin.channels.base-url-default')}
                         {...field}
+                        onChange={(event) => {
+                          field.onChange(event)
+                          resetModelSelection()
+                        }}
                       />
                     </FormControl>
                     <FormDescription className="text-xs">
@@ -274,8 +389,13 @@ function ChannelForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{t('admin.channels.api-key')}</FormLabel>
-                    <FormControl>
-                      <div className="flex items-center gap-2">
+                    {/* FormControl wraps the input itself, not the row: RHF
+                        injects the id and the `aria-*` that connect the label
+                        and the error message onto its direct child, and those
+                        belong on the field rather than on a layout div. The
+                        Clear button sits beside the control, inside the row. */}
+                    <div className="flex items-center gap-2">
+                      <FormControl>
                         <PasswordInput
                           className="flex-1"
                           autoComplete="off"
@@ -288,23 +408,27 @@ function ChannelForm({
                           }
                           disabled={clearKey}
                           {...field}
+                          onChange={(event) => {
+                            field.onChange(event)
+                            resetModelSelection()
+                          }}
                         />
-                        {isEdit && channel.hasKey && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="shrink-0"
-                            onClick={() => {
-                              setClearKey((current) => !current)
-                              form.setValue('apiKey', '')
-                            }}
-                          >
-                            {t(clearKey ? 'admin.ui.cancel' : 'admin.channels.api-key-clear')}
-                          </Button>
-                        )}
-                      </div>
-                    </FormControl>
+                      </FormControl>
+                      {isEdit && channel.hasKey && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="shrink-0"
+                          onClick={() => {
+                            setClearKey((current) => !current)
+                            form.setValue('apiKey', '')
+                          }}
+                        >
+                          {t(clearKey ? 'admin.ui.cancel' : 'admin.channels.api-key-clear')}
+                        </Button>
+                      )}
+                    </div>
                     {/* One description element, because `FormDescription` carries
                         the id the control's `aria-describedby` points at and two
                         of them would be two elements with one id. The catalogue's
@@ -312,7 +436,13 @@ function ChannelForm({
                         lives and where to go and read about it — belong next to
                         the field you cannot fill without them. */}
                     <FormDescription className="space-y-1 text-xs">
-                      <span className="block">{t('admin.channels.api-key-hint')}</span>
+                      <span className="block">
+                        {t(
+                          isEdit
+                            ? 'admin.channels.api-key-hint'
+                            : 'admin.channels.api-key-create-hint',
+                        )}
+                      </span>
                       {/* The shape the vendor's keys take, which is how an
                           operator tells a pasted key from the wrong one. */}
                       {selected?.keyHint && (
@@ -355,26 +485,56 @@ function ChannelForm({
           </form>
         </Form>
 
-        {/* Only when editing. A channel that has not been saved has no id to
-            hang models on, and nothing to ask the endpoint with. */}
-        {isEdit && <ChannelModelsSection channel={channel} />}
+        {isEdit ? (
+          <ChannelModelsSection
+            channel={channel}
+            connectionDirty={
+              selectedType !== channel.type ||
+              baseUrl.trim() !== (channel.baseUrl ?? '') ||
+              Boolean(apiKey) ||
+              clearKey
+            }
+          />
+        ) : (
+          <ChannelModelPicker
+            key={connectionRevision}
+            connection={{ type: selectedType, baseUrl, apiKey }}
+            selected={selectedModels}
+            onChange={setSelectedModels}
+            disabled={pending}
+            onFetchingChange={setModelsFetching}
+          />
+        )}
       </div>
 
-      <SheetFooter className="flex-row justify-end">
-        <Button variant="outline" disabled={pending} onClick={() => onOpenChange(false)}>
-          {t('admin.ui.cancel')}
-        </Button>
-        <Button
-          type="submit"
-          form="channels-action-form"
-          // Keeps the one required text field from ever reaching zod, whose
-          // built-in messages are not localised. The protocol needs no such
-          // guard: it always holds one of three values, never an empty one.
-          disabled={pending || !name.trim()}
-        >
-          {t('admin.ui.save')}
-        </Button>
-      </SheetFooter>
+      {step === 'form' && (
+        <SheetFooter className="flex-row justify-end">
+          <Button variant="outline" disabled={pending} onClick={() => onOpenChange(false)}>
+            {t('admin.ui.cancel')}
+          </Button>
+          <Button
+            type="submit"
+            form="channels-action-form"
+            // Keeps the one required text field from ever reaching zod, whose
+            // built-in messages are not localised. The type needs no such guard:
+            // the picker always supplies a known one.
+            //
+            // `modelsFetching` overlaps `pending` only by accident — it is the
+            // preview, not the create, that must block a submit carrying a stale
+            // selection. The count then keeps a create with no models out of reach.
+            disabled={
+              pending ||
+              modelsFetching ||
+              !name.trim() ||
+              (!isEdit && selectedModels.length === 0)
+            }
+          >
+            {isEdit
+              ? t('admin.ui.save')
+              : t('admin.channels.create-with-models', { count: selectedModels.length })}
+          </Button>
+        </SheetFooter>
+      )}
     </>
   )
 }

@@ -27,7 +27,9 @@ type openAIList struct {
 
 func (openAI) list(ctx context.Context, f fetcher) ([]Model, error) {
 	header := http.Header{}
-	header.Set("Authorization", "Bearer "+f.key)
+	if f.key != "" {
+		header.Set("Authorization", "Bearer "+f.key)
+	}
 
 	var body openAIList
 	if err := f.get(ctx, "/models", nil, header, &body); err != nil {

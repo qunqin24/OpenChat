@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -46,11 +47,20 @@ func toChannel(row sqlc.Channel, modelCount int64) Channel {
 		base := row.BaseUrl
 		channel.BaseUrl = &base
 	}
-	if key := []rune(row.ApiKey); len(key) > keyPreviewLength {
-		preview := "…" + string(key[len(key)-keyPreviewLength:])
+	if preview := keyPreview(row.ApiKey); preview != "" {
 		channel.KeyPreview = &preview
 	}
 	return channel
+}
+
+// keyPreview is a stored credential's last few characters, for telling two
+// keys apart; empty for a key too short to show any of without showing most.
+func keyPreview(key string) string {
+	runes := []rune(key)
+	if len(runes) <= keyPreviewLength {
+		return ""
+	}
+	return "…" + string(runes[len(runes)-keyPreviewLength:])
 }
 
 func (s *Server) ListChannels(w http.ResponseWriter, r *http.Request) {
@@ -106,7 +116,22 @@ func (s *Server) CreateChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	row, err := s.q.CreateChannel(r.Context(), sqlc.CreateChannelParams{
+	models := derefOr(body.Models, []ChannelModelInput{})
+	if err := validateChannelModels(models); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+
+	// The connection and the selected models are one operation. A failed model
+	// insert must not leave a saved but empty channel behind.
+	tx, err := s.pool.Begin(r.Context())
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	q := s.q.WithTx(tx)
+	row, err := q.CreateChannel(r.Context(), sqlc.CreateChannelParams{
 		Name:    name,
 		Type:    sqlc.ChannelType(body.Type),
 		BaseUrl: strings.TrimSpace(derefOr(body.BaseUrl, "")),
@@ -117,9 +142,43 @@ func (s *Server) CreateChannel(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, err)
 		return
 	}
-	// A channel that does not exist yet offers nothing; its models arrive from
-	// a refresh, which is a separate, deliberate call.
-	httpx.JSON(w, http.StatusCreated, toChannel(row, 0))
+	if len(models) > 0 {
+		params := sqlc.CreateSelectedChannelModelsParams{ChannelID: row.ID}
+		for _, model := range models {
+			params.ModelIds = append(params.ModelIds, model.ModelId)
+			params.DisplayNames = append(params.DisplayNames, model.DisplayName)
+			params.Sources = append(params.Sources, string(model.Source))
+		}
+		if err := q.CreateSelectedChannelModels(r.Context(), params); err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	httpx.JSON(w, http.StatusCreated, toChannel(row, int64(len(models))))
+}
+
+func validateChannelModels(models []ChannelModelInput) error {
+	if len(models) > 2000 {
+		return httpx.NewFieldError("models", "models_invalid", "select at most 2000 models")
+	}
+	seen := make(map[string]bool, len(models))
+	for i := range models {
+		model := &models[i]
+		model.ModelId = strings.TrimSpace(model.ModelId)
+		model.DisplayName = strings.TrimSpace(model.DisplayName)
+		if model.ModelId == "" || utf8.RuneCountInString(model.ModelId) > 200 ||
+			utf8.RuneCountInString(model.DisplayName) > 500 ||
+			(model.Source != ChannelModelInputSourceFetched && model.Source != ChannelModelInputSourceManual) ||
+			seen[model.ModelId] {
+			return httpx.NewFieldError("models", "models_invalid", "model selections must have unique ids and a valid source")
+		}
+		seen[model.ModelId] = true
+	}
+	return nil
 }
 
 func (s *Server) UpdateChannel(w http.ResponseWriter, r *http.Request, channelId openapi_types.UUID) {
@@ -203,19 +262,4 @@ func derefOr[T any](value *T, fallback T) T {
 		return fallback
 	}
 	return *value
-}
-
-// optionalText trims an optional string and turns an empty one into NULL.
-//
-// Empty is not a value this column accepts: a CHECK constraint requires a
-// non-blank provider id, and "no provider" is spelled NULL.
-func optionalText(value *string) *string {
-	if value == nil {
-		return nil
-	}
-	trimmed := strings.TrimSpace(*value)
-	if trimmed == "" {
-		return nil
-	}
-	return &trimmed
 }

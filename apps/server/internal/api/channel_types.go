@@ -22,54 +22,100 @@ type channelTypeDef struct {
 	Endpoint string      `json:"endpoint"`
 	KeyHint  string      `json:"keyHint"`
 	// IconID names the brand mark, which is not always the type id —
-	// `claude` is drawn with the Anthropic mark, `palm` with Gemini's.
+	// `anthropic` is drawn with the Claude mark, `dashscope` with Qwen's.
+	//
+	// It is a brand, not a models.dev provider id: the two spell several of
+	// these vendors differently (`gemini` vs `google`, `zhipu` vs `zhipuai`).
+	// The front end resolves it through BRAND_ICONS in
+	// `apps/web/src/components/model-icon.tsx`, so a new entry here needs a
+	// line there too — without one the vendor silently draws as a letter.
+	// Empty is a valid answer, and the relay entry below gives it.
 	IconID string `json:"iconId"`
 	Doc    string `json:"doc,omitempty"`
+	// Group is the tab the picker files the vendor under. It is how an operator
+	// narrows forty names down to the kind of thing they are looking for, not a
+	// property the server acts on.
+	Group ChannelTypeGroup `json:"group"`
+	// KeyOptional marks an endpoint that is normally reached without a
+	// credential — a service on the operator's own machine. It is served rather
+	// than named in the front end so that the model discovery here and the
+	// "needs a key" checks there cannot disagree about which vendors those are.
+	KeyOptional bool `json:"keyOptional"`
 }
 
 // Labels are brand names and stay untranslated: "SiliconFlow" is what it is
 // called in both locales, and the Chinese vendors are listed the way they write
 // themselves, which is how an operator will recognise them.
 var channelTypes = []channelTypeDef{
-	{ID: "openai", Label: "OpenAI", WireApi: "openai",
+	// The model makers themselves: the key is theirs and the models are theirs.
+	{ID: "openai", Label: "OpenAI", WireApi: "openai", Group: Vendor,
 		Endpoint: "https://api.openai.com/v1", KeyHint: "sk-…", IconID: "openai",
 		Doc: "https://platform.openai.com/api-keys"},
-	{ID: "anthropic", Label: "Anthropic Claude", WireApi: "anthropic",
+	{ID: "anthropic", Label: "Anthropic Claude", WireApi: "anthropic", Group: Vendor,
 		Endpoint: "https://api.anthropic.com/v1", KeyHint: "sk-ant-…", IconID: "claude",
 		Doc: "https://console.anthropic.com/settings/keys"},
-	{ID: "gemini", Label: "Google Gemini", WireApi: "gemini",
+	{ID: "gemini", Label: "Google Gemini", WireApi: "gemini", Group: Vendor,
 		Endpoint: "https://generativelanguage.googleapis.com/v1beta", KeyHint: "AIza…", IconID: "gemini",
 		Doc: "https://aistudio.google.com/apikey"},
 
 	// Everything below speaks the OpenAI protocol. They are separate entries
 	// because the endpoint and the key format differ, and because an operator
 	// looks for the name on their invoice.
-	{ID: "openrouter", Label: "OpenRouter", WireApi: "openai",
-		Endpoint: "https://openrouter.ai/api/v1", KeyHint: "sk-or-…", IconID: "openrouter"},
-	{ID: "deepseek", Label: "深度求索 DeepSeek", WireApi: "openai",
+	{ID: "deepseek", Label: "深度求索 DeepSeek", WireApi: "openai", Group: Vendor,
 		Endpoint: "https://api.deepseek.com/v1", KeyHint: "sk-…", IconID: "deepseek"},
-	{ID: "siliconflow", Label: "硅基流动 SiliconFlow", WireApi: "openai",
-		Endpoint: "https://api.siliconflow.cn/v1", KeyHint: "sk-…", IconID: "siliconcloud"},
-	{ID: "moonshot", Label: "月之暗面 Moonshot", WireApi: "openai",
+	{ID: "moonshot", Label: "月之暗面 Moonshot", WireApi: "openai", Group: Vendor,
 		Endpoint: "https://api.moonshot.cn/v1", KeyHint: "sk-…", IconID: "moonshot"},
-	{ID: "zhipu", Label: "智谱 GLM", WireApi: "openai",
+	{ID: "zhipu", Label: "智谱 GLM", WireApi: "openai", Group: Vendor,
 		Endpoint: "https://open.bigmodel.cn/api/paas/v4", KeyHint: "…", IconID: "zhipu"},
-	{ID: "dashscope", Label: "阿里云百炼 DashScope", WireApi: "openai",
+	{ID: "dashscope", Label: "阿里云百炼 DashScope", WireApi: "openai", Group: Vendor,
 		Endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1", KeyHint: "sk-…", IconID: "qwen"},
-	{ID: "volcengine", Label: "火山方舟 Volcengine", WireApi: "openai",
+	{ID: "volcengine", Label: "火山方舟 Volcengine", WireApi: "openai", Group: Vendor,
 		Endpoint: "https://ark.cn-beijing.volces.com/api/v3", KeyHint: "…", IconID: "volcengine"},
-	{ID: "minimax", Label: "MiniMax", WireApi: "openai",
+	{ID: "minimax", Label: "MiniMax", WireApi: "openai", Group: Vendor,
 		Endpoint: "https://api.minimax.chat/v1", KeyHint: "…", IconID: "minimax"},
-	{ID: "xai", Label: "xAI Grok", WireApi: "openai",
+	{ID: "xai", Label: "xAI Grok", WireApi: "openai", Group: Vendor,
 		Endpoint: "https://api.x.ai/v1", KeyHint: "xai-…", IconID: "grok"},
-	{ID: "groq", Label: "Groq", WireApi: "openai",
+	{ID: "mistral", Label: "Mistral AI", WireApi: "openai", Group: Vendor,
+		Endpoint: "https://api.mistral.ai/v1", KeyHint: "…", IconID: "mistral"},
+	{ID: "stepfun", Label: "阶跃星辰 StepFun", WireApi: "openai", Group: Vendor,
+		Endpoint: "https://api.stepfun.com/v1", KeyHint: "…", IconID: "stepfun"},
+	{ID: "hunyuan", Label: "腾讯混元 Hunyuan", WireApi: "openai", Group: Vendor,
+		Endpoint: "https://api.hunyuan.cloud.tencent.com/v1", KeyHint: "sk-…", IconID: "hunyuan"},
+	{ID: "qianfan", Label: "百度千帆 Qianfan", WireApi: "openai", Group: Vendor,
+		Endpoint: "https://qianfan.baidubce.com/v2", KeyHint: "bce-v3/…", IconID: "wenxin"},
+	{ID: "mimo", Label: "小米 MiMo", WireApi: "openai", Group: Vendor,
+		Endpoint: "https://api.xiaomimimo.com/v1", KeyHint: "…", IconID: "mimo"},
+
+	// Hosts that serve other people's models, or a router in front of several
+	// of them. Same protocol; the difference an operator cares about is whose
+	// invoice it lands on.
+	{ID: "openrouter", Label: "OpenRouter", WireApi: "openai", Group: Platform,
+		Endpoint: "https://openrouter.ai/api/v1", KeyHint: "sk-or-…", IconID: "openrouter"},
+	{ID: "siliconflow", Label: "硅基流动 SiliconFlow", WireApi: "openai", Group: Platform,
+		Endpoint: "https://api.siliconflow.cn/v1", KeyHint: "sk-…", IconID: "siliconcloud"},
+	{ID: "groq", Label: "Groq", WireApi: "openai", Group: Platform,
 		Endpoint: "https://api.groq.com/openai/v1", KeyHint: "gsk_…", IconID: "groq"},
-	{ID: "ollama", Label: "Ollama", WireApi: "openai",
+	{ID: "together", Label: "Together AI", WireApi: "openai", Group: Platform,
+		Endpoint: "https://api.together.xyz/v1", KeyHint: "…", IconID: "together"},
+	{ID: "fireworks", Label: "Fireworks AI", WireApi: "openai", Group: Platform,
+		Endpoint: "https://api.fireworks.ai/inference/v1", KeyHint: "…", IconID: "fireworks"},
+	{ID: "nvidia", Label: "NVIDIA NIM", WireApi: "openai", Group: Platform,
+		Endpoint: "https://integrate.api.nvidia.com/v1", KeyHint: "nvapi-…", IconID: "nvidia"},
+	{ID: "modelscope", Label: "魔搭 ModelScope", WireApi: "openai", Group: Platform,
+		Endpoint: "https://api-inference.modelscope.cn/v1", KeyHint: "…", IconID: "modelscope"},
+	{ID: "cerebras", Label: "Cerebras", WireApi: "openai", Group: Platform,
+		Endpoint: "https://api.cerebras.ai/v1", KeyHint: "csk-…", IconID: "cerebras"},
+
+	// Servers the operator runs. A local one answers without a credential, which
+	// is what `KeyOptional` records.
+	{ID: "ollama", Label: "Ollama", WireApi: "openai", Group: Custom, KeyOptional: true,
 		Endpoint: "http://localhost:11434/v1", KeyHint: "", IconID: "ollama"},
+	{ID: "lmstudio", Label: "LM Studio", WireApi: "openai", Group: Custom, KeyOptional: true,
+		Endpoint: "http://localhost:1234/v1", KeyHint: "", IconID: "lmstudio"},
 
 	// Last on purpose: it is the answer when none of the names above is the
 	// one on the invoice, and it is the only entry with no endpoint to offer.
-	{ID: "openai-compatible", Label: "OpenAI 兼容 / 中转", WireApi: "openai",
+	{ID: "openai-compatible", Label: "OpenAI 兼容 / 中转", WireApi: "openai", Group: Custom,
 		Endpoint: "", KeyHint: "sk-…", IconID: ""},
 }
 
@@ -84,6 +130,7 @@ func (s *Server) ListChannelTypes(w http.ResponseWriter, r *http.Request) {
 		info := ChannelTypeInfo{
 			Id: t.ID, Label: t.Label, WireApi: t.WireApi,
 			Endpoint: t.Endpoint, KeyHint: t.KeyHint, IconId: t.IconID,
+			Group: t.Group, KeyOptional: t.KeyOptional,
 		}
 		if t.Doc != "" {
 			doc := t.Doc
@@ -112,4 +159,14 @@ func defaultEndpointFor(t ChannelType) string {
 		}
 	}
 	return ""
+}
+
+// keyOptionalFor reports whether the type is normally reached without a key.
+func keyOptionalFor(t ChannelType) bool {
+	for _, def := range channelTypes {
+		if def.ID == t {
+			return def.KeyOptional
+		}
+	}
+	return false
 }

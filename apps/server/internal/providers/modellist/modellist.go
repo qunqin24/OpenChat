@@ -51,9 +51,10 @@ type Lister interface {
 	List(ctx context.Context) ([]Model, error)
 }
 
-// Kind is the wire protocol an endpoint speaks. It mirrors the channel_kind
-// enum in the database and the ChannelKind schema in the contract, which is
-// why the strings have to match theirs exactly.
+// Kind is the wire protocol an endpoint speaks. It mirrors the WireApi schema
+// in the contract, which is why the strings have to match it exactly; a
+// channel's vendor type is mapped to one of these by the API layer, not stored
+// on the channel row.
 type Kind string
 
 const (
@@ -69,9 +70,11 @@ type Config struct {
 	// deliberately does not.
 	BaseURL string
 
-	// APIKey is the stored credential. It never comes from a request and never
-	// appears in an error.
+	// APIKey is the operator's credential, saved or supplied for a preview.
+	// It never appears in an error.
 	APIKey string
+	// AllowNoKey is set only for a channel type that supports anonymous access.
+	AllowNoKey bool
 
 	// HTTP overrides the shared client, mainly so a test can point an adapter
 	// at an httptest server and never reach the network. The redirect policy is
@@ -172,7 +175,7 @@ func (e *StatusError) Unauthorized() bool {
 // The credential is checked here rather than at the first request, so a
 // misconfigured channel fails without anything leaving the machine.
 func For(kind Kind, cfg Config) (Lister, error) {
-	if strings.TrimSpace(cfg.APIKey) == "" {
+	if strings.TrimSpace(cfg.APIKey) == "" && !cfg.AllowNoKey {
 		return nil, ErrNoKey
 	}
 

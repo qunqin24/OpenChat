@@ -26,11 +26,24 @@ VALUES (sqlc.arg('channel_id'), sqlc.arg('model_id'), sqlc.arg('display_name'), 
 ON CONFLICT (channel_id, model_id) DO NOTHING
 RETURNING *;
 
+-- name: CreateSelectedChannelModels :exec
+-- These are the operator's selections at creation, not the endpoint's entire
+-- list. Insert them together with the channel in one transaction.
+INSERT INTO channel_models (channel_id, model_id, display_name, source, enabled, fetched_at)
+SELECT sqlc.arg('channel_id'), ids.model_id, names.display_name, sources.source, true,
+       CASE WHEN sources.source = 'fetched' THEN now() END
+FROM unnest(sqlc.arg('model_ids')::text[]) WITH ORDINALITY AS ids(model_id, n)
+         JOIN unnest(sqlc.arg('display_names')::text[]) WITH ORDINALITY AS names(display_name, n)
+              ON names.n = ids.n
+         JOIN unnest(sqlc.arg('sources')::text[]) WITH ORDINALITY AS sources(source, n)
+              ON sources.n = ids.n;
+
 -- name: SetChannelModelEnabled :one
--- The only statement in this file that writes `enabled`. That is the whole
--- point of the column: whether this installation offers a model is our
--- decision, and a refresh of somebody else's list is not an occasion to revisit
--- it.
+-- The only statement in this file that changes `enabled` on a row that already
+-- exists. The inserts set it once, when the row is created and there is no
+-- decision to preserve; a refresh never touches it. That is the whole point of
+-- the column: whether this installation offers a model is our decision, and a
+-- refresh of somebody else's list is not an occasion to revisit it.
 UPDATE channel_models
 SET enabled = sqlc.arg('enabled')
 WHERE channel_id = sqlc.arg('channel_id')
@@ -105,8 +118,8 @@ WHERE channel_id = $1
 -- name: ListCatalogModelsForChannel :many
 -- What models.dev knows about the models one channel lists.
 --
--- Deliberately the same column list as ListCatalogModels, so the row converts
--- to that one and both go through a single mapper. If the two ever diverge this
+-- Deliberately the same column list as ListServedModels, so the row converts to
+-- that one and both go through a single mapper. If the two ever diverge this
 -- stops compiling, which is when you want to hear about it.
 --
 -- The channel is the authority on which models exist; this only decorates them,
@@ -122,6 +135,7 @@ SELECT DISTINCT ON (m.model_id) m.provider_id,
        m.structured_output,
        m.context_limit,
        m.output_limit,
+       coalesce((m.raw -> 'limit' ->> 'input')::numeric::bigint, 0)::bigint AS input_limit,
        m.input_cost::double precision  AS input_cost,
        m.output_cost::double precision AS output_cost,
        m.release_date,
@@ -129,7 +143,8 @@ SELECT DISTINCT ON (m.model_id) m.provider_id,
        m.input_modalities,
        m.output_modalities,
        p.name                          AS provider_name,
-       coalesce(s.enabled, false)      AS enabled
+       coalesce(s.enabled, false)      AS enabled,
+       coalesce(m.raw -> 'reasoning_options', '[]'::jsonb)::jsonb AS reasoning_options
 FROM catalog_models m
          JOIN catalog_providers p ON p.id = m.provider_id
          LEFT JOIN LATERAL (SELECT bool_or(cm.enabled) AS enabled
@@ -143,3 +158,38 @@ FROM catalog_models m
 -- equally arbitrary, and an arbitrary context limit beats none.
 WHERE m.model_id = ANY (sqlc.arg('model_ids')::text[])
 ORDER BY m.model_id, (m.provider_id = sqlc.arg('wire_api')::text) DESC, m.provider_id;
+
+-- name: PickServingChannel :one
+-- The channel a new run of this model is answered from: the first enabled one
+-- that offers it, in the operator's order. Pinned on the run, so a later change
+-- here affects the next run, never one already going.
+SELECT c.id
+FROM channel_models cm
+         JOIN channels c ON c.id = cm.channel_id
+WHERE cm.model_id = sqlc.arg('model_id')
+  AND cm.enabled
+  AND c.enabled
+ORDER BY c.sort_order, c.created_at
+LIMIT 1;
+
+-- name: FirstServedModel :one
+-- What a conversation that never picked a model is answered with.
+SELECT cm.model_id
+FROM channel_models cm
+         JOIN channels c ON c.id = cm.channel_id
+WHERE cm.enabled
+  AND c.enabled
+ORDER BY c.sort_order, c.created_at, cm.model_id
+LIMIT 1;
+
+-- name: GetServingChannel :one
+-- A run's pinned channel, as long as it still serves the model. Anything else
+-- — deleted, disabled, the model switched off — reads as no rows, which is
+-- the run's `no_model`.
+SELECT c.*
+FROM channels c
+         JOIN channel_models cm ON cm.channel_id = c.id
+WHERE c.id = sqlc.arg('channel_id')
+  AND cm.model_id = sqlc.arg('model_id')
+  AND c.enabled
+  AND cm.enabled;

@@ -10,16 +10,19 @@ import { Skeleton } from '@/components/shadcn/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { ChannelModelRow } from './channel-model-row'
 import { PanelSection } from './panel-section'
+import { useChannelTypes } from '../channel-types'
 import {
   useAddChannelModel,
   useChannelModels,
   useRefreshChannelModels,
   useSetChannelModelsEnabled,
+  channelModelErrorKey,
 } from '../use-channel-models'
 
 type ChannelModelsSectionProps = {
   /** A saved channel. A channel that does not exist yet cannot have models. */
   channel: Channel
+  connectionDirty?: boolean
 }
 
 /**
@@ -36,7 +39,7 @@ type ChannelModelsSectionProps = {
  * that filter is currently showing. The filter is the selection mechanism:
  * "enable all" after typing `gpt-4` is the reason to have either.
  */
-export function ChannelModelsSection({ channel }: ChannelModelsSectionProps) {
+export function ChannelModelsSection({ channel, connectionDirty = false }: ChannelModelsSectionProps) {
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [draft, setDraft] = useState('')
@@ -45,6 +48,11 @@ export function ChannelModelsSection({ channel }: ChannelModelsSectionProps) {
   const refresh = useRefreshChannelModels(channel.id)
   const addModel = useAddChannelModel(channel.id)
   const setEnabled = useSetChannelModelsEnabled(channel.id)
+  // A local service answers without a credential; which types those are is the
+  // server's table, the same one its own discovery consults.
+  const channelTypes = useChannelTypes()
+  const keyOptional = channelTypes.data?.find((type) => type.id === channel.type)?.keyOptional
+  const needsKey = !channel.hasKey && !keyOptional
 
   const all = useMemo(() => models.data ?? [], [models.data])
   const query = search.trim().toLowerCase()
@@ -76,10 +84,10 @@ export function ChannelModelsSection({ channel }: ChannelModelsSectionProps) {
           removed: result.removed,
         }),
       )
-    } catch {
+    } catch (error) {
       // The two things that break this are a bad credential and a base URL that
       // is not an endpoint, and the operator is looking at both fields.
-      toast.error(t('admin.channels.models-fetch-failed'))
+      toast.error(t(channelModelErrorKey(error)))
     }
   }
 
@@ -168,7 +176,7 @@ export function ChannelModelsSection({ channel }: ChannelModelsSectionProps) {
           // Refreshing calls the endpoint with the stored credential, so with no
           // key there is nothing to call it with. Saying that before the click
           // is kinder than a failed request that says the same thing later.
-          disabled={!channel.hasKey || refresh.isPending}
+          disabled={needsKey || connectionDirty || refresh.isPending}
           onClick={() => void fetchModels()}
         >
           {/* Under `prefers-reduced-motion` the icon stops turning, so the label
@@ -187,7 +195,8 @@ export function ChannelModelsSection({ channel }: ChannelModelsSectionProps) {
         )}
         {/* Sits under the button it explains, rather than in a tooltip a
             disabled button cannot open. */}
-        {!channel.hasKey && <span className="ms-auto">{t('admin.channels.models-need-key')}</span>}
+        {connectionDirty ? <span className="ms-auto">{t('admin.channels.models-save-connection')}</span>
+          : needsKey && <span className="ms-auto">{t('admin.channels.models-need-key')}</span>}
       </div>
 
       {all.length > 0 && (
