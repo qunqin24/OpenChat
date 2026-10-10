@@ -112,11 +112,12 @@ export function channelsColumns(
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title={t('admin.channels.base-url')} />
       ),
-      // Blank means the provider's own endpoint; the dash says "nothing
-      // overridden" without claiming to know what that endpoint is.
+      // Blank means the provider's own endpoint, which is shown as the address
+      // the channel actually talks to. The dash is left for a type with no
+      // endpoint of its own.
       cell: ({ row }) => (
         <LongText className="text-muted-foreground max-w-64 text-sm">
-          {row.original.baseUrl || '—'}
+          {row.original.baseUrl || byId.get(row.original.type)?.endpoint || '—'}
         </LongText>
       ),
       enableSorting: false,
