@@ -74,3 +74,13 @@ GROUP BY m.n, m.model_id, c.capacity;
 DELETE
 FROM model_overrides
 WHERE model_id = sqlc.arg('model_id');
+
+-- name: ModelWouldReach :one
+-- Whether a model's spend since the start of its window, plus money held back
+-- for requests in flight and the one about to go, reaches its capacity. The
+-- same sum as ModelSpends and the same index-only scan, with the held amount
+-- added in numeric: never through a float.
+SELECT (coalesce(sum(l.cost), 0) + sqlc.arg('held')::numeric) >= sqlc.arg('capacity')::numeric AS reached
+FROM usage_logs l
+WHERE l.model_id = sqlc.arg('model_id')
+  AND l.created_at >= coalesce(sqlc.narg('since')::timestamptz, '-infinity'::timestamptz);

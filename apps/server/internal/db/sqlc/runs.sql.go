@@ -11,13 +11,48 @@ import (
 	"github.com/google/uuid"
 )
 
+const countIPRunningRuns = `-- name: CountIPRunningRuns :one
+SELECT count(*)::bigint
+FROM runs
+WHERE client_ip = $1::text
+  AND status = 'running'
+  AND updated_at > now() - interval '20 minutes'
+`
+
+// How many guest runs from this address are going. A guest's run lives inside
+// the request that follows it and is never resumed after a restart, so one that
+// has committed nothing for a long while is a leftover of a process that died
+// (the sweep deletes its user within hours), not a run that is going: it does
+// not hold a slot.
+func (q *Queries) CountIPRunningRuns(ctx context.Context, ip string) (int64, error) {
+	row := q.db.QueryRow(ctx, countIPRunningRuns, ip)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countUserRunningRuns = `-- name: CountUserRunningRuns :one
+SELECT count(*)::bigint
+FROM runs
+WHERE user_id = $1
+  AND status = 'running'
+`
+
+// How many runs of this account are going, in all its conversations.
+func (q *Queries) CountUserRunningRuns(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countUserRunningRuns, userID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createRun = `-- name: CreateRun :one
 INSERT INTO runs (conversation_id, user_id, input_message_id, request_id, model_id, channel_id, reasoning_effort,
-                  web_search, continues)
+                  web_search, continues, client_ip)
 VALUES ($1, $2, $3,
         $4, $5, $6, $7,
-        $8, $9)
-RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues
+        $8, $9, $10)
+RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, client_ip
 `
 
 type CreateRunParams struct {
@@ -30,6 +65,7 @@ type CreateRunParams struct {
 	ReasoningEffort *string    `json:"reasoning_effort"`
 	WebSearch       bool       `json:"web_search"`
 	Continues       *uuid.UUID `json:"continues"`
+	ClientIp        *string    `json:"client_ip"`
 }
 
 func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, error) {
@@ -43,6 +79,7 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 		arg.ReasoningEffort,
 		arg.WebSearch,
 		arg.Continues,
+		arg.ClientIp,
 	)
 	var i Run
 	err := row.Scan(
@@ -65,6 +102,7 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 		&i.ReasoningEffort,
 		&i.WebSearch,
 		&i.Continues,
+		&i.ClientIp,
 	)
 	return i, err
 }
@@ -79,7 +117,7 @@ SET status      = $1,
     finished_at = now()
 WHERE id = $3
   AND status = 'running'
-RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues
+RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, client_ip
 `
 
 type FinishRunParams struct {
@@ -113,12 +151,13 @@ func (q *Queries) FinishRun(ctx context.Context, arg FinishRunParams) (Run, erro
 		&i.ReasoningEffort,
 		&i.WebSearch,
 		&i.Continues,
+		&i.ClientIp,
 	)
 	return i, err
 }
 
 const getActiveRun = `-- name: GetActiveRun :one
-SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues
+SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, client_ip
 FROM runs
 WHERE conversation_id = $1
   AND status = 'running'
@@ -147,12 +186,13 @@ func (q *Queries) GetActiveRun(ctx context.Context, conversationID uuid.UUID) (R
 		&i.ReasoningEffort,
 		&i.WebSearch,
 		&i.Continues,
+		&i.ClientIp,
 	)
 	return i, err
 }
 
 const getRun = `-- name: GetRun :one
-SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues
+SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, client_ip
 FROM runs
 WHERE id = $1
 `
@@ -180,12 +220,13 @@ func (q *Queries) GetRun(ctx context.Context, id uuid.UUID) (Run, error) {
 		&i.ReasoningEffort,
 		&i.WebSearch,
 		&i.Continues,
+		&i.ClientIp,
 	)
 	return i, err
 }
 
 const getRunByRequestID = `-- name: GetRunByRequestID :one
-SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues
+SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, client_ip
 FROM runs
 WHERE conversation_id = $1
   AND request_id = $2
@@ -219,12 +260,13 @@ func (q *Queries) GetRunByRequestID(ctx context.Context, arg GetRunByRequestIDPa
 		&i.ReasoningEffort,
 		&i.WebSearch,
 		&i.Continues,
+		&i.ClientIp,
 	)
 	return i, err
 }
 
 const listRunningRuns = `-- name: ListRunningRuns :many
-SELECT runs.id, runs.conversation_id, runs.user_id, runs.input_message_id, runs.request_id, runs.model_id, runs.channel_id, runs.status, runs.checkpoint, runs.live, runs.version, runs.cancel_requested, runs.error_code, runs.created_at, runs.updated_at, runs.finished_at, runs.reasoning_effort, runs.web_search, runs.continues
+SELECT runs.id, runs.conversation_id, runs.user_id, runs.input_message_id, runs.request_id, runs.model_id, runs.channel_id, runs.status, runs.checkpoint, runs.live, runs.version, runs.cancel_requested, runs.error_code, runs.created_at, runs.updated_at, runs.finished_at, runs.reasoning_effort, runs.web_search, runs.continues, runs.client_ip
 FROM runs
          JOIN users ON users.id = runs.user_id
 WHERE runs.status = 'running'
@@ -264,6 +306,7 @@ func (q *Queries) ListRunningRuns(ctx context.Context) ([]Run, error) {
 			&i.ReasoningEffort,
 			&i.WebSearch,
 			&i.Continues,
+			&i.ClientIp,
 		); err != nil {
 			return nil, err
 		}
@@ -276,7 +319,7 @@ func (q *Queries) ListRunningRuns(ctx context.Context) ([]Run, error) {
 }
 
 const lockRun = `-- name: LockRun :one
-SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues
+SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, client_ip
 FROM runs
 WHERE id = $1
 FOR UPDATE
@@ -307,8 +350,22 @@ func (q *Queries) LockRun(ctx context.Context, id uuid.UUID) (Run, error) {
 		&i.ReasoningEffort,
 		&i.WebSearch,
 		&i.Continues,
+		&i.ClientIp,
 	)
 	return i, err
+}
+
+const lockRunSlots = `-- name: LockRunSlots :exec
+SELECT pg_advisory_xact_lock(hashtextextended('run_slots:' || $1::text, 23))
+`
+
+// Held until the transaction ends, so that counting the runs that are going
+// and then starting one is a single step: two requests with one slot left
+// cannot both be let through. The key is the account's id, or for a guest the
+// address (`ip:...`); servers sharing the database share the lock.
+func (q *Queries) LockRunSlots(ctx context.Context, key string) error {
+	_, err := q.db.Exec(ctx, lockRunSlots, key)
+	return err
 }
 
 const requestRunCancel = `-- name: RequestRunCancel :one
@@ -318,7 +375,7 @@ SET cancel_requested = true,
 WHERE id = $1
   AND conversation_id = $2
   AND status = 'running'
-RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues
+RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, client_ip
 `
 
 type RequestRunCancelParams struct {
@@ -349,6 +406,7 @@ func (q *Queries) RequestRunCancel(ctx context.Context, arg RequestRunCancelPara
 		&i.ReasoningEffort,
 		&i.WebSearch,
 		&i.Continues,
+		&i.ClientIp,
 	)
 	return i, err
 }
@@ -361,7 +419,7 @@ SET checkpoint = $1,
     updated_at = now()
 WHERE id = $3
   AND status = 'running'
-RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues
+RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, client_ip
 `
 
 type SaveRunStateParams struct {
@@ -395,6 +453,7 @@ func (q *Queries) SaveRunState(ctx context.Context, arg SaveRunStateParams) (Run
 		&i.ReasoningEffort,
 		&i.WebSearch,
 		&i.Continues,
+		&i.ClientIp,
 	)
 	return i, err
 }

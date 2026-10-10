@@ -75,11 +75,19 @@ type Querier interface {
 	// How many requests this address has made in the last hour, and everyone in
 	// the last day.
 	CountGuestRequests(ctx context.Context, ip string) (CountGuestRequestsRow, error)
+	// How many guest runs from this address are going. A guest's run lives inside
+	// the request that follows it and is never resumed after a restart, so one that
+	// has committed nothing for a long while is a leftover of a process that died
+	// (the sweep deletes its user within hours), not a run that is going: it does
+	// not hold a slot.
+	CountIPRunningRuns(ctx context.Context, ip string) (int64, error)
 	CountMemories(ctx context.Context, userID uuid.UUID) (int64, error)
 	// The total behind ListServedModels; see the comments there. Counting `served`
 	// rather than channel_models is what keeps a model served by three channels
 	// from counting three times.
 	CountServedModels(ctx context.Context, arg CountServedModelsParams) (int64, error)
+	// How many runs of this account are going, in all its conversations.
+	CountUserRunningRuns(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
 	CountUsersFiltered(ctx context.Context, arg CountUsersFilteredParams) (int64, error)
 	CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (Attachment, error)
@@ -444,6 +452,11 @@ type Querier interface {
 	// Held until the transaction ends, so two answers to one question queue up and
 	// the second finds the first's.
 	LockRun(ctx context.Context, id uuid.UUID) (Run, error)
+	// Held until the transaction ends, so that counting the runs that are going
+	// and then starting one is a single step: two requests with one slot left
+	// cannot both be let through. The key is the account's id, or for a guest the
+	// address (`ip:...`); servers sharing the database share the lock.
+	LockRunSlots(ctx context.Context, key string) error
 	MarkMemoryEventUndone(ctx context.Context, arg MarkMemoryEventUndoneParams) (MemoryEvent, error)
 	// What a run needs to know about its model: how its thinking is controlled,
 	// how much it may read and write, and what it can do. The catalogue row is
@@ -464,6 +477,11 @@ type Querier interface {
 	// (sqlc cannot read a multi-argument unnest, hence the three joined by their
 	// position.)
 	ModelSpends(ctx context.Context, arg ModelSpendsParams) ([]ModelSpendsRow, error)
+	// Whether a model's spend since the start of its window, plus money held back
+	// for requests in flight and the one about to go, reaches its capacity. The
+	// same sum as ModelSpends and the same index-only scan, with the held amount
+	// added in numeric: never through a float.
+	ModelWouldReach(ctx context.Context, arg ModelWouldReachParams) (bool, error)
 	// Hands the files of one message to another: an edited question's files go to
 	// the question that replaces it.
 	MoveAttachments(ctx context.Context, arg MoveAttachmentsParams) error

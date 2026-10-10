@@ -18,7 +18,7 @@ INSERT INTO usage_logs (created_at, kind, status, error_code, error_message,
                         model_id, served_model,
                         input_tokens, output_tokens, reasoning_tokens, cache_read_tokens, cache_write_tokens,
                         input_price, output_price, cache_read_price, cache_write_price, cost,
-                        streamed, first_token_ms, duration_ms)
+                        streamed, first_token_ms, duration_ms, estimated)
 VALUES ($1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10,
         $11, $12,
@@ -27,7 +27,7 @@ VALUES ($1, $2, $3, $4, $5,
         round(($18::double precision)::numeric, 10), round(($19::double precision)::numeric, 10),
         round(($20::double precision)::numeric, 10), round(($21::double precision)::numeric, 10),
         round(($22::double precision)::numeric, 10),
-        $23, $24, $25)
+        $23, $24, $25, $26)
 `
 
 type InsertUsageLogParams struct {
@@ -56,6 +56,7 @@ type InsertUsageLogParams struct {
 	Streamed         bool               `json:"streamed"`
 	FirstTokenMs     *int32             `json:"first_token_ms"`
 	DurationMs       int32              `json:"duration_ms"`
+	Estimated        bool               `json:"estimated"`
 }
 
 // Prices and cost arrive as double precision and are stored as numeric rounded
@@ -88,6 +89,7 @@ func (q *Queries) InsertUsageLog(ctx context.Context, arg InsertUsageLogParams) 
 		arg.Streamed,
 		arg.FirstTokenMs,
 		arg.DurationMs,
+		arg.Estimated,
 	)
 	return err
 }
@@ -151,7 +153,8 @@ SELECT l.id,
        l.cache_write_price,
        l.cost,
        l.first_token_ms,
-       l.duration_ms
+       l.duration_ms,
+       l.estimated
 FROM usage_logs l
          LEFT JOIN users u ON u.id = l.user_id AND NOT u.guest
 WHERE ($1::timestamptz IS NULL
@@ -209,6 +212,7 @@ type ListUsageLogsRow struct {
 	Cost             pgtype.Numeric     `json:"cost"`
 	FirstTokenMs     *int32             `json:"first_token_ms"`
 	DurationMs       int32              `json:"duration_ms"`
+	Estimated        bool               `json:"estimated"`
 }
 
 // Newest first, by keyset on (created_at, id): the order of usage_logs_created_idx,
@@ -267,6 +271,7 @@ func (q *Queries) ListUsageLogs(ctx context.Context, arg ListUsageLogsParams) ([
 			&i.Cost,
 			&i.FirstTokenMs,
 			&i.DurationMs,
+			&i.Estimated,
 		); err != nil {
 			return nil, err
 		}

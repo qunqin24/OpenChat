@@ -911,6 +911,12 @@ export interface paths {
          *     `model_capacity_reached` — unless the caller is an administrator and the
          *     cap exempts them. The other ways of starting a run (regenerate, edit,
          *     answering a question) refuse it the same way.
+         *
+         *     An account may have only so many runs going at once across all its
+         *     conversations (`SystemSettings.maxConcurrentRuns`, 3 unless changed;
+         *     administrators are exempt). Past it this is refused, again before
+         *     anything is written, with 429 `too_many_runs`; the same goes for the
+         *     other ways of starting a run. Stopping a run, or its ending, frees the slot.
          */
         post: operations["createMessage"];
         delete?: never;
@@ -1430,7 +1436,9 @@ export interface paths {
          *     last `GuestEndEvent` with what the browser has to keep.
          *
          *     Refused before anything is written, as JSON: 429 `guest_ip_limit` and
-         *     `guest_daily_limit` (the administrator's limits), 409 `no_models`,
+         *     `guest_daily_limit` (the administrator's limits), 429 `too_many_runs`
+         *     (this address already has `SystemSettings.guestMaxConcurrentRuns` runs
+         *     going), 409 `no_models`,
          *     400 `model_unavailable`, 409 `model_capacity_reached` (a guest is never
          *     exempt from a cap) and the attachment errors of `createMessage`,
          *     400 `invalid_answers`, 409 `not_pending` for an answer to a question
@@ -2499,9 +2507,19 @@ export interface components {
             cacheWritePrice?: number | null;
             /**
              * Format: double
-             * @description USD. Null when the price is unknown or the provider reported no usage.
+             * @description USD. Null when the price is unknown, or when the provider reported
+             *     no usage and the request was never taken up (so there is nothing
+             *     to estimate).
              */
             cost?: number | null;
+            /**
+             * @description Whether the token counts (and so the cost) are, in whole or in
+             *     part, the server's estimate and not what the provider reported: a
+             *     request that was stopped, or broke, before the provider's usage
+             *     frame, or one from a provider that reports none. Estimates err
+             *     high. Whatever the provider did report is kept as it is.
+             */
+            estimated: boolean;
             /**
              * Format: int64
              * @description Request start to the first content, reasoning or tool-call delta.
@@ -3017,6 +3035,18 @@ export interface components {
             /** @description Requests all guests together may make per day (the last 24 hours); 0 is unlimited. */
             guestDailyLimit: number;
             /**
+             * @description How many runs one address may have going at once as a guest (the
+             *     address the hourly limit counts); 0 is unlimited. 2 unless changed.
+             */
+            guestMaxConcurrentRuns: number;
+            /**
+             * @description How many runs one account may have going at once across all its
+             *     conversations; 0 is unlimited. 3 unless changed. Administrators
+             *     are exempt. Past it, starting a run is refused with 429
+             *     `too_many_runs`.
+             */
+            maxConcurrentRuns: number;
+            /**
              * @description How many days a conversation a user deleted is kept before it is
              *     removed for good, with its messages and files. Until then the
              *     delete can still be undone in the database. Default 30.
@@ -3095,6 +3125,10 @@ export interface components {
             guestHourlyLimit?: number;
             /** @description 0 to 10000000 (400 `invalid_guest_limit` otherwise); 0 is unlimited. */
             guestDailyLimit?: number;
+            /** @description 0 to 1000 (400 `invalid_run_limit` otherwise); 0 is unlimited. */
+            guestMaxConcurrentRuns?: number;
+            /** @description 0 to 1000 (400 `invalid_run_limit` otherwise); 0 is unlimited. */
+            maxConcurrentRuns?: number;
             /**
              * @description A model an enabled channel offers (400 `model_unavailable`
              *     otherwise), or empty for each conversation's own.

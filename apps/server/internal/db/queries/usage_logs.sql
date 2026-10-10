@@ -7,7 +7,7 @@ INSERT INTO usage_logs (created_at, kind, status, error_code, error_message,
                         model_id, served_model,
                         input_tokens, output_tokens, reasoning_tokens, cache_read_tokens, cache_write_tokens,
                         input_price, output_price, cache_read_price, cache_write_price, cost,
-                        streamed, first_token_ms, duration_ms)
+                        streamed, first_token_ms, duration_ms, estimated)
 VALUES (sqlc.arg('created_at'), sqlc.arg('kind'), sqlc.arg('status'), sqlc.narg('error_code'), sqlc.narg('error_message'),
         sqlc.narg('user_id'), sqlc.narg('conversation_id'), sqlc.narg('run_id'), sqlc.narg('channel_id'), sqlc.arg('channel_name'),
         sqlc.arg('model_id'), sqlc.arg('served_model'),
@@ -16,7 +16,7 @@ VALUES (sqlc.arg('created_at'), sqlc.arg('kind'), sqlc.arg('status'), sqlc.narg(
         round((sqlc.narg('input_price')::double precision)::numeric, 10), round((sqlc.narg('output_price')::double precision)::numeric, 10),
         round((sqlc.narg('cache_read_price')::double precision)::numeric, 10), round((sqlc.narg('cache_write_price')::double precision)::numeric, 10),
         round((sqlc.narg('cost')::double precision)::numeric, 10),
-        sqlc.arg('streamed'), sqlc.narg('first_token_ms'), sqlc.arg('duration_ms'));
+        sqlc.arg('streamed'), sqlc.narg('first_token_ms'), sqlc.arg('duration_ms'), sqlc.arg('estimated'));
 
 -- name: UsagePricing :one
 -- What a request needs to be priced and labelled: the channel's current name,
@@ -81,7 +81,8 @@ SELECT l.id,
        l.cache_write_price,
        l.cost,
        l.first_token_ms,
-       l.duration_ms
+       l.duration_ms,
+       l.estimated
 FROM usage_logs l
          LEFT JOIN users u ON u.id = l.user_id AND NOT u.guest
 WHERE (sqlc.narg('cursor_created_at')::timestamptz IS NULL

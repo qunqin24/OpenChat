@@ -148,6 +148,36 @@ func (q *Queries) ModelSpends(ctx context.Context, arg ModelSpendsParams) ([]Mod
 	return items, nil
 }
 
+const modelWouldReach = `-- name: ModelWouldReach :one
+SELECT (coalesce(sum(l.cost), 0) + $1::numeric) >= $2::numeric AS reached
+FROM usage_logs l
+WHERE l.model_id = $3
+  AND l.created_at >= coalesce($4::timestamptz, '-infinity'::timestamptz)
+`
+
+type ModelWouldReachParams struct {
+	Held     pgtype.Numeric     `json:"held"`
+	Capacity pgtype.Numeric     `json:"capacity"`
+	ModelID  string             `json:"model_id"`
+	Since    pgtype.Timestamptz `json:"since"`
+}
+
+// Whether a model's spend since the start of its window, plus money held back
+// for requests in flight and the one about to go, reaches its capacity. The
+// same sum as ModelSpends and the same index-only scan, with the held amount
+// added in numeric: never through a float.
+func (q *Queries) ModelWouldReach(ctx context.Context, arg ModelWouldReachParams) (bool, error) {
+	row := q.db.QueryRow(ctx, modelWouldReach,
+		arg.Held,
+		arg.Capacity,
+		arg.ModelID,
+		arg.Since,
+	)
+	var reached bool
+	err := row.Scan(&reached)
+	return reached, err
+}
+
 const resetModelCapacity = `-- name: ResetModelCapacity :one
 INSERT INTO model_overrides (model_id, capacity_since)
 VALUES ($1, $2)

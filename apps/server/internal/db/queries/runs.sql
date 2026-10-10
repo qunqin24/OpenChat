@@ -1,10 +1,36 @@
 -- name: CreateRun :one
 INSERT INTO runs (conversation_id, user_id, input_message_id, request_id, model_id, channel_id, reasoning_effort,
-                  web_search, continues)
+                  web_search, continues, client_ip)
 VALUES (sqlc.arg('conversation_id'), sqlc.arg('user_id'), sqlc.arg('input_message_id'),
         sqlc.narg('request_id'), sqlc.arg('model_id'), sqlc.narg('channel_id'), sqlc.narg('reasoning_effort'),
-        sqlc.arg('web_search'), sqlc.narg('continues'))
+        sqlc.arg('web_search'), sqlc.narg('continues'), sqlc.narg('client_ip'))
 RETURNING *;
+
+-- name: LockRunSlots :exec
+-- Held until the transaction ends, so that counting the runs that are going
+-- and then starting one is a single step: two requests with one slot left
+-- cannot both be let through. The key is the account's id, or for a guest the
+-- address (`ip:...`); servers sharing the database share the lock.
+SELECT pg_advisory_xact_lock(hashtextextended('run_slots:' || sqlc.arg('key')::text, 23));
+
+-- name: CountUserRunningRuns :one
+-- How many runs of this account are going, in all its conversations.
+SELECT count(*)::bigint
+FROM runs
+WHERE user_id = $1
+  AND status = 'running';
+
+-- name: CountIPRunningRuns :one
+-- How many guest runs from this address are going. A guest's run lives inside
+-- the request that follows it and is never resumed after a restart, so one that
+-- has committed nothing for a long while is a leftover of a process that died
+-- (the sweep deletes its user within hours), not a run that is going: it does
+-- not hold a slot.
+SELECT count(*)::bigint
+FROM runs
+WHERE client_ip = sqlc.arg('ip')::text
+  AND status = 'running'
+  AND updated_at > now() - interval '20 minutes';
 
 -- name: LockRun :one
 -- Held until the transaction ends, so two answers to one question queue up and

@@ -529,6 +529,7 @@ type Run struct {
 	ReasoningEffort *string            `json:"reasoning_effort"`
 	WebSearch       bool               `json:"web_search"`
 	Continues       *uuid.UUID         `json:"continues"`
+	ClientIp        *string            `json:"client_ip"`
 }
 
 type Session struct {
@@ -568,6 +569,7 @@ type UsageLog struct {
 	Streamed         bool               `json:"streamed"`
 	FirstTokenMs     *int32             `json:"first_token_ms"`
 	DurationMs       int32              `json:"duration_ms"`
+	Estimated        bool               `json:"estimated"`
 }
 
 type User struct {
