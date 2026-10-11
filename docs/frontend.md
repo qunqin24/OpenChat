@@ -82,7 +82,7 @@ packages/api-client/
 | 状态 | 归属 | 原因 |
 | --- | --- | --- |
 | 会话、会话列表、消息、admin 数据 | TanStack Query | 服务端权威 |
-| 流式回复、AbortController、pendingPrompt | `stores/chat-store.ts` | 每秒多次变更，会打爆 query cache |
+| 流式回复、AbortController、发送中的气泡（outbox） | `stores/chat-store.ts` | 每秒多次变更，会打爆 query cache |
 | theme、sidebar | `stores/ui-store.ts`（persist） | 纯客户端偏好 |
 
 规则：key 里带过滤条件（page/search/days/cursor）的 query 必须有

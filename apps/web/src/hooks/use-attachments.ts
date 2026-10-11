@@ -19,8 +19,6 @@ export interface PendingAttachment {
   name: string
   size: number
   kind: 'image' | 'pdf'
-  /** The file itself: kept so that a thumbnail can be made again when the upload is given back to the composer. */
-  file: File
   /** An object URL of the file itself, for the thumbnail of an image. */
   preview?: string
   status: 'uploading' | 'ready' | 'error'
@@ -29,11 +27,6 @@ export interface PendingAttachment {
   /** The server's id for it, once uploaded. */
   id?: string
   error?: UploadError
-}
-
-/** Lets go of the thumbnails of uploads whose owner is done with them. */
-export function releasePreviews(items: PendingAttachment[]) {
-  for (const item of items) if (item.preview) URL.revokeObjectURL(item.preview)
 }
 
 /**
@@ -100,7 +93,6 @@ export function useAttachments(accepts: Accepts) {
           name: file.name,
           size: file.size,
           kind,
-          file,
           preview: kind === 'image' ? URL.createObjectURL(file) : undefined,
           status: 'uploading',
           progress: 0,
@@ -151,39 +143,6 @@ export function useAttachments(accepts: Accepts) {
     commit([])
   }, [commit, forget])
 
-  /**
-   * Gives up the uploaded files without letting go of them, to travel with a
-   * message to the page that will send it (a new chat is made first, on another
-   * screen). Their thumbnails stay valid for whoever is showing them; the new
-   * owner either releases them (`releasePreviews`) or gives them back (`adopt`).
-   */
-  const handOff = useCallback(() => {
-    const ready = queued.current.filter((item) => item.status === 'ready')
-    commit(queued.current.filter((item) => item.status !== 'ready'))
-    return ready
-  }, [commit])
-
-  /**
-   * Takes uploads back into the composer (a send that did not go through): they
-   * are still the server's, unclaimed, for a day. The thumbnails are made again
-   * from the files, and the ones they arrive with are let go - their holder is
-   * done with them, and they are no longer what is shown. Idempotent by key, so
-   * a remount (StrictMode's, in development) takes them again without doubling.
-   */
-  const adopt = useCallback(
-    (items: PendingAttachment[]) => {
-      if (items.length === 0) return
-      const back = items.map((item): PendingAttachment => {
-        if (item.preview) URL.revokeObjectURL(item.preview)
-        return { ...item, preview: item.kind === 'image' ? URL.createObjectURL(item.file) : undefined }
-      })
-      const keys = new Set(back.map((item) => item.key))
-      for (const old of queued.current) if (keys.has(old.key) && old.preview) URL.revokeObjectURL(old.preview)
-      commit([...queued.current.filter((item) => !keys.has(item.key)), ...back])
-    },
-    [commit],
-  )
-
   // Leaving the screen abandons what was still going up and frees the previews.
   useEffect(() => {
     const pending = uploads.current
@@ -198,8 +157,6 @@ export function useAttachments(accepts: Accepts) {
     add,
     remove,
     clear,
-    handOff,
-    adopt,
     uploading: items.some((item) => item.status === 'uploading'),
     failed: items.some((item) => item.status === 'error'),
     ids: items.flatMap((item) => (item.id ? [item.id] : [])),

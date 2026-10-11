@@ -2,7 +2,7 @@ import type { Message } from '@openchat/api-client'
 import { describe, expect, it } from 'vitest'
 
 import { assistant, id, user } from './testing'
-import { appendRow, spliceNewest, truncateTranscript, type TranscriptPages } from './transcript-pages'
+import { appendRow, emptyTranscript, spliceNewest, truncateTranscript, type TranscriptPages } from './transcript-pages'
 
 /** Pages as the cache holds them: newest first, each page's items oldest first. */
 const pages = (...held: { items: Message[]; olderCursor?: string | null }[]): TranscriptPages => ({
@@ -108,5 +108,16 @@ describe('appendRow', () => {
     const held = appendRow(pages({ items: [q1, a1] }), kept)!
     const fresh = { items: [q1, a1, kept], olderCursor: null }
     expect(ids(spliceNewest(held, fresh))).toEqual([q1.id, a1.id, kept.id])
+  })
+})
+
+describe('emptyTranscript', () => {
+  it('holds a page with no rows, which a row can be added to and a fetch spliced over', () => {
+    const empty = emptyTranscript()
+    expect(ids(empty)).toEqual([])
+    const row = user('hello')
+    expect(ids(appendRow(empty, row))).toEqual([row.id])
+    const fresh = { items: [row], olderCursor: null }
+    expect(spliceNewest(empty, fresh).pages[0]).toBe(fresh)
   })
 })

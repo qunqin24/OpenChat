@@ -1,7 +1,6 @@
 import type { Attachment, BatchEvent, Message, Run, SnapshotEvent } from '@openchat/api-client'
 import { create } from 'zustand'
 
-import type { PendingAttachment } from '@/hooks/use-attachments'
 import { applyBatch, finishedBy, fromSnapshot, idle, rememberFinished, type ConversationLive } from '@/lib/run-state'
 import type { Refusal } from '@/lib/moderation-refusal'
 import type { Replacing } from '@/lib/transcript'
@@ -14,26 +13,6 @@ import type { Replacing } from '@/lib/transcript'
  * here; once a run is over its rows are refetched through Query and the live
  * copy is let go (`settle`).
  */
-/** What was written on the empty-state screen, to be sent once the conversation exists. */
-export interface PendingPrompt {
-  content: string
-  /** Uploads already made for it; the new route sends them with the text. */
-  attachmentIds: string[]
-  /**
-   * The same uploads as the composer held them, handed over with the prompt:
-   * the new route gives them back to its composer if the send is refused (and
-   * lets their thumbnails go once it is not), so the files are not lost.
-   */
-  attachments?: PendingAttachment[]
-}
-
-/** The first message of a new chat that the server refused before writing anything, as it was written. */
-export interface ReturnedDraft {
-  content: string
-  /** The uploads it carried, which are still unclaimed and valid. */
-  attachments: PendingAttachment[]
-}
-
 /**
  * A message on its way to the server, shown in the transcript the moment it is
  * sent rather than a round trip later — on a slow link that round trip is the
@@ -61,7 +40,8 @@ interface ChatState {
   /**
    * Each conversation's message being sent, until the server has taken it
    * (its run starts) or refused it. Keyed by conversation id, or by '' on the
-   * empty screen before the conversation exists.
+   * empty screen between the send and the moment the page takes the conversation
+   * it made for the message as its own (NextChat).
    */
   outbox: Record<string, OutboxItem>
   post: (key: string, item: OutboxItem) => void
@@ -85,23 +65,6 @@ interface ChatState {
   replacing: Record<string, Replacing>
   redo: (conversationId: string, target: Replacing | null) => void
 
-  /**
-   * Prompt typed on the empty-state screen, carried across the navigation that
-   * follows creating the conversation for it. The new route consumes it on mount.
-   */
-  pendingPrompt: PendingPrompt | null
-
-  /**
-   * A first message the server refused before writing anything (a
-   * limit, no model), carried back to the empty-state screen after the
-   * conversation made for it was removed: its text and its files. The empty
-   * state takes them into the composer. (A message moderation refused is kept
-   * in its conversation, which stays, and gets them back there.)
-   */
-  returnedDraft: ReturnedDraft | null
-  returnDraft: (draft: ReturnedDraft) => void
-  takeReturnedDraft: () => ReturnedDraft | null
-
   applySnapshot: (conversationId: string, snapshot: SnapshotEvent) => void
   applyBatch: (conversationId: string, batch: BatchEvent) => void
   /**
@@ -120,9 +83,6 @@ interface ChatState {
    */
   temporaryChat: boolean
   setTemporaryChat: (on: boolean) => void
-
-  setPendingPrompt: (prompt: PendingPrompt | null) => void
-  takePendingPrompt: () => PendingPrompt | null
 }
 
 const without = <T,>(record: Record<string, T>, key: string) => {
@@ -138,13 +98,11 @@ const settled = (state: ChatState, conversationId: string) => ({
   replacing: without(state.replacing, conversationId),
 })
 
-export const useChatStore = create<ChatState>()((set, get) => ({
+export const useChatStore = create<ChatState>()((set) => ({
   live: {},
   finished: [],
   outbox: {},
   replacing: {},
-  pendingPrompt: null,
-  returnedDraft: null,
   temporaryChat: false,
 
   setTemporaryChat: (temporaryChat) => set({ temporaryChat }),
@@ -208,22 +166,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       if (current?.run?.run.id !== runId || current.run.run.status === 'running') return state
       return { live: { ...state.live, [conversationId]: idle }, finished: rememberFinished(state.finished, runId) }
     }),
-
-  setPendingPrompt: (pendingPrompt) => set({ pendingPrompt }),
-
-  returnDraft: (returnedDraft) => set({ returnedDraft }),
-
-  takeReturnedDraft: () => {
-    const { returnedDraft } = get()
-    if (returnedDraft !== null) set({ returnedDraft: null })
-    return returnedDraft
-  },
-
-  takePendingPrompt: () => {
-    const { pendingPrompt } = get()
-    if (pendingPrompt !== null) set({ pendingPrompt: null })
-    return pendingPrompt
-  },
 }))
 
 /**
@@ -232,5 +174,5 @@ export const useChatStore = create<ChatState>()((set, get) => ({
  * changes, and when the session ends.
  */
 export function resetChatStore() {
-  useChatStore.setState({ live: {}, finished: [], outbox: {}, replacing: {}, pendingPrompt: null, returnedDraft: null, refusals: {}, temporaryChat: false })
+  useChatStore.setState({ live: {}, finished: [], outbox: {}, replacing: {}, refusals: {}, temporaryChat: false })
 }

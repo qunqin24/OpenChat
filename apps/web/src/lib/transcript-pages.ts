@@ -13,6 +13,15 @@ import type { Message, MessagePage } from '@openchat/api-client'
 export type TranscriptPages = InfiniteData<MessagePage, string | undefined>
 
 /**
+ * The transcript of a conversation that has just been made: no rows, nothing
+ * older. Put in the cache for it, so the page that made it does not fetch what
+ * it knows is empty - and show a spinner in place of the message just sent.
+ */
+export function emptyTranscript(): TranscriptPages {
+  return { pages: [{ items: [], olderCursor: null }], pageParams: [undefined] }
+}
+
+/**
  * `held` with its newest rows replaced by `fresh`, the page just fetched
  * without a cursor.
  *

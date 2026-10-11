@@ -95,6 +95,10 @@ const choiceBody = ({ model, reasoningEffort, webSearch }: RunChoice) => ({
  * Sends a message. The server writes it, starts the run that answers it and
  * returns at once; the answer arrives on the conversation's events stream, so
  * nothing here waits for it — and closing the page does not stop it.
+ *
+ * To the conversation the page shows - except the first message of a new chat,
+ * which goes to the conversation just made for it, in the same breath as the
+ * page takes that conversation as its own: that call names it (`conversationId`).
  */
 export function useSendMessage(conversationId: string) {
   const startRun = useChatStore((s) => s.startRun)
@@ -106,17 +110,20 @@ export function useSendMessage(conversationId: string) {
     // Shown in the transcript itself (the outbox, a waiting reply).
     meta: { silent: true },
     mutationFn: async ({
+      conversationId: target = conversationId,
       content,
       attachmentIds,
       ...choice
     }: RunChoice & {
+      /** The conversation to send to, when it is not the page's own yet. */
+      conversationId?: string
       content: string
       /** Uploads (see `useAttachments`) to send with it. */
       attachmentIds?: string[]
     }) =>
       unwrap(
         await api.POST('/conversations/{conversationId}/messages', {
-          params: { path: { conversationId } },
+          params: { path: { conversationId: target } },
           // A retried request with the same id finds the run it started rather
           // than paying for a second answer.
           body: {
@@ -127,19 +134,21 @@ export function useSendMessage(conversationId: string) {
           },
         }),
       ),
-    onSuccess: (response) => startRun(conversationId, response.run, response.message),
+    onSuccess: (response, variables) =>
+      startRun(variables.conversationId ?? conversationId, response.run, response.message),
     // Here and not in the call's own `onError`: that one is skipped when the
     // page that made the call is gone, and a message sent just before switching
     // conversations would stay in the transcript as a bubble with a reply that
-    // never comes. (The same goes for the prompt carried over from the empty screen.)
+    // never comes. (The same goes for the first message of a new chat.)
     onError: (error, variables) => {
+      const target = variables.conversationId ?? conversationId
       const refusal = refusalOf(error)
       // Refused for its content, the message is kept in the conversation: put it
       // in the transcript before the bubble that stood for it is taken down, so
       // the one is the other and nothing blinks, and fetch the newest page to
       // have the row as the server wrote it.
-      if (refusal?.messageId) keepRefused(queryClient, conversationId, refusal, variables.content)
-      unpost(conversationId)
+      if (refusal?.messageId) keepRefused(queryClient, target, refusal, variables.content)
+      unpost(target)
       onError(error)
     },
   })
