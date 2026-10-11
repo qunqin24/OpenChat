@@ -379,3 +379,62 @@ describe('the data page', () => {
     expect(doc.conversations[0]!.messages.map((m) => `${m.role}:${m.content}`)).toEqual(['user:q1', 'assistant:a1'])
   })
 })
+
+// A message moderation refused is kept as a row of status blocked (keepBlocked):
+// listed with the transcript, and in none of the places that read it as what was
+// said - search, the export - as the server's queries leave it out.
+describe('a refused message', () => {
+  it('is kept after the newest row, whatever the clock says, and shown with the transcript', async () => {
+    const h = harness()
+    const c = await h.conversation()
+    await h.turn(c, { ask: 'q1', answer: 'a1' })
+    // A clock behind the server's rows, as a page's can be.
+    h.clock.now -= 3_600_000
+    const kept = await h.repo.keepBlocked(c, 'BAD')
+    const page = await h.repo.listMessages(c, {})
+    expect(page.items.map((m) => `${m.role}:${m.content}:${m.status}`)).toEqual(['user:q1:complete', 'assistant:a1:complete', 'user:BAD:blocked'])
+    expect(page.items.at(-1)!.id).toBe(kept!.id)
+    // It carries no run and no file.
+    expect(page.items.at(-1)).not.toHaveProperty('runId')
+    expect(page.items.at(-1)).not.toHaveProperty('attachments')
+    // A second one goes after the first.
+    await h.repo.keepBlocked(c, 'BAD AGAIN')
+    expect((await h.repo.listMessages(c, {})).items.map((m) => m.content).slice(-2)).toEqual(['BAD', 'BAD AGAIN'])
+  })
+
+  it('is not found by a search and not in the export', async () => {
+    const h = harness()
+    const c = await h.conversation()
+    await h.turn(c, { ask: 'ordinary words', answer: 'fine' })
+    await h.repo.keepBlocked(c, 'forbidden words')
+
+    expect((await h.repo.listConversations({ search: 'forbidden' })).items).toEqual([])
+    expect((await h.repo.listConversations({ search: 'ordinary' })).items.map((i) => i.id)).toEqual([c])
+    const exported = await h.repo.export()
+    expect(exported.conversations[0]!.messages.map((m) => m.content)).toEqual(['ordinary words', 'fine'])
+  })
+
+  it('is deleted with the answer when the last question is answered again, and by an edit that reaches it', async () => {
+    const h = harness()
+    const c = await h.conversation()
+    const q1 = await h.turn(c, { ask: 'q1', answer: 'a1' })
+    await h.repo.keepBlocked(c, 'BAD')
+    await h.turn(c, { action: 'regenerate', input: q1.input.id, answer: 'a1 again' })
+    expect((await h.repo.data(c)).messages.map((m) => m.content)).toEqual(['q1', 'a1 again'])
+
+    const again = await h.repo.keepBlocked(c, 'BAD 2')
+    await h.turn(c, { ask: 'ok', answer: 'fine', replaces: again!.id })
+    expect((await h.repo.data(c)).messages.map((m) => m.content)).toEqual(['q1', 'a1 again', 'ok', 'fine'])
+  })
+
+  it('does not keep a summary that ends at it', async () => {
+    const h = harness()
+    const c = await h.conversation()
+    await h.turn(c, { ask: 'q1', answer: 'a1' })
+    const kept = await h.repo.keepBlocked(c, 'BAD')
+    const written = {
+      content: 's', throughMessageId: kept!.id, model: 'm', inputTokens: 1, outputTokens: 1, createdAt: h.tick(),
+    }
+    expect(await h.repo.setSummary(c, written)).toBeUndefined()
+  })
+})

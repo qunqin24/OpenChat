@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import { GuestError } from './errors'
 import { harness, type Harness } from './testing'
-import { deletedBy, pageOf, timeKey } from './transcript'
+import { contextOf, deletedBy, isBlocked, lastQuestionIndex, pageOf, timeKey } from './transcript'
+import type { StoredMessage } from './types'
 
 // The rules of a conversation (AGENTS.md, "对话是一条线"), as the guest's
 // browser applies them: the transcript is every row in the order it was
@@ -177,5 +178,38 @@ describe('errors', () => {
     const h = harness()
     await expect(h.repo.getConversation('missing')).rejects.toBeInstanceOf(GuestError)
     await expect(h.repo.getConversation('missing')).rejects.toMatchObject({ status: 404, code: 'not_found' })
+  })
+})
+
+// A message content moderation refused is kept as a row of status blocked: part
+// of the transcript the reader sees, none of what a model is given, and not a
+// question for a regeneration (the server's GetLastInput and DeleteAnswerTo).
+describe('a refused message', () => {
+  const row = (id: string, role: StoredMessage['role'], status: StoredMessage['status'] = 'complete', n = 0): StoredMessage => ({
+    id, conversationId: 'c', role, content: id, parts: [], status, createdAt: new Date(Date.parse('2026-10-01T00:00:00Z') + n * 1000).toISOString(),
+  })
+
+  it('is left out of the context but not of the transcript', () => {
+    const rows = [row('q1', 'user'), row('b', 'user', 'blocked', 1), row('q2', 'user', 'complete', 2)]
+    expect(isBlocked(rows[1]!)).toBe(true)
+    expect(contextOf(rows).map((m) => m.id)).toEqual(['q1', 'q2'])
+  })
+
+  it('is not the last question: that is the last user row that was not refused', () => {
+    const rows = [row('q1', 'user'), row('a1', 'assistant', 'complete', 1), row('b', 'user', 'blocked', 2)]
+    expect(lastQuestionIndex(rows)).toBe(0)
+    expect(lastQuestionIndex([row('b', 'user', 'blocked')])).toBe(-1)
+    expect(lastQuestionIndex([])).toBe(-1)
+  })
+
+  it('goes with the answer when an answer is made again, and with an edit that reaches it', () => {
+    const rows = [
+      row('q1', 'user'), row('a1', 'assistant', 'complete', 1), row('b1', 'user', 'blocked', 2),
+      row('q2', 'user', 'complete', 3), row('a2', 'assistant', 'complete', 4), row('b2', 'user', 'blocked', 5),
+    ]
+    // Regenerating q2: its answer and the refused message after it; the refused message before it stays.
+    expect(deletedBy(rows, { after: 'q2' }).map((m) => m.id)).toEqual(['a2', 'b2'])
+    // Editing the refused message deletes it and what follows, as any question.
+    expect(deletedBy(rows, { from: 'b1' }).map((m) => m.id)).toEqual(['b1', 'q2', 'a2', 'b2'])
   })
 })

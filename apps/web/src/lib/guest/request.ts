@@ -10,7 +10,7 @@ import type {
 import { GuestError } from './errors'
 import { DEFAULT_TITLE } from './repo'
 import { rowsToSend, survivingSummary } from './summary'
-import { transcriptOf } from './transcript'
+import { contextOf, lastQuestionIndex, transcriptOf } from './transcript'
 import type { ConversationData, StoredBlob, StoredMessage, StoredPersonalization } from './types'
 
 /**
@@ -69,7 +69,10 @@ export async function toBase64(blob: Blob): Promise<string> {
 
 export async function buildRunRequest(params: RunParams, what: RunAction): Promise<BuiltRun> {
   const { data } = params
-  const rows = transcriptOf(data)
+  // Every row, and the rows a model can be given: the messages moderation
+  // refused are in the first and never in the second.
+  const all = transcriptOf(data)
+  const rows = contextOf(all)
   let history: StoredMessage[] = rows
   let input: BuiltRun['input']
   let inputRow: StoredMessage | undefined
@@ -88,10 +91,11 @@ export async function buildRunRequest(params: RunParams, what: RunAction): Promi
     }
     case 'edit': {
       // The question and everything after it are not part of what the new wording is asked from.
-      const at = rows.findIndex((m) => m.id === what.messageId && m.role === 'user')
+      // A refused message can be edited like any other: it is one of the rows.
+      const at = all.findIndex((m) => m.id === what.messageId && m.role === 'user')
       if (at < 0) throw invalid('message_not_found', 'no such message in this conversation', 404)
-      const edited = rows[at]!
-      history = rows.slice(0, at)
+      const edited = all[at]!
+      history = contextOf(all.slice(0, at))
       // An edit changes what was asked, not what was attached: the question keeps its files.
       const files: StoredBlob[] = []
       for (const file of edited.attachments ?? []) {
@@ -103,7 +107,8 @@ export async function buildRunRequest(params: RunParams, what: RunAction): Promi
       break
     }
     case 'regenerate': {
-      const last = rows.map((m) => m.role).lastIndexOf('user')
+      // The last question asked, not a message refused after it.
+      const last = lastQuestionIndex(rows)
       if (last < 0) throw invalid('nothing_to_answer', 'this conversation has no message to answer', 404)
       // The answer being made again is not part of what it is made from.
       history = rows.slice(0, last + 1)

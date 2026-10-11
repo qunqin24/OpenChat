@@ -33,9 +33,40 @@ export const byRow = (a: { createdAt: string; id: string }, b: { createdAt: stri
   return x < y ? -1 : x > y ? 1 : 0
 }
 
-/** Every row the reader sees and the model is sent, oldest first. */
+/** Every row the reader sees, oldest first. The refused messages are among them (see `contextOf`). */
 export function transcriptOf(data: ConversationData): StoredMessage[] {
   return [...data.messages].sort(byRow)
+}
+
+/**
+ * A message content moderation refused (status `blocked`): kept so that it is
+ * still there when the page is opened again, shown, and never sent to a model.
+ * It is the server's `messages.status = 'blocked'` row, and every rule below
+ * treats it as the server's queries do (internal/db/queries/messages.sql).
+ */
+export const isBlocked = (row: { status: string }): boolean => row.status === 'blocked'
+
+/**
+ * The rows a model can be given or a summary can cover, in the order they were
+ * given: the transcript less the refused messages. The server's context
+ * queries (`ListMessagesAfter`, `ListMessagesFrom`, `ListRecentMessages`) leave
+ * them out the same way.
+ */
+export function contextOf<T extends { status: string }>(rows: T[]): T[] {
+  return rows.filter((row) => !isBlocked(row))
+}
+
+/**
+ * The index of the last question that was asked: the last user row that was not
+ * refused. A regeneration answers it (the server's `GetLastInput`); -1 when
+ * there is none.
+ */
+export function lastQuestionIndex(rows: Pick<StoredMessage, 'role' | 'status'>[]): number {
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const row = rows[i]!
+    if (row.role === 'user' && !isBlocked(row)) return i
+  }
+  return -1
 }
 
 /**
@@ -43,7 +74,8 @@ export function transcriptOf(data: ConversationData): StoredMessage[] {
  * DeleteAnswerTo choose them: with `from`, that message and every row after
  * it (an edited question); with `after`, the rows after it that the question
  * did not write itself (the answer of a regenerated one - a question is only
- * regenerated while it is the last, so what follows it is its answer).
+ * regenerated while it is the last, so what follows it is its answer - and the
+ * messages refused since, which are user rows but not questions).
  */
 export function deletedBy(
   messages: StoredMessage[],
@@ -53,7 +85,7 @@ export function deletedBy(
   const id = 'from' in redo ? redo.from : redo.after
   const at = ordered.findIndex((m) => m.id === id)
   if (at < 0) return []
-  return 'from' in redo ? ordered.slice(at) : ordered.slice(at + 1).filter((m) => m.role !== 'user')
+  return 'from' in redo ? ordered.slice(at) : ordered.slice(at + 1).filter((m) => m.role !== 'user' || isBlocked(m))
 }
 
 // ----------------------------------------------------------------- paging

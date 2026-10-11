@@ -32,7 +32,7 @@ import {
 } from './memory'
 import type { GuestStorage } from './storage'
 import { survivingSummary } from './summary'
-import { byRow, deletedBy, encodeCursor, pageOf, rowKey, timeKey, transcriptOf } from './transcript'
+import { byRow, contextOf, deletedBy, encodeCursor, pageOf, rowKey, timeKey, transcriptOf } from './transcript'
 import type { ConversationData, StoredBlob, StoredConversation, StoredMessage, StoredPersonalization, StoredRun } from './types'
 
 /** What a new conversation is called until it is titled; the server's default too. */
@@ -256,7 +256,8 @@ export class GuestRepo {
       const needle = search.toLocaleLowerCase()
       const kept: StoredConversation[] = []
       for (const c of rows) {
-        const found = (await this.storage.messages(c.id))
+        // Not the messages moderation refused: they were never sent (SearchConversations).
+        const found = contextOf(await this.storage.messages(c.id))
           .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.content.toLocaleLowerCase().includes(needle))
           .sort(byRow)
           .at(-1)
@@ -455,6 +456,39 @@ export class GuestRepo {
           for (const file of message.attachments ?? []) if (!carried.has(file.id)) await this.dropBlob(file.id)
         }
       }
+    })
+  }
+
+  /**
+   * Keeps a message the server's moderation refused (`content_blocked` to a
+   * send): a user row of status `blocked` at the end of the conversation, so
+   * that it is still there after the page is opened again, as the server keeps
+   * an account's. It is shown and never sent (transcript.ts, summary.ts,
+   * request.ts), starts no run and carries no file - the files stay the
+   * composer's.
+   *
+   * Written nowhere a run is writing, like the server's, and returns null then.
+   * The rows are the server's, stamped by its clock and not the page's, but this
+   * one is not the server's: it goes after the newest row there is, as the failed
+   * reply of an interrupted run does (`runInterrupted`), so that it sorts last.
+   */
+  async keepBlocked(conversationId: string, content: string): Promise<Message | null> {
+    return this.serial(conversationId, async () => {
+      const data = await this.load(conversationId)
+      if (this.activeRun(data)) return null
+      const newest = transcriptOf(data).at(-1)
+      const at = new Date(Math.max(this.now().getTime(), newest ? Date.parse(newest.createdAt) + 1 : 0)).toISOString()
+      const row: StoredMessage = {
+        id: this.newId(),
+        conversationId,
+        role: 'user',
+        content,
+        parts: [{ type: 'text', text: content }],
+        status: 'blocked',
+        createdAt: at,
+      }
+      await this.storage.putMessages([row])
+      return (await this.messagePage([row]))[0] ?? null
     })
   }
 
@@ -696,7 +730,8 @@ export class GuestRepo {
     for (const c of conversations) {
       const data = await this.load(c.id).catch(() => undefined)
       if (!data) continue
-      const messages = transcriptOf(data)
+      // Not the messages moderation refused: the export is what was sent (ListTranscript).
+      const messages = contextOf(transcriptOf(data))
         .filter((m) => m.role !== 'tool' && !(m.role === 'assistant' && m.content.trim() === ''))
         .map((m) => ({
           id: m.id,

@@ -109,6 +109,7 @@ async function build(): Promise<Wired> {
       channel?.postMessage({ conversationId })
     },
     onDeleted: (conversationId, from) => channel?.postMessage({ conversationId, from }),
+    onKept: (conversationId) => channel?.postMessage({ conversationId }),
   })
   const api = createGuestApi({
     repo,

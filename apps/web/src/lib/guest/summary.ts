@@ -1,5 +1,6 @@
 import type { ContextSummary } from '@openchat/api-client'
 
+import { contextOf } from './transcript'
 import type { StoredMessage } from './types'
 
 /**
@@ -10,7 +11,9 @@ import type { StoredMessage } from './types'
  *
  * A summary stands in, for the model, for the rows up to and including
  * `throughMessageId`, except the user message `keptMessageId`, which is sent as
- * written. The rows themselves are never touched.
+ * written. The rows themselves are never touched. A message moderation refused
+ * (status `blocked`) is not a row of any of this: it is never covered, ended at,
+ * kept or sent.
  */
 
 /**
@@ -22,7 +25,9 @@ import type { StoredMessage } from './types'
  */
 export function survivingSummary(summary: ContextSummary | null | undefined, rows: StoredMessage[]): ContextSummary | undefined {
   if (!summary) return undefined
-  const ids = new Set(rows.map((m) => m.id))
+  // A refused message is never what a summary ends at or keeps (the server's
+  // queries leave it out), so one that names it describes nothing.
+  const ids = new Set(contextOf(rows).map((m) => m.id))
   if (!ids.has(summary.throughMessageId)) return undefined
   if (summary.keptMessageId && !ids.has(summary.keptMessageId)) return undefined
   return summary
@@ -35,7 +40,9 @@ export function survivingSummary(summary: ContextSummary | null | undefined, row
  * after that - the rows between, which the summary replaces, are not sent. At
  * most `max` rows in all.
  */
-export function rowsToSend(rows: StoredMessage[], summary: ContextSummary | undefined, max: number): StoredMessage[] {
+export function rowsToSend(all: StoredMessage[], summary: ContextSummary | undefined, max: number): StoredMessage[] {
+  // Refused messages are never sent.
+  const rows = contextOf(all)
   if (!summary) return rows.slice(-max)
   const through = rows.findIndex((m) => m.id === summary.throughMessageId)
   if (through < 0) return rows.slice(-max)
@@ -71,7 +78,9 @@ export interface CompactionPlan {
  * which deletes what follows it, leaves the summary in place. Null when there
  * is nothing since the last summary.
  */
-export function planCompaction(rows: StoredMessage[], held: ContextSummary | undefined): CompactionPlan | null {
+export function planCompaction(all: StoredMessage[], held: ContextSummary | undefined): CompactionPlan | null {
+  // Refused messages are not part of what a summary covers, ends at or keeps.
+  const rows = contextOf(all)
   const summary = survivingSummary(held, rows)
   const through = summary ? rows.findIndex((m) => m.id === summary.throughMessageId) : -1
   let since = rows.slice(through + 1)

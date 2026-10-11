@@ -5,7 +5,7 @@ import { GuestError, notFound } from './errors'
 import { eventStream, type GuestHub } from './hub'
 import type { GuestRepo } from './repo'
 import type { GuestRunner } from './runner'
-import { transcriptOf } from './transcript'
+import { contextOf, transcriptOf } from './transcript'
 
 /**
  * The API a guest's page calls, answered in the page. Everything the signed-in
@@ -132,7 +132,8 @@ export function createGuestApi(deps: GuestApiDeps) {
         const conversationId = params[0]!
         const data = await repo.data(conversationId)
         if (data.conversation.temporary) throw new GuestError(409, 'temporary_conversation', 'a temporary chat is not titled')
-        const exchanges = transcriptOf(data)
+        // The exchange, not a message moderation refused.
+        const exchanges = contextOf(transcriptOf(data))
           .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.content.trim() !== '')
           .slice(-8)
           .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))

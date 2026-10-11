@@ -34,6 +34,8 @@ export interface RunnerDeps {
   onSettled?: (conversationId: string) => void
   /** Rows were deleted by a redo that has started: other pages showing the conversation hold them. */
   onDeleted?: (conversationId: string, from?: string) => void
+  /** A refused message was kept at the end of the conversation: other pages showing it do not hold it yet. */
+  onKept?: (conversationId: string) => void
 }
 
 /** How often a run says it is still being followed. */
@@ -55,6 +57,9 @@ interface Progress {
    */
   finished: boolean
 }
+
+/** The code of a message moderation refused. */
+const CONTENT_BLOCKED = 'content_blocked'
 
 const busy = () => new GuestError(409, 'conversation_busy', 'this conversation is already answering')
 
@@ -146,7 +151,25 @@ export class GuestRunner {
       }
     } catch (error) {
       controller.abort()
-      throw asGuestError(error)
+      const refusal = asGuestError(error)
+      // The server kept nothing of a refused message (it keeps nothing of a
+      // guest), so the browser keeps it, as the server does an account's: a
+      // refused *send*; the words of an edit or an answer go back to their field.
+      if (what.action === 'send' && refusal.code === CONTENT_BLOCKED) {
+        const kept = await repo.keepBlocked(conversationId, what.content).catch((storageError: unknown) => {
+          console.warn('guest data: keeping a refused message failed', storageError)
+          return null
+        })
+        if (kept) {
+          hub.announceChanged(conversationId)
+          this.deps.onKept?.(conversationId)
+          throw new GuestError(refusal.status, refusal.code, refusal.message, refusal.field, {
+            ...refusal.details,
+            messageId: kept.id,
+          })
+        }
+      }
+      throw refusal
     }
     const started = first?.events.find((e) => e.type === 'run_started')
     if (!first || started?.type !== 'run_started') {

@@ -59,7 +59,12 @@ export function pruneBranches(c: StoredConversation, held: StoredMessage[], held
   const runs = heldRuns as Old<StoredRun>[]
   const onPath = pathOf(c as Old<StoredConversation>, messages)
   const answers = new Set(runs.filter((r) => onPath.has(r.inputId) && !r.superseded).map((r) => r.id))
-  const shown = (m: Old<StoredMessage>) => (m.role === 'user' ? onPath.has(m.id) : Boolean(m.runId) && answers.has(m.runId!))
+  // A refused message (status `blocked`) came with the version that has no
+  // branches, so data kept by one that had them holds none; if one is there it
+  // is a row of the line like any other and stays - it names no parent, and
+  // would otherwise be taken for a question off the path.
+  const shown = (m: Old<StoredMessage>) =>
+    m.status === 'blocked' || (m.role === 'user' ? onPath.has(m.id) : Boolean(m.runId) && answers.has(m.runId!))
 
   const keptMessages = messages.filter(shown).sort(byRow)
   const keptIds = new Set(keptMessages.map((m) => m.id))

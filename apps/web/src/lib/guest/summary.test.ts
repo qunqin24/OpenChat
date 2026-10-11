@@ -135,3 +135,41 @@ describe('sentToModel', () => {
     expect(sentToModel(user('q'))).toBe(false)
   })
 })
+
+// A message moderation refused (status blocked) is a row of the transcript and
+// no row of any of this: the server's queries leave it out.
+describe('a refused message', () => {
+  const blocked = (name: string) => user(name, { status: 'blocked' })
+
+  it('is never sent, whether or not there is a summary', () => {
+    const all = [...rows('q1', 'a1'), blocked('b1'), ...rows('q2', 'a2'), blocked('b2')]
+    expect(rowsToSend(all, undefined, 300).map((m) => m.id)).toEqual([id('q1'), id('a1'), id('q2'), id('a2')])
+    // The window is counted in rows that can be sent.
+    expect(rowsToSend(all, undefined, 2).map((m) => m.id)).toEqual([id('q2'), id('a2')])
+    const s = summary('a1', { keptMessageId: id('q1') })
+    expect(rowsToSend(all, s, 300).map((m) => m.id)).toEqual([id('q1'), id('a1'), id('q2'), id('a2')])
+  })
+
+  it('is never what a summary ends at or keeps', () => {
+    const all = [...rows('q1', 'a1'), blocked('b1')]
+    expect(survivingSummary(summary('b1'), all)).toBeUndefined()
+    expect(survivingSummary(summary('a1', { keptMessageId: id('b1') }), all)).toBeUndefined()
+    const fine = summary('a1')
+    expect(survivingSummary(fine, all)).toBe(fine)
+  })
+
+  it('is not covered by a compression, and does not end it', () => {
+    const plan = planCompaction([...rows('q1', 'a1'), blocked('b1'), ...rows('q2', 'a2'), blocked('b2')], undefined)!
+    expect(plan.through.id).toBe(id('a2'))
+    expect(plan.covered.map((m) => m.id)).toEqual([id('q1'), id('a1'), id('q2'), id('a2')])
+    // A question without an answer is the last question even with a refusal after it.
+    const unanswered = planCompaction([...rows('q1', 'a1', 'q2'), blocked('b1')], undefined)!
+    expect(unanswered.through.id).toBe(id('q2'))
+    expect(unanswered.keep?.id).toBe(id('q2'))
+  })
+
+  it('is nothing new to compress when it is all that came after the summary', () => {
+    expect(planCompaction([...rows('q1', 'a1'), blocked('b1')], summary('a1'))).toBeNull()
+    expect(planCompaction([blocked('b1')], undefined)).toBeNull()
+  })
+})

@@ -83,6 +83,13 @@ describe('pruneBranches', () => {
     expect(pruned.runs.map((r) => r.id).sort()).toEqual(['c2', 'h2'])
   })
 
+  it('keeps a message moderation refused, which names no parent and is on no path', () => {
+    const messages = [user('q1', null), answer('a1', 'r1'), user('b1', null, { status: 'blocked' })]
+    const pruned = pruneBranches(conversation('q1'), messages, [run('r1', 'q1')])
+    expect(pruned.messages.map((m) => m.id)).toEqual(['q1', 'a1', 'b1'])
+    expect(pruned.deletedMessages).toEqual([])
+  })
+
   it('leaves a linear conversation as it was, row for row', () => {
     const messages = [user('q1', null), answer('a1', 'r1'), user('q2', 'q1'), answer('a2', 'r2')]
     const runs = [run('r1', 'q1'), run('r2', 'q2')]
