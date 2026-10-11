@@ -429,8 +429,14 @@ export function AssistantTurn({
     })
 
   const entries: Block[] = []
+  // Parts are keyed by where they sit — which response of the reply, which
+  // part of it — not by the response's id: the response being written has no
+  // id yet, and keyed by its place it is the same element once it is saved
+  // (and again once the run hands over to the message list), so the text
+  // keeps its node and finishes revealing what it holds rather than being
+  // drawn anew all at once (see `Markdown`).
   for (const [position, response] of turn.responses.entries()) {
-    entries.push(...renderParts(response.parts, response.id, false))
+    entries.push(...renderParts(response.parts, `r${position}`, false))
     if (response.stopReason === 'error') {
       entries.push(
         <Notice key={`${response.id}:error`} tone="error">
@@ -463,7 +469,8 @@ export function AssistantTurn({
       )
     }
   }
-  if (turn.partial) entries.push(...renderParts(turn.partial, 'partial', running))
+  const partialKey = `r${turn.responses.length}`
+  if (turn.partial) entries.push(...renderParts(turn.partial, partialKey, running))
   if (running && live?.retry) {
     entries.push(
       <Notice key="retry" tone="quiet">
@@ -505,7 +512,7 @@ export function AssistantTurn({
     ((running &&
       isFoldBlock(tail) &&
       tail.fold.kind === 'reasoning' &&
-      tail.key.startsWith('partial:') &&
+      tail.key.startsWith(`${partialKey}:`) &&
       // Still the newest thing written: once the answer starts, it is over.
       entries.slice(last + 1).every((entry) => entry === null)) ||
       waiting)
