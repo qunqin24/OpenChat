@@ -145,8 +145,12 @@ func (s *Server) CreateMessage(w http.ResponseWriter, r *http.Request, conversat
 	// The words and the pictures, before a run is started or a file claimed. A
 	// message that fails is kept as what it is - a refused message - and
 	// nothing else of it is (moderation_kept.go).
+	//
+	// The check's reading of the pictures is also what is recorded of them
+	// (attachment_digest.go): the model is sent those bytes or none.
+	images, digests := s.checkedImages(files)
 	if refused, err := s.moderated(ctx, s.accountSubject(ctx, user, conversationId, ModerationSourceSend),
-		moderationInput{text: content, images: s.attachmentImages(files)}); err != nil {
+		moderationInput{text: content, images: images}); err != nil {
 		if refused {
 			err = s.keepRefused(ctx, conversationId, content, err)
 		}
@@ -177,7 +181,7 @@ func (s *Server) CreateMessage(w http.ResponseWriter, r *http.Request, conversat
 			return err
 		}
 		var err error
-		input, err = appendInput(ctx, q, conversationId, nil, content, inputParts(content, files))
+		input, err = appendInput(ctx, q, conversationId, nil, content, inputPartsChecked(content, files, digests))
 		if err != nil {
 			return err
 		}

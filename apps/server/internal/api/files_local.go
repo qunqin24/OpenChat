@@ -53,6 +53,9 @@ func (s *Server) signedKey(r *http.Request, local *storage.Local, method string)
 	return key, row, nil
 }
 
+var errAlreadyUploaded = httpx.NewError(http.StatusConflict, "already_uploaded",
+	"this upload already has its file; ask for a new upload to send another")
+
 // PutFileContent receives the bytes of an upload CreateUpload issued a URL for.
 // It holds the file to what the upload announced: the content type it was
 // issued for, and the largest size that type may be.
@@ -86,10 +89,23 @@ func (s *Server) PutFileContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Written once. The bytes of an upload are looked at (content moderation
+	// reads the images of a message) between this PUT and the message that
+	// claims them, and the signed URL stays good for its whole lifetime; a
+	// second PUT in that time would put other bytes under the key the first
+	// were checked at. What an upload announced is what it holds: a client that
+	// wants another file asks for another upload. (A bucket cannot do this -
+	// see attachment_digest.go for what is done there.)
+	if local.Has(key) {
+		httpx.Fail(w, r, errAlreadyUploaded)
+		return
+	}
 	// Without a declared length the limit still holds: the body is cut off.
-	_, err = local.Put(key, http.MaxBytesReader(w, r.Body, limit), limit)
+	_, err = local.PutNew(key, http.MaxBytesReader(w, r.Body, limit), limit)
 	var tooBig *http.MaxBytesError
 	switch {
+	case errors.Is(err, storage.ErrExists):
+		httpx.Fail(w, r, errAlreadyUploaded)
 	case errors.Is(err, storage.ErrTooLarge), errors.As(err, &tooBig):
 		httpx.Fail(w, r, tooLarge)
 	case err != nil:

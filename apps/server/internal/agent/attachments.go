@@ -3,6 +3,8 @@ package agent
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -130,6 +132,15 @@ func (a *attachmentResolver) one(ctx context.Context, ref llm.AttachmentPart, ro
 		if err != nil {
 			slog.WarnContext(ctx, "read attachment", "attachment_id", id, "error", err)
 			return ref, "the file could not be read"
+		}
+	}
+	// What content moderation looked at is what the model gets. The object may
+	// have been written again since (an S3 presigned PUT cannot be made
+	// write-once), and a file that is not the checked one is not sent.
+	if ref.SHA256 != "" {
+		if sum := sha256.Sum256(data); hex.EncodeToString(sum[:]) != ref.SHA256 {
+			slog.WarnContext(ctx, "attachment changed after it was checked", "attachment_id", id)
+			return ref, "the file changed after it was checked"
 		}
 	}
 	mediaType, ok := sniff(modality, data)

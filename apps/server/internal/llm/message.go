@@ -211,6 +211,12 @@ type AttachmentPart struct {
 	Ref       string
 	Filename  string
 	MediaType string
+	// SHA256 is the hex digest of the bytes content moderation looked at when
+	// the message was sent, or empty when none did. The file lives in storage
+	// the client can sometimes write to (an S3 presigned URL cannot refuse a
+	// second PUT), so what the model is sent is the bytes that were checked
+	// or nothing: the context builder compares what it reads against this.
+	SHA256 string
 
 	// Data is the resolved content when the builder chose to inline it.
 	Data []byte

@@ -271,3 +271,44 @@ func TestLocalPutObject(t *testing.T) {
 		t.Errorf("a key outside the directory: %v", err)
 	}
 }
+
+func TestLocalPutNewWritesOnce(t *testing.T) {
+	l := newTestLocal(t)
+	ctx := context.Background()
+	key := "uploads/once.png"
+	if _, err := l.PutNew(key, strings.NewReader("first"), 10); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := l.PutNew(key, strings.NewReader("second"), 10); !errors.Is(err, ErrExists) {
+		t.Fatalf("a second write: %v", err)
+	}
+	if got, _ := l.Read(ctx, key, 10); string(got) != "first" {
+		t.Errorf("the object is %q", got)
+	}
+	// Neither the refused write nor the successful one leaves a temporary file.
+	entries, _ := os.ReadDir(filepath.Join(l.Dir(), "uploads"))
+	if len(entries) != 1 {
+		t.Errorf("a temporary file was left behind: %v", entries)
+	}
+
+	// Racing writers: exactly one wins, and what is stored is whole.
+	race := "uploads/race.png"
+	results := make(chan error, 8)
+	for i := range 8 {
+		go func() {
+			_, err := l.PutNew(race, strings.NewReader(strings.Repeat(string(rune('a'+i)), 5)), 10)
+			results <- err
+		}()
+	}
+	won := 0
+	for range 8 {
+		if err := <-results; err == nil {
+			won++
+		} else if !errors.Is(err, ErrExists) {
+			t.Errorf("a racing write: %v", err)
+		}
+	}
+	if won != 1 {
+		t.Errorf("%d writers won the key", won)
+	}
+}

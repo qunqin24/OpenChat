@@ -162,6 +162,22 @@ func (l *Local) ObjectURL(key string) string {
 // temporary file that is renamed over the key when complete, so a reader sees
 // the whole object or none of it, and an upload that fails leaves nothing.
 func (l *Local) Put(key string, r io.Reader, limit int64) (int64, error) {
+	return l.put(key, r, limit, false)
+}
+
+// ErrExists is a write-once object that has been written.
+var ErrExists = errors.New("storage: the object already exists")
+
+// PutNew is Put for an object that must not be replaced: it is committed only
+// if nothing is at the key (ErrExists otherwise), and that check and the commit
+// are one step, so of two writers racing for a key exactly one wins. A browser's
+// upload is written this way (see the handler): the bytes content moderation
+// reads are then the bytes that are there afterwards.
+func (l *Local) PutNew(key string, r io.Reader, limit int64) (int64, error) {
+	return l.put(key, r, limit, true)
+}
+
+func (l *Local) put(key string, r io.Reader, limit int64, exclusive bool) (int64, error) {
 	if err := checkKey(key); err != nil {
 		return 0, err
 	}
@@ -200,6 +216,22 @@ func (l *Local) Put(key string, r io.Reader, limit int64) (int64, error) {
 	}
 	if err := f.Close(); err != nil {
 		return 0, fmt.Errorf("storage: close %q: %w", key, err)
+	}
+	if exclusive {
+		// A hard link fails when the name is taken, which a rename would not.
+		switch err := l.root.Link(tmp, key); {
+		case err == nil:
+			// The key and the temporary name are one file now; the name goes.
+			done = true
+			_ = l.root.Remove(tmp)
+			return n, nil
+		case errors.Is(err, fs.ErrExist):
+			return 0, ErrExists
+		case l.Has(key):
+			return 0, ErrExists
+		}
+		// Links the filesystem does not do: the check and the rename are two
+		// steps there, the most that can be had.
 	}
 	if err := l.root.Rename(tmp, key); err != nil {
 		return 0, fmt.Errorf("storage: commit %q: %w", key, err)
