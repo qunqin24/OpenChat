@@ -146,3 +146,29 @@ function appendDelta(part: MessagePart, delta: string): MessagePart {
 export function isRunning(live: ConversationLive | undefined): boolean {
   return live?.run?.run.status === 'running'
 }
+
+/**
+ * How many finished runs the page remembers (see `rememberFinished`). A late
+ * response only ever trails its own run by moments, so what matters is the few
+ * most recent runs, not the history; a long session must not grow without bound.
+ */
+export const FINISHED_RUNS_KEPT = 32
+
+/**
+ * Notes that a run is over, keeping the newest `FINISHED_RUNS_KEPT`. A run
+ * never comes back from finished, so whatever still says it is running - a
+ * send's response that arrived after the events stream had told the whole
+ * story, a snapshot taken before it ended - is out of date and is not applied.
+ */
+export function rememberFinished(finished: readonly string[], runId: string): readonly string[] {
+  if (finished.includes(runId)) return finished
+  const next = [...finished, runId]
+  return next.length > FINISHED_RUNS_KEPT ? next.slice(next.length - FINISHED_RUNS_KEPT) : next
+}
+
+/** The runs a batch ends, by id - including one this page never saw start. */
+export function finishedBy(batch: BatchEvent): string[] {
+  const ids: string[] = []
+  for (const event of batch.events) if (event.type === 'run_finished') ids.push(event.run.id)
+  return ids
+}

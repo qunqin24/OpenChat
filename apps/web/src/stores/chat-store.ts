@@ -1,7 +1,7 @@
 import type { Attachment, BatchEvent, Message, Run, SnapshotEvent } from '@openchat/api-client'
 import { create } from 'zustand'
 
-import { applyBatch, fromSnapshot, idle, type ConversationLive } from '@/lib/run-state'
+import { applyBatch, finishedBy, fromSnapshot, idle, rememberFinished, type ConversationLive } from '@/lib/run-state'
 import type { Replacing } from '@/lib/transcript'
 
 /**
@@ -32,6 +32,16 @@ export interface OutboxItem {
 
 interface ChatState {
   live: Record<string, ConversationLive>
+
+  /**
+   * Runs known to be over, newest last and bounded (`rememberFinished`). The
+   * events stream can tell a run's whole story - started, finished, its rows
+   * fetched, the live copy settled - before the HTTP response of the request
+   * that started it comes back; that response, and a snapshot taken earlier
+   * than the end, still say "running". A run does not go back, so neither is
+   * allowed to write it into `live` again: nothing would ever finish it.
+   */
+  finished: readonly string[]
 
   /**
    * Each conversation's message being sent, until the server has taken it
@@ -95,6 +105,7 @@ const settled = (state: ChatState, conversationId: string) => ({
 
 export const useChatStore = create<ChatState>()((set, get) => ({
   live: {},
+  finished: [],
   outbox: {},
   replacing: {},
   pendingPrompt: null,
@@ -109,24 +120,41 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     })),
 
   applySnapshot: (conversationId, snapshot) =>
-    set((state) => ({
-      live: { ...state.live, [conversationId]: fromSnapshot(snapshot) },
-      // A run in flight already shows the message it answers.
-      ...(snapshot.run?.status === 'running' ? settled(state, conversationId) : {}),
-    })),
+    set((state) => {
+      const run = snapshot.run
+      // Taken before the run ended and delivered after: out of date.
+      if (run?.status === 'running' && state.finished.includes(run.id)) return state
+      return {
+        live: { ...state.live, [conversationId]: fromSnapshot(snapshot) },
+        ...(run && run.status !== 'running' ? { finished: rememberFinished(state.finished, run.id) } : {}),
+        // A run in flight already shows the message it answers.
+        ...(run?.status === 'running' ? settled(state, conversationId) : {}),
+      }
+    }),
 
   applyBatch: (conversationId, batch) =>
-    set((state) => ({
-      live: { ...state.live, [conversationId]: applyBatch(state.live[conversationId] ?? idle, batch) },
-      // The stream can announce the run before the POST that started it returns.
-      ...(batch.events.some((event) => event.type === 'run_started') ? settled(state, conversationId) : {}),
-    })),
+    set((state) => {
+      const starts = batch.events.some((event) => event.type === 'run_started')
+      // Announcing a run that is already over (a replay, a late copy).
+      if (starts && state.finished.includes(batch.runId)) return state
+      const live = applyBatch(state.live[conversationId] ?? idle, batch)
+      const ended = finishedBy(batch)
+      return {
+        live: { ...state.live, [conversationId]: live },
+        ...(ended.length > 0 ? { finished: ended.reduce(rememberFinished, state.finished) } : {}),
+        // The stream can announce the run before the POST that started it returns.
+        ...(starts ? settled(state, conversationId) : {}),
+      }
+    }),
 
   startRun: (conversationId, run, input, rows = []) =>
     set((state) => {
       const current = state.live[conversationId]
       // The stream may already have announced it.
       if (current?.run?.run.id === run.id) return settled(state, conversationId)
+      // Or told all of it, and had it handed over to the message list: the
+      // response says "running" because that is what it was when it was written.
+      if (state.finished.includes(run.id)) return settled(state, conversationId)
       return {
         ...settled(state, conversationId),
         live: {
@@ -140,7 +168,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     set((state) => {
       const current = state.live[conversationId]
       if (current?.run?.run.id !== runId || current.run.run.status === 'running') return state
-      return { live: { ...state.live, [conversationId]: idle } }
+      return { live: { ...state.live, [conversationId]: idle }, finished: rememberFinished(state.finished, runId) }
     }),
 
   setPendingPrompt: (pendingPrompt) => set({ pendingPrompt }),
@@ -158,5 +186,5 @@ export const useChatStore = create<ChatState>()((set, get) => ({
  * changes, and when the session ends.
  */
 export function resetChatStore() {
-  useChatStore.setState({ live: {}, outbox: {}, replacing: {}, pendingPrompt: null, temporaryChat: false })
+  useChatStore.setState({ live: {}, finished: [], outbox: {}, replacing: {}, pendingPrompt: null, temporaryChat: false })
 }
