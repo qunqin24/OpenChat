@@ -480,8 +480,11 @@ func TestModerationStrikesDisableAnAccount(t *testing.T) {
 			t.Fatalf("after %d strikes the account is disabled", i)
 		}
 	}
-	// The third is refused like the others - and the account goes.
-	refused(t, h.post("BLOCKME 3"))
+	// The third disables the account, and is answered as a request whose
+	// session is gone (401): the page goes to sign-in, which shows the ban.
+	if rec := h.post("BLOCKME 3"); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("the disabling message: %d %s", rec.Code, rec.Body)
+	}
 	if !disabled() || sessions() != 0 {
 		t.Fatalf("after 3 strikes: disabled %v, %d sessions", disabled(), sessions())
 	}
@@ -516,7 +519,9 @@ func TestModerationStrikesDisableAnAccount(t *testing.T) {
 	if rec := h.patchModeration(`{"strikeWindowHours":72}`); rec.Code != http.StatusOK {
 		t.Fatal(rec.Body)
 	}
-	refused(t, h.post("BLOCKME in a wider window"))
+	if rec := h.post("BLOCKME in a wider window"); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("the disabling message: %d %s", rec.Code, rec.Body)
+	}
 	if !disabled() {
 		t.Error("strikes inside the window were not counted")
 	}
@@ -581,8 +586,9 @@ func TestModerationStrikesAreCountedUnderParallelRequests(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			// Blocked, or (the one that reaches the threshold) signed out.
 			rec := h.post(fmt.Sprintf("BLOCKME %d", i))
-			if rec.Code != http.StatusUnprocessableEntity {
+			if rec.Code != http.StatusUnprocessableEntity && rec.Code != http.StatusUnauthorized {
 				t.Errorf("status %d: %s", rec.Code, rec.Body)
 			}
 		}()

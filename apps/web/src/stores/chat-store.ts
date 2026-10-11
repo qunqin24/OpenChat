@@ -67,6 +67,15 @@ interface ChatState {
    */
   pendingPrompt: PendingPrompt | null
 
+  /**
+   * The text of a first message the server refused (content moderation, a
+   * limit), carried back to the empty-state screen after the conversation made
+   * for it was removed. The empty state takes it into the composer.
+   */
+  returnedDraft: string | null
+  returnDraft: (text: string) => void
+  takeReturnedDraft: () => string | null
+
   applySnapshot: (conversationId: string, snapshot: SnapshotEvent) => void
   applyBatch: (conversationId: string, batch: BatchEvent) => void
   /**
@@ -109,6 +118,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   outbox: {},
   replacing: {},
   pendingPrompt: null,
+  returnedDraft: null,
   temporaryChat: false,
 
   setTemporaryChat: (temporaryChat) => set({ temporaryChat }),
@@ -173,6 +183,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   setPendingPrompt: (pendingPrompt) => set({ pendingPrompt }),
 
+  returnDraft: (returnedDraft) => set({ returnedDraft }),
+
+  takeReturnedDraft: () => {
+    const { returnedDraft } = get()
+    if (returnedDraft !== null) set({ returnedDraft: null })
+    return returnedDraft
+  },
+
   takePendingPrompt: () => {
     const { pendingPrompt } = get()
     if (pendingPrompt !== null) set({ pendingPrompt: null })
@@ -186,5 +204,5 @@ export const useChatStore = create<ChatState>()((set, get) => ({
  * changes, and when the session ends.
  */
 export function resetChatStore() {
-  useChatStore.setState({ live: {}, finished: [], outbox: {}, replacing: {}, pendingPrompt: null, temporaryChat: false })
+  useChatStore.setState({ live: {}, finished: [], outbox: {}, replacing: {}, pendingPrompt: null, returnedDraft: null, temporaryChat: false })
 }

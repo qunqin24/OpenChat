@@ -227,9 +227,15 @@ func TestGuestModerationBansTheAddress(t *testing.T) {
 	h, _ := newGuestModeration(t, nil)
 	const ip, other = "198.51.100.13", "198.51.100.14"
 
+	// Two are refused as blocked; the third, which bans the address, is
+	// answered with the ban itself so the page shows it at once.
 	for i := 1; i <= 3; i++ {
-		if status, _ := h.sendAs(ip, fmt.Sprintf("BLOCKME %d", i)); status != http.StatusUnprocessableEntity {
-			t.Fatalf("strike %d: %d", i, status)
+		want := http.StatusUnprocessableEntity
+		if i == 3 {
+			want = http.StatusForbidden
+		}
+		if status, body := h.sendAs(ip, fmt.Sprintf("BLOCKME %d", i)); status != want || (i == 3 && body["code"] != "guest_banned") {
+			t.Fatalf("strike %d: %d %s", i, status, body)
 		}
 	}
 	events := h.events(ip)
@@ -303,8 +309,8 @@ func TestGuestBanLengthAndNetworks(t *testing.T) {
 	// 0 hours is for good, and the ban does not say when it ends.
 	h, _ := newGuestModeration(t, map[string]any{settingGuestBanHours: 0, settingModerationStrikes: 1})
 	const v6 = "2001:db8:1:2:3:4:5:6"
-	if status, _ := h.sendAs(v6, "BLOCKME"); status != http.StatusUnprocessableEntity {
-		t.Fatalf("%d", status)
+	if status, body := h.sendAs(v6, "BLOCKME"); status != http.StatusForbidden || body["code"] != "guest_banned" || body["details"].(map[string]any)["until"] != nil {
+		t.Fatalf("the banning message: %d %s", status, body)
 	}
 	var ip string
 	var expires *time.Time

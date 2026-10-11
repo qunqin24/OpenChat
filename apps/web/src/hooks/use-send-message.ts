@@ -38,6 +38,9 @@ function useSendError() {
   const queryClient = useQueryClient()
   return (error: Error) => {
     const code = isOpenChatError(error) ? error.code : ''
+    // Said by the page itself, not a toast: a banned guest's window is covered
+    // by the ban, and a signed-out account is taken to sign-in.
+    if (code === 'guest_banned' || (isOpenChatError(error) && error.status === 401)) return
     const known = SEND_ERRORS.find((c) => c === code)
     // The request's id under the message, for a report that finds its lines.
     const requestId = isOpenChatError(error) ? error.requestId : undefined

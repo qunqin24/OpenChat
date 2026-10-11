@@ -5,7 +5,7 @@ import { Fragment, useCallback, useEffect, useEffectEvent, useLayoutEffect, useM
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import type { Message, ReasoningEffort } from '@openchat/api-client'
+import { isOpenChatError, type Message, type ReasoningEffort } from '@openchat/api-client'
 import {
   chatModelsQueryOptions,
   useChatFeatures,
@@ -14,7 +14,7 @@ import {
 } from '@/hooks/use-chat-models'
 import { useCompact, useCompaction, useUndoCompaction } from '@/hooks/use-compaction'
 import { useConversationEvents } from '@/hooks/use-conversation-events'
-import { useConversation, useCreateConversation } from '@/hooks/use-conversations'
+import { useConversation, useCreateConversation, useDeleteConversation } from '@/hooks/use-conversations'
 import { useAttachments } from '@/hooks/use-attachments'
 import { useFileDrop } from '@/hooks/use-file-drop'
 import { useMessages } from '@/hooks/use-messages'
@@ -68,7 +68,8 @@ export function NextChat({ conversationId }: NextChatProps) {
   const queryClient = useQueryClient()
   const paths = useChatPaths()
 
-  const [input, setInput] = useState('')
+  // A new chat starts with the text of a refused first message, if one came back.
+  const [input, setInput] = useState(() => (conversationId ? '' : (useChatStore.getState().returnedDraft ?? '')))
   const scrollRef = useRef<HTMLDivElement>(null)
   const columnRef = useRef<HTMLDivElement>(null)
   const parked = useRef(true)
@@ -98,6 +99,9 @@ export function NextChat({ conversationId }: NextChatProps) {
   const post = useChatStore((s) => s.post)
   const unpost = useChatStore((s) => s.unpost)
   const takePendingPrompt = useChatStore((s) => s.takePendingPrompt)
+  const returnDraft = useChatStore((s) => s.returnDraft)
+  const takeReturnedDraft = useChatStore((s) => s.takeReturnedDraft)
+  const deleteConversation = useDeleteConversation()
   const temporaryChat = useChatStore((s) => s.temporaryChat)
   const setTemporaryChat = useChatStore((s) => s.setTemporaryChat)
   const replacing = useChatStore((s) => s.replacing[conversationId ?? ''])
@@ -563,14 +567,30 @@ export function NextChat({ conversationId }: NextChatProps) {
     if (runId) cancelRun.mutate(runId)
   }, [cancelRun, live])
 
+  // The returned draft is in the composer now (the initial input); let it go.
+  useEffect(() => {
+    if (!conversationId) takeReturnedDraft()
+  }, [conversationId, takeReturnedDraft])
+
   // Consume a prompt carried over from the empty state.
   useEffect(() => {
     if (!conversationId) return
     const pending = takePendingPrompt()
     if (pending) {
       sendMessage.mutate(pending, {
-        onError: () => {
+        onError: (error) => {
           unpost(conversationId)
+          // The conversation was made for this message alone. Refused before
+          // anything was written (moderation, a limit), it is empty: remove it
+          // rather than leave a blank chat in the list, and take the text back
+          // to the new-chat screen. Any other failure keeps the conversation,
+          // which may hold the message after all.
+          if (isOpenChatError(error) && error.status >= 400 && error.status < 500 && error.status !== 401) {
+            returnDraft(pending.content)
+            deleteConversation.mutate(conversationId)
+            void navigate({ to: paths.home, replace: true })
+            return
+          }
           setInput((current) => current || pending.content)
         },
       })

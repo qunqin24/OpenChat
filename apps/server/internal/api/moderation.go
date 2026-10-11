@@ -159,8 +159,24 @@ func (s *Server) moderate(ctx context.Context, who moderationSubject, in moderat
 	if len(hits) == 0 {
 		return nil
 	}
-	s.recordBlocked(ctx, cfg, who, text, hits)
+	// The message that reaches the threshold is answered with the sanction
+	// itself, so the page shows it at once rather than on the next attempt: a
+	// banned address is told so, and a disabled account - its sessions are
+	// gone - is signed out, which takes its page to sign-in.
+	switch sanction := s.recordBlocked(ctx, cfg, who, text, hits); {
+	case sanction.banned:
+		return errGuestBanned(sanction.until)
+	case sanction.disabled:
+		return httpx.ErrUnauthorized
+	}
 	return contentBlocked(hits)
+}
+
+// moderationSanction is what recordBlocked did beyond logging.
+type moderationSanction struct {
+	disabled bool
+	banned   bool
+	until    *time.Time // a ban's end; nil for good
 }
 
 // moderationFailed is the answer when the check could not be made. A guest's
@@ -459,7 +475,7 @@ func parseModelVerdict(answer string) (moderationVerdict, error) {
 // step under a lock on the subject, so parallel messages of one account or
 // address each see the others' strikes. A failure to record is logged and does
 // not un-block the message.
-func (s *Server) recordBlocked(ctx context.Context, cfg moderationConfig, who moderationSubject, text string, categories []string) {
+func (s *Server) recordBlocked(ctx context.Context, cfg moderationConfig, who moderationSubject, text string, categories []string) moderationSanction {
 	// The message is already refused; the record is kept even if the page went away.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 	defer cancel()
@@ -468,7 +484,10 @@ func (s *Server) recordBlocked(ctx context.Context, cfg moderationConfig, who mo
 	if !who.guest() {
 		subject = "user:" + who.userID.String()
 	}
-	var sanction string
+	var (
+		sanction string
+		until    *time.Time
+	)
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
 		if err := q.LockModerationSubject(ctx, subject); err != nil {
@@ -510,7 +529,7 @@ func (s *Server) recordBlocked(ctx context.Context, cfg moderationConfig, who mo
 		}
 
 		if who.guest() {
-			if err := banGuest(ctx, q, who.guestIP, cfg.GuestBanHours, "content moderation", &event.ID); err != nil {
+			if until, err = banGuest(ctx, q, who.guestIP, cfg.GuestBanHours, "content moderation", &event.ID); err != nil {
 				return err
 			}
 			sanction = string(ModerationSanctionBanned)
@@ -539,22 +558,35 @@ func (s *Server) recordBlocked(ctx context.Context, cfg moderationConfig, who mo
 	})
 	if err != nil {
 		slog.ErrorContext(ctx, "record a blocked message", "error", err, "guest", who.guest())
-		return
+		return moderationSanction{}
 	}
-	if sanction != "" {
-		slog.WarnContext(ctx, "moderation sanction", "sanction", sanction, "user_id", who.userID, "guest_ip", who.guestIP,
+	if sanction == "" {
+		return moderationSanction{}
+	}
+	if who.guest() {
+		slog.WarnContext(ctx, "moderation sanction", "sanction", sanction, "guest_ip", who.guestIP,
 			"strikes", cfg.Strikes, "window_hours", cfg.StrikeWindowHours)
+		return moderationSanction{banned: true, until: until}
 	}
+	slog.WarnContext(ctx, "moderation sanction", "sanction", sanction, "user_id", who.userID,
+		"strikes", cfg.Strikes, "window_hours", cfg.StrikeWindowHours)
+	return moderationSanction{disabled: true}
 }
 
-// banGuest bans an address for hours (0 is for good).
-func banGuest(ctx context.Context, q *sqlc.Queries, ip string, hours int, reason string, eventID *uuid.UUID) error {
-	var expires pgtype.Timestamptz
+// banGuest bans an address for hours (0 is for good) and returns when the ban
+// ends, nil for good.
+func banGuest(ctx context.Context, q *sqlc.Queries, ip string, hours int, reason string, eventID *uuid.UUID) (*time.Time, error) {
+	var (
+		expires pgtype.Timestamptz
+		until   *time.Time
+	)
 	if hours > 0 {
-		expires = pgtype.Timestamptz{Time: time.Now().Add(time.Duration(hours) * time.Hour), Valid: true}
+		end := time.Now().Add(time.Duration(hours) * time.Hour)
+		expires = pgtype.Timestamptz{Time: end, Valid: true}
+		until = &end
 	}
 	_, err := q.UpsertGuestBan(ctx, sqlc.UpsertGuestBanParams{Ip: ip, ExpiresAt: expires, Reason: reason, EventID: eventID})
-	return err
+	return until, err
 }
 
 // subjectOfRequest is the person behind a signed-in request.

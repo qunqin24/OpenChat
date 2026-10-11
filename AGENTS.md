@@ -182,7 +182,7 @@ HttpOnly Cookie 会话，库里只存 token 的 SHA-256；前端从不接触 tok
 
 - `moderation_events`（迁移 `…_content_moderation.sql`）：只记被拒绝的，不记通过的。`user_id`（账号，`SET NULL`）或 `guest_ip`（游客，IPv6 按 /64，即 `clientIP`），`conversation_id`（游客没有，`SET NULL`）、`source`（`send|edit|answer|guest`）、`mode`、`categories`、`excerpt`（原文前 500 字，运营者自己的记录，只有管理员能读）、`action`（目前只有 `blocked`）、`sanction`（这条事件触发了处罚才有：`disabled` / `banned`）。90 天后由清理循环的 `purgeModeration` 删。**不要给这张表加"user_id 或 guest_ip 必有一个"的约束**：用户行删除时外键置空会撞上它。
 - 接口（都在管理员分组，非管理员 404）：`GET /admin/moderation/events`（游标分页 `(created_at, id)`，过滤 `userId`、`guestIp`、`category`，游标只对发出它的那组过滤有效）、`GET/POST/DELETE /admin/moderation/bans`（POST 按日志行的 `eventId` 封那条的游客地址，账号的行是 409 `not_a_guest`；DELETE 的地址放查询参数，因为 IPv6 网段里有 `/`）。
-- 处罚在 `recordBlocked`：**一个事务**里按主体（`user:<id>` / `ip:<地址>`）取 advisory lock、写事件、数窗口内的违规、够了就处罚，所以并发的违规请求不会各数少一条。账号：走和管理员停用一样的两步（`AdminUpdateUser` 的 `disabled` + `DeleteUserSessions`），已开着的页面下次请求 401、登录页出现已有的封禁遮罩；**管理员永远不自动停用，只记录**。游客：`guest_bans`（`ip` 主键、`expires_at` 空为永久、`reason`、`event_id`），已封的地址再封只延长不缩短。计数**从该主体上一次被处罚之后**算起，所以管理员启用账号 / 解封地址后重新来过，不会下一条消息又触发。触发处罚的那个请求本身仍然返回 422，下一个请求才被 401 / 403。
+- 处罚在 `recordBlocked`：**一个事务**里按主体（`user:<id>` / `ip:<地址>`）取 advisory lock、写事件、数窗口内的违规、够了就处罚，所以并发的违规请求不会各数少一条。账号：走和管理员停用一样的两步（`AdminUpdateUser` 的 `disabled` + `DeleteUserSessions`），已开着的页面下次请求 401、登录页出现已有的封禁遮罩；**管理员永远不自动停用，只记录**。游客：`guest_bans`（`ip` 主键、`expires_at` 空为永久、`reason`、`event_id`），已封的地址再封只延长不缩短。计数**从该主体上一次被处罚之后**算起，所以管理员启用账号 / 解封地址后重新来过，不会下一条消息又触发。触发处罚的那个请求直接以处罚作答（`moderate` 里 `recordBlocked` 的结果）：游客是 403 `guest_banned`（带 `until`），页面立刻盖上封禁遮罩；账号是 401（会话已删），页面按会话失效去登录页，登录时看到封禁遮罩。
 - 过期的封禁无论清理循环删没删都不生效（`GetGuestBan` 带过期条件），清理循环再把它们删掉。
 
 ### 游客按地址封禁
