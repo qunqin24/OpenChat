@@ -1070,7 +1070,7 @@ func (p *guestPlan) endReceipts(end *GuestEndEvent) {
 	}
 	r.Messages, r.Files = &messages, &files
 	for i := range end.Memories {
-		v := p.signer.text(end.Memories[i].Content)
+		v := p.signer.text(p.ids.text(end.Memories[i].Content))
 		end.Memories[i].Receipt = &v
 	}
 	if end.MemorySnapshot != nil {
@@ -1134,7 +1134,9 @@ func (p *guestPlan) sign(m *Message) {
 			m.Receipt = &r
 		}
 	case RoleAssistant, RoleTool:
-		r := p.signer.messageReceipt(*m)
+		// Of the row the browser will have: its ids are turned back on the way
+		// out (guestIDs), and what it sends back is that form.
+		r := p.signer.messageReceipt(p.ids.forBrowser(*m))
 		m.Receipt = &r
 	}
 }
@@ -1144,7 +1146,7 @@ func (p *guestPlan) signSummary(s *ContextSummary) {
 	if p == nil || p.signer == nil || s == nil {
 		return
 	}
-	r := p.signer.summary(s.Content)
+	r := p.signer.summary(p.ids.text(s.Content))
 	s.Receipt = &r
 }
 

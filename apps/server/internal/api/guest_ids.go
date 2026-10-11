@@ -74,6 +74,34 @@ func (g *guestIDs) seal() {
 	}
 }
 
+// text turns the staged ids in an encoded text back into the browser's.
+func (g *guestIDs) text(s string) string {
+	if g == nil || g.back == nil {
+		return s
+	}
+	return g.back.Replace(s)
+}
+
+// forBrowser is a message as the browser will hold it: the ids turned back, the
+// way send writes it. A receipt has to be made from this form and no other -
+// the browser stores what it was sent and returns exactly that, and a receipt
+// for the staged ids would be for a row it never had (a memory tool's result
+// names the memory it changed, and that memory has the browser's id there).
+func (g *guestIDs) forBrowser(m Message) Message {
+	if g == nil || g.back == nil {
+		return m
+	}
+	raw, err := json.Marshal(m)
+	if err != nil {
+		return m
+	}
+	var out Message
+	if json.Unmarshal([]byte(g.back.Replace(string(raw))), &out) != nil {
+		return m
+	}
+	return out
+}
+
 // send writes a frame to the browser with the ids turned back.
 func (g *guestIDs) send(sse *httpx.SSEWriter, v any) error {
 	payload, err := json.Marshal(v)
