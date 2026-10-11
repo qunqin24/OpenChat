@@ -3101,6 +3101,11 @@ export interface components {
         GuestAttachment: {
             /** Format: uuid */
             id: string;
+            /**
+             * @description 1 to 255 characters, no control characters (400 `invalid_filename`).
+             *     The model is told it, so it is checked as words are: with the new
+             *     message, or in history unless the file's `receipt` covers it.
+             */
             filename: string;
             contentType: string;
             /** Format: int64 */
@@ -3113,9 +3118,12 @@ export interface components {
              */
             data?: string;
             /**
-             * @description The server's signature that these bytes have been checked, from
-             *     `GuestEndEvent.receipts.files`. Without one a picture sent with its
-             *     bytes is checked again.
+             * @description The server's signature that this file's name and (for a picture
+             *     sent with its bytes) bytes have been checked, from
+             *     `GuestEndEvent.receipts.files`. Opaque, and kept as received. It
+             *     has two halves; a picture whose bytes are no longer sent still has
+             *     its name vouched for. Without one the name, and a picture's bytes,
+             *     are checked again.
              */
             receipt?: string;
         };
@@ -3144,7 +3152,7 @@ export interface components {
             messages?: {
                 [key: string]: string;
             };
-            /** @description Only in `GuestEndEvent`. The files whose bytes were checked, by attachment id. */
+            /** @description Only in `GuestEndEvent`. The files whose name (and bytes, for a picture) were checked, by attachment id. */
             files?: {
                 [key: string]: string;
             };
@@ -3228,6 +3236,11 @@ export interface components {
             /**
              * @description The conversation's snapshot from `GuestEndEvent`, sent back so the
              *     system prompt is the same bytes at every turn. Absent on its first run.
+             *     It has to be exactly what the server wrote (notes numbered `m1`,
+             *     `m2`, … in order, saved notes numbered on from there, each note one
+             *     line of at most 200 characters, ids set and unique): the prompt
+             *     prints the numbers next to the notes, so any other is 400
+             *     `invalid_snapshot`.
              */
             memorySnapshot?: {
                 [key: string]: unknown;
