@@ -1,8 +1,12 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"image"
+	"image/png"
 	"io"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"strings"
@@ -20,7 +24,10 @@ import (
 //
 // DuckDuckGo's icon service is the source: one fixed host, so the domain in
 // the path never decides where this server connects, and it answers 404 for a
-// site with no icon, which the client turns into its own letter mark.
+// site with no icon. Ours answers that (and an icon service that is down) with
+// a 1×1 transparent PNG rather than an error: a source list is mostly sites
+// without one, and every error status is a red line in the reader's console.
+// The client sees an image one pixel wide and draws its own letter mark.
 
 const (
 	faviconSource   = "https://icons.duckduckgo.com/ip3/"
@@ -114,20 +121,33 @@ func (s *Server) GetFavicon(w http.ResponseWriter, r *http.Request, domain strin
 		return
 	}
 	entry, err := favicons.get(r.Context(), domain)
-	if err != nil {
-		httpx.Fail(w, r, err)
-		return
-	}
-	if entry.body == nil {
+	switch {
+	case err != nil:
+		slog.WarnContext(r.Context(), "favicon fetch", "domain", domain, "error", err)
+		// Asked again in a few minutes: the service may be back by then.
+		writeIcon(w, "image/png", noFavicon, "private, max-age=300")
+	case entry.body == nil:
 		// Cached by the browser too, so a site without an icon is asked about
 		// once a day, not on every reply that cites it.
-		w.Header().Set("Cache-Control", "private, max-age=86400")
-		httpx.Fail(w, r, httpx.NewError(http.StatusNotFound, "no_favicon", "the site has no icon"))
-		return
+		writeIcon(w, "image/png", noFavicon, "private, max-age=86400")
+	default:
+		writeIcon(w, entry.contentType, entry.body, "private, max-age=604800")
 	}
-	w.Header().Set("Content-Type", entry.contentType)
-	w.Header().Set("Cache-Control", "private, max-age=604800")
+}
+
+// noFavicon is a 1×1 transparent PNG: "this site has no icon".
+var noFavicon = func() []byte {
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, image.NewNRGBA(image.Rect(0, 0, 1, 1))); err != nil {
+		panic(err)
+	}
+	return buf.Bytes()
+}()
+
+func writeIcon(w http.ResponseWriter, contentType string, body []byte, cache string) {
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", cache)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
-	_, _ = w.Write(entry.body)
+	_, _ = w.Write(body)
 }

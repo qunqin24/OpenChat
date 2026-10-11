@@ -1466,8 +1466,10 @@ export interface paths {
         /**
          * A site's icon, for the sources a reply cites
          * @description Fetched by the server and cached, so a browser showing a reply's
-         *     sources asks no third party about them. 404 when the site has none;
-         *     the client then draws its own mark.
+         *     sources asks no third party about them. A site with no icon (or an
+         *     icon service that is down) gets a 1×1 transparent PNG, not an error
+         *     status, which the browser would log for every source; the client sees
+         *     an image one pixel wide and draws its own mark.
          */
         get: operations["getFavicon"];
         put?: never;

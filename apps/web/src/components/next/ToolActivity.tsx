@@ -214,6 +214,9 @@ export function SourceMark({ url }: { url: string }) {
           loading="lazy"
           decoding="async"
           onError={() => setFailed(true)}
+          // The server answers a site without an icon with a 1×1 image (an
+          // error status would be logged in the console for every source).
+          onLoad={(e) => e.currentTarget.naturalWidth <= 1 && setFailed(true)}
         />
       )}
     </span>
