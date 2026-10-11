@@ -21,6 +21,8 @@ var reservedKeys = map[string]bool{
 	"max_tokens":    true,
 	"thinking":      true,
 	"output_config": true,
+	// The end-user identifier is the server's to set, from the request.
+	"metadata": true,
 }
 
 // Two ways to ask for thinking, by model generation. Claude 4.6 and later take
@@ -123,6 +125,9 @@ func buildBody(req llm.Request, cfg Config) ([]byte, error) {
 	}
 	if !cfg.ExplicitCachingOnly {
 		body["cache_control"] = cacheControl
+	}
+	if cfg.SendUser && req.User != "" {
+		body["metadata"] = map[string]any{"user_id": req.User}
 	}
 	if len(req.Tools) > 0 {
 		body["tools"] = convertTools(req.Tools)

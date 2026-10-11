@@ -787,6 +787,8 @@
       "api-key-clearing": "保存后将清除密钥",
       "section-connection": "连接",
       "section-credential": "凭据",
+      "send-user-id": "发送用户标识",
+      "send-user-id-hint": "请求里带上用户的匿名标识（OpenAI 的 safety_identifier、Anthropic 的 metadata.user_id），上游封号时能定位到具体用户而不是整个账号。标识是服务端密钥算出的哈希，不含邮箱。第三方中转可能不认识这个字段而拒绝请求，所以仅对 api.openai.com 和 api.anthropic.com 默认开启。",
       "base-url-default": "使用默认地址",
       "models": "模型",
       "models-count": "{{n}} 个模型",

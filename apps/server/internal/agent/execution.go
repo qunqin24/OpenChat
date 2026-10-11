@@ -442,6 +442,7 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 		Options:  options,
 		Session:  ex.run.ConversationID.String(),
 	}
+	request.User = ex.endUser(ctx)
 	meter := r.usage.Begin(ledger.Call{
 		Kind:           ledger.KindChat,
 		UserID:         ex.run.UserID,
@@ -497,6 +498,14 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 		return ex.requestFailed(resp, streamErr)
 	}
 	return ex.responded(resp, offered, final)
+}
+
+// endUser is the identifier of the person the run is for, or "".
+func (ex *execution) endUser(ctx context.Context) string {
+	if ex.r.opts.EndUser == nil {
+		return ""
+	}
+	return ex.r.opts.EndUser(ctx, ex.run)
 }
 
 // requestFailed records a failed attempt and either schedules the next one or

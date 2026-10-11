@@ -159,6 +159,7 @@ func (s *Server) CompactConversation(w http.ResponseWriter, r *http.Request, con
 		Client:         client,
 		Profile:        profile,
 		Mode:           agent.ModeManual,
+		EndUser:        s.endUsers.Account(ctx, user.ID),
 	})
 	switch {
 	case errors.Is(err, agent.ErrNothingToCompact):
@@ -292,6 +293,7 @@ func (s *Server) GuestCompact(w http.ResponseWriter, r *http.Request) {
 	}
 	content, in, out, err := s.runner.Compactor().Summarise(ctx, agent.CompactParams{
 		ChannelID: &channelID, ModelID: modelID, Client: client, Profile: profile,
+		EndUser: s.endUsers.Guest(ctx, clientIP(r)),
 	}, derefOr(body.Existing, ""), derefOr(body.Latest, ""), messages)
 	switch {
 	case errors.Is(err, agent.ErrNothingToCompact):

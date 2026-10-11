@@ -44,6 +44,8 @@ type Server struct {
 	// usage is the ledger of model requests, for the ones the server makes
 	// itself (titles). Runs write theirs through the runner.
 	usage *usage.Recorder
+	// endUsers makes the identifiers sent with model requests (end_user.go).
+	endUsers *EndUsers
 	// now is the clock the spending caps' periods are read from; time.Now
 	// unless a test has set another.
 	now func() time.Time
@@ -60,6 +62,8 @@ func NewServer(cfg *config.Config, pool *pgxpool.Pool, store storage.Backend, ru
 		local:  func() *storage.Local { return nil },
 		runner: runner,
 		usage:  usage.NewRecorder(sqlc.New(pool)),
+
+		endUsers: NewEndUsers(pool),
 	}
 	if runner != nil {
 		// One ledger, and one set of holds against the caps, for every request

@@ -255,7 +255,7 @@ func (q *Queries) GetChannelModel(ctx context.Context, arg GetChannelModelParams
 }
 
 const getServingChannel = `-- name: GetServingChannel :one
-SELECT c.id, c.name, c.base_url, c.api_key, c.enabled, c.sort_order, c.created_at, c.updated_at, c.type, c.api_format
+SELECT c.id, c.name, c.base_url, c.api_key, c.enabled, c.sort_order, c.created_at, c.updated_at, c.type, c.api_format, c.send_user_id
 FROM channels c
          JOIN channel_models cm ON cm.channel_id = c.id
 WHERE c.id = $1
@@ -286,6 +286,7 @@ func (q *Queries) GetServingChannel(ctx context.Context, arg GetServingChannelPa
 		&i.UpdatedAt,
 		&i.Type,
 		&i.ApiFormat,
+		&i.SendUserID,
 	)
 	return i, err
 }

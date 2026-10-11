@@ -78,6 +78,12 @@ type Config struct {
 	// HTTPClient overrides the default, mainly so tests can serve fixtures.
 	HTTPClient *http.Client
 
+	// SendUser puts the request's end-user identifier (llm.Request.User) on the
+	// wire as `metadata.user_id`. Off by default: a gateway other than
+	// Anthropic's may reject a field it does not know, so the operator turns it
+	// on per channel.
+	SendUser bool
+
 	// ExplicitCachingOnly leaves out the request-level cache_control and keeps
 	// only the marker on the system prompt. Some Messages deployments (the
 	// legacy Amazon Bedrock integration for Opus 4.6 and earlier) reject the

@@ -404,16 +404,17 @@ type CatalogProvider struct {
 }
 
 type Channel struct {
-	ID        uuid.UUID          `json:"id"`
-	Name      string             `json:"name"`
-	BaseUrl   string             `json:"base_url"`
-	ApiKey    string             `json:"api_key"`
-	Enabled   bool               `json:"enabled"`
-	SortOrder int32              `json:"sort_order"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	Type      ChannelType        `json:"type"`
-	ApiFormat string             `json:"api_format"`
+	ID         uuid.UUID          `json:"id"`
+	Name       string             `json:"name"`
+	BaseUrl    string             `json:"base_url"`
+	ApiKey     string             `json:"api_key"`
+	Enabled    bool               `json:"enabled"`
+	SortOrder  int32              `json:"sort_order"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	Type       ChannelType        `json:"type"`
+	ApiFormat  string             `json:"api_format"`
+	SendUserID bool               `json:"send_user_id"`
 }
 
 type ChannelModel struct {

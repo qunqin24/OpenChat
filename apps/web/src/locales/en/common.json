@@ -787,6 +787,8 @@
       "api-key-clearing": "Will be removed on save",
       "section-connection": "Connection",
       "section-credential": "Credential",
+      "send-user-id": "Send user identifier",
+      "send-user-id-hint": "Adds an anonymous identifier of the user to each request (OpenAI's safety_identifier, Anthropic's metadata.user_id), so an upstream ban can be traced to one user instead of the whole account. It is a keyed hash, never the email. A third-party relay may reject a field it does not know, so this is on by default only for api.openai.com and api.anthropic.com.",
       "base-url-default": "Provider default",
       "models": "Models",
       "models-count": "{{n}} models",

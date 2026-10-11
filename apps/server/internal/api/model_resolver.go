@@ -154,15 +154,15 @@ func clientFor(channel sqlc.Channel, modelID string, thinks bool) (llm.ModelClie
 	switch wire {
 	case wireAnthropic:
 		return anthropic.New(anthropic.Config{Provider: provider, BaseURL: baseURL, APIKey: channel.ApiKey,
-			Headers: headers, SessionHeader: sessionHeader})
+			Headers: headers, SessionHeader: sessionHeader, SendUser: channel.SendUserID})
 	case wireGemini:
 		return gemini.New(gemini.Config{Provider: provider, BaseURL: baseURL, APIKey: channel.ApiKey})
 	case wireResponses:
 		return openai.NewResponses(openai.Config{Provider: provider, BaseURL: baseURL, APIKey: channel.ApiKey,
-			Headers: headers, SessionHeader: sessionHeader, Reasoning: thinks})
+			Headers: headers, SessionHeader: sessionHeader, Reasoning: thinks, SendUser: channel.SendUserID})
 	default:
 		return openai.New(openai.Config{Provider: provider, BaseURL: baseURL, APIKey: channel.ApiKey,
-			Headers: headers, SessionHeader: sessionHeader, Compat: compatFor(kind)})
+			Headers: headers, SessionHeader: sessionHeader, Compat: compatFor(kind), SendUser: channel.SendUserID})
 	}
 }
 

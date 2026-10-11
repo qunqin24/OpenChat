@@ -165,7 +165,7 @@ func TestStoppedTitleIsEstimated(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		_, err := f.server.generateTitle(ctx, f.member.ID, uuid.Nil, f.modelID, nil, "<user>\nwhat is a long question\n</user>")
+		_, err := f.server.generateTitle(ctx, f.member.ID, "", uuid.Nil, f.modelID, nil, "<user>\nwhat is a long question\n</user>")
 		done <- err
 	}()
 	f.waitHeld(1)

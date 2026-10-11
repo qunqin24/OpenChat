@@ -4041,7 +4041,7 @@ components:
 
     Channel:
       type: object
-      required: [id, name, type, wireApi, apiFormat, enabled, hasKey, sortOrder, createdAt, modelCount]
+      required: [id, name, type, wireApi, apiFormat, enabled, hasKey, sendUserId, sortOrder, createdAt, modelCount]
       properties:
         id: { type: string, format: uuid }
         name: { type: string, description: What the operator calls this connection. }
@@ -4063,6 +4063,14 @@ components:
           description: |
             The last four characters, for telling two keys apart in the UI —
             e.g. `…4f2a`. Absent when no key is stored.
+        sendUserId:
+          type: boolean
+          description: |
+            Whether requests through this channel carry the end user's
+            identifier (a keyed hash, never the email): `safety_identifier` on
+            OpenAI's APIs, `metadata.user_id` on Anthropic's. A third-party
+            endpoint may reject the field, so it is on by default only for
+            api.openai.com and api.anthropic.com.
         sortOrder: { type: integer }
         createdAt: { type: string, format: date-time }
         spent:
@@ -4102,6 +4110,11 @@ components:
         apiKey: { type: string, maxLength: 500 }
         enabled: { type: boolean, default: true }
         apiFormat: { $ref: "#/components/schemas/ApiFormat" }
+        sendUserId:
+          type: boolean
+          description: |
+            Absent: on when the endpoint (`baseUrl`, else the type's default)
+            is api.openai.com or api.anthropic.com, off otherwise.
         models:
           type: array
           maxItems: 2000
@@ -4122,6 +4135,7 @@ components:
         enabled: { type: boolean }
         sortOrder: { type: integer }
         apiFormat: { $ref: "#/components/schemas/ApiFormat" }
+        sendUserId: { type: boolean }
 
     DashboardRange:
       type: string

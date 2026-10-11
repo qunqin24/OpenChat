@@ -877,7 +877,7 @@ func (s *Server) guestTitleAfterRun(ctx context.Context, sse *httpx.SSEWriter, h
 			done <- ""
 			return
 		}
-		title, err := s.generateTitle(ctx, st.user.ID, st.conv.ID, run.ModelID, run.ChannelID, exchange)
+		title, err := s.generateTitle(ctx, st.user.ID, s.endUsers.ForRun(ctx, run), st.conv.ID, run.ModelID, run.ChannelID, exchange)
 		if err != nil {
 			slog.WarnContext(ctx, "guest title", "error", err)
 			title = ""

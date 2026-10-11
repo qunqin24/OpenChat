@@ -3430,6 +3430,14 @@ export interface components {
              *     e.g. `…4f2a`. Absent when no key is stored.
              */
             keyPreview?: string;
+            /**
+             * @description Whether requests through this channel carry the end user's
+             *     identifier (a keyed hash, never the email): `safety_identifier` on
+             *     OpenAI's APIs, `metadata.user_id` on Anthropic's. A third-party
+             *     endpoint may reject the field, so it is on by default only for
+             *     api.openai.com and api.anthropic.com.
+             */
+            sendUserId: boolean;
             sortOrder: number;
             /** Format: date-time */
             createdAt: string;
@@ -3463,6 +3471,11 @@ export interface components {
             /** @default true */
             enabled: boolean;
             apiFormat?: components["schemas"]["ApiFormat"];
+            /**
+             * @description Absent: on when the endpoint (`baseUrl`, else the type's default)
+             *     is api.openai.com or api.anthropic.com, off otherwise.
+             */
+            sendUserId?: boolean;
             /** @description Selected models, created enabled in the same transaction as the channel. */
             models?: components["schemas"]["ChannelModelInput"][];
         };
@@ -3479,6 +3492,7 @@ export interface components {
             enabled?: boolean;
             sortOrder?: number;
             apiFormat?: components["schemas"]["ApiFormat"];
+            sendUserId?: boolean;
         };
         /**
          * @default 7d

@@ -28,6 +28,8 @@ var responsesReservedKeys = map[string]bool{
 	"tool_choice":  true,
 	"store":        true,
 	"include":      true,
+	// The end-user identifier is the server's to set, from the request.
+	"safety_identifier": true,
 }
 
 func buildResponsesBody(req llm.Request, cfg Config) ([]byte, error) {
@@ -63,6 +65,9 @@ func buildResponsesBodyWith(req llm.Request, cfg Config, summary bool) ([]byte, 
 		// encrypted reasoning below is how the model keeps its own context
 		// across a tool loop without that.
 		"store": false,
+	}
+	if cfg.SendUser && req.User != "" {
+		body["safety_identifier"] = req.User
 	}
 	opts := req.Options
 	thinks := asksForReasoning(req, cfg)

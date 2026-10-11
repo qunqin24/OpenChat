@@ -28,6 +28,7 @@ import {
   FormMessage,
 } from '@/components/shadcn/ui/form'
 import { Input } from '@/components/shadcn/ui/input'
+import { Label } from '@/components/shadcn/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/shadcn/ui/radio-group'
 import { Switch } from '@/components/shadcn/ui/switch'
 import { useCreateChannel, useUpdateChannel } from '@/features/admin/use-admin'
@@ -38,6 +39,7 @@ import type { ChannelModelInput } from '../use-channel-models'
 import { PanelSection } from './panel-section'
 import { cn } from '@/lib/utils'
 import { DEFAULT_CHANNEL_TYPE, useChannelTypes, type ChannelType } from '../channel-types'
+import { defaultSendUserId } from '../send-user-id'
 
 type ChannelsActionPanelProps = {
   /** Absent in create mode. */
@@ -173,6 +175,11 @@ function ChannelForm({
   // "remove it" — the two are the same empty string. This carries the second
   // meaning, so both stay expressible without a magic value in the input.
   const [clearKey, setClearKey] = useState(false)
+  // The "send the user identifier" switch. A saved channel has its own answer;
+  // a new one follows the endpoint (on only for OpenAI's and Anthropic's own)
+  // until the operator touches it - and then it is sent, where an untouched
+  // switch is left to the server's default, which is the same rule.
+  const [sendUserChoice, setSendUserChoice] = useState<boolean | undefined>(channel?.sendUserId)
   const [selectedModels, setSelectedModels] = useState<ChannelModelInput[]>([])
   const [connectionRevision, setConnectionRevision] = useState(0)
   // Raised by the picker while a preview is in flight. Create waits on it so a
@@ -198,6 +205,7 @@ function ChannelForm({
   // Undefined only while the table is still loading, in which case the hints
   // below simply do not appear yet.
   const selected = types.find((type) => type.id === selectedType)
+  const sendUserId = sendUserChoice ?? defaultSendUserId(baseUrl.trim() || selected?.endpoint)
 
   // Choosing a vendor settles the type, discards the model list fetched for the
   // previous one, and names the channel after the vendor when the operator has
@@ -238,6 +246,7 @@ function ChannelForm({
           ...(values.baseUrl !== (channel.baseUrl ?? '') ? { baseUrl: values.baseUrl } : {}),
           ...(values.enabled !== channel.enabled ? { enabled: values.enabled } : {}),
           ...(values.apiFormat !== channel.apiFormat ? { apiFormat: values.apiFormat } : {}),
+          ...(sendUserId !== channel.sendUserId ? { sendUserId } : {}),
           // The load-bearing line: the property exists only when the admin
           // actually typed a key, or asked for the stored one to go. Blank and
           // untouched leaves it in place, because the field is absent rather
@@ -255,6 +264,7 @@ function ChannelForm({
           // ignores it, and sending it would only mislead a reader of the
           // request.
           ...(selected?.apiFormatChoice ? { apiFormat: values.apiFormat } : {}),
+          ...(sendUserChoice !== undefined ? { sendUserId: sendUserChoice } : {}),
           ...(values.baseUrl ? { baseUrl: values.baseUrl } : {}),
           ...(values.apiKey ? { apiKey: values.apiKey } : {}),
         })
@@ -574,6 +584,23 @@ function ChannelForm({
                   </FormItem>
                 )}
               />
+
+              {/* Not a form field: its default follows the endpoint above (see
+                  sendUserChoice), which a field's static default cannot. */}
+              <div className="flex flex-row items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <Label htmlFor="channel-send-user-id" className="font-normal">
+                    {t('admin.channels.send-user-id')}
+                  </Label>
+                  <p className="text-muted-foreground text-xs">{t('admin.channels.send-user-id-hint')}</p>
+                </div>
+                <Switch
+                  id="channel-send-user-id"
+                  className="mt-0.5 shrink-0"
+                  checked={sendUserId}
+                  onCheckedChange={setSendUserChoice}
+                />
+              </div>
             </PanelSection>
           </form>
         </Form>

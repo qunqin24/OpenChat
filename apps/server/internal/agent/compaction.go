@@ -104,6 +104,9 @@ type CompactParams struct {
 	Client    llm.ModelClient
 	Profile   ModelProfile
 	Mode      Mode
+	// EndUser is the identifier of the person the summary is for, sent with
+	// the request (llm.Request.User).
+	EndUser string
 }
 
 // Compactor writes summaries.
@@ -382,6 +385,7 @@ func (c *Compactor) fold(ctx context.Context, p CompactParams, existing, latest 
 		},
 		Options: llm.Options{MaxTokens: &maxTokens, Reasoning: p.Profile.Effort},
 		Session: session,
+		User:    p.EndUser,
 	}
 	meter := c.usage.Begin(ledger.Call{
 		Kind:           ledger.KindCompression,
@@ -685,6 +689,7 @@ func (ex *execution) compress(ctx context.Context, client llm.ModelClient, syste
 		Client:         client,
 		Profile:        profile,
 		Mode:           ModeAuto,
+		EndUser:        ex.endUser(ctx),
 	})
 	if cerr != nil && (ctx.Err() != nil || errors.Is(context.Cause(ctx), errShutdown)) {
 		// Stopped meanwhile. The flag is left to the next process if this is a

@@ -129,6 +129,12 @@ type Config struct {
 	// HTTPClient overrides the default, mainly so tests can serve fixtures.
 	HTTPClient *http.Client
 
+	// SendUser puts the request's end-user identifier (llm.Request.User) on the
+	// wire as `safety_identifier`. Off by default: an endpoint other than
+	// OpenAI's may reject a field it does not know, so the operator turns it on
+	// per channel.
+	SendUser bool
+
 	// MaxToolArgumentBytes caps a single tool call's accumulated arguments.
 	// Zero uses the package default.
 	MaxToolArgumentBytes int

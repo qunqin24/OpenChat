@@ -19,6 +19,8 @@ var reservedKeys = map[string]bool{
 	"stream_options": true,
 	"tools":          true,
 	"tool_choice":    true,
+	// The end-user identifier is the server's to set, from the request.
+	"safety_identifier": true,
 }
 
 func buildBody(req llm.Request, cfg Config) ([]byte, error) {
@@ -46,6 +48,10 @@ func buildBody(req llm.Request, cfg Config) ([]byte, error) {
 		if req.Options.ToolChoice != llm.ToolChoiceAuto {
 			body["tool_choice"] = string(req.Options.ToolChoice)
 		}
+	}
+
+	if cfg.SendUser && req.User != "" {
+		body["safety_identifier"] = req.User
 	}
 
 	opts := req.Options

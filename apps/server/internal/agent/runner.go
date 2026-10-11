@@ -94,6 +94,9 @@ type Options struct {
 	// run that is refused ends with CodeModelCapacity. Without it there are no
 	// caps.
 	Capacity func(ctx context.Context, userID uuid.UUID, modelID string) (bool, error)
+	// EndUser is the identifier of the person a run is for, put on every model
+	// request the run makes (llm.Request.User). Without it requests carry none.
+	EndUser func(ctx context.Context, run sqlc.Run) string
 	// Reserver holds money back for the requests of capped models while they
 	// are out (see api.SpendReserver), so the ledger, which is written when a
 	// request ends, is not the only thing a request is checked against. Without

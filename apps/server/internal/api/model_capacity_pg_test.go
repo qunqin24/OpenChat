@@ -766,7 +766,7 @@ func TestCapacityTaskModelFallsBack(t *testing.T) {
 		t.Errorf("both capped, pinned: %v, want the capacity error", err)
 	}
 	before := f.ledgerRows()
-	if _, err := f.server.generateTitle(ctx, f.member.ID, uuid.Nil, own, nil, "<user>hi</user>"); !errors.Is(err, errModelCapacity) {
+	if _, err := f.server.generateTitle(ctx, f.member.ID, "", uuid.Nil, own, nil, "<user>hi</user>"); !errors.Is(err, errModelCapacity) {
 		t.Errorf("generateTitle: %v, want the capacity error", err)
 	}
 	if f.ledgerRows() != before || f.requests.Load() != 0 {

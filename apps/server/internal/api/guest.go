@@ -267,7 +267,7 @@ func (s *Server) GuestTitle(w http.ResponseWriter, r *http.Request) {
 	}
 	// Billed to no one: the ledger row has no owner, which is what marks a
 	// guest's request there (see CreateGuestUser).
-	title, err := s.generateTitle(ctx, uuid.Nil, uuid.Nil, own, nil, transcript.String())
+	title, err := s.generateTitle(ctx, uuid.Nil, s.endUsers.Guest(ctx, clientIP(r)), uuid.Nil, own, nil, transcript.String())
 	if err != nil {
 		slog.WarnContext(ctx, "guest title", "error", err)
 		httpx.Fail(w, r, httpx.NewError(http.StatusBadGateway, "title_failed", "the model gave no title"))

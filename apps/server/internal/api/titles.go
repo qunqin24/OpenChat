@@ -91,7 +91,7 @@ func (s *Server) titleConversation(run sqlc.Run) {
 	if exchange == "" {
 		return
 	}
-	title, err := s.generateTitle(ctx, run.UserID, run.ConversationID, run.ModelID, run.ChannelID, exchange)
+	title, err := s.generateTitle(ctx, run.UserID, s.endUsers.Account(ctx, run.UserID), run.ConversationID, run.ModelID, run.ChannelID, exchange)
 	if errors.Is(err, errModelCapacity) {
 		// Not a failure: the model's spending cap spares the request.
 		log.Info("title: skipped, the model has reached its spending cap", "model", run.ModelID)
@@ -149,7 +149,9 @@ var errNoTitle = errors.New("the model gave no title")
 // The request goes in the usage ledger as the conversation owner's, kind
 // `title`: it is spent on their behalf, and an operator reading the log should
 // be able to tell it from the answer it follows.
-func (s *Server) generateTitle(ctx context.Context, userID, conversationID uuid.UUID, ownModel string, ownChannel *uuid.UUID, transcript string) (string, error) {
+//
+// endUser is the identifier of the person it is for (EndUsers), sent with the request.
+func (s *Server) generateTitle(ctx context.Context, userID uuid.UUID, endUser string, conversationID uuid.UUID, ownModel string, ownChannel *uuid.UUID, transcript string) (string, error) {
 	admin, err := s.capacity().isAdmin(ctx, userID)
 	if err != nil {
 		return "", err
@@ -178,6 +180,7 @@ func (s *Server) generateTitle(ctx context.Context, userID, conversationID uuid.
 		},
 		Options: llm.Options{MaxTokens: &maxTokens, Reasoning: leastThinking(ctx, s.q, modelID)},
 		Session: session,
+		User:    endUser,
 	}
 	meter := s.usage.Begin(ledger.Call{
 		Kind:           ledger.KindTitle,
@@ -329,7 +332,7 @@ func (s *Server) GenerateConversationTitle(w http.ResponseWriter, r *http.Reques
 	if conv.Model != nil {
 		ownModel = *conv.Model
 	}
-	title, err := s.generateTitle(ctx, user.ID, conversationId, ownModel, nil, transcript.String())
+	title, err := s.generateTitle(ctx, user.ID, s.endUsers.Account(ctx, user.ID), conversationId, ownModel, nil, transcript.String())
 	if errors.Is(err, errModelCapacity) {
 		// Nothing was asked of the model, and the reason is not a failure of it.
 		httpx.Fail(w, r, errModelCapacity)

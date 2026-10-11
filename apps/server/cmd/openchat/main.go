@@ -98,6 +98,7 @@ func run() error {
 		agent.Options{SystemPrompt: api.NewSystemPrompt(pool), Blobs: store, Modalities: api.NewModalities(pool),
 			Compression: api.NewCompression(pool),
 			Capacity:    api.NewCapacityCheck(pool),
+			EndUser:     api.NewEndUsers(pool).ForRun,
 			Reserver:    api.NewSpendReserver(pool)})
 	// Runs a previous process left unfinished pick up from their checkpoints.
 	if err := runner.Resume(ctx); err != nil {

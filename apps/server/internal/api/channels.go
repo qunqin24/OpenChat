@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
 	"unicode/utf8"
 
@@ -37,6 +38,9 @@ func toChannel(row sqlc.Channel, modelCount int64) Channel {
 		ApiFormat: ApiFormat(row.ApiFormat),
 		Enabled:   row.Enabled,
 		HasKey:    row.ApiKey != "",
+		// The switch as stored: the default for a new channel is made once,
+		// when it is created (defaultSendUserID), not re-derived on every read.
+		SendUserId: row.SendUserID,
 		// How many models this channel offers, which is how many are switched
 		// on — a channel that lists two hundred models and offers none is
 		// configured but not yet useful, and the number is what says so.
@@ -161,6 +165,8 @@ func (s *Server) CreateChannel(w http.ResponseWriter, r *http.Request) {
 		ApiKey:    strings.TrimSpace(derefOr(body.ApiKey, "")),
 		Enabled:   derefOr(body.Enabled, true),
 		ApiFormat: string(format),
+		// The vendors' own endpoints take the identifier; a relay may reject it.
+		SendUserID: derefOr(body.SendUserId, defaultSendUserID(body.Type, derefOr(body.BaseUrl, ""))),
 	})
 	if err != nil {
 		httpx.Fail(w, r, err)
@@ -246,6 +252,7 @@ func (s *Server) UpdateChannel(w http.ResponseWriter, r *http.Request, channelId
 		params.ApiKey = &trimmed
 	}
 	params.Enabled = body.Enabled
+	params.SendUserID = body.SendUserId
 	if body.ApiFormat != nil {
 		if !body.ApiFormat.Valid() {
 			httpx.Fail(w, r, httpx.NewFieldError("apiFormat", "api_format_invalid", "the format is chat or responses"))
@@ -286,6 +293,26 @@ func (s *Server) DeleteChannel(w http.ResponseWriter, r *http.Request, channelId
 		return
 	}
 	httpx.NoContent(w)
+}
+
+// defaultSendUserID is whether a new channel sends the end user's identifier
+// unless told otherwise: on for OpenAI's and Anthropic's own endpoints (the
+// base URL given, else the channel type's default one), off for everything
+// else, since a third-party endpoint may reject a field it does not know.
+func defaultSendUserID(kind ChannelType, baseURL string) bool {
+	baseURL = strings.TrimSpace(baseURL)
+	if baseURL == "" {
+		baseURL = defaultEndpointFor(kind)
+	}
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return false
+	}
+	switch strings.ToLower(u.Hostname()) {
+	case "api.openai.com", "api.anthropic.com":
+		return true
+	}
+	return false
 }
 
 // derefOr reads through an optional field, falling back when it is absent.

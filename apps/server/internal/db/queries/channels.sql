@@ -11,8 +11,8 @@ WHERE id = $1;
 -- name: CreateChannel :one
 -- An empty format is the default, so a caller that has no opinion — tests,
 -- older code — gets Chat Completions rather than a constraint violation.
-INSERT INTO channels (name, type, base_url, api_key, enabled, api_format)
-VALUES ($1, $2, $3, $4, $5, COALESCE(NULLIF(sqlc.arg('api_format')::text, ''), 'chat'))
+INSERT INTO channels (name, type, base_url, api_key, enabled, api_format, send_user_id)
+VALUES ($1, $2, $3, $4, $5, COALESCE(NULLIF(sqlc.arg('api_format')::text, ''), 'chat'), sqlc.arg('send_user_id')::boolean)
 RETURNING *;
 
 -- name: UpdateChannel :one
@@ -29,6 +29,7 @@ SET name       = COALESCE(sqlc.narg('name')::text, name),
     enabled    = COALESCE(sqlc.narg('enabled')::boolean, enabled),
     sort_order = COALESCE(sqlc.narg('sort_order')::integer, sort_order),
     api_format = COALESCE(sqlc.narg('api_format')::text, api_format),
+    send_user_id = COALESCE(sqlc.narg('send_user_id')::boolean, send_user_id),
     updated_at = now()
 WHERE id = sqlc.arg('id')
 RETURNING *;
