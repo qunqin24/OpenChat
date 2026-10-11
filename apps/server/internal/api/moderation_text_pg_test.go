@@ -389,29 +389,48 @@ func newSelectiveModeration(t *testing.T) *fakeModeration {
 	var mu sync.Mutex
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
+		// As the real endpoint takes it: an array of strings (one result each)
+		// or of multi-modal items (one result for all of them).
 		var req struct {
-			Input []struct {
-				Text string `json:"text"`
-			} `json:"input"`
+			Input []json.RawMessage `json:"input"`
 		}
 		_ = json.Unmarshal(raw, &req)
-		var text string
-		for _, item := range req.Input {
-			text += item.Text
+		var inputs []string
+		plain := true
+		for _, part := range req.Input {
+			var text string
+			if json.Unmarshal(part, &text) == nil {
+				inputs = append(inputs, text)
+				continue
+			}
+			var item struct {
+				Text string `json:"text"`
+			}
+			_ = json.Unmarshal(part, &item)
+			plain = false
+			inputs = append(inputs, item.Text)
+		}
+		if !plain {
+			inputs = []string{strings.Join(inputs, "")}
 		}
 		mu.Lock()
-		f.texts = append(f.texts, []string{text})
+		f.texts = append(f.texts, []string{strings.Join(inputs, "")})
 		mu.Unlock()
-		if strings.Contains(text, "FAILME") {
-			http.Error(w, "unavailable", http.StatusInternalServerError)
-			return
+		results := make([]any, 0, len(inputs))
+		for _, text := range inputs {
+			if strings.Contains(text, "FAILME") {
+				http.Error(w, "unavailable", http.StatusInternalServerError)
+				return
+			}
+			categories := map[string]bool{}
+			scores := map[string]float64{}
+			for _, c := range moderationCategories {
+				categories[string(c)] = c == "violence/graphic" && strings.Contains(text, "BLOCKME")
+				scores[string(c)] = 0
+			}
+			results = append(results, map[string]any{"categories": categories, "category_scores": scores})
 		}
-		categories := map[string]bool{}
-		scores := map[string]float64{}
-		for _, c := range moderationCategories {
-			categories[string(c)] = c == "violence/graphic" && strings.Contains(text, "BLOCKME")
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"results": []any{map[string]any{"categories": categories, "category_scores": scores}}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"results": results})
 	}))
 	t.Cleanup(f.srv.Close)
 	return f
