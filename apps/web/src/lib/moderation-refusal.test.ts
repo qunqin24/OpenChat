@@ -24,4 +24,15 @@ describe('refusalOf', () => {
     expect(refusalOf(error('content_blocked', { strikesLeft: 0, windowHours: 24 }))).toEqual({})
     expect(refusalOf(error('content_blocked', { strikesLeft: '2', windowHours: 24 }))).toEqual({})
   })
+
+  it('names the message the server kept, when it kept one', () => {
+    expect(refusalOf(error('content_blocked', { categories: ['violence'], messageId: 'm-1', strikesLeft: 1, windowHours: 24 }))).toEqual({
+      messageId: 'm-1',
+      strikesLeft: 1,
+      windowHours: 24,
+    })
+    // An edit or an answer that is refused keeps nothing and names nothing; nor does a wrong type pass.
+    expect(refusalOf(error('content_blocked', { messageId: 7 }))).toEqual({})
+    expect(refusalOf(error('content_blocked', { messageId: '' }))).toEqual({})
+  })
 })

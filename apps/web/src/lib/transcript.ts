@@ -12,9 +12,22 @@ import type { LiveRun } from './run-state'
  * reply with its tool steps inside it, in order. So is a reply that stopped to
  * ask a question: the run that asked and the run the answer started share one
  * block, keyed by the first of them.
+ *
+ * A message content moderation refused (a `blocked` row) is a user turn like any
+ * other, followed by a `refusal` turn: the reply that stands where the model's
+ * answer would have been. Neither is part of what the conversation asked or
+ * was answered (`sentTurns`).
  */
 export type Turn =
   | { kind: 'user'; key: string; message: Message; after?: ContextSummary }
+  | {
+      kind: 'refusal'
+      key: string
+      /** The refused message, which the reply is to. */
+      message: Message
+      /** Never a place for a divider: a summary does not end at a refused message. */
+      after?: undefined
+    }
   | {
       kind: 'assistant'
       key: string
@@ -41,6 +54,21 @@ export type Turn =
     }
 
 export type AssistantTurn = Extract<Turn, { kind: 'assistant' }>
+
+/** A refused message or the reply that says so. */
+export function isRefusedTurn(turn: Turn): boolean {
+  return turn.kind === 'refusal' || (turn.kind === 'user' && turn.message.status === 'blocked')
+}
+
+/**
+ * The turns without the refused messages and their replies: the conversation as
+ * it was asked and answered. The last question, the answer a regeneration
+ * replaces and the question the model is waiting on are all found among these,
+ * as the server finds them among the rows it does not call blocked.
+ */
+export function sentTurns(turns: Turn[]): Exclude<Turn, { kind: 'refusal' }>[] {
+  return turns.filter((turn): turn is Exclude<Turn, { kind: 'refusal' }> => !isRefusedTurn(turn))
+}
 
 /**
  * What a redo hides until the server has started it and the cache has caught up
@@ -101,8 +129,13 @@ export function buildTurns(
 
   for (const message of rows) {
     if (message.role === 'user') {
-      current = null
+      const refused = message.status === 'blocked'
+      // A refused message is no question: a reply that went on after the
+      // model's own question (the answer is written after it) still belongs to
+      // the block that asked.
+      if (!refused) current = null
       turns.push({ kind: 'user', key: message.id, message, ...(message.id === summary?.throughMessageId ? { after: summary } : {}) })
+      if (refused) turns.push({ kind: 'refusal', key: `${message.id}:refused`, message })
       continue
     }
     if (message.role !== 'assistant' && message.role !== 'tool') continue
@@ -141,8 +174,9 @@ export function buildTurns(
 
   if (live) {
     // The run in flight owns the last block, which may not exist yet: before
-    // its first response there is only the user's input.
-    let last = turns.at(-1)
+    // its first response there is only the user's input. (A message refused
+    // before it is no block.)
+    let last = sentTurns(turns).at(-1)
     // One that continues a reply writes into the block that asked.
     if (!last || last.kind !== 'assistant' || (last.key !== live.run.id && !live.run.continues)) {
       if (live.run.status !== 'running') return placeSummary()
@@ -172,7 +206,8 @@ export function turnText(turn: AssistantTurn): string {
  * else is how a question is skipped.
  */
 export function pendingQuestion(turns: Turn[], busy: boolean): string | null {
-  const last = turns.at(-1)
+  // A message refused after the question neither answers it nor hides it.
+  const last = sentTurns(turns).at(-1)
   if (busy || last?.kind !== 'assistant') return null
   const response = last.responses.at(-1)
   if (response?.stopReason !== 'tool_calls') return null

@@ -571,14 +571,10 @@ function isFoldBlock(block: Block): block is FoldBlock {
 }
 
 /**
- * The reply to a message that is still on its way to the server: the model's
- * header and the thinking line, exactly as a run looks before its first token,
- * so nothing shifts when the real one takes its place.
- */
-/**
  * A message content moderation refused, answered in the model's place: the
- * model's head as on any reply, and the refusal as its body. Nothing of it was
- * written; it is the page's own until the next send.
+ * model's head as on any reply, and the refusal as its body. The message is in
+ * the transcript (a `blocked` row) and the reply is drawn after it each time;
+ * it is not a reply the model wrote and is never sent back to it.
  */
 export function RefusedReply({ model, modelId, refusal }: { model?: ChatModel; modelId: string; refusal: Refusal }) {
   const name = model?.name ?? modelId
@@ -601,6 +597,11 @@ export function RefusedReply({ model, modelId, refusal }: { model?: ChatModel; m
   )
 }
 
+/**
+ * The reply to a message that is still on its way to the server: the model's
+ * header and the thinking line, exactly as a run looks before its first token,
+ * so nothing shifts when the real one takes its place.
+ */
 export function PendingReply({ model, modelId }: { model?: ChatModel; modelId: string }) {
   const name = model?.name ?? modelId
   return (

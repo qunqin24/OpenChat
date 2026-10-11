@@ -1,5 +1,5 @@
 import type { InfiniteData } from '@tanstack/react-query'
-import type { MessagePage } from '@openchat/api-client'
+import type { Message, MessagePage } from '@openchat/api-client'
 
 /**
  * A conversation's transcript as the query cache holds it, from its end: the
@@ -64,4 +64,17 @@ export function truncateTranscript(
     pages: [{ items: kept, olderCursor: held.pages.at(-1)!.olderCursor }],
     pageParams: [undefined],
   }
+}
+
+/**
+ * `held` with a row added at the end of the transcript: a message the server
+ * has just kept (a refused send, which no run follows) shown before the page has
+ * fetched it again. Nothing is made of an empty cache - the fetch that fills it
+ * will have the row - and a row already held is not added twice.
+ */
+export function appendRow(held: TranscriptPages | undefined, row: Message): TranscriptPages | undefined {
+  if (!held || held.pages.length === 0) return held
+  if (held.pages.some((page) => page.items.some((m) => m.id === row.id))) return held
+  const [newest, ...older] = held.pages
+  return { ...held, pages: [{ ...newest!, items: [...newest!.items, row] }, ...older] }
 }

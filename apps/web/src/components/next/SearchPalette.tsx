@@ -17,7 +17,7 @@ import { API_BASE_URL } from '@/lib/api'
 import { useChatPaths } from '@/lib/chat-paths'
 import { groupConversations, parseTimestamp } from '@/lib/grouping'
 import { displayTitle, useDisplayTitle } from '@/lib/titles'
-import { buildTurns, type AssistantTurn as Turn } from '@/lib/transcript'
+import { buildTurns, sentTurns, type AssistantTurn as Turn } from '@/lib/transcript'
 import { ImageSource, proxiedImages } from './genui/image-source'
 import { AssistantTurn, UserMessage } from './MessageItem'
 
@@ -349,13 +349,14 @@ function Preview({ conversationId, term }: { conversationId: string | null; term
         <div className="n-palette-preview-idle">{t('next.search.preview-idle')}</div>
       ) : messages.isPending ? (
         <div className="n-palette-preview-idle"><span className="n-spinner" data-motion="essential" /></div>
-      ) : turns.length === 0 ? (
+      ) : sentTurns(turns).length === 0 ? (
         <div className="n-palette-preview-idle">{t('next.search.preview-empty')}</div>
       ) : (
         // Inert: a preview to read, not a transcript to act on.
         <ImageSource.Provider value={proxiedImages(API_BASE_URL, shown)}>
           <div className="n-palette-transcript" inert>
-            {turns.map((turn) =>
+            {/* Without the messages moderation refused: no search finds them. */}
+            {sentTurns(turns).map((turn) =>
               turn.kind === 'user' ? (
                 <UserMessage key={turn.key} message={turn.message} />
               ) : (

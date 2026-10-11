@@ -7,10 +7,11 @@ import type { Refusal } from '@/lib/moderation-refusal'
 /**
  * A message content moderation refused, shown where it would have gone: what
  * happened, what to do (change the prompt), and - when more refusals would
- * disable the account or ban the guest - how many are left. The message was
- * never written, so the card is the page's own and goes with the next send.
- * It is the body of a reply (`RefusedReply`), where the model's answer would be,
- * and is written like one.
+ * disable the account or ban the guest - how many are left (only while the page
+ * that was refused is open: the warning comes with the response and is not
+ * kept). It is the body of a reply (`RefusedReply`), where the model's answer
+ * would be, drawn after the refused message each time it is shown, and is
+ * written like one.
  */
 export default function RefusalCard({ refusal }: { refusal: Refusal }) {
   const { t } = useTranslation()

@@ -2,7 +2,7 @@ import type { Message } from '@openchat/api-client'
 import { describe, expect, it } from 'vitest'
 
 import { assistant, id, user } from './testing'
-import { spliceNewest, truncateTranscript, type TranscriptPages } from './transcript-pages'
+import { appendRow, spliceNewest, truncateTranscript, type TranscriptPages } from './transcript-pages'
 
 /** Pages as the cache holds them: newest first, each page's items oldest first. */
 const pages = (...held: { items: Message[]; olderCursor?: string | null }[]): TranscriptPages => ({
@@ -75,5 +75,38 @@ describe('truncateTranscript', () => {
     const before = held()
     expect(truncateTranscript(before, { from: id('gone') })).toBe(before)
     expect(truncateTranscript(undefined, { from: q1.id })).toBeUndefined()
+  })
+})
+
+describe('appendRow', () => {
+  const q1 = user('q1')
+  const a1 = assistant('a1', id('r1'))
+  const kept = user('kept', { status: 'blocked' })
+
+  it('puts the row at the end of the newest page, the older pages as they were', () => {
+    const held = pages({ items: [a1] }, { items: [q1], olderCursor: 'older' })
+    const next = appendRow(held, kept)!
+    expect(ids(next)).toEqual([q1.id, a1.id, kept.id])
+    expect(next.pages[1]).toBe(held.pages[1])
+    expect(next.pageParams).toEqual(held.pageParams)
+    // Nothing was changed in what was held.
+    expect(ids(held)).toEqual([q1.id, a1.id])
+  })
+
+  it('does not add a row that is held already, in any page', () => {
+    const held = pages({ items: [a1, kept] }, { items: [q1], olderCursor: null })
+    expect(appendRow(held, kept)).toBe(held)
+    expect(appendRow(pages({ items: [a1] }, { items: [kept] }), kept)).toBeDefined()
+  })
+
+  it('makes nothing of an empty cache: the fetch that fills it has the row', () => {
+    expect(appendRow(undefined, kept)).toBeUndefined()
+    expect(appendRow({ pages: [], pageParams: [] }, kept)).toEqual({ pages: [], pageParams: [] })
+  })
+
+  it('is replaced, not repeated, by the page fetched after it', () => {
+    const held = appendRow(pages({ items: [q1, a1] }), kept)!
+    const fresh = { items: [q1, a1, kept], olderCursor: null }
+    expect(ids(spliceNewest(held, fresh))).toEqual([q1.id, a1.id, kept.id])
   })
 })

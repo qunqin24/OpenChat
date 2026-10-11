@@ -54,11 +54,13 @@ interface ChatState {
   unpost: (key: string) => void
 
   /**
-   * A message content moderation refused, per conversation ('' for a new chat):
-   * shown as a card until the next send there, or until it is closed.
+   * What the response that refused a send said about it (the strike warning),
+   * by the id of the message the server kept for it. The message itself is in
+   * the transcript - a `blocked` row, drawn with its reply card - and survives a
+   * refresh; this is only the live warning, which a refresh forgets.
    */
-  refused: Record<string, Refusal>
-  refuse: (key: string, refusal: Refusal | null) => void
+  refusals: Record<string, Refusal>
+  refuse: (messageId: string, refusal: Refusal) => void
 
   /**
    * Each conversation's redo — the last answer regenerated, or a question
@@ -76,9 +78,11 @@ interface ChatState {
   pendingPrompt: PendingPrompt | null
 
   /**
-   * The text of a first message the server refused (content moderation, a
-   * limit), carried back to the empty-state screen after the conversation made
-   * for it was removed. The empty state takes it into the composer.
+   * The text of a first message the server refused before writing anything (a
+   * limit, no model), carried back to the empty-state screen after the
+   * conversation made for it was removed. The empty state takes it into the
+   * composer. (A message moderation refused is kept in its conversation, which
+   * stays.)
    */
   returnedDraft: string | null
   returnDraft: (text: string) => void
@@ -130,11 +134,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   temporaryChat: false,
 
   setTemporaryChat: (temporaryChat) => set({ temporaryChat }),
-  // A new message replaces whatever card the last refusal left.
-  post: (key, item) => set((state) => ({ outbox: { ...state.outbox, [key]: item }, refused: without(state.refused, key) })),
-  refused: {},
-  refuse: (key, refusal) =>
-    set((state) => ({ refused: refusal ? { ...state.refused, [key]: refusal } : without(state.refused, key) })),
+  post: (key, item) => set((state) => ({ outbox: { ...state.outbox, [key]: item } })),
+  refusals: {},
+  refuse: (messageId, refusal) => set((state) => ({ refusals: { ...state.refusals, [messageId]: refusal } })),
   unpost: (key) => set((state) => ({ outbox: without(state.outbox, key) })),
   redo: (conversationId, target) =>
     set((state) => ({
@@ -216,5 +218,5 @@ export const useChatStore = create<ChatState>()((set, get) => ({
  * changes, and when the session ends.
  */
 export function resetChatStore() {
-  useChatStore.setState({ live: {}, finished: [], outbox: {}, replacing: {}, pendingPrompt: null, returnedDraft: null, refused: {}, temporaryChat: false })
+  useChatStore.setState({ live: {}, finished: [], outbox: {}, replacing: {}, pendingPrompt: null, returnedDraft: null, refusals: {}, temporaryChat: false })
 }

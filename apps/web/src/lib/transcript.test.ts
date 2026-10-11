@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { ASK_USER } from './ask-user'
 import { assistant, id, liveRun, run, summary, text, toolCallRow, toolResultRow, user } from './testing'
-import { buildTurns, pendingQuestion, turnText, type AssistantTurn } from './transcript'
+import { buildTurns, isRefusedTurn, pendingQuestion, sentTurns, turnText, type AssistantTurn } from './transcript'
 
 const assistantTurns = (turns: ReturnType<typeof buildTurns>) =>
   turns.filter((t): t is AssistantTurn => t.kind === 'assistant')
@@ -244,5 +244,73 @@ describe('pendingQuestion', () => {
 
   it('is null when the last turn is the user’s', () => {
     expect(pendingQuestion(buildTurns([user('q')], null), false)).toBeNull()
+  })
+})
+
+// A message content moderation refused is a user row of status `blocked`: drawn
+// as the person's message followed by the reply that says so, wherever it falls
+// in the transcript, and no part of what was asked and answered.
+describe('a refused message', () => {
+  const refused = (name: string) => user(name, { status: 'blocked' })
+  const kinds = (turns: ReturnType<typeof buildTurns>) => turns.map((t) => t.kind)
+
+  it('is the person’s message followed by its reply card', () => {
+    const turns = buildTurns([user('q'), assistant('a', id('r1')), refused('bad')], null)
+    expect(kinds(turns)).toEqual(['user', 'assistant', 'user', 'refusal'])
+    expect(turns[2]).toMatchObject({ kind: 'user', key: id('bad') })
+    expect(turns[3]).toMatchObject({ kind: 'refusal', message: { id: id('bad'), content: 'bad' } })
+    expect(isRefusedTurn(turns[2]!)).toBe(true)
+    expect(isRefusedTurn(turns[3]!)).toBe(true)
+    expect(isRefusedTurn(turns[0]!)).toBe(false)
+    expect(sentTurns(turns).map((t) => t.kind)).toEqual(['user', 'assistant'])
+  })
+
+  it('is a transcript of its own in a conversation that has nothing else', () => {
+    expect(kinds(buildTurns([refused('bad')], null))).toEqual(['user', 'refusal'])
+    // Two in a row, and a question after: each has its card.
+    expect(kinds(buildTurns([refused('b1'), refused('b2'), user('q')], null))).toEqual(['user', 'refusal', 'user', 'refusal', 'user'])
+  })
+
+  it('does not end the reply before it: the rows after a question the model asked still join its block', () => {
+    const ask = { ...toolCallRow('ask', id('r1'), 'call-ask', ASK_USER), stopReason: 'tool_calls' as const }
+    const answer = toolResultRow('ans', id('r1'), 'call-ask', ASK_USER)
+    const after = assistant('after', id('r2'))
+    const turns = buildTurns([user('q'), ask, refused('bad'), answer, after], null)
+    // One reply, the one that asked and went on; the refused message beside it.
+    expect(assistantTurns(turns)).toHaveLength(1)
+    expect(assistantTurns(turns)[0]!.responses.map((m) => m.id)).toEqual([ask.id, after.id])
+    expect(sentTurns(turns).map((t) => t.kind)).toEqual(['user', 'assistant'])
+  })
+
+  it('goes with the answer being made again', () => {
+    const q = user('q')
+    const rows = [q, assistant('a', id('r1')), refused('bad')]
+    // The click hides what is after the question, the refused message included.
+    expect(kinds(buildTurns(rows, null, { after: q.id }))).toEqual(['user'])
+    // The run that the server started is on the question; the old rows after it are not shown.
+    const r2 = run('r2')
+    expect(kinds(buildTurns(rows, liveRun(r2, [q]), undefined))).toEqual(['user', 'assistant'])
+  })
+
+  it('goes with an edit that reaches it, and is itself what an edit of it hides', () => {
+    const bad = refused('bad')
+    const rows = [user('q1'), assistant('a1', id('r1')), bad, user('q2')]
+    expect(kinds(buildTurns(rows, null, { from: bad.id }))).toEqual(['user', 'assistant'])
+  })
+
+  it('leaves the running reply where a run puts it, after the card', () => {
+    const r2 = run('r2')
+    const turns = buildTurns([user('q1'), assistant('a1', id('r1')), refused('bad'), user('q2')], liveRun(r2, [user('q2')]))
+    expect(turns.at(-1)).toMatchObject({ kind: 'assistant', key: r2.id })
+  })
+
+  it('does not hide the question the model is waiting on, and is not the reply to it', () => {
+    const rows = [
+      user('q'),
+      { ...toolCallRow('ask', id('r1'), 'call-ask', ASK_USER), stopReason: 'tool_calls' as const },
+      refused('bad'),
+    ]
+    const turns = buildTurns(rows, null)
+    expect(pendingQuestion(turns, false)).toBe('call-ask')
   })
 })
