@@ -25,12 +25,15 @@ import (
 
 // Titling a conversation from its first exchange.
 //
-// After a run finishes, a conversation still under the default title is
-// given one by the task model (System settings), or by the conversation's own
-// model when none is set. It is a background task: the answer is already
-// shown and the run is over, so a slow or failed title costs nothing but the
-// title — the conversation keeps "New chat" and the next answer tries again.
-// A title the user typed meanwhile is never overwritten (SetGeneratedTitle).
+// After a run ends - however it ended: answered, stopped by the user, failed -
+// a conversation still under the default title is given one by the task model
+// (System settings), or by the conversation's own model when none is set. It
+// is a background task: the answer is already shown and the run is over. When
+// no model can write one (an error, an empty answer, a spending cap), the
+// question itself is the title, as in Open WebUI: a list of "New chat" rows
+// that never get named is worse than a title that is only the first line of
+// what was asked. A title the user typed meanwhile is never overwritten
+// (SetGeneratedTitle).
 
 // defaultTitle is what a conversation is called until it is titled.
 const defaultTitle = "New chat"
@@ -54,12 +57,19 @@ const titlePrompt = `Write a short title for the conversation below: at most 6 w
 // TitleAfterRun is the runner's after-run hook. It returns at once; the title
 // is made on a goroutine of its own.
 func (s *Server) TitleAfterRun(run sqlc.Run) {
-	// A run that stopped to ask a question has been read by the user too, and
-	// the question is often all there is to name the conversation by.
-	if run.Status != sqlc.RunStatusCompleted && run.Status != sqlc.RunStatusAwaitingInput {
+	if !titleAfter(run.Status) {
 		return
 	}
 	go s.titleConversation(run)
+}
+
+// titleAfter is whether a run that ended so names its conversation: any end.
+// One that stopped to ask a question has been read too, and the question is
+// often all there is to name the conversation by; one the user stopped, or
+// that failed, still had a question, and leaving it "New chat" until a later
+// answer (which may never come) is how conversations went unnamed.
+func titleAfter(status sqlc.RunStatus) bool {
+	return status != sqlc.RunStatusRunning
 }
 
 func (s *Server) titleConversation(run sqlc.Run) {
@@ -83,7 +93,7 @@ func (s *Server) titleConversation(run sqlc.Run) {
 	if err != nil || conv.Title != defaultTitle || conv.Temporary {
 		return
 	}
-	exchange, err := s.exchangeOf(ctx, run)
+	exchange, question, err := s.exchangeOf(ctx, run)
 	if err != nil {
 		log.Warn("title: read the exchange", "error", err)
 		return
@@ -94,11 +104,14 @@ func (s *Server) titleConversation(run sqlc.Run) {
 	title, err := s.generateTitle(ctx, run.UserID, s.endUsers.Account(ctx, run.UserID), run.ConversationID, run.ModelID, run.ChannelID, exchange)
 	if errors.Is(err, errModelCapacity) {
 		// Not a failure: the model's spending cap spares the request.
-		log.Info("title: skipped, the model has reached its spending cap", "model", run.ModelID)
-		return
+		log.Info("title: no model, the model has reached its spending cap; naming it by the question", "model", run.ModelID)
+	} else if err != nil {
+		log.Warn("title: generate; naming it by the question", "error", err)
 	}
 	if err != nil {
-		log.Warn("title: generate", "error", err)
+		title = questionTitle(question)
+	}
+	if title == "" {
 		return
 	}
 
@@ -118,11 +131,12 @@ func (s *Server) titleConversation(run sqlc.Run) {
 }
 
 // exchangeOf is a run's question and answer as the title prompt reads them, or
-// "" when there is no question to name the conversation by.
-func (s *Server) exchangeOf(ctx context.Context, run sqlc.Run) (string, error) {
+// "" when there is no question to name the conversation by; and the question
+// alone, the title when no model writes one (questionTitle).
+func (s *Server) exchangeOf(ctx context.Context, run sqlc.Run) (exchange, asked string, err error) {
 	rows, err := s.q.ListRunMessages(ctx, sqlc.ListRunMessagesParams{RunID: &run.ID, InputMessageID: run.InputMessageID})
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	var question, answer strings.Builder
 	for _, row := range rows {
@@ -134,10 +148,16 @@ func (s *Server) exchangeOf(ctx context.Context, run sqlc.Run) (string, error) {
 		}
 	}
 	if strings.TrimSpace(question.String()) == "" {
-		return "", nil
+		return "", "", nil
 	}
 	return "<user>\n" + clip(question.String(), titleInputCap) + "\n</user>\n<assistant>\n" +
-		clip(answer.String(), titleAnswerCap) + "\n</assistant>", nil
+		clip(answer.String(), titleAnswerCap) + "\n</assistant>", question.String(), nil
+}
+
+// questionTitle is the title of a conversation no model could name: the first
+// line of what was asked, tidied and cut short as a written title is.
+func questionTitle(question string) string {
+	return cleanTitle(question)
 }
 
 // errNoTitle is a model that answered with nothing usable as a title.

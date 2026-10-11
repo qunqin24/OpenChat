@@ -37,6 +37,11 @@ func TestTitleAfterFirstAnswer(t *testing.T) {
 		}
 		_ = json.Unmarshal(raw, &body)
 		text := "An answer about futures."
+		if strings.Contains(string(raw), "Write a short title") && strings.Contains(string(raw), "FAILTITLE") {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, `{"error":{"message":"no titles today"}}`)
+			return
+		}
 		if strings.Contains(string(raw), "Write a short title") {
 			mu.Lock()
 			titleAsked = append(titleAsked, body.Model)
@@ -131,6 +136,21 @@ func TestTitleAfterFirstAnswer(t *testing.T) {
 		t.Fatalf("title requests named %v, want [%s]", titleAsked, taskModel)
 	}
 	mu.Unlock()
+
+	// A title no model could write: the question names the conversation, rather
+	// than leaving it "New chat" for good.
+	unnamed, err := q.CreateConversation(ctx, sqlc.CreateConversationParams{UserID: &user.ID, Title: defaultTitle})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec = httptest.NewRecorder()
+	server.CreateMessage(rec, post(fmt.Sprintf(`{"content":"FAILTITLE 明天会下雨吗？\n顺便说说后天","model":%q}`, chatModel)), unnamed.ID)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("send: %d %s", rec.Code, rec.Body)
+	}
+	if got := titleOf(unnamed.ID, "FAILTITLE 明天会下雨吗"); got != "FAILTITLE 明天会下雨吗" {
+		t.Fatalf("title after a failed title request %q, want the question", got)
+	}
 
 	// A conversation the user named keeps its name.
 	named, err := q.CreateConversation(ctx, sqlc.CreateConversationParams{UserID: &user.ID, Title: "My own name"})

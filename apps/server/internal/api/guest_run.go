@@ -975,8 +975,7 @@ func (s *Server) followGuestRun(ctx context.Context, sse *httpx.SSEWriter, sub *
 	}
 
 	title := ""
-	if !plan.titled && !plan.temporary &&
-		(finished.Status == sqlc.RunStatusCompleted || finished.Status == sqlc.RunStatusAwaitingInput) {
+	if !plan.titled && !plan.temporary && titleAfter(finished.Status) {
 		title = s.guestTitleAfterRun(ctx, sse, heartbeat, *finished, st)
 	}
 	end, err := s.guestEnd(ctx, st, plan, title)
@@ -995,15 +994,16 @@ func (s *Server) guestTitleAfterRun(ctx context.Context, sse *httpx.SSEWriter, h
 	defer cancel()
 	done := make(chan string, 1)
 	go func() {
-		exchange, err := s.exchangeOf(ctx, run)
+		exchange, question, err := s.exchangeOf(ctx, run)
 		if err != nil || exchange == "" {
 			done <- ""
 			return
 		}
 		title, err := s.generateTitle(ctx, st.user.ID, s.endUsers.ForRun(ctx, run), st.conv.ID, run.ModelID, run.ChannelID, exchange)
 		if err != nil {
-			slog.WarnContext(ctx, "guest title", "error", err)
-			title = ""
+			// As for an account: the question names it (titles.go).
+			slog.WarnContext(ctx, "guest title; naming it by the question", "error", err)
+			title = questionTitle(question)
 		}
 		done <- title
 	}()

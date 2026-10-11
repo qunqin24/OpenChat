@@ -126,16 +126,16 @@ func TestUsageLedgerEndToEnd(t *testing.T) {
 		}
 	}
 	send(admin, chatModel) // a chat row, then a title row
-	send(member, badModel) // an auth failure
+	send(member, badModel) // an auth failure, and the title attempted after it (which fails the same way)
 
 	count := func(where string, args ...any) (n int) {
 		_ = pool.QueryRow(ctx, "SELECT count(*) FROM usage_logs WHERE "+where, args...).Scan(&n)
 		return
 	}
 	deadline := time.Now().Add(10 * time.Second)
-	for count("model_id = ANY($1)", []string{chatModel, badModel}) < 3 {
+	for count("model_id = ANY($1)", []string{chatModel, badModel}) < 4 {
 		if time.Now().After(deadline) {
-			t.Fatalf("the ledger has %d rows after 10s, want 3", count("model_id = ANY($1)", []string{chatModel, badModel}))
+			t.Fatalf("the ledger has %d rows after 10s, want 4", count("model_id = ANY($1)", []string{chatModel, badModel}))
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
@@ -229,7 +229,7 @@ func TestUsageLedgerEndToEnd(t *testing.T) {
 	}
 
 	// The failure: an error row, the code the chat shows, the key scrubbed, no cost.
-	_, failed := get(adminCookie, url.Values{"status": {"error"}, "model": {badModel}})
+	_, failed := get(adminCookie, url.Values{"status": {"error"}, "model": {badModel}, "kind": {"chat"}})
 	if len(failed.Items) != 1 {
 		t.Fatalf("error rows = %+v", failed.Items)
 	}
@@ -249,7 +249,7 @@ func TestUsageLedgerEndToEnd(t *testing.T) {
 
 	// Filters combine and are scoped by the other columns.
 	_, byUser := get(adminCookie, url.Values{"userId": {member.ID.String()}})
-	if byUser.Summary.Requests != 1 || byUser.Items[0].Model != badModel {
+	if byUser.Summary.Requests != 2 || byUser.Items[0].Model != badModel || byUser.Items[1].Model != badModel {
 		t.Errorf("by user: %+v", byUser)
 	}
 	_, byChannel := get(adminCookie, url.Values{"channelId": {channel.ID.String()}, "status": {"ok"}})
@@ -262,17 +262,17 @@ func TestUsageLedgerEndToEnd(t *testing.T) {
 	}
 	_, inRange := get(adminCookie, url.Values{"channelId": {channel.ID.String()},
 		"from": {time.Now().Add(-time.Hour).Format(time.RFC3339)}, "to": {time.Now().Add(time.Hour).Format(time.RFC3339)}})
-	if inRange.Summary.Requests != 3 {
-		t.Errorf("in range: %d, want 3", inRange.Summary.Requests)
+	if inRange.Summary.Requests != 4 {
+		t.Errorf("in range: %d, want 4", inRange.Summary.Requests)
 	}
 
 	// Paging: newest first, by cursor, and the summary covers every page.
-	_, first := get(adminCookie, url.Values{"channelId": {channel.ID.String()}, "limit": {"2"}})
+	_, first := get(adminCookie, url.Values{"channelId": {channel.ID.String()}, "limit": {"3"}})
 	if first.NextCursor == nil {
-		t.Fatalf("a first page of 2 of 3 has no next cursor: %+v", first)
+		t.Fatalf("a first page of 3 of 4 has no next cursor: %+v", first)
 	}
-	_, second := get(adminCookie, url.Values{"channelId": {channel.ID.String()}, "limit": {"2"}, "cursor": {*first.NextCursor}})
-	if first.Summary.Requests != 3 || len(first.Items) != 2 || len(second.Items) != 1 || second.NextCursor != nil || second.Summary.Requests != 3 {
+	_, second := get(adminCookie, url.Values{"channelId": {channel.ID.String()}, "limit": {"3"}, "cursor": {*first.NextCursor}})
+	if first.Summary.Requests != 4 || len(first.Items) != 3 || len(second.Items) != 1 || second.NextCursor != nil || second.Summary.Requests != 4 {
 		t.Fatalf("paging: %d + %d items, totals %d and %d", len(first.Items), len(second.Items), first.Summary.Requests, second.Summary.Requests)
 	}
 	all := append(append([]UsageLog{}, first.Items...), second.Items...)
