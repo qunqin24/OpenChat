@@ -442,7 +442,6 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 		Options:  options,
 		Session:  ex.run.ConversationID.String(),
 	}
-	stream := newPartialStream(ex, ex.cp.Attempt, r.opts.PartialInterval)
 	meter := r.usage.Begin(ledger.Call{
 		Kind:           ledger.KindChat,
 		UserID:         ex.run.UserID,
@@ -468,6 +467,10 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 		}
 		return false, fmt.Errorf("agent: reserving the cost of a request to %s: %w", ex.run.ModelID, err)
 	}
+	// Made after the reservation, not before: the throttle is a goroutine, and
+	// every way out above would have to remember to stop it. From here on the
+	// only exit before `stream.close()` is the request itself returning.
+	stream := newPartialStream(ctx, ex, ex.cp.Attempt, r.opts.PartialInterval)
 	resp, streamErr := client.Stream(ctx, request, meter.Wrap(stream.emit))
 	stream.close()
 	resp.Message.Parts = stream.stampAll(resp.Message.Parts)
@@ -942,7 +945,10 @@ type partialStream struct {
 
 type span struct{ from, to time.Time }
 
-func newPartialStream(ex *execution, attempt int, interval time.Duration) *partialStream {
+// newPartialStream starts the throttle of one request. Its goroutine ends on
+// close, and also when ctx does, so a stream that is never closed (a path
+// added later, a panic unwinding) cannot outlive the request it was made for.
+func newPartialStream(ctx context.Context, ex *execution, attempt int, interval time.Duration) *partialStream {
 	s := &partialStream{ex: ex, attempt: attempt, thinking: map[int]*span{}, stop: make(chan struct{}), done: make(chan struct{})}
 	go func() {
 		defer close(s.done)
@@ -951,6 +957,8 @@ func newPartialStream(ex *execution, attempt int, interval time.Duration) *parti
 		for {
 			select {
 			case <-s.stop:
+				return
+			case <-ctx.Done():
 				return
 			case <-ticker.C:
 				s.flush()
