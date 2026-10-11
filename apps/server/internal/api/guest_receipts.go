@@ -326,9 +326,11 @@ func (r guestRow) receiptPtr() *string {
 // ---- moderating what has no receipt
 
 const (
-	// guestCheckRunes bounds the words of one moderation call, so that none of
-	// it falls in the part a longer text is not read from (moderationTextRunes).
-	guestCheckRunes = moderationTextRunes
+	// guestCheckRunes bounds the words of one moderation call. A text of any
+	// length is checked whole (in pieces, moderation.go); this size is one
+	// piece for a model (moderationModelChunkRunes) and one request for
+	// OpenAI, so each batch costs one call either way.
+	guestCheckRunes = moderationModelChunkRunes
 	// guestCheckMaxRunes and guestCheckMaxImages bound how much a request may
 	// ask to have checked: each guestCheckRunes is a call.
 	guestCheckMaxRunes  = 10 * guestCheckRunes
