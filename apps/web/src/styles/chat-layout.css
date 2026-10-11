@@ -207,6 +207,11 @@
   animation: n-chat-fade-in 50ms linear backwards;
 }
 
+/* Arrived carrying the message just sent from the new-chat page: no fade. */
+.prism-next .n-chat-fade.is-carried {
+  animation: none;
+}
+
 @keyframes n-chat-fade-in {
   from { opacity: 0; }
   to { opacity: 1; }

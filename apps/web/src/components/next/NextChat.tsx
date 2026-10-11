@@ -534,8 +534,11 @@ export function NextChat({ conversationId }: NextChatProps) {
       setTemporaryChat(false)
       // The message moves with it to the conversation's own page.
       post(created.id, item)
-      unpost('')
       await navigate({ to: paths.chat, params: { conversationId: created.id } })
+      // Only now, with the conversation's page in place: let go of it earlier
+      // and this page, still on screen while the route loads, has no message
+      // and draws the welcome again for a frame - a flash on every first send.
+      unpost('')
     } catch {
       // Nothing was sent: the text comes back, and the files were never let go.
       unpost('')
@@ -573,6 +576,12 @@ export function NextChat({ conversationId }: NextChatProps) {
     const runId = live?.run?.run.id
     if (runId) cancelRun.mutate(runId)
   }, [cancelRun, live])
+
+  // Opened by sending the first message of a new chat: the message was on
+  // screen a moment ago on the new-chat page, so the transcript does not fade
+  // in (it would blink). OpenWebUI keeps one page and only rewrites the URL;
+  // here the route changes, and this keeps it looking like one page.
+  const [arrivedSending] = useState(() => Boolean(conversationId && useChatStore.getState().outbox[conversationId]))
 
   // The returned draft is in the composer now (the initial input); let it go.
   useEffect(() => {
@@ -675,7 +684,7 @@ export function NextChat({ conversationId }: NextChatProps) {
           <Welcome onPick={setInput} modelName={modelName} model={modelById.get(modelId)} />
         ) : (
           <ImageSource.Provider value={images}>
-            <div className="n-column n-chat-fade" ref={columnRef}>
+            <div className={arrivedSending ? 'n-column n-chat-fade is-carried' : 'n-column n-chat-fade'} ref={columnRef}>
               {(start > floor || hasOlder) && (
                 // Room for the spinner is always kept while there is more above,
                 // so it appearing does not move the transcript.
