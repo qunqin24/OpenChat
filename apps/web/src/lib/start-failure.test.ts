@@ -12,6 +12,8 @@ describe('startWroteNothing', () => {
     expect(startWroteNothing(error(409, 'no_models'))).toBe(true)
     // A content refusal of an edit or answer keeps nothing, but a first send always names its row.
     expect(startWroteNothing(error(422, 'content_blocked'))).toBe(true)
+    // Too large to be checked: refused before anything is written, the text goes back to the box.
+    expect(startWroteNothing(error(413, 'message_too_large_for_moderation'))).toBe(true)
   })
 
   it('is false for a refused message the server kept in the conversation', () => {
@@ -32,6 +34,7 @@ describe('returnableFiles', () => {
     expect(returnableFiles(error(429, 'too_many_runs'), files)).toEqual(files)
     expect(returnableFiles(error(422, 'content_blocked', { messageId: 'm-1' }), files)).toEqual(files)
     expect(returnableFiles(new Error('network'), files)).toEqual(files)
+    expect(returnableFiles(error(413, 'message_too_large_for_moderation'), files)).toEqual(files)
   })
 
   it('does not give back files the server cannot use', () => {

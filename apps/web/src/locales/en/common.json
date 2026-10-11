@@ -115,6 +115,7 @@
       "model_capacity_reached": "This model has reached its maximum capacity.",
       "content_blocked": "This message did not pass content moderation and was not sent.",
       "moderation_unavailable": "Content moderation is unavailable right now, so the message was not sent. Try again in a moment.",
+      "message_too_large_for_moderation": "This message is too large to be checked by content moderation, so it was not sent. Shorten the text or attach fewer or smaller images.",
       "too_many_runs": "Too many answers are being written at once. Wait for one to finish, or stop one, and try again."
     },
     "thinking": {

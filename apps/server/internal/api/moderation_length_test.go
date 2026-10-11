@@ -213,9 +213,10 @@ func TestLongMessageIsCheckedInTheMiddle(t *testing.T) {
 	})
 }
 
-// Past what a check reads a message is refused (503), not partly checked, and
-// the on-error setting does not let it by; a model that would need more
-// requests than a check makes fails the check, which does take that path.
+// Past what a check reads a message is refused (413 message_too_large_for_moderation),
+// not partly checked, and the on-error setting does not let it by - nor does it
+// the model that would need more requests than a check makes: the size is the
+// sender's, and "too big to check" is not "the service failed".
 func TestOverlongMessageIsNotPartlyChecked(t *testing.T) {
 	ctx := context.Background()
 
@@ -223,10 +224,10 @@ func TestOverlongMessageIsNotPartlyChecked(t *testing.T) {
 		h, f := newModerationHarness(t, `,"onError":"allow"`)
 		who := moderationSubject{userID: h.user.ID, source: ModerationSourceSend}
 		long := strings.Repeat("a ", moderationMaxRunes/2+1)
-		if err := h.server.moderate(ctx, who, moderationInput{text: long}); err != errModerationUnavailable {
+		if err := h.server.moderate(ctx, who, moderationInput{text: long}); err != errMessageTooLarge {
 			t.Fatalf("one character past the limit, on_error allow: %v", err)
 		}
-		if err := h.server.moderate(ctx, moderationSubject{guestIP: "203.0.113.5", source: ModerationSourceGuest}, moderationInput{text: long}); err != errModerationUnavailable {
+		if err := h.server.moderate(ctx, moderationSubject{guestIP: "203.0.113.5", source: ModerationSourceGuest}, moderationInput{text: long}); err != errMessageTooLarge {
 			t.Fatalf("a guest: %v", err)
 		}
 		if f.calls() != 0 {
@@ -239,12 +240,12 @@ func TestOverlongMessageIsNotPartlyChecked(t *testing.T) {
 		if f.calls() != 3 {
 			t.Errorf("%d requests for 400,000 characters", f.calls())
 		}
-		// Through the handler, the answer is the 503 and nothing is written.
+		// Through the handler, the answer is the 413 and nothing is written.
 		messages := h.count(`SELECT count(*) FROM messages WHERE conversation_id = $1`, h.conv.ID)
 		rec := h.post(long)
 		var body blockedBody
 		_ = json.Unmarshal(rec.Body.Bytes(), &body)
-		if rec.Code != http.StatusServiceUnavailable || body.Code != "moderation_unavailable" {
+		if rec.Code != http.StatusRequestEntityTooLarge || body.Code != "message_too_large_for_moderation" {
 			t.Fatalf("%d %s", rec.Code, rec.Body)
 		}
 		if h.count(`SELECT count(*) FROM messages WHERE conversation_id = $1`, h.conv.ID) != messages {
@@ -290,18 +291,19 @@ func TestOverlongMessageIsNotPartlyChecked(t *testing.T) {
 			t.Errorf("%d classifier requests", asked)
 		}
 
-		// on_error allow lets an account's through (nothing was sent to the model
-		// for it), a guest's is held back, and with block so is the account's.
-		if err := h.server.moderate(ctx, who, moderationInput{text: tooMany}); err != nil {
+		// More than a check makes is refused, not passed: on_error allow does
+		// not let an account's through (no model was asked), nor a guest's, nor
+		// does block turn it into an outage.
+		if err := h.server.moderate(ctx, who, moderationInput{text: tooMany}); err != errMessageTooLarge {
 			t.Errorf("too many pieces, on_error allow: %v", err)
 		}
-		if err := h.server.moderate(ctx, guest, moderationInput{text: tooMany}); err != errModerationUnavailable {
+		if err := h.server.moderate(ctx, guest, moderationInput{text: tooMany}); err != errMessageTooLarge {
 			t.Errorf("too many pieces, a guest: %v", err)
 		}
 		if rec := h.patchModeration(`{"onError":"block"}`); rec.Code != http.StatusOK {
 			t.Fatal(rec.Body)
 		}
-		if err := h.server.moderate(ctx, who, moderationInput{text: tooMany}); err != errModerationUnavailable {
+		if err := h.server.moderate(ctx, who, moderationInput{text: tooMany}); err != errMessageTooLarge {
 			t.Errorf("too many pieces, on_error block: %v", err)
 		}
 		if h.chatRequests() != asked {
@@ -311,7 +313,7 @@ func TestOverlongMessageIsNotPartlyChecked(t *testing.T) {
 		if rec := h.patchModeration(`{"onError":"allow"}`); rec.Code != http.StatusOK {
 			t.Fatal(rec.Body)
 		}
-		if err := h.server.moderate(ctx, who, moderationInput{text: strings.Repeat("a", moderationMaxRunes+1)}); err != errModerationUnavailable {
+		if err := h.server.moderate(ctx, who, moderationInput{text: strings.Repeat("a", moderationMaxRunes+1)}); err != errMessageTooLarge {
 			t.Errorf("past the limit: %v", err)
 		}
 	})

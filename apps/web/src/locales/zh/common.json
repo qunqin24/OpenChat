@@ -115,6 +115,7 @@
       "model_capacity_reached": "此模型已达到最大容量。",
       "content_blocked": "这条消息未通过内容审核，没有发送。",
       "moderation_unavailable": "内容审核暂时不可用，消息没有发送，请稍后重试。",
+      "message_too_large_for_moderation": "这条消息太大，内容审核无法完整检查，没有发送。请缩短文字，或减少、换小图片后再试。",
       "too_many_runs": "同时进行的回答太多了，请等其中一个完成，或停止一个后再试。"
     },
     "thinking": {

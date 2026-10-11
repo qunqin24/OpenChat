@@ -21,6 +21,7 @@ const SEND_ERRORS = [
   'model_capacity_reached',
   'content_blocked',
   'moderation_unavailable',
+  'message_too_large_for_moderation',
   'too_many_runs',
   'too_many_attachments',
   'attachments_too_large',

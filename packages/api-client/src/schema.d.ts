@@ -1057,7 +1057,13 @@ export interface paths {
          *     now keeps nothing and has no `messageId`. The message that reaches the
          *     limit disables the account and is answered 401 (its sessions are gone);
          *     it is kept all the same. When the moderation service cannot be reached and the setting says to
-         *     block, 503 `moderation_unavailable`. Editing a message and answering a
+         *     block, 503 `moderation_unavailable`. A message too large to be checked
+         *     whole - its text past what a check reads (about 400,000 characters; in
+         *     model mode about 190,000), more than six images, or an image bigger than
+         *     a check reads - is refused with 413 `message_too_large_for_moderation`
+         *     whatever that setting says: the size is the sender's, so it is never
+         *     treated as a failure of the service. Nothing is written or kept, and the
+         *     page keeps the text. Editing a message and answering a
          *     question are checked the same way, but a refusal keeps nothing; a
          *     regeneration re-sends what was already checked.
          */
@@ -1606,7 +1612,10 @@ export interface paths {
          *     server keeps nothing of a guest, so there is no `details.messageId` -
          *     the browser keeps the refused message itself), or 503
          *     `moderation_unavailable` when the check could not be made (a guest's
-         *     message is never sent unchecked). The message that earns the ban is
+         *     message is never sent unchecked), or 413 `message_too_large_for_moderation`
+         *     when the message, or what the request carries that nothing vouched for,
+         *     is too large to be checked whole (as for `createMessage`; the
+         *     `history_too_large` of the history is a separate 413). The message that earns the ban is
          *     answered with it (403 `guest_banned`). A regeneration is not checked.
          *     From a network address banned for it, this and every other guest
          *     endpoint but cancelling a run answers 403 `guest_banned`, with

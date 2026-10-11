@@ -24,6 +24,7 @@ import (
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin/openchat/apps/server/internal/httpx"
 	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin/openchat/apps/server/internal/storage"
 	ledger "github.com/qunqin/openchat/apps/server/internal/usage"
 )
 
@@ -61,6 +62,21 @@ var (
 	// unchecked, or it is a guest's).
 	errModerationUnavailable = httpx.NewError(http.StatusServiceUnavailable, "moderation_unavailable",
 		"content moderation is unavailable right now; the message was not sent")
+
+	// errMessageTooLarge is a message that cannot be checked whole because of
+	// its size - its text is past what a check reads, or it carries more or
+	// bigger pictures than a check sends. It is refused whatever the on-error
+	// setting says, and whoever sent it: the size is the sender's to choose, so
+	// "too big to check" must never read as "the service failed" (which the
+	// setting may let through), or padding a message would be a way past the
+	// check. It is not an outage and not a verdict on the content.
+	errMessageTooLarge = httpx.NewError(http.StatusRequestEntityTooLarge, "message_too_large_for_moderation",
+		"this message is too large to be checked by content moderation; shorten it or attach fewer files")
+
+	// errTooLargeToCheck marks, inside the checking code, an error that is the
+	// size of what the sender sent (and not a failure of the service);
+	// checkFailed turns it into errMessageTooLarge.
+	errTooLargeToCheck = errors.New("too large to be checked")
 )
 
 // contentBlocked is the refusal of a message that failed the check. It names
@@ -98,20 +114,21 @@ const (
 	// carries (the endpoint answers once per piece).
 	moderationItemsPerRequest = 16
 	// moderationModelMaxChunks is the most completions a message may cost in
-	// model mode (192,000 characters); a longer one cannot be checked, which
-	// takes the on-error path like any check that cannot be made.
+	// model mode (192,000 characters); a longer one cannot be checked whole and
+	// is refused like one past moderationMaxRunes (413), not passed on the
+	// on-error setting.
 	moderationModelMaxChunks = 8
 	// moderationMaxRunes is the longest text that is checked at all. A longer
-	// one is refused (503 moderation_unavailable) whatever the on-error
-	// setting says and whoever sent it: it is not an outage, it is a message
-	// that could only be sent unchecked or partly checked, and a person could
-	// use that to carry anything past the check. A message this long is not a
-	// chat message; the check is off for an administrator who must send one
-	// (the exemption in the settings).
+	// one is refused (413 message_too_large_for_moderation) whatever the
+	// on-error setting says and whoever sent it: it is not an outage, it is a
+	// message that could only be sent unchecked or partly checked, and a person
+	// could use that to carry anything past the check. A message this long is
+	// not a chat message; the check is off for an administrator who must send
+	// one (the exemption in the settings).
 	moderationMaxRunes = 400_000
 	// moderationMaxImages and moderationMaxImageBytes bound the images one
-	// check sends. A message with more is not checked whole, which counts as the
-	// service failing (it is not sent unchecked unless the settings say so).
+	// check sends. A message with more is not checked whole and is refused
+	// (413) like a text that is too long.
 	moderationMaxImages     = 6
 	moderationMaxImageBytes = 24 << 20
 	// moderationExcerptRunes is how much of a blocked message the log keeps.
@@ -175,9 +192,8 @@ func (s *Server) moderated(ctx context.Context, who moderationSubject, in modera
 		return false, nil
 	}
 	if utf8.RuneCountInString(text) > moderationMaxRunes {
-		slog.WarnContext(ctx, "message too long to be moderated; it is held back", "mode", cfg.Mode, "guest", who.guest(),
-			"runes", utf8.RuneCountInString(text), "limit", moderationMaxRunes)
-		return false, errModerationUnavailable
+		return false, tooLargeToModerate(ctx, cfg, who, fmt.Errorf("%d characters is more than %d: %w",
+			utf8.RuneCountInString(text), moderationMaxRunes, errTooLargeToCheck))
 	}
 
 	var verdict moderationVerdict
@@ -186,7 +202,7 @@ func (s *Server) moderated(ctx context.Context, who moderationSubject, in modera
 		var images []moderationImage
 		if in.images != nil {
 			if images, err = in.images(ctx); err != nil {
-				return false, s.moderationFailed(ctx, cfg, who, err)
+				return false, s.checkFailed(ctx, cfg, who, err)
 			}
 		}
 		if text == "" && len(images) == 0 {
@@ -200,7 +216,7 @@ func (s *Server) moderated(ctx context.Context, who moderationSubject, in modera
 		verdict, err = s.moderateWithModel(ctx, cfg, who, text)
 	}
 	if err != nil {
-		return false, s.moderationFailed(ctx, cfg, who, err)
+		return false, s.checkFailed(ctx, cfg, who, err)
 	}
 
 	hits := cfg.blocked(verdict)
@@ -246,6 +262,24 @@ func (s *Server) settingsUnreadable(ctx context.Context, cfg moderationConfig, w
 	}
 	slog.ErrorContext(ctx, "moderation settings unreadable; the message is held back", "guest", who.guest(), "error", err)
 	return errModerationUnavailable
+}
+
+// checkFailed is the answer when a check did not give a verdict. Either the
+// message is too large to be checked whole - the sender's doing, refused (413)
+// whatever the settings say - or the service failed, which moderationFailed
+// answers by the on-error setting.
+func (s *Server) checkFailed(ctx context.Context, cfg moderationConfig, who moderationSubject, err error) error {
+	if errors.Is(err, errTooLargeToCheck) {
+		return tooLargeToModerate(ctx, cfg, who, err)
+	}
+	return s.moderationFailed(ctx, cfg, who, err)
+}
+
+// tooLargeToModerate logs a message that cannot be checked whole and returns
+// its refusal.
+func tooLargeToModerate(ctx context.Context, cfg moderationConfig, who moderationSubject, why error) error {
+	slog.WarnContext(ctx, "message too large to be moderated; it is refused", "mode", cfg.Mode, "guest", who.guest(), "reason", why)
+	return errMessageTooLarge
 }
 
 // moderationFailed is the answer when the check could not be made. A guest's
@@ -370,16 +404,16 @@ func (s *Server) moderateWithOpenAI(ctx context.Context, cfg moderationConfig, t
 		return verdict, errors.New("no OpenAI API key is stored")
 	}
 	if len(images) > moderationMaxImages {
-		return verdict, fmt.Errorf("%d images is more than one check sends", len(images))
+		return verdict, fmt.Errorf("%d images is more than one check sends: %w", len(images), errTooLargeToCheck)
 	}
 	if utf8.RuneCountInString(text) > moderationMaxRunes {
-		return verdict, errors.New("the text is longer than a check reads")
+		return verdict, fmt.Errorf("the text is longer than a check reads: %w", errTooLargeToCheck)
 	}
 	var imageItems []any
 	var total int
 	for _, image := range images {
 		if total += len(image.data); total > moderationMaxImageBytes {
-			return verdict, errors.New("the images are more than one check sends")
+			return verdict, fmt.Errorf("the images are more than one check sends: %w", errTooLargeToCheck)
 		}
 		imageItems = append(imageItems, map[string]any{"type": "image_url", "image_url": map[string]any{
 			"url": "data:" + image.contentType + ";base64," + base64.StdEncoding.EncodeToString(image.data),
@@ -569,7 +603,10 @@ func moderationRequest(text string) string {
 // is classified piece by piece, one metered request each, and a category applies
 // if it applies to any piece. A text that would take more than
 // moderationModelMaxChunks requests is not classified at all - not from its ends
-// alone - and the check fails, which takes the on-error path.
+// alone - and the check is refused as too large (errTooLargeToCheck), not
+// passed on the on-error setting. So is a piece the classifier's own context
+// window cannot hold (llm.ErrorContextLength): that is the size of the text,
+// not a fault of the service.
 func (s *Server) moderateWithModel(ctx context.Context, cfg moderationConfig, who moderationSubject, text string) (moderationVerdict, error) {
 	verdict := newVerdict()
 	if cfg.Model == "" {
@@ -577,7 +614,8 @@ func (s *Server) moderateWithModel(ctx context.Context, cfg moderationConfig, wh
 	}
 	pieces := splitForModeration(text, moderationModelChunkRunes)
 	if len(pieces) > moderationModelMaxChunks {
-		return verdict, fmt.Errorf("the text takes %d requests to classify, more than the %d one check makes", len(pieces), moderationModelMaxChunks)
+		return verdict, fmt.Errorf("the text takes %d requests to classify, more than the %d one check makes: %w",
+			len(pieces), moderationModelMaxChunks, errTooLargeToCheck)
 	}
 	modelID, channelID, err := s.pickChannel(ctx, cfg.Model, asker{staff: true, admin: who.admin})
 	if err != nil {
@@ -646,6 +684,9 @@ func (s *Server) classify(ctx context.Context, cfg moderationConfig, who moderat
 	resp, err := client.Stream(ctx, request, meter.Wrap(nil))
 	meter.End(ctx, resp, err)
 	if err != nil {
+		if llm.IsKind(err, llm.ErrorContextLength) {
+			return newVerdict(), fmt.Errorf("a piece of the text does not fit the classifier's context (%w): %w", err, errTooLargeToCheck)
+		}
 		return newVerdict(), err
 	}
 	return parseModelVerdict(cfg, resp.Message.Text())
@@ -832,11 +873,16 @@ func (s *Server) attachmentImages(files []sqlc.Attachment) func(ctx context.Cont
 	}
 	return func(ctx context.Context) ([]moderationImage, error) {
 		if len(keys) > moderationMaxImages {
-			return nil, fmt.Errorf("%d images is more than one check sends", len(keys))
+			return nil, fmt.Errorf("%d images is more than one check sends: %w", len(keys), errTooLargeToCheck)
 		}
 		images := make([]moderationImage, 0, len(keys))
 		for _, file := range keys {
 			data, err := s.store.Read(ctx, file.StorageKey, uploadable[file.ContentType]+1)
+			if errors.Is(err, storage.ErrTooLarge) {
+				// Bigger than admission let it be: written again after it was
+				// admitted. The size is the sender's.
+				return nil, fmt.Errorf("an attachment is larger than a check reads: %w", errTooLargeToCheck)
+			}
 			if err != nil {
 				return nil, fmt.Errorf("read an attachment: %w", err)
 			}
