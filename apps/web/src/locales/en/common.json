@@ -88,7 +88,8 @@
     },
     "refused": {
       "title": "Content not allowed",
-      "text": "This message did not pass content moderation and was not sent. Please change your prompt and try again.",
+      "tag": "Not sent",
+      "text": "This message did not pass content moderation. Please change your prompt and try again.",
       "warning_one": "{{count}} more within {{hours}} hours and this account will be disabled.",
       "warning_other": "{{count}} more within {{hours}} hours and this account will be disabled.",
       "warning-guest_one": "{{count}} more within {{hours}} hours and guest mode will be closed to you.",

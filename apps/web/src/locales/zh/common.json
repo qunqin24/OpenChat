@@ -88,7 +88,8 @@
     },
     "refused": {
       "title": "内容违规",
-      "text": "这条消息未通过内容审核，没有发送。请修改提示词后再试。",
+      "tag": "未发送",
+      "text": "这条消息未通过内容审核。请修改提示词后再试。",
       "warning_one": "{{hours}} 小时内再违规 {{count}} 次，账号将被停用。",
       "warning_other": "{{hours}} 小时内再违规 {{count}} 次，账号将被停用。",
       "warning-guest_one": "{{hours}} 小时内再违规 {{count}} 次，将被禁止使用游客模式。",

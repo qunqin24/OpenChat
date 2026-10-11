@@ -1,4 +1,4 @@
-import { ShieldAlert } from 'lucide-react'
+import { ShieldAlert, TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { useIsGuest } from '@/lib/guest/mode'
@@ -16,19 +16,27 @@ export default function RefusalCard({ refusal }: { refusal: Refusal }) {
   const guest = useIsGuest()
   return (
     <div className="n-refusal" role="alert">
-      <ShieldAlert className="n-refusal-icon" aria-hidden="true" />
-      <div className="n-refusal-body">
-        <p className="n-refusal-title">{t('chat.refused.title')}</p>
-        <p className="n-refusal-text">{t('chat.refused.text')}</p>
-        {refusal.strikesLeft ? (
-          <p className="n-refusal-warning">
-            {t(guest ? 'chat.refused.warning-guest' : 'chat.refused.warning', {
-              count: refusal.strikesLeft,
-              hours: refusal.windowHours,
-            })}
+      <div className="n-refusal-main">
+        <span className="n-refusal-badge" aria-hidden="true">
+          <ShieldAlert className="n-refusal-icon" />
+        </span>
+        <div className="n-refusal-body">
+          <p className="n-refusal-title">
+            {t('chat.refused.title')}
+            <span className="n-refusal-tag">{t('chat.refused.tag')}</span>
           </p>
-        ) : null}
+          <p className="n-refusal-text">{t('chat.refused.text')}</p>
+        </div>
       </div>
+      {refusal.strikesLeft ? (
+        <p className="n-refusal-warning">
+          <TriangleAlert className="n-refusal-warning-icon" aria-hidden="true" />
+          {t(guest ? 'chat.refused.warning-guest' : 'chat.refused.warning', {
+            count: refusal.strikesLeft,
+            hours: refusal.windowHours,
+          })}
+        </p>
+      ) : null}
     </div>
   )
 }
