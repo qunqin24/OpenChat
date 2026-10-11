@@ -516,7 +516,9 @@ func TestBlockedMessageIsNotKeptWhileARunIsAnswering(t *testing.T) {
 		h.conv.ID, h.user.ID, first.Message.Id, h.model); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _, _ = h.pool.Exec(context.Background(), `DELETE FROM runs WHERE conversation_id = $1`, h.conv.ID) })
+	t.Cleanup(func() {
+		_, _ = h.pool.Exec(context.Background(), `DELETE FROM runs WHERE conversation_id = $1`, h.conv.ID)
+	})
 
 	rec := h.post("BLOCKME while answering")
 	refused(t, rec)
