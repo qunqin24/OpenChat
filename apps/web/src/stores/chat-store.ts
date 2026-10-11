@@ -1,6 +1,7 @@
 import type { Attachment, BatchEvent, Message, Run, SnapshotEvent } from '@openchat/api-client'
 import { create } from 'zustand'
 
+import type { PendingAttachment } from '@/hooks/use-attachments'
 import { applyBatch, finishedBy, fromSnapshot, idle, rememberFinished, type ConversationLive } from '@/lib/run-state'
 import type { Refusal } from '@/lib/moderation-refusal'
 import type { Replacing } from '@/lib/transcript'
@@ -18,6 +19,19 @@ export interface PendingPrompt {
   content: string
   /** Uploads already made for it; the new route sends them with the text. */
   attachmentIds: string[]
+  /**
+   * The same uploads as the composer held them, handed over with the prompt:
+   * the new route gives them back to its composer if the send is refused (and
+   * lets their thumbnails go once it is not), so the files are not lost.
+   */
+  attachments?: PendingAttachment[]
+}
+
+/** The first message of a new chat that the server refused before writing anything, as it was written. */
+export interface ReturnedDraft {
+  content: string
+  /** The uploads it carried, which are still unclaimed and valid. */
+  attachments: PendingAttachment[]
 }
 
 /**
@@ -78,15 +92,15 @@ interface ChatState {
   pendingPrompt: PendingPrompt | null
 
   /**
-   * The text of a first message the server refused before writing anything (a
+   * A first message the server refused before writing anything (a
    * limit, no model), carried back to the empty-state screen after the
-   * conversation made for it was removed. The empty state takes it into the
-   * composer. (A message moderation refused is kept in its conversation, which
-   * stays.)
+   * conversation made for it was removed: its text and its files. The empty
+   * state takes them into the composer. (A message moderation refused is kept
+   * in its conversation, which stays, and gets them back there.)
    */
-  returnedDraft: string | null
-  returnDraft: (text: string) => void
-  takeReturnedDraft: () => string | null
+  returnedDraft: ReturnedDraft | null
+  returnDraft: (draft: ReturnedDraft) => void
+  takeReturnedDraft: () => ReturnedDraft | null
 
   applySnapshot: (conversationId: string, snapshot: SnapshotEvent) => void
   applyBatch: (conversationId: string, batch: BatchEvent) => void
