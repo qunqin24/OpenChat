@@ -20,6 +20,8 @@ const SEND_ERRORS = [
   'model_unavailable',
   'model_capacity_reached',
   'content_blocked',
+  'revise_refused',
+  'attachments_not_editable',
   'moderation_unavailable',
   'message_too_large_for_moderation',
   'too_many_runs',
@@ -37,7 +39,7 @@ const SEND_ERRORS = [
   'guest_unreachable',
 ] as const
 
-function useSendError() {
+function useSendError(conversationId?: string) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   return (error: Error) => {
@@ -69,6 +71,10 @@ function useSendError() {
     // The picker learned of the cap too late: its list says the model has room.
     // Fetch it again so the model shows as unavailable, not as a trap.
     if (code === CAPACITY_CODE) void queryClient.invalidateQueries({ queryKey: queryKeys.models.all })
+    // This page did not know the conversation ends on a refused message (it was
+    // refused in another tab, or on another device): fetch the end of it, and the
+    // composer turns into that message's editor.
+    if (code === 'revise_refused' && conversationId) void refreshNewestMessages(queryClient, conversationId).catch(() => undefined)
   }
 }
 
@@ -94,7 +100,7 @@ export function useSendMessage(conversationId: string) {
   const startRun = useChatStore((s) => s.startRun)
   const unpost = useChatStore((s) => s.unpost)
   const queryClient = useQueryClient()
-  const onError = useSendError()
+  const onError = useSendError(conversationId)
 
   return useMutation({
     // Shown in the transcript itself (the outbox, a waiting reply).
@@ -185,7 +191,7 @@ export function useRegenerate(conversationId: string) {
   const startRun = useChatStore((s) => s.startRun)
   const redo = useChatStore((s) => s.redo)
   const forget = useForgetDeleted(conversationId)
-  const onError = useSendError()
+  const onError = useSendError(conversationId)
 
   return useMutation({
     // Shown in the transcript itself (the outbox, a waiting reply).
@@ -222,8 +228,9 @@ export function useEditMessage(conversationId: string) {
   const redo = useChatStore((s) => s.redo)
   const post = useChatStore((s) => s.post)
   const unpost = useChatStore((s) => s.unpost)
+  const queryClient = useQueryClient()
   const forget = useForgetDeleted(conversationId)
-  const onError = useSendError()
+  const onError = useSendError(conversationId)
 
   return useMutation({
     // Shown in the transcript itself (the outbox, a waiting reply).
@@ -232,17 +239,28 @@ export function useEditMessage(conversationId: string) {
       messageId,
       content,
       attachments: _attachments,
+      attachmentIds,
       ...choice
     }: RunChoice & {
       messageId: string
       content: string
-      /** The question's files, which the edit keeps. */
+      /** The files the bubble shows while the edit is on its way: the question's own, or the composer's. */
       attachments: Attachment[]
+      /**
+       * Uploads to send with the new wording. Only for the edit of a message
+       * that was refused (it carried none): the composer's files go with it.
+       */
+      attachmentIds?: string[]
     }) =>
       unwrap(
         await api.POST('/conversations/{conversationId}/messages/{messageId}/edit', {
           params: { path: { conversationId, messageId } },
-          body: { content, requestId: crypto.randomUUID(), ...choiceBody(choice) },
+          body: {
+            content,
+            requestId: crypto.randomUUID(),
+            ...choiceBody(choice),
+            ...(attachmentIds?.length ? { attachmentIds } : {}),
+          },
         }),
       ),
     onMutate: ({ messageId, content, attachments }) => {
@@ -253,7 +271,15 @@ export function useEditMessage(conversationId: string) {
       forget({ from: messageId })
       startRun(conversationId, response.run, response.message)
     },
-    onError: (error) => {
+    onError: (error, variables) => {
+      // The words of a refused message that were refused again took its place
+      // (and are named in the refusal): drop the old row from the cache and show
+      // the new, as a refused send is shown.
+      const refusal = refusalOf(error)
+      if (refusal?.messageId) {
+        forget({ from: variables.messageId })
+        keepRefused(queryClient, conversationId, refusal, variables.content)
+      }
       redo(conversationId, null)
       unpost(conversationId)
       onError(error)
@@ -269,7 +295,7 @@ export function useEditMessage(conversationId: string) {
  */
 export function useAnswerQuestion(conversationId: string) {
   const startRun = useChatStore((s) => s.startRun)
-  const onError = useSendError()
+  const onError = useSendError(conversationId)
 
   return useMutation({
     // Shown in the question's card itself.

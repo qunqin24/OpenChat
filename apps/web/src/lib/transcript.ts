@@ -27,6 +27,12 @@ export type Turn =
       message: Message
       /** Never a place for a divider: a summary does not end at a refused message. */
       after?: undefined
+      /**
+       * The refused message is the last row there is: the conversation stops here
+       * until it is reworded. (Not when a row was written after it - old data -
+       * even though that row may be drawn above it, in the reply it belongs to.)
+       */
+      last?: boolean
     }
   | {
       kind: 'assistant'
@@ -68,6 +74,38 @@ export function isRefusedTurn(turn: Turn): boolean {
  */
 export function sentTurns(turns: Turn[]): Exclude<Turn, { kind: 'refusal' }>[] {
   return turns.filter((turn): turn is Exclude<Turn, { kind: 'refusal' }> => !isRefusedTurn(turn))
+}
+
+/**
+ * The refused message the conversation stops on: the last turn is a refusal, so
+ * the last row is a message content moderation refused. Until it is reworded the
+ * conversation does not go on (the server answers 409 `revise_refused` to a
+ * send, a regeneration and an answer), so the page turns the composer into the
+ * editor of this message (`composerMode`) and offers nothing else. A refused
+ * message with something after it (old data) is not one the conversation stops
+ * on.
+ */
+export function refusedTail(turns: Turn[]): Message | null {
+  const last = turns.at(-1)
+  return last?.kind === 'refusal' && last.last ? last.message : null
+}
+
+/**
+ * The answer that can be asked for again, and the question it answers: the last
+ * reply, only the last, as asking for an earlier one again would delete the turns
+ * after it. A message moderation refused after it is no question and its reply no
+ * answer (the server finds the last question the same way), and goes with the
+ * answer when it is redone - but not while that message ends the conversation: it
+ * is reworded first, and nothing is offered to redo (the server refuses it with
+ * `revise_refused`).
+ */
+export function regenerable(turns: Turn[]): { answer: AssistantTurn; inputId: string } | null {
+  if (refusedTail(turns)) return null
+  const sent = sentTurns(turns)
+  const answer = sent.at(-1)
+  const input = [...sent].reverse().find((turn) => turn.kind === 'user')
+  if (answer?.kind !== 'assistant' || input?.kind !== 'user') return null
+  return { answer, inputId: input.message.id }
 }
 
 /**
@@ -117,6 +155,8 @@ export function buildTurns(
 
   const turns: Turn[] = []
   let current: AssistantTurn | null = null
+  // The refusal card of the refused message that is the last row so far.
+  let tail: Extract<Turn, { kind: 'refusal' }> | null = null
   // How many responses the reply had when the summary's last row was written,
   // for the reply that holds it.
   const endsAt = new Map<AssistantTurn, number>()
@@ -128,6 +168,7 @@ export function buildTurns(
   }
 
   for (const message of rows) {
+    if (message.role === 'user' || message.role === 'assistant' || message.role === 'tool') tail = null
     if (message.role === 'user') {
       const refused = message.status === 'blocked'
       // A refused message is no question: a reply that went on after the
@@ -135,7 +176,10 @@ export function buildTurns(
       // the block that asked.
       if (!refused) current = null
       turns.push({ kind: 'user', key: message.id, message, ...(message.id === summary?.throughMessageId ? { after: summary } : {}) })
-      if (refused) turns.push({ kind: 'refusal', key: `${message.id}:refused`, message })
+      if (refused) {
+        tail = { kind: 'refusal', key: `${message.id}:refused`, message }
+        turns.push(tail)
+      }
       continue
     }
     if (message.role !== 'assistant' && message.role !== 'tool') continue
@@ -162,6 +206,8 @@ export function buildTurns(
   // Where the summary stops in a reply: after it when nothing else was said in
   // it since, and among its parts when the run went on (a compression between
   // two tool rounds) or is going on - the next thing it says is below the line.
+  if (tail) tail.last = true
+
   const placeSummary = (): Turn[] => {
     for (const [turn, count] of endsAt) {
       if (!summary) break
@@ -206,9 +252,11 @@ export function turnText(turn: AssistantTurn): string {
  * else is how a question is skipped.
  */
 export function pendingQuestion(turns: Turn[], busy: boolean): string | null {
-  // A message refused after the question neither answers it nor hides it.
+  // A message refused after the question neither answers it nor hides it - but
+  // while it ends the conversation the question cannot be answered past it: the
+  // refused message is reworded first.
   const last = sentTurns(turns).at(-1)
-  if (busy || last?.kind !== 'assistant') return null
+  if (busy || last?.kind !== 'assistant' || refusedTail(turns)) return null
   const response = last.responses.at(-1)
   if (response?.stopReason !== 'tool_calls') return null
   for (const part of response.parts) {

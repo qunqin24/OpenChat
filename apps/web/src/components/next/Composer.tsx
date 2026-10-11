@@ -20,6 +20,12 @@ interface ComposerProps {
   /** Switches for this conversation's tools, beside the attach button. */
   toolsSlot?: ReactNode
   /**
+   * A quiet line above the box about what sending from it does: set while the
+   * box is the editor of a message content moderation refused, where sending
+   * rewords that message instead of adding a new one.
+   */
+  note?: string
+  /**
    * File attachments. `accept` is the picker's filter and is empty when the
    * model takes no files, which leaves the button off; `hint` says what the
    * button does, or why it does not.
@@ -44,6 +50,7 @@ export function Composer({
   disabled,
   modelSlot,
   toolsSlot,
+  note,
   attach,
 }: ComposerProps) {
   const { t } = useTranslation()
@@ -85,6 +92,11 @@ export function Composer({
     // One group for the whole composer: hovering along the button row swaps
     // tooltips instantly instead of re-paying the open delay per button.
     <TooltipGroup>
+      {note && (
+        <p className="n-composer-note" role="status">
+          {note}
+        </p>
+      )}
       <div className={cn('n-composer', expanded && 'expanded', showToggle && 'has-toggle')}>
         {showToggle && (
           <Tooltip

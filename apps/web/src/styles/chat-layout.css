@@ -131,6 +131,16 @@
   background: oklch(0.69 0 0 / 5%);
 }
 
+/* What sending from the box does, when it is not the usual: said quietly above
+   it, in the type of the activity lines, not as a warning. */
+.prism-next .n-composer-note {
+  margin: 0 0 6px;
+  padding-inline: 14px;
+  color: var(--n-text-2);
+  font-size: 13.5px;
+  line-height: 20px;
+}
+
 .prism-next .n-composer:hover { border-color: var(--n-composer-hover-border); }
 .prism-next .n-composer:focus-within { border-color: var(--n-composer-focus-border); }
 

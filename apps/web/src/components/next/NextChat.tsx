@@ -34,8 +34,9 @@ import { smoothScrollBehavior } from '@/lib/motion'
 import { displayTitle } from '@/lib/titles'
 import { acceptAttribute, acceptsOf } from '@/lib/attachments'
 import { isRunning } from '@/lib/run-state'
+import { composerMode, reviseDraft } from '@/lib/revise'
 import { returnableFiles, startWroteNothing } from '@/lib/start-failure'
-import { buildTurns, pendingQuestion, sentTurns } from '@/lib/transcript'
+import { buildTurns, pendingQuestion, regenerable } from '@/lib/transcript'
 import { parseQuestions, type AskAnswer } from '@/lib/ask-user'
 import { useChatStore } from '@/stores/chat-store'
 import AskUserDock from './AskUserDock'
@@ -232,17 +233,15 @@ export function NextChat({ conversationId }: NextChatProps) {
   const start = Math.max(floor, topIndex >= 0 ? topIndex : turns.length - TURN_STEP)
   const anchor = useRef<{ el: HTMLElement; top: number } | null>(null)
 
-  // The last answer can be asked for again: only the last, as asking for an
-  // earlier one again would delete the turns after it. A message moderation
-  // refused after it is no question and its reply no answer (the server finds
-  // the last question the same way), and goes with the answer when it is redone.
-  const last = useMemo(() => {
-    const sent = sentTurns(turns)
-    const answer = sent.at(-1)
-    const input = [...sent].reverse().find((turn) => turn.kind === 'user')
-    if (answer?.kind !== 'assistant' || input?.kind !== 'user') return null
-    return { answer, inputId: input.message.id }
-  }, [turns])
+  // While the conversation ends on a message moderation refused, it does not go
+  // on until that message is reworded: the composer is its editor (sending from it
+  // is an edit of the refused message), and nothing else is offered below.
+  const mode = useMemo(() => composerMode(turns), [turns])
+  const revising = mode.kind === 'revise' ? mode.message : null
+
+  // The last answer can be asked for again (not while a refused message ends the
+  // conversation: it is reworded first).
+  const last = useMemo(() => regenerable(turns), [turns])
 
   // The question the last reply ended on, if nobody has answered or written past it.
   const askingCallId = useMemo(() => pendingQuestion(turns, superseded), [turns, superseded])
@@ -459,6 +458,20 @@ export function NextChat({ conversationId }: NextChatProps) {
     if (!isEmpty && parked.current) scrollToBottom('auto')
   }, [isEmpty, turns.length, streamed, outgoing, replacing, scrollToBottom])
 
+  // The refused message the composer was filled with, so that a person who
+  // empties the box is not given its words back. Empty on arrival (a refresh,
+  // another device), the box takes them; refused from this box, they are there.
+  const filledFor = useRef<string | null>(null)
+  const reviseId = revising?.id ?? null
+  const fillRevision = useEffectEvent(() => {
+    const next = reviseDraft(mode, input, filledFor.current)
+    filledFor.current = next.handled
+    if (next.fill !== null) setInput(next.fill)
+  })
+  useEffect(() => {
+    fillRevision()
+  }, [reviseId])
+
   const handleSend = useCallback(async () => {
     const content = input.trim()
     if (!content || attachments.uploading || attachments.failed) return
@@ -502,6 +515,29 @@ export function NextChat({ conversationId }: NextChatProps) {
         })),
     }
     parked.current = true
+
+    if (conversationId && revising) {
+      // The refused message is reworded, not followed: an edit of it, which
+      // takes the files in the box with it and the new words checked again.
+      parked.current = true
+      editMessage.mutate(
+        {
+          messageId: revising.id,
+          content,
+          attachments: item.attachments,
+          attachmentIds,
+          model: modelId || undefined,
+          reasoningEffort: canThink ? effort : undefined,
+          webSearch: canSearch ? webSearch : undefined,
+        },
+        {
+          onSuccess: () => attachments.clear(),
+          // Refused again or not taken: the words stay in the box, as a send's do.
+          onError: () => setInput((current) => current || content),
+        },
+      )
+      return
+    }
 
     if (conversationId) {
       post(conversationId, item)
@@ -569,6 +605,7 @@ export function NextChat({ conversationId }: NextChatProps) {
     canThink,
     conversationId,
     createConversation,
+    editMessage,
     effort,
     input,
     modelById,
@@ -577,6 +614,7 @@ export function NextChat({ conversationId }: NextChatProps) {
     queryClient,
     paths.chat,
     post,
+    revising,
     sendMessage,
     working,
     setPendingPrompt,
@@ -664,6 +702,7 @@ export function NextChat({ conversationId }: NextChatProps) {
       onValueChange={setInput}
       onSend={() => void handleSend()}
       onStop={handleStop}
+      note={revising ? t('chat.revise.label') : undefined}
       working={working}
       disabled={createConversation.isPending}
       modelSlot={
@@ -727,7 +766,8 @@ export function NextChat({ conversationId }: NextChatProps) {
                   {turn.kind === 'user' ? (
                     <UserMessage
                       message={turn.message}
-                      onEdit={!working && !outgoing ? (content) => editQuestion(turn.message, content) : undefined}
+                      // The refused message that ends the conversation is edited in the composer.
+                      onEdit={!working && !outgoing && turn.message.id !== revising?.id ? (content) => editQuestion(turn.message, content) : undefined}
                       restoredDraft={refusedEdit?.id === turn.message.id ? refusedEdit.content : undefined}
                       onDraftDone={() => setRefusedEdit(null)}
                     />

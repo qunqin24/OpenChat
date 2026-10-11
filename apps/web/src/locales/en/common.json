@@ -95,6 +95,9 @@
       "warning-guest_one": "{{count}} more within {{hours}} hours and guest mode will be closed to you.",
       "warning-guest_other": "{{count}} more within {{hours}} hours and guest mode will be closed to you."
     },
+    "revise": {
+      "label": "Revise the refused message to send it again"
+    },
     "send-error": {
       "conversation_busy": "The previous reply is still being written. Wait for it, or stop it first.",
       "no_models": "No model is available yet. An administrator has to enable one in a channel.",
@@ -114,6 +117,8 @@
       "guest_unreachable": "The server could not be reached, so nothing was sent.",
       "model_capacity_reached": "This model has reached its maximum capacity.",
       "content_blocked": "This message did not pass content moderation and was not sent.",
+      "revise_refused": "The last message was refused by content moderation. Revise it before going on.",
+      "attachments_not_editable": "Files can only be added when revising a refused message.",
       "moderation_unavailable": "Content moderation is unavailable right now, so the message was not sent. Try again in a moment.",
       "message_too_large_for_moderation": "This message is too large to be checked by content moderation, so it was not sent. Shorten the text or attach fewer or smaller images.",
       "too_many_runs": "Too many answers are being written at once. Wait for one to finish, or stop one, and try again."
