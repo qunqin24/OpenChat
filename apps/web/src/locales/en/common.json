@@ -104,6 +104,8 @@
       "guest_daily_limit": "Guests have used up today's requests. Try again later, or sign in.",
       "guest_unreachable": "The server could not be reached, so nothing was sent.",
       "model_capacity_reached": "This model has reached its maximum capacity.",
+      "content_blocked": "This message did not pass content moderation and was not sent.",
+      "moderation_unavailable": "Content moderation is unavailable right now, so the message was not sent. Try again in a moment.",
       "too_many_runs": "Too many answers are being written at once. Wait for one to finish, or stop one, and try again."
     },
     "thinking": {
@@ -1083,6 +1085,7 @@
       "kind-chat": "Chat",
       "kind-title": "Title",
       "kind-compression": "Compression",
+      "kind-moderation": "Moderation",
       "from": "From date",
       "to": "To date",
       "search-model": "Search models…",
@@ -1254,6 +1257,14 @@
     "notice-unsaved": "Guest mode: this browser would not let the page store anything, so conversations are lost when you reload",
     "sign-in": "Sign in",
     "name": "Guest",
-    "menu-hint": "Not signed in"
+        "menu-hint": "Not signed in",
+    "banned": {
+      "title": "You've been banned",
+      "subtitle": "Guest mode is no longer available",
+      "text": "This network address has been banned from guest mode for sending content that breaks the rules.\nIf you have an account, you can sign in to keep using the app.",
+      "until": "Banned until {{time}}",
+      "permanent": "This ban has no end date.",
+      "sign-in": "Sign in"
+    }
   }
 }

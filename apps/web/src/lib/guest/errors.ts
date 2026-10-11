@@ -9,6 +9,8 @@ export class GuestError extends Error {
     readonly code: string,
     message: string,
     readonly field?: string,
+    /** What the server added to the refusal (`content_blocked` names categories, `guest_banned` when it ends). */
+    readonly details?: Record<string, unknown>,
   ) {
     super(message)
     this.name = 'GuestError'
@@ -16,7 +18,12 @@ export class GuestError extends Error {
 
   toResponse(): Response {
     return Response.json(
-      { code: this.code, message: this.message, ...(this.field ? { field: this.field } : {}) },
+      {
+        code: this.code,
+        message: this.message,
+        ...(this.field ? { field: this.field } : {}),
+        ...(this.details ? { details: this.details } : {}),
+      },
       { status: this.status },
     )
   }

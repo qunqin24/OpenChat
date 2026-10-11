@@ -109,6 +109,7 @@ export function UsageLogsToolbar<TData>({
           <SelectItem value="chat">{t('admin.usage.kind-chat')}</SelectItem>
           <SelectItem value="title">{t('admin.usage.kind-title')}</SelectItem>
           <SelectItem value="compression">{t('admin.usage.kind-compression')}</SelectItem>
+          <SelectItem value="moderation">{t('admin.usage.kind-moderation')}</SelectItem>
         </SelectContent>
       </Select>
 

@@ -326,6 +326,6 @@ export class GuestRunner {
 
 /** A refusal of the server, or a connection that did not happen, as the answer to the page's own request. */
 function asGuestError(error: unknown): GuestError {
-  if (isOpenChatError(error)) return new GuestError(error.status, error.code, error.message, error.field)
+  if (isOpenChatError(error)) return new GuestError(error.status, error.code, error.message, error.field, error.details)
   return new GuestError(502, 'guest_unreachable', 'the server could not be reached')
 }

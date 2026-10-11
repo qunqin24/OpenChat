@@ -3,6 +3,8 @@ import type { GuestConfig } from '@openchat/api-client'
 import { API_BASE_URL } from '@/lib/api-base'
 import { queryClient } from '@/lib/query'
 import { queryKeys } from '@/lib/query-keys'
+import { markGuestBanned } from '@/stores/guest-ban-store'
+import { bannedUntil } from './ban'
 import { GuestHub } from './hub'
 import { isGuestMode } from './mode'
 import { setStorageKept } from './kept'
@@ -34,7 +36,22 @@ let configLoad: Promise<GuestConfig> | undefined
 const CONFIG_TTL_MS = 30_000
 
 /** Every request to the network goes through here, never through the page's own fetch (which would serve it locally). */
-const network: typeof globalThis.fetch = (input, init) => globalThis.fetch(input, init)
+const network: typeof globalThis.fetch = async (input, init) => {
+  const response = await globalThis.fetch(input, init)
+  // A banned address is refused by every guest endpoint; the shell is told, and
+  // covers the page.
+  if (response.status === 403) {
+    void response
+      .clone()
+      .json()
+      .then((body: unknown) => {
+        const until = bannedUntil(body)
+        if (until !== undefined) markGuestBanned(until)
+      })
+      .catch(() => undefined)
+  }
+  return response
+}
 
 async function loadConfig(): Promise<GuestConfig> {
   if (config && Date.now() - config.at < CONFIG_TTL_MS) return config.value

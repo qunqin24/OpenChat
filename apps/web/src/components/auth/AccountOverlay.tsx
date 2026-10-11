@@ -127,6 +127,31 @@ export function BannedScreen({ admin, onBack }: { admin?: AdminContact; onBack: 
 }
 
 /**
+ * A guest whose network address is banned from guest mode (content moderation):
+ * the same frosted cover as a disabled account's, over the whole window. The
+ * one way on is to sign in, if they have an account; the page behind asks the
+ * server for nothing more.
+ */
+export function GuestBannedScreen({ until, onSignIn }: { until: string | null; onSignIn: () => void }) {
+  const { t, i18n } = useTranslation()
+  const when = until ? new Date(until) : null
+  return (
+    <AccountOverlay
+      title={t('guest.banned.title')}
+      subtitle={t('guest.banned.subtitle')}
+      text={t('guest.banned.text')}
+      status={
+        when && !Number.isNaN(when.getTime())
+          ? t('guest.banned.until', { time: when.toLocaleString(i18n.language) })
+          : t('guest.banned.permanent')
+      }
+      action={{ label: t('guest.banned.sign-in'), onClick: onSignIn }}
+      onEscape={() => undefined}
+    />
+  )
+}
+
+/**
  * An account waiting for an administrator: after registering in approval mode,
  * or signing in before approval. "Check again" signs in with the credentials
  * just used - if the account has been approved meanwhile, that is the way in;

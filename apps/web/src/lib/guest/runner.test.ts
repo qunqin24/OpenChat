@@ -164,6 +164,34 @@ describe('a send', () => {
     expect(t.runner.isRunning(c)).toBe(false)
   })
 
+  it('passes a content moderation refusal on with what the server said, and keeps an edited question', async () => {
+    let refuse = false
+    const t = setup((request) =>
+      refuse
+        ? Response.json(
+            { code: 'content_blocked', message: 'no', details: { categories: ['violence/graphic'] } },
+            { status: 422 },
+          )
+        : sse(answered(request.conversationId, request)),
+    )
+    const c = await t.h.conversation()
+    await t.runner.start(c, { action: 'send', content: 'one', attachmentIds: [], id: 'in-1' }, {})
+    await t.runner.settled(c)
+    refuse = true
+    const send = t.runner.start(c, { action: 'send', content: 'two', attachmentIds: [], id: 'in-2' }, {})
+    await expect(send).rejects.toMatchObject({ status: 422, code: 'content_blocked', details: { categories: ['violence/graphic'] } })
+    // The page reads it as the server's own refusal.
+    await send.catch((error: { toResponse: () => Response }) => {
+      const response = error.toResponse()
+      return response.json().then((body) => expect(body.details).toEqual({ categories: ['violence/graphic'] }))
+    })
+    // Refused edit: the question and its answer stay.
+    await expect(t.runner.start(c, { action: 'edit', content: 'x', messageId: 'in-1', id: 'in-3' }, {})).rejects.toMatchObject({
+      code: 'content_blocked',
+    })
+    expect((await t.h.repo.listMessages(c, {})).items.map((m) => `${m.role}:${m.content}`)).toEqual(['user:one', 'assistant:Hello'])
+  })
+
   it('records a stream that ends without its last frame as a failed run', async () => {
     const t = setup((request) => sse(answered(request.conversationId, request).slice(0, 2)))
     const c = await t.h.conversation()

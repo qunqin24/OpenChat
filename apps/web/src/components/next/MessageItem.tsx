@@ -51,10 +51,32 @@ function CopyButton({ content }: { content: string }) {
  * be edited in place (`onEdit`): the bubble becomes a field, and sending it
  * asks the question again in the new words, replacing it and the turns after it.
  */
-export function UserMessage({ message, onEdit }: { message: Message; onEdit?: (content: string) => void }) {
+export function UserMessage({
+  message,
+  onEdit,
+  restoredDraft,
+  onDraftDone,
+}: {
+  message: Message
+  onEdit?: (content: string) => void
+  /**
+   * The wording of an edit the server refused (content moderation, a limit):
+   * the field opens with it again, so what was typed is not lost. The turn
+   * itself was hidden while the edit was out, so this is not kept in the field's
+   * own state.
+   */
+  restoredDraft?: string
+  /** The field was sent or put away: the restored wording is no longer wanted. */
+  onDraftDone?: () => void
+}) {
   const { t } = useTranslation()
-  const [draft, setDraft] = useState<string | null>(null)
+  const [typed, setTyped] = useState<string | null>(null)
+  const draft = typed ?? restoredDraft ?? null
   const files = message.attachments && message.attachments.length > 0 && <MessageAttachments items={message.attachments} />
+  const closeField = () => {
+    setTyped(null)
+    onDraftDone?.()
+  }
 
   if (draft !== null) {
     return (
@@ -62,12 +84,12 @@ export function UserMessage({ message, onEdit }: { message: Message; onEdit?: (c
         {files}
         <EditField
           value={draft}
-          onChange={setDraft}
-          onCancel={() => setDraft(null)}
+          onChange={setTyped}
+          onCancel={closeField}
           onSubmit={
             onEdit &&
             ((content) => {
-              setDraft(null)
+              closeField()
               onEdit(content)
             })
           }
@@ -83,7 +105,7 @@ export function UserMessage({ message, onEdit }: { message: Message; onEdit?: (c
       <div className="n-actions">
         <CopyButton content={message.content} />
         {onEdit && (
-          <button type="button" className="n-icon-btn sm" aria-label={t('chat.edit')} onClick={() => setDraft(message.content)}>
+          <button type="button" className="n-icon-btn sm" aria-label={t('chat.edit')} onClick={() => setTyped(message.content)}>
             <Pencil className="h-3.5 w-3.5" />
           </button>
         )}

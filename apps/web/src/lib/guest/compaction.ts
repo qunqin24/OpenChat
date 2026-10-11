@@ -56,7 +56,7 @@ export async function compactGuestConversation(deps: CompactionDeps, conversatio
   }
   if (!response.ok) {
     const error = (await response.json().catch(() => undefined)) as ApiError | undefined
-    throw new GuestError(response.status, error?.code ?? 'compaction_failed', error?.message ?? 'the model did not write a summary', error?.field)
+    throw new GuestError(response.status, error?.code ?? 'compaction_failed', error?.message ?? 'the model did not write a summary', error?.field, error?.details)
   }
   const written = (await response.json()) as GuestCompactResponse
 

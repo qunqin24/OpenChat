@@ -104,6 +104,8 @@
       "guest_daily_limit": "今天游客的总请求次数已用完，请稍后再试，或登录后继续使用。",
       "guest_unreachable": "连不上服务器，消息没有发出去。",
       "model_capacity_reached": "此模型已达到最大容量。",
+      "content_blocked": "这条消息未通过内容审核，没有发送。",
+      "moderation_unavailable": "内容审核暂时不可用，消息没有发送，请稍后重试。",
       "too_many_runs": "同时进行的回答太多了，请等其中一个完成，或停止一个后再试。"
     },
     "thinking": {
@@ -1083,6 +1085,7 @@
       "kind-chat": "对话",
       "kind-title": "标题",
       "kind-compression": "压缩",
+      "kind-moderation": "内容审核",
       "from": "开始日期",
       "to": "结束日期",
       "search-model": "搜索模型…",
@@ -1254,6 +1257,14 @@
     "notice-unsaved": "游客模式：这个浏览器不允许此页面保存数据，刷新后对话会丢失",
     "sign-in": "登录",
     "name": "游客",
-    "menu-hint": "未登录"
+        "menu-hint": "未登录",
+    "banned": {
+      "title": "你已被封禁",
+      "subtitle": "游客模式已不可用",
+      "text": "当前网络地址因发送违规内容，已被禁止使用游客模式。\n如果你有账号，可以登录后继续使用。",
+      "until": "封禁至 {{time}}",
+      "permanent": "此封禁没有到期时间。",
+      "sign-in": "登录"
+    }
   }
 }

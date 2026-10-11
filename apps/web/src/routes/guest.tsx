@@ -5,6 +5,7 @@ import { guestStatusQueryOptions } from '@/hooks/use-guest'
 import { chatFeaturesQueryOptions, chatModelsQueryOptions } from '@/hooks/use-chat-models'
 import { conversationsQueryOptions } from '@/hooks/use-conversations'
 import { isSettingsTab, type SettingsTab } from '@/lib/settings'
+import { markGuestBanned } from '@/stores/guest-ban-store'
 
 /**
  * The chat for someone with no account. Same shell as `_authed`, but the
@@ -17,9 +18,14 @@ export const Route = createFileRoute('/guest')({
     isSettingsTab(search.settings) ? { settings: search.settings } : {},
   beforeLoad: async ({ context }) => {
     const { queryClient } = context
-    const status = await queryClient.ensureQueryData(guestStatusQueryOptions).catch(() => ({ enabled: false }))
+    const status = await queryClient
+      .ensureQueryData(guestStatusQueryOptions)
+      .catch(() => ({ enabled: false, banned: false, bannedUntil: null }))
     // Off: there is nothing here, and the sign-in page is where to go.
     if (!status.enabled) throw redirect({ to: '/login', search: {} })
+    // Banned: the shell covers the page and says so; the pages behind it ask
+    // nothing more of the server.
+    if (status.banned) markGuestBanned(status.bannedUntil ?? null)
     // Opens the browser's storage now rather than on the first message, so the
     // notice can say early if conversations will not be kept. Loaded here, not
     // imported, so an account never downloads the guest code.

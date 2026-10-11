@@ -289,15 +289,22 @@ export function NextChat({ conversationId }: NextChatProps) {
   // after it are deleted, and the new wording goes on the end.
   const editQuestion = (message: Message, content: string) => {
     parked.current = true
-    editMessage.mutate({
-      messageId: message.id,
-      content,
-      attachments: message.attachments ?? [],
-      model: modelId || undefined,
-      reasoningEffort: canThink ? effort : undefined,
-      webSearch: canSearch ? webSearch : undefined,
-    })
+    setRefusedEdit(null)
+    editMessage.mutate(
+      {
+        messageId: message.id,
+        content,
+        attachments: message.attachments ?? [],
+        model: modelId || undefined,
+        reasoningEffort: canThink ? effort : undefined,
+        webSearch: canSearch ? webSearch : undefined,
+      },
+      // Refused (content moderation, a limit): the question is back as it was,
+      // and the field reopens with the words that were typed.
+      { onError: () => setRefusedEdit({ id: message.id, content }) },
+    )
   }
+  const [refusedEdit, setRefusedEdit] = useState<{ id: string; content: string } | null>(null)
 
   const isEmpty = !outgoing && (!conversationId || (!messages.isPending && turns.length === 0))
 
@@ -654,6 +661,8 @@ export function NextChat({ conversationId }: NextChatProps) {
                     <UserMessage
                       message={turn.message}
                       onEdit={!working && !outgoing ? (content) => editQuestion(turn.message, content) : undefined}
+                      restoredDraft={refusedEdit?.id === turn.message.id ? refusedEdit.content : undefined}
+                      onDraftDone={() => setRefusedEdit(null)}
                     />
                   ) : (
                     <AssistantTurn

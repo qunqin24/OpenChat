@@ -16,6 +16,8 @@ const SEND_ERRORS = [
   'no_models',
   'model_unavailable',
   'model_capacity_reached',
+  'content_blocked',
+  'moderation_unavailable',
   'too_many_runs',
   'too_many_attachments',
   'attachments_too_large',
