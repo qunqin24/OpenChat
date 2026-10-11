@@ -109,7 +109,8 @@ grep -rn -- "--n-\|prism-next" apps/web/src/features/admin apps/web/src/componen
 - 游客必须在这些地方被排除：登录（`GetUserByLogin`）、管理员用户列表和计数、仪表盘总用户数/活跃用户、「第一个注册的成为管理员」的计数、启动时恢复 run（`ListRunningRuns`）、事后标题（`TitleAfterRun`）。新写查全体用户的查询时都要想想 `NOT guest`。
 - 用量日志保留游客的请求：用户删除后 `user_id` 变 NULL，而账号从不删除，所以没有主人的行就是游客的，界面标「游客」。游客的 run 进行中，查询的 JOIN 排除 guest 行，同样读作无主人。
 - 断开连接就取消 run（`stopGuestRun`）并清理；清理循环里 `sweepGuests` 删超过 2 小时的游客用户（进程中途死掉的残留），文件一并收走。`POST /guest/runs/{id}/cancel` 以 run id 为凭据（只有发起的页面知道）。
-- `storage.Backend` 有 `PutObject`（服务器自己持有的字节），游客附件走它，key 在 `uploads/guest/…`；孤儿清扫只看没有行的文件，游客的行在 run 期间一直在。
+- `storage.Backend` 有 `PutObject`（服务器自己持有的字节），游客附件走它，key 是 `uploads/guest/<日期>/<每个文件现生成的 uuid><扩展名>`（`guestFileKey`，写文件时才定）；孤儿清扫只看没有行的文件，游客的行在 run 期间一直在。**key 里绝不放浏览器给的 id**：重复请求（两个标签页、连点两次）带着同样的附件 id，若 key 由它决定，被拒的那个请求在失败清理里删的就是先到的、已被接受的请求正在用的文件。每个请求、每个文件的 key 都是自己的，清理才只可能删到自己写的东西。
+- 游客的记忆在 `user_memories` 里的 id 是请求自己的，**不是浏览器的**：`user_memories.id` 是全表主键，同一个浏览器的两个对话同时发请求、带同一份记忆，若用浏览器的 id 插入，第二个会撞主键，被误报成 `conversation_busy`。所以浏览器给的每个记忆 id（记忆列表里的，和它带来的快照里 `memories`/`added` 的）都换成这个请求新生成的 id 再入库（`guestIDs`，`api/guest_ids.go`；按发来的顺序生成 uuid v7，列表按 id 排序时保持原来的次序），凡是离开服务器的帧都把它们换回去：发出前对编码后的 JSON 整体替换（流里的批次、重发的快照、工具结果的 `details.memoryId`、最后一帧的快照/记忆/记忆日志），所以以后哪个字段又带了记忆 id 也不会漏。浏览器看到的永远是它发出去的 id；模型在 run 里新建的记忆没有浏览器的 id，用服务器给的 uuid 原样交给浏览器，浏览器照常存、下次照常带回（到时又被换成那次请求自己的 id）。模型看到的只有 `m1…` 这样的短 id，不含真 id。其余由浏览器指定的 id（对话、消息、附件、`continues` 的 run）是故意留着的：对话 id 撞了就是「同一个对话同时在两处发」，得到 `conversation_busy`；浏览器对每条消息、每个附件都 `crypto.randomUUID()`，不同对话之间不会重复。新增由浏览器指定、又落在全表主键上的 id 时要想清楚：能不能撞上同一浏览器的另一个对话。
 
 ### 前端（`lib/guest/`）
 

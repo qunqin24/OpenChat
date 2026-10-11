@@ -105,11 +105,14 @@ type guestPlan struct {
 	temporary bool
 	titled    bool
 	memories  []GuestMemory
-	snapshot  []byte
-	summary   *ContextSummary
-	memoryOn  bool
-	about     string
-	style     string
+	// ids translates between the browser's memory ids and the ones the staged
+	// rows have (see guestIDs).
+	ids      *guestIDs
+	snapshot []byte
+	summary  *ContextSummary
+	memoryOn bool
+	about    string
+	style    string
 	// For an answer: the result to record, and the run it joins.
 	result llm.ToolResultPart
 	head   uuid.UUID
@@ -199,7 +202,7 @@ func (s *Server) stopGuestRun(runID uuid.UUID) {
 // planGuestRun checks a request, and settles the model, before anything is
 // written: every refusal a person can act on is made here.
 func (s *Server) planGuestRun(ctx context.Context, body GuestRunRequest) (*guestPlan, error) {
-	plan := &guestPlan{req: body, temporary: body.Temporary != nil && *body.Temporary, titled: body.Titled != nil && *body.Titled}
+	plan := &guestPlan{req: body, temporary: body.Temporary != nil && *body.Temporary, titled: body.Titled != nil && *body.Titled, ids: newGuestIDs()}
 	switch body.Action {
 	case "send", "regenerate", "answer":
 	default:
@@ -231,6 +234,9 @@ func (s *Server) planGuestRun(ctx context.Context, body GuestRunRequest) (*guest
 				return nil, guestBad("invalid_memory", "a memory is empty, too long or repeated")
 			}
 			ids[m.Id] = true
+			// In the order sent: the staged ids ascend, and the list is read by id (ListMemories)
+			// among rows written at one instant.
+			plan.ids.server(m.Id)
 			m.Content = content
 			plan.memories = append(plan.memories, m)
 		}
@@ -245,6 +251,14 @@ func (s *Server) planGuestRun(ctx context.Context, body GuestRunRequest) (*guest
 		var snap memory.Snapshot
 		if err := json.Unmarshal(raw, &snap); err != nil {
 			return nil, guestBad("invalid_snapshot", "memorySnapshot is not a snapshot")
+		}
+		// Its ids are the browser's; the rows the run reads are staged under
+		// their own (guestIDs), and the snapshot has to name those.
+		for i := range snap.Memories {
+			snap.Memories[i].ID = plan.ids.server(snap.Memories[i].ID)
+		}
+		for i := range snap.Added {
+			snap.Added[i].ID = plan.ids.server(snap.Added[i].ID)
 		}
 		if plan.snapshot, err = json.Marshal(snap); err != nil {
 			return nil, err
@@ -340,6 +354,7 @@ func (s *Server) planGuestRun(ctx context.Context, body GuestRunRequest) (*guest
 		return nil, err
 	}
 	plan.choice = choice
+	plan.ids.seal()
 	if plan.input != nil && len(plan.input.files) > 0 {
 		settings, err := loadModelSettings(ctx, s.q, choice.modelID)
 		if err != nil {
@@ -424,8 +439,18 @@ func guestFileOf(f GuestAttachment, seen map[uuid.UUID]bool, total *int64) (gues
 	if file.size <= 0 || file.size > limit {
 		return file, errAttachmentsTooLarge
 	}
-	file.key = fmt.Sprintf("uploads/guest/%s/%s%s", time.Now().UTC().Format("2006/01/02"), file.id, keyExt(file.filename))
+	// The key is given when the file is written (seedGuest).
 	return file, nil
+}
+
+// guestFileKey is where a file of one request is stored. The name carries a
+// fresh id and nothing of the browser's: the browser chooses its ids, a
+// duplicate request (two tabs, a double submit) carries the same ones, and a key
+// both of them wrote would be deleted by whichever is refused, taking the file
+// out from under the one that was accepted. Every file of every request gets a
+// key no other has; the date keeps the layout of the other uploads.
+func guestFileKey(file guestFile) string {
+	return fmt.Sprintf("uploads/guest/%s/%s%s", time.Now().UTC().Format("2006/01/02"), uuid.NewString(), keyExt(file.filename))
 }
 
 // inputPartsOf is a user message: its text, then its files as references (see
@@ -590,6 +615,7 @@ func (s *Server) seedGuest(ctx context.Context, plan *guestPlan) (st *guestRunSt
 			file.key = "uploads/guest/unsent/" + file.id.String()
 			continue
 		}
+		file.key = guestFileKey(*file)
 		if err := s.store.PutObject(ctx, file.key, file.contentType, file.data); err != nil {
 			return nil, err
 		}
@@ -616,7 +642,7 @@ func (s *Server) seedGuest(ctx context.Context, plan *guestPlan) (st *guestRunSt
 			return err
 		}
 		for _, m := range plan.memories {
-			id := m.Id
+			id := plan.ids.server(m.Id)
 			source := memory.SourceUser
 			if m.Source != nil && *m.Source == MemorySource(memory.SourceModel) {
 				source = memory.SourceModel
@@ -835,7 +861,7 @@ func (s *Server) followGuestRun(ctx context.Context, sse *httpx.SSEWriter, sub *
 		slog.ErrorContext(ctx, "guest end", "error", err)
 		return
 	}
-	_ = sse.Event(end)
+	_ = plan.ids.send(sse, end)
 }
 
 // guestTitleAfterRun names the conversation from the exchange just made, as an
@@ -928,7 +954,7 @@ func sendGuestBatch(sse *httpx.SSEWriter, batch agent.Batch, plan *guestPlan) er
 			events = append(events, mapped)
 		}
 	}
-	return sse.Event(BatchEvent{Type: Batch, RunId: batch.RunID, Version: batch.Version, Events: events})
+	return plan.ids.send(sse, BatchEvent{Type: Batch, RunId: batch.RunID, Version: batch.Version, Events: events})
 }
 
 func guestRunEvent(event agent.Event, plan *guestPlan) (RunEvent, bool) {
@@ -972,5 +998,5 @@ func (s *Server) sendGuestSnapshot(ctx context.Context, sse *httpx.SSEWriter, ru
 		message.ProviderState = providerState(row)
 		snapshot.Messages = append(snapshot.Messages, message)
 	}
-	return sse.Event(snapshot)
+	return plan.ids.send(sse, snapshot)
 }

@@ -36,6 +36,12 @@ func (s *SSEWriter) Event(v any) error {
 	if err != nil {
 		return fmt.Errorf("sse: marshal event: %w", err)
 	}
+	return s.Frame(payload)
+}
+
+// Frame writes an already-encoded JSON payload as one `data:` frame, for a
+// caller that has to rewrite what Event would have marshalled.
+func (s *SSEWriter) Frame(payload []byte) error {
 	if _, err := fmt.Fprintf(s.w, "data: %s\n\n", payload); err != nil {
 		return fmt.Errorf("sse: write event: %w", err)
 	}
