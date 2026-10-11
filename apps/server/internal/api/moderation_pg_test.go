@@ -50,45 +50,81 @@ func newFakeModeration(t *testing.T) *fakeModeration {
 	f := &fakeModeration{t: t}
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
+		// The input is an array of strings (one result each) or of multi-modal
+		// items (one result for all of them), as the real endpoint takes it.
 		var req struct {
-			Model string `json:"model"`
-			Input []struct {
-				Type     string `json:"type"`
-				Text     string `json:"text"`
-				ImageURL struct {
-					URL string `json:"url"`
-				} `json:"image_url"`
-			} `json:"input"`
+			Model string            `json:"model"`
+			Input []json.RawMessage `json:"input"`
 		}
 		if err := json.Unmarshal(raw, &req); err != nil || r.URL.Path != "/v1/moderations" || req.Model != "omni-moderation-latest" {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
+		type item struct {
+			Type     string `json:"type"`
+			Text     string `json:"text"`
+			ImageURL struct {
+				URL string `json:"url"`
+			} `json:"image_url"`
+		}
+		var items []item
+		plain := true
+		for _, part := range req.Input {
+			var text string
+			if json.Unmarshal(part, &text) == nil {
+				items = append(items, item{Type: "text", Text: text})
+				continue
+			}
+			var it item
+			if err := json.Unmarshal(part, &it); err != nil {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
+			plain = false
+			items = append(items, it)
+		}
 		var texts []string
 		var images [][]byte
-		flagged := map[string]bool{}
-		scores := map[string]float64{}
-		for _, item := range req.Input {
-			switch item.Type {
+		// flaggedOf is what one input is flagged for.
+		type verdict struct {
+			flagged map[string]bool
+			scores  map[string]float64
+		}
+		classify := func(it item, v verdict) {
+			switch it.Type {
 			case "text":
-				texts = append(texts, item.Text)
-				if strings.Contains(item.Text, "BLOCKME") {
-					flagged["violence/graphic"], scores["violence/graphic"] = true, 0.95
+				if strings.Contains(it.Text, "BLOCKME") {
+					v.flagged["violence/graphic"], v.scores["violence/graphic"] = true, 0.95
 				}
-				if strings.Contains(item.Text, "SEXMINOR") {
-					flagged["sexual/minors"], scores["sexual/minors"] = true, 0.9
+				if strings.Contains(it.Text, "SEXMINOR") {
+					v.flagged["sexual/minors"], v.scores["sexual/minors"] = true, 0.9
 				}
-				if strings.Contains(item.Text, "SOFTSCORE") {
-					scores["hate"] = 0.6
+				if strings.Contains(it.Text, "SOFTSCORE") {
+					v.scores["hate"] = 0.6
 				}
 			case "image_url":
-				_, data, _ := strings.Cut(item.ImageURL.URL, ";base64,")
+				_, data, _ := strings.Cut(it.ImageURL.URL, ";base64,")
 				decoded, _ := base64.StdEncoding.DecodeString(data)
-				images = append(images, decoded)
 				if strings.Contains(string(decoded), "BADIMG") {
-					flagged["sexual"], scores["sexual"] = true, 0.99
+					v.flagged["sexual"], v.scores["sexual"] = true, 0.99
 				}
 			}
+		}
+		var verdicts []verdict
+		combined := verdict{map[string]bool{}, map[string]float64{}}
+		for _, it := range items {
+			switch it.Type {
+			case "text":
+				texts = append(texts, it.Text)
+			case "image_url":
+				_, data, _ := strings.Cut(it.ImageURL.URL, ";base64,")
+				decoded, _ := base64.StdEncoding.DecodeString(data)
+				images = append(images, decoded)
+			}
+			one := verdict{map[string]bool{}, map[string]float64{}}
+			classify(it, one)
+			classify(it, combined)
+			verdicts = append(verdicts, one)
 		}
 		f.mu.Lock()
 		f.auth = append(f.auth, r.Header.Get("Authorization"))
@@ -101,15 +137,22 @@ func newFakeModeration(t *testing.T) *fakeModeration {
 			http.Error(w, "unavailable", status)
 			return
 		}
-		categories := map[string]bool{}
-		allScores := map[string]float64{}
-		for _, c := range moderationCategories {
-			categories[string(c)] = flagged[string(c)]
-			allScores[string(c)] = scores[string(c)]
+		if !plain {
+			verdicts = []verdict{combined}
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"results": []any{map[string]any{
-			"flagged": len(flagged) > 0, "categories": categories, "category_scores": allScores,
-		}}})
+		results := make([]any, 0, len(verdicts))
+		for _, v := range verdicts {
+			categories := map[string]bool{}
+			allScores := map[string]float64{}
+			for _, c := range moderationCategories {
+				categories[string(c)] = v.flagged[string(c)]
+				allScores[string(c)] = v.scores[string(c)]
+			}
+			results = append(results, map[string]any{
+				"flagged": len(v.flagged) > 0, "categories": categories, "category_scores": allScores,
+			})
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"results": results})
 	}))
 	t.Cleanup(f.srv.Close)
 	return f

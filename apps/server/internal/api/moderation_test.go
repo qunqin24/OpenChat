@@ -119,17 +119,6 @@ func TestFirstRunes(t *testing.T) {
 	}
 }
 
-func TestClipEnds(t *testing.T) {
-	if got := clipEnds("short", 10); got != "short" {
-		t.Errorf("%q", got)
-	}
-	long := strings.Repeat("a", 30) + strings.Repeat("b", 30)
-	got := clipEnds(long, 20)
-	if got != strings.Repeat("a", 10)+"\n"+strings.Repeat("b", 10) {
-		t.Errorf("%q", got)
-	}
-}
-
 func TestContentBlockedCarriesOnlyCategories(t *testing.T) {
 	err := contentBlocked([]string{"violence/graphic"}, moderationSanction{})
 	raw, _ := json.Marshal(err)

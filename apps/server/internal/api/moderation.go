@@ -14,6 +14,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -82,9 +84,31 @@ const (
 	// moderationModelTimeout bounds a model's classification, which is a
 	// completion and takes longer.
 	moderationModelTimeout = 20 * time.Second
-	// moderationTextRunes is the most text one check reads: a message longer
-	// than this is read from its two ends.
-	moderationTextRunes = 32_000
+	// The whole text is checked, in pieces: a text longer than a piece is cut
+	// into pieces of moderationChunkRunes (moderationModelChunkRunes for a
+	// model, which reads a piece in one completion), each overlapping the one
+	// before by moderationOverlapRunes so that a sentence on the cut is whole
+	// in one of them. Nothing of it is dropped: the chat request carries all
+	// of it, so a check of its ends alone is a check that a marker in the
+	// middle gets past.
+	moderationChunkRunes      = 12_000
+	moderationModelChunkRunes = 24_000
+	moderationOverlapRunes    = 400
+	// moderationItemsPerRequest is how many pieces one request to OpenAI
+	// carries (the endpoint answers once per piece).
+	moderationItemsPerRequest = 16
+	// moderationModelMaxChunks is the most completions a message may cost in
+	// model mode (192,000 characters); a longer one cannot be checked, which
+	// takes the on-error path like any check that cannot be made.
+	moderationModelMaxChunks = 8
+	// moderationMaxRunes is the longest text that is checked at all. A longer
+	// one is refused (503 moderation_unavailable) whatever the on-error
+	// setting says and whoever sent it: it is not an outage, it is a message
+	// that could only be sent unchecked or partly checked, and a person could
+	// use that to carry anything past the check. A message this long is not a
+	// chat message; the check is off for an administrator who must send one
+	// (the exemption in the settings).
+	moderationMaxRunes = 400_000
 	// moderationMaxImages and moderationMaxImageBytes bound the images one
 	// check sends. A message with more is not checked whole, which counts as the
 	// service failing (it is not sent unchecked unless the settings say so).
@@ -149,6 +173,11 @@ func (s *Server) moderated(ctx context.Context, who moderationSubject, in modera
 	text := strings.TrimSpace(in.text)
 	if text == "" && in.images == nil {
 		return false, nil
+	}
+	if utf8.RuneCountInString(text) > moderationMaxRunes {
+		slog.WarnContext(ctx, "message too long to be moderated; it is held back", "mode", cfg.Mode, "guest", who.guest(),
+			"runes", utf8.RuneCountInString(text), "limit", moderationMaxRunes)
+		return false, errModerationUnavailable
 	}
 
 	var verdict moderationVerdict
@@ -326,7 +355,14 @@ func (s *Server) moderationHTTP() *http.Client {
 }
 
 // moderateWithOpenAI asks OpenAI's moderation endpoint (omni-moderation-latest,
-// which takes images too) about the text and the images of a message.
+// which takes images too) about the text and the images of a message - all of
+// the text. A text longer than a piece (moderationChunkRunes) goes as several
+// pieces, up to moderationItemsPerRequest to a request, and the endpoint answers
+// once per piece: a category applies if it applies to any of them, with the
+// highest score. The images, with the first piece, go as one multi-modal
+// request. A request that fails, or whose answer is not complete for every piece
+// it carried, fails the check: no part of the message is left unchecked and
+// passed as safe.
 func (s *Server) moderateWithOpenAI(ctx context.Context, cfg moderationConfig, text string, images []moderationImage) (moderationVerdict, error) {
 	verdict := newVerdict()
 	if cfg.OpenAIKey == "" {
@@ -335,24 +371,82 @@ func (s *Server) moderateWithOpenAI(ctx context.Context, cfg moderationConfig, t
 	if len(images) > moderationMaxImages {
 		return verdict, fmt.Errorf("%d images is more than one check sends", len(images))
 	}
-	items := make([]map[string]any, 0, 1+len(images))
-	if text != "" {
-		items = append(items, map[string]any{"type": "text", "text": clipEnds(text, moderationTextRunes)})
+	if utf8.RuneCountInString(text) > moderationMaxRunes {
+		return verdict, errors.New("the text is longer than a check reads")
 	}
+	var imageItems []any
 	var total int
 	for _, image := range images {
 		if total += len(image.data); total > moderationMaxImageBytes {
 			return verdict, errors.New("the images are more than one check sends")
 		}
-		items = append(items, map[string]any{"type": "image_url", "image_url": map[string]any{
+		imageItems = append(imageItems, map[string]any{"type": "image_url", "image_url": map[string]any{
 			"url": "data:" + image.contentType + ";base64," + base64.StdEncoding.EncodeToString(image.data),
 		}})
 	}
-	body, err := json.Marshal(map[string]any{"model": moderationOpenAIModel, "input": items})
-	if err != nil {
-		return verdict, err
+
+	// The requests: the images with the first piece (a multi-modal input, one
+	// answer for it), then the other pieces as plain strings (one answer each).
+	type request struct {
+		input   []any
+		answers int // how many results the endpoint owes
+	}
+	pieces := splitForModeration(text, moderationChunkRunes)
+	var requests []request
+	if len(imageItems) > 0 {
+		var input []any
+		if len(pieces) > 0 {
+			input = append(input, map[string]any{"type": "text", "text": pieces[0]})
+			pieces = pieces[1:]
+		}
+		requests = append(requests, request{input: append(input, imageItems...), answers: 1})
+	}
+	for len(pieces) > 0 {
+		n := min(len(pieces), moderationItemsPerRequest)
+		input := make([]any, n)
+		for i, piece := range pieces[:n] {
+			input[i] = piece
+		}
+		requests = append(requests, request{input: input, answers: n})
+		pieces = pieces[n:]
 	}
 
+	for _, req := range requests {
+		results, err := s.askOpenAI(ctx, cfg, req.input)
+		if err != nil {
+			return newVerdict(), err
+		}
+		// One result per piece, or the pieces cannot be told from the results
+		// (a multi-modal input may be answered with one result, or one per item).
+		if len(results) < req.answers || (req.answers > 1 && len(results) != req.answers) {
+			return newVerdict(), fmt.Errorf("the moderation endpoint returned %d results for %d inputs", len(results), req.answers)
+		}
+		for _, result := range results {
+			got, err := cfg.verdictFrom(result.Categories, result.CategoryScores)
+			if err != nil {
+				return newVerdict(), fmt.Errorf("the moderation endpoint's result is incomplete: %w", err)
+			}
+			verdict.merge(got.flagged, got.scores)
+		}
+		// Enough has been found: the rest of the text is not worth a request.
+		if len(cfg.blocked(verdict)) > 0 {
+			break
+		}
+	}
+	return verdict, nil
+}
+
+type openAIResult = struct {
+	Categories     map[string]*bool    `json:"categories"`
+	CategoryScores map[string]*float64 `json:"category_scores"`
+}
+
+// askOpenAI makes one request to the moderation endpoint and returns its results.
+func (s *Server) askOpenAI(ctx context.Context, cfg moderationConfig, input []any) ([]openAIResult, error) {
+	body, err := json.Marshal(map[string]any{"model": moderationOpenAIModel, "input": input})
+	if err != nil {
+		return nil, err
+	}
 	base := cfg.OpenAIBaseURL
 	if base == "" {
 		base = defaultModerationOpenAIBase
@@ -361,7 +455,7 @@ func (s *Server) moderateWithOpenAI(ctx context.Context, cfg moderationConfig, t
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/moderations", bytes.NewReader(body))
 	if err != nil {
-		return verdict, err
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.OpenAIKey)
@@ -369,32 +463,56 @@ func (s *Server) moderateWithOpenAI(ctx context.Context, cfg moderationConfig, t
 	if err != nil {
 		// The transport's error names the URL and never the header, but it is
 		// scrubbed of the key all the same.
-		return verdict, errors.New(strings.ReplaceAll(err.Error(), cfg.OpenAIKey, "[redacted]"))
+		return nil, errors.New(strings.ReplaceAll(err.Error(), cfg.OpenAIKey, "[redacted]"))
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, moderationMaxResponse))
 	if err != nil {
-		return verdict, err
+		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
 		// The status only: the body of a refusal can quote the key.
-		return verdict, fmt.Errorf("the moderation endpoint answered %d", resp.StatusCode)
+		return nil, fmt.Errorf("the moderation endpoint answered %d", resp.StatusCode)
 	}
 	var parsed openAIModerationResponse
 	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return verdict, fmt.Errorf("the moderation endpoint answered with something else: %w", err)
+		return nil, fmt.Errorf("the moderation endpoint answered with something else: %w", err)
 	}
 	if len(parsed.Results) == 0 {
-		return verdict, errors.New("the moderation endpoint returned no result")
+		return nil, errors.New("the moderation endpoint returned no result")
 	}
-	for _, result := range parsed.Results {
-		got, err := cfg.verdictFrom(result.Categories, result.CategoryScores)
-		if err != nil {
-			return newVerdict(), fmt.Errorf("the moderation endpoint's result is incomplete: %w", err)
+	return parsed.Results, nil
+}
+
+// splitForModeration cuts a text into pieces of at most size characters that
+// together hold all of it: each starts moderationOverlapRunes before the one
+// before ended (so a sentence on a cut is whole in one of them), and a cut is
+// moved back to whitespace when there is some in the last tenth of a piece. A
+// piece of nothing but whitespace is left out - there is nothing to check in it.
+func splitForModeration(text string, size int) []string {
+	runes := []rune(text)
+	if len(runes) <= size {
+		return []string{text}
+	}
+	var pieces []string
+	for start := 0; ; {
+		end := min(start+size, len(runes))
+		if end < len(runes) {
+			for i := end; i > end-size/10; i-- {
+				if unicode.IsSpace(runes[i-1]) {
+					end = i
+					break
+				}
+			}
 		}
-		verdict.merge(got.flagged, got.scores)
+		if piece := string(runes[start:end]); strings.TrimSpace(piece) != "" {
+			pieces = append(pieces, piece)
+		}
+		if end == len(runes) {
+			return pieces
+		}
+		start = end - moderationOverlapRunes
 	}
-	return verdict, nil
 }
 
 // firstRunes is the first n characters of text, as they are, with no ellipsis:
@@ -404,16 +522,6 @@ func firstRunes(text string, n int) string {
 		return string(runes[:n])
 	}
 	return text
-}
-
-// clipEnds keeps the first and last half of the limit of a text that is longer.
-func clipEnds(text string, limit int) string {
-	runes := []rune(text)
-	if len(runes) <= limit {
-		return text
-	}
-	half := limit / 2
-	return string(runes[:half]) + "\n" + string(runes[len(runes)-half:])
 }
 
 // -------------------------------------------------------------- by model
@@ -447,7 +555,7 @@ var messageTag = regexp.MustCompile(`(?i)<(/?)message\b`)
 // any tag of the same name in the text made inert so the message cannot close
 // its own delimiters (as the compression prompt does with the history).
 func moderationRequest(text string) string {
-	return "<message>\n" + messageTag.ReplaceAllString(clipEnds(text, moderationTextRunes), "&lt;${1}message") + "\n</message>"
+	return "<message>\n" + messageTag.ReplaceAllString(text, "&lt;${1}message") + "\n</message>"
 }
 
 // moderateWithModel has the configured catalogue model classify the text. It is
@@ -455,10 +563,20 @@ func moderationRequest(text string) string {
 // administrators is not held back, and its requests go in the ledger as kind
 // `moderation` - which a spending cap counts, and which, past the cap, leaves
 // the check unavailable.
+//
+// All of the text is read: a text longer than a piece (moderationModelChunkRunes)
+// is classified piece by piece, one metered request each, and a category applies
+// if it applies to any piece. A text that would take more than
+// moderationModelMaxChunks requests is not classified at all - not from its ends
+// alone - and the check fails, which takes the on-error path.
 func (s *Server) moderateWithModel(ctx context.Context, cfg moderationConfig, who moderationSubject, text string) (moderationVerdict, error) {
 	verdict := newVerdict()
 	if cfg.Model == "" {
 		return verdict, errors.New("no model is chosen")
+	}
+	pieces := splitForModeration(text, moderationModelChunkRunes)
+	if len(pieces) > moderationModelMaxChunks {
+		return verdict, fmt.Errorf("the text takes %d requests to classify, more than the %d one check makes", len(pieces), moderationModelMaxChunks)
 	}
 	modelID, channelID, err := s.pickChannel(ctx, cfg.Model, asker{staff: true, admin: who.admin})
 	if err != nil {
@@ -475,21 +593,38 @@ func (s *Server) moderateWithModel(ctx context.Context, cfg moderationConfig, wh
 	} else {
 		endUser = s.endUsers.Account(ctx, who.userID)
 	}
-	maxTokens := 4096 // room for a reasoning model's thinking before the JSON
 	session := ""
 	if who.conversationID != nil {
 		session = who.conversationID.String()
 	}
-	request := llm.Request{
-		Model: modelID,
-		Messages: []llm.Message{
-			llm.TextMessage(llm.RoleSystem, moderationPrompt),
-			llm.TextMessage(llm.RoleUser, moderationRequest(text)),
-		},
-		Options: llm.Options{MaxTokens: &maxTokens, Reasoning: leastThinking(ctx, s.q, modelID)},
-		Session: session,
-		User:    endUser,
+	maxTokens := 4096 // room for a reasoning model's thinking before the JSON
+	reasoning := leastThinking(ctx, s.q, modelID)
+	for _, piece := range pieces {
+		request := llm.Request{
+			Model: modelID,
+			Messages: []llm.Message{
+				llm.TextMessage(llm.RoleSystem, moderationPrompt),
+				llm.TextMessage(llm.RoleUser, moderationRequest(piece)),
+			},
+			Options: llm.Options{MaxTokens: &maxTokens, Reasoning: reasoning},
+			Session: session,
+			User:    endUser,
+		}
+		got, err := s.classify(ctx, cfg, who, channelID, client, request)
+		if err != nil {
+			return newVerdict(), err
+		}
+		verdict.merge(got.flagged, got.scores)
+		// Enough has been found: the rest of the text is not worth a request.
+		if len(cfg.blocked(verdict)) > 0 {
+			break
+		}
 	}
+	return verdict, nil
+}
+
+// classify is one metered request to the classifier, read as a verdict.
+func (s *Server) classify(ctx context.Context, cfg moderationConfig, who moderationSubject, channelID uuid.UUID, client llm.ModelClient, request llm.Request) (moderationVerdict, error) {
 	ctx, cancel := context.WithTimeout(ctx, moderationModelTimeout)
 	defer cancel()
 	meter := s.usage.Begin(ledger.Call{
@@ -497,20 +632,20 @@ func (s *Server) moderateWithModel(ctx context.Context, cfg moderationConfig, wh
 		UserID:         who.userID,
 		ConversationID: who.conversationID,
 		ChannelID:      &channelID,
-		ModelID:        modelID,
+		ModelID:        request.Model,
 		InputEstimate:  llm.EstimateInput(request),
 	}, nil)
 	defer meter.Release()
 	if err := meter.Reserve(ctx); err != nil {
 		if errors.Is(err, ledger.ErrCapacity) {
-			return verdict, errModelCapacity
+			return newVerdict(), errModelCapacity
 		}
-		return verdict, err
+		return newVerdict(), err
 	}
 	resp, err := client.Stream(ctx, request, meter.Wrap(nil))
 	meter.End(ctx, resp, err)
 	if err != nil {
-		return verdict, err
+		return newVerdict(), err
 	}
 	return parseModelVerdict(cfg, resp.Message.Text())
 }
