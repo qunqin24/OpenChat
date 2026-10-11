@@ -67,8 +67,16 @@ The server is a Go program with the web app embedded in the binary, and PostgreS
 ### Accounts and sign-up
 
 - **Sign-up control.** Two admin switches, "allow registration" and "new users need approval" (both on by default), give three modes: **closed**, **open** and **approval**. **The first account to register becomes the administrator**, whatever the switches say.
+- A pending or disabled account signing in sees a full-window notice with the administrator to contact.
 - Sign-in and sign-up attempts are rate-limited per IP.
 - Sessions use an HttpOnly cookie, and the database stores only a hash of the token.
+
+### Spend and safety
+
+- **Per-model spending caps.** A dollar cap per model over a total, monthly or daily period; once reached the model is closed to users (administrators can be exempt). Spend comes from the usage log; a request stopped midway, or one whose provider reported no usage, is charged an estimate and marked as such.
+- **Answers at once.** Each account (3 by default) and each guest address (2 by default) can have only so many answers being written at the same time; administrators are exempt.
+- **Content moderation.** User input and images are checked before they reach the upstream (OpenAI Moderation or a model of your choice), blocking only high-risk categories. A blocked request writes nothing and goes into the moderation log; repeat offenders are disabled automatically, and guests are banned by address for a while. Off by default.
+- **End-user identifiers.** Requests to the official APIs carry a non-reversible identifier of the user, so a provider that finds abuse can tell which user it was rather than blaming the whole account.
 
 ### Admin panel
 
