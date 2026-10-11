@@ -402,7 +402,8 @@
       "models": "Models",
       "web-search": "Web search",
       "storage": "File storage",
-      "usage-logs": "Usage logs"
+      "usage-logs": "Usage logs",
+      "moderation-logs": "Moderation log"
     },
     "dashboard": {
       "subtitle": "Volume, spend and reliability of model requests",
@@ -669,7 +670,7 @@
         "lang-en": "English"
       },
       "system": {
-        "tabs": {"general": "General", "chat": "Chat", "access": "Access", "data": "Data"},
+        "tabs": {"general": "General", "chat": "Chat", "access": "Access", "moderation": "Moderation", "data": "Data"},
         "title": "System",
         "subtitle": "Server-wide settings. They apply to everyone.",
         "debug": "Debug mode",
@@ -1062,6 +1063,116 @@
       "save": "Save settings",
       "saved": "File storage settings saved",
       "save-failed": "Could not save. Try again."
+    },
+    "moderation": {
+      "intro": "Every message and image a user sends goes out under your upstream accounts (OpenAI, Anthropic, a relay), and abusive content can get those accounts banned. With moderation on, each new message is checked before it is sent to a model: one that fails is refused and logged, and someone who keeps failing has their account disabled or their guest address banned. Only what a user newly sends is checked (sending, editing, answering the model's question, a guest's message) - not tool results, web pages, earlier turns or titles.",
+      "open-log": "Open the moderation log",
+      "mode": {
+        "off": "Off",
+        "off-hint": "No message is checked.",
+        "openai": "OpenAI's moderation endpoint",
+        "openai-hint": "Sends the text and images to OpenAI's moderation endpoint (omni-moderation-latest). Free, about a second; needs an OpenAI API key.",
+        "model": "A model",
+        "model-hint": "Has a model of the catalogue classify the text. It costs model money, shows in the usage log as kind 'moderation' and counts toward the model's spending cap; text only, images are not checked."
+      },
+      "form": {
+        "mode": "How messages are checked",
+        "key": "OpenAI API key",
+        "key-hint": "Write-only: it is not shown again after saving, and leaving the box empty keeps the stored one. Used for the moderation endpoint only.",
+        "key-clear": "Clear",
+        "key-clearing": "Will be removed on save",
+        "base-url": "Endpoint",
+        "base-url-hint": "Empty is OpenAI's own address; for a relay, its /v1 address.",
+        "model": "Moderation model",
+        "model-placeholder": "Choose a model",
+        "model-hint": "A cheap, fast model is best. It is a server task like the task model, so 'open to regular users' does not apply. While the model is at its spending cap the check is unavailable, and 'When moderation is unavailable' below applies.",
+        "model-unavailable": "That model is not available right now. Choose another.",
+        "categories": "Categories that block",
+        "categories-default": "Restore defaults",
+        "categories-hint": "A message that matches any chosen category is refused. The categories are those of OpenAI's moderation model.",
+        "min-score": "Minimum score",
+        "min-score-hint": "At 0 only what the service flagged counts. Above 0, a chosen category whose score reaches it blocks too, flagged or not - it can only make the check stricter.",
+        "exempt-admins": "Exempt administrators",
+        "exempt-admins-hint": "Off by default: an administrator's messages reach the same upstream accounts and are checked too. Administrators are only logged, never disabled automatically.",
+        "on-error": "When moderation is unavailable",
+        "on-error-allow": "Send the message anyway",
+        "on-error-block": "Refuse the message",
+        "on-error-hint": "What happens to an account's message when the service errors, times out, has no channel or the model is at its cap. A guest's message is always refused then.",
+        "save": "Save",
+        "saved": "Moderation settings saved",
+        "required": "Enter a number",
+        "whole": "Enter a whole number",
+        "range": "From {{min}} to {{max}}",
+        "score": "Enter a number from 0 to 1",
+        "url": "Enter an http(s) address, or leave it empty",
+        "key-required": "This mode needs an OpenAI API key",
+        "model-required": "Choose the moderation model"
+      },
+      "sanctions": {
+        "title": "Sanctions",
+        "hint": "When an account (or a guest network address) has this many messages refused within the window, it is sanctioned: the account is disabled and signed out, the guest address is banned. The count starts over after a sanction.",
+        "strikes": "Strikes",
+        "strikes-hint": "How many refused messages set it off. 0 never sanctions and only logs. Administrators are only logged.",
+        "strikes-unit": "messages",
+        "strikeWindowHours": "Window",
+        "strikeWindowHours-hint": "Only refused messages this recent count.",
+        "guestBanHours": "Guest ban length",
+        "guestBanHours-hint": "0 is permanent. An address shared by many people (a campus, a company) makes a permanent ban risky, so the default is 168 hours (7 days).",
+        "hours": "hours"
+      },
+      "category": {
+        "sexual": "Sexual content",
+        "sexual-minors": "Sexual content involving minors",
+        "harassment": "Harassment",
+        "harassment-threatening": "Harassment with threats",
+        "hate": "Hate",
+        "hate-threatening": "Hate with threats of violence",
+        "illicit": "Instructions for illicit acts",
+        "illicit-violent": "Instructions for violent illicit acts",
+        "self-harm": "Self-harm",
+        "self-harm-intent": "Intent to self-harm",
+        "self-harm-instructions": "Self-harm instructions",
+        "violence": "Violence",
+        "violence-graphic": "Graphic violence"
+      },
+      "source": {
+        "send": "Send",
+        "edit": "Edit",
+        "answer": "Answer",
+        "guest": "Guest"
+      },
+      "sanction": {
+        "disabled": "Account disabled",
+        "banned": "Address banned"
+      },
+      "bans": {
+        "title": "Banned guest addresses",
+        "hint": "These network addresses cannot use guest mode now. A ban past its end stops counting and is cleaned up.",
+        "none": "No address is banned",
+        "since": "Since {{time}}",
+        "until": "until {{time}}",
+        "permanent": "permanent",
+        "lift": "Lift ban",
+        "lifted": "Lifted the ban on {{ip}}"
+      },
+      "log": {
+        "subtitle": "Messages moderation refused: who sent them, which categories matched, the start of the text. Only refused messages are logged, for 90 days, and only administrators can see them.",
+        "time": "Time",
+        "who": "Who",
+        "categories": "Categories",
+        "excerpt": "Excerpt",
+        "sanction": "Sanction",
+        "actions": "Actions",
+        "disabled": "Account disabled",
+        "banned": "Address banned",
+        "ban": "Ban this address",
+        "banned-toast": "Banned {{ip}}",
+        "open-account": "Open account",
+        "address": "Guest address",
+        "category": "Category",
+        "any-category": "All categories",
+        "none": "No message was refused"
+      }
     },
     "usage": {
       "subtitle": "Every request made to a model: who sent it, through which channel, what it cost and how fast it came back.",

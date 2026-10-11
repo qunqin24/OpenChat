@@ -174,7 +174,7 @@ function pickerButton(title: string, value?: ReactNode) {
   )
 }
 
-function UserFilter({
+export function UserFilter({
   picked,
   onPick,
 }: {

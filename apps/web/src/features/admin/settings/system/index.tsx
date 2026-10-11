@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/shadcn/ui/skeleton'
 import { Switch } from '@/components/shadcn/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn/ui/tabs'
+import { ModerationPanel } from '@/features/admin/moderation/moderation-panel'
 import { ContentSection } from '../components/content-section'
 import { GuestLimitsForm } from './guest-limits-form'
 import { RetentionForm } from './retention-form'
@@ -193,6 +194,10 @@ export function SettingsSystem() {
           <SettingRow id="avatar-uploads" label={t('admin.settings.system.avatars')} hint={t('admin.settings.system.avatars-hint')}>
             {toggle('avatar-uploads', data?.avatarUploads ?? false, toggleAvatars)}
           </SettingRow>
+        </TabsContent>
+
+        <TabsContent value="moderation">
+          <ModerationPanel />
         </TabsContent>
 
         <TabsContent value="data">

@@ -18,6 +18,7 @@ import { Route as AuthedIndexRouteImport } from './routes/_authed.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminChannelsRouteImport } from './routes/admin.channels'
 import { Route as AdminModelsRouteImport } from './routes/admin.models'
+import { Route as AdminModerationLogsRouteImport } from './routes/admin.moderation-logs'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminStorageRouteImport } from './routes/admin.storage'
 import { Route as AdminUsageLogsRouteImport } from './routes/admin.usage-logs'
@@ -75,6 +76,11 @@ const AdminChannelsRoute = AdminChannelsRouteImport.update({
 const AdminModelsRoute = AdminModelsRouteImport.update({
   id: '/models',
   path: '/models',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminModerationLogsRoute = AdminModerationLogsRouteImport.update({
+  id: '/moderation-logs',
+  path: '/moderation-logs',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
@@ -157,6 +163,7 @@ export interface FileRoutesByFullPath {
   '/register': typeof RegisterRoute
   '/admin/channels': typeof AdminChannelsRoute
   '/admin/models': typeof AdminModelsRoute
+  '/admin/moderation-logs': typeof AdminModerationLogsRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
   '/admin/storage': typeof AdminStorageRoute
   '/admin/usage-logs': typeof AdminUsageLogsRoute
@@ -178,6 +185,7 @@ export interface FileRoutesByTo {
   '/register': typeof RegisterRoute
   '/admin/channels': typeof AdminChannelsRoute
   '/admin/models': typeof AdminModelsRoute
+  '/admin/moderation-logs': typeof AdminModerationLogsRoute
   '/admin/storage': typeof AdminStorageRoute
   '/admin/usage-logs': typeof AdminUsageLogsRoute
   '/admin/users': typeof AdminUsersRoute
@@ -203,6 +211,7 @@ export interface FileRoutesById {
   '/register': typeof RegisterRoute
   '/admin/channels': typeof AdminChannelsRoute
   '/admin/models': typeof AdminModelsRoute
+  '/admin/moderation-logs': typeof AdminModerationLogsRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
   '/admin/storage': typeof AdminStorageRoute
   '/admin/usage-logs': typeof AdminUsageLogsRoute
@@ -230,6 +239,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/admin/channels'
     | '/admin/models'
+    | '/admin/moderation-logs'
     | '/admin/settings'
     | '/admin/storage'
     | '/admin/usage-logs'
@@ -251,6 +261,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/admin/channels'
     | '/admin/models'
+    | '/admin/moderation-logs'
     | '/admin/storage'
     | '/admin/usage-logs'
     | '/admin/users'
@@ -275,6 +286,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/admin/channels'
     | '/admin/models'
+    | '/admin/moderation-logs'
     | '/admin/settings'
     | '/admin/storage'
     | '/admin/usage-logs'
@@ -366,6 +378,13 @@ declare module '@tanstack/react-router' {
       path: '/models'
       fullPath: '/admin/models'
       preLoaderRoute: typeof AdminModelsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/moderation-logs': {
+      id: '/admin/moderation-logs'
+      path: '/moderation-logs'
+      fullPath: '/admin/moderation-logs'
+      preLoaderRoute: typeof AdminModerationLogsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/settings': {
@@ -503,6 +522,7 @@ const AdminSettingsRouteWithChildren = AdminSettingsRoute._addFileChildren(
 interface AdminRouteChildren {
   AdminChannelsRoute: typeof AdminChannelsRoute
   AdminModelsRoute: typeof AdminModelsRoute
+  AdminModerationLogsRoute: typeof AdminModerationLogsRoute
   AdminSettingsRoute: typeof AdminSettingsRouteWithChildren
   AdminStorageRoute: typeof AdminStorageRoute
   AdminUsageLogsRoute: typeof AdminUsageLogsRoute
@@ -514,6 +534,7 @@ interface AdminRouteChildren {
 const AdminRouteChildren: AdminRouteChildren = {
   AdminChannelsRoute: AdminChannelsRoute,
   AdminModelsRoute: AdminModelsRoute,
+  AdminModerationLogsRoute: AdminModerationLogsRoute,
   AdminSettingsRoute: AdminSettingsRouteWithChildren,
   AdminStorageRoute: AdminStorageRoute,
   AdminUsageLogsRoute: AdminUsageLogsRoute,

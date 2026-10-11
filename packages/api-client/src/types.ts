@@ -79,6 +79,12 @@ export type DeletedConversations = Schemas['DeletedConversations']
 export type ConversationExport = Schemas['ConversationExport']
 
 export type GuestStatus = Schemas['GuestStatus']
+
+export type ModerationSettings = Schemas['ModerationSettings']
+export type UpdateModerationSettingsRequest = Schemas['UpdateModerationSettingsRequest']
+export type ModerationCategory = Schemas['ModerationCategory']
+export type ModerationEvent = Schemas['ModerationEvent']
+export type GuestBan = Schemas['GuestBan']
 export type GuestConfig = Schemas['GuestConfig']
 export type GuestRunRequest = Schemas['GuestRunRequest']
 export type GuestMessage = Schemas['GuestMessage']

@@ -402,7 +402,8 @@
       "models": "模型市场",
       "web-search": "联网搜索",
       "storage": "文件存储",
-      "usage-logs": "使用日志"
+      "usage-logs": "使用日志",
+      "moderation-logs": "审核日志"
     },
     "dashboard": {
       "subtitle": "模型请求的用量、花费与稳定性",
@@ -669,7 +670,7 @@
         "lang-en": "English"
       },
       "system": {
-        "tabs": {"general": "常规", "chat": "对话", "access": "访问", "data": "数据"},
+        "tabs": {"general": "常规", "chat": "对话", "access": "访问", "moderation": "审核", "data": "数据"},
         "title": "系统",
         "subtitle": "影响整个服务端的设置，对所有人生效。",
         "debug": "调试模式",
@@ -1062,6 +1063,116 @@
       "save": "保存设置",
       "saved": "文件存储设置已保存",
       "save-failed": "保存失败，请重试"
+    },
+    "moderation": {
+      "intro": "用户发出的每一条消息和图片，都是以你的上游账号（OpenAI、Anthropic、中转站）的名义发出去的，违规内容可能让这些账号被封。开启审核后，新消息发给模型前先检查，不通过的直接拒绝并记入日志；同一个人反复违规会被停用账号或封禁游客地址。只检查用户新发的内容（发送、改写、回答模型的提问、游客的消息），不检查工具结果、网页、历史对话和标题。",
+      "open-log": "查看审核日志",
+      "mode": {
+        "off": "关闭",
+        "off-hint": "不检查任何消息。",
+        "openai": "OpenAI 审核接口",
+        "openai-hint": "把文字和图片发给 OpenAI 的审核接口（omni-moderation-latest）。免费，约 1 秒；需要一个 OpenAI API Key。",
+        "model": "用模型审核",
+        "model-hint": "让模型库里的一个模型给文字分类。会产生模型费用并计入用量日志（类型「内容审核」）和模型的容量上限；只检查文字，不检查图片。"
+      },
+      "form": {
+        "mode": "审核方式",
+        "key": "OpenAI API Key",
+        "key-hint": "只写不读：保存后不会再显示，留空表示保持不变。只用于审核接口。",
+        "key-clear": "清除",
+        "key-clearing": "保存后将清除密钥",
+        "base-url": "接口地址",
+        "base-url-hint": "留空使用 OpenAI 官方地址；用中转站时填它的 /v1 地址。",
+        "model": "审核模型",
+        "model-placeholder": "选择一个模型",
+        "model-hint": "建议选便宜、快的模型。它收到的是用户消息，按任务模型处理：不受“向普通用户开放”限制。模型达到容量上限时审核不可用，按下面的“审核不可用时”处理。",
+        "model-unavailable": "这个模型现在不可用，请换一个。",
+        "categories": "拦截的类别",
+        "categories-default": "恢复默认",
+        "categories-hint": "命中任意一个选中的类别就拒绝这条消息。类别与 OpenAI 审核接口的一致。",
+        "min-score": "最低分数",
+        "min-score-hint": "0 表示只看审核接口标记的结果。大于 0 时，选中的类别分数达到这个值也会拒绝，哪怕接口没有标记——只会更严格，不会放过被标记的内容。",
+        "exempt-admins": "管理员免审",
+        "exempt-admins-hint": "默认关闭：管理员的消息发往同样的上游账号，同样要审。管理员只会被记录，永远不会被自动停用。",
+        "on-error": "审核不可用时",
+        "on-error-allow": "照常发送",
+        "on-error-block": "拒绝发送",
+        "on-error-hint": "审核服务出错、超时、没有可用渠道或模型达到容量上限时，账号用户的消息怎么处理。游客的消息在这种情况下始终被拒绝。",
+        "save": "保存",
+        "saved": "审核设置已保存",
+        "required": "请输入数字",
+        "whole": "请输入整数",
+        "range": "范围 {{min}} 到 {{max}}",
+        "score": "请输入 0 到 1 之间的数",
+        "url": "请填写 http(s) 地址，或留空",
+        "key-required": "这个方式需要 OpenAI API Key",
+        "model-required": "请选择审核模型"
+      },
+      "sanctions": {
+        "title": "处罚",
+        "hint": "一个账号（或一个游客网络地址）在时间窗口内被拒绝的消息达到次数，就会被处罚：账号停用并退出登录，游客地址被封禁。处罚后重新计数。",
+        "strikes": "违规次数",
+        "strikes-hint": "达到这个次数触发处罚。0 表示从不处罚，只记录。管理员只记录。",
+        "strikes-unit": "次",
+        "strikeWindowHours": "统计窗口",
+        "strikeWindowHours-hint": "只统计最近这么久内被拒绝的消息。",
+        "guestBanHours": "游客封禁时长",
+        "guestBanHours-hint": "0 表示永久。多人共用一个地址（校园网、公司出口）时永久封禁风险很大，默认 168 小时（7 天）。",
+        "hours": "小时"
+      },
+      "category": {
+        "sexual": "色情内容",
+        "sexual-minors": "涉及未成年人的色情内容",
+        "harassment": "骚扰",
+        "harassment-threatening": "带威胁的骚扰",
+        "hate": "仇恨言论",
+        "hate-threatening": "带暴力威胁的仇恨言论",
+        "illicit": "违法行为指导",
+        "illicit-violent": "涉及暴力的违法行为指导",
+        "self-harm": "自残",
+        "self-harm-intent": "自残意图",
+        "self-harm-instructions": "自残方法与指导",
+        "violence": "暴力",
+        "violence-graphic": "血腥暴力"
+      },
+      "source": {
+        "send": "发送",
+        "edit": "改写",
+        "answer": "回答提问",
+        "guest": "游客"
+      },
+      "sanction": {
+        "disabled": "已停用账号",
+        "banned": "已封禁地址"
+      },
+      "bans": {
+        "title": "被封禁的游客地址",
+        "hint": "这些网络地址现在不能使用游客模式。过期的封禁会自动失效并被清理。",
+        "none": "没有被封禁的地址",
+        "since": "自 {{time}}",
+        "until": "至 {{time}}",
+        "permanent": "永久",
+        "lift": "解封",
+        "lifted": "已解封 {{ip}}"
+      },
+      "log": {
+        "subtitle": "被审核拒绝的消息：谁发的、命中什么类别、消息开头的一段。只记录被拒绝的，保留 90 天，只有管理员看得到。",
+        "time": "时间",
+        "who": "用户",
+        "categories": "类别",
+        "excerpt": "内容摘录",
+        "sanction": "处罚",
+        "actions": "操作",
+        "disabled": "账号已停用",
+        "banned": "地址已封禁",
+        "ban": "封禁此地址",
+        "banned-toast": "已封禁 {{ip}}",
+        "open-account": "查看账号",
+        "address": "游客地址",
+        "category": "类别",
+        "any-category": "全部类别",
+        "none": "没有被拒绝的消息"
+      }
     },
     "usage": {
       "subtitle": "所有发往模型的请求：谁发的、走了哪个渠道、花了多少钱、响应有多快。",
