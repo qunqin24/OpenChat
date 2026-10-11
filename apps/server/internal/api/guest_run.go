@@ -125,6 +125,8 @@ type guestPlan struct {
 	receipts      GuestReceipts
 	snapshotCanon []byte
 	snapshotWords []string
+	// snap is the snapshot as the browser sent it, before its ids are staged.
+	snap *memory.Snapshot
 	// signer signs what the run writes. active is whether moderation was on
 	// when the request came: only then are words receipted as checked.
 	signer  *receiptSigner
@@ -217,6 +219,13 @@ func (s *Server) verifyGuest(ctx context.Context, plan *guestPlan) error {
 	if plan.active, err = s.guestModerationOn(ctx); err != nil || !plan.active {
 		return err
 	}
+	// The snapshot is the system prompt's source, and moderation sees only the
+	// words of it: what else it prints is the server's to write.
+	if plan.snap != nil {
+		if err := validSnapshot(*plan.snap); err != nil {
+			return err
+		}
+	}
 	plan.pending, plan.fresh, err = signer.verify(guestContent{
 		rows: plan.rows, about: plan.about, style: plan.style, receipts: plan.receipts,
 		memories: plan.memories, snapshot: plan.snapshotCanon, snapTexts: plan.snapshotWords, summary: plan.summary,
@@ -232,7 +241,8 @@ func (s *Server) moderateGuest(ctx context.Context, ip string, plan *guestPlan) 
 	who := moderationSubject{guestIP: ip, source: ModerationSourceGuest}
 	switch plan.req.Action {
 	case "send":
-		in := moderationInput{text: plan.input.content}
+		// The message and the names of its files, which the model is told.
+		in := moderationInput{text: withFileNames(plan.input.content, plan.input.files)}
 		var images []moderationImage
 		for _, file := range plan.input.files {
 			if file.data != nil && llm.ModalityOf(file.contentType) == llm.ModalityImage {
@@ -338,6 +348,7 @@ func (s *Server) planGuestRun(ctx context.Context, body GuestRunRequest) (*guest
 		}
 		// As the browser has it, before its ids are exchanged.
 		plan.snapshotCanon, plan.snapshotWords = snapshotCanon(snap), snapshotWords(snap)
+		plan.snap = &memory.Snapshot{About: snap.About, Style: snap.Style, Memories: slices.Clone(snap.Memories), Added: slices.Clone(snap.Added)}
 		// Its ids are the browser's; the rows the run reads are staged under
 		// their own (guestIDs), and the snapshot has to name those.
 		for i := range snap.Memories {
@@ -507,8 +518,8 @@ func guestFileOf(f GuestAttachment, seen map[uuid.UUID]bool, total *int64) (gues
 	switch {
 	case f.Id == uuid.Nil || seen[f.Id]:
 		return file, guestBad("invalid_attachment", "a file has no id, or its id is repeated")
-	case file.filename == "":
-		return file, httpx.NewFieldError("attachments", "invalid_filename", "filename must not be empty")
+	case !validFilename(file.filename):
+		return file, httpx.NewFieldError("attachments", "invalid_filename", "filename must be 1 to 255 characters, none of them a control character")
 	case !allowed:
 		return file, httpx.NewError(http.StatusUnsupportedMediaType, "unsupported_file_type",
 			"only images (PNG, JPEG, WebP, GIF) and PDFs can be attached")
@@ -1063,8 +1074,8 @@ func (p *guestPlan) endReceipts(end *GuestEndEvent) {
 			messages[row.id.String()] = p.signer.text(row.content)
 		}
 		for _, file := range row.files {
-			if file.data != nil && (isInput || p.fresh.files[file.id]) && llm.ModalityOf(file.contentType) == llm.ModalityImage {
-				files[file.id.String()] = p.signer.file(file.contentType, file.data)
+			if isInput || p.fresh.files[file.id] {
+				files[file.id.String()] = p.signer.attachment(file)
 			}
 		}
 	}

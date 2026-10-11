@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -124,6 +125,33 @@ func (g *receiptSigner) text(words string) string { return g.mac("t", []byte(wor
 func (g *receiptSigner) file(contentType string, data []byte) string {
 	sum := sha256.Sum256(data)
 	return g.mac("f", []byte(contentType), sum[:])
+}
+
+// fileName is the receipt for an attachment's name, which the model is told
+// (and a provider is sent with the file). It is words like any others, and the
+// browser chooses it.
+func (g *receiptSigner) fileName(contentType, filename string) string {
+	return g.mac("fn", []byte(contentType), []byte(filename))
+}
+
+// attachment is the receipt an attachment is kept with: "<bytes>.<name>", the
+// two halves for the picture's bytes (empty for anything but a picture whose
+// bytes were sent) and for its name. They are separate so that a picture the
+// page later stops sending the bytes of (it no longer fits a request) still has
+// its name vouched for.
+func (g *receiptSigner) attachment(f guestFile) string {
+	head := ""
+	if f.data != nil && llm.ModalityOf(f.contentType) == llm.ModalityImage {
+		head = g.file(f.contentType, f.data)
+	}
+	return head + "." + g.fileName(f.contentType, f.filename)
+}
+
+// splitFileReceipt reads an attachment's receipt. One from before names were
+// receipted is the bytes' alone.
+func splitFileReceipt(receipt string) (bytes, name string) {
+	bytes, name, _ = strings.Cut(receipt, ".")
+	return bytes, name
 }
 
 // snapshot is the receipt for a conversation's memory snapshot: the
@@ -253,12 +281,20 @@ func (g *receiptSigner) verify(c guestContent) (pending []checkedWords, fresh gu
 				item.text = row.content
 			}
 			for _, file := range row.files {
-				// Only bytes the request sends reach the model; a file named and not sent is a line of text.
-				if file.data == nil || llm.ModalityOf(file.contentType) != llm.ModalityImage {
-					continue
-				}
-				if !receiptMatches(&file.receipt, g.file(file.contentType, file.data)) {
+				head, tail := splitFileReceipt(file.receipt)
+				// The name reaches the model whether or not the bytes do (a file
+				// named and not sent is a line of text).
+				unnamed := !receiptMatches(&tail, g.fileName(file.contentType, file.filename))
+				// Only bytes the request sends reach the model.
+				unseen := file.data != nil && llm.ModalityOf(file.contentType) == llm.ModalityImage &&
+					!receiptMatches(&head, g.file(file.contentType, file.data))
+				if unnamed || unseen {
 					fresh.files[file.id] = true
+				}
+				if unnamed {
+					add(file.filename)
+				}
+				if unseen {
 					item.images = append(item.images, moderationImage{contentType: file.contentType, data: file.data})
 				}
 			}
@@ -454,6 +490,80 @@ func snapshotOf(raw map[string]any) (memory.Snapshot, error) {
 		return snap, fmt.Errorf("memorySnapshot: %w", err)
 	}
 	return snap, json.Unmarshal(encoded, &snap)
+}
+
+// withFileNames is a message with the names of the files it carries after it:
+// the model is told them, so they are checked with the message.
+func withFileNames(text string, files []guestFile) string {
+	for _, f := range files {
+		text += "\n\n" + f.filename
+	}
+	return text
+}
+
+// maxFilenameRunes bounds an attachment's name. A name is read by the model
+// and checked by moderation, so it is a name and not a place to put text.
+const maxFilenameRunes = 255
+
+// validFilename is whether a file name is one a file system gives: not empty,
+// not long, no control characters (a newline would start a line of its own in
+// what the model is shown).
+func validFilename(name string) bool {
+	if name == "" || utf8.RuneCountInString(name) > maxFilenameRunes {
+		return false
+	}
+	return !strings.ContainsFunc(name, unicode.IsControl)
+}
+
+// errInvalidSnapshot is a snapshot this server did not write.
+func errInvalidSnapshot(what string) error {
+	return guestBad("invalid_snapshot", "memorySnapshot is not one this server wrote: "+what)
+}
+
+// validSnapshot reads the snapshot a browser sent back as the system prompt's
+// source. Only the words of it are moderated (about, style, the notes), but the
+// prompt also prints each note's short id, and every field of it reaches the
+// model, so it has to be exactly what this server writes: notes numbered m1,
+// m2, … in order, then the ones saved since numbered on from there (memory.Store
+// does the same, in EnsureSnapshot and noteAdded), each a note as Clean leaves
+// it, no more than the list holds, ids that are ids. The refs are not
+// re-derived and used instead: a snapshot that disagrees with itself was not
+// written by this server, and is refused rather than quietly mended.
+func validSnapshot(snap memory.Snapshot) error {
+	if utf8.RuneCountInString(snap.About) > memory.MaxInstructions || utf8.RuneCountInString(snap.Style) > memory.MaxInstructions {
+		return errInvalidSnapshot("the instructions are too long")
+	}
+	if len(snap.Memories) > memory.MaxMemories {
+		return errInvalidSnapshot("too many notes")
+	}
+	seen := map[uuid.UUID]bool{}
+	claim := func(id uuid.UUID) bool {
+		if id == uuid.Nil || seen[id] {
+			return false
+		}
+		seen[id] = true
+		return true
+	}
+	for i, m := range snap.Memories {
+		if m.Ref != memory.Ref(i+1) {
+			return errInvalidSnapshot("a note has an id the server would not have given it")
+		}
+		if content, err := memory.Clean(m.Content); err != nil || content != m.Content {
+			return errInvalidSnapshot("a note is empty, too long or not one line")
+		}
+		if !claim(m.ID) {
+			return errInvalidSnapshot("a note has no id or a repeated one")
+		}
+	}
+	for i, a := range snap.Added {
+		if a.Ref != memory.Ref(len(snap.Memories)+i+1) {
+			return errInvalidSnapshot("a saved note has an id the server would not have given it")
+		}
+		if !claim(a.ID) {
+			return errInvalidSnapshot("a saved note has no id or a repeated one")
+		}
+	}
+	return nil
 }
 
 // snapshotWords are the words in a snapshot.

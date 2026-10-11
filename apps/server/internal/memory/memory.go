@@ -161,7 +161,9 @@ type SnapshotRef struct {
 	ID  uuid.UUID `json:"id"`
 }
 
-func refOf(n int) string { return fmt.Sprintf("m%d", n) }
+// Ref is the short id the nth memory of a conversation is known by (from 1):
+// the notes of the snapshot first, in order, then those saved since.
+func Ref(n int) string { return fmt.Sprintf("m%d", n) }
 
 // Hash is how a text is remembered as checked or refused by content
 // moderation: the hex SHA-256 of its UTF-8 bytes. Editing a text changes it,
@@ -308,7 +310,7 @@ func (s *Store) EnsureSnapshot(ctx context.Context, userID, conversationID uuid.
 	}
 	for _, c := range listed {
 		if !c.out {
-			snap.Memories = append(snap.Memories, SnapshotMemory{Ref: refOf(len(snap.Memories) + 1), ID: c.piece.ID, Content: c.piece.Text})
+			snap.Memories = append(snap.Memories, SnapshotMemory{Ref: Ref(len(snap.Memories) + 1), ID: c.piece.ID, Content: c.piece.Text})
 		}
 	}
 	raw, err := json.Marshal(snap)
@@ -534,7 +536,7 @@ func noteAdded(ctx context.Context, q *sqlc.Queries, userID, conversationID, mem
 	if err != nil {
 		return "", err
 	}
-	ref := refOf(len(snap.Memories) + len(snap.Added) + 1)
+	ref := Ref(len(snap.Memories) + len(snap.Added) + 1)
 	snap.Added = append(snap.Added, SnapshotRef{Ref: ref, ID: memoryID})
 	raw, err := json.Marshal(snap)
 	if err != nil {
