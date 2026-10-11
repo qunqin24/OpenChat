@@ -111,7 +111,7 @@ func (s *Server) RegenerateAnswer(w http.ResponseWriter, r *http.Request, conver
 	var run sqlc.Run
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
-		if _, err := q.LockConversation(ctx, conversationId); err != nil {
+		if _, err := lockLive(ctx, q, conversationId); err != nil {
 			return err
 		}
 		if err := requireIdle(ctx, q, conversationId); err != nil {
@@ -191,7 +191,7 @@ func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversatio
 	)
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
-		if _, err := q.LockConversation(ctx, conversationId); err != nil {
+		if _, err := lockLive(ctx, q, conversationId); err != nil {
 			return err
 		}
 		if err := requireIdle(ctx, q, conversationId); err != nil {

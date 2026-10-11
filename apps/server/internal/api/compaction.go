@@ -194,7 +194,7 @@ func (s *Server) UndoCompaction(w http.ResponseWriter, r *http.Request, conversa
 	deleted := int64(0)
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
-		if _, err := q.LockConversation(ctx, conversationId); err != nil {
+		if _, err := lockLive(ctx, q, conversationId); err != nil {
 			return err
 		}
 		if err := requireIdle(ctx, q, conversationId); err != nil {

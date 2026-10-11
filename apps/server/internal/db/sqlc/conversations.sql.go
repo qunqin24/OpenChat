@@ -12,6 +12,40 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const cancelConversationRuns = `-- name: CancelConversationRuns :many
+UPDATE runs
+SET cancel_requested = true,
+    updated_at       = now()
+WHERE conversation_id = ANY ($1::uuid[])
+  AND status = 'running'
+RETURNING id
+`
+
+// Stop pressed for every run these conversations have going, as the stop
+// endpoint does for one: recorded here, and the runner told after the commit.
+// Deleting a conversation does this, because nothing can stop a run in a
+// deleted conversation afterwards (the stop endpoint no longer finds it) and
+// it would go on calling the model and holding its owner's run slot.
+func (q *Queries) CancelConversationRuns(ctx context.Context, ids []uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, cancelConversationRuns, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createConversation = `-- name: CreateConversation :one
 INSERT INTO conversations (user_id, title, model, temporary)
 VALUES ($1, $2, $3, $4)
@@ -200,6 +234,39 @@ func (q *Queries) LockConversation(ctx context.Context, id uuid.UUID) (Conversat
 		&i.Temporary,
 	)
 	return i, err
+}
+
+const lockUserConversations = `-- name: LockUserConversations :many
+SELECT id
+FROM conversations
+WHERE user_id = $1
+  AND deleted_at IS NULL
+ORDER BY id
+FOR UPDATE
+`
+
+// Every live conversation of the user, held until the transaction ends, in id
+// order. Deleting them all takes the same per-conversation lock a send, an
+// edit or a regeneration does (LockConversation), so none of those can be
+// starting a run in one of them while it goes.
+func (q *Queries) LockUserConversations(ctx context.Context, userID *uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, lockUserConversations, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const searchConversations = `-- name: SearchConversations :many

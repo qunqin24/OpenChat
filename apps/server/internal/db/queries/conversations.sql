@@ -94,6 +94,31 @@ SET deleted_at = now()
 WHERE user_id = sqlc.arg('user_id')
   AND deleted_at IS NULL;
 
+-- name: LockUserConversations :many
+-- Every live conversation of the user, held until the transaction ends, in id
+-- order. Deleting them all takes the same per-conversation lock a send, an
+-- edit or a regeneration does (LockConversation), so none of those can be
+-- starting a run in one of them while it goes.
+SELECT id
+FROM conversations
+WHERE user_id = sqlc.arg('user_id')
+  AND deleted_at IS NULL
+ORDER BY id
+FOR UPDATE;
+
+-- name: CancelConversationRuns :many
+-- Stop pressed for every run these conversations have going, as the stop
+-- endpoint does for one: recorded here, and the runner told after the commit.
+-- Deleting a conversation does this, because nothing can stop a run in a
+-- deleted conversation afterwards (the stop endpoint no longer finds it) and
+-- it would go on calling the model and holding its owner's run slot.
+UPDATE runs
+SET cancel_requested = true,
+    updated_at       = now()
+WHERE conversation_id = ANY (sqlc.arg('ids')::uuid[])
+  AND status = 'running'
+RETURNING id;
+
 -- name: SetConversationModel :one
 -- The model a conversation's next run uses. Remembered per conversation so a
 -- reload, or another device, continues with the same one.

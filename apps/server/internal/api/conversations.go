@@ -1,10 +1,12 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/qunqin/openchat/apps/server/internal/auth"
 
@@ -189,21 +191,73 @@ func (s *Server) UpdateConversation(w http.ResponseWriter, r *http.Request, conv
 	httpx.JSON(w, http.StatusOK, toConversation(row))
 }
 
+// DeleteConversation deletes a conversation, and stops the runs it has going.
+//
+// Both under the conversation's lock (LockConversation), the one a send, an
+// edit, a regeneration and an answer take before they start a run. So a run is
+// either started before the delete, and cancelled by it, or the request that
+// would start it finds the conversation deleted (lockLive) and is refused:
+// a deleted conversation never has a run going. Without the cancel the run
+// would go on calling the model with nobody able to stop it - the stop
+// endpoint no longer finds the conversation - and keep its owner's run slot.
 func (s *Server) DeleteConversation(w http.ResponseWriter, r *http.Request, conversationId ConversationId) {
-	user := auth.MustUser(r.Context())
-	affected, err := s.q.SoftDeleteConversation(r.Context(), sqlc.SoftDeleteConversationParams{
-		ID:     conversationId,
-		UserID: &user.ID,
+	ctx := r.Context()
+	user := auth.MustUser(ctx)
+	// Ownership first, without the lock: someone else's conversation is not
+	// found, and is not locked either.
+	if err := s.conversationExists(ctx, conversationId); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+
+	var cancelled []uuid.UUID
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		q := s.q.WithTx(tx)
+		if _, err := lockLive(ctx, q, conversationId); err != nil {
+			return err
+		}
+		affected, err := q.SoftDeleteConversation(ctx, sqlc.SoftDeleteConversationParams{
+			ID:     conversationId,
+			UserID: &user.ID,
+		})
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
+			return httpx.ErrNotFound
+		}
+		cancelled, err = q.CancelConversationRuns(ctx, []uuid.UUID{conversationId})
+		return err
 	})
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
-	if affected == 0 {
-		httpx.Fail(w, r, httpx.ErrNotFound)
-		return
-	}
+	s.cancelRuns(cancelled)
 	httpx.NoContent(w)
+}
+
+// cancelRuns tells the runner about runs whose cancellation a committed
+// transaction recorded.
+func (s *Server) cancelRuns(ids []uuid.UUID) {
+	for _, id := range ids {
+		s.runner.Cancel(id)
+	}
+}
+
+// lockLive takes a conversation's lock and returns it, or not found when it was
+// deleted while the request waited for the lock (or before it began). Every
+// request that starts a run in a conversation takes the lock this way, which
+// is what makes starting one and deleting the conversation exclusive.
+func lockLive(ctx context.Context, q *sqlc.Queries, conversationID uuid.UUID) (sqlc.Conversation, error) {
+	conv, err := q.LockConversation(ctx, conversationID)
+	if err != nil {
+		return conv, dbErr(err)
+	}
+	if conv.DeletedAt.Valid {
+		return conv, httpx.ErrNotFound
+	}
+	return conv, nil
 }
 
 // ListRunningConversations says which of the caller's conversations are being

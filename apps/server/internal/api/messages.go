@@ -156,7 +156,7 @@ func (s *Server) CreateMessage(w http.ResponseWriter, r *http.Request, conversat
 		q := s.q.WithTx(tx)
 		// Held, so that the message is written after whatever an edit or a
 		// regeneration queued ahead of this deleted.
-		if _, err := q.LockConversation(ctx, conversationId); err != nil {
+		if _, err := lockLive(ctx, q, conversationId); err != nil {
 			return err
 		}
 		var err error

@@ -96,7 +96,7 @@ func (s *Server) AnswerQuestion(w http.ResponseWriter, r *http.Request, conversa
 		q := s.q.WithTx(tx)
 		// An edit or a regeneration queued ahead of this may have deleted the
 		// question; it is looked for again below, with the conversation held.
-		if _, err := q.LockConversation(ctx, conversationId); err != nil {
+		if _, err := lockLive(ctx, q, conversationId); err != nil {
 			return err
 		}
 		// Two answers to one question queue here, and the second finds the

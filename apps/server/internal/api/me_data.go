@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/qunqin/openchat/apps/server/internal/auth"
@@ -187,14 +188,33 @@ func (s *Server) exportConversation(r *http.Request, conv sqlc.Conversation) (Ex
 }
 
 // DeleteAllMyConversations deletes every conversation of the caller's, the way
-// DeleteConversation deletes one: the rows are marked and nothing is read from
-// them again.
+// DeleteConversation deletes one: the rows are marked, the runs they have going
+// are stopped, and nothing is read from them again. All the conversations are
+// locked first, so no send is starting a run in one of them.
 func (s *Server) DeleteAllMyConversations(w http.ResponseWriter, r *http.Request) {
-	user := auth.MustUser(r.Context())
-	deleted, err := s.q.SoftDeleteAllConversations(r.Context(), &user.ID)
+	ctx := r.Context()
+	user := auth.MustUser(ctx)
+
+	var (
+		deleted   int64
+		cancelled []uuid.UUID
+	)
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		q := s.q.WithTx(tx)
+		ids, err := q.LockUserConversations(ctx, &user.ID)
+		if err != nil {
+			return err
+		}
+		if deleted, err = q.SoftDeleteAllConversations(ctx, &user.ID); err != nil {
+			return err
+		}
+		cancelled, err = q.CancelConversationRuns(ctx, ids)
+		return err
+	})
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
+	s.cancelRuns(cancelled)
 	httpx.JSON(w, http.StatusOK, DeletedConversations{Deleted: deleted})
 }

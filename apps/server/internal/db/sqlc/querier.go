@@ -60,6 +60,12 @@ type Querier interface {
 	BulkApproveUsers(ctx context.Context, ids []uuid.UUID) (int64, error)
 	BulkSetUserDisabled(ctx context.Context, arg BulkSetUserDisabledParams) (int64, error)
 	BulkUpdateUserRole(ctx context.Context, arg BulkUpdateUserRoleParams) (int64, error)
+	// Stop pressed for every run these conversations have going, as the stop
+	// endpoint does for one: recorded here, and the runner told after the commit.
+	// Deleting a conversation does this, because nothing can stop a run in a
+	// deleted conversation afterwards (the stop endpoint no longer finds it) and
+	// it would go on calling the model and holding its owner's run slot.
+	CancelConversationRuns(ctx context.Context, ids []uuid.UUID) ([]uuid.UUID, error)
 	// What each channel's requests have cost, all time, from the usage ledger: one
 	// grouped read for the whole channel list. Requests with no price (a model
 	// the catalogue does not price) add nothing. A channel never used is absent.
@@ -467,6 +473,11 @@ type Querier interface {
 	// cannot both be let through. The key is the account's id, or for a guest the
 	// address (`ip:...`); servers sharing the database share the lock.
 	LockRunSlots(ctx context.Context, key string) error
+	// Every live conversation of the user, held until the transaction ends, in id
+	// order. Deleting them all takes the same per-conversation lock a send, an
+	// edit or a regeneration does (LockConversation), so none of those can be
+	// starting a run in one of them while it goes.
+	LockUserConversations(ctx context.Context, userID *uuid.UUID) ([]uuid.UUID, error)
 	MarkMemoryEventUndone(ctx context.Context, arg MarkMemoryEventUndoneParams) (MemoryEvent, error)
 	// What a run needs to know about its model: how its thinking is controlled,
 	// how much it may read and write, and what it can do. The catalogue row is
