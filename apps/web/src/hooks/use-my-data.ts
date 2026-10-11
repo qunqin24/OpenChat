@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { api, API_BASE_URL, appFetch, unwrap } from '@/lib/api'
-import { queryKeys } from '@/lib/query-keys'
+import { announceDeleted, forgetDeleted } from '@/lib/conversation-sync'
 
 /**
  * The person's own data as a whole: take it out, or delete it. Both are
@@ -52,10 +52,8 @@ export function useDeleteAllConversations() {
     meta: { silent: true },
     mutationFn: async () => unwrap(await api.DELETE('/me/conversations')),
     onSuccess: () => {
-      queryClient.removeQueries({ queryKey: queryKeys.messages.all })
-      queryClient.removeQueries({ queryKey: [...queryKeys.conversations.all, 'detail'] })
-      queryClient.removeQueries({ queryKey: [...queryKeys.conversations.all, 'context'] })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.list() })
+      forgetDeleted(queryClient, 'all')
+      announceDeleted('all')
     },
   })
 }

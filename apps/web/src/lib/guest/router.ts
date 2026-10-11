@@ -30,6 +30,8 @@ export interface GuestApiDeps {
   config: () => Promise<GuestConfig>
   /** A conversation's summary was made or taken back: the guest's other pages are told. */
   compactionChanged?: (conversationId: string) => void
+  /** Conversations were deleted: the guest's other pages are told. */
+  conversationsDeleted?: (conversationIds: string[]) => void
   newId?: () => string
 }
 
@@ -118,7 +120,8 @@ export function createGuestApi(deps: GuestApiDeps) {
       handler: async ({ params }) => {
         runner.abort(params[0]!)
         await repo.deleteConversation(params[0]!)
-        hub.forget(params[0]!)
+        hub.announceDeleted(params[0]!)
+        deps.conversationsDeleted?.([params[0]!])
         return empty()
       },
     },
@@ -311,8 +314,12 @@ export function createGuestApi(deps: GuestApiDeps) {
       method: 'DELETE',
       pattern: /^\/me\/conversations$/,
       handler: async () => {
-        for (const c of (await repo.storage.conversations())) runner.abort(c.id)
-        return ok({ deleted: await repo.deleteAll() })
+        const ids = (await repo.storage.conversations()).map((c) => c.id)
+        for (const id of ids) runner.abort(id)
+        const deleted = await repo.deleteAll()
+        for (const id of ids) hub.announceDeleted(id)
+        deps.conversationsDeleted?.(ids)
+        return ok({ deleted })
       },
     },
 

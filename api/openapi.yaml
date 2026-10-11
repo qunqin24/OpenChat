@@ -2394,6 +2394,7 @@ components:
         - $ref: "#/components/schemas/CompactionStartedEvent"
         - $ref: "#/components/schemas/CompactionFinishedEvent"
         - $ref: "#/components/schemas/CompactionChangedEvent"
+        - $ref: "#/components/schemas/ConversationDeletedEvent"
       discriminator:
         propertyName: type
         mapping:
@@ -2412,6 +2413,7 @@ components:
           retry_scheduled: "#/components/schemas/RetryScheduledEvent"
           title_changed: "#/components/schemas/TitleChangedEvent"
           transcript_changed: "#/components/schemas/TranscriptChangedEvent"
+          conversation_deleted: "#/components/schemas/ConversationDeletedEvent"
 
     RunStartedEvent:
       type: object
@@ -2552,6 +2554,19 @@ components:
       properties:
         type: { type: string, const: compaction_finished }
         summary: { $ref: "#/components/schemas/ContextSummary" }
+
+    ConversationDeletedEvent:
+      type: object
+      description: |
+        The conversation was deleted (`deleteConversation`, or
+        `deleteAllMyConversations`), perhaps from another tab or device. Sent
+        in a batch of its own with the nil run id and version 0, after the
+        delete committed; its runs were cancelled with it. A client showing
+        the conversation leaves it and stops following: reconnecting would be
+        404.
+      required: [type]
+      properties:
+        type: { type: string, const: conversation_deleted }
 
     CompactionChangedEvent:
       type: object

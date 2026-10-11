@@ -2006,7 +2006,7 @@ export interface components {
             version: number;
             events: components["schemas"]["RunEvent"][];
         };
-        RunEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["RunFinishedEvent"] | components["schemas"]["GenerationStartedEvent"] | components["schemas"]["PartStartedEvent"] | components["schemas"]["PartDeltaEvent"] | components["schemas"]["PartEndedEvent"] | components["schemas"]["MessageAppendedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"] | components["schemas"]["RetryScheduledEvent"] | components["schemas"]["TitleChangedEvent"] | components["schemas"]["TranscriptChangedEvent"] | components["schemas"]["CompactionStartedEvent"] | components["schemas"]["CompactionFinishedEvent"] | components["schemas"]["CompactionChangedEvent"];
+        RunEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["RunFinishedEvent"] | components["schemas"]["GenerationStartedEvent"] | components["schemas"]["PartStartedEvent"] | components["schemas"]["PartDeltaEvent"] | components["schemas"]["PartEndedEvent"] | components["schemas"]["MessageAppendedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"] | components["schemas"]["RetryScheduledEvent"] | components["schemas"]["TitleChangedEvent"] | components["schemas"]["TranscriptChangedEvent"] | components["schemas"]["CompactionStartedEvent"] | components["schemas"]["CompactionFinishedEvent"] | components["schemas"]["CompactionChangedEvent"] | components["schemas"]["ConversationDeletedEvent"];
         RunStartedEvent: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -2165,6 +2165,21 @@ export interface components {
              */
             type: "compaction_finished";
             summary?: components["schemas"]["ContextSummary"];
+        };
+        /**
+         * @description The conversation was deleted (`deleteConversation`, or
+         *     `deleteAllMyConversations`), perhaps from another tab or device. Sent
+         *     in a batch of its own with the nil run id and version 0, after the
+         *     delete committed; its runs were cancelled with it. A client showing
+         *     the conversation leaves it and stops following: reconnecting would be
+         *     404.
+         */
+        ConversationDeletedEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "conversation_deleted";
         };
         /**
          * @description The conversation's summary was made or taken back by a request of the

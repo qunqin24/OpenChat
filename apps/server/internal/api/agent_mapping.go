@@ -218,6 +218,8 @@ func toRunEvent(event agent.Event) (RunEvent, bool) {
 		err = out.FromCompactionFinishedEvent(CompactionFinishedEvent{Type: CompactionFinished, Summary: toContextSummary(e.Summary)})
 	case agent.CompactionChanged:
 		err = out.FromCompactionChangedEvent(CompactionChangedEvent{Type: CompactionChanged, Summary: toContextSummary(e.Summary)})
+	case agent.ConversationDeleted:
+		err = out.FromConversationDeletedEvent(ConversationDeletedEvent{Type: ConversationDeleted})
 	default:
 		return out, false
 	}

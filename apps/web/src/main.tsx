@@ -12,6 +12,7 @@ import { applyTheme, useUIStore } from '@/stores/ui-store'
 
 import 'streamdown/styles.css'
 import '@/styles/globals.css'
+import { followDeletions } from '@/lib/conversation-sync'
 
 function App() {
   const theme = useUIStore((s) => s.theme)
@@ -29,6 +30,7 @@ restoreQueryCache(queryClient)
 persistQueryCache(queryClient)
 // A session that ended is noticed by whichever call finds out first.
 setErrorListener((error) => void leaveIfSessionExpired(error, router))
+followDeletions(queryClient)
 
 const container = document.getElementById('root')
 if (!container) throw new Error('#root element is missing from index.html')

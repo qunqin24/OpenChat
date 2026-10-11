@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/qunqin/openchat/apps/server/internal/agent"
 	"github.com/qunqin/openchat/apps/server/internal/auth"
 
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
@@ -234,7 +235,16 @@ func (s *Server) DeleteConversation(w http.ResponseWriter, r *http.Request, conv
 		return
 	}
 	s.cancelRuns(cancelled)
+	s.announceDeleted(conversationId)
 	httpx.NoContent(w)
+}
+
+// announceDeleted tells the pages following conversations that they were
+// deleted. It belongs to no run: nil run id and version 0, like a title.
+func (s *Server) announceDeleted(conversationIDs ...uuid.UUID) {
+	for _, id := range conversationIDs {
+		s.runner.Hub().Publish(id, agent.Batch{Events: []agent.Event{agent.ConversationDeleted{}}})
+	}
 }
 
 // cancelRuns tells the runner about runs whose cancellation a committed

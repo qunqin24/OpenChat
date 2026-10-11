@@ -83,6 +83,18 @@ export class GuestHub {
     this.publish(conversationId, batch)
   }
 
+  /** The conversation was deleted (by this page or another of the guest's): its followers leave it. */
+  announceDeleted(conversationId: string) {
+    const batch: BatchEvent = {
+      type: 'batch',
+      runId: '00000000-0000-0000-0000-000000000000',
+      version: 0,
+      events: [{ type: 'conversation_deleted' }],
+    }
+    this.publish(conversationId, batch)
+    this.forget(conversationId)
+  }
+
   /** A conversation's followers are told of something that is for everyone and not any run: the page that deleted it, say. */
   forget(conversationId: string) {
     this.lives.delete(conversationId)

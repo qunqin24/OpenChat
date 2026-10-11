@@ -4,6 +4,7 @@ import { infiniteQueryOptions, type QueryClient, queryOptions, useInfiniteQuery,
 import { useEffect, useMemo, useRef } from 'react'
 
 import { api, unwrap } from '@/lib/api'
+import { announceDeleted } from '@/lib/conversation-sync'
 import { queryKeys } from '@/lib/query-keys'
 
 /** The conversation list, newest first, a page at a time. Shared with the route loader. */
@@ -167,6 +168,7 @@ export function useDeleteConversation() {
       queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(conversationId) })
       queryClient.removeQueries({ queryKey: queryKeys.messages.list(conversationId) })
       refreshLists(queryClient)
+      announceDeleted([conversationId])
     },
   })
 }

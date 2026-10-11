@@ -149,6 +149,13 @@ export function useConversationEvents(conversationId: string | undefined) {
             }
             applyBatch(conversationId, event)
             for (const runEvent of event.events) {
+              // Deleted, here or in another tab or on another device: there is
+              // nothing left to show, and reconnecting would only be refused.
+              if (runEvent.type === 'conversation_deleted') {
+                controller.abort()
+                leave()
+                return
+              }
               if (runEvent.type === 'run_finished') {
                 handOver(runEvent.run.id)
                 // Stopped because the model reached its cap: the picker is

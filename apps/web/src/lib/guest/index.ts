@@ -102,11 +102,14 @@ async function build(): Promise<Wired> {
     config: loadConfig,
     // The summary is read again with the transcript, so this tells it as a change.
     compactionChanged: (conversationId) => channel?.postMessage({ conversationId }),
+    conversationsDeleted: (ids) => channel?.postMessage({ deleted: ids }),
   })
   // Another tab of the same guest changed a conversation (a run finished, or
   // started over a deletion of rows).
   if (channel) {
-    channel.onmessage = (event: MessageEvent<{ conversationId?: string; from?: string }>) => {
+    channel.onmessage = (event: MessageEvent<{ conversationId?: string; from?: string; deleted?: string[] }>) => {
+      // Deleted in another tab: a page here showing one leaves it.
+      for (const deleted of event.data?.deleted ?? []) hub.announceDeleted(deleted)
       const id = event.data?.conversationId
       // A run this tab is following reports itself.
       if (id && !runner.isRunning(id)) hub.announceChanged(id, event.data?.from)

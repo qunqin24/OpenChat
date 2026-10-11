@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/qunqin/openchat/apps/server/internal/agent"
 	"github.com/qunqin/openchat/apps/server/internal/auth"
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 )
@@ -412,4 +413,55 @@ func TestRequestsQueuedBehindADeleteAreRefused(t *testing.T) {
 		t.Errorf("the conversation has %d runs, want the %d it had", got, runsBefore)
 	}
 	f.waitNoneRunning(conv.ID)
+}
+
+// A page following a conversation is told when it is deleted - from another
+// tab or device - so it can leave instead of showing it. Once, outside any run,
+// after the delete; delete-all tells each conversation's followers. A refused
+// delete (someone else's) announces nothing.
+func TestDeletingAConversationIsAnnounced(t *testing.T) {
+	f := newCapFixture(t, true)
+	deletedIn := func(sub *agent.Subscription) int {
+		t.Helper()
+		batches, _ := sub.Drain()
+		n := 0
+		for _, batch := range batches {
+			for _, e := range batch.Events {
+				if _, ok := e.(agent.ConversationDeleted); ok {
+					if batch.RunID != uuid.Nil || batch.Version != 0 {
+						t.Errorf("the announcement belongs to a run: %v/%d", batch.RunID, batch.Version)
+					}
+					n++
+				}
+			}
+		}
+		return n
+	}
+
+	conv := f.newConversation(f.member)
+	sub := f.server.runner.Hub().Subscribe(conv.ID)
+	defer sub.Close()
+	if rec := f.deleteConversation(f.admin, conv.ID); rec.Code != http.StatusNotFound {
+		t.Fatalf("someone else deleting: %d", rec.Code)
+	}
+	if n := deletedIn(sub); n != 0 {
+		t.Errorf("a refused delete announced %d", n)
+	}
+	if rec := f.deleteConversation(f.member, conv.ID); rec.Code != http.StatusNoContent {
+		t.Fatalf("delete: %d %s", rec.Code, rec.Body)
+	}
+	if n := deletedIn(sub); n != 1 {
+		t.Errorf("deleting announced %d times, want once", n)
+	}
+
+	a, b := f.newConversation(f.member), f.newConversation(f.member)
+	subA, subB := f.server.runner.Hub().Subscribe(a.ID), f.server.runner.Hub().Subscribe(b.ID)
+	defer subA.Close()
+	defer subB.Close()
+	if rec := f.deleteAll(f.member); rec.Code != http.StatusOK {
+		t.Fatalf("delete all: %d %s", rec.Code, rec.Body)
+	}
+	if deletedIn(subA) != 1 || deletedIn(subB) != 1 {
+		t.Error("delete all did not tell each conversation's followers")
+	}
 }

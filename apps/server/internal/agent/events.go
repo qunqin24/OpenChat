@@ -108,6 +108,14 @@ type CompactionFinished struct{ Summary *Summary }
 // version 0), like a title.
 type CompactionChanged struct{ Summary *Summary }
 
+// ConversationDeleted: the conversation was deleted, from this page or another
+// one. Published outside any run (nil run id, version 0) after the delete
+// committed, so a page following it can leave instead of showing a
+// conversation that no longer exists.
+type ConversationDeleted struct{}
+
+func (ConversationDeleted) isEvent() {}
+
 func (CompactionStarted) isEvent()  {}
 func (CompactionFinished) isEvent() {}
 func (CompactionChanged) isEvent()  {}

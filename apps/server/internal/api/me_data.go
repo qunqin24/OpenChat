@@ -198,6 +198,7 @@ func (s *Server) DeleteAllMyConversations(w http.ResponseWriter, r *http.Request
 	var (
 		deleted   int64
 		cancelled []uuid.UUID
+		gone      []uuid.UUID
 	)
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
@@ -205,6 +206,7 @@ func (s *Server) DeleteAllMyConversations(w http.ResponseWriter, r *http.Request
 		if err != nil {
 			return err
 		}
+		gone = ids
 		if deleted, err = q.SoftDeleteAllConversations(ctx, &user.ID); err != nil {
 			return err
 		}
@@ -216,5 +218,6 @@ func (s *Server) DeleteAllMyConversations(w http.ResponseWriter, r *http.Request
 		return
 	}
 	s.cancelRuns(cancelled)
+	s.announceDeleted(gone...)
 	httpx.JSON(w, http.StatusOK, DeletedConversations{Deleted: deleted})
 }
