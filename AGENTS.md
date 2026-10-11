@@ -67,7 +67,7 @@ grep -rn -- "--n-\|prism-next" apps/web/src/features/admin apps/web/src/componen
   - 周期按服务器本地时区的零点算（日从当天零点、月从 1 日零点，`time.Date` 构造，所以夏令时的 23/25 小时日也对）。时区来自环境变量 `TZ`（部署默认 `Asia/Shanghai`），`cmd/openchat` 引入 `time/tzdata`，因为生产镜像是 distroless、没有系统时区库，缺了它 Go 会悄悄把 `TZ=Asia/Shanghai` 当成 UTC。`total` 从 `capacity_since` 起算，NULL 表示整个历史；「重新计算」（`POST /admin/models/{id}/capacity/reset`）把它设为现在，使用日志不动。保存设置不会改 `capacity_since`（`SaveModelOverride` 的 `ON CONFLICT` 不更新它）；清掉上限时周期和管理员豁免会被写回默认值（`total`、开），不留看不见的状态。
   - 「恢复默认」（`DELETE .../settings`）删掉整行，所以上限、周期、豁免和起点一并消失；保存时如果什么都没决定（含没有上限）也删行，起点随之丢失。花费记录仍在使用日志里。
   - 上限对所有人生效，除非该模型的 `capacity_admin_exempt` 开着且请求者是管理员（`asker.admin`；管理员的花费照样计入）。访客不是管理员。后台为某人做的事（标题）按那个人算：管理员的对话在豁免下照常起标题。
-  - 执行点：①起一次运行之前，`chooseRun` → `pickChannel(ctx, modelID, asker)` 返回 `errModelCapacity`（409 `model_capacity_reached`），此时什么都还没写，发送、重新生成、改写、回答 ask_user 和访客运行都走这条；"随便哪个模型"（空 id）会跳过已满的模型，全满才拒绝。②运行当中，`agent.Options.Capacity`（`api.NewCapacityCheck`）在 `generate` 里**每次模型请求之前**问一次，满了就以 `failWithRow(CodeModelCapacity)` 结束，留下一条带该错误码的空失败助手消息；账本在请求结束时才写，所以光看账本，超出量是检查通过时已在飞的请求，不是整个工具循环；再加上下面的「在飞请求先预留」，同时发起的请求会互相看见。查询出错按失败处理（运行以 `internal` 结束），不放行。③任务模型：配置的任务模型满了就退回对话自己的模型，也满了就跳过标题（`taskModel` 返回 `errModelCapacity`；按需起标题的接口把它原样返回）。④`GET /models`、`/guest/config` 的 `atCapacity` 按请求者算，满的模型仍然列出来。新增任何会用模型的新路径（比如上下文压缩）都要在它的请求前过这几个点之一，用量记一个新 kind 就会自动计入花费。
+  - 执行点：①起一次运行之前，`chooseRun` → `pickChannel(ctx, modelID, asker)` 返回 `errModelCapacity`（409 `model_capacity_reached`），此时什么都还没写，发送、重新生成、改写、回答 ask_user 和访客运行都走这条；"随便哪个模型"（空 id）会跳过已满的模型，全满才拒绝。②运行当中，`agent.Options.Capacity`（`api.NewCapacityCheck`）在 `generate` 里**每次模型请求之前**问一次，满了就以 `failWithRow(CodeModelCapacity)` 结束，留下一条带该错误码的空失败助手消息；账本在请求结束时才写，所以光看账本，超出量是检查通过时已在飞的请求，不是整个工具循环；再加上下面的「在飞请求先预留」，同时发起的请求会互相看见。查询出错按失败处理（运行以 `internal` 结束），不放行。③任务模型：配置的任务模型满了就退回对话自己的模型，也满了就跳过标题（`taskModel` 返回 `errModelCapacity`；按需起标题的接口把它原样返回）。④`GET /models`、`/guest/config` 的 `atCapacity` 按请求者算，满的模型仍然列出来。新增任何会用模型的新路径（比如上下文压缩、内容审核）都要在它的请求前过这几个点之一，用量记一个新 kind 就会自动计入花费。
   - 保存任务模型（`UpdateSystemSettings`）不检查容量（`asker.ignoreCap`），只看它能不能被回答。
   - 索引：`usage_logs_model_idx` 是 `(model_id, created_at DESC) INCLUDE (cost)`，上限的求和是 index-only scan；只有设了上限的模型才查花费，没设的只多一次主键查询。`total` 且从不重新计算的上限要扫该模型全部历史，历史很长就用「重新计算」收窄。
   - 在飞请求先预留（`internal/api/spend_reserve.go`，`usage.Reserver`）：对**设了上限的模型**，每次模型请求（对话请求、运行里的压缩、标题、手动压缩，凡是过 `usage.Meter` 的）在发出前调 `meter.Reserve`，先预留「估算输入 token × 目录输入价」这一笔，要求「已花 + 其他在飞请求的预留 + 本次预留 < 上限」，否则拒绝（对话请求以 `failWithRow(CodeModelCapacity)` 结束，标题跳过，手动压缩 409 `model_capacity_reached`）；请求的账本行写完后 `Meter.End` 才释放，调用方另外 `defer meter.Release()` 兜底。预留只含输入（输出事先不知道，同时有多少个回答在写由下面的并发上限管），缓存命中也按全价输入预留，所以偏保守；没有价格的模型不预留。**只在进程内存里、尽力而为**：不建表、不会留下脏行，单实例下是准的，多实例各看各的预留，超出量最多是其他实例上在飞的请求。预留带 1 小时 TTL 防泄漏。比较在 SQL 里按 numeric 做（`ModelWouldReach`），持有互斥锁跨过这次查询，这样「读到的花费」一定包含了已释放预留对应的行。管理员被豁免时不被拒绝，但预留照记（他们的花费对别人算数）。
@@ -155,3 +155,49 @@ HttpOnly Cookie 会话，库里只存 token 的 SHA-256；前端从不接触 tok
 - 先占位后验证：登录先在 advisory lock 下「数 + 记」一行，密码对了再把这行删掉（所以只有失败才占额度，成功的登录不会耗尽它，也不会清掉别人的失败）。这样一批并发的猜测在 argon2 慢慢算的时候就已经被数进去，而不是算完才记。被拒的请求不记录，免得延长等待。密码对但账号待审批/已停用不算失败。
 - 注册：每个 IP 每小时 5 次，**每次尝试都算**（包括邮箱已被占用的——那是探测邮箱的办法），在 argon2 之前计数；超过是 429 `register_rate_limited`。关闭注册时的拒绝发生在计数之前，不记录。
 - 新增一类需要限流的公开端点，用 `takeAttempt(ctx, attemptLimit{...}, ip, subject)`，别另造一张表。
+
+## 内容审核
+
+用户发的一切都以运营者的上游账号（OpenAI、Anthropic、中转站）名义发出，违规内容会让这些账号被封。所以：用户新发的输入先审核再发给模型，拒绝的记日志，反复违规的账号被停用、游客地址被封禁；上游请求再带一个用户标识，万一被封也能定位到人。代码在 `internal/api/moderation*.go`、`end_user.go`，查询在 `queries/moderation.sql`。
+
+### 检查什么、在哪儿
+
+- 只检查**用户新发的输入**：发送（`CreateMessage`）的文字和图片附件、改写（`EditMessage`）的新文字（附件是第一次发送时审过的）、回答 `ask_user` 时用户**打的字**（`other`，选的选项是模型自己写的，不审）、游客的新消息和回答（`GuestRun` 里的 `moderateGuest`，只看浏览器真的发来字节的图片）。
+- **不审**：重新生成（重发的是审过的输入）、工具结果、网页内容、历史对话、标题、摘要——都不是用户新发的。新增会把用户输入送上游的路径要想清楚属于哪一类。
+- 位置和容量检查一样：`chooseRun` 之后、事务之前，所以被拒绝的请求不写行、不认领附件、不建 run。游客在 `planGuestRun` 之后、`seedGuest` 之前。拒绝是 **422 `content_blocked`**，`details.categories` 只列命中的类别名，不给分数、不给原文；服务不可用并且要拦时是 **503 `moderation_unavailable`**。幂等重试（`requestId` 已有 run）在检查之前就返回了，不会被重复审。
+
+### 设置
+
+全部在 `app_settings`，每个请求读一次（一条 `GetSettings` 查询），改了立即生效，保存时服务端校验（400 `invalid_moderation_*`、`moderation_key_required`、`moderation_model_required`、`invalid_guest_ban_hours`），任何一项不合法就一项都不存；入口是 `GET/PATCH /admin/moderation`，页面在 后台 → 系统 →「审核」。读不出来的存储值是错误（按"服务不可用"处理），不是默认值，免得一个坏值悄悄把审核关了。
+
+- `moderation_mode`：`off`（默认）/ `openai` / `model`。
+- `openai`：`moderation_openai_key`（只写不读，接口只报 `openaiKeySet` 和末 4 位，不进日志，错误信息里也抹掉）、`moderation_openai_base_url`（空 = `https://api.openai.com/v1`）。POST `{base}/moderations`，模型 `omni-moderation-latest`，输入是文字 + 图片（`image_url` data URL，最多 6 张、合计 24 MiB，超了算"检查不了"），超时 5 秒；文字超过 32000 字时取头尾各一半。多个 result 按"任一标记、取高分"合并。
+- `model`：`moderation_model`，目录里的模型。按**服务端任务**走 `pickChannel`（`staff=true`，管理员发的请求带 `admin` 以便容量豁免，和 `taskModel` 一样），用量记新类型 `moderation`（`usage_logs_kind` 约束已加，所以花费上限会计入）。提示词是英文、模型可见（`moderationPrompt`），用户文字放在 `<message>` 标签里当不可信数据，里面的同名标签被转义成 `&lt;`；要求只回一个 JSON（`categories` 布尔 + `scores`），容忍代码围栏和前后文字，读不出来就算失败。**只审文字**，图片不给任意模型。`errModelCapacity`（模型满了）按"服务不可用"处理，不去问。
+- `moderation_categories`：拦截的类别，OpenAI 的 13 个类别里多选，默认 `sexual/minors`、`harassment/threatening`、`hate/threatening`、`illicit/violent`、`self-harm/instructions`、`violence/graphic`。`moderation_min_score`（默认 0）：为 0 只看接口给的布尔；大于 0 时，选中类别的分数达到它也算命中——**只会更严，不会放过布尔已标记的**。
+- `moderation_exempt_admins`（默认**关**：管理员的消息发往同一个上游，同样要审）。
+- `moderation_on_error`：`allow`（默认）/ `block`，服务出错、超时、没渠道、模型满了、图片太多时账号用户的消息怎么办。**游客永远拦**（没有账号可以担责）。
+- `moderation_strikes`（默认 3，0 = 只记录不处罚）、`moderation_strike_window_hours`（默认 24）、`guest_ban_hours`（默认 168，0 = 永久；共用出口的地址永久封禁风险大）。
+
+### 日志与处罚
+
+- `moderation_events`（迁移 `…_content_moderation.sql`）：只记被拒绝的，不记通过的。`user_id`（账号，`SET NULL`）或 `guest_ip`（游客，IPv6 按 /64，即 `clientIP`），`conversation_id`（游客没有，`SET NULL`）、`source`（`send|edit|answer|guest`）、`mode`、`categories`、`excerpt`（原文前 500 字，运营者自己的记录，只有管理员能读）、`action`（目前只有 `blocked`）、`sanction`（这条事件触发了处罚才有：`disabled` / `banned`）。90 天后由清理循环的 `purgeModeration` 删。**不要给这张表加"user_id 或 guest_ip 必有一个"的约束**：用户行删除时外键置空会撞上它。
+- 接口（都在管理员分组，非管理员 404）：`GET /admin/moderation/events`（游标分页 `(created_at, id)`，过滤 `userId`、`guestIp`、`category`，游标只对发出它的那组过滤有效）、`GET/POST/DELETE /admin/moderation/bans`（POST 按日志行的 `eventId` 封那条的游客地址，账号的行是 409 `not_a_guest`；DELETE 的地址放查询参数，因为 IPv6 网段里有 `/`）。
+- 处罚在 `recordBlocked`：**一个事务**里按主体（`user:<id>` / `ip:<地址>`）取 advisory lock、写事件、数窗口内的违规、够了就处罚，所以并发的违规请求不会各数少一条。账号：走和管理员停用一样的两步（`AdminUpdateUser` 的 `disabled` + `DeleteUserSessions`），已开着的页面下次请求 401、登录页出现已有的封禁遮罩；**管理员永远不自动停用，只记录**。游客：`guest_bans`（`ip` 主键、`expires_at` 空为永久、`reason`、`event_id`），已封的地址再封只延长不缩短。计数**从该主体上一次被处罚之后**算起，所以管理员启用账号 / 解封地址后重新来过，不会下一条消息又触发。触发处罚的那个请求本身仍然返回 422，下一个请求才被 401 / 403。
+- 过期的封禁无论清理循环删没删都不生效（`GetGuestBan` 带过期条件），清理循环再把它们删掉。
+
+### 游客按地址封禁
+
+被封地址的每个 `/guest/*` 请求（`config`、`runs`、`title`、`compaction`、`images`、`favicons`）都是 **403 `guest_banned`**，`details.until` 总是在，要么是结束时间要么是 `null`（永久）；由 `rejectBannedGuests` 中间件挂在 `requireGuestMode` 之内。`/guest/status` 不拦，但多报 `banned` / `bannedUntil`（页面靠它知道）；`POST /guest/runs/{id}/cancel` 也不拦（运行已经在花钱，停下更省）。地址取 `clientIP`，所以和游客限额一样必须部署在会正确设置转发头的代理后面。
+
+### 用户标识（上游请求里的 end-user id）
+
+- 每个发往模型的请求带 `llm.Request.User`：账号 = `HMAC-SHA256(密钥, 用户 id)`，游客 = `HMAC-SHA256(密钥, "guest:" + clientIP)`，十六进制取前 32 位。密钥 `end_user_key` 在 `app_settings`，首次使用时生成（`InsertSettingIfMissing`，和 `storage_signing_key` 一路），**没有任何接口读或写它**；不含邮箱，别人拿不到密钥就反推不出 id。
+- 线上字段：OpenAI Chat Completions 和 Responses 是 `safety_identifier`，Anthropic 是 `metadata.user_id`，Gemini 没有这个字段所以不发。这几个键在 `Options.Extra` 里是保留键。
+- 第三方兼容端点可能拒绝不认识的字段，所以每个渠道有开关「发送用户标识」（`channels.send_user_id`，渠道表单里可改）：新建时 base URL（空则取该渠道类型的默认地址）的主机是 `api.openai.com` / `api.anthropic.com` 就默认开，否则关；迁移按同样规则给已有渠道回填。适配器只在开关开着且请求带标识时才发（`Config.SendUser`）。
+- 传到哪：run 的每次请求（`Options.EndUser`，游客的 run 取 `runs.client_ip`）、标题（含按需标题和游客标题）、上下文压缩（run 内、手动、游客）、模型审核的请求。新写会用模型的路径也要带上 `User`。
+
+### 前端
+
+- 被拒绝的发送 / 改写 / 回答走已有的发送错误路径（`useSendError`）：提示「这条消息未通过内容审核，没有发送」，**不显示类别**；输入框的文字和文件原样留着（`handleSend` 的 `onError`），改写的输入框在被拒绝后带着打的字重新打开（`NextChat` 的 `refusedEdit` → `UserMessage.restoredDraft`，因为改写期间那条消息被藏起来了，本地 state 保不住）。游客的拒绝同一条路：`GuestError` 带着服务端的 `details`。
+- 游客被封：`lib/guest/index.ts` 里所有发往网络的请求都经 `network`，看到 403 `guest_banned` 就 `markGuestBanned`（`stores/guest-ban-store.ts`），`/guest` 路由读到 `status.banned` 也一样；`NextShell` 在游客页上盖满窗的磨砂遮罩（`GuestBannedScreen`，复用 `AccountOverlay`），只留「登录」一条路。
+- 后台：系统 →「审核」页签（`features/admin/moderation/`：zod 模式 + vitest、表单、被封地址列表和「解封」），「审核日志」页（`features/admin/moderation-logs/`，`DataTableCursorPagination`，游客行有「封禁此地址」、账号行链到用户页），渠道表单的「发送用户标识」开关。使用日志的类型过滤里有「内容审核」。
