@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { ASK_USER } from './ask-user'
 import { assistant, id, liveRun, run, summary, text, toolCallRow, toolResultRow, user } from './testing'
-import { buildTurns, isRefusedTurn, pendingQuestion, sentTurns, turnText, type AssistantTurn } from './transcript'
+import { buildTurns, isRefusedTurn, pendingQuestion, refusedTail, sentTurns, turnText, type AssistantTurn } from './transcript'
 
 const assistantTurns = (turns: ReturnType<typeof buildTurns>) =>
   turns.filter((t): t is AssistantTurn => t.kind === 'assistant')
@@ -311,6 +311,33 @@ describe('a refused message', () => {
       refused('bad'),
     ]
     const turns = buildTurns(rows, null)
-    expect(pendingQuestion(turns, false)).toBe('call-ask')
+    // Not answerable while the refused message ends the conversation: it is reworded first.
+    expect(pendingQuestion(turns, false)).toBeNull()
+    // With something after the refused message (old data), the question is still the question.
+    const after = [...rows, assistant('stray', id('r1'))]
+    expect(refusedTail(buildTurns(after, null))).toBeNull()
+  })
+})
+
+describe('refusedTail', () => {
+  const refused = (name: string) => user(name, { status: 'blocked' })
+
+  it('is the refused message the conversation ends on', () => {
+    const bad = refused('bad')
+    expect(refusedTail(buildTurns([user('q'), assistant('a', id('r1')), bad], null))).toBe(bad)
+    expect(refusedTail(buildTurns([bad], null))).toBe(bad)
+  })
+
+  it('is nothing when anything follows it, or nothing was refused', () => {
+    expect(refusedTail(buildTurns([user('q'), assistant('a', id('r1'))], null))).toBeNull()
+    expect(refusedTail(buildTurns([refused('bad'), user('q')], null))).toBeNull()
+    expect(refusedTail(buildTurns([], null))).toBeNull()
+  })
+
+  it('is gone while a redo hides it, and while a run follows it', () => {
+    const bad = refused('bad')
+    const rows = [user('q'), assistant('a', id('r1')), bad]
+    expect(refusedTail(buildTurns(rows, null, { from: bad.id }))).toBeNull()
+    expect(refusedTail(buildTurns(rows, liveRun(run('r2'), [user('q2')])))).toBeNull()
   })
 })

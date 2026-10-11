@@ -270,11 +270,13 @@ func TestImagesTooMuchToCheckAreRefused(t *testing.T) {
 	}
 
 	// Six are checked.
+	h.discardRefused()
 	if got := refused(t, sendWith(many[:moderationMaxImages]...)); strings.Join(got, ",") != "sexual" {
 		t.Errorf("six pictures, one of them bad: %v", got)
 	}
 
 	// One that grew past the limit after it was admitted.
+	h.discardRefused()
 	fine, grown := upload("\x89PNG fine"), upload("\x89PNG grown")
 	h.server.store = oversizeStore{memoryStore: blobs, big: grown.key}
 	tooLarge(t, sendWith(fine, grown))

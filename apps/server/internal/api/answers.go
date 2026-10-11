@@ -43,6 +43,9 @@ var (
 	errNotLatest = httpx.NewError(http.StatusConflict, "not_latest",
 		"only the last message's answer can be redone")
 	errMessageNotFound = httpx.NewError(http.StatusNotFound, "message_not_found", "no such message in this conversation")
+
+	errAttachmentsNotEditable = httpx.NewFieldError("attachmentIds", "attachments_not_editable",
+		"only a message that moderation refused takes files when it is edited; any other keeps its own")
 )
 
 // appendInput writes a user message at the end of a conversation, under the
@@ -93,6 +96,12 @@ func (s *Server) RegenerateAnswer(w http.ResponseWriter, r *http.Request, conver
 		return
 	}
 
+	// A refused message at the end is reworded first (moderation_kept.go); the
+	// question before it is not the one to answer again.
+	if err := requireRevised(ctx, s.q, conversationId); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
 	input, err := s.q.GetLastInput(ctx, conversationId)
 	if errors.Is(err, pgx.ErrNoRows) {
 		httpx.Fail(w, r, errNothingToAnswer)
@@ -121,6 +130,9 @@ func (s *Server) RegenerateAnswer(w http.ResponseWriter, r *http.Request, conver
 			return err
 		}
 		if err := requireIdle(ctx, q, conversationId); err != nil {
+			return err
+		}
+		if err := requireRevised(ctx, q, conversationId); err != nil {
 			return err
 		}
 		// The question was looked up before the lock: a message sent since is
@@ -180,8 +192,21 @@ func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversatio
 		httpx.JSON(w, http.StatusAccepted, found)
 		return
 	}
-	if _, err := s.q.GetInput(ctx, sqlc.GetInputParams{ID: messageId, ConversationID: conversationId}); err != nil {
+	target, err := s.q.GetInput(ctx, sqlc.GetInputParams{ID: messageId, ConversationID: conversationId})
+	if err != nil {
 		httpx.Fail(w, r, inputErr(err))
+		return
+	}
+	// A message that was refused is the one an edit can send files with: it
+	// carried none (they stayed the composer's), so a reworded one takes the
+	// composer's. Any other keeps its own.
+	refusedTarget := target.Status == sqlc.MessageStatusBlocked
+	var ids []uuid.UUID
+	if body.AttachmentIds != nil {
+		ids = *body.AttachmentIds
+	}
+	if len(ids) > 0 && !refusedTarget {
+		httpx.Fail(w, r, errAttachmentsNotEditable)
 		return
 	}
 	choice, err := s.chooseRun(ctx, conv, body.Model, body.ReasoningEffort, body.WebSearch)
@@ -189,9 +214,22 @@ func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversatio
 		httpx.Fail(w, r, err)
 		return
 	}
-	// The new wording only: the files it carries were checked when it was first sent.
-	if err := s.moderate(ctx, s.accountSubject(ctx, user, conversationId, ModerationSourceEdit),
-		moderationInput{text: content}); err != nil {
+	files, err := s.admitAttachments(ctx, user.ID, choice.modelID, ids)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	// The new wording, and any files this edit brings: those of a question that
+	// was sent were checked when it was first sent. As a send is, with the
+	// pictures read once and what was read recorded (attachment_digest.go).
+	images, digests := s.checkedImages(files)
+	if refused, err := s.moderated(ctx, s.accountSubject(ctx, user, conversationId, ModerationSourceEdit),
+		moderationInput{text: content, images: images}); err != nil {
+		// The words that were refused replace the refused message they were to
+		// reword, so the transcript shows what was tried last.
+		if refused && refusedTarget {
+			err = s.keepRefusedEdit(ctx, conversationId, target, content, err)
+		}
 		httpx.Fail(w, r, err)
 		return
 	}
@@ -224,7 +262,7 @@ func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversatio
 
 		// The new wording, and the files the question carried: an edit changes
 		// what was asked, not what was attached.
-		parts := []llm.Part{llm.TextPart{Text: content}}
+		parts := inputPartsChecked(content, files, digests)
 		if old, err := agent.DecodeParts(edited.Parts); err == nil {
 			for _, part := range old {
 				if file, ok := part.(llm.AttachmentPart); ok {
@@ -235,6 +273,18 @@ func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversatio
 		input, err = appendInput(ctx, q, conversationId, nil, content, parts)
 		if err != nil {
 			return err
+		}
+		if len(files) > 0 {
+			// The claim re-checks what admission saw, as a send's does.
+			claimed, err := q.AttachToMessage(ctx, sqlc.AttachToMessageParams{
+				MessageID: &input.ID, UserID: &user.ID, Ids: attachmentIDs(files),
+			})
+			if err != nil {
+				return err
+			}
+			if claimed != int64(len(files)) {
+				return errAttachmentUnavailable
+			}
 		}
 		// The files change hands before the rows are deleted, or they would
 		// go with the question they were attached to.

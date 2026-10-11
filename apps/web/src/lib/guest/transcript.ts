@@ -63,6 +63,20 @@ export function transcriptOf(data: ConversationData): StoredMessage[] {
 export const isBlocked = (row: { status: string }): boolean => row.status === 'blocked'
 
 /**
+ * Whether the transcript ends on a refused message: its last row is one. The
+ * conversation does not go on past it - a send, a regeneration and an answer to
+ * the model's question are refused (`revise_refused`) - until the refused message
+ * is reworded, which is an edit of it. The server's `requireRevised`, asked of the
+ * rows the browser keeps: a guest's server holds none, so this is where the rule
+ * is kept for a guest.
+ */
+export function endsRefused(rows: { createdAt: string; id: string; status: string }[]): boolean {
+  let last: { createdAt: string; id: string; status: string } | undefined
+  for (const row of rows) if (!last || byRow(last, row) < 0) last = row
+  return last !== undefined && isBlocked(last)
+}
+
+/**
  * The rows a model can be given or a summary can cover, in the order they were
  * given: the transcript less the refused messages. The server's context
  * queries (`ListMessagesAfter`, `ListMessagesFrom`, `ListRecentMessages`) leave

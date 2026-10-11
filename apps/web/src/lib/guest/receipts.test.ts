@@ -203,8 +203,10 @@ describe('over a run', () => {
     expect((await h.repo.data(c)).messages.map((m) => m.status)).toEqual(['blocked'])
 
     // An old row, a note or the instructions were what failed: the message was not.
+    // (The refused message is reworded, as the conversation stops at it.)
     details = { categories: ['violence/graphic'], history: true }
-    await expect(runner.start(c, { action: 'send', content: 'fine too', attachmentIds: [], id: 'in-2' }, {})).rejects.toMatchObject({
+    const blocked = (await h.repo.data(c)).messages[0]!
+    await expect(runner.start(c, { action: 'edit', content: 'fine too', messageId: blocked.id, id: 'in-2' }, {})).rejects.toMatchObject({
       code: 'content_blocked', details: { history: true },
     })
     expect((await h.repo.data(c)).messages.map((m) => m.content)).toEqual(['fine'])

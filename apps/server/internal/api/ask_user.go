@@ -58,6 +58,12 @@ func (s *Server) AnswerQuestion(w http.ResponseWriter, r *http.Request, conversa
 		return
 	}
 
+	// A refused message after the question is reworded first
+	// (moderation_kept.go): the answer would go after it.
+	if err := requireRevised(ctx, s.q, conversationId); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
 	asked, err := pendingQuestion(ctx, s.q, conversationId, callId)
 	if err != nil {
 		httpx.Fail(w, r, err)
@@ -120,6 +126,9 @@ func (s *Server) AnswerQuestion(w http.ResponseWriter, r *http.Request, conversa
 			return err
 		}
 		if _, err := pendingQuestion(ctx, q, conversationId, callId); err != nil {
+			return err
+		}
+		if err := requireRevised(ctx, q, conversationId); err != nil {
 			return err
 		}
 		var err error

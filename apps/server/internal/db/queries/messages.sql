@@ -104,6 +104,17 @@ WHERE conversation_id = $1
 ORDER BY created_at DESC, id DESC
 LIMIT 1;
 
+-- name: GetLastMessage :one
+-- The conversation's last row, whatever it is: where the transcript stops. A
+-- conversation whose last row is a refused message (status 'blocked') does not
+-- go on until that message is reworded, so every request that would write
+-- after it asks this first, with the conversation held.
+SELECT *
+FROM messages
+WHERE conversation_id = $1
+ORDER BY created_at DESC, id DESC
+LIMIT 1;
+
 -- name: GetInput :one
 -- A user message of the conversation - a refused one too: it can be edited like
 -- any other, and the new wording is checked again.

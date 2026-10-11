@@ -397,9 +397,27 @@ describe('a refused message', () => {
     // It carries no run and no file.
     expect(page.items.at(-1)).not.toHaveProperty('runId')
     expect(page.items.at(-1)).not.toHaveProperty('attachments')
-    // A second one goes after the first.
-    await h.repo.keepBlocked(c, 'BAD AGAIN')
-    expect((await h.repo.listMessages(c, {})).items.map((m) => m.content).slice(-2)).toEqual(['BAD', 'BAD AGAIN'])
+    // The conversation stops at it: a second does not go after the first.
+    expect(await h.repo.keepBlocked(c, 'BAD AGAIN')).toBeNull()
+    expect((await h.repo.listMessages(c, {})).items.map((m) => m.content)).toEqual(['q1', 'a1', 'BAD'])
+  })
+
+  it('is replaced by the words that were refused in its place, while it is still the last row', async () => {
+    const h = harness()
+    const c = await h.conversation()
+    await h.turn(c, { ask: 'q1', answer: 'a1' })
+    const kept = await h.repo.keepBlocked(c, 'BAD')
+    const again = await h.repo.keepBlocked(c, 'BAD 2', h.tick(), kept!.id)
+    expect(again).toMatchObject({ content: 'BAD 2', status: 'blocked' })
+    expect(again!.id).not.toBe(kept!.id)
+    expect((await h.repo.listMessages(c, {})).items.map((m) => m.content)).toEqual(['q1', 'a1', 'BAD 2'])
+
+    // Not the last row any more (or not a refused message at all): nothing changes.
+    await h.turn(c, { ask: 'q2', answer: 'a2', replaces: again!.id })
+    expect(await h.repo.keepBlocked(c, 'BAD 3', undefined, again!.id)).toBeNull()
+    const q1 = (await h.repo.data(c)).messages.find((m) => m.content === 'q1')!
+    expect(await h.repo.keepBlocked(c, 'BAD 4', undefined, q1.id)).toBeNull()
+    expect((await h.repo.listMessages(c, {})).items.map((m) => m.content)).toEqual(['q1', 'a1', 'q2', 'a2'])
   })
 
   it('is not found by a search and not in the export', async () => {
@@ -503,7 +521,7 @@ describe('a refused message in a conversation with nothing else', () => {
     const kept = await h.repo.keepBlocked(c, 'BAD', early)
     expect(Date.parse(kept!.createdAt)).toBe(Date.parse(newest) + 1)
     const told = h.tick()
-    const later = await h.repo.keepBlocked(c, 'BAD 2', told)
+    const later = await h.repo.keepBlocked(c, 'BAD 2', told, kept!.id)
     expect(later!.createdAt).toBe(told)
   })
 })

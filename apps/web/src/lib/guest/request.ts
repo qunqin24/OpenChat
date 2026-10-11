@@ -11,7 +11,7 @@ import { GuestError } from './errors'
 import { requestReceipts, signedSummary } from './receipts'
 import { DEFAULT_TITLE } from './repo'
 import { rowsToSend, survivingSummary } from './summary'
-import { contextOf, lastQuestionIndex, transcriptOf } from './transcript'
+import { contextOf, isBlocked, lastQuestionIndex, transcriptOf } from './transcript'
 import type { ConversationData, StoredBlob, StoredMessage, StoredPersonalization } from './types'
 
 /**
@@ -44,7 +44,7 @@ export interface RunParams {
 
 export type RunAction =
   | { action: 'send'; content: string; attachmentIds: string[]; id: string }
-  | { action: 'edit'; content: string; messageId: string; id: string }
+  | { action: 'edit'; content: string; messageId: string; id: string; attachmentIds?: string[] }
   | { action: 'regenerate' }
   | { action: 'answer'; callId: string; answers: { selected: string[]; other?: string }[] }
 
@@ -54,7 +54,13 @@ export interface BuiltRun {
    * The question being asked, as the page will keep it once the run starts;
    * `replaces` is the question a reworded one takes the place of.
    */
-  input?: { id: string; replaces?: string; blobs: StoredBlob[] }
+  input?: {
+    id: string
+    replaces?: string
+    blobs: StoredBlob[]
+    /** The question replaced was a refused message: words refused again take its place. */
+    replacesRefused?: boolean
+  }
 }
 
 const invalid = (code: string, message: string, status = 400) => new GuestError(status, code, message)
@@ -97,13 +103,28 @@ export async function buildRunRequest(params: RunParams, what: RunAction): Promi
       if (at < 0) throw invalid('message_not_found', 'no such message in this conversation', 404)
       const edited = all[at]!
       history = contextOf(all.slice(0, at))
-      // An edit changes what was asked, not what was attached: the question keeps its files.
-      const files: StoredBlob[] = []
-      for (const file of edited.attachments ?? []) {
-        const blob = await params.readBlob(file.id)
-        if (blob) files.push(blob)
+      const refused = isBlocked(edited)
+      // A refused message carried no files (they stayed the composer's), so a
+      // reworded one takes the composer's; any other keeps its own and takes none,
+      // as on the server.
+      if ((what.attachmentIds?.length ?? 0) > 0 && !refused) {
+        throw invalid('attachments_not_editable', 'only a message that moderation refused takes files when it is edited', 400)
       }
-      input = { id: what.id, replaces: edited.id, blobs: files }
+      const files: StoredBlob[] = []
+      if (refused) {
+        const picked = await Promise.all((what.attachmentIds ?? []).map((id) => params.readBlob(id)))
+        if (picked.some((b) => !b)) {
+          throw invalid('attachment_unavailable', 'a file was never uploaded, was already sent, or is not yours', 400)
+        }
+        files.push(...(picked as StoredBlob[]))
+      } else {
+        // An edit changes what was asked, not what was attached: the question keeps its files.
+        for (const file of edited.attachments ?? []) {
+          const blob = await params.readBlob(file.id)
+          if (blob) files.push(blob)
+        }
+      }
+      input = { id: what.id, replaces: edited.id, blobs: files, ...(refused ? { replacesRefused: true } : {}) }
       inputRow = userRow(what.id, what.content, files)
       break
     }
