@@ -1,10 +1,30 @@
 import { OpenChatError } from '@openchat/api-client'
 import { describe, expect, it } from 'vitest'
 
-import { refusalOf } from './moderation-refusal'
+import { refusalOf, saveRefusalOf } from './moderation-refusal'
 
 const error = (code: string, details?: Record<string, unknown>) =>
   new OpenChatError(422, { code, message: 'x', ...(details ? { details } : {}) })
+
+describe('saveRefusalOf', () => {
+  it('is a refusal with its warning for content_blocked', () => {
+    expect(saveRefusalOf(error('content_blocked', { categories: ['violence'], strikesLeft: 2, windowHours: 24 }))).toEqual({
+      kind: 'blocked',
+      strikesLeft: 2,
+      windowHours: 24,
+    })
+    expect(saveRefusalOf(error('content_blocked', { categories: ['violence'] }))).toEqual({ kind: 'blocked' })
+  })
+
+  it('is unavailable when the check could not be made', () => {
+    expect(saveRefusalOf(new OpenChatError(503, { code: 'moderation_unavailable', message: 'x' }))).toEqual({ kind: 'unavailable' })
+  })
+
+  it('is null for every other failure', () => {
+    expect(saveRefusalOf(error('memory_full'))).toBeNull()
+    expect(saveRefusalOf(new Error('boom'))).toBeNull()
+  })
+})
 
 describe('refusalOf', () => {
   it('is null for anything but content_blocked', () => {

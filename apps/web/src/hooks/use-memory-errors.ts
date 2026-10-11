@@ -1,11 +1,34 @@
 import { useTranslation } from 'react-i18next'
 
 import { memoryErrorCode } from '@/lib/memory-errors'
+import { saveRefusalOf } from '@/lib/moderation-refusal'
+
+/**
+ * The words for a save that content moderation turned away, or null when that is
+ * not why it failed: the wording family of a refused message ("did not pass
+ * content moderation"), with the strike warning when the server gives one.
+ * Nothing was saved, so the text stays where the person typed it.
+ */
+export function useSaveRefusalText() {
+  const { t } = useTranslation()
+  return (error: unknown): string | null => {
+    const refusal = saveRefusalOf(error)
+    if (!refusal) return null
+    if (refusal.kind === 'unavailable') return t('settings.refused.unavailable')
+    const warning = refusal.strikesLeft
+      ? ` ${t('chat.refused.warning', { count: refusal.strikesLeft, hours: refusal.windowHours })}`
+      : ''
+    return t('settings.refused.blocked') + warning
+  }
+}
 
 /** The words for a failed write to the memory list. */
 export function useMemoryErrorText() {
   const { t } = useTranslation()
+  const refused = useSaveRefusalText()
   return (error: unknown) => {
+    const refusal = refused(error)
+    if (refusal) return refusal
     switch (memoryErrorCode(error)) {
       case 'memory_full':
         return t('settings.memory.full-error')

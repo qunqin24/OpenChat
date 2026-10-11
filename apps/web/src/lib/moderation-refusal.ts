@@ -32,3 +32,20 @@ export function refusalOf(error: unknown): Refusal | null {
   }
   return out
 }
+
+/**
+ * Why saving the person's own text - custom instructions, a memory - failed when
+ * content moderation was the reason: the text was refused (422 `content_blocked`,
+ * with the same strike warning a refused message carries), or the check could not
+ * be made and the setting says not to go on without it (503 `moderation_unavailable`).
+ * Null for any other failure. Nothing was saved either way, and the page keeps
+ * what the person typed.
+ */
+export type SaveRefusal = ({ kind: 'blocked' } & Refusal) | { kind: 'unavailable' }
+
+export function saveRefusalOf(error: unknown): SaveRefusal | null {
+  const refusal = refusalOf(error)
+  if (refusal) return { kind: 'blocked', ...refusal }
+  if (isOpenChatError(error) && error.code === 'moderation_unavailable') return { kind: 'unavailable' }
+  return null
+}

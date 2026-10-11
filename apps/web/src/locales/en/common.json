@@ -1148,7 +1148,10 @@
         "send": "Send",
         "edit": "Edit",
         "answer": "Answer",
-        "guest": "Guest"
+        "guest": "Guest",
+        "instructions": "Custom instructions",
+        "memory": "Memory",
+        "snapshot": "Checked at chat start"
       },
       "sanction": {
         "disabled": "Account disabled",
@@ -1278,6 +1281,10 @@
       "learn": "Learn from conversations",
       "soon": "Coming soon",
       "memory-description": "Add memories with Manage below to make the model more helpful and tailored to you. The model also keeps notes worth remembering on its own as you chat, tells you in its reply, and you can undo it."
+    },
+    "refused": {
+      "blocked": "This text did not pass content moderation and was not saved. Please change it and try again.",
+      "unavailable": "Content moderation is unavailable right now, so this was not saved. Try again later."
     },
     "memory": {
       "clear-yes": "Yes, clear all",

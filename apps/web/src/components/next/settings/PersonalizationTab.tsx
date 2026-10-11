@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { useSaveRefusalText } from '@/hooks/use-memory-errors'
 import { useMemories, usePersonalization, useUpdatePersonalization } from '@/hooks/use-memory'
 import { cn } from '@/lib/utils'
 import NextSwitch from '../NextSwitch'
@@ -46,7 +47,10 @@ function Loaded({ host }: { host: HTMLElement | null }) {
   const { data } = usePersonalization()
   const update = useUpdatePersonalization()
   const memories = useMemories()
+  const refusalText = useSaveRefusalText()
   const [draft, setDraft] = useState<{ about?: string; style?: string }>({})
+  // Why the last save was turned away by content moderation. The fields keep what was typed.
+  const [refusal, setRefusal] = useState<string>()
   const [managing, setManaging] = useState(false)
   if (!data) return null
 
@@ -59,9 +63,13 @@ function Loaded({ host }: { host: HTMLElement | null }) {
     try {
       await update.mutateAsync({ aboutYou: about, responseStyle: style })
       setDraft({})
+      setRefusal(undefined)
       toast.success(t('settings.personalization.saved'))
-    } catch {
-      toast.error(t('settings.personalization.save-failed'))
+    } catch (failure) {
+      // Refused by content moderation: said under the fields, which keep the text.
+      const refused = refusalText(failure)
+      if (refused) setRefusal(refused)
+      else toast.error(t('settings.personalization.save-failed'))
     }
   }
 
@@ -84,7 +92,10 @@ function Loaded({ host }: { host: HTMLElement | null }) {
           placeholder={t('settings.personalization.about-placeholder')}
           value={about}
           max={data.instructionLimit}
-          onChange={(value) => setDraft((d) => ({ ...d, about: value }))}
+          onChange={(value) => {
+            setRefusal(undefined)
+            setDraft((d) => ({ ...d, about: value }))
+          }}
         />
         <InstructionField
           id="instructions-style"
@@ -92,8 +103,16 @@ function Loaded({ host }: { host: HTMLElement | null }) {
           placeholder={t('settings.personalization.style-placeholder')}
           value={style}
           max={data.instructionLimit}
-          onChange={(value) => setDraft((d) => ({ ...d, style: value }))}
+          onChange={(value) => {
+            setRefusal(undefined)
+            setDraft((d) => ({ ...d, style: value }))
+          }}
         />
+        {refusal && (
+          <p className="n-settings-error is-after-field" role="alert">
+            {refusal}
+          </p>
+        )}
 
         <hr className="n-settings-rule" />
 

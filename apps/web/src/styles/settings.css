@@ -164,6 +164,7 @@
 .prism-next .n-settings-help { margin: 0; color: var(--n-text-2); font-size: 12px; line-height: 17px; }
 .prism-next .n-settings-help.is-faint { margin-top: 8px; color: var(--n-text-3); }
 .prism-next .n-settings-error { margin: 0; color: var(--n-err); font-size: 12px; line-height: 17px; }
+.prism-next .n-settings-error.is-after-field { margin-top: 8px; }
 .prism-next .n-settings-callout {
   margin: 10px 0 0;
   padding: 8px 12px;
