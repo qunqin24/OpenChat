@@ -373,10 +373,17 @@ func TestRequestsQueuedBehindADeleteAreRefused(t *testing.T) {
 		}()
 	}
 	// Each is blocked on the lock, past the checks that read the conversation.
+	// Watched from the transaction's own connection: the three requests each
+	// hold one of the pool's, and on a small runner (2 CPUs: a pool of 4) one
+	// more acquire would wait for ever. Inside a transaction pg_stat_activity
+	// is a snapshot taken at first read, so it is cleared before each look.
 	deadline := time.Now().Add(10 * time.Second)
 	for {
 		var waiting int
-		if err := f.pool.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query ILIKE '%FOR UPDATE%'`).Scan(&waiting); err != nil {
+		if _, err := tx.Exec(ctx, `SELECT pg_stat_clear_snapshot()`); err != nil {
+			t.Fatal(err)
+		}
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query ILIKE '%FOR UPDATE%'`).Scan(&waiting); err != nil {
 			t.Fatal(err)
 		}
 		if waiting >= len(requests) {
