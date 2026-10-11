@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { GuestError } from './errors'
 import { harness, type Harness } from './testing'
-import { contextOf, deletedBy, isBlocked, lastQuestionIndex, pageOf, stampAfter, timeKey } from './transcript'
+import { contextOf, deletedBy, endsRefused, isBlocked, lastQuestionIndex, pageOf, stampAfter, timeKey } from './transcript'
 import type { StoredMessage } from './types'
 
 // The rules of a conversation (AGENTS.md, "对话是一条线"), as the guest's
@@ -233,5 +233,18 @@ describe('a refused message', () => {
     expect(deletedBy(rows, { after: 'q2' }).map((m) => m.id)).toEqual(['a2', 'b2'])
     // Editing the refused message deletes it and what follows, as any question.
     expect(deletedBy(rows, { from: 'b1' }).map((m) => m.id)).toEqual(['b1', 'q2', 'a2', 'b2'])
+  })
+
+  // The conversation stops at a refused message: a send, a regeneration and an
+  // answer are refused until it is reworded (the server's requireRevised).
+  it('ends on a refused message only when it is the last row, whatever order the rows are held in', () => {
+    const q = row('q1', 'user'), a = row('a1', 'assistant', 'complete', 1), b = row('b', 'user', 'blocked', 2)
+    expect(endsRefused([q, a, b])).toBe(true)
+    expect(endsRefused([b, a, q])).toBe(true)
+    expect(endsRefused([b])).toBe(true)
+    expect(endsRefused([q, a])).toBe(false)
+    expect(endsRefused([])).toBe(false)
+    // Old data: something written after it.
+    expect(endsRefused([q, b, row('c', 'assistant', 'complete', 3)])).toBe(false)
   })
 })

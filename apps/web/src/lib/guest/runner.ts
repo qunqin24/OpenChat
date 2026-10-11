@@ -13,6 +13,7 @@ import { GuestError } from './errors'
 import type { GuestHub } from './hub'
 import type { GuestRepo } from './repo'
 import { buildRunRequest, type RunAction } from './request'
+import { endsRefused } from './transcript'
 
 /** What the composer asked this run for. */
 export interface RunChoice {
@@ -34,8 +35,12 @@ export interface RunnerDeps {
   onSettled?: (conversationId: string) => void
   /** Rows were deleted by a redo that has started: other pages showing the conversation hold them. */
   onDeleted?: (conversationId: string, from?: string) => void
-  /** A refused message was kept at the end of the conversation: other pages showing it do not hold it yet. */
-  onKept?: (conversationId: string) => void
+  /**
+   * A refused message was kept at the end of the conversation, in the place of
+   * the refused message `from` when it replaced one: other pages showing it do not
+   * hold it yet.
+   */
+  onKept?: (conversationId: string, from?: string) => void
 }
 
 /** How often a run says it is still being followed. */
@@ -62,6 +67,10 @@ interface Progress {
 const CONTENT_BLOCKED = 'content_blocked'
 
 const busy = () => new GuestError(409, 'conversation_busy', 'this conversation is already answering')
+
+/** The server's answer to a request that would go on past a refused message. */
+const reviseRefused = () =>
+  new GuestError(409, 'revise_refused', 'the last message was refused by content moderation; reword it before going on')
 
 /**
  * Runs a guest's questions. A run is one request to the server (`/guest/runs`)
@@ -120,6 +129,11 @@ export class GuestRunner {
 
     const data = await repo.data(conversationId)
     if (repo.activeRun(data)) throw busy()
+    // A refused message is reworded, not gone past: the server keeps this for an
+    // account (`requireRevised`) and holds no guest's rows, so the browser does.
+    // An edit is the way on - of the refused message, or of an earlier question,
+    // which deletes it with the rest.
+    if (what.action !== 'edit' && endsRefused(data.messages)) throw reviseRefused()
     const built = await buildRunRequest(
       {
         data,
@@ -154,20 +168,25 @@ export class GuestRunner {
       const refusal = asGuestError(error)
       // The server kept nothing of a refused message (it keeps nothing of a
       // guest), so the browser keeps it, as the server does an account's: a
-      // refused *send*; the words of an edit or an answer go back to their field.
-      // Not when it was the conversation that was refused - a row, a note, the
-      // instructions the browser sent along with it (`details.history`): the new
-      // message was not what failed.
-      if (what.action === 'send' && refusal.code === CONTENT_BLOCKED && refusal.details?.history !== true) {
+      // refused *send*, and the words that were to reword a refused message,
+      // which take its place; the words of any other edit or an answer go back to
+      // their field. Not when it was the conversation that was refused - a row, a
+      // note, the instructions the browser sent along with it (`details.history`):
+      // the new message was not what failed.
+      let words: { content: string; replaced?: string } | undefined
+      if (what.action === 'send') words = { content: what.content }
+      else if (what.action === 'edit' && built.input?.replacesRefused) words = { content: what.content, replaced: what.messageId }
+      if (words && refusal.code === CONTENT_BLOCKED && refusal.details?.history !== true) {
+        const replaced = words.replaced
         // In the server's clock, which the refusal tells: the page's own is not the rows'.
         const at = typeof refusal.details?.at === 'string' ? refusal.details.at : undefined
-        const kept = await repo.keepBlocked(conversationId, what.content, at).catch((storageError: unknown) => {
+        const kept = await repo.keepBlocked(conversationId, words.content, at, replaced).catch((storageError: unknown) => {
           console.warn('guest data: keeping a refused message failed', storageError)
           return null
         })
         if (kept) {
-          hub.announceChanged(conversationId)
-          this.deps.onKept?.(conversationId)
+          hub.announceChanged(conversationId, replaced)
+          this.deps.onKept?.(conversationId, replaced)
           throw new GuestError(refusal.status, refusal.code, refusal.message, refusal.field, {
             ...refusal.details,
             messageId: kept.id,

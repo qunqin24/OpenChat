@@ -2,7 +2,7 @@ import type { BatchEvent, ConversationEvent, GuestEndEvent, GuestRunRequest, Mes
 import { describe, expect, it, vi } from 'vitest'
 
 import { GuestHub } from './hub'
-import { buildRunRequest, MAX_FILE_BYTES, MAX_ROWS } from './request'
+import { buildRunRequest, MAX_FILE_BYTES, MAX_ROWS, type RunAction } from './request'
 import { createGuestApi, apiPath } from './router'
 import { GuestRunner } from './runner'
 import { harness } from './testing'
@@ -70,6 +70,7 @@ function setup(respond: (request: GuestRunRequest, url: string) => Response | Pr
   const settled: string[] = []
   const deleted: (string | undefined)[][] = []
   const kept: string[] = []
+  const keptFrom: (string | undefined)[] = []
   const runner = new GuestRunner({
     repo: h.repo,
     hub,
@@ -77,7 +78,10 @@ function setup(respond: (request: GuestRunRequest, url: string) => Response | Pr
     tab: 'tab',
     onSettled: (id) => settled.push(id),
     onDeleted: (id, from) => deleted.push([id, from]),
-    onKept: (id) => kept.push(id),
+    onKept: (id, from) => {
+      kept.push(id)
+      keptFrom.push(from)
+    },
     fetch: async (input, init) => {
       const url = String(input)
       const body = init?.body ? (JSON.parse(String(init.body)) as GuestRunRequest) : ({} as GuestRunRequest)
@@ -89,7 +93,7 @@ function setup(respond: (request: GuestRunRequest, url: string) => Response | Pr
     },
   })
   const seen: ConversationEvent[] = []
-  return { h, hub, runner, requests, signals, seen, settled, deleted, kept, listen: (id: string) => hub.subscribe(id, (e) => seen.push(e)) }
+  return { h, hub, runner, requests, signals, seen, settled, deleted, kept, keptFrom, listen: (id: string) => hub.subscribe(id, (e) => seen.push(e)) }
 }
 
 describe('a send', () => {
@@ -240,12 +244,44 @@ describe('a send', () => {
       await t.runner.start(c, { action: 'send', content: 'BAD', attachmentIds: [], id: 'in-2' }, {}).catch(() => undefined)
       refuse = false
 
-      await t.runner.start(c, { action: 'send', content: 'two', attachmentIds: [], id: 'in-3' }, {})
+      // The conversation goes on by rewording it: the words take its place.
+      const blocked = (await t.h.repo.data(c)).messages.find((m) => m.status === 'blocked')!
+      await t.runner.start(c, { action: 'edit', content: 'two', messageId: blocked.id, id: 'in-3' }, {})
       await t.runner.settled(c)
       expect(t.requests.at(-1)!.messages.map((m) => m.content)).toEqual(['one', 'Hello'])
       expect(JSON.stringify(t.requests.at(-1))).not.toContain('BAD')
-      // It is still in the transcript, before the question that followed it.
-      expect((await t.h.repo.listMessages(c, {})).items.map((m) => m.content)).toEqual(['one', 'Hello', 'BAD', 'two', 'Hello'])
+      expect((await t.h.repo.listMessages(c, {})).items.map((m) => m.content)).toEqual(['one', 'Hello', 'two', 'Hello'])
+    })
+
+    // The conversation stops at a refused message, as the server's does: only its
+    // rewording goes on. The guest's server holds no rows, so it is the browser's rule.
+    it('stops the conversation: a send, a regeneration and an answer are refused, and nothing reaches the server', async () => {
+      let refuse = false
+      const t = setup((request) => (refuse ? refused() : sse(answered(request.conversationId, request))))
+      const c = await t.h.conversation()
+      await t.runner.start(c, { action: 'send', content: 'one', attachmentIds: [], id: 'in-1' }, {})
+      await t.runner.settled(c)
+      refuse = true
+      await t.runner.start(c, { action: 'send', content: 'BAD', attachmentIds: [], id: 'in-2' }, {}).catch(() => undefined)
+      refuse = false
+      const before = t.requests.length
+      const rows = (await t.h.repo.data(c)).messages.length
+
+      const goingOn: RunAction[] = [
+        { action: 'send', content: 'fine', attachmentIds: [], id: 'in-3' },
+        { action: 'regenerate' },
+        { action: 'answer', callId: 'call', answers: [] },
+      ]
+      for (const what of goingOn) {
+        await expect(t.runner.start(c, what, {})).rejects.toMatchObject({ status: 409, code: 'revise_refused' })
+      }
+      expect(t.requests.length).toBe(before)
+      expect((await t.h.repo.data(c)).messages).toHaveLength(rows)
+
+      // An edit of an earlier question is a way on too: it deletes the refused message with the rest.
+      await t.runner.start(c, { action: 'edit', content: 'one again', messageId: 'in-1', id: 'in-4' }, {})
+      await t.runner.settled(c)
+      expect((await t.h.repo.listMessages(c, {})).items.map((m) => `${m.content}:${m.status}`)).toEqual(['one again:complete', 'Hello:complete'])
     })
 
     // The page's clock against the script's server, whose rows are at 2026-10-11T00:00:xx.
@@ -267,35 +303,93 @@ describe('a send', () => {
         await t.runner.settled(c)
         refuse = true
         await t.runner.start(c, { action: 'send', content: 'BAD', attachmentIds: [], id: 'in-2' }, {}).catch(() => undefined)
-        refuse = false
-        await t.runner.start(c, { action: 'send', content: 'B', attachmentIds: [], id: 'in-3' }, {})
-        await t.runner.settled(c)
         const texts = async () => (await t.h.repo.listMessages(c, {})).items.map((m) => m.content)
-        // A, its answer, the refused message, B and its answer: the order they were said in.
-        expect(await texts()).toEqual(['A', 'Hello', 'BAD', 'B', 'Hello'])
+        // A, its answer, the refused message: the order they were said in.
+        expect(await texts()).toEqual(['A', 'Hello', 'BAD'])
 
-        // Editing the refused message replaces it and everything after it, and the
-        // request that asks for the new wording carries none of that as context.
+        // Reworded and refused again, the new words take its place - still last.
         const blocked = (await t.h.repo.data(c)).messages.find((m) => m.status === 'blocked')!
-        await t.runner.start(c, { action: 'edit', content: 'OK', messageId: blocked.id, id: 'in-4' }, {})
+        await t.runner.start(c, { action: 'edit', content: 'BAD2', messageId: blocked.id, id: 'in-3' }, {}).catch(() => undefined)
+        expect(await texts()).toEqual(['A', 'Hello', 'BAD2'])
+
+        // Reworded to something that passes: it replaces the refused message, and
+        // the request that asks for the new wording carries none of that as context.
+        refuse = false
+        const again = (await t.h.repo.data(c)).messages.find((m) => m.status === 'blocked')!
+        await t.runner.start(c, { action: 'edit', content: 'OK', messageId: again.id, id: 'in-4' }, {})
         await t.runner.settled(c)
         expect(t.requests.at(-1)!.messages.map((m) => m.content)).toEqual(['A', 'Hello'])
-        expect(JSON.stringify(t.requests.at(-1))).not.toContain('"B"')
+        expect(JSON.stringify(t.requests.at(-1))).not.toContain('BAD')
         expect(await texts()).toEqual(['A', 'Hello', 'OK', 'Hello'])
       }
     })
 
-    it('is kept for a conversation that has nothing else, and a refused edit keeps nothing', async () => {
+    it('is kept for a conversation that has nothing else, and words refused again take its place', async () => {
       const t = setup(refused)
       const c = await t.h.conversation()
       await expect(t.runner.start(c, { action: 'send', content: 'BAD', attachmentIds: [], id: 'in-1' }, {})).rejects.toMatchObject({ code: 'content_blocked' })
       expect((await t.h.repo.data(c)).messages.map((m) => [m.content, m.status])).toEqual([['BAD', 'blocked']])
-      // An edit of the refused message is refused again: it stays as it was.
+      // An edit of the refused message is refused again: what was last tried is the refused message.
       const blockedId = (await t.h.repo.data(c)).messages[0]!.id
-      await expect(t.runner.start(c, { action: 'edit', content: 'BAD2', messageId: blockedId, id: 'in-2' }, {})).rejects.toMatchObject({ code: 'content_blocked' })
-      expect((await t.h.repo.data(c)).messages.map((m) => [m.content, m.status])).toEqual([['BAD', 'blocked']])
+      const error = await t.runner.start(c, { action: 'edit', content: 'BAD2', messageId: blockedId, id: 'in-2' }, {}).catch((e: { toResponse: () => Response }) => e)
+      const body = await (error as { toResponse: () => Response }).toResponse().json()
+      const rows = (await t.h.repo.data(c)).messages
+      expect(rows.map((m) => [m.content, m.status])).toEqual([['BAD2', 'blocked']])
+      // The refusal names the row that stands now, and the other pages are told which went.
+      expect(body).toMatchObject({ code: 'content_blocked', details: { messageId: rows[0]!.id } })
+      expect(rows[0]!.id).not.toBe(blockedId)
+      expect(t.kept).toEqual([c, c])
+      expect(t.keptFrom).toEqual([undefined, blockedId])
       // The request of that edit carried nothing before it, and not the refused message.
       expect(t.requests.at(-1)!.messages).toEqual([])
+    })
+
+    it('leaves an ordinary question alone when its reworded form is refused, and a refused message with rows after it', async () => {
+      const t = setup(refused)
+      const c = await t.h.conversation()
+      await t.h.turn(c, { ask: 'one', answer: 'a1' })
+      const data = await t.h.repo.data(c)
+      const question = data.messages.find((m) => m.role === 'user')!
+      await expect(t.runner.start(c, { action: 'edit', content: 'x', messageId: question.id, id: 'in-2' }, {})).rejects.toMatchObject({ code: 'content_blocked' })
+      expect((await t.h.repo.data(c)).messages.map((m) => m.status)).toEqual(['complete', 'complete'])
+
+      // Old data: a refused message with a row after it is not replaced by a refused edit.
+      const blocked = await t.h.repo.keepBlocked(c, 'BAD', t.h.tick())
+      await t.h.repo.messageAppended(c, {
+        id: 'after', conversationId: c, role: 'user', content: 'after it', createdAt: iso(70), status: 'complete', parts: [{ type: 'text', text: 'after it' }],
+      })
+      await expect(t.runner.start(c, { action: 'edit', content: 'BAD2', messageId: blocked!.id, id: 'in-3' }, {})).rejects.toMatchObject({ code: 'content_blocked' })
+      expect((await t.h.repo.data(c)).messages.map((m) => m.content)).toEqual(['one', 'a1', 'BAD', 'after it'])
+    })
+
+    it('takes the composer\'s files with the reworded message, and leaves them when refused again', async () => {
+      let refuse = true
+      const t = setup((request) => (refuse ? refused() : sse(answered(request.conversationId, request))))
+      const c = await t.h.conversation()
+      const png = (id: string) => ({ id, conversationId: '', blob: new Blob(['x']), filename: `${id}.png`, contentType: 'image/png', size: 1 })
+      await t.h.repo.putFile(png('f1'))
+      await t.runner.start(c, { action: 'send', content: 'BAD', attachmentIds: ['f1'], id: 'in-1' }, {}).catch(() => undefined)
+      const blocked = (await t.h.repo.data(c)).messages[0]!
+      expect(blocked.attachments).toBeUndefined()
+
+      // Refused again with the file: it is still the composer's.
+      await t.runner.start(c, { action: 'edit', content: 'BAD2', messageId: blocked.id, id: 'in-2', attachmentIds: ['f1'] }, {}).catch(() => undefined)
+      expect(await t.h.repo.file('f1')).toBeDefined()
+      expect((await t.h.repo.data(c)).messages.every((m) => !m.attachments)).toBe(true)
+
+      refuse = false
+      const again = (await t.h.repo.data(c)).messages[0]!
+      await t.runner.start(c, { action: 'edit', content: 'what is this', messageId: again.id, id: 'in-3', attachmentIds: ['f1'] }, {})
+      await t.runner.settled(c)
+      const sent = t.requests.at(-1)!
+      expect(sent.input!.attachments!.map((f) => [f.id, f.data !== undefined])).toEqual([['f1', true]])
+      expect((await t.h.repo.data(c)).messages.find((m) => m.id === 'in-3')!.attachments!.map((f) => f.id)).toEqual(['f1'])
+
+      // Any other question keeps its own and takes none.
+      await t.h.repo.putFile(png('f2'))
+      await expect(
+        t.runner.start(c, { action: 'edit', content: 'again', messageId: 'in-3', id: 'in-4', attachmentIds: ['f2'] }, {}),
+      ).rejects.toMatchObject({ status: 400, code: 'attachments_not_editable' })
     })
 
     it('is not kept when the refusal is any other (a ban, a limit, an outage)', async () => {
@@ -504,7 +598,14 @@ describe('a redo', () => {
     await t.runner.start(c, { action: 'send', content: 'one', attachmentIds: [], id: 'in-1' }, {})
     await t.runner.settled(c)
     await t.h.repo.keepBlocked(c, 'BAD')
-    expect(await texts(t, c)).toEqual(['user:one', 'assistant:Hello', 'user:BAD'])
+    // Old data: a reply written after the refused message (the conversation stops
+    // at one now, but did not once).
+    const reply: Message = {
+      id: 'stray', conversationId: c, role: 'assistant', content: 'stray', status: 'complete', createdAt: iso(60),
+      stopReason: 'stop', parts: [{ type: 'text', text: 'stray' }],
+    }
+    await t.h.repo.messageAppended(c, reply)
+    expect(await texts(t, c)).toEqual(['user:one', 'assistant:Hello', 'user:BAD', 'assistant:stray'])
 
     await t.runner.start(c, { action: 'regenerate' }, {})
     await t.runner.settled(c)

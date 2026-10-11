@@ -224,11 +224,15 @@ export function createGuestApi(deps: GuestApiDeps) {
       pattern: new RegExp(`^/conversations/${id}/messages/${id}/edit$`),
       handler: async ({ params, json }) => {
         const [conversationId, messageId] = [params[0]!, params[1]!]
-        const body = await json<{ content: string } & Parameters<typeof choiceOf>[0]>()
+        const body = await json<{ content: string; attachmentIds?: string[] } & Parameters<typeof choiceOf>[0]>()
         const content = (body.content ?? '').trim()
         if (!content) throw new GuestError(400, 'empty_content', 'content must not be empty')
         await repo.getConversation(conversationId)
-        const started = await runner.start(conversationId, { action: 'edit', content, messageId, id: newId() }, choiceOf(body))
+        const started = await runner.start(
+          conversationId,
+          { action: 'edit', content, messageId, id: newId(), ...(body.attachmentIds?.length ? { attachmentIds: body.attachmentIds } : {}) },
+          choiceOf(body),
+        )
         return ok({ message: await messageOf(conversationId, started.inputId), run: started.run }, 202)
       },
     },

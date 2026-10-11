@@ -34,7 +34,7 @@ import {
 import { adoptMemoryReceipts, withEndReceipts, withInstructionReceipts } from './receipts'
 import type { GuestStorage } from './storage'
 import { survivingSummary } from './summary'
-import { byRow, contextOf, deletedBy, encodeCursor, pageOf, rowKey, stampAfter, timeKey, transcriptOf } from './transcript'
+import { byRow, contextOf, deletedBy, encodeCursor, isBlocked, pageOf, rowKey, stampAfter, timeKey, transcriptOf } from './transcript'
 import type { ConversationData, StoredBlob, StoredConversation, StoredMessage, StoredPersonalization, StoredRun } from './types'
 
 /** What a new conversation is called until it is titled; the server's default too. */
@@ -472,6 +472,11 @@ export class GuestRepo {
    * request.ts), starts no run and carries no file - the files stay the
    * composer's.
    *
+   * The conversation stops at it, so none is kept after one (null). `replaced` is
+   * the refused message the new words were to reword and were refused for again:
+   * they take its place, written before it is deleted, and only while it is still
+   * the last row (null otherwise, and nothing changes).
+   *
    * Written nowhere a run is writing, like the server's, and returns null then.
    * The rows are the server's, stamped by its clock and not the page's, and so is
    * this one: `serverTime` is the time the refusal told (`details.at`), kept if it
@@ -479,11 +484,17 @@ export class GuestRepo {
    * just after the newest row - never at the page's own time, which with a clock
    * a few minutes ahead would sort it after the questions asked next.
    */
-  async keepBlocked(conversationId: string, content: string, serverTime?: string): Promise<Message | null> {
+  async keepBlocked(conversationId: string, content: string, serverTime?: string, replaced?: string): Promise<Message | null> {
     return this.serial(conversationId, async () => {
       const data = await this.load(conversationId)
       if (this.activeRun(data)) return null
-      const at = stampAfter(transcriptOf(data).at(-1)?.createdAt, serverTime)
+      const ordered = transcriptOf(data)
+      const last = ordered.at(-1)
+      // The conversation stops at a refused message, so a second does not go after
+      // it; one that replaces it must still be the last row, or deleting it would
+      // take what came after (the server's `storeRefused`).
+      if (replaced ? last?.id !== replaced || !isBlocked(last) : last && isBlocked(last)) return null
+      const at = stampAfter((replaced ? ordered.at(-2) : last)?.createdAt, serverTime)
       const row: StoredMessage = {
         id: this.newId(),
         conversationId,
@@ -493,7 +504,10 @@ export class GuestRepo {
         status: 'blocked',
         createdAt: at,
       }
+      // Written before the old one goes, as a redo's rows are: a page that dies in
+      // between leaves a conversation that reads as before, not one with nothing.
       await this.storage.putMessages([row])
+      if (replaced) await this.storage.deleteMessages([replaced])
       return (await this.messagePage([row]))[0] ?? null
     })
   }
