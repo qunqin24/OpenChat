@@ -337,6 +337,19 @@ func (q *Queries) ListModerationEvents(ctx context.Context, arg ListModerationEv
 	return items, nil
 }
 
+const lockModerationSettings = `-- name: LockModerationSettings :exec
+SELECT pg_advisory_xact_lock(hashtextextended('moderation_settings', 31))
+`
+
+// Held until the transaction ends: saving the moderation settings reads them,
+// applies the change and writes all of them, and two saves at once would
+// otherwise each start from the same old settings and the later one would
+// undo the earlier one's fields. Servers sharing the database share the lock.
+func (q *Queries) LockModerationSettings(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, lockModerationSettings)
+	return err
+}
+
 const lockModerationSubject = `-- name: LockModerationSubject :exec
 SELECT pg_advisory_xact_lock(hashtextextended($1::text, 14))
 `

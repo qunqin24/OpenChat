@@ -494,6 +494,11 @@ type Querier interface {
 	// Serialises writers of one person's list for the length of the transaction, so
 	// two adds at the cap cannot both pass the count.
 	LockMemoryList(ctx context.Context, userID string) error
+	// Held until the transaction ends: saving the moderation settings reads them,
+	// applies the change and writes all of them, and two saves at once would
+	// otherwise each start from the same old settings and the later one would
+	// undo the earlier one's fields. Servers sharing the database share the lock.
+	LockModerationSettings(ctx context.Context) error
 	// Held until the transaction ends, so that recording a blocked message,
 	// counting the subject's strikes and sanctioning them is one step: parallel
 	// requests of one account or address cannot all count one fewer than the

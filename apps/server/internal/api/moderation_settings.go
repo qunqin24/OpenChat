@@ -10,6 +10,9 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/qunqin/openchat/apps/server/internal/auth"
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
@@ -199,8 +202,18 @@ func invalidModeration(code, message string) error {
 	return httpx.NewError(http.StatusBadRequest, code, message)
 }
 
+// moderationSaving serializes the saves within a process; the advisory lock
+// (LockModerationSettings) does it between processes.
+var moderationSaving sync.Mutex
+
 // UpdateModerationSettings validates the whole change against the settings it
-// would leave behind, and only then saves any of it.
+// would leave behind, and only then saves any of it - all of it in one
+// transaction. Saved key by key, a save that stopped half way left a mixture
+// (a model mode with no model, an on-error of allow beside a stored block), and
+// a message checked in the middle of one read the mixture. The settings are
+// read, changed and written under one lock, so two saves at once apply one after
+// the other instead of each undoing the other's fields, and the readers - one
+// query each - see the settings from before the save or from after it.
 func (s *Server) UpdateModerationSettings(w http.ResponseWriter, r *http.Request) {
 	var body UpdateModerationSettingsRequest
 	if err := httpx.DecodeJSON(r, &body); err != nil {
@@ -208,18 +221,52 @@ func (s *Server) UpdateModerationSettings(w http.ResponseWriter, r *http.Request
 		return
 	}
 	ctx := r.Context()
-	c, err := loadModeration(ctx, s.q)
-	if err != nil {
-		// A stored value that no longer parses must not stop the operator from
-		// replacing it: start from the defaults over what does.
-		slog.WarnContext(ctx, "moderation settings unreadable; the change starts from the defaults", "error", err)
-		c = defaultModerationConfig()
-	}
 
+	// One save at a time in this process too: each save holds a connection while
+	// it waits for the lock, and the check of a model needs another, so saves
+	// as many as the pool has connections would wait for each other for good.
+	moderationSaving.Lock()
+	defer moderationSaving.Unlock()
+
+	var c moderationConfig
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		q := s.q.WithTx(tx)
+		if err := q.LockModerationSettings(ctx); err != nil {
+			return err
+		}
+		var err error
+		if c, err = loadModeration(ctx, q); err != nil {
+			// A stored value that no longer parses must not stop the operator from
+			// replacing it: start from the defaults over what does.
+			slog.WarnContext(ctx, "moderation settings unreadable; the change starts from the defaults", "error", err)
+			c = defaultModerationConfig()
+		}
+		if err := c.apply(body); err != nil {
+			return err
+		}
+		if err := s.checkModerationMode(ctx, c); err != nil {
+			return err
+		}
+		return saveModeration(ctx, q, c)
+	})
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	// Never the key itself, not even at debug level.
+	slog.InfoContext(ctx, "moderation settings changed",
+		"mode", c.Mode, "model", c.Model, "categories", len(c.Categories), "on_error", c.OnError,
+		"strikes", c.Strikes, "key_changed", body.OpenaiApiKey != nil, "actor", auth.MustUser(ctx).Email)
+
+	httpx.JSON(w, http.StatusOK, c.toSettings())
+}
+
+// apply lays a change over the settings, refusing a field that is not valid. The
+// settings are only changed in memory: nothing is saved here.
+func (c *moderationConfig) apply(body UpdateModerationSettingsRequest) error {
 	if body.Mode != nil {
 		if !body.Mode.Valid() {
-			httpx.Fail(w, r, invalidModeration("invalid_moderation_mode", "the mode is off, openai or model"))
-			return
+			return invalidModeration("invalid_moderation_mode", "the mode is off, openai or model")
 		}
 		c.Mode = *body.Mode
 	}
@@ -229,8 +276,7 @@ func (s *Server) UpdateModerationSettings(w http.ResponseWriter, r *http.Request
 	if body.OpenaiBaseUrl != nil {
 		base, err := cleanModerationBaseURL(*body.OpenaiBaseUrl)
 		if err != nil {
-			httpx.Fail(w, r, err)
-			return
+			return err
 		}
 		c.OpenAIBaseURL = base
 	}
@@ -242,8 +288,7 @@ func (s *Server) UpdateModerationSettings(w http.ResponseWriter, r *http.Request
 		var chosen []ModerationCategory
 		for _, category := range *body.Categories {
 			if !category.Valid() {
-				httpx.Fail(w, r, invalidModeration("invalid_moderation_category", "unknown category "+string(category)))
-				return
+				return invalidModeration("invalid_moderation_category", "unknown category "+string(category))
 			}
 			if !seen[category] {
 				seen[category] = true
@@ -258,8 +303,7 @@ func (s *Server) UpdateModerationSettings(w http.ResponseWriter, r *http.Request
 	}
 	if body.MinScore != nil {
 		if math.IsNaN(*body.MinScore) || *body.MinScore < 0 || *body.MinScore > 1 {
-			httpx.Fail(w, r, invalidModeration("invalid_moderation_score", "the minimum score must be between 0 and 1"))
-			return
+			return invalidModeration("invalid_moderation_score", "the minimum score must be between 0 and 1")
 		}
 		c.MinScore = *body.MinScore
 	}
@@ -268,56 +312,58 @@ func (s *Server) UpdateModerationSettings(w http.ResponseWriter, r *http.Request
 	}
 	if body.OnError != nil {
 		if !body.OnError.Valid() {
-			httpx.Fail(w, r, invalidModeration("invalid_moderation_on_error", "on error is allow or block"))
-			return
+			return invalidModeration("invalid_moderation_on_error", "on error is allow or block")
 		}
 		c.OnError = *body.OnError
 	}
 	if body.Strikes != nil {
 		if *body.Strikes < 0 || *body.Strikes > maxModerationStrikes {
-			httpx.Fail(w, r, invalidModeration("invalid_moderation_strikes",
-				fmt.Sprintf("strikes must be between 0 and %d", maxModerationStrikes)))
-			return
+			return invalidModeration("invalid_moderation_strikes",
+				fmt.Sprintf("strikes must be between 0 and %d", maxModerationStrikes))
 		}
 		c.Strikes = *body.Strikes
 	}
 	if body.StrikeWindowHours != nil {
 		if *body.StrikeWindowHours < 1 || *body.StrikeWindowHours > maxModerationWindowHours {
-			httpx.Fail(w, r, invalidModeration("invalid_moderation_window",
-				fmt.Sprintf("the strike window must be between 1 and %d hours", maxModerationWindowHours)))
-			return
+			return invalidModeration("invalid_moderation_window",
+				fmt.Sprintf("the strike window must be between 1 and %d hours", maxModerationWindowHours))
 		}
 		c.StrikeWindowHours = *body.StrikeWindowHours
 	}
 	if body.GuestBanHours != nil {
 		if *body.GuestBanHours < 0 || *body.GuestBanHours > maxGuestBanHours {
-			httpx.Fail(w, r, invalidModeration("invalid_guest_ban_hours",
-				fmt.Sprintf("the ban must be between 0 (permanent) and %d hours", maxGuestBanHours)))
-			return
+			return invalidModeration("invalid_guest_ban_hours",
+				fmt.Sprintf("the ban must be between 0 (permanent) and %d hours", maxGuestBanHours))
 		}
 		c.GuestBanHours = *body.GuestBanHours
 	}
+	return nil
+}
 
-	// What the chosen mode needs, as the settings would stand after the change.
+// checkModerationMode is what the chosen mode needs, as the settings would
+// stand after the change.
+func (s *Server) checkModerationMode(ctx context.Context, c moderationConfig) error {
 	switch c.Mode {
 	case ModerationModeOpenai:
 		if c.OpenAIKey == "" {
-			httpx.Fail(w, r, httpx.NewFieldError("openaiApiKey", "moderation_key_required", "an OpenAI API key is needed for this mode"))
-			return
+			return httpx.NewFieldError("openaiApiKey", "moderation_key_required", "an OpenAI API key is needed for this mode")
 		}
 	case ModerationModeModel:
 		if c.Model == "" {
-			httpx.Fail(w, r, httpx.NewFieldError("model", "moderation_model_required", "choose the model that classifies messages"))
-			return
+			return httpx.NewFieldError("model", "moderation_model_required", "choose the model that classifies messages")
 		}
 		// Whether it can be answered with, not whether it has money left: at its
 		// cap the check is unavailable (and the setting says what that means).
 		if _, _, err := s.pickChannel(ctx, c.Model, asker{staff: true, admin: true, ignoreCap: true}); err != nil {
-			httpx.Fail(w, r, err)
-			return
+			return err
 		}
 	}
+	return nil
+}
 
+// saveModeration writes every setting. The caller's transaction is what makes
+// them one change.
+func saveModeration(ctx context.Context, q *sqlc.Queries, c moderationConfig) error {
 	for _, set := range []struct {
 		key   string
 		value any
@@ -334,18 +380,15 @@ func (s *Server) UpdateModerationSettings(w http.ResponseWriter, r *http.Request
 		{settingModerationStrikeWindow, c.StrikeWindowHours},
 		{settingGuestBanHours, c.GuestBanHours},
 	} {
-		value, _ := json.Marshal(set.value)
-		if err := s.q.SetSetting(ctx, sqlc.SetSettingParams{Key: set.key, Value: value}); err != nil {
-			httpx.Fail(w, r, err)
-			return
+		value, err := json.Marshal(set.value)
+		if err != nil {
+			return err
+		}
+		if err := q.SetSetting(ctx, sqlc.SetSettingParams{Key: set.key, Value: value}); err != nil {
+			return err
 		}
 	}
-	// Never the key itself, not even at debug level.
-	slog.InfoContext(ctx, "moderation settings changed",
-		"mode", c.Mode, "model", c.Model, "categories", len(c.Categories), "on_error", c.OnError,
-		"strikes", c.Strikes, "key_changed", body.OpenaiApiKey != nil, "actor", auth.MustUser(ctx).Email)
-
-	httpx.JSON(w, http.StatusOK, c.toSettings())
+	return nil
 }
 
 func categoriesOrEmpty(c []ModerationCategory) []ModerationCategory {

@@ -8,6 +8,13 @@ SELECT key, value
 FROM app_settings
 WHERE key = ANY (sqlc.arg('keys')::text[]);
 
+-- name: LockModerationSettings :exec
+-- Held until the transaction ends: saving the moderation settings reads them,
+-- applies the change and writes all of them, and two saves at once would
+-- otherwise each start from the same old settings and the later one would
+-- undo the earlier one's fields. Servers sharing the database share the lock.
+SELECT pg_advisory_xact_lock(hashtextextended('moderation_settings', 31));
+
 -- name: LockModerationSubject :exec
 -- Held until the transaction ends, so that recording a blocked message,
 -- counting the subject's strikes and sanctioning them is one step: parallel
