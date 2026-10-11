@@ -6,7 +6,8 @@ name: Release
 #
 # builds the Docker image for linux/amd64 and linux/arm64, pushes it to the
 # GitHub Container Registry as ghcr.io/<owner>/openchat:1.0.0 and :latest, and
-# creates the GitHub release with notes from the commits since the last tag.
+# creates the GitHub release: with docs/releases/<tag>.md as its notes when
+# that file exists, otherwise with notes from the commits since the last tag.
 on:
   push:
     # v1.2.3 and v1.2.3-rc.1; not any tag that happens to start with v.
@@ -75,7 +76,14 @@ jobs:
           IMAGE: ghcr.io/${{ github.repository_owner }}/openchat
         run: |
           image="$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')"
-          notes="$(printf 'Docker image:\n\n```\ndocker pull %s:%s\n```\n' "$image" "${TAG#v}")"
           prerelease=""
           case "$TAG" in *-*) prerelease="--prerelease" ;; esac
-          gh release create "$TAG" --title "$TAG" --generate-notes --notes "$notes" $prerelease
+          # Written notes for this tag (docs/releases/v1.2.3.md) when there are
+          # some - they already say how to pull the image; otherwise GitHub's
+          # list of changes since the last tag, under the pull command.
+          if [ -f "docs/releases/$TAG.md" ]; then
+            gh release create "$TAG" --title "$TAG" --notes-file "docs/releases/$TAG.md" $prerelease
+          else
+            notes="$(printf 'Docker image:\n\n```\ndocker pull %s:%s\n```\n' "$image" "${TAG#v}")"
+            gh release create "$TAG" --title "$TAG" --generate-notes --notes "$notes" $prerelease
+          fi
