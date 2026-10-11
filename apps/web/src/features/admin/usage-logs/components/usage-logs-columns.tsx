@@ -151,7 +151,7 @@ export function usageLogsColumns(t: TFunction<'common'>): ColumnDef<UsageLog>[] 
       cell: ({ row }) => {
         const speed = outputSpeed(row.original)
         return (
-          <span className="text-muted-foreground text-sm whitespace-nowrap tabular-nums">
+          <span className="text-muted-foreground text-sm whitespace-nowrap tabular-nums" title={t('admin.usage.speed-hint')}>
             {speed === undefined ? DASH : t('admin.usage.speed', { n: speed.toFixed(speed < 100 ? 1 : 0) })}
           </span>
         )

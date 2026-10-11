@@ -1262,6 +1262,7 @@
         "internal": "Server error"
       },
       "speed-title": "Output speed",
+      "speed-hint": "Output tokens over the whole request, the wait for the first token included. Not shown for tiny, failed or estimated requests.",
       "no-duration": "The provider rejected the request at once; no time was spent",
       "guest": "Guest"
     }

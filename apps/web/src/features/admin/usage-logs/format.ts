@@ -61,16 +61,28 @@ export function formatDuration(ms: number): string {
   return `${minutes}m ${String(Math.round(seconds - minutes * 60)).padStart(2, '0')}s`
 }
 
+/** Fewer output tokens, or less time, and a speed is noise: how the network cut the stream into chunks. */
+export const SPEED_MIN_TOKENS = 20
+export const SPEED_MIN_MS = 300
+
 /**
- * Output tokens per second of generation: the time after the first token, so
- * the wait for it does not count against the model's speed. Not computable
- * without a first token, without output, or when it all arrived at once.
+ * Output tokens per second over the whole request.
+ *
+ * Not over the time after the first token, which is what it once was: the
+ * output tokens include reasoning the provider bills but does not stream as
+ * it goes - Anthropic's summarized or omitted thinking, OpenAI's hidden
+ * reasoning, a relay that buffers - so the first token can arrive near the
+ * end, and thousands of tokens divided by the last tenth of a second came out
+ * as 70,000 t/s. Over the whole request the figure is always one the model
+ * could have done, and it is the speed the person waiting saw.
+ *
+ * None for a failed or estimated row (its tokens are not what was produced),
+ * and none for one too small to measure.
  */
-export function outputSpeed(log: UsageLog): number | undefined {
-  if (log.firstTokenMs == null || log.outputTokens <= 0) return undefined
-  const generating = log.durationMs - log.firstTokenMs
-  if (generating <= 0) return undefined
-  return log.outputTokens / (generating / 1000)
+export function outputSpeed(log: Pick<UsageLog, 'status' | 'estimated' | 'outputTokens' | 'durationMs'>): number | undefined {
+  if (log.status !== 'ok' || log.estimated) return undefined
+  if (log.outputTokens < SPEED_MIN_TOKENS || log.durationMs < SPEED_MIN_MS) return undefined
+  return log.outputTokens / (log.durationMs / 1000)
 }
 
 /**
