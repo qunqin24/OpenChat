@@ -216,6 +216,7 @@ const (
 	MessageStatusStreaming MessageStatus = "streaming"
 	MessageStatusComplete  MessageStatus = "complete"
 	MessageStatusFailed    MessageStatus = "failed"
+	MessageStatusBlocked   MessageStatus = "blocked"
 )
 
 func (e *MessageStatus) Scan(src interface{}) error {

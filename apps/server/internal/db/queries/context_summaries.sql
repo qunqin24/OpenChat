@@ -33,11 +33,13 @@ WHERE conversation_id = $1;
 -- Rows after a place in the transcript, oldest first: what a summary has not
 -- covered. With no place given, from the start. The rows nearest the end are
 -- kept when there are more than the limit - the same choice a request makes,
--- which is answered from the end of the conversation.
+-- which is answered from the end of the conversation. Not the messages
+-- moderation refused: a request never carries them.
 SELECT *
 FROM (SELECT *
       FROM messages
       WHERE messages.conversation_id = sqlc.arg('conversation_id')
+        AND messages.status <> 'blocked'
         AND (sqlc.narg('after_created_at')::timestamptz IS NULL
           OR (created_at, id) > (sqlc.narg('after_created_at')::timestamptz, sqlc.narg('after_id')::uuid))
       ORDER BY created_at DESC, id DESC
@@ -47,10 +49,12 @@ ORDER BY created_at, id;
 -- name: ListMessagesFrom :many
 -- Rows after a place in the transcript, oldest first, from the oldest: for
 -- compressing, which reads what has not been covered from where it begins and
--- stops at the limit, leaving the rest for the next time.
+-- stops at the limit, leaving the rest for the next time. Not the messages
+-- moderation refused, so a summary never ends at one or keeps one.
 SELECT *
 FROM messages
 WHERE messages.conversation_id = sqlc.arg('conversation_id')
+  AND messages.status <> 'blocked'
   AND (sqlc.narg('after_created_at')::timestamptz IS NULL
     OR (created_at, id) > (sqlc.narg('after_created_at')::timestamptz, sqlc.narg('after_id')::uuid))
 ORDER BY created_at, id

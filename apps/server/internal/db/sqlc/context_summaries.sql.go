@@ -70,6 +70,7 @@ SELECT id, conversation_id, role, content, status, metadata, created_at, updated
 FROM (SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
       FROM messages
       WHERE messages.conversation_id = $1
+        AND messages.status <> 'blocked'
         AND ($2::timestamptz IS NULL
           OR (created_at, id) > ($2::timestamptz, $3::uuid))
       ORDER BY created_at DESC, id DESC
@@ -87,7 +88,8 @@ type ListMessagesAfterParams struct {
 // Rows after a place in the transcript, oldest first: what a summary has not
 // covered. With no place given, from the start. The rows nearest the end are
 // kept when there are more than the limit - the same choice a request makes,
-// which is answered from the end of the conversation.
+// which is answered from the end of the conversation. Not the messages
+// moderation refused: a request never carries them.
 func (q *Queries) ListMessagesAfter(ctx context.Context, arg ListMessagesAfterParams) ([]Message, error) {
 	rows, err := q.db.Query(ctx, listMessagesAfter,
 		arg.ConversationID,
@@ -133,6 +135,7 @@ const listMessagesFrom = `-- name: ListMessagesFrom :many
 SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
 FROM messages
 WHERE messages.conversation_id = $1
+  AND messages.status <> 'blocked'
   AND ($2::timestamptz IS NULL
     OR (created_at, id) > ($2::timestamptz, $3::uuid))
 ORDER BY created_at, id
@@ -148,7 +151,8 @@ type ListMessagesFromParams struct {
 
 // Rows after a place in the transcript, oldest first, from the oldest: for
 // compressing, which reads what has not been covered from where it begins and
-// stops at the limit, leaving the rest for the next time.
+// stops at the limit, leaving the rest for the next time. Not the messages
+// moderation refused, so a summary never ends at one or keeps one.
 func (q *Queries) ListMessagesFrom(ctx context.Context, arg ListMessagesFromParams) ([]Message, error) {
 	rows, err := q.db.Query(ctx, listMessagesFrom,
 		arg.ConversationID,

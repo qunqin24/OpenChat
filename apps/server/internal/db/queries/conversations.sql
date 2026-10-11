@@ -29,7 +29,8 @@ LIMIT sqlc.arg('row_limit');
 -- The caller's conversations whose title or any message's text contains the
 -- pattern (an ILIKE pattern, escaped by the caller), newest first, each with
 -- the latest message that matched. Reasoning and tool rows are not words
--- the person wrote or read as the answer, so only user and assistant text.
+-- the person wrote or read as the answer, so only user and assistant text -
+-- and not a message moderation refused, which was never sent.
 -- A conversation found by its title alone has no hit: empty strings, not NULLs.
 SELECT c.*,
        COALESCE(hit.id::text, '')::text  AS hit_id,
@@ -41,6 +42,7 @@ FROM conversations c
     FROM messages m
     WHERE m.conversation_id = c.id
       AND m.role IN ('user', 'assistant')
+      AND m.status <> 'blocked'
       AND m.content ILIKE sqlc.arg('pattern')::text
     ORDER BY m.created_at DESC, m.id DESC
     LIMIT 1

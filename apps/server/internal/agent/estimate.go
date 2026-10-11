@@ -29,6 +29,9 @@ func EstimatePart(part llm.Part) int { return llm.EstimatePart(part) }
 // in for the estimate when there is one: it is the better figure, and what the
 // model wrote is the bulk of a long conversation.
 func EstimateRow(row sqlc.Message) int {
+	if row.Status == sqlc.MessageStatusBlocked {
+		return 0 // a refused message is never sent (BuildContext)
+	}
 	if row.Role == sqlc.MessageRoleAssistant {
 		if row.StopReason != nil && (*row.StopReason == StopError || *row.StopReason == StopCancelled) {
 			return 0 // never sent (BuildContext)

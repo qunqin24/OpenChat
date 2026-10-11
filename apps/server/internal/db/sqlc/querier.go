@@ -137,8 +137,9 @@ type Querier interface {
 	// Deletes the answer to a question: every run on it - the ones that carry on
 	// after a question the model asked included - and every row that follows it.
 	// A question is only regenerated while it is the last one, so what follows it
-	// is its answer. Files hang on user messages only, so there are none to hand
-	// back.
+	// is its answer - and the messages moderation refused since, which are user
+	// rows but not questions. Files hang on user messages that were sent, so a
+	// refused one has none to hand back.
 	DeleteAnswerTo(ctx context.Context, arg DeleteAnswerToParams) error
 	// A sign-in whose password turned out right gives its slot back: only failures
 	// count.
@@ -267,9 +268,12 @@ type Querier interface {
 	// The ban in force on an address: a ban past its expiry is ignored whether or
 	// not the cleanup has removed it yet.
 	GetGuestBan(ctx context.Context, ip string) (GuestBan, error)
-	// A user message of the conversation.
+	// A user message of the conversation - a refused one too: it can be edited like
+	// any other, and the new wording is checked again.
 	GetInput(ctx context.Context, arg GetInputParams) (Message, error)
 	// The conversation's last user message: the one a regenerated answer answers.
+	// A message moderation refused is not a question that was asked, so the last
+	// question is the one before it.
 	GetLastInput(ctx context.Context, conversationID uuid.UUID) (Message, error)
 	GetMemory(ctx context.Context, arg GetMemoryParams) (UserMemory, error)
 	GetMemoryEventForUpdate(ctx context.Context, arg GetMemoryEventForUpdateParams) (MemoryEvent, error)
@@ -382,11 +386,13 @@ type Querier interface {
 	// Rows after a place in the transcript, oldest first: what a summary has not
 	// covered. With no place given, from the start. The rows nearest the end are
 	// kept when there are more than the limit - the same choice a request makes,
-	// which is answered from the end of the conversation.
+	// which is answered from the end of the conversation. Not the messages
+	// moderation refused: a request never carries them.
 	ListMessagesAfter(ctx context.Context, arg ListMessagesAfterParams) ([]Message, error)
 	// Rows after a place in the transcript, oldest first, from the oldest: for
 	// compressing, which reads what has not been covered from where it begins and
-	// stops at the limit, leaving the rest for the next time.
+	// stops at the limit, leaving the rest for the next time. Not the messages
+	// moderation refused, so a summary never ends at one or keeps one.
 	ListMessagesFrom(ctx context.Context, arg ListMessagesFromParams) ([]Message, error)
 	ListModelOverrides(ctx context.Context, modelIds []string) ([]ModelOverride, error)
 	// Newest first, by keyset on (created_at, id): the order of
@@ -397,7 +403,9 @@ type Querier interface {
 	ListPendingAttachments(ctx context.Context, arg ListPendingAttachmentsParams) ([]Attachment, error)
 	// The newest rows of the conversation, oldest first: the raw material of a
 	// model request. Newest, not oldest — a long conversation is answered from its
-	// end.
+	// end. A message that moderation refused (status 'blocked') is not a row of the
+	// context: it is shown to the person and never read back, so it neither fills
+	// the window nor hides the question it follows.
 	ListRecentMessages(ctx context.Context, arg ListRecentMessagesParams) ([]Message, error)
 	// Every row a run wrote, its input included: what a subscriber's snapshot
 	// carries alongside the run's live state. The runs that continue it (the answer
@@ -448,7 +456,9 @@ type Querier interface {
 	// block at the top that looks like a fault.
 	ListServedModels(ctx context.Context, arg ListServedModelsParams) ([]ListServedModelsRow, error)
 	// The conversation, oldest first and whole, for an export. Tool results are
-	// left out: they are the model's working, and some are whole web pages.
+	// left out: they are the model's working, and some are whole web pages. Nor are
+	// the messages moderation refused: they were never sent, and are not a record
+	// of the conversation.
 	ListTranscript(ctx context.Context, conversationID uuid.UUID) ([]Message, error)
 	// Newest first, by keyset on (created_at, id): the order of usage_logs_created_idx,
 	// so a page deep into a ledger of millions of rows costs what the first one
@@ -576,7 +586,8 @@ type Querier interface {
 	// The caller's conversations whose title or any message's text contains the
 	// pattern (an ILIKE pattern, escaped by the caller), newest first, each with
 	// the latest message that matched. Reasoning and tool rows are not words
-	// the person wrote or read as the answer, so only user and assistant text.
+	// the person wrote or read as the answer, so only user and assistant text -
+	// and not a message moderation refused, which was never sent.
 	// A conversation found by its title alone has no hit: empty strings, not NULLs.
 	SearchConversations(ctx context.Context, arg SearchConversationsParams) ([]SearchConversationsRow, error)
 	// The only statement in this file that changes `enabled` on a row that already

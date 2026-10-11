@@ -68,35 +68,45 @@ ORDER BY created_at, id;
 -- name: ListRecentMessages :many
 -- The newest rows of the conversation, oldest first: the raw material of a
 -- model request. Newest, not oldest — a long conversation is answered from its
--- end.
+-- end. A message that moderation refused (status 'blocked') is not a row of the
+-- context: it is shown to the person and never read back, so it neither fills
+-- the window nor hides the question it follows.
 SELECT *
 FROM (SELECT *
       FROM messages
       WHERE messages.conversation_id = sqlc.arg('conversation_id')
+        AND messages.status <> 'blocked'
       ORDER BY created_at DESC, id DESC
       LIMIT sqlc.arg('row_limit')) recent
 ORDER BY created_at, id;
 
 -- name: ListTranscript :many
 -- The conversation, oldest first and whole, for an export. Tool results are
--- left out: they are the model's working, and some are whole web pages.
+-- left out: they are the model's working, and some are whole web pages. Nor are
+-- the messages moderation refused: they were never sent, and are not a record
+-- of the conversation.
 SELECT *
 FROM messages
 WHERE messages.conversation_id = sqlc.arg('conversation_id')
   AND messages.role <> 'tool'
+  AND messages.status <> 'blocked'
 ORDER BY created_at, id;
 
 -- name: GetLastInput :one
 -- The conversation's last user message: the one a regenerated answer answers.
+-- A message moderation refused is not a question that was asked, so the last
+-- question is the one before it.
 SELECT *
 FROM messages
 WHERE conversation_id = $1
   AND role = 'user'
+  AND status <> 'blocked'
 ORDER BY created_at DESC, id DESC
 LIMIT 1;
 
 -- name: GetInput :one
--- A user message of the conversation.
+-- A user message of the conversation - a refused one too: it can be edited like
+-- any other, and the new wording is checked again.
 SELECT *
 FROM messages
 WHERE id = sqlc.arg('id')
@@ -126,14 +136,15 @@ WHERE a.message_id IN (SELECT id FROM gone);
 -- Deletes the answer to a question: every run on it - the ones that carry on
 -- after a question the model asked included - and every row that follows it.
 -- A question is only regenerated while it is the last one, so what follows it
--- is its answer. Files hang on user messages only, so there are none to hand
--- back.
+-- is its answer - and the messages moderation refused since, which are user
+-- rows but not questions. Files hang on user messages that were sent, so a
+-- refused one has none to hand back.
 WITH rows AS (
     DELETE FROM messages
         USING messages question
         WHERE question.id = sqlc.arg('input_id')
             AND messages.conversation_id = sqlc.arg('conversation_id')
-            AND messages.role <> 'user'
+            AND (messages.role <> 'user' OR messages.status = 'blocked')
             AND (messages.created_at, messages.id) > (question.created_at, question.id)
         RETURNING messages.id)
 DELETE

@@ -31,6 +31,9 @@ const skippedResult = "The user did not answer this question and sent a new mess
 // request has stricter rules than that, and these are pi-durable's context
 // derivation rules (spec §2.1) applied to our rows:
 //
+//   - A message content moderation refused (status blocked) is shown to the
+//     person and never sent: the queries that feed this leave it out, and it
+//     is skipped here as well, so no caller can send it by accident.
 //   - A failed or cancelled response is shown to the user but never sent back:
 //     half an answer, or an error, is not context the next request should build
 //     on, and a cancelled response may hold a tool call that never ran.
@@ -72,6 +75,9 @@ func BuildContext(rows []sqlc.Message) ([]llm.Message, error) {
 	}
 
 	for _, row := range rows {
+		if row.Status == sqlc.MessageStatusBlocked {
+			continue
+		}
 		parts, err := DecodeParts(row.Parts)
 		if err != nil {
 			return nil, err
