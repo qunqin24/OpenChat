@@ -492,6 +492,20 @@ func (q *Queries) ListUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]User, 
 	return items, nil
 }
 
+const lockAdminMembership = `-- name: LockAdminMembership :exec
+SELECT pg_advisory_xact_lock(hashtextextended('admin_membership', 29))
+`
+
+// Every change that can take an administrator away (demoting, disabling, one
+// account or a batch) takes this first and holds it until its transaction
+// ends, then counts the enabled admins and changes. Without it, two admins
+// demoting each other both read "2 admins" and both succeed, leaving none.
+// Servers sharing the database share the lock.
+func (q *Queries) LockAdminMembership(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, lockAdminMembership)
+	return err
+}
+
 const lockRegistration = `-- name: LockRegistration :exec
 SELECT pg_advisory_xact_lock(hashtextextended('registration', 13))
 `

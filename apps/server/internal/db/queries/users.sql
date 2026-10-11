@@ -139,6 +139,14 @@ WHERE role = 'admin'
 ORDER BY created_at, id
 LIMIT 1;
 
+-- name: LockAdminMembership :exec
+-- Every change that can take an administrator away (demoting, disabling, one
+-- account or a batch) takes this first and holds it until its transaction
+-- ends, then counts the enabled admins and changes. Without it, two admins
+-- demoting each other both read "2 admins" and both succeed, leaving none.
+-- Servers sharing the database share the lock.
+SELECT pg_advisory_xact_lock(hashtextextended('admin_membership', 29));
+
 -- name: CountAdmins :one
 SELECT count(*)
 FROM users

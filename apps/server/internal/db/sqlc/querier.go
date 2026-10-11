@@ -433,6 +433,12 @@ type Querier interface {
 	// total, and the row count here stays small enough that the scan is cheap.
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
 	ListUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]User, error)
+	// Every change that can take an administrator away (demoting, disabling, one
+	// account or a batch) takes this first and holds it until its transaction
+	// ends, then counts the enabled admins and changes. Without it, two admins
+	// demoting each other both read "2 admins" and both succeed, leaving none.
+	// Servers sharing the database share the lock.
+	LockAdminMembership(ctx context.Context) error
 	// Limits on signing in and signing up (api/auth_limits.go). One row per attempt
 	// that counts; see the migration for the columns.
 	// Held until the transaction ends, so that counting and then recording an

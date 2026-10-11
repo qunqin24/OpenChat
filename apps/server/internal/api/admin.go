@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
@@ -177,39 +178,6 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, userId opena
 	}
 
 	actor := auth.MustUser(r.Context())
-	target, err := s.q.GetUser(r.Context(), userId)
-	if err != nil {
-		httpx.Fail(w, r, dbErr(err))
-		return
-	}
-
-	// Two locks on the admin API: you cannot demote or disable yourself, and
-	// the last enabled admin cannot be removed. Either would leave the panel
-	// with nobody able to reach it and no way back in through the UI.
-	demoting := body.Role != nil && *body.Role != UserRole(sqlc.UserRoleAdmin) && target.Role == sqlc.UserRoleAdmin
-	disabling := body.Disabled != nil && *body.Disabled && !target.DisabledAt.Valid
-
-	if target.ID == actor.ID && (demoting || disabling) {
-		httpx.Fail(w, r, httpx.NewError(http.StatusConflict, "self_lockout",
-			"you cannot remove your own admin access"))
-		return
-	}
-
-	// As in the bulk path, this cannot currently fire — the caller is an admin
-	// and self-changes are refused above, so a second admin always exists — but
-	// it keeps the invariant explicit rather than implied by two other rules.
-	if demoting || (disabling && target.Role == sqlc.UserRoleAdmin) {
-		admins, err := s.q.CountAdmins(r.Context())
-		if err != nil {
-			httpx.Fail(w, r, err)
-			return
-		}
-		if admins <= 1 {
-			httpx.Fail(w, r, httpx.NewError(http.StatusConflict, "last_admin",
-				"this is the last enabled admin"))
-			return
-		}
-	}
 
 	var role *sqlc.UserRole
 	if body.Role != nil {
@@ -217,21 +185,70 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, userId opena
 		role = &converted
 	}
 
-	updated, err := s.q.AdminUpdateUser(r.Context(), sqlc.AdminUpdateUserParams{
-		ID:           userId,
-		Name:         name,
-		Email:        email,
-		PasswordHash: passwordHash,
-		Role:         role,
-		Disabled:     body.Disabled,
-		Approved:     body.Approved,
+	// A change of role or of disabled can take an administrator away, so it is
+	// made with the admin-membership lock held (see lockAdminChange): the
+	// target is read, the update made and the admins counted all in one
+	// transaction, and a second such request waits for this one to commit and
+	// then counts what it left.
+	removesAdminAccess := body.Role != nil || (body.Disabled != nil && *body.Disabled)
+
+	var updated sqlc.User
+	err := pgx.BeginFunc(r.Context(), s.pool, func(tx pgx.Tx) error {
+		q := s.q.WithTx(tx)
+		if removesAdminAccess {
+			if err := q.LockAdminMembership(r.Context()); err != nil {
+				return err
+			}
+		}
+		target, err := q.GetUser(r.Context(), userId)
+		if err != nil {
+			return dbErr(err)
+		}
+
+		// Two locks on the admin API: you cannot demote or disable yourself,
+		// and the last enabled admin cannot be removed. Either would leave the
+		// panel with nobody able to reach it and no way back in through the UI.
+		demoting := body.Role != nil && *body.Role != UserRole(sqlc.UserRoleAdmin) && target.Role == sqlc.UserRoleAdmin
+		disabling := body.Disabled != nil && *body.Disabled && !target.DisabledAt.Valid
+
+		if target.ID == actor.ID && (demoting || disabling) {
+			return httpx.NewError(http.StatusConflict, "self_lockout",
+				"you cannot remove your own admin access")
+		}
+
+		updated, err = q.AdminUpdateUser(r.Context(), sqlc.AdminUpdateUserParams{
+			ID:           userId,
+			Name:         name,
+			Email:        email,
+			PasswordHash: passwordHash,
+			Role:         role,
+			Disabled:     body.Disabled,
+			Approved:     body.Approved,
+		})
+		if err != nil {
+			return dbErr(err)
+		}
+
+		// Counted after the update, with the lock held: the state the commit
+		// would leave behind. Self-changes are refused above, so this only
+		// fires when another admin's change has taken the others away first.
+		if demoting || (disabling && target.Role == sqlc.UserRoleAdmin) {
+			admins, err := q.CountAdmins(r.Context())
+			if err != nil {
+				return err
+			}
+			if admins == 0 {
+				return errLastAdmin
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		if dup := duplicateError(err); dup != nil {
 			httpx.Fail(w, r, dup)
 			return
 		}
-		httpx.Fail(w, r, dbErr(err))
+		httpx.Fail(w, r, err)
 		return
 	}
 
@@ -251,6 +268,11 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, userId opena
 
 	httpx.JSON(w, http.StatusOK, s.user(r.Context(), updated))
 }
+
+// errLastAdmin: the change would leave no enabled administrator, which the UI
+// has no way back from.
+var errLastAdmin = httpx.NewError(http.StatusConflict, "last_admin",
+	"this is the last enabled admin")
 
 // maxBulkUsers mirrors the contract's cap on one request.
 const maxBulkUsers = 200
@@ -312,6 +334,15 @@ func (s *Server) BulkUpdateUsers(w http.ResponseWriter, r *http.Request) {
 	defer func() { _ = tx.Rollback(r.Context()) }()
 
 	q := s.q.WithTx(tx)
+
+	// Taken before anything is read, and only by a change that can remove an
+	// admin: see UpdateUser. Approving cannot, and does not queue.
+	if body.Role != nil || (body.Disabled != nil && *body.Disabled) {
+		if err := q.LockAdminMembership(r.Context()); err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+	}
 
 	found, err := q.ListUsersByIDs(r.Context(), body.UserIds)
 	if err != nil {
@@ -376,8 +407,7 @@ func (s *Server) BulkUpdateUsers(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if admins == 0 {
-			httpx.Fail(w, r, httpx.NewError(http.StatusConflict, "last_admin",
-				"this would leave no enabled admin"))
+			httpx.Fail(w, r, errLastAdmin)
 			return
 		}
 
