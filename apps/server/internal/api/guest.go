@@ -77,7 +77,17 @@ func (s *Server) requireGuestMode(next http.Handler) http.Handler {
 
 // GetGuestStatus tells the sign-in page whether to offer guest mode.
 func (s *Server) GetGuestStatus(w http.ResponseWriter, r *http.Request) {
-	httpx.JSON(w, http.StatusOK, GuestStatus{Enabled: s.guestEnabled(r.Context())})
+	status := GuestStatus{Enabled: s.guestEnabled(r.Context())}
+	// Stays open to a banned address, which is how its page learns of the ban
+	// and until when.
+	if ban, banned := s.guestBan(r); banned {
+		status.Banned = true
+		if ban.ExpiresAt.Valid {
+			until := ban.ExpiresAt.Time
+			status.BannedUntil = &until
+		}
+	}
+	httpx.JSON(w, http.StatusOK, status)
 }
 
 // GetGuestConfig is what the chat reads, for a guest, from `/models`,

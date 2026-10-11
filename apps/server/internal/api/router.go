@@ -64,13 +64,22 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireGuestMode)
 
-			r.Get("/guest/config", wrapper.GetGuestConfig)
-			r.Post("/guest/runs", wrapper.GuestRun)
+			// Stopping a run is allowed to an address banned meanwhile: the run
+			// is already paid for, and ending it early spends less.
 			r.Post("/guest/runs/{runId}/cancel", wrapper.CancelGuestRun)
-			r.Post("/guest/title", wrapper.GuestTitle)
-			r.Post("/guest/compaction", wrapper.GuestCompact)
-			r.Get("/guest/favicons/{domain}", wrapper.GetGuestFavicon)
-			r.Get("/guest/images", wrapper.GetGuestImage)
+
+			// An address banned by content moderation is refused everywhere
+			// else, with 403 guest_banned (moderation_admin.go).
+			r.Group(func(r chi.Router) {
+				r.Use(s.rejectBannedGuests)
+
+				r.Get("/guest/config", wrapper.GetGuestConfig)
+				r.Post("/guest/runs", wrapper.GuestRun)
+				r.Post("/guest/title", wrapper.GuestTitle)
+				r.Post("/guest/compaction", wrapper.GuestCompact)
+				r.Get("/guest/favicons/{domain}", wrapper.GetGuestFavicon)
+				r.Get("/guest/images", wrapper.GetGuestImage)
+			})
 		})
 
 		// ---- signed URL -------------------------------------------------
@@ -175,6 +184,13 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 				r.Put("/admin/models/{modelId}/settings", wrapper.UpdateModelSettings)
 				r.Delete("/admin/models/{modelId}/settings", wrapper.ResetModelSettings)
 				r.Post("/admin/models/{modelId}/capacity/reset", wrapper.ResetModelCapacity)
+
+				r.Get("/admin/moderation", wrapper.GetModerationSettings)
+				r.Patch("/admin/moderation", wrapper.UpdateModerationSettings)
+				r.Get("/admin/moderation/events", wrapper.ListModerationEvents)
+				r.Get("/admin/moderation/bans", wrapper.ListGuestBans)
+				r.Post("/admin/moderation/bans", wrapper.CreateGuestBan)
+				r.Delete("/admin/moderation/bans", wrapper.DeleteGuestBan)
 
 				r.Get("/admin/usage-logs", wrapper.ListUsageLogs)
 				r.Get("/admin/users", wrapper.ListUsers)

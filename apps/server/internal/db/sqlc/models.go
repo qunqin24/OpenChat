@@ -452,6 +452,14 @@ type Conversation struct {
 	Temporary       bool               `json:"temporary"`
 }
 
+type GuestBan struct {
+	Ip        string             `json:"ip"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	Reason    string             `json:"reason"`
+	EventID   *uuid.UUID         `json:"event_id"`
+}
+
 type GuestRequest struct {
 	Ip        string             `json:"ip"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
@@ -508,6 +516,20 @@ type ModelOverride struct {
 	CapacityPeriod      string             `json:"capacity_period"`
 	CapacityAdminExempt bool               `json:"capacity_admin_exempt"`
 	CapacitySince       pgtype.Timestamptz `json:"capacity_since"`
+}
+
+type ModerationEvent struct {
+	ID             uuid.UUID          `json:"id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UserID         *uuid.UUID         `json:"user_id"`
+	GuestIp        *string            `json:"guest_ip"`
+	ConversationID *uuid.UUID         `json:"conversation_id"`
+	Source         string             `json:"source"`
+	Mode           string             `json:"mode"`
+	Categories     []string           `json:"categories"`
+	Excerpt        string             `json:"excerpt"`
+	Action         string             `json:"action"`
+	Sanction       *string            `json:"sanction"`
 }
 
 type Run struct {

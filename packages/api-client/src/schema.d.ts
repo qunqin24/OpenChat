@@ -529,6 +529,82 @@ export interface paths {
         patch: operations["updateSystemSettings"];
         trace?: never;
     };
+    "/admin/moderation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Content moderation settings */
+        get: operations["getModerationSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change content moderation settings
+         * @description Read on every message, so a change applies at once. Everything is
+         *     checked before anything is saved (400 `invalid_moderation_*`): a mode
+         *     that needs a key or a model without one is refused, and so is a model
+         *     no channel offers.
+         */
+        patch: operations["updateModerationSettings"];
+        trace?: never;
+    };
+    "/admin/moderation/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The messages content moderation turned away
+         * @description Newest first, paged by cursor over (created time, id); `nextCursor` of a
+         *     page is the `cursor` of the one after it, and the filters must stay the
+         *     same between pages. Only blocked messages are logged, and for 90 days.
+         *     The excerpt is the start of what was sent: the operator's own record,
+         *     for administrators only.
+         */
+        get: operations["listModerationEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/moderation/bans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The guest addresses banned now */
+        get: operations["listGuestBans"];
+        put?: never;
+        /**
+         * Ban the guest address of a logged message
+         * @description Bans the address the event was logged against, for the length set in
+         *     `ModerationSettings.guestBanHours`. 409 `not_a_guest` for the event of
+         *     an account: an account is disabled from the users page.
+         */
+        post: operations["createGuestBan"];
+        /**
+         * Lift the ban on a guest address
+         * @description The address is a query parameter, not a path segment: an IPv6 network
+         *     reads `2001:db8:1:2::/64`.
+         */
+        delete: operations["deleteGuestBan"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/web-search": {
         parameters: {
             query?: never;
@@ -919,6 +995,14 @@ export interface paths {
          *     administrators are exempt). Past it this is refused, again before
          *     anything is written, with 429 `too_many_runs`; the same goes for the
          *     other ways of starting a run. Stopping a run, or its ending, frees the slot.
+         *
+         *     With content moderation on (`ModerationSettings.mode`) the text of the
+         *     message and its images are checked first. A message that fails is
+         *     refused before anything is written, with 422 `content_blocked` and the
+         *     matched categories in `details.categories`; when the moderation service
+         *     cannot be reached and the setting says to block, 503
+         *     `moderation_unavailable`. The same goes for editing a message and
+         *     answering a question; a regeneration re-sends what was already checked.
          */
         post: operations["createMessage"];
         delete?: never;
@@ -2466,10 +2550,12 @@ export interface components {
         /**
          * @description `chat` is a model request of a run; `title` is the background request
          *     that names a conversation; `compression` is a request that writes a
-         *     conversation's context summary, made with the conversation's own model.
+         *     conversation's context summary, made with the conversation's own model;
+         *     `moderation` is a request that has a model classify a message
+         *     (`ModerationSettings.mode` `model`).
          * @enum {string}
          */
-        UsageKind: "chat" | "title" | "compression";
+        UsageKind: "chat" | "title" | "compression" | "moderation";
         /**
          * @description A user stopping a reply is `ok`; only a failed request is `error`.
          * @enum {string}
@@ -2868,6 +2954,17 @@ export interface components {
         };
         GuestStatus: {
             enabled: boolean;
+            /**
+             * @description Whether the caller's network address is banned from guest mode
+             *     (content moderation). Every other `/guest/*` endpoint answers 403
+             *     `guest_banned` then.
+             */
+            banned: boolean;
+            /**
+             * Format: date-time
+             * @description When the ban ends; null for a permanent one. Only with `banned`.
+             */
+            bannedUntil?: string | null;
         };
         GuestConfig: {
             models: components["schemas"]["ChatModel"][];
@@ -3191,6 +3288,127 @@ export interface components {
          * @enum {string}
          */
         WebSearchDepth: "basic" | "advanced";
+        /**
+         * @description `off` checks nothing; `openai` sends each message to OpenAI's
+         *     moderation endpoint; `model` has a model of the catalogue classify it.
+         * @enum {string}
+         */
+        ModerationMode: "off" | "openai" | "model";
+        /**
+         * @description What an account's message does when the moderation service fails (an
+         *     error, a timeout, no channel, the model's spending cap): `allow` sends
+         *     it anyway, `block` refuses it. A guest's is always refused.
+         * @enum {string}
+         */
+        ModerationOnError: "allow" | "block";
+        /**
+         * @description A category of OpenAI's moderation model.
+         * @enum {string}
+         */
+        ModerationCategory: "sexual" | "sexual/minors" | "harassment" | "harassment/threatening" | "hate" | "hate/threatening" | "illicit" | "illicit/violent" | "self-harm" | "self-harm/intent" | "self-harm/instructions" | "violence" | "violence/graphic";
+        /**
+         * @description Where the blocked message came from.
+         * @enum {string}
+         */
+        ModerationSource: "send" | "edit" | "answer" | "guest";
+        /**
+         * @description What a blocked message set off, when it reached the strike threshold.
+         * @enum {string}
+         */
+        ModerationSanction: "disabled" | "banned";
+        ModerationSettings: {
+            mode: components["schemas"]["ModerationMode"];
+            /** @description Whether an OpenAI API key is stored. Write-only, like a channel's. */
+            openaiKeySet: boolean;
+            /** @description The key's last four characters, e.g. `…4f2a`. */
+            openaiKeyPreview?: string;
+            /**
+             * @description Where `openai` mode sends its requests; empty is OpenAI's own
+             *     (https://api.openai.com/v1).
+             */
+            openaiBaseUrl: string;
+            /** @description The catalogue model that classifies in `model` mode; empty when none is chosen. */
+            model: string;
+            /** @description The categories that block a message. */
+            categories: components["schemas"]["ModerationCategory"][];
+            /**
+             * Format: double
+             * @description 0 blocks a category the service flagged. Above 0 a category also
+             *     blocks when its score reaches this, flagged or not.
+             */
+            minScore: number;
+            /** @description Whether an administrator's messages go unchecked. Off, they reach the same upstream and are checked like anyone's. */
+            exemptAdmins: boolean;
+            onError: components["schemas"]["ModerationOnError"];
+            /**
+             * @description How many blocked messages within `strikeWindowHours` disable the
+             *     account (or ban the guest address). 0 never sanctions. An
+             *     administrator is only logged.
+             */
+            strikes: number;
+            strikeWindowHours: number;
+            /** @description How long a banned guest address stays banned; 0 is permanent. */
+            guestBanHours: number;
+        };
+        /** @description Only the fields present are changed. An absent `openaiApiKey` keeps the stored one; an empty string clears it. */
+        UpdateModerationSettingsRequest: {
+            mode?: components["schemas"]["ModerationMode"];
+            openaiApiKey?: string;
+            openaiBaseUrl?: string;
+            model?: string;
+            categories?: components["schemas"]["ModerationCategory"][];
+            /** Format: double */
+            minScore?: number;
+            exemptAdmins?: boolean;
+            onError?: components["schemas"]["ModerationOnError"];
+            strikes?: number;
+            strikeWindowHours?: number;
+            guestBanHours?: number;
+        };
+        ModerationEvent: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            userId?: string | null;
+            userName?: string | null;
+            userEmail?: string | null;
+            /** @description Whether the account is disabled now; null for a guest. */
+            userDisabled?: boolean | null;
+            /** @description A guest's network address (an IPv6 one as its /64); null for an account. */
+            guestIp?: string | null;
+            /** @description Whether the guest address is banned now; null for an account. */
+            ipBanned?: boolean | null;
+            /** Format: uuid */
+            conversationId?: string | null;
+            source: components["schemas"]["ModerationSource"];
+            /** @enum {string} */
+            mode: "openai" | "model";
+            categories: string[];
+            /** @description The first 500 characters of the blocked text. */
+            excerpt: string;
+            sanction?: components["schemas"]["ModerationSanction"];
+        };
+        ModerationEventPage: {
+            items: components["schemas"]["ModerationEvent"][];
+            /** @description Absent on the last page. */
+            nextCursor?: string;
+            limit: number;
+        };
+        GuestBan: {
+            ip: string;
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description Null for a permanent ban.
+             */
+            expiresAt?: string | null;
+            reason: string;
+            /** Format: uuid */
+            eventId?: string | null;
+        };
         WebSearchSettings: {
             /**
              * @description Whether runs are offered the web_search tool. Tavily also needs a
@@ -4401,6 +4619,150 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SystemSettings"];
                 };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getModerationSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModerationSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateModerationSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateModerationSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModerationSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listModerationEvents: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                userId?: string;
+                /** @description A guest's network address, as the log shows it. */
+                guestIp?: string;
+                category?: components["schemas"]["ModerationCategory"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModerationEventPage"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listGuestBans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuestBan"][];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createGuestBan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    eventId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuestBan"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteGuestBan: {
+        parameters: {
+            query: {
+                ip: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description lifted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Error"];
         };

@@ -142,6 +142,12 @@ func (s *Server) CreateMessage(w http.ResponseWriter, r *http.Request, conversat
 		httpx.Fail(w, r, err)
 		return
 	}
+	// The words and the pictures, before any row is written or file claimed.
+	if err := s.moderate(ctx, s.accountSubject(ctx, user, conversationId, ModerationSourceSend),
+		moderationInput{text: content, images: s.attachmentImages(files)}); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
 	signed, err := s.signAttachments(ctx, files)
 	if err != nil {
 		httpx.Fail(w, r, err)

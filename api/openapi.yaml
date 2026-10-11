@@ -645,6 +645,126 @@ paths:
               schema: { $ref: "#/components/schemas/SystemSettings" }
         default: { $ref: "#/components/responses/Error" }
 
+  /admin/moderation:
+    get:
+      tags: [admin]
+      summary: Content moderation settings
+      operationId: getModerationSettings
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ModerationSettings" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [admin]
+      summary: Change content moderation settings
+      description: |
+        Read on every message, so a change applies at once. Everything is
+        checked before anything is saved (400 `invalid_moderation_*`): a mode
+        that needs a key or a model without one is refused, and so is a model
+        no channel offers.
+      operationId: updateModerationSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateModerationSettingsRequest" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ModerationSettings" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/moderation/events:
+    get:
+      tags: [admin]
+      summary: The messages content moderation turned away
+      description: |
+        Newest first, paged by cursor over (created time, id); `nextCursor` of a
+        page is the `cursor` of the one after it, and the filters must stay the
+        same between pages. Only blocked messages are logged, and for 90 days.
+        The excerpt is the start of what was sent: the operator's own record,
+        for administrators only.
+      operationId: listModerationEvents
+      parameters:
+        - { $ref: "#/components/parameters/Limit" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - name: userId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: guestIp
+          in: query
+          description: A guest's network address, as the log shows it.
+          schema: { type: string }
+        - name: category
+          in: query
+          schema: { $ref: "#/components/schemas/ModerationCategory" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ModerationEventPage" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/moderation/bans:
+    get:
+      tags: [admin]
+      summary: The guest addresses banned now
+      operationId: listGuestBans
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/GuestBan" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [admin]
+      summary: Ban the guest address of a logged message
+      description: |
+        Bans the address the event was logged against, for the length set in
+        `ModerationSettings.guestBanHours`. 409 `not_a_guest` for the event of
+        an account: an account is disabled from the users page.
+      operationId: createGuestBan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [eventId]
+              properties:
+                eventId: { type: string, format: uuid }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GuestBan" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [admin]
+      summary: Lift the ban on a guest address
+      description: |
+        The address is a query parameter, not a path segment: an IPv6 network
+        reads `2001:db8:1:2::/64`.
+      operationId: deleteGuestBan
+      parameters:
+        - name: ip
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: lifted }
+        default: { $ref: "#/components/responses/Error" }
+
   /admin/web-search:
     get:
       tags: [admin]
@@ -1122,6 +1242,14 @@ paths:
         administrators are exempt). Past it this is refused, again before
         anything is written, with 429 `too_many_runs`; the same goes for the
         other ways of starting a run. Stopping a run, or its ending, frees the slot.
+
+        With content moderation on (`ModerationSettings.mode`) the text of the
+        message and its images are checked first. A message that fails is
+        refused before anything is written, with 422 `content_blocked` and the
+        matched categories in `details.categories`; when the moderation service
+        cannot be reached and the setting says to block, 503
+        `moderation_unavailable`. The same goes for editing a message and
+        answering a question; a regeneration re-sends what was already checked.
       operationId: createMessage
       requestBody:
         required: true
@@ -2911,11 +3039,13 @@ components:
       description: |
         `chat` is a model request of a run; `title` is the background request
         that names a conversation; `compression` is a request that writes a
-        conversation's context summary, made with the conversation's own model.
-      enum: [chat, title, compression]
+        conversation's context summary, made with the conversation's own model;
+        `moderation` is a request that has a model classify a message
+        (`ModerationSettings.mode` `model`).
+      enum: [chat, title, compression, moderation]
       # Named explicitly: bare `Chat` would collide with ApiFormat's `chat` and
       # make the generator rename both enums' constants.
-      x-enum-varnames: [UsageKindChat, UsageKindTitle, UsageKindCompression]
+      x-enum-varnames: [UsageKindChat, UsageKindTitle, UsageKindCompression, UsageKindModeration]
 
     UsageStatus:
       type: string
@@ -3334,9 +3464,20 @@ components:
 
     GuestStatus:
       type: object
-      required: [enabled]
+      required: [enabled, banned]
       properties:
         enabled: { type: boolean }
+        banned:
+          type: boolean
+          description: |
+            Whether the caller's network address is banned from guest mode
+            (content moderation). Every other `/guest/*` endpoint answers 403
+            `guest_banned` then.
+        bannedUntil:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the ban ends; null for a permanent one. Only with `banned`.
 
     GuestConfig:
       type: object
@@ -3741,6 +3882,196 @@ components:
         Tavily's search depth. `advanced` finds more relevant excerpts and
         costs two credits a search instead of one.
       enum: [basic, advanced]
+
+    ModerationMode:
+      type: string
+      description: |
+        `off` checks nothing; `openai` sends each message to OpenAI's
+        moderation endpoint; `model` has a model of the catalogue classify it.
+      enum: [off, openai, model]
+      x-enum-varnames: [ModerationModeOff, ModerationModeOpenai, ModerationModeModel]
+
+    ModerationOnError:
+      type: string
+      description: |
+        What an account's message does when the moderation service fails (an
+        error, a timeout, no channel, the model's spending cap): `allow` sends
+        it anyway, `block` refuses it. A guest's is always refused.
+      enum: [allow, block]
+      x-enum-varnames: [ModerationOnErrorAllow, ModerationOnErrorBlock]
+
+    ModerationCategory:
+      type: string
+      description: A category of OpenAI's moderation model.
+      enum:
+        - sexual
+        - sexual/minors
+        - harassment
+        - harassment/threatening
+        - hate
+        - hate/threatening
+        - illicit
+        - illicit/violent
+        - self-harm
+        - self-harm/intent
+        - self-harm/instructions
+        - violence
+        - violence/graphic
+      x-enum-varnames:
+        - ModerationCategorySexual
+        - ModerationCategorySexualMinors
+        - ModerationCategoryHarassment
+        - ModerationCategoryHarassmentThreatening
+        - ModerationCategoryHate
+        - ModerationCategoryHateThreatening
+        - ModerationCategoryIllicit
+        - ModerationCategoryIllicitViolent
+        - ModerationCategorySelfHarm
+        - ModerationCategorySelfHarmIntent
+        - ModerationCategorySelfHarmInstructions
+        - ModerationCategoryViolence
+        - ModerationCategoryViolenceGraphic
+
+    ModerationSource:
+      type: string
+      description: Where the blocked message came from.
+      enum: [send, edit, answer, guest]
+      x-enum-varnames: [ModerationSourceSend, ModerationSourceEdit, ModerationSourceAnswer, ModerationSourceGuest]
+
+    ModerationSanction:
+      type: string
+      description: What a blocked message set off, when it reached the strike threshold.
+      enum: [disabled, banned]
+      x-enum-varnames: [ModerationSanctionDisabled, ModerationSanctionBanned]
+
+    ModerationSettings:
+      type: object
+      required:
+        [mode, openaiKeySet, openaiBaseUrl, model, categories, minScore, exemptAdmins, onError,
+         strikes, strikeWindowHours, guestBanHours]
+      properties:
+        mode: { $ref: "#/components/schemas/ModerationMode" }
+        openaiKeySet:
+          type: boolean
+          description: Whether an OpenAI API key is stored. Write-only, like a channel's.
+        openaiKeyPreview:
+          type: string
+          description: The key's last four characters, e.g. `…4f2a`.
+        openaiBaseUrl:
+          type: string
+          description: |
+            Where `openai` mode sends its requests; empty is OpenAI's own
+            (https://api.openai.com/v1).
+        model:
+          type: string
+          description: The catalogue model that classifies in `model` mode; empty when none is chosen.
+        categories:
+          type: array
+          description: The categories that block a message.
+          items: { $ref: "#/components/schemas/ModerationCategory" }
+        minScore:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+          description: |
+            0 blocks a category the service flagged. Above 0 a category also
+            blocks when its score reaches this, flagged or not.
+        exemptAdmins:
+          type: boolean
+          description: Whether an administrator's messages go unchecked. Off, they reach the same upstream and are checked like anyone's.
+        onError: { $ref: "#/components/schemas/ModerationOnError" }
+        strikes:
+          type: integer
+          minimum: 0
+          description: |
+            How many blocked messages within `strikeWindowHours` disable the
+            account (or ban the guest address). 0 never sanctions. An
+            administrator is only logged.
+        strikeWindowHours: { type: integer, minimum: 1 }
+        guestBanHours:
+          type: integer
+          minimum: 0
+          description: How long a banned guest address stays banned; 0 is permanent.
+
+    UpdateModerationSettingsRequest:
+      type: object
+      description: Only the fields present are changed. An absent `openaiApiKey` keeps the stored one; an empty string clears it.
+      properties:
+        mode: { $ref: "#/components/schemas/ModerationMode" }
+        openaiApiKey: { type: string, maxLength: 500 }
+        openaiBaseUrl: { type: string, maxLength: 500 }
+        model: { type: string, maxLength: 200 }
+        categories:
+          type: array
+          items: { $ref: "#/components/schemas/ModerationCategory" }
+        minScore: { type: number, format: double, minimum: 0, maximum: 1 }
+        exemptAdmins: { type: boolean }
+        onError: { $ref: "#/components/schemas/ModerationOnError" }
+        strikes: { type: integer, minimum: 0 }
+        strikeWindowHours: { type: integer, minimum: 1 }
+        guestBanHours: { type: integer, minimum: 0 }
+
+    ModerationEvent:
+      type: object
+      required: [id, createdAt, source, mode, categories, excerpt]
+      properties:
+        id: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        userId: { type: string, format: uuid, nullable: true }
+        userName: { type: string, nullable: true }
+        userEmail: { type: string, nullable: true }
+        userDisabled:
+          type: boolean
+          nullable: true
+          description: Whether the account is disabled now; null for a guest.
+        guestIp:
+          type: string
+          nullable: true
+          description: A guest's network address (an IPv6 one as its /64); null for an account.
+        ipBanned:
+          type: boolean
+          nullable: true
+          description: Whether the guest address is banned now; null for an account.
+        conversationId: { type: string, format: uuid, nullable: true }
+        source: { $ref: "#/components/schemas/ModerationSource" }
+        mode:
+          type: string
+          enum: [openai, model]
+          x-enum-varnames: [ModerationEventModeOpenai, ModerationEventModeModel]
+        categories:
+          type: array
+          items: { type: string }
+        excerpt: { type: string, description: The first 500 characters of the blocked text. }
+        sanction:
+          $ref: "#/components/schemas/ModerationSanction"
+          nullable: true
+
+    ModerationEventPage:
+      type: object
+      required: [items, limit]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ModerationEvent" }
+        nextCursor:
+          type: string
+          description: Absent on the last page.
+        limit: { type: integer }
+
+    GuestBan:
+      type: object
+      required: [ip, createdAt, reason]
+      properties:
+        ip: { type: string }
+        createdAt: { type: string, format: date-time }
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null for a permanent ban.
+        reason: { type: string }
+        eventId: { type: string, format: uuid, nullable: true }
 
     WebSearchSettings:
       type: object

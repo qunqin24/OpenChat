@@ -115,6 +115,9 @@ func (s *Server) CleanupNow(ctx context.Context) {
 	// The sign-in and sign-up attempts no limit looks at any more.
 	s.purgeAuthAttempts(ctx, now)
 
+	// The moderation log past its 90 days, and the guest bans that ran out.
+	s.purgeModeration(ctx, now)
+
 	s.sweepOrphanFiles(ctx, now.Add(-keep.orphanFiles))
 
 	if _, err := s.notes().PurgeEvents(ctx); err != nil {

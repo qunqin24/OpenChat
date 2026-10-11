@@ -147,6 +147,12 @@ func (s *Server) GuestRun(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, err)
 		return
 	}
+	// Before a row is written or a file stored. A guest's message is not sent
+	// unchecked when the check cannot be made.
+	if err := s.moderateGuest(ctx, ip, plan); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
 	plan.choice.clientIP = ip
 	st, err := s.seedGuest(ctx, plan)
 	if err != nil {
@@ -168,6 +174,35 @@ func (s *Server) GuestRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.followGuestRun(ctx, sse, sub, plan, st)
+}
+
+// moderateGuest checks what a guest is sending on: a new message, its pictures
+// (those the page sent the bytes of), or the words typed in answer to a
+// question. A regeneration sends nothing new. The conversation is not on the
+// server, so the log has the address and no conversation.
+func (s *Server) moderateGuest(ctx context.Context, ip string, plan *guestPlan) error {
+	who := moderationSubject{guestIP: ip, source: ModerationSourceGuest}
+	switch plan.req.Action {
+	case "send":
+		in := moderationInput{text: plan.input.content}
+		var images []moderationImage
+		for _, file := range plan.input.files {
+			if file.data != nil && llm.ModalityOf(file.contentType) == llm.ModalityImage {
+				images = append(images, moderationImage{contentType: file.contentType, data: file.data})
+			}
+		}
+		if len(images) > 0 {
+			in.images = func(context.Context) ([]moderationImage, error) { return images, nil }
+		}
+		return s.moderate(ctx, who, in)
+	case "answer":
+		var answers []tools.Answer
+		for _, a := range derefOr(plan.req.Answers, nil) {
+			answers = append(answers, tools.Answer{Selected: a.Selected, Other: derefOr(a.Other, "")})
+		}
+		return s.moderate(ctx, who, moderationInput{text: typedAnswers(answers)})
+	}
+	return nil
 }
 
 // CancelGuestRun stops a guest's run on request. The run's id is the capability:

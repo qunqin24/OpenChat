@@ -35,6 +35,9 @@ const (
 	// KindCompression is the request that writes a conversation's context
 	// summary, made with the conversation's own model.
 	KindCompression Kind = "compression"
+	// KindModeration is the request that has a model classify a message for
+	// content moderation (api/moderation.go).
+	KindModeration Kind = "moderation"
 )
 
 // Status is how a request ended.

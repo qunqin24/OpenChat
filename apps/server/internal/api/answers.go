@@ -183,6 +183,12 @@ func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversatio
 		httpx.Fail(w, r, err)
 		return
 	}
+	// The new wording only: the files it carries were checked when it was first sent.
+	if err := s.moderate(ctx, s.accountSubject(ctx, user, conversationId, ModerationSourceEdit),
+		moderationInput{text: content}); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
 
 	var (
 		input sqlc.Message

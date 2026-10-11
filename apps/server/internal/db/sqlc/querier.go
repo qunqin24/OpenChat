@@ -81,6 +81,8 @@ type Querier interface {
 	// How many requests this address has made in the last hour, and everyone in
 	// the last day.
 	CountGuestRequests(ctx context.Context, ip string) (CountGuestRequestsRow, error)
+	// The same for a guest address.
+	CountGuestStrikes(ctx context.Context, arg CountGuestStrikesParams) (int64, error)
 	// How many guest runs from this address are going. A guest's run lives inside
 	// the request that follows it and is never resumed after a restart, so one that
 	// has committed nothing for a long while is a leftover of a process that died
@@ -94,6 +96,10 @@ type Querier interface {
 	CountServedModels(ctx context.Context, arg CountServedModelsParams) (int64, error)
 	// How many runs of this account are going, in all its conversations.
 	CountUserRunningRuns(ctx context.Context, userID uuid.UUID) (int64, error)
+	// An account's blocked messages in the window, counted from the last time it
+	// was sanctioned: an administrator who enables the account again gives it a
+	// fresh start, instead of the next message setting the same punishment off.
+	CountUserStrikes(ctx context.Context, arg CountUserStrikesParams) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
 	CountUsersFiltered(ctx context.Context, arg CountUsersFilteredParams) (int64, error)
 	CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (Attachment, error)
@@ -152,6 +158,7 @@ type Querier interface {
 	// NULL). SKIP LOCKED lets servers run this at once without waiting on each
 	// other, and a batch keeps one pass from holding a million rows.
 	DeleteExpiredTemporaryConversations(ctx context.Context, arg DeleteExpiredTemporaryConversationsParams) ([]DeleteExpiredTemporaryConversationsRow, error)
+	DeleteGuestBan(ctx context.Context, ip string) (int64, error)
 	// The end of a run: the user goes, and the conversation, transcript, runs,
 	// attachments and memories go with it by cascade. The usage ledger keeps its
 	// rows with the user (and conversation, and run) set to NULL - an account is
@@ -257,6 +264,9 @@ type Querier interface {
 	// window before, the one the figures are compared with. Worked out here, in
 	// the database's time zone, so the buckets of the trend line up with it.
 	GetDashboardWindow(ctx context.Context, arg GetDashboardWindowParams) (GetDashboardWindowRow, error)
+	// The ban in force on an address: a ban past its expiry is ignored whether or
+	// not the cleanup has removed it yet.
+	GetGuestBan(ctx context.Context, ip string) (GuestBan, error)
 	// A user message of the conversation.
 	GetInput(ctx context.Context, arg GetInputParams) (Message, error)
 	// The conversation's last user message: the one a regenerated answer answers.
@@ -265,6 +275,7 @@ type Querier interface {
 	GetMemoryEventForUpdate(ctx context.Context, arg GetMemoryEventForUpdateParams) (MemoryEvent, error)
 	GetMessage(ctx context.Context, id uuid.UUID) (Message, error)
 	GetModelOverride(ctx context.Context, modelID string) (ModelOverride, error)
+	GetModerationEvent(ctx context.Context, id uuid.UUID) (ModerationEvent, error)
 	GetPersonalization(ctx context.Context, id uuid.UUID) (GetPersonalizationRow, error)
 	GetRun(ctx context.Context, id uuid.UUID) (Run, error)
 	GetRunByRequestID(ctx context.Context, arg GetRunByRequestIDParams) (Run, error)
@@ -278,6 +289,11 @@ type Querier interface {
 	// code path forgets the first.
 	GetSessionUser(ctx context.Context, tokenHash []byte) (GetSessionUserRow, error)
 	GetSetting(ctx context.Context, key string) ([]byte, error)
+	// Content moderation (api/moderation.go): the log of what was turned away, the
+	// strikes counted from it, and the guest addresses banned for them.
+	// Several settings in one round trip: the moderation settings are read on every
+	// message, and a request should not cost a query per key.
+	GetSettings(ctx context.Context, keys []string) ([]GetSettingsRow, error)
 	GetUser(ctx context.Context, id uuid.UUID) (User, error)
 	// Who a stored picture belongs to: the signed read URL of a locally kept file
 	// is served to anyone holding it, and this is what says the key is a picture.
@@ -300,6 +316,7 @@ type Querier interface {
 	InsertGuestRequest(ctx context.Context, ip string) error
 	InsertMemory(ctx context.Context, arg InsertMemoryParams) (UserMemory, error)
 	InsertMemoryEvent(ctx context.Context, arg InsertMemoryEventParams) (MemoryEvent, error)
+	InsertModerationEvent(ctx context.Context, arg InsertModerationEventParams) (ModerationEvent, error)
 	// Writes a setting only when there is none yet, so two processes that both find
 	// it missing cannot overwrite each other's value. Read it back afterwards.
 	InsertSettingIfMissing(ctx context.Context, arg InsertSettingIfMissingParams) error
@@ -349,6 +366,8 @@ type Querier interface {
 	// the paging and the count.
 	ListChannelsServingModels(ctx context.Context, modelIds []string) ([]ListChannelsServingModelsRow, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
+	// The bans in force, newest first.
+	ListGuestBans(ctx context.Context) ([]GuestBan, error)
 	// Which of these keys an attachment row still wants: what the orphan sweep
 	// asks before it removes a file from the disk.
 	ListKnownStorageKeys(ctx context.Context, keys []string) ([]string, error)
@@ -370,6 +389,10 @@ type Querier interface {
 	// stops at the limit, leaving the rest for the next time.
 	ListMessagesFrom(ctx context.Context, arg ListMessagesFromParams) ([]Message, error)
 	ListModelOverrides(ctx context.Context, modelIds []string) ([]ModelOverride, error)
+	// Newest first, by keyset on (created_at, id): the order of
+	// moderation_events_created_idx. The account's name and whether it is disabled,
+	// and whether a guest's address is banned now, are read alongside.
+	ListModerationEvents(ctx context.Context, arg ListModerationEventsParams) ([]ListModerationEventsRow, error)
 	// The caller's own uploads that no message has claimed yet.
 	ListPendingAttachments(ctx context.Context, arg ListPendingAttachmentsParams) ([]Attachment, error)
 	// The newest rows of the conversation, oldest first: the raw material of a
@@ -461,6 +484,11 @@ type Querier interface {
 	// Serialises writers of one person's list for the length of the transaction, so
 	// two adds at the cap cannot both pass the count.
 	LockMemoryList(ctx context.Context, userID string) error
+	// Held until the transaction ends, so that recording a blocked message,
+	// counting the subject's strikes and sanctioning them is one step: parallel
+	// requests of one account or address cannot all count one fewer than the
+	// others, and servers sharing the database share the lock.
+	LockModerationSubject(ctx context.Context, subject string) error
 	// Registrations take this before RegisterUser, so that "is the table empty?" is
 	// answered one registration at a time: two people registering on a fresh
 	// install cannot both be made the administrator.
@@ -479,6 +507,7 @@ type Querier interface {
 	// starting a run in one of them while it goes.
 	LockUserConversations(ctx context.Context, userID *uuid.UUID) ([]uuid.UUID, error)
 	MarkMemoryEventUndone(ctx context.Context, arg MarkMemoryEventUndoneParams) (MemoryEvent, error)
+	MarkModerationSanction(ctx context.Context, arg MarkModerationSanctionParams) error
 	// What a run needs to know about its model: how its thinking is controlled,
 	// how much it may read and write, and what it can do. The catalogue row is
 	// chosen the way ListServedModels chooses it — a provider one of the serving
@@ -516,8 +545,10 @@ type Querier interface {
 	// recoverable by an operator for the retention period, then goes with its
 	// messages, runs and attachments. Same shape as the temporary-chat statement.
 	PurgeDeletedConversations(ctx context.Context, arg PurgeDeletedConversationsParams) ([]PurgeDeletedConversationsRow, error)
+	PurgeExpiredGuestBans(ctx context.Context) (int64, error)
 	// Nothing counts a request for more than a day.
 	PurgeGuestRequests(ctx context.Context, before pgtype.Timestamptz) (int64, error)
+	PurgeModerationEvents(ctx context.Context, before pgtype.Timestamptz) (int64, error)
 	// The first account created becomes the admin: someone has to be able to reach
 	// the admin panel, and there is no other bootstrap path. It is never pending
 	// and never refused, whatever the switches say - a fresh install must not be
@@ -632,6 +663,9 @@ type Querier interface {
 	// `unnest(ids, names)`, which says the same thing in one line but which sqlc's
 	// analyser cannot type.
 	UpsertFetchedChannelModels(ctx context.Context, arg UpsertFetchedChannelModelsParams) error
+	// A ban on an address already banned lengthens it, never shortens: the later
+	// expiry stands, and a permanent ban stays permanent.
+	UpsertGuestBan(ctx context.Context, arg UpsertGuestBanParams) (GuestBan, error)
 	// What a request needs to be priced and labelled: the channel's current name,
 	// and the catalogue's per-million-token prices for the model.
 	//

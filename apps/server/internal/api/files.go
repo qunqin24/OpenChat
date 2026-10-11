@@ -36,6 +36,9 @@ type blobStore interface {
 	PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error)
 	ObjectURL(key string) string
 	Size(ctx context.Context, key string) (int64, error)
+	// Read returns a stored file, refusing one larger than limit (content
+	// moderation reads the images of a message it checks).
+	Read(ctx context.Context, key string, limit int64) ([]byte, error)
 	// PutObject stores bytes the server received itself (a guest's files).
 	PutObject(ctx context.Context, key, contentType string, data []byte) error
 	// Delete removes a stored file; the cleanup passes use it once the row that

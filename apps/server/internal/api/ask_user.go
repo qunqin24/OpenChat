@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -80,6 +81,12 @@ func (s *Server) AnswerQuestion(w http.ResponseWriter, r *http.Request, conversa
 		httpx.Fail(w, r, err)
 		return
 	}
+	// What the person typed: the options they picked are the model's own words.
+	if err := s.moderate(ctx, s.accountSubject(ctx, user, conversationId, ModerationSourceAnswer),
+		moderationInput{text: typedAnswers(answers)}); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
 	// The answer joins the run that asked, or the run that began the answer it
 	// is already part of.
 	head := asked.run.ID
@@ -131,6 +138,18 @@ func (s *Server) AnswerQuestion(w http.ResponseWriter, r *http.Request, conversa
 		return
 	}
 	httpx.JSON(w, http.StatusAccepted, AnswerQuestionResponse{Message: page.Items[0], Result: toMessage(written, nil), Run: toRun(run)})
+}
+
+// typedAnswers is the words a person typed in answer to the model's questions
+// (the "other" of each), which is the part of an answer that is theirs.
+func typedAnswers(answers []tools.Answer) string {
+	var typed []string
+	for _, a := range answers {
+		if text := strings.TrimSpace(a.Other); text != "" {
+			typed = append(typed, text)
+		}
+	}
+	return strings.Join(typed, "\n")
 }
 
 // answerPart checks the answers against the questions asked and gives the tool

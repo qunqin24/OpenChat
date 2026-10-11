@@ -44,6 +44,9 @@ type Server struct {
 	// usage is the ledger of model requests, for the ones the server makes
 	// itself (titles). Runs write theirs through the runner.
 	usage *usage.Recorder
+	// moderationClient makes the requests to OpenAI's moderation endpoint; nil
+	// is a client with the check's own timeout. Tests point it elsewhere.
+	moderationClient *http.Client
 	// endUsers makes the identifiers sent with model requests (end_user.go).
 	endUsers *EndUsers
 	// now is the clock the spending caps' periods are read from; time.Now
