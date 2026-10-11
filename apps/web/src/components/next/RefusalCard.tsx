@@ -1,4 +1,4 @@
-import { ShieldAlert, TriangleAlert } from 'lucide-react'
+import { ShieldAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { useIsGuest } from '@/lib/guest/mode'
@@ -9,28 +9,24 @@ import type { Refusal } from '@/lib/moderation-refusal'
  * happened, what to do (change the prompt), and - when more refusals would
  * disable the account or ban the guest - how many are left. The message was
  * never written, so the card is the page's own and goes with the next send.
- * It is the body of a reply (`RefusedReply`), where the model's answer would be.
+ * It is the body of a reply (`RefusedReply`), where the model's answer would be,
+ * and is written like one.
  */
 export default function RefusalCard({ refusal }: { refusal: Refusal }) {
   const { t } = useTranslation()
   const guest = useIsGuest()
+  // Written as a reply is: a status line like the tool activity's ("searched
+  // 16 times"), then plain text in the body's type. No frame, no fill.
   return (
     <div className="n-refusal" role="alert">
-      <div className="n-refusal-main">
-        <span className="n-refusal-badge" aria-hidden="true">
-          <ShieldAlert className="n-refusal-icon" />
-        </span>
-        <div className="n-refusal-body">
-          <p className="n-refusal-title">
-            {t('chat.refused.title')}
-            <span className="n-refusal-tag">{t('chat.refused.tag')}</span>
-          </p>
-          <p className="n-refusal-text">{t('chat.refused.text')}</p>
-        </div>
-      </div>
+      <p className="n-refusal-head">
+        <ShieldAlert className="n-refusal-icon" aria-hidden="true" />
+        <span>{t('chat.refused.title')}</span>
+        <span className="n-refusal-tag">{t('chat.refused.tag')}</span>
+      </p>
+      <p className="n-refusal-text">{t('chat.refused.text')}</p>
       {refusal.strikesLeft ? (
         <p className="n-refusal-warning">
-          <TriangleAlert className="n-refusal-warning-icon" aria-hidden="true" />
           {t(guest ? 'chat.refused.warning-guest' : 'chat.refused.warning', {
             count: refusal.strikesLeft,
             hours: refusal.windowHours,

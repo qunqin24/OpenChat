@@ -712,83 +712,38 @@
 
 /* ---- a message content moderation refused (RefusalCard) ------------------ */
 
-/* A quiet card in the reply's place: the page's own surface and hairline, with
-   red kept to the badge and the tag, so it reads as a notice and not an alarm. */
+/* Written as a reply: the status line takes the tool activity line's place and
+   look (body size, muted, a 16px icon), the text is the body's own, and red is
+   only the small "not sent" mark - as the activity line marks its failures. */
 .prism-next .n-refusal {
-  max-width: 560px;
-  margin: 2px 0 0;
-  border: 1px solid var(--n-line);
-  border-radius: 16px;
-  background: var(--n-card);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.04);
-  overflow: hidden;
-}
-.prism-next .n-refusal-main {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 14px 16px;
+  flex-direction: column;
+  gap: 6px;
 }
-.prism-next .n-refusal-badge {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  background: color-mix(in oklab, var(--n-err) 10%, transparent);
+.prism-next .n-refusal-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--n-text-2);
+  font-size: 15px;
+  line-height: 22px;
 }
 .prism-next .n-refusal-icon {
-  width: 17px;
-  height: 17px;
-  color: var(--n-err);
-}
-.prism-next .n-refusal-body {
-  flex: 1;
-  min-width: 0;
-  padding-top: 1px;
-}
-.prism-next .n-refusal-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  color: var(--n-text);
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 20px;
+  flex: none;
+  width: 16px;
+  height: 16px;
 }
 .prism-next .n-refusal-tag {
-  padding: 0 7px;
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--n-err) 10%, transparent);
   color: var(--n-err);
-  font-size: 11.5px;
-  font-weight: 500;
-  line-height: 18px;
+  font-size: 12px;
 }
 .prism-next .n-refusal-text {
-  margin: 3px 0 0;
-  color: var(--n-text-2);
-  font-size: 13.5px;
-  line-height: 20px;
-}
-/* How close the sanction is: a footer of its own under a hairline. */
-.prism-next .n-refusal-warning {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   margin: 0;
-  padding: 10px 16px;
-  border-top: 1px solid var(--n-line);
-  background: color-mix(in oklab, var(--n-hover) 60%, transparent);
-  color: var(--n-text-2);
-  font-size: 12.5px;
-  line-height: 18px;
 }
-.prism-next .n-refusal-warning-icon {
-  flex: none;
-  width: 14px;
-  height: 14px;
-  color: #d97706;
+.prism-next .n-refusal-warning {
+  margin: 0;
+  color: var(--n-text-2);
+  font-size: 13px;
+  line-height: 20px;
 }
