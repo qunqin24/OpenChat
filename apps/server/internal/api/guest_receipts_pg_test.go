@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -576,5 +575,74 @@ func TestGuestCheckBatches(t *testing.T) {
 	if calls, err := guestCalls([]checkedWords{{images: images}}); err != nil || len(calls) != 3 || len(calls[0].images) != moderationMaxImages {
 		t.Errorf("pictures: %d calls, %v", len(calls), err)
 	}
-	var _ io.Reader
+}
+
+// The rows of a tool call - the question, its answer - survive the browser's
+// round trip with their receipts, and the whole conversation can be sent on.
+func TestGuestToolRowsKeepTheirReceipts(t *testing.T) {
+	h, f := newGuestModeration(t, noStrikes)
+	const ip = "198.51.100.48"
+	h.script = func(n int, _ string) string {
+		if n == 1 {
+			return openAIToolCall("call_q", "ask_user", questionsJSON)
+		}
+		return openAIWire.text("Beach it is.")
+	}
+	conv := uuid.New()
+	first := h.runAs(ip, map[string]any{
+		"action": "send", "conversationId": conv, "model": h.model, "titled": true,
+		"input": map[string]any{"id": uuid.New(), "role": "user", "content": "Plan a trip", "createdAt": time.Now().Format(time.RFC3339Nano), "parts": []any{}},
+	})
+	user := first.find("run_started")["message"].(map[string]any)
+	var asking map[string]any
+	for _, e := range first.events() {
+		if e["type"] == "message_appended" {
+			asking = e["message"].(map[string]any)
+		}
+	}
+	if asking == nil || str(asking["receipt"]) == "" {
+		t.Fatalf("the question has no receipt: %v", asking)
+	}
+	run1 := first.find("run_finished")["run"].(map[string]any)
+
+	second := h.runAs(ip, map[string]any{
+		"action": "answer", "conversationId": conv, "model": h.model, "titled": true,
+		"messages": []any{user, asking}, "callId": "call_q", "continues": run1["id"],
+		"answers": []any{map[string]any{"selected": []string{"Beach"}}, map[string]any{"selected": []string{"Food"}}},
+	})
+	if second.status != http.StatusOK {
+		t.Fatalf("answer with receipted rows: %d %v", second.status, second.error)
+	}
+	rows := []any{user, asking}
+	for _, e := range second.events() {
+		if e["type"] == "message_appended" {
+			rows = append(rows, e["message"])
+		}
+	}
+	if len(rows) != 4 || str(rows[2].(map[string]any)["role"]) != "tool" || str(rows[2].(map[string]any)["receipt"]) == "" {
+		t.Fatalf("the answer's rows: %v", rows)
+	}
+
+	// All four, as streamed, go back and are accepted for the price of the new message.
+	calls := f.calls()
+	third := h.runAs(ip, map[string]any{
+		"action": "send", "conversationId": conv, "model": h.model, "titled": true, "messages": rows,
+		"input": map[string]any{"id": uuid.New(), "role": "user", "content": "thanks", "createdAt": time.Now().Format(time.RFC3339Nano), "parts": []any{}},
+	})
+	if third.status != http.StatusOK || f.calls() != calls+1 {
+		t.Fatalf("the whole conversation, receipted: %d %v (%d calls)", third.status, third.error, f.calls()-calls)
+	}
+
+	// The same with the answer's words changed.
+	forged := map[string]any{}
+	raw, _ := json.Marshal(rows[2])
+	_ = json.Unmarshal(raw, &forged)
+	forged["parts"] = []any{map[string]any{"type": "tool_result", "callId": "call_q", "name": "ask_user", "content": "BLOCKME", "status": "succeeded"}}
+	bad := h.runAs(ip, map[string]any{
+		"action": "send", "conversationId": conv, "model": h.model, "titled": true, "messages": []any{user, asking, forged, rows[3]},
+		"input": map[string]any{"id": uuid.New(), "role": "user", "content": "thanks", "createdAt": time.Now().Format(time.RFC3339Nano), "parts": []any{}},
+	})
+	if bad.status != http.StatusBadRequest || bad.error["code"] != "invalid_history" {
+		t.Errorf("a tool row with its words changed: %d %v", bad.status, bad.error)
+	}
 }
