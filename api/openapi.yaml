@@ -2094,6 +2094,13 @@ components:
         model: { type: string, description: The model that wrote it. }
         inputTokens: { type: integer, description: Tokens it took to write, in. }
         outputTokens: { type: integer, description: Tokens it took to write, out. }
+        receipt:
+          type: string
+          description: |
+            Guest only. The server's signature that it wrote `content`; a
+            guest's summary without a valid one is refused, since it would be
+            words the browser made up (`invalid_summary`). Opaque. Absent for
+            an account's.
         createdAt: { type: string, format: date-time }
 
     CompactionState:
@@ -2244,6 +2251,12 @@ components:
             it to a signed-in browser, which has no use for it; a guest's
             browser keeps the transcript, so it has to hold it for the next
             request (`GuestMessage.providerState`). Absent elsewhere.
+        receipt:
+          type: string
+          description: |
+            Guest streams only. The server's signature that it wrote this row
+            (assistant, tool) or checked its words (user), to be handed back
+            as `GuestMessage.receipt`. Opaque. Absent elsewhere.
         createdAt: { type: string, format: date-time }
 
     MessagePart:
@@ -2859,6 +2872,11 @@ components:
           format: uuid
           nullable: true
           description: The conversation it was learned in, while that still exists.
+        receipt:
+          type: string
+          description: |
+            Guest streams only. The server's signature that `content` has been
+            checked (`GuestMemory.receipt`). Opaque. Absent elsewhere.
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
 
@@ -3557,12 +3575,50 @@ components:
             The file, base64. Left out for the files that no longer fit what a
             request can carry (the newest are sent, as the model gets the newest);
             the model is told those were not included, as for an account.
+        receipt:
+          type: string
+          description: |
+            The server's signature that these bytes have been checked, from
+            `GuestEndEvent.receipts.files`. Without one a picture sent with its
+            bytes is checked again.
+
+    GuestReceipts:
+      type: object
+      description: |
+        Signatures the server gives for content it has checked or written, so
+        that the browser, which keeps the conversation and could write anything
+        into it, is not believed about it. All opaque: a signature covers
+        exactly the words (or, for a row of the model's, the blocks) it was
+        made for, so a changed byte is a missing receipt. Kept next to the
+        thing they sign and sent back with it. In a request only
+        `aboutYou`, `responseStyle` and `memorySnapshot` are read; the rest
+        ride on the rows, memories and files themselves.
+      properties:
+        aboutYou: { type: string, description: For the custom instructions' `aboutYou`. }
+        responseStyle: { type: string, description: For `responseStyle`. }
+        memorySnapshot: { type: string, description: For the conversation's `memorySnapshot`. }
+        messages:
+          type: object
+          additionalProperties: { type: string }
+          description: |
+            Only in `GuestEndEvent`. User rows the server checked in this
+            request (the new question, and any row that was sent without a
+            receipt), by message id.
+        files:
+          type: object
+          additionalProperties: { type: string }
+          description: Only in `GuestEndEvent`. The files whose bytes were checked, by attachment id.
 
     GuestMessage:
       type: object
       description: |
         A row of the conversation as the guest's browser holds it. Assistant
         and tool rows are what the server sent back earlier (`Message`).
+        Nothing in a row is taken on the browser's word: a user row's words
+        are checked again unless it comes with its `receipt`, and an assistant
+        or tool row that does not (with the blocks it is sent with) is not
+        something the server wrote, so the request is refused
+        (`invalid_history`).
       required: [id, role, content, parts, createdAt]
       properties:
         id: { type: string, format: uuid }
@@ -3574,6 +3630,9 @@ components:
         providerState:
           type: string
           description: The `Message.providerState` the row came with; used in place of `parts` when sent.
+        receipt:
+          type: string
+          description: The `Message.receipt` the row came with, or `GuestReceipts.messages` for a user row.
         stopReason:
           type: string
           enum: [stop, length, tool_calls, content_filter, cancelled, error]
@@ -3592,6 +3651,9 @@ components:
         id: { type: string, format: uuid }
         content: { type: string }
         source: { $ref: "#/components/schemas/MemorySource" }
+        receipt:
+          type: string
+          description: The `Memory.receipt` it came with. Without a valid one the note is checked again.
 
     GuestRunRequest:
       type: object
@@ -3642,6 +3704,7 @@ components:
         memories:
           type: array
           items: { $ref: "#/components/schemas/GuestMemory" }
+        receipts: { $ref: "#/components/schemas/GuestReceipts" }
         memorySnapshot:
           type: object
           nullable: true
@@ -3668,6 +3731,12 @@ components:
         existing:
           type: string
           description: The text of the summary the conversation has, to be folded into the new one.
+        existingReceipt:
+          type: string
+          description: The `ContextSummary.receipt` of `existing`; without a valid one 400 `invalid_summary`.
+        latestReceipt:
+          type: string
+          description: The receipt of the user message `latest` is the text of; without one it is checked.
         messages:
           type: array
           description: |
@@ -3686,6 +3755,9 @@ components:
         model: { type: string }
         inputTokens: { type: integer }
         outputTokens: { type: integer }
+        receipt:
+          type: string
+          description: The signature for `content`, to be kept as the summary's `ContextSummary.receipt`.
 
     GuestEndEvent:
       type: object
@@ -3708,6 +3780,8 @@ components:
           type: array
           description: What the model changed during this run, for the undo list.
           items: { $ref: "#/components/schemas/MemoryEvent" }
+        receipts:
+          $ref: "#/components/schemas/GuestReceipts"
         title:
           type: string
           description: Set when the conversation was given a title after this run.
@@ -3744,6 +3818,11 @@ components:
             properties:
               role: { type: string, enum: [user, assistant] }
               content: { type: string }
+              receipt:
+                type: string
+                description: |
+                  The row's receipt. A user row without a valid one is checked
+                  first; an assistant row without one is left out of the title.
         model:
           type: string
           description: The conversation's model, used when no task model is set.

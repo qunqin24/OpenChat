@@ -246,7 +246,21 @@ func (s *Server) GuestTitle(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, err)
 		return
 	}
+	// The words sent to the model are the browser's to claim like any others
+	// (guest_receipts.go): a user's that no receipt covers are moderated first,
+	// and an answer that no receipt covers is left out, not the model's.
+	signer, err := s.guestSigner(ctx)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	on, err := s.guestModerationOn(ctx)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
 	var transcript strings.Builder
+	var pending []checkedWords
 	rows := body.Messages
 	if len(rows) > guestTitleRows {
 		rows = rows[len(rows)-guestTitleRows:]
@@ -261,6 +275,14 @@ func (s *Server) GuestTitle(w http.ResponseWriter, r *http.Request) {
 		if row.Role == "user" {
 			limit, role = titleInputCap/2, "user"
 		}
+		if on {
+			switch {
+			case role == "assistant" && !signer.contentValid(row.Content, row.Receipt):
+				continue
+			case role == "user" && !receiptMatches(row.Receipt, signer.text(row.Content)):
+				pending = append(pending, checkedWords{text: clip(text, limit)})
+			}
+		}
 		fmt.Fprintf(&transcript, "<%s>\n%s\n</%s>\n", role, clip(text, limit), role)
 	}
 	if transcript.Len() == 0 {
@@ -268,6 +290,10 @@ func (s *Server) GuestTitle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.takeGuestRequest(ctx, clientIP(r)); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	if err := s.moderateWords(ctx, clientIP(r), pending); err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}

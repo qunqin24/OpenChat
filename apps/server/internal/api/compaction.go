@@ -241,12 +241,14 @@ func (s *Server) GuestCompact(w http.ResponseWriter, r *http.Request) {
 	ids := map[uuid.UUID]bool{}
 	var total int64
 	var rows []sqlc.Message
+	var carried []guestRow
 	for _, m := range body.Messages {
 		row, err := guestRowOf(m, ids, map[uuid.UUID]bool{}, &total)
 		if err != nil {
 			httpx.Fail(w, r, err)
 			return
 		}
+		carried = append(carried, row)
 		// A file is named in the history and not read: nothing is stored here.
 		for i := range row.files {
 			row.files[i].data = nil
@@ -266,7 +268,35 @@ func (s *Server) GuestCompact(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, errNothingToCompact)
 		return
 	}
+	// What goes to the model is the browser's to claim as much as in a run
+	// (guest_receipts.go): the rows, the summary being folded in, and the
+	// question kept as written.
+	signer, err := s.guestSigner(ctx)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	on, err := s.guestModerationOn(ctx)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	var pending []checkedWords
+	if on {
+		content := guestContent{rows: carried, summaryText: derefOr(body.Existing, ""), summaryRcpt: body.ExistingReceipt}
+		if pending, _, err = signer.verify(content); err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+		if latest := derefOr(body.Latest, ""); strings.TrimSpace(latest) != "" && !receiptMatches(body.LatestReceipt, signer.text(latest)) {
+			pending = append(pending, checkedWords{text: latest})
+		}
+	}
 	if err := s.takeGuestRequest(ctx, clientIP(r)); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	if err := s.moderateWords(ctx, clientIP(r), pending); err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
@@ -309,5 +339,6 @@ func (s *Server) GuestCompact(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, errCompactionFailed)
 		return
 	}
-	httpx.JSON(w, http.StatusOK, GuestCompactResponse{Content: content, Model: modelID, InputTokens: in, OutputTokens: out})
+	receipt := signer.summary(content)
+	httpx.JSON(w, http.StatusOK, GuestCompactResponse{Content: content, Model: modelID, InputTokens: in, OutputTokens: out, Receipt: &receipt})
 }

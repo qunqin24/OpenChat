@@ -52,6 +52,10 @@ type Server struct {
 	// now is the clock the spending caps' periods are read from; time.Now
 	// unless a test has set another.
 	now func() time.Time
+	// receiptKey signs what a guest's browser is later believed about
+	// (guest_receipts.go), read once and kept.
+	receiptMu  sync.Mutex
+	receiptKey []byte
 }
 
 var _ ServerInterface = (*Server)(nil)

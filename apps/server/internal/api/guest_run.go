@@ -78,6 +78,8 @@ type guestFile struct {
 	// told what happened to it.
 	data []byte
 	key  string
+	// receipt is the server's signature for the bytes (see guest_receipts.go).
+	receipt string
 }
 
 // guestRow is one row of the browser's transcript, checked.
@@ -93,6 +95,8 @@ type guestRow struct {
 	usage   []byte
 	at      time.Time
 	files   []guestFile
+	// receipt is the server's signature for the row (see guest_receipts.go).
+	receipt string
 }
 
 // guestPlan is a request, checked and ready to be written: nothing has touched
@@ -116,6 +120,17 @@ type guestPlan struct {
 	// For an answer: the result to record, and the run it joins.
 	result llm.ToolResultPart
 	head   uuid.UUID
+
+	// What nothing in the request vouches for (guest_receipts.go).
+	receipts      GuestReceipts
+	snapshotCanon []byte
+	snapshotWords []string
+	// signer signs what the run writes. active is whether moderation was on
+	// when the request came: only then are words receipted as checked.
+	signer  *receiptSigner
+	active  bool
+	pending []checkedWords
+	fresh   guestFresh
 }
 
 func guestBad(code, message string) error {
@@ -148,8 +163,19 @@ func (s *Server) GuestRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Before a row is written or a file stored. A guest's message is not sent
-	// unchecked when the check cannot be made.
+	// unchecked when the check cannot be made. First what only the server could
+	// have written (refused without a call to anyone), then the new message,
+	// then whatever else of the request nothing vouches for, in one call
+	// (guest_receipts.go).
+	if err := s.verifyGuest(ctx, plan); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
 	if err := s.moderateGuest(ctx, ip, plan); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	if err := s.moderateWords(ctx, ip, plan.pending); err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
@@ -174,6 +200,28 @@ func (s *Server) GuestRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.followGuestRun(ctx, sse, sub, plan, st)
+}
+
+// verifyGuest reads the request for what is not the browser's to claim: the
+// conversation it carries, the instructions, the notes, the summary. What the
+// server has signed passes; words a person could have written and no receipt
+// covers are set aside to be moderated (plan.pending); a row of the model's or a
+// summary no receipt covers is refused. With moderation off nothing is
+// enforced, and nothing that says "checked" is signed.
+func (s *Server) verifyGuest(ctx context.Context, plan *guestPlan) error {
+	signer, err := s.guestSigner(ctx)
+	if err != nil {
+		return err
+	}
+	plan.signer = signer
+	if plan.active, err = s.guestModerationOn(ctx); err != nil || !plan.active {
+		return err
+	}
+	plan.pending, plan.fresh, err = signer.verify(guestContent{
+		rows: plan.rows, about: plan.about, style: plan.style, receipts: plan.receipts,
+		memories: plan.memories, snapshot: plan.snapshotCanon, snapTexts: plan.snapshotWords, summary: plan.summary,
+	})
+	return err
 }
 
 // moderateGuest checks what a guest is sending on: a new message, its pictures
@@ -237,7 +285,8 @@ func (s *Server) stopGuestRun(runID uuid.UUID) {
 // planGuestRun checks a request, and settles the model, before anything is
 // written: every refusal a person can act on is made here.
 func (s *Server) planGuestRun(ctx context.Context, body GuestRunRequest) (*guestPlan, error) {
-	plan := &guestPlan{req: body, temporary: body.Temporary != nil && *body.Temporary, titled: body.Titled != nil && *body.Titled, ids: newGuestIDs()}
+	plan := &guestPlan{req: body, temporary: body.Temporary != nil && *body.Temporary, titled: body.Titled != nil && *body.Titled, ids: newGuestIDs(),
+		receipts: derefOr(body.Receipts, GuestReceipts{})}
 	switch body.Action {
 	case "send", "regenerate", "answer":
 	default:
@@ -287,6 +336,8 @@ func (s *Server) planGuestRun(ctx context.Context, body GuestRunRequest) (*guest
 		if err := json.Unmarshal(raw, &snap); err != nil {
 			return nil, guestBad("invalid_snapshot", "memorySnapshot is not a snapshot")
 		}
+		// As the browser has it, before its ids are exchanged.
+		plan.snapshotCanon, plan.snapshotWords = snapshotCanon(snap), snapshotWords(snap)
 		// Its ids are the browser's; the rows the run reads are staged under
 		// their own (guestIDs), and the snapshot has to name those.
 		for i := range snap.Memories {
@@ -409,7 +460,7 @@ func (s *Server) planGuestRun(ctx context.Context, body GuestRunRequest) (*guest
 // the database holds. ids and files are the ones seen so far: a repeated id is
 // refused, and total counts the bytes of the files sent.
 func guestRowOf(m GuestMessage, ids, files map[uuid.UUID]bool, total *int64) (guestRow, error) {
-	row := guestRow{id: m.Id, role: sqlc.MessageRole(m.Role), content: m.Content, at: m.CreatedAt}
+	row := guestRow{id: m.Id, role: sqlc.MessageRole(m.Role), content: m.Content, at: m.CreatedAt, receipt: derefOr(m.Receipt, "")}
 	if m.Id == uuid.Nil || ids[m.Id] {
 		return row, guestBad("invalid_message", "a message has no id, or its id is repeated")
 	}
@@ -450,7 +501,7 @@ func guestRowOf(m GuestMessage, ids, files map[uuid.UUID]bool, total *int64) (gu
 }
 
 func guestFileOf(f GuestAttachment, seen map[uuid.UUID]bool, total *int64) (guestFile, error) {
-	file := guestFile{id: f.Id, filename: strings.TrimSpace(f.Filename), size: f.Size}
+	file := guestFile{id: f.Id, filename: strings.TrimSpace(f.Filename), size: f.Size, receipt: derefOr(f.Receipt, "")}
 	contentType, _, _ := mime.ParseMediaType(f.ContentType)
 	limit, allowed := uploadable[contentType]
 	switch {
@@ -891,7 +942,7 @@ func (s *Server) followGuestRun(ctx context.Context, sse *httpx.SSEWriter, sub *
 		(finished.Status == sqlc.RunStatusCompleted || finished.Status == sqlc.RunStatusAwaitingInput) {
 		title = s.guestTitleAfterRun(ctx, sse, heartbeat, *finished, st)
 	}
-	end, err := s.guestEnd(ctx, st, title)
+	end, err := s.guestEnd(ctx, st, plan, title)
 	if err != nil {
 		slog.ErrorContext(ctx, "guest end", "error", err)
 		return
@@ -934,7 +985,7 @@ func (s *Server) guestTitleAfterRun(ctx context.Context, sse *httpx.SSEWriter, h
 }
 
 // guestEnd is the last frame: what the browser keeps.
-func (s *Server) guestEnd(ctx context.Context, st *guestRunState, title string) (GuestEndEvent, error) {
+func (s *Server) guestEnd(ctx context.Context, st *guestRunState, plan *guestPlan, title string) (GuestEndEvent, error) {
 	ctx = context.WithoutCancel(ctx)
 	end := GuestEndEvent{Type: GuestEnd, Memories: []Memory{}, MemoryEvents: []MemoryEvent{}}
 	run, err := s.q.GetRun(ctx, st.run.ID)
@@ -975,7 +1026,63 @@ func (s *Server) guestEnd(ctx context.Context, st *guestRunState, title string) 
 		return end, err
 	}
 	end.Summary = toContextSummary(summary)
+	plan.signSummary(end.Summary)
+	plan.endReceipts(&end)
 	return end, nil
+}
+
+// endReceipts puts in the last frame the receipts for what this request had
+// moderated, so that the browser need not have it moderated again: the new
+// message and any row that came without a receipt, the pictures among them, the
+// instructions, the notes as they are now (the model may have saved some), and
+// the snapshot as it stands.
+func (p *guestPlan) endReceipts(end *GuestEndEvent) {
+	if p == nil || p.signer == nil || !p.active {
+		return
+	}
+	var r GuestReceipts
+	if p.about != "" {
+		v := p.signer.text(p.about)
+		r.AboutYou = &v
+	}
+	if p.style != "" {
+		v := p.signer.text(p.style)
+		r.ResponseStyle = &v
+	}
+	messages, files := map[string]string{}, map[string]string{}
+	rows := p.rows
+	if p.input != nil {
+		rows = append(append([]guestRow(nil), rows...), *p.input)
+	}
+	for _, row := range rows {
+		if row.role != sqlc.MessageRoleUser {
+			continue
+		}
+		isInput := p.input != nil && row.id == p.input.id
+		if isInput || p.fresh.rows[row.id] {
+			messages[row.id.String()] = p.signer.text(row.content)
+		}
+		for _, file := range row.files {
+			if file.data != nil && (isInput || p.fresh.files[file.id]) && llm.ModalityOf(file.contentType) == llm.ModalityImage {
+				files[file.id.String()] = p.signer.file(file.contentType, file.data)
+			}
+		}
+	}
+	r.Messages, r.Files = &messages, &files
+	for i := range end.Memories {
+		v := p.signer.text(end.Memories[i].Content)
+		end.Memories[i].Receipt = &v
+	}
+	if end.MemorySnapshot != nil {
+		if raw, err := json.Marshal(end.MemorySnapshot); err == nil {
+			var snap memory.Snapshot
+			if json.Unmarshal(raw, &snap) == nil {
+				v := p.signer.snapshot(snap)
+				r.MemorySnapshot = &v
+			}
+		}
+	}
+	end.Receipts = &r
 }
 
 // sendGuestBatch maps a batch for a guest. It differs from an account's in one
@@ -996,13 +1103,49 @@ func guestRunEvent(event agent.Event, plan *guestPlan) (RunEvent, bool) {
 	var out RunEvent
 	switch e := event.(type) {
 	case agent.RunStarted:
-		return out, out.FromRunStartedEvent(RunStartedEvent{Type: RunStarted, Run: toRun(e.Run), Message: toMessage(e.Input, nil)}) == nil
+		message := toMessage(e.Input, nil)
+		plan.sign(&message)
+		return out, out.FromRunStartedEvent(RunStartedEvent{Type: RunStarted, Run: toRun(e.Run), Message: message}) == nil
 	case agent.MessageAppended:
 		message := toMessage(e.Message, nil)
 		message.ProviderState = providerState(e.Message)
+		plan.sign(&message)
 		return out, out.FromMessageAppendedEvent(MessageAppendedEvent{Type: MessageAppended, Message: message}) == nil
+	case agent.CompactionFinished:
+		summary := toContextSummary(e.Summary)
+		plan.signSummary(summary)
+		return out, out.FromCompactionFinishedEvent(CompactionFinishedEvent{Type: CompactionFinished, Summary: summary}) == nil
 	}
 	return toRunEvent(event)
+}
+
+// sign puts the receipt on a row on its way to the browser: a row of the
+// model's always (it is the server's own work), a user row's words only when
+// they were checked, which in this request they have been - the new message, a
+// regenerated one, or one that came with a receipt.
+func (p *guestPlan) sign(m *Message) {
+	if p == nil || p.signer == nil {
+		return
+	}
+	switch m.Role {
+	case RoleUser:
+		if p.active {
+			r := p.signer.text(m.Content)
+			m.Receipt = &r
+		}
+	case RoleAssistant, RoleTool:
+		r := p.signer.messageReceipt(*m)
+		m.Receipt = &r
+	}
+}
+
+// signSummary signs a summary the server's model wrote.
+func (p *guestPlan) signSummary(s *ContextSummary) {
+	if p == nil || p.signer == nil || s == nil {
+		return
+	}
+	r := p.signer.summary(s.Content)
+	s.Receipt = &r
 }
 
 // providerState is an assistant row's blocks as stored, for the browser to hand
@@ -1031,6 +1174,7 @@ func (s *Server) sendGuestSnapshot(ctx context.Context, sse *httpx.SSEWriter, ru
 	for _, row := range rows {
 		message := toMessage(row, nil)
 		message.ProviderState = providerState(row)
+		plan.sign(&message)
 		snapshot.Messages = append(snapshot.Messages, message)
 	}
 	return plan.ids.send(sse, snapshot)

@@ -148,16 +148,18 @@ func TestGuestModerationRefusesBeforeAnythingIsWritten(t *testing.T) {
 		t.Errorf("%d checks", f.calls())
 	}
 
-	// A regeneration re-sends what was checked.
+	// A regeneration re-sends the history, and the history is the browser's: a
+	// row that comes with no receipt is words nobody has checked
+	// (guest_receipts_pg_test.go has the cases of one that has).
 	calls := f.calls()
 	user := userRow(uuid.New(), "BLOCKME was said long ago", time.Now().Add(-time.Minute))
 	if status, _, _ := h.as(ip, http.MethodPost, "/guest/runs", map[string]any{
 		"action": "regenerate", "conversationId": uuid.New(), "model": h.model, "messages": []any{user},
-	}); status != http.StatusOK {
+	}); status != http.StatusUnprocessableEntity {
 		t.Errorf("regenerate: %d", status)
 	}
-	if f.calls() != calls {
-		t.Error("a regeneration was checked")
+	if f.calls() != calls+1 {
+		t.Error("a regeneration of unchecked words was not checked")
 	}
 }
 

@@ -1779,6 +1779,13 @@ export interface components {
             inputTokens: number;
             /** @description Tokens it took to write */
             outputTokens: number;
+            /**
+             * @description Guest only. The server's signature that it wrote `content`; a
+             *     guest's summary without a valid one is refused, since it would be
+             *     words the browser made up (`invalid_summary`). Opaque. Absent for
+             *     an account's.
+             */
+            receipt?: string;
             /** Format: date-time */
             createdAt: string;
         };
@@ -1906,6 +1913,12 @@ export interface components {
              *     request (`GuestMessage.providerState`). Absent elsewhere.
              */
             providerState?: string;
+            /**
+             * @description Guest streams only. The server's signature that it wrote this row
+             *     (assistant, tool) or checked its words (user), to be handed back
+             *     as `GuestMessage.receipt`. Opaque. Absent elsewhere.
+             */
+            receipt?: string;
             /** Format: date-time */
             createdAt: string;
         };
@@ -2417,6 +2430,11 @@ export interface components {
              * @description The conversation it was learned in, while that still exists.
              */
             conversationId?: string | null;
+            /**
+             * @description Guest streams only. The server's signature that `content` has been
+             *     checked (`GuestMemory.receipt`). Opaque. Absent elsewhere.
+             */
+            receipt?: string;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -3037,10 +3055,51 @@ export interface components {
              *     the model is told those were not included, as for an account.
              */
             data?: string;
+            /**
+             * @description The server's signature that these bytes have been checked, from
+             *     `GuestEndEvent.receipts.files`. Without one a picture sent with its
+             *     bytes is checked again.
+             */
+            receipt?: string;
+        };
+        /**
+         * @description Signatures the server gives for content it has checked or written, so
+         *     that the browser, which keeps the conversation and could write anything
+         *     into it, is not believed about it. All opaque: a signature covers
+         *     exactly the words (or, for a row of the model's, the blocks) it was
+         *     made for, so a changed byte is a missing receipt. Kept next to the
+         *     thing they sign and sent back with it. In a request only
+         *     `aboutYou`, `responseStyle` and `memorySnapshot` are read; the rest
+         *     ride on the rows, memories and files themselves.
+         */
+        GuestReceipts: {
+            /** @description For the custom instructions' `aboutYou`. */
+            aboutYou?: string;
+            /** @description For `responseStyle`. */
+            responseStyle?: string;
+            /** @description For the conversation's `memorySnapshot`. */
+            memorySnapshot?: string;
+            /**
+             * @description Only in `GuestEndEvent`. User rows the server checked in this
+             *     request (the new question, and any row that was sent without a
+             *     receipt), by message id.
+             */
+            messages?: {
+                [key: string]: string;
+            };
+            /** @description Only in `GuestEndEvent`. The files whose bytes were checked, by attachment id. */
+            files?: {
+                [key: string]: string;
+            };
         };
         /**
          * @description A row of the conversation as the guest's browser holds it. Assistant
          *     and tool rows are what the server sent back earlier (`Message`).
+         *     Nothing in a row is taken on the browser's word: a user row's words
+         *     are checked again unless it comes with its `receipt`, and an assistant
+         *     or tool row that does not (with the blocks it is sent with) is not
+         *     something the server wrote, so the request is refused
+         *     (`invalid_history`).
          */
         GuestMessage: {
             /** Format: uuid */
@@ -3050,6 +3109,8 @@ export interface components {
             parts: components["schemas"]["MessagePart"][];
             /** @description The `Message.providerState` the row came with; used in place of `parts` when sent. */
             providerState?: string;
+            /** @description The `Message.receipt` the row came with, or `GuestReceipts.messages` for a user row. */
+            receipt?: string;
             /** @enum {string} */
             stopReason?: "stop" | "length" | "tool_calls" | "content_filter" | "cancelled" | "error";
             model?: string;
@@ -3064,6 +3125,8 @@ export interface components {
             id: string;
             content: string;
             source?: components["schemas"]["MemorySource"];
+            /** @description The `Memory.receipt` it came with. Without a valid one the note is checked again. */
+            receipt?: string;
         };
         GuestRunRequest: {
             /**
@@ -3104,6 +3167,7 @@ export interface components {
             responseStyle?: string;
             memoryEnabled?: boolean;
             memories?: components["schemas"]["GuestMemory"][];
+            receipts?: components["schemas"]["GuestReceipts"];
             /**
              * @description The conversation's snapshot from `GuestEndEvent`, sent back so the
              *     system prompt is the same bytes at every turn. Absent on its first run.
@@ -3126,6 +3190,10 @@ export interface components {
             model?: string;
             /** @description The text of the summary the conversation has, to be folded into the new one. */
             existing?: string;
+            /** @description The `ContextSummary.receipt` of `existing`; without a valid one 400 `invalid_summary`. */
+            existingReceipt?: string;
+            /** @description The receipt of the user message `latest` is the text of; without one it is checked. */
+            latestReceipt?: string;
             /**
              * @description The rows to add to the summary, in order, without the question being
              *     kept (`latest`) - rows the summary already covers are not sent.
@@ -3139,6 +3207,8 @@ export interface components {
             model: string;
             inputTokens: number;
             outputTokens: number;
+            /** @description The signature for `content`, to be kept as the summary's `ContextSummary.receipt`. */
+            receipt?: string;
         };
         /**
          * @description The last frame of a guest's run: what the browser has to keep, because
@@ -3158,6 +3228,7 @@ export interface components {
             memories: components["schemas"]["Memory"][];
             /** @description What the model changed during this run, for the undo list. */
             memoryEvents: components["schemas"]["MemoryEvent"][];
+            receipts?: components["schemas"]["GuestReceipts"];
             /** @description Set when the conversation was given a title after this run. */
             title?: string;
             /**
@@ -3174,6 +3245,11 @@ export interface components {
                 /** @enum {string} */
                 role: "user" | "assistant";
                 content: string;
+                /**
+                 * @description The row's receipt. A user row without a valid one is checked
+                 *     first; an assistant row without one is left out of the title.
+                 */
+                receipt?: string;
             }[];
             /** @description The conversation's model, used when no task model is set. */
             model?: string;
