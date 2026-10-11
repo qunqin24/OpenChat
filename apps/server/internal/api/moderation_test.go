@@ -129,7 +129,7 @@ func TestClipEnds(t *testing.T) {
 }
 
 func TestContentBlockedCarriesOnlyCategories(t *testing.T) {
-	err := contentBlocked([]string{"violence/graphic"})
+	err := contentBlocked([]string{"violence/graphic"}, moderationSanction{})
 	raw, _ := json.Marshal(err)
 	var body struct {
 		Code    string
@@ -143,6 +143,15 @@ func TestContentBlockedCarriesOnlyCategories(t *testing.T) {
 	}
 	if cats, _ := body.Details["categories"].([]any); len(cats) != 1 || cats[0] != "violence/graphic" {
 		t.Errorf("details %v", body.Details)
+	}
+}
+
+// The warning - how many more before the sanction, within how long - is added
+// only when a sanction can follow.
+func TestContentBlockedWarnsOfTheSanction(t *testing.T) {
+	err := contentBlocked([]string{"violence/graphic"}, moderationSanction{strikesLeft: 2, windowHours: 24})
+	if err.Details["strikesLeft"] != 2 || err.Details["windowHours"] != 24 {
+		t.Errorf("details %v", err.Details)
 	}
 }
 

@@ -19,6 +19,8 @@ import MessageAttachments from './MessageAttachments'
 import { Markdown } from './MarkdownText'
 import CompactionDivider from './CompactionDivider'
 import { CompactingLine, ThinkingLine, ThinkingOrb } from './ThinkingOrb'
+import type { Refusal } from '@/lib/moderation-refusal'
+import RefusalCard from './RefusalCard'
 import ToolActivity, {
   type ActivityItem,
   type ActivityNote,
@@ -573,6 +575,32 @@ function isFoldBlock(block: Block): block is FoldBlock {
  * header and the thinking line, exactly as a run looks before its first token,
  * so nothing shifts when the real one takes its place.
  */
+/**
+ * A message content moderation refused, answered in the model's place: the
+ * model's head as on any reply, and the refusal as its body. Nothing of it was
+ * written; it is the page's own until the next send.
+ */
+export function RefusedReply({ model, modelId, refusal }: { model?: ChatModel; modelId: string; refusal: Refusal }) {
+  const name = model?.name ?? modelId
+  return (
+    <div className="n-msg-assistant">
+      <span className="n-msg-avatar n-msg-mark" aria-hidden="true">
+        <ModelIcon
+          subject="model"
+          className="size-8"
+          providerId={model?.providerId || undefined}
+          family={model?.family || undefined}
+          name={name}
+        />
+      </span>
+      <div className="n-msg-head">{name}</div>
+      <div className="n-msg-body">
+        <RefusalCard refusal={refusal} />
+      </div>
+    </div>
+  )
+}
+
 export function PendingReply({ model, modelId }: { model?: ChatModel; modelId: string }) {
   const name = model?.name ?? modelId
   return (

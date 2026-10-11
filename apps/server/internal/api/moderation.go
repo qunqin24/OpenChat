@@ -60,9 +60,16 @@ var (
 
 // contentBlocked is the refusal of a message that failed the check. It names
 // the categories that matched and nothing else: not the scores, not the text.
-func contentBlocked(categories []string) *httpx.APIError {
+func contentBlocked(categories []string, warning moderationSanction) *httpx.APIError {
 	err := httpx.NewError(http.StatusUnprocessableEntity, "content_blocked", "this message did not pass content moderation")
 	err.Details = map[string]any{"categories": categories}
+	// How many more blocked messages, within how many hours, bring the sanction:
+	// a warning for someone who did not mean it. Absent when nothing would
+	// follow (no strike limit, an administrator, the count not known).
+	if warning.strikesLeft > 0 {
+		err.Details["strikesLeft"] = warning.strikesLeft
+		err.Details["windowHours"] = warning.windowHours
+	}
 	return err
 }
 
@@ -163,20 +170,26 @@ func (s *Server) moderate(ctx context.Context, who moderationSubject, in moderat
 	// itself, so the page shows it at once rather than on the next attempt: a
 	// banned address is told so, and a disabled account - its sessions are
 	// gone - is signed out, which takes its page to sign-in.
-	switch sanction := s.recordBlocked(ctx, cfg, who, text, hits); {
+	sanction := s.recordBlocked(ctx, cfg, who, text, hits)
+	switch {
 	case sanction.banned:
 		return errGuestBanned(sanction.until)
 	case sanction.disabled:
 		return httpx.ErrUnauthorized
 	}
-	return contentBlocked(hits)
+	return contentBlocked(hits, sanction)
 }
 
-// moderationSanction is what recordBlocked did beyond logging.
+// moderationSanction is what recordBlocked did beyond logging, or how close it
+// came: strikesLeft blocked messages more within windowHours bring the
+// sanction (0 when none will: no limit, an administrator, or the count failed).
 type moderationSanction struct {
 	disabled bool
 	banned   bool
 	until    *time.Time // a ban's end; nil for good
+
+	strikesLeft int
+	windowHours int
 }
 
 // moderationFailed is the answer when the check could not be made. A guest's
@@ -487,6 +500,7 @@ func (s *Server) recordBlocked(ctx context.Context, cfg moderationConfig, who mo
 	var (
 		sanction string
 		until    *time.Time
+		strikes  int64
 	)
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
@@ -515,7 +529,6 @@ func (s *Server) recordBlocked(ctx context.Context, cfg moderationConfig, who mo
 			return nil
 		}
 
-		var strikes int64
 		if who.guest() {
 			strikes, err = q.CountGuestStrikes(ctx, sqlc.CountGuestStrikesParams{GuestIp: &who.guestIP, WindowHours: int32(cfg.StrikeWindowHours)})
 		} else {
@@ -561,7 +574,11 @@ func (s *Server) recordBlocked(ctx context.Context, cfg moderationConfig, who mo
 		return moderationSanction{}
 	}
 	if sanction == "" {
-		return moderationSanction{}
+		// An administrator is never sanctioned, so is not warned either.
+		if cfg.Strikes <= 0 || who.admin {
+			return moderationSanction{}
+		}
+		return moderationSanction{strikesLeft: max(cfg.Strikes-int(strikes), 0), windowHours: cfg.StrikeWindowHours}
 	}
 	if who.guest() {
 		slog.WarnContext(ctx, "moderation sanction", "sanction", sanction, "guest_ip", who.guestIP,

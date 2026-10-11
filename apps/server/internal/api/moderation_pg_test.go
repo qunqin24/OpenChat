@@ -199,8 +199,13 @@ func refused(t *testing.T, rec *httptest.ResponseRecorder) []string {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || body.Code != "content_blocked" {
 		t.Fatalf("body %s", rec.Body)
 	}
-	// Only the categories: not the scores, not the text.
-	if len(body.Details) != 1 || strings.Contains(rec.Body.String(), "0.9") || strings.Contains(rec.Body.String(), "BLOCKME") {
+	// Only the categories (and the strike warning): not the scores, not the text.
+	for key := range body.Details {
+		if key != "categories" && key != "strikesLeft" && key != "windowHours" {
+			t.Fatalf("the refusal says more than the categories: %s", rec.Body)
+		}
+	}
+	if strings.Contains(rec.Body.String(), "0.9") || strings.Contains(rec.Body.String(), "BLOCKME") {
 		t.Fatalf("the refusal says more than the categories: %s", rec.Body)
 	}
 	var categories []string
@@ -475,7 +480,14 @@ func TestModerationStrikesDisableAnAccount(t *testing.T) {
 	addSession()
 
 	for i := 1; i <= 2; i++ {
-		refused(t, h.post("BLOCKME "+fmt.Sprint(i)))
+		rec := h.post("BLOCKME " + fmt.Sprint(i))
+		refused(t, rec)
+		// Warned: 3 strikes, so 2 left after the first, 1 after the second.
+		var warned blockedBody
+		_ = json.Unmarshal(rec.Body.Bytes(), &warned)
+		if left, _ := warned.Details["strikesLeft"].(float64); int(left) != 3-i || warned.Details["windowHours"] != float64(24) {
+			t.Errorf("after %d strikes the warning is %v", i, warned.Details)
+		}
 		if disabled() || sessions() != 1 {
 			t.Fatalf("after %d strikes the account is disabled", i)
 		}

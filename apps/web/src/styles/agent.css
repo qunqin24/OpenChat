@@ -709,3 +709,47 @@
 .prism-next .n-reasoning-toggle .n-orb {
   margin-inline-end: 2px;
 }
+
+/* ---- a message content moderation refused (RefusalCard) ------------------ */
+
+.prism-next .n-refusal {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 2px 0 0;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in oklab, var(--n-err) 35%, transparent);
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--n-err) 7%, var(--n-bg));
+  color: var(--n-text);
+}
+.prism-next .n-refusal-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  color: var(--n-err);
+}
+.prism-next .n-refusal-body {
+  flex: 1;
+  min-width: 0;
+}
+.prism-next .n-refusal-title {
+  margin: 0;
+  color: var(--n-err);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+.prism-next .n-refusal-text {
+  margin: 4px 0 0;
+  color: var(--n-text-2);
+  font-size: 13.5px;
+  line-height: 20px;
+}
+.prism-next .n-refusal-warning {
+  margin: 6px 0 0;
+  color: var(--n-err);
+  font-size: 13px;
+  line-height: 18px;
+}

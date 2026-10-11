@@ -86,6 +86,14 @@
       "error-compaction_failed": "The model did not write a summary. Try again later.",
       "error-generic": "Compressing did not work. Try again later."
     },
+    "refused": {
+      "title": "Content not allowed",
+      "text": "This message did not pass content moderation and was not sent. Please change your prompt and try again.",
+      "warning_one": "{{count}} more within {{hours}} hours and this account will be disabled.",
+      "warning_other": "{{count}} more within {{hours}} hours and this account will be disabled.",
+      "warning-guest_one": "{{count}} more within {{hours}} hours and guest mode will be closed to you.",
+      "warning-guest_other": "{{count}} more within {{hours}} hours and guest mode will be closed to you."
+    },
     "send-error": {
       "conversation_busy": "The previous reply is still being written. Wait for it, or stop it first.",
       "no_models": "No model is available yet. An administrator has to enable one in a channel.",

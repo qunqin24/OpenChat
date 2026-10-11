@@ -999,10 +999,14 @@ export interface paths {
          *     With content moderation on (`ModerationSettings.mode`) the text of the
          *     message and its images are checked first. A message that fails is
          *     refused before anything is written, with 422 `content_blocked` and the
-         *     matched categories in `details.categories`; when the moderation service
-         *     cannot be reached and the setting says to block, 503
-         *     `moderation_unavailable`. The same goes for editing a message and
-         *     answering a question; a regeneration re-sends what was already checked.
+         *     matched categories in `details.categories` - and, when more blocked
+         *     messages would disable the account, `details.strikesLeft` of them
+         *     within `details.windowHours`. The message that reaches the limit
+         *     disables the account and is answered 401 (its sessions are gone).
+         *     When the moderation service cannot be reached and the setting says to
+         *     block, 503 `moderation_unavailable`. The same goes for editing a message
+         *     and answering a question; a regeneration re-sends what was already
+         *     checked.
          */
         post: operations["createMessage"];
         delete?: never;
@@ -1532,9 +1536,11 @@ export interface paths {
          *
          *     With content moderation on, a new message (and its images) or the words
          *     typed in an answer are checked before anything is written: 422
-         *     `content_blocked` with the matched categories in `details.categories`,
-         *     or 503 `moderation_unavailable` when the check could not be made (a
-         *     guest's message is never sent unchecked). A regeneration is not checked.
+         *     `content_blocked` with the matched categories in `details.categories`
+         *     (and `details.strikesLeft` / `details.windowHours` before a ban), or 503
+         *     `moderation_unavailable` when the check could not be made (a guest's
+         *     message is never sent unchecked). The message that earns the ban is
+         *     answered with it (403 `guest_banned`). A regeneration is not checked.
          *     From a network address banned for it, this and every other guest
          *     endpoint but cancelling a run answers 403 `guest_banned`, with
          *     `details.until` (a time, or null for a permanent ban).

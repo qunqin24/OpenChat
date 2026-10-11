@@ -34,6 +34,7 @@ import { smoothScrollBehavior } from '@/lib/motion'
 import { displayTitle } from '@/lib/titles'
 import { acceptAttribute, acceptsOf } from '@/lib/attachments'
 import { isRunning } from '@/lib/run-state'
+import { refusalOf } from '@/lib/moderation-refusal'
 import { buildTurns, pendingQuestion } from '@/lib/transcript'
 import { parseQuestions, type AskAnswer } from '@/lib/ask-user'
 import { useChatStore } from '@/stores/chat-store'
@@ -43,7 +44,7 @@ import Composer from './Composer'
 import ContextMeter from './ContextMeter'
 import { DropOverlay } from './DropOverlay'
 import { ImageSource, proxiedImages } from './genui/image-source'
-import { AssistantTurn, PendingReply, UserMessage } from './MessageItem'
+import { AssistantTurn, PendingReply, RefusedReply, UserMessage } from './MessageItem'
 import ModelPicker from './ModelPicker'
 import ThinkingPicker from './ThinkingPicker'
 import WebSearchToggle from './WebSearchToggle'
@@ -100,6 +101,10 @@ export function NextChat({ conversationId }: NextChatProps) {
   const unpost = useChatStore((s) => s.unpost)
   const takePendingPrompt = useChatStore((s) => s.takePendingPrompt)
   const returnDraft = useChatStore((s) => s.returnDraft)
+  const refuse = useChatStore((s) => s.refuse)
+  // A message content moderation refused here (or, on a new chat, the first
+  // message of one that was removed for it).
+  const refusal = useChatStore((s) => s.refused[conversationId ?? ''])
   const takeReturnedDraft = useChatStore((s) => s.takeReturnedDraft)
   const deleteConversation = useDeleteConversation()
   const temporaryChat = useChatStore((s) => s.temporaryChat)
@@ -586,6 +591,12 @@ export function NextChat({ conversationId }: NextChatProps) {
           // to the new-chat screen. Any other failure keeps the conversation,
           // which may hold the message after all.
           if (isOpenChatError(error) && error.status >= 400 && error.status < 500 && error.status !== 401) {
+            // The card goes with the text to the new-chat screen.
+            const refused = refusalOf(error, pending.content)
+            if (refused) {
+              refuse(conversationId, null)
+              refuse('', refused)
+            }
             returnDraft(pending.content)
             deleteConversation.mutate(conversationId)
             void navigate({ to: paths.home, replace: true })
@@ -608,6 +619,27 @@ export function NextChat({ conversationId }: NextChatProps) {
 
   const title = conversationId ? displayTitle(conversation.data?.title, t) : t('next.nav.new')
   const modelName = modelById.get(modelId)?.name ?? (modelId || 'OpenChat')
+
+  // A message content moderation refused: what was sent, and the refusal in
+  // the model's place. The page's own - nothing of it was written.
+  const refusedTurn = refusal ? (
+    <>
+      {refusal.content !== undefined && (
+        <UserMessage
+          message={{
+            id: 'refused',
+            conversationId: conversationId ?? '',
+            role: 'user',
+            content: refusal.content,
+            parts: [],
+            status: 'complete',
+            createdAt: '',
+          }}
+        />
+      )}
+      <RefusedReply modelId={modelId} model={modelById.get(modelId)} refusal={refusal} />
+    </>
+  ) : null
 
   // Exactly one composer for every state; on the empty state it docks beneath
   // the centred welcome rather than living inside it.
@@ -661,6 +693,8 @@ export function NextChat({ conversationId }: NextChatProps) {
           <div className="n-loading" role="status" aria-label={t('state.loading')}>
             <span className="n-spinner" data-motion="essential" />
           </div>
+        ) : isEmpty && refusal ? (
+          <div className="n-column n-chat-fade">{refusedTurn}</div>
         ) : isEmpty ? (
           <Welcome onPick={setInput} modelName={modelName} model={modelById.get(modelId)} />
         ) : (
@@ -702,6 +736,7 @@ export function NextChat({ conversationId }: NextChatProps) {
                 </Fragment>
               ))}
               {replacing && !outgoing && <PendingReply modelId={modelId} model={modelById.get(modelId)} />}
+              {refusal && !outgoing && refusedTurn}
               {outgoing && (
                 <>
                   <UserMessage

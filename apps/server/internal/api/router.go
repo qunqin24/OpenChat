@@ -25,7 +25,7 @@ import (
 func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler {
 	r := chi.NewRouter()
 
-	r.Use(middleware.RequestID)
+	r.Use(httpx.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(httpx.RequestLogger)

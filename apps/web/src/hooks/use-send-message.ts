@@ -5,7 +5,9 @@ import { toast } from 'sonner'
 
 import { api, unwrap } from '@/lib/api'
 import type { AskAnswer } from '@/lib/ask-user'
+import { isGuestMode } from '@/lib/guest/mode'
 import { CAPACITY_CODE } from '@/lib/model-capacity'
+import { refusalOf } from '@/lib/moderation-refusal'
 import { queryKeys } from '@/lib/query-keys'
 import { truncateTranscript, type TranscriptPages } from '@/lib/transcript-pages'
 import { useChatStore } from '@/stores/chat-store'
@@ -33,14 +35,33 @@ const SEND_ERRORS = [
   'guest_unreachable',
 ] as const
 
-function useSendError() {
+function useSendError(conversationId: string) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  return (error: Error) => {
+  const refuse = useChatStore((s) => s.refuse)
+  // `content` is the text of a new message: given, a refusal shows in the
+  // conversation as that message and a card in reply. An edit or an answer has
+  // its own place for the text, and gets only the toast.
+  return (error: Error, content?: string) => {
     const code = isOpenChatError(error) ? error.code : ''
     // Said by the page itself, not a toast: a banned guest's window is covered
     // by the ban, and a signed-out account is taken to sign-in.
     if (code === 'guest_banned' || (isOpenChatError(error) && error.status === 401)) return
+    // Content moderation: a card in the conversation, and a toast that says so
+    // and, if it applies, how close the sanction is. Not a fault, so no error id.
+    const refusal = refusalOf(error, content)
+    if (refusal) {
+      if (content !== undefined) refuse(conversationId, refusal)
+      toast.error(t('chat.send-error.content_blocked'), {
+        description: refusal.strikesLeft
+          ? t(isGuestMode() ? 'chat.refused.warning-guest' : 'chat.refused.warning', {
+              count: refusal.strikesLeft,
+              hours: refusal.windowHours,
+            })
+          : undefined,
+      })
+      return
+    }
     const known = SEND_ERRORS.find((c) => c === code)
     // The request's id under the message, for a report that finds its lines.
     const requestId = isOpenChatError(error) ? error.requestId : undefined
@@ -74,7 +95,7 @@ const choiceBody = ({ model, reasoningEffort, webSearch }: RunChoice) => ({
 export function useSendMessage(conversationId: string) {
   const startRun = useChatStore((s) => s.startRun)
   const unpost = useChatStore((s) => s.unpost)
-  const onError = useSendError()
+  const onError = useSendError(conversationId)
 
   return useMutation({
     // Shown in the transcript itself (the outbox, a waiting reply).
@@ -106,9 +127,9 @@ export function useSendMessage(conversationId: string) {
     // page that made the call is gone, and a message sent just before switching
     // conversations would stay in the transcript as a bubble with a reply that
     // never comes. (The same goes for the prompt carried over from the empty screen.)
-    onError: (error) => {
+    onError: (error, variables) => {
       unpost(conversationId)
-      onError(error)
+      onError(error, variables.content)
     },
   })
 }
@@ -136,7 +157,7 @@ export function useRegenerate(conversationId: string) {
   const startRun = useChatStore((s) => s.startRun)
   const redo = useChatStore((s) => s.redo)
   const forget = useForgetDeleted(conversationId)
-  const onError = useSendError()
+  const onError = useSendError(conversationId)
 
   return useMutation({
     // Shown in the transcript itself (the outbox, a waiting reply).
@@ -174,7 +195,7 @@ export function useEditMessage(conversationId: string) {
   const post = useChatStore((s) => s.post)
   const unpost = useChatStore((s) => s.unpost)
   const forget = useForgetDeleted(conversationId)
-  const onError = useSendError()
+  const onError = useSendError(conversationId)
 
   return useMutation({
     // Shown in the transcript itself (the outbox, a waiting reply).
@@ -220,7 +241,7 @@ export function useEditMessage(conversationId: string) {
  */
 export function useAnswerQuestion(conversationId: string) {
   const startRun = useChatStore((s) => s.startRun)
-  const onError = useSendError()
+  const onError = useSendError(conversationId)
 
   return useMutation({
     // Shown in the question's card itself.
@@ -233,7 +254,7 @@ export function useAnswerQuestion(conversationId: string) {
         }),
       ),
     onSuccess: (response) => startRun(conversationId, response.run, response.message, [response.result]),
-    onError,
+    onError: (error) => onError(error),
   })
 }
 

@@ -86,6 +86,14 @@
       "error-compaction_failed": "模型没能写出摘要，请稍后再试。",
       "error-generic": "压缩没有成功，请稍后再试。"
     },
+    "refused": {
+      "title": "内容违规",
+      "text": "这条消息未通过内容审核，没有发送。请修改提示词后再试。",
+      "warning_one": "{{hours}} 小时内再违规 {{count}} 次，账号将被停用。",
+      "warning_other": "{{hours}} 小时内再违规 {{count}} 次，账号将被停用。",
+      "warning-guest_one": "{{hours}} 小时内再违规 {{count}} 次，将被禁止使用游客模式。",
+      "warning-guest_other": "{{hours}} 小时内再违规 {{count}} 次，将被禁止使用游客模式。"
+    },
     "send-error": {
       "conversation_busy": "上一条回复还在生成，请等它结束或先停止。",
       "no_models": "还没有可用的模型，需要管理员先在渠道里启用。",

@@ -2,6 +2,7 @@ import type { Attachment, BatchEvent, Message, Run, SnapshotEvent } from '@openc
 import { create } from 'zustand'
 
 import { applyBatch, finishedBy, fromSnapshot, idle, rememberFinished, type ConversationLive } from '@/lib/run-state'
+import type { Refusal } from '@/lib/moderation-refusal'
 import type { Replacing } from '@/lib/transcript'
 
 /**
@@ -51,6 +52,13 @@ interface ChatState {
   outbox: Record<string, OutboxItem>
   post: (key: string, item: OutboxItem) => void
   unpost: (key: string) => void
+
+  /**
+   * A message content moderation refused, per conversation ('' for a new chat):
+   * shown as a card until the next send there, or until it is closed.
+   */
+  refused: Record<string, Refusal>
+  refuse: (key: string, refusal: Refusal | null) => void
 
   /**
    * Each conversation's redo — the last answer regenerated, or a question
@@ -122,7 +130,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   temporaryChat: false,
 
   setTemporaryChat: (temporaryChat) => set({ temporaryChat }),
-  post: (key, item) => set((state) => ({ outbox: { ...state.outbox, [key]: item } })),
+  // A new message replaces whatever card the last refusal left.
+  post: (key, item) => set((state) => ({ outbox: { ...state.outbox, [key]: item }, refused: without(state.refused, key) })),
+  refused: {},
+  refuse: (key, refusal) =>
+    set((state) => ({ refused: refusal ? { ...state.refused, [key]: refusal } : without(state.refused, key) })),
   unpost: (key) => set((state) => ({ outbox: without(state.outbox, key) })),
   redo: (conversationId, target) =>
     set((state) => ({
@@ -204,5 +216,5 @@ export const useChatStore = create<ChatState>()((set, get) => ({
  * changes, and when the session ends.
  */
 export function resetChatStore() {
-  useChatStore.setState({ live: {}, finished: [], outbox: {}, replacing: {}, pendingPrompt: null, returnedDraft: null, temporaryChat: false })
+  useChatStore.setState({ live: {}, finished: [], outbox: {}, replacing: {}, pendingPrompt: null, returnedDraft: null, refused: {}, temporaryChat: false })
 }
