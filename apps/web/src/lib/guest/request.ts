@@ -8,6 +8,7 @@ import type {
 } from '@openchat/api-client'
 
 import { GuestError } from './errors'
+import { requestReceipts, signedSummary } from './receipts'
 import { DEFAULT_TITLE } from './repo'
 import { rowsToSend, survivingSummary } from './summary'
 import { contextOf, lastQuestionIndex, transcriptOf } from './transcript'
@@ -129,7 +130,8 @@ export async function buildRunRequest(params: RunParams, what: RunAction): Promi
 
   // What the conversation's summary still describes once this run has deleted
   // what it replaces (an edit's question and what followed it, an old answer).
-  const summary = survivingSummary(data.conversation.summary, history)
+  // One the server did not sign is left out (receipts.ts).
+  const summary = signedSummary(survivingSummary(data.conversation.summary, history))
   const carried = rowsToSend(history, summary, MAX_ROWS)
 
   // The newest files are sent, as the newest are what the model gets.
@@ -161,12 +163,19 @@ export async function buildRunRequest(params: RunParams, what: RunAction): Promi
     responseStyle: params.personalization.responseStyle,
     memoryEnabled: params.personalization.memoryEnabled,
     memories: params.memories.map(
-      (m): GuestMemory => ({ id: m.id, content: m.content, source: m.source }),
+      (m): GuestMemory => ({ id: m.id, content: m.content, source: m.source, ...(m.receipt ? { receipt: m.receipt } : {}) }),
     ),
+    ...receiptsOf(params, data),
     ...(data.conversation.memorySnapshot ? { memorySnapshot: data.conversation.memorySnapshot } : {}),
     ...(summary ? { summary } : {}),
   }
   return { request, input }
+}
+
+/** The server's signatures for the instructions and the snapshot, as the request carries them. */
+function receiptsOf(params: RunParams, data: ConversationData): { receipts?: GuestRunRequest['receipts'] } {
+  const receipts = requestReceipts(params.personalization, data.conversation.memorySnapshot ? data.conversation.memorySnapshotReceipt : undefined)
+  return receipts ? { receipts } : {}
 }
 
 function userRow(id: string, content: string, files: StoredBlob[]): StoredMessage {
@@ -196,6 +205,7 @@ export async function toGuestMessage(
     parts: row.parts,
     createdAt: row.createdAt,
     ...(row.providerState ? { providerState: row.providerState } : {}),
+    ...(row.receipt ? { receipt: row.receipt } : {}),
     ...(row.stopReason ? { stopReason: row.stopReason } : {}),
     ...(row.model ? { model: row.model } : {}),
     ...(row.errorCode ? { errorCode: row.errorCode } : {}),
@@ -204,7 +214,13 @@ export async function toGuestMessage(
   if (row.role === 'user' && row.attachments?.length) {
     const files: GuestAttachment[] = []
     for (const file of row.attachments) {
-      const base = { id: file.id, filename: file.filename, contentType: file.contentType, size: file.size }
+      const base = {
+        id: file.id,
+        filename: file.filename,
+        contentType: file.contentType,
+        size: file.size,
+        ...(file.receipt ? { receipt: file.receipt } : {}),
+      }
       const blob = sent.has(file.id) ? await readBlob(file.id) : undefined
       files.push(blob ? { ...base, data: await toBase64(blob.blob) } : base)
     }

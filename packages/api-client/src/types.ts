@@ -90,6 +90,7 @@ export type GuestRunRequest = Schemas['GuestRunRequest']
 export type GuestMessage = Schemas['GuestMessage']
 export type GuestAttachment = Schemas['GuestAttachment']
 export type GuestMemory = Schemas['GuestMemory']
+export type GuestReceipts = Schemas['GuestReceipts']
 export type GuestEndEvent = Schemas['GuestEndEvent']
 export type GuestRunEvent = Schemas['GuestRunEvent']
 

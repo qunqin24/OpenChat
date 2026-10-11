@@ -9,8 +9,11 @@ import type { Attachment, ContextSummary, Conversation, Memory, MemoryEvent, Mes
  * reads the same `Message` and `Conversation` as for an account.
  */
 
-/** A file a message carries; its bytes are in the blob store, under the same id. */
-export type StoredAttachment = Omit<Attachment, 'url'>
+/**
+ * A file a message carries; its bytes are in the blob store, under the same id.
+ * `receipt` is the server's signature that the bytes were checked (receipts.ts).
+ */
+export type StoredAttachment = Omit<Attachment, 'url'> & { receipt?: string }
 
 /** A transcript row as kept: the contract's `Message`, less what is worked out when it is read. */
 export interface StoredMessage extends Omit<Message, 'attachments'> {
@@ -34,6 +37,8 @@ export interface StoredConversation extends Conversation {
    * through `survivingSummary`.
    */
   summary?: ContextSummary | null
+  /** The server's signature for `memorySnapshot`, sent back with it (receipts.ts). */
+  memorySnapshotReceipt?: string | null
 }
 
 /** One conversation as the functions over it read it. */
@@ -58,6 +63,9 @@ export interface StoredPersonalization {
   aboutYou: string
   responseStyle: string
   memoryEnabled: boolean
+  /** The server's signatures that the words above were checked; each is good only for the words it was made for (receipts.ts). */
+  aboutYouReceipt?: string
+  responseStyleReceipt?: string
 }
 
 export type { Memory, MemoryEvent }

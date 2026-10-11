@@ -19,6 +19,7 @@ const summaryOf = (through: string, over: Partial<ContextSummary> = {}): Context
   inputTokens: 10,
   outputTokens: 4,
   createdAt: '2026-10-10T00:00:00Z',
+  receipt: 'signed-by-the-server',
   ...over,
 })
 

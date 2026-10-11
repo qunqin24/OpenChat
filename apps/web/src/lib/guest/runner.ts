@@ -155,7 +155,10 @@ export class GuestRunner {
       // The server kept nothing of a refused message (it keeps nothing of a
       // guest), so the browser keeps it, as the server does an account's: a
       // refused *send*; the words of an edit or an answer go back to their field.
-      if (what.action === 'send' && refusal.code === CONTENT_BLOCKED) {
+      // Not when it was the conversation that was refused - a row, a note, the
+      // instructions the browser sent along with it (`details.history`): the new
+      // message was not what failed.
+      if (what.action === 'send' && refusal.code === CONTENT_BLOCKED && refusal.details?.history !== true) {
         const kept = await repo.keepBlocked(conversationId, what.content).catch((storageError: unknown) => {
           console.warn('guest data: keeping a refused message failed', storageError)
           return null

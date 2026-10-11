@@ -39,10 +39,10 @@ export async function compactGuestConversation(deps: CompactionDeps, conversatio
 
   const request: GuestCompactRequest = {
     ...(data.conversation.model ? { model: data.conversation.model } : {}),
-    ...(held ? { existing: held.content } : {}),
+    ...(held ? { existing: held.content, ...(held.receipt ? { existingReceipt: held.receipt } : {}) } : {}),
     // Files are named in the history and not sent: the summary does not need their bytes.
     messages: await Promise.all(plan.covered.map((row) => toGuestMessage(row, new Set(), async () => undefined))),
-    ...(plan.keep ? { latest: plan.keep.content } : {}),
+    ...(plan.keep ? { latest: plan.keep.content, ...(plan.keep.receipt ? { latestReceipt: plan.keep.receipt } : {}) } : {}),
   }
   let response: Response
   try {
@@ -67,6 +67,7 @@ export async function compactGuestConversation(deps: CompactionDeps, conversatio
     model: written.model,
     inputTokens: written.inputTokens,
     outputTokens: written.outputTokens,
+    ...(written.receipt ? { receipt: written.receipt } : {}),
     createdAt: (deps.now?.() ?? new Date()).toISOString(),
   }
   // A run that started while the model was writing owns the conversation now;

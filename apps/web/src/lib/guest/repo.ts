@@ -6,6 +6,7 @@ import type {
   Conversation,
   ConversationPage,
   CreateConversationRequest,
+  GuestReceipts,
   Memory,
   MemoryEvent,
   Message,
@@ -30,6 +31,7 @@ import {
   sortMemories,
   undoEvent,
 } from './memory'
+import { adoptMemoryReceipts, withEndReceipts, withInstructionReceipts } from './receipts'
 import type { GuestStorage } from './storage'
 import { survivingSummary } from './summary'
 import { byRow, contextOf, deletedBy, encodeCursor, pageOf, rowKey, timeKey, transcriptOf } from './transcript'
@@ -206,7 +208,7 @@ export class GuestRepo {
 
   private toConversation(c: StoredConversation): Conversation {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { memorySnapshot: _b, summary: _s, ...rest } = c
+    const { memorySnapshot: _b, summary: _s, memorySnapshotReceipt: _r, ...rest } = c
     return { ...rest, reasoningEffort: rest.reasoningEffort ?? 'auto' }
   }
 
@@ -216,6 +218,9 @@ export class GuestRepo {
       if (!row.attachments?.length) continue
       const files: Attachment[] = []
       for (const file of row.attachments) {
+        // The receipt is the server's and the page has no use for it.
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { receipt: _r, ...plain } = file
         let url = this.urls.get(file.id)
         if (!url) {
           const blob = await this.storage.blob(file.id)
@@ -223,7 +228,7 @@ export class GuestRepo {
           url = this.urlFor(blob.blob, file.id)
           this.urls.set(file.id, url)
         }
-        files.push({ ...file, url })
+        files.push({ ...plain, url })
       }
       if (files.length) out.set(row.id, files)
     }
@@ -235,7 +240,7 @@ export class GuestRepo {
     const attached = await this.attachmentsOf(rows)
     return rows.map((row) => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { attachments: _a, providerState: _ps, ...message } = row
+      const { attachments: _a, providerState: _ps, receipt: _rc, ...message } = row
       const out: Message = { ...message }
       const files = attached.get(row.id)
       if (files) out.attachments = files
@@ -526,12 +531,16 @@ export class GuestRepo {
       title?: string
       /** The compressed context as the run left it (the same as `compaction_finished` told, when it made one). */
       summary?: ContextSummary
+      /** What the server signed of what it checked or wrote (receipts.ts). */
+      receipts?: GuestReceipts
     },
   ): Promise<void> {
     await this.serial(conversationId, async () => {
       const conversation = await this.storage.conversation(conversationId)
       if (conversation) {
         const next: StoredConversation = { ...conversation, memorySnapshot: end.memorySnapshot ?? conversation.memorySnapshot }
+        // The receipt is for the snapshot it came with; a snapshot without one has none.
+        if (end.memorySnapshot) next.memorySnapshotReceipt = end.receipts?.memorySnapshot ?? null
         // Absent means the server sent none back, which is not the same as the
         // conversation having none: a summary is only ever replaced here.
         if (end.summary) next.summary = end.summary
@@ -540,12 +549,20 @@ export class GuestRepo {
       }
       const held = (await this.storage.runs(conversationId)).find((r) => r.id === end.run.id)
       if (held) await this.storage.putRuns([{ ...held, ...end.run }])
+      // The words the server checked for this request are not checked again.
+      const signed = withEndReceipts(await this.storage.messages(conversationId), end.receipts)
+      if (signed.length > 0) await this.storage.putMessages(signed)
     })
     // The memory list is the guest's, not the conversation's: the tool may have
     // changed it. What the model changed is applied to the list as it is now -
     // not the server's whole list, which is the list as the run began and would
     // undo what the person did while the answer streamed.
     await this.serial(MEMORIES, async () => {
+      // The notes that were checked, and the instructions: as the server signed them.
+      const adopted = adoptMemoryReceipts(await this.storage.memories(), end.memories)
+      for (const memory of adopted) await this.storage.putMemory(memory)
+      const held = await this.storage.personalization()
+      if (held && end.receipts) await this.storage.putPersonalization(withInstructionReceipts(held, end.receipts))
       const { put, remove, events } = applyModelChanges(await this.storage.memories(), end.memoryEvents, end.memories)
       for (const id of remove) await this.storage.deleteMemory(id)
       for (const memory of put) await this.storage.putMemory({ ...memory, conversationId: memory.conversationId ?? null })
@@ -641,7 +658,14 @@ export class GuestRepo {
 
   async storedPersonalization(): Promise<StoredPersonalization> {
     const { aboutYou, responseStyle, memoryEnabled } = await this.personalization()
-    return { aboutYou, responseStyle, memoryEnabled }
+    const held = await this.storage.personalization()
+    return {
+      aboutYou,
+      responseStyle,
+      memoryEnabled,
+      ...(held?.aboutYouReceipt ? { aboutYouReceipt: held.aboutYouReceipt } : {}),
+      ...(held?.responseStyleReceipt ? { responseStyleReceipt: held.responseStyleReceipt } : {}),
+    }
   }
 
   async updatePersonalization(body: UpdatePersonalizationRequest): Promise<Personalization> {
@@ -652,10 +676,15 @@ export class GuestRepo {
         throw new GuestError(400, 'instructions_too_long', 'the instructions are too long', field)
       }
     }
+    const aboutYou = body.aboutYou ?? held.aboutYou
+    const responseStyle = body.responseStyle ?? held.responseStyle
     await this.storage.putPersonalization({
-      aboutYou: body.aboutYou ?? held.aboutYou,
-      responseStyle: body.responseStyle ?? held.responseStyle,
+      aboutYou,
+      responseStyle,
       memoryEnabled: body.memoryEnabled ?? held.memoryEnabled,
+      // A receipt is for the words it was made for: changed words have none.
+      ...(held.aboutYouReceipt && aboutYou === held.aboutYou ? { aboutYouReceipt: held.aboutYouReceipt } : {}),
+      ...(held.responseStyleReceipt && responseStyle === held.responseStyle ? { responseStyleReceipt: held.responseStyleReceipt } : {}),
     })
     return this.personalization()
   }

@@ -58,7 +58,10 @@ export function rewriteMemory(list: Memory[], id: string, raw: string, now: Date
   const current = list.find((m) => m.id === id)
   if (!current) throw refuse(404, 'not_found', 'resource not found')
   checkRoom(list, content, id)
-  return { ...current, content, updatedAt: now.toISOString() }
+  // The server's receipt was for the words that were there (receipts.ts).
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { receipt: _receipt, ...rest } = current
+  return { ...rest, content, updatedAt: now.toISOString() }
 }
 
 /** The log entries that stay once a person has changed or removed a note themselves: its own are forgotten. */
@@ -105,7 +108,12 @@ export function undoEvent(list: Memory[], events: MemoryEvent[], eventId: string
     case 'update':
       if (!current) throw refuse(404, 'not_found', 'resource not found')
       if (event.after == null || event.before == null || current.content !== event.after) throw changed()
-      next = list.map((m) => (m.id === current.id ? { ...m, content: event.before as string, updatedAt: now.toISOString() } : m))
+      next = list.map((m) => {
+        if (m.id !== current.id) return m
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { receipt: _receipt, ...rest } = m
+        return { ...rest, content: event.before as string, updatedAt: now.toISOString() }
+      })
       break
     case 'delete': {
       if (current) throw changed() // written back already
@@ -195,11 +203,15 @@ export function applyModelChanges(list: Memory[], events: MemoryEvent[], theirs:
           break
         }
         if (taken(event.after, current.id)) break
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { receipt: _stale, ...unsigned } = current
         const memory: Memory = {
-          ...current,
+          ...unsigned,
           content: event.after,
           updatedAt: wrote?.updatedAt ?? event.createdAt,
           ...(wrote ? { source: wrote.source } : {}),
+          // The server signed the words it wrote.
+          ...(wrote?.receipt && wrote.content === event.after ? { receipt: wrote.receipt } : {}),
         }
         working.set(memory.id, memory)
         put.set(memory.id, memory)

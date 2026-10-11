@@ -136,7 +136,7 @@ export function createGuestApi(deps: GuestApiDeps) {
         const exchanges = contextOf(transcriptOf(data))
           .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.content.trim() !== '')
           .slice(-8)
-          .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+          .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content, ...(m.receipt ? { receipt: m.receipt } : {}) }))
         if (exchanges.length === 0) throw new GuestError(409, 'nothing_to_title', 'this conversation has nothing to title yet')
         const base = deps.baseUrl.replace(/\/$/, '')
         let response: Response
