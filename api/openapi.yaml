@@ -645,6 +645,44 @@ paths:
               schema: { $ref: "#/components/schemas/SystemSettings" }
         default: { $ref: "#/components/responses/Error" }
 
+  /admin/version:
+    get:
+      tags: [admin]
+      summary: The running version, and the newest release
+      description: |
+        `current` is the version this server was built as (`APP_VERSION`, set
+        from the release tag when the image is built; `dev` for a local
+        build). The newest release is read from the project's GitHub releases
+        (`/releases/latest`: no drafts, no pre-releases) and kept for six
+        hours; past that, this asks again, so opening the page is enough to
+        learn of an update. A failed look is not an error of this endpoint: it
+        answers with what it knows and `checkError` set.
+      operationId: getVersionInfo
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VersionInfo" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/version/check:
+    post:
+      tags: [admin]
+      summary: Look for a newer release now
+      description: |
+        As `getVersionInfo`, without the six hours: the "check for updates"
+        button. Looks that follow each other within a minute share one request
+        to GitHub.
+      operationId: checkForUpdate
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VersionInfo" }
+        default: { $ref: "#/components/responses/Error" }
+
   /admin/moderation:
     get:
       tags: [admin]
@@ -4070,6 +4108,34 @@ components:
       description: What a blocked message set off, when it reached the strike threshold.
       enum: [disabled, banned]
       x-enum-varnames: [ModerationSanctionDisabled, ModerationSanctionBanned]
+
+    VersionInfo:
+      type: object
+      required: [current, updateAvailable]
+      properties:
+        current:
+          type: string
+          description: This server's version, `1.2.3` (no `v`), or `dev` for a local build.
+        latest:
+          type: string
+          description: The newest release's version, `1.2.3`. Absent until a look has succeeded.
+        latestUrl:
+          type: string
+          description: The newest release's page, with its notes.
+        publishedAt: { type: string, format: date-time }
+        updateAvailable:
+          type: boolean
+          description: |
+            The newest release is newer than this one. Never for a `dev`
+            build, which has no version to compare.
+        checkedAt:
+          type: string
+          format: date-time
+          description: When the last look succeeded.
+        checkError:
+          type: string
+          enum: [unreachable, rate_limited, unexpected]
+          description: The last look failed; `latest` (if any) is from an earlier one.
 
     ModerationSettings:
       type: object

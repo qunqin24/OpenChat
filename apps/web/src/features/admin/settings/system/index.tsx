@@ -20,6 +20,7 @@ import { GuestLimitsForm } from './guest-limits-form'
 import { RetentionForm } from './retention-form'
 import { RunLimitForm } from './run-limit-form'
 import { SYSTEM_TABS, type SystemTab } from './tabs'
+import { VersionRow } from './version-row'
 
 const route = getRouteApi('/admin/settings/system')
 
@@ -99,6 +100,7 @@ export function SettingsSystem() {
         </TabsList>
 
         <TabsContent value="general" className="divide-y">
+          <VersionRow />
           <SettingRow id="task-model" label={t('admin.settings.system.task-model')} hint={t('admin.settings.system.task-model-hint')}>
             {isPending || models.isPending ? (
               loading('w-48', 'h-9')

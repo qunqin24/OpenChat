@@ -152,6 +152,8 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 
 				r.Get("/admin/dashboard", wrapper.GetAdminDashboard)
 				r.Get("/admin/system", wrapper.GetSystemSettings)
+				r.Get("/admin/version", wrapper.GetVersionInfo)
+				r.Post("/admin/version/check", wrapper.CheckForUpdate)
 				r.Get("/admin/web-search", wrapper.GetWebSearchSettings)
 				r.Patch("/admin/web-search", wrapper.UpdateWebSearchSettings)
 				r.Post("/admin/web-search/test", wrapper.TestWebSearch)

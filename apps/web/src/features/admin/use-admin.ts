@@ -18,6 +18,7 @@ export const adminKeys = {
   users: (page: number, search: string, status: readonly UserStatus[] = []) =>
     [...adminKeys.all, 'users', page, search, status] as const,
   system: () => [...adminKeys.all, 'system'] as const,
+  version: () => [...adminKeys.all, 'version'] as const,
   /** Shared with features/admin/models, which owns the rest of this subtree. */
   catalog: () => [...adminKeys.all, 'catalog'] as const,
   channels: () => [...adminKeys.all, 'channels'] as const,

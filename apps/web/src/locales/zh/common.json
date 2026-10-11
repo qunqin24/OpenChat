@@ -679,6 +679,24 @@
         "lang-en": "English"
       },
       "system": {
+        "version": {
+          "label": "版本",
+          "check": "检查更新",
+          "checking": "正在检查…",
+          "dev": "开发版本",
+          "dev-hint": "这是本地构建的开发版本，不和发布版本比较。",
+          "latest-is": "最新发布版本是 v{{version}}。",
+          "current": "已是最新版本。",
+          "available": "有新版本 v{{version}}",
+          "how": "升级方法：拉取新镜像后重启，数据库迁移会自动执行。",
+          "notes": "查看更新内容",
+          "checked-at": "上次检查：{{time}}。",
+          "error": {
+            "unreachable": "检查失败：连不上 GitHub。",
+            "rate_limited": "检查失败：GitHub 限制了请求次数，稍后再试。",
+            "unexpected": "检查失败：GitHub 返回了无法识别的内容。"
+          }
+        },
         "tabs": {"general": "常规", "chat": "对话", "access": "访问", "moderation": "审核", "data": "数据"},
         "title": "系统",
         "subtitle": "影响整个服务端的设置，对所有人生效。",

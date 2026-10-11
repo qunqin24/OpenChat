@@ -679,6 +679,24 @@
         "lang-en": "English"
       },
       "system": {
+        "version": {
+          "label": "Version",
+          "check": "Check for updates",
+          "checking": "Checking…",
+          "dev": "Development build",
+          "dev-hint": "A local development build; it is not compared with releases.",
+          "latest-is": "The latest release is v{{version}}.",
+          "current": "You are on the latest version.",
+          "available": "Version v{{version}} is available",
+          "how": "To upgrade, pull the new image and restart; database migrations run on start.",
+          "notes": "Release notes",
+          "checked-at": "Last checked {{time}}.",
+          "error": {
+            "unreachable": "Could not reach GitHub.",
+            "rate_limited": "GitHub is limiting requests; try again later.",
+            "unexpected": "GitHub answered with something unexpected."
+          }
+        },
         "tabs": {"general": "General", "chat": "Chat", "access": "Access", "moderation": "Moderation", "data": "Data"},
         "title": "System",
         "subtitle": "Server-wide settings. They apply to everyone.",

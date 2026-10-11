@@ -56,6 +56,8 @@ type Server struct {
 	// (guest_receipts.go), read once and kept.
 	receiptMu  sync.Mutex
 	receiptKey []byte
+	// updates is the last look at the project's releases (version.go).
+	updates updateChecker
 }
 
 var _ ServerInterface = (*Server)(nil)

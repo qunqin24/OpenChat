@@ -73,6 +73,7 @@ export type SnapshotEvent = Schemas['SnapshotEvent']
 export type BatchEvent = Schemas['BatchEvent']
 export type RunEvent = Schemas['RunEvent']
 export type SystemSettings = Schemas['SystemSettings']
+export type VersionInfo = Schemas['VersionInfo']
 
 export type ContextUsage = Schemas['ContextUsage']
 export type DeletedConversations = Schemas['DeletedConversations']

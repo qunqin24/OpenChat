@@ -529,6 +529,54 @@ export interface paths {
         patch: operations["updateSystemSettings"];
         trace?: never;
     };
+    "/admin/version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The running version, and the newest release
+         * @description `current` is the version this server was built as (`APP_VERSION`, set
+         *     from the release tag when the image is built; `dev` for a local
+         *     build). The newest release is read from the project's GitHub releases
+         *     (`/releases/latest`: no drafts, no pre-releases) and kept for six
+         *     hours; past that, this asks again, so opening the page is enough to
+         *     learn of an update. A failed look is not an error of this endpoint: it
+         *     answers with what it knows and `checkError` set.
+         */
+        get: operations["getVersionInfo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/version/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Look for a newer release now
+         * @description As `getVersionInfo`, without the six hours: the "check for updates"
+         *     button. Looks that follow each other within a minute share one request
+         *     to GitHub.
+         */
+        post: operations["checkForUpdate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/moderation": {
         parameters: {
             query?: never;
@@ -3441,6 +3489,31 @@ export interface components {
          * @enum {string}
          */
         ModerationSanction: "disabled" | "banned";
+        VersionInfo: {
+            /** @description This server's version, `1.2.3` (no `v`), or `dev` for a local build. */
+            current: string;
+            /** @description The newest release's version, `1.2.3`. Absent until a look has succeeded. */
+            latest?: string;
+            /** @description The newest release's page, with its notes. */
+            latestUrl?: string;
+            /** Format: date-time */
+            publishedAt?: string;
+            /**
+             * @description The newest release is newer than this one. Never for a `dev`
+             *     build, which has no version to compare.
+             */
+            updateAvailable: boolean;
+            /**
+             * Format: date-time
+             * @description When the last look succeeded.
+             */
+            checkedAt?: string;
+            /**
+             * @description The last look failed; `latest` (if any) is from an earlier one.
+             * @enum {string}
+             */
+            checkError?: "unreachable" | "rate_limited" | "unexpected";
+        };
         ModerationSettings: {
             mode: components["schemas"]["ModerationMode"];
             /** @description Whether an OpenAI API key is stored. Write-only, like a channel's. */
@@ -4743,6 +4816,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getVersionInfo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionInfo"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    checkForUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionInfo"];
                 };
             };
             default: components["responses"]["Error"];
