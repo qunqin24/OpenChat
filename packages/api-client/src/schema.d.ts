@@ -1064,8 +1064,15 @@ export interface paths {
          *     whatever that setting says: the size is the sender's, so it is never
          *     treated as a failure of the service. Nothing is written or kept, and the
          *     page keeps the text. Editing a message and answering a
-         *     question are checked the same way, but a refusal keeps nothing; a
+         *     question are checked the same way, but a refusal keeps nothing (except
+         *     the edit of a refused message, which replaces it: see the edit); a
          *     regeneration re-sends what was already checked.
+         *
+         *     While the conversation's last row is a refused message (`status:
+         *     blocked`) it does not go on past it: 409 `revise_refused`, before
+         *     anything is checked, written or counted. The refused message is
+         *     reworded through the edit endpoint, which a page does by sending from a
+         *     composer that has turned into the editor of that message.
          */
         post: operations["createMessage"];
         delete?: never;
@@ -1100,6 +1107,20 @@ export interface paths {
          *     when the message is not a user message of the conversation. The
          *     conversation's other followers (another tab) are told with a
          *     `transcript_changed` event in the batch that starts the run.
+         *
+         *     A message content moderation refused (`status: blocked`) is edited the
+         *     same way, and this is how a conversation that ends on one goes on
+         *     (sending and regenerating are refused with 409 `revise_refused` until
+         *     then). It has no files, so `attachmentIds` - uploads to claim, as for
+         *     sending - is accepted for it and for no other message (400
+         *     `attachments_not_editable`); the new words and those images are checked
+         *     again. Refused again, the new words take the place of the refused
+         *     message when it is still the last row: it is deleted and the new words
+         *     are written in its place as another refused message, with 422
+         *     `content_blocked` and its id in `details.messageId`, and the other
+         *     followers are told with `transcript_changed` from the old one; if it is
+         *     not the last row nothing changes. A refusal of any other edit keeps
+         *     nothing.
          */
         post: operations["editMessage"];
         delete?: never;
@@ -1130,7 +1151,8 @@ export interface paths {
          *     conversation's other followers (`transcript_changed`); 409
          *     `conversation_busy` while one is going, `not_latest` when a message
          *     was added since the caller looked, 404 `nothing_to_answer` in a
-         *     conversation with no message.
+         *     conversation with no message. 409 `revise_refused` while the last row
+         *     is a refused message (`status: blocked`): that is reworded first.
          */
         post: operations["regenerateAnswer"];
         delete?: never;
@@ -1166,7 +1188,9 @@ export interface paths {
          *     `not_pending` for one already answered, one the user wrote past, one
          *     whose answer was deleted, or a call that is not an `ask_user` waiting
          *     for its answer. 409 `conversation_busy` while a run is going; 400
-         *     `invalid_answers` when the answers do not fit the questions.
+         *     `invalid_answers` when the answers do not fit the questions; 409
+         *     `revise_refused` while a refused message (`status: blocked`) is the last
+         *     row, written after the question: that is reworded first.
          */
         post: operations["answerQuestion"];
         delete?: never;
@@ -2079,6 +2103,12 @@ export interface components {
             model?: string;
             reasoningEffort?: components["schemas"]["ReasoningEffort"];
             webSearch?: boolean;
+            /**
+             * @description Uploads to send with the new wording. Only for the edit of a message
+             *     content moderation refused (it carries none of its own); any other
+             *     message keeps its own files and takes none.
+             */
+            attachmentIds?: string[];
             /** @description Chosen by the client; a retry with the same id finds the same run. */
             requestId?: string;
         };

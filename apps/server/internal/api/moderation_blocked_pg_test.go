@@ -47,7 +47,7 @@ func newBlocking(t *testing.T) *compacting {
 // names for the row it kept.
 func (h *askHarness) blockedWith(content string) uuid.UUID {
 	h.t.Helper()
-	rec := h.post(content)
+	rec := h.trySend(content)
 	refused(h.t, rec)
 	var body struct {
 		Details struct {
@@ -72,6 +72,47 @@ func (b *redoing) shown() []string {
 		out = append(out, line)
 	}
 	return out
+}
+
+// tryEdit and tryRegenerate answer a request without requiring it to be taken.
+func (h *askHarness) tryEdit(id uuid.UUID, content string) *httptest.ResponseRecorder {
+	h.t.Helper()
+	rec := httptest.NewRecorder()
+	h.server.EditMessage(rec, h.request(http.MethodPost, fmt.Sprintf(`{"content":%q,"model":%q}`, content, h.model)), h.conv.ID, id)
+	return rec
+}
+
+func (h *askHarness) tryRegenerate() *httptest.ResponseRecorder {
+	h.t.Helper()
+	rec := httptest.NewRecorder()
+	h.server.RegenerateAnswer(rec, h.request(http.MethodPost, fmt.Sprintf(`{"model":%q}`, h.model)), h.conv.ID)
+	return rec
+}
+
+// messageIDOf is the refused message a refusal names.
+func messageIDOf(t *testing.T, rec *httptest.ResponseRecorder) uuid.UUID {
+	t.Helper()
+	var body struct {
+		Details struct {
+			MessageID uuid.UUID `json:"messageId"`
+		} `json:"details"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || body.Details.MessageID == uuid.Nil {
+		t.Fatalf("the refusal names no message: %s", rec.Body)
+	}
+	return body.Details.MessageID
+}
+
+// appendRow writes a row straight into the conversation, as old data has it.
+func (h *askHarness) appendRow(role sqlc.MessageRole, status sqlc.MessageStatus, text string) sqlc.Message {
+	h.t.Helper()
+	row, err := h.q.AppendEntry(context.Background(), sqlc.AppendEntryParams{
+		ConversationID: h.conv.ID, Role: role, Content: text, Parts: agent.EncodeParts(inputParts(text, nil)), Status: status,
+	})
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	return row
 }
 
 func (b *redoing) requests() int {
@@ -169,12 +210,13 @@ func TestBlockedSendIsKept(t *testing.T) {
 		t.Errorf("no transcript_changed after a refused send: %+v", batches)
 	}
 
-	// The next send appends after it, and the model is shown the conversation
-	// without it.
-	b.send("second question")
+	// The conversation does not go on past it: the way on is rewording it. The
+	// model is shown the conversation without it.
+	blocked := body.Details.MessageID
+	b.refused(b.trySend("second question"), http.StatusConflict, "revise_refused")
+	b.edit(blocked, "second question")
 	same(t, "shown", b.shown(), []string{
-		"user:first question", "assistant:re: first question", "user:BLOCKME please [blocked]",
-		"user:second question", "assistant:re: second question",
+		"user:first question", "assistant:re: first question", "user:second question", "assistant:re: second question",
 	})
 	same(t, "context", b.lastHistory(), []string{"user:first question", "assistant:re: first question", "user:second question"})
 	for n := 1; n <= b.requests(); n++ {
@@ -207,16 +249,12 @@ func TestBlockedFirstMessageOfAConversation(t *testing.T) {
 		t.Errorf("title: %d %s", rec.Code, rec.Body)
 	}
 	// Nor anything to regenerate or compress.
-	b.refused(func() *httptest.ResponseRecorder {
-		rec := httptest.NewRecorder()
-		b.server.RegenerateAnswer(rec, b.request(http.MethodPost, fmt.Sprintf(`{"model":%q}`, b.model)), b.conv.ID)
-		return rec
-	}(), http.StatusNotFound, "nothing_to_answer")
+	b.refused(b.tryRegenerate(), http.StatusConflict, "revise_refused")
 	b.refused(b.compact(), http.StatusConflict, "nothing_to_compact")
 
-	// The first real message after it starts the conversation as usual.
-	b.send("a real question")
-	same(t, "shown", b.shown(), []string{"user:BLOCKME first [blocked]", "user:a real question", "assistant:re: a real question"})
+	// Reworded, it starts the conversation as usual.
+	b.edit(b.transcript()[0].Id, "a real question")
+	same(t, "shown", b.shown(), []string{"user:a real question", "assistant:re: a real question"})
 	same(t, "context", b.lastHistory(), []string{"user:a real question"})
 }
 
@@ -299,8 +337,9 @@ func TestBlockedMessageAndCompaction(t *testing.T) {
 		// Only a refused message since: nothing new to cover.
 		b.refused(b.compact(), http.StatusConflict, "nothing_to_compact")
 
-		// The next question is answered from the summary and itself.
-		b.send("q2")
+		// The refused message is reworded to go on: the next question is answered
+		// from the summary and itself.
+		b.edit(blocked, "q2")
 		history := b.lastHistory()
 		if len(history) != 2 || !isSummary(history[0]) || history[1] != "user:q2" {
 			t.Fatalf("the request after compressing: %q", history)
@@ -335,13 +374,13 @@ func TestBlockedMessageAndCompaction(t *testing.T) {
 		blockedBy(t, b.askHarness)
 		b.send("short question")
 		// Refused messages as long as a window: none of it is the model's to read.
-		b.blockedWith("BLOCKME " + long)
-		b.blockedWith("BLOCKME " + long)
-		b.send("another short question")
+		first := b.blockedWith("BLOCKME " + long)
+		b.edit(first, "another short question")
+		second := b.blockedWith("BLOCKME " + long)
 		if b.state() != nil {
 			t.Fatal("refused messages filled the window")
 		}
-		b.send(long)
+		b.edit(second, long)
 		b.send("last question")
 
 		got := b.state()
@@ -372,12 +411,18 @@ func derefUUID(id *uuid.UUID) uuid.UUID {
 	return *id
 }
 
-// Regenerating answers the last question that was asked, not the refused
-// message after it, and removes that message with the answer.
+// Regenerating answers the last question that was asked, not a refused
+// message after it - and with a refused message at the end it is refused: that
+// is reworded first (revise_refused_pg_test.go). A refused message in the middle
+// of old data, with rows after it, goes with the answer.
 func TestRegenerateAfterABlockedMessage(t *testing.T) {
 	b := newBlocking(t)
 	q1, _ := b.send("q1")
 	b.blockedWith("BLOCKME")
+	// Old data: an answer written after the refused message (the model's reply
+	// to a question it had asked, which was answered past a refused message
+	// before the conversation stopped there).
+	b.appendRow(sqlc.MessageRoleAssistant, sqlc.MessageStatusComplete, "a stray answer")
 	b.regenerate()
 
 	same(t, "shown", b.shown(), []string{"user:q1", "assistant:re: q1"})
@@ -388,20 +433,10 @@ func TestRegenerateAfterABlockedMessage(t *testing.T) {
 	if n := b.count(`SELECT count(*) FROM messages WHERE conversation_id = $1 AND status = 'blocked'`, b.conv.ID); n != 0 {
 		t.Errorf("%d refused messages survived a regeneration", n)
 	}
-
-	// A refused message is the end of the transcript only until the next send,
-	// and a question sent after it is the last.
-	b.blockedWith("BLOCKME again")
-	b.send("q2")
-	b.regenerate()
-	same(t, "shown", b.shown(), []string{
-		"user:q1", "assistant:re: q1", "user:BLOCKME again [blocked]", "user:q2", "assistant:re: q2",
-	})
-	same(t, "context", b.lastHistory(), []string{"user:q1", "assistant:re: q1", "user:q2"})
 }
 
 // An edit is an edit whatever it edits: of a refused message, the new words go
-// at the end, are checked, and take the refused one and what follows it.
+// at the end, are checked, and take the refused one's place.
 func TestEditingABlockedMessage(t *testing.T) {
 	b := newBlocking(t)
 	if rec := b.patchModeration(`{"strikes":0}`); rec.Code != http.StatusOK { // no sanction in the way
@@ -409,42 +444,49 @@ func TestEditingABlockedMessage(t *testing.T) {
 	}
 	b.send("q1")
 	blocked := b.blockedWith("BLOCKME")
-	b.send("q2")
 
-	// Refused again: nothing changes.
-	rec := httptest.NewRecorder()
-	b.server.EditMessage(rec, b.request(http.MethodPost, fmt.Sprintf(`{"content":"BLOCKME still","model":%q}`, b.model)), b.conv.ID, blocked)
+	// Refused again: the words that were tried last are the refused message.
+	rec := b.tryEdit(blocked, "BLOCKME still")
 	refused(t, rec)
-	same(t, "shown", b.shown(), []string{
-		"user:q1", "assistant:re: q1", "user:BLOCKME [blocked]", "user:q2", "assistant:re: q2",
-	})
+	again := messageIDOf(t, rec)
+	if again == blocked {
+		t.Fatal("the refused message was not replaced")
+	}
+	same(t, "shown", b.shown(), []string{"user:q1", "assistant:re: q1", "user:BLOCKME still [blocked]"})
+	if n := b.count(`SELECT count(*) FROM messages WHERE id = $1`, blocked); n != 0 {
+		t.Error("the old refused message survived being replaced")
+	}
 
 	// Reworded to something that passes.
-	edited, status := b.edit(blocked, "q1 reworded")
+	edited, status := b.edit(again, "q2")
 	if status != sqlc.RunStatusCompleted {
 		t.Fatalf("run ended %s", status)
 	}
-	same(t, "shown", b.shown(), []string{"user:q1", "assistant:re: q1", "user:q1 reworded", "assistant:re: q1 reworded"})
-	same(t, "context", b.lastHistory(), []string{"user:q1", "assistant:re: q1", "user:q1 reworded"})
+	same(t, "shown", b.shown(), []string{"user:q1", "assistant:re: q1", "user:q2", "assistant:re: q2"})
+	same(t, "context", b.lastHistory(), []string{"user:q1", "assistant:re: q1", "user:q2"})
 	if edited.Message.Status == MessageStatusBlocked {
 		t.Error("the new wording is a refused message")
 	}
-	if n := b.count(`SELECT count(*) FROM messages WHERE id = $1`, blocked); n != 0 {
+	if n := b.count(`SELECT count(*) FROM messages WHERE id = $1`, again); n != 0 {
 		t.Error("the refused message survived being edited")
 	}
 
 	// A refused edit of an ordinary question keeps nothing: the words go back
 	// to the editor.
-	rec = httptest.NewRecorder()
-	b.server.EditMessage(rec, b.request(http.MethodPost, fmt.Sprintf(`{"content":"BLOCKME edit","model":%q}`, b.model)), b.conv.ID, edited.Message.Id)
+	rec = b.tryEdit(edited.Message.Id, "BLOCKME edit")
 	refused(t, rec)
 	if n := b.count(`SELECT count(*) FROM messages WHERE conversation_id = $1 AND status = 'blocked'`, b.conv.ID); n != 0 {
 		t.Errorf("a refused edit left %d refused messages", n)
 	}
+	if strings.Contains(rec.Body.String(), "messageId") {
+		t.Errorf("a refused edit of an ordinary question names a kept message: %s", rec.Body)
+	}
 }
 
 // A refused message after the model's question neither hides the question nor
-// answers it.
+// answers it - and the conversation stops there: the question is not answered
+// past it. Rewording the refused message goes on, skipping the question as any
+// message written instead of an answer does.
 func TestBlockedMessageAndAQuestionTheModelAsked(t *testing.T) {
 	for _, w := range wires {
 		t.Run(w.name, func(t *testing.T) {
@@ -461,44 +503,69 @@ func TestBlockedMessageAndAQuestionTheModelAsked(t *testing.T) {
 			if _, status := h.send("plan my trip"); status != sqlc.RunStatusAwaitingInput {
 				t.Fatalf("run ended %s", status)
 			}
-			h.blockedWith("BLOCKME instead of answering")
+			blocked := h.blockedWith("BLOCKME instead of answering")
 
-			// Still waiting for its answer: compression says so, and the answer is taken.
+			// Still waiting for its answer: compression says so.
 			rec := httptest.NewRecorder()
 			h.server.CompactConversation(rec, h.request(http.MethodPost, ""), h.conv.ID)
 			if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "question_pending") {
 				t.Fatalf("compress while a question waits: %d %s", rec.Code, rec.Body)
 			}
-			if _, status := h.answered("call_ask_1", answersJSON); status != sqlc.RunStatusCompleted {
-				t.Fatalf("the answer's run ended %s", status)
+			// But it cannot be answered past the refused message, and nothing is written.
+			rows := h.count(`SELECT count(*) FROM messages WHERE conversation_id = $1`, h.conv.ID)
+			runs := h.count(`SELECT count(*) FROM runs WHERE conversation_id = $1`, h.conv.ID)
+			if rec := h.answer("call_ask_1", answersJSON); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "revise_refused") {
+				t.Fatalf("answer past a refused message: %d %s", rec.Code, rec.Body)
+			}
+			if h.count(`SELECT count(*) FROM messages WHERE conversation_id = $1`, h.conv.ID) != rows ||
+				h.count(`SELECT count(*) FROM runs WHERE conversation_id = $1`, h.conv.ID) != runs {
+				t.Error("a refused answer wrote something")
 			}
 
-			// The model was sent its question and the answer, not the refused words.
-			last := h.body(2)
-			if strings.Contains(last, "BLOCKME") {
-				t.Errorf("the request after the answer carried the refused message")
+			// Reworded, the message is the person's reply instead of an answer.
+			rec = h.tryEdit(blocked, "never mind")
+			var out CreateMessageResponse
+			h.accepted(rec, &out)
+			if status := h.settle(out.Run.Id); status != sqlc.RunStatusCompleted && status != sqlc.RunStatusAwaitingInput {
+				t.Fatalf("the reworded message's run ended %s", status)
 			}
-			equal(t, "results", w.results(t, last), []string{"call_ask_1"})
-			shown := h.transcript()
-			if len(shown) != 5 || shown[2].Status != MessageStatusBlocked || shown[3].Role != RoleTool {
-				t.Errorf("transcript = %v", shape(t, shown))
+			for n := 1; n <= h.chatRequests(); n++ {
+				if strings.Contains(h.body(n), "BLOCKME") {
+					t.Errorf("request %d carried the refused message", n)
+				}
+			}
+			for _, m := range h.transcript() {
+				if m.Status == MessageStatusBlocked {
+					t.Errorf("a refused message is left: %v", shape(t, h.transcript()))
+				}
 			}
 		})
 	}
 }
 
 // The message that earns the sanction is kept too, and answered with the
-// sanction; so are those before it.
+// sanction; so are those before it (each reworded, and refused again).
 func TestBlockedMessagesAreKeptWhenOneEarnsTheSanction(t *testing.T) {
 	h, _ := newModerationHarness(t, "")
-	for i := 1; i <= 2; i++ {
-		h.blockedWith(fmt.Sprintf("BLOCKME %d", i))
+	kept := h.blockedWith("BLOCKME 1")
+	for i := 2; i <= 3; i++ {
+		rec := h.tryEdit(kept, fmt.Sprintf("BLOCKME %d", i))
+		if i == 3 {
+			if rec.Code != http.StatusUnauthorized {
+				t.Fatalf("the sanctioning message: %d %s", rec.Code, rec.Body)
+			}
+			break
+		}
+		refused(t, rec)
+		kept = messageIDOf(t, rec)
 	}
-	if rec := h.post("BLOCKME 3"); rec.Code != http.StatusUnauthorized {
-		t.Fatalf("the sanctioning message: %d %s", rec.Code, rec.Body)
+	// One at a time: each refused edit took the place of the last, and the one
+	// that earned the sanction took the place of the one before it.
+	if n := h.count(`SELECT count(*) FROM messages WHERE conversation_id = $1 AND status = 'blocked' AND content = 'BLOCKME 3'`, h.conv.ID); n != 1 {
+		t.Errorf("%d copies of the sanctioning message kept, want 1", n)
 	}
-	if n := h.count(`SELECT count(*) FROM messages WHERE conversation_id = $1 AND status = 'blocked'`, h.conv.ID); n != 3 {
-		t.Errorf("%d refused messages kept, want 3", n)
+	if n := h.count(`SELECT count(*) FROM messages WHERE conversation_id = $1 AND status = 'blocked'`, h.conv.ID); n != 1 {
+		t.Errorf("%d refused messages kept, want 1", n)
 	}
 	if n := h.count(`SELECT count(*) FROM users WHERE id = $1 AND disabled_at IS NOT NULL`, h.user.ID); n != 1 {
 		t.Error("the account was not disabled")

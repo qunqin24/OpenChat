@@ -277,6 +277,11 @@ type Querier interface {
 	// A message moderation refused is not a question that was asked, so the last
 	// question is the one before it.
 	GetLastInput(ctx context.Context, conversationID uuid.UUID) (Message, error)
+	// The conversation's last row, whatever it is: where the transcript stops. A
+	// conversation whose last row is a refused message (status 'blocked') does not
+	// go on until that message is reworded, so every request that would write
+	// after it asks this first, with the conversation held.
+	GetLastMessage(ctx context.Context, conversationID uuid.UUID) (Message, error)
 	GetMemory(ctx context.Context, arg GetMemoryParams) (UserMemory, error)
 	GetMemoryEventForUpdate(ctx context.Context, arg GetMemoryEventForUpdateParams) (MemoryEvent, error)
 	GetMessage(ctx context.Context, id uuid.UUID) (Message, error)

@@ -206,11 +206,32 @@ func (h *askHarness) patchModeration(body string) *httptest.ResponseRecorder {
 }
 
 // post sends a message and returns the response without waiting for the run.
+// The refused messages the conversation holds are discarded first (see
+// discardRefused): these tests send several in a row to see what moderation
+// decides about each. trySend is the plain request.
 func (h *askHarness) post(content string) *httptest.ResponseRecorder {
+	h.t.Helper()
+	h.discardRefused()
+	return h.trySend(content)
+}
+
+func (h *askHarness) trySend(content string) *httptest.ResponseRecorder {
 	h.t.Helper()
 	rec := httptest.NewRecorder()
 	h.server.CreateMessage(rec, h.request(http.MethodPost, fmt.Sprintf(`{"content":%q,"model":%q}`, content, h.model)), h.conv.ID)
 	return rec
+}
+
+// discardRefused removes the refused messages the conversation has kept, as if
+// the person had dealt with them (reworded them, or left the chat): a
+// conversation does not go on past a refused message (moderation_kept.go), and
+// the tests about what moderation decides - not about going on - send again.
+func (h *askHarness) discardRefused() {
+	h.t.Helper()
+	if _, err := h.pool.Exec(context.Background(),
+		`DELETE FROM messages WHERE conversation_id = $1 AND status = 'blocked'`, h.conv.ID); err != nil {
+		h.t.Fatal(err)
+	}
 }
 
 func (h *askHarness) count(query string, args ...any) (n int) {
@@ -496,6 +517,7 @@ func TestModerationChecksImages(t *testing.T) {
 		t.Errorf("the service was sent %q", last)
 	}
 
+	h.discardRefused()
 	good := upload([]byte("\x89PNG fine"))
 	rec := sendWith("look at this one", good)
 	if rec.Code != http.StatusAccepted {

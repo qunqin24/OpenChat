@@ -128,6 +128,13 @@ func (s *Server) CreateMessage(w http.ResponseWriter, r *http.Request, conversat
 		return
 	}
 
+	// A refused message is reworded, not gone past (moderation_kept.go): asked
+	// here as well as under the lock below, so that a page that did not know
+	// costs neither a moderation call nor a strike.
+	if err := requireRevised(ctx, s.q, conversationId); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
 	choice, err := s.chooseRun(ctx, conv, body.Model, body.ReasoningEffort, body.WebSearch)
 	if err != nil {
 		httpx.Fail(w, r, err)
@@ -178,6 +185,11 @@ func (s *Server) CreateMessage(w http.ResponseWriter, r *http.Request, conversat
 		// Held, so that the message is written after whatever an edit or a
 		// regeneration queued ahead of this deleted.
 		if _, err := lockLive(ctx, q, conversationId); err != nil {
+			return err
+		}
+		// An edit of the refused message, or a send that was refused first, may
+		// have got in ahead.
+		if err := requireRevised(ctx, q, conversationId); err != nil {
 			return err
 		}
 		var err error

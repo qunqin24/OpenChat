@@ -360,6 +360,41 @@ func (q *Queries) GetLastInput(ctx context.Context, conversationID uuid.UUID) (M
 	return i, err
 }
 
+const getLastMessage = `-- name: GetLastMessage :one
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
+FROM messages
+WHERE conversation_id = $1
+ORDER BY created_at DESC, id DESC
+LIMIT 1
+`
+
+// The conversation's last row, whatever it is: where the transcript stops. A
+// conversation whose last row is a refused message (status 'blocked') does not
+// go on until that message is reworded, so every request that would write
+// after it asks this first, with the conversation held.
+func (q *Queries) GetLastMessage(ctx context.Context, conversationID uuid.UUID) (Message, error) {
+	row := q.db.QueryRow(ctx, getLastMessage, conversationID)
+	var i Message
+	err := row.Scan(
+		&i.ID,
+		&i.ConversationID,
+		&i.Role,
+		&i.Content,
+		&i.Status,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Parts,
+		&i.StopReason,
+		&i.Model,
+		&i.Provider,
+		&i.Usage,
+		&i.ErrorCode,
+		&i.RunID,
+	)
+	return i, err
+}
+
 const getMessage = `-- name: GetMessage :one
 SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
 FROM messages
