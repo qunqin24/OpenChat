@@ -1,10 +1,11 @@
 import type { TFunction } from 'i18next'
 import type { ToolCallPart, ToolResultPart } from '@openchat/api-client'
 import { Brain, ChevronRight, Globe, Search, TriangleAlert, Wrench } from 'lucide-react'
+import { Collapsible } from 'radix-ui'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { useStuck } from '@/hooks/use-stuck'
+import { keepHeaderInPlace, useStuck } from '@/hooks/use-stuck'
 import { API_BASE_URL } from '@/lib/api'
 import { isGuestMode } from '@/lib/guest/mode'
 import { isHttpUrl, siteName } from '@/lib/urls'
@@ -87,58 +88,66 @@ export function ToolActivity({ items, thinking = false }: { items: ActivityItem[
   }
 
   return (
-    <div className={cn('n-activity', open && 'is-open', (active || thinking) && 'is-active')}>
-      <button
-        ref={head}
-        type="button"
-        className="n-activity-head"
-        data-stuck={stuck || undefined}
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        <span className="n-activity-icon">
-          {active ? (
-            // Opacity, not movement, and kept under reduced motion: a frozen
-            // indicator cannot be told apart from a stuck one.
-            <span className="n-activity-pulse" data-motion="essential" role="status" aria-label={t('chat.tool.running')} />
-          ) : thinking ? (
-            // The same mark as thinking anywhere else, between rounds too.
-            <span className="n-activity-orb" role="status" aria-label={t('chat.reasoning.live')}><ThinkingOrb /></span>
-          ) : (
-            stepIcon(steps[steps.length - 1]!.call.name)
-          )}
-        </span>
-        <span className="n-activity-title">{title}</span>
-        {!active && !thinking && failed > 0 && (
-          <span className="n-activity-failed">{t('chat.tool.failures', { count: failed })}</span>
-        )}
-        {sources.length > 0 && (
-          <span className="n-activity-sources" aria-hidden="true">
-            {sources.slice(0, HEAD_SOURCES).map((hit) => (
-              <SourceMark key={hit.url} url={hit.url} />
-            ))}
-            {sources.length > HEAD_SOURCES && (
-              <span className="n-activity-more">+{sources.length - HEAD_SOURCES}</span>
+    // A Radix collapsible only for its measured height, so the steps can
+    // animate open and closed like the reasoning; the line stays a plain button.
+    <Collapsible.Root asChild open={open}>
+      <div className={cn('n-activity', open && 'is-open', (active || thinking) && 'is-active')}>
+        <button
+          ref={head}
+          type="button"
+          className="n-activity-head"
+          data-stuck={stuck || undefined}
+          aria-expanded={open}
+          onClick={() => {
+            // Closed from where it is pinned: stay at the line, not below the answer.
+            if (open) keepHeaderInPlace(head.current)
+            setOpen(!open)
+          }}
+        >
+          <span className="n-activity-icon">
+            {active ? (
+              // Opacity, not movement, and kept under reduced motion: a frozen
+              // indicator cannot be told apart from a stuck one.
+              <span className="n-activity-pulse" data-motion="essential" role="status" aria-label={t('chat.tool.running')} />
+            ) : thinking ? (
+              // The same mark as thinking anywhere else, between rounds too.
+              <span className="n-activity-orb" role="status" aria-label={t('chat.reasoning.live')}><ThinkingOrb /></span>
+            ) : (
+              stepIcon(steps[steps.length - 1]!.call.name)
             )}
           </span>
-        )}
-        <ChevronRight className="n-activity-chevron" aria-hidden="true" />
-      </button>
-
-      {open && (
-        <ol className="n-activity-steps">
-          {items.map((item) =>
-            item.kind === 'tool' ? (
-              <Step key={item.key} step={item} />
-            ) : (
-              <li key={item.key} className={cn('n-activity-note', item.kind === 'reasoning' && 'is-reasoning')}>
-                {item.text}
-              </li>
-            ),
+          <span className="n-activity-title">{title}</span>
+          {!active && !thinking && failed > 0 && (
+            <span className="n-activity-failed">{t('chat.tool.failures', { count: failed })}</span>
           )}
-        </ol>
-      )}
-    </div>
+          {sources.length > 0 && (
+            <span className="n-activity-sources" aria-hidden="true">
+              {sources.slice(0, HEAD_SOURCES).map((hit) => (
+                <SourceMark key={hit.url} url={hit.url} />
+              ))}
+              {sources.length > HEAD_SOURCES && (
+                <span className="n-activity-more">+{sources.length - HEAD_SOURCES}</span>
+              )}
+            </span>
+          )}
+          <ChevronRight className="n-activity-chevron" aria-hidden="true" />
+        </button>
+
+        <Collapsible.Content className="n-activity-content">
+          <ol className="n-activity-steps">
+            {items.map((item) =>
+              item.kind === 'tool' ? (
+                <Step key={item.key} step={item} />
+              ) : (
+                <li key={item.key} className={cn('n-activity-note', item.kind === 'reasoning' && 'is-reasoning')}>
+                  {item.text}
+                </li>
+              ),
+            )}
+          </ol>
+        </Collapsible.Content>
+      </div>
+    </Collapsible.Root>
   )
 }
 

@@ -6,7 +6,7 @@ import { isValidElement, useLayoutEffect, useRef, useState, type ReactNode } fro
 import { useTranslation } from 'react-i18next'
 
 import { ModelIcon } from '@/components/model-icon'
-import { useStuck } from '@/hooks/use-stuck'
+import { keepHeaderInPlace, useStuck } from '@/hooks/use-stuck'
 import { answersOf, ASK_USER, parseQuestions } from '@/lib/ask-user'
 import { copyClipboard } from '@/lib/clipboard'
 import { splitSegments } from '@/lib/genui/segments'
@@ -226,7 +226,15 @@ function Reasoning({ text, streaming, durationMs }: { text: string; streaming: b
   return (
     // A Radix collapsible rather than <details>, so the body can animate
     // open and closed: <details> drops its content the instant it closes.
-    <Collapsible.Root className="n-reasoning" open={open && Boolean(text)} onOpenChange={setOpen}>
+    <Collapsible.Root
+      className="n-reasoning"
+      open={open && Boolean(text)}
+      onOpenChange={(next) => {
+        // Closed from where it is pinned: stay at the toggle, not below the answer.
+        if (!next) keepHeaderInPlace(toggle.current)
+        setOpen(next)
+      }}
+    >
       <Collapsible.Trigger ref={toggle} className="n-reasoning-toggle" data-stuck={stuck || undefined}>
         {streaming ? (
           <>

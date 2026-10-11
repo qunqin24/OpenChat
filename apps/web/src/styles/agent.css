@@ -52,27 +52,38 @@
 .prism-next .n-reasoning-toggle[data-state='open']::after {
   transform: rotate(90deg);
 }
-/* Height from Radix's measurement of the content, so it opens to exactly its
-   size and closes from it. OpenWebUI's Collapsible motion: Svelte's `slide` —
-   height alone, no fade, 300ms on quintOut both ways (Svelte plays an outro's
-   easing forwards on the remaining height, so closing also starts fast and
-   settles, rather than easing in). */
-.prism-next .n-reasoning-content {
+/* The reasoning and the tool activity open and close the same small way: the
+   height Radix measured, with a light fade, 200ms on quintOut both ways. The
+   fade is what keeps a long section from smearing as its height sweeps: the
+   text is gone before the box has much shrunk. Off under reduced motion. */
+.prism-next .n-reasoning-content,
+.prism-next .n-activity-content {
   overflow: hidden;
 }
-.prism-next .n-reasoning-content[data-state='open'] {
-  animation: n-reasoning-open 300ms cubic-bezier(0.23, 1, 0.32, 1);
+.prism-next .n-reasoning-content[data-state='open'],
+.prism-next .n-activity-content[data-state='open'] {
+  animation: n-section-open 200ms cubic-bezier(0.23, 1, 0.32, 1);
 }
-.prism-next .n-reasoning-content[data-state='closed'] {
-  animation: n-reasoning-close 300ms cubic-bezier(0.23, 1, 0.32, 1);
+.prism-next .n-reasoning-content[data-state='closed'],
+.prism-next .n-activity-content[data-state='closed'] {
+  /* Held at its end (forwards) until Radix hides it: otherwise, between the
+     animation's last frame and the hidden attribute, the whole section
+     flashes back at full height. */
+  animation: n-section-close 200ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
 }
-@keyframes n-reasoning-open {
-  from { height: 0; }
-  to { height: var(--radix-collapsible-content-height); }
+@keyframes n-section-open {
+  from { height: 0; opacity: 0; }
+  to { height: var(--radix-collapsible-content-height); opacity: 1; }
 }
-@keyframes n-reasoning-close {
-  from { height: var(--radix-collapsible-content-height); }
-  to { height: 0; }
+@keyframes n-section-close {
+  from { height: var(--radix-collapsible-content-height); opacity: 1; }
+  to { height: 0; opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .prism-next .n-reasoning-content[data-state],
+  .prism-next .n-activity-content[data-state] {
+    animation: none;
+  }
 }
 .prism-next .n-reasoning-body {
   margin-top: 6px;

@@ -40,3 +40,23 @@ export function useStuck<T extends HTMLElement>(active: boolean) {
 
   return [ref, stuck] as const
 }
+
+/**
+ * Called just before a pinned header's section closes: scrolls the transcript
+ * back to where the header sits in the flow, so the header stays on screen
+ * exactly where it was clicked. Without it, closing a long section read half
+ * way through takes away everything above the reader's place at once, and
+ * leaves them far below - at the end of the answer, or past it.
+ *
+ * Done before the close, while the section is still open: the header's own
+ * place (its parent's top) does not depend on what is below it, so this is
+ * the same before and after, and the closing then only removes what is under
+ * the header. Instant, not smooth: the header must not move.
+ */
+export function keepHeaderInPlace(header: HTMLElement | null) {
+  const parent = header?.parentElement
+  const scroller = header?.closest<HTMLElement>('.n-scroll')
+  if (!header || !parent || !scroller) return
+  const pinnedBy = header.getBoundingClientRect().top - parent.getBoundingClientRect().top
+  if (pinnedBy > 0.5) scroller.scrollTo({ top: scroller.scrollTop - pinnedBy, behavior: 'instant' })
+}
