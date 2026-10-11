@@ -142,9 +142,14 @@ func (s *Server) CreateMessage(w http.ResponseWriter, r *http.Request, conversat
 		httpx.Fail(w, r, err)
 		return
 	}
-	// The words and the pictures, before any row is written or file claimed.
-	if err := s.moderate(ctx, s.accountSubject(ctx, user, conversationId, ModerationSourceSend),
+	// The words and the pictures, before a run is started or a file claimed. A
+	// message that fails is kept as what it is - a refused message - and
+	// nothing else of it is (moderation_kept.go).
+	if refused, err := s.moderated(ctx, s.accountSubject(ctx, user, conversationId, ModerationSourceSend),
 		moderationInput{text: content, images: s.attachmentImages(files)}); err != nil {
+		if refused {
+			err = s.keepRefused(ctx, conversationId, content, err)
+		}
 		httpx.Fail(w, r, err)
 		return
 	}

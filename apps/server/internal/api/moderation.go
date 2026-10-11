@@ -47,8 +47,11 @@ import (
 // and summaries - none of it is something the person sent.
 //
 // The check runs where a capacity refusal does, before anything is written and
-// before the run exists, so a refused request leaves no rows, claims no
-// attachment and starts nothing.
+// before the run exists, so a refused request starts nothing and claims no
+// attachment. A refused *send* is the one thing it leaves: the text, kept as a
+// message of status `blocked` at the end of the conversation (keepRefused), so
+// that it is still there after a refresh and on the person's other devices. It
+// is shown and never sent to a model. A refused edit or answer leaves nothing.
 
 var (
 	// errModerationUnavailable is a message held back because the moderation
@@ -124,19 +127,28 @@ type moderationImage struct {
 // content_blocked error when it failed, or a 503 moderation_unavailable when
 // the check could not be made and the settings refuse an unchecked message.
 func (s *Server) moderate(ctx context.Context, who moderationSubject, in moderationInput) error {
+	_, err := s.moderated(ctx, who, in)
+	return err
+}
+
+// moderated is moderate that also says whether the message was refused for its
+// content - as opposed to not being checked at all (503) - whatever the answer
+// to the request is: the message that earns the sanction is answered with the
+// sanction (401, 403), and is refused all the same.
+func (s *Server) moderated(ctx context.Context, who moderationSubject, in moderationInput) (refused bool, err error) {
 	cfg, err := loadModeration(ctx, s.q)
 	if err != nil {
-		return s.moderationFailed(ctx, defaultModerationConfig(), who, err)
+		return false, s.moderationFailed(ctx, defaultModerationConfig(), who, err)
 	}
 	if cfg.Mode == ModerationModeOff {
-		return nil
+		return false, nil
 	}
 	if who.admin && cfg.ExemptAdmins {
-		return nil
+		return false, nil
 	}
 	text := strings.TrimSpace(in.text)
 	if text == "" && in.images == nil {
-		return nil
+		return false, nil
 	}
 
 	var verdict moderationVerdict
@@ -145,26 +157,26 @@ func (s *Server) moderate(ctx context.Context, who moderationSubject, in moderat
 		var images []moderationImage
 		if in.images != nil {
 			if images, err = in.images(ctx); err != nil {
-				return s.moderationFailed(ctx, cfg, who, err)
+				return false, s.moderationFailed(ctx, cfg, who, err)
 			}
 		}
 		if text == "" && len(images) == 0 {
-			return nil
+			return false, nil
 		}
 		verdict, err = s.moderateWithOpenAI(ctx, cfg, text, images)
 	case ModerationModeModel:
 		if text == "" {
-			return nil // a model is asked about words, not pictures
+			return false, nil // a model is asked about words, not pictures
 		}
 		verdict, err = s.moderateWithModel(ctx, cfg, who, text)
 	}
 	if err != nil {
-		return s.moderationFailed(ctx, cfg, who, err)
+		return false, s.moderationFailed(ctx, cfg, who, err)
 	}
 
 	hits := cfg.blocked(verdict)
 	if len(hits) == 0 {
-		return nil
+		return false, nil
 	}
 	// The message that reaches the threshold is answered with the sanction
 	// itself, so the page shows it at once rather than on the next attempt: a
@@ -173,11 +185,11 @@ func (s *Server) moderate(ctx context.Context, who moderationSubject, in moderat
 	sanction := s.recordBlocked(ctx, cfg, who, text, hits)
 	switch {
 	case sanction.banned:
-		return errGuestBanned(sanction.until)
+		return true, errGuestBanned(sanction.until)
 	case sanction.disabled:
-		return httpx.ErrUnauthorized
+		return true, httpx.ErrUnauthorized
 	}
-	return contentBlocked(hits, sanction)
+	return true, contentBlocked(hits, sanction)
 }
 
 // moderationSanction is what recordBlocked did beyond logging, or how close it

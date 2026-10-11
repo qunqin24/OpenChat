@@ -998,15 +998,20 @@ export interface paths {
          *
          *     With content moderation on (`ModerationSettings.mode`) the text of the
          *     message and its images are checked first. A message that fails is
-         *     refused before anything is written, with 422 `content_blocked` and the
-         *     matched categories in `details.categories` - and, when more blocked
+         *     refused before a run is started or a file claimed, with 422
+         *     `content_blocked` and the matched categories in `details.categories` - and, when more blocked
          *     messages would disable the account, `details.strikesLeft` of them
-         *     within `details.windowHours`. The message that reaches the limit
-         *     disables the account and is answered 401 (its sessions are gone).
-         *     When the moderation service cannot be reached and the setting says to
-         *     block, 503 `moderation_unavailable`. The same goes for editing a message
-         *     and answering a question; a regeneration re-sends what was already
-         *     checked.
+         *     within `details.windowHours`. The refused text is kept as a message of
+         *     its own (`status: blocked`, no run, no file claimed): `details.messageId`
+         *     is that message, and the conversation's other followers are told with a
+         *     `transcript_changed` event (no `from`) to fetch their newest page. It is
+         *     shown and never sent to a model. A conversation that is answering right
+         *     now keeps nothing and has no `messageId`. The message that reaches the
+         *     limit disables the account and is answered 401 (its sessions are gone);
+         *     it is kept all the same. When the moderation service cannot be reached and the setting says to
+         *     block, 503 `moderation_unavailable`. Editing a message and answering a
+         *     question are checked the same way, but a refusal keeps nothing; a
+         *     regeneration re-sends what was already checked.
          */
         post: operations["createMessage"];
         delete?: never;
@@ -1537,7 +1542,9 @@ export interface paths {
          *     With content moderation on, a new message (and its images) or the words
          *     typed in an answer are checked before anything is written: 422
          *     `content_blocked` with the matched categories in `details.categories`
-         *     (and `details.strikesLeft` / `details.windowHours` before a ban), or 503
+         *     (and `details.strikesLeft` / `details.windowHours` before a ban; the
+         *     server keeps nothing of a guest, so there is no `details.messageId` -
+         *     the browser keeps the refused message itself), or 503
          *     `moderation_unavailable` when the check could not be made (a guest's
          *     message is never sent unchecked). The message that earns the ban is
          *     answered with it (403 `guest_banned`). A regeneration is not checked.
@@ -1713,8 +1720,17 @@ export interface components {
         };
         /** @enum {string} */
         Role: "system" | "user" | "assistant" | "tool";
-        /** @enum {string} */
-        MessageStatus: "pending" | "streaming" | "complete" | "failed";
+        /**
+         * @description `blocked` is a message content moderation refused: a user message that
+         *     is shown and never sent to a model. It is not a question the
+         *     conversation asked - it is left out of what a model is given, what a
+         *     summary covers, a title, search and export - and it starts no run. It is
+         *     the end of the transcript only until the next send. `regenerateAnswer`
+         *     answers the last message that is not blocked and deletes the blocked
+         *     ones after it; a blocked message can be edited like any other.
+         * @enum {string}
+         */
+        MessageStatus: "pending" | "streaming" | "complete" | "failed" | "blocked";
         /** @description Both fields are left out when nothing has been answered yet. */
         ContextUsage: {
             /**
@@ -2217,7 +2233,10 @@ export interface components {
         /**
          * @description Rows the conversation showed were deleted (`editMessage` removes a
          *     question and what followed it, `regenerateAnswer` removes the answer),
-         *     so the transcript is no longer the old one with rows added to it. A
+         *     so the transcript is no longer the old one with rows added to it. It is
+         *     also sent, on its own and with no `from`, when a message was added that
+         *     no run follows: a refused send kept as a `blocked` message
+         *     (`createMessage`). A
          *     client that holds a transcript of the conversation - another tab, say -
          *     fetches its newest page again and drops what it held that the page does
          *     not contain; what the transcript is lives in `listMessages`, and the
