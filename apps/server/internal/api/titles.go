@@ -46,11 +46,16 @@ const (
 	// titleRecentRows is how much of a conversation a title on request reads:
 	// its last few exchanges.
 	titleRecentRows = 8
-	titleTimeout    = 45 * time.Second
-	titleMaxRunes   = 40
-	titleInputCap   = 1200
-	titleAnswerCap  = 1800
+	// titleSaveTimeout is what is left, after the model's time, to save a title.
+	titleSaveTimeout = 10 * time.Second
+	titleMaxRunes    = 40
+	titleInputCap    = 1200
+	titleAnswerCap   = 1800
 )
+
+// titleTimeout is how long a model has to write a title. A variable for the
+// test of a model that takes all of it.
+var titleTimeout = 45 * time.Second
 
 const titlePrompt = `Write a short title for the conversation below: at most 6 words in English, or at most 12 characters in Chinese — in the language the user wrote in. Name the topic. No quotes, no emoji, no punctuation at the end. Reply with the title alone.`
 
@@ -73,7 +78,10 @@ func titleAfter(status sqlc.RunStatus) bool {
 }
 
 func (s *Server) titleConversation(run sqlc.Run) {
-	ctx, cancel := context.WithTimeout(context.Background(), titleTimeout)
+	// The model gets titleTimeout (titleBy); everything else here is a few
+	// queries, and the fallback title must still be saved when the model used
+	// all of it - so the whole has its own, longer, bound.
+	ctx, cancel := context.WithTimeout(context.Background(), titleTimeout+titleSaveTimeout)
 	defer cancel()
 	log := slog.With("conversation_id", run.ConversationID, "run_id", run.ID)
 	// Its own goroutine: a panic here would otherwise end the process.
@@ -101,7 +109,7 @@ func (s *Server) titleConversation(run sqlc.Run) {
 	if exchange == "" {
 		return
 	}
-	title, err := s.generateTitle(ctx, run.UserID, s.endUsers.Account(ctx, run.UserID), run.ConversationID, run.ModelID, run.ChannelID, exchange)
+	title, err := s.titleBy(ctx, run.UserID, s.endUsers.Account(ctx, run.UserID), run.ConversationID, run.ModelID, run.ChannelID, exchange)
 	if errors.Is(err, errModelCapacity) {
 		// Not a failure: the model's spending cap spares the request.
 		log.Info("title: no model, the model has reached its spending cap; naming it by the question", "model", run.ModelID)
@@ -158,6 +166,14 @@ func (s *Server) exchangeOf(ctx context.Context, run sqlc.Run) (exchange, asked 
 // line of what was asked, tidied and cut short as a written title is.
 func questionTitle(question string) string {
 	return cleanTitle(question)
+}
+
+// titleBy is generateTitle within titleTimeout of its own, leaving the caller's
+// context alive to save what it falls back on when the model took all of it.
+func (s *Server) titleBy(ctx context.Context, userID uuid.UUID, endUser string, conversationID uuid.UUID, ownModel string, ownChannel *uuid.UUID, transcript string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, titleTimeout)
+	defer cancel()
+	return s.generateTitle(ctx, userID, endUser, conversationID, ownModel, ownChannel, transcript)
 }
 
 // errNoTitle is a model that answered with nothing usable as a title.

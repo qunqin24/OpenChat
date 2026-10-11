@@ -1,3 +1,12 @@
+import type { HistoryState } from '@tanstack/react-router'
+
+declare module '@tanstack/react-router' {
+  interface HistoryState {
+    /** Set afresh by every "new chat" (newChatState). */
+    newChat?: number
+  }
+}
+
 /**
  * Which conversation the chat page shows, and which "copy" of the page that is.
  *
@@ -61,4 +70,27 @@ export function adopt(view: ChatView, id: string): ChatView {
  */
 export function release(view: ChatView, id: string): ChatView {
   return view.shown === id ? { ...view, shown: undefined } : view
+}
+
+/**
+ * "New chat" was asked for while the address already says it (`/`): the page
+ * made a conversation for its first message and shows it, but the address only
+ * follows once the server has taken the message - and the router does nothing
+ * at all for a link to where it already is. A page ahead of its address starts
+ * over as the empty screen, as it would from any other conversation; one that
+ * is the empty screen already is left alone, with whatever is typed in it.
+ */
+export function startOver(view: ChatView): ChatView {
+  return view.shown === undefined ? view : { epoch: view.epoch + 1, route: view.route, shown: view.route }
+}
+
+let nonce = 0
+
+/**
+ * The history state of a "new chat" link or navigation: a mark that differs
+ * every time, so asking for a new chat is a navigation even from `/`, and the
+ * chat page sees it (ChatPage, startOver).
+ */
+export function newChatState(previous: HistoryState): HistoryState {
+  return { ...previous, newChat: Date.now() * 1000 + (nonce++ % 1000) }
 }

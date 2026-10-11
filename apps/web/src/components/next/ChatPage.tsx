@@ -1,7 +1,7 @@
-import { useParams } from '@tanstack/react-router'
+import { useParams, useRouterState } from '@tanstack/react-router'
 import { useCallback, useState } from 'react'
 
-import { adopt, followAddress, openView, release } from '@/lib/chat-view'
+import { adopt, followAddress, openView, release, startOver } from '@/lib/chat-view'
 import NextChat from './NextChat'
 
 /**
@@ -24,9 +24,23 @@ export default function ChatPage() {
   const route = 'conversationId' in params ? params.conversationId : undefined
 
   const [view, setView] = useState(() => openView(route))
+  // Every "new chat" leaves a fresh mark in the history state (newChatState).
+  const asked = useRouterState({ select: (state) => state.location.state.newChat })
+  const [seen, setSeen] = useState(asked)
   // The address moved: follow it now, in this render, so the page is never
   // drawn with the old conversation under the new address.
-  const current = followAddress(view, route)
+  let current = followAddress(view, route)
+  if (asked !== seen) {
+    setSeen(asked)
+    // A new chat asked for at `/` itself, while the page shows the conversation
+    // its first message made: the address has not caught up, so only this says so.
+    // Only a mark that appears is an ask. One that goes is the address moving
+    // on (to the conversation, which carries none) - and the router updates the
+    // location a render before the params, so in that render the route still
+    // reads `/`: taking it as an ask would start the page over under the
+    // conversation it just made.
+    if (asked !== undefined && route === undefined) current = startOver(current)
+  }
   if (current !== view) setView(current)
 
   const onCreated = useCallback((id: string) => setView((held) => adopt(held, id)), [])

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { adopt, followAddress, openView, release, type ChatView } from './chat-view'
+import { adopt, followAddress, newChatState, openView, release, startOver, type ChatView } from './chat-view'
 
 describe('followAddress', () => {
   it('keeps the page when the address has not changed', () => {
@@ -57,5 +57,27 @@ describe('release', () => {
     const view = adopt(openView(undefined), 'x')
     expect(release(view, 'other')).toBe(view)
     expect(release(view, 'x').shown).toBeUndefined()
+  })
+})
+
+describe('startOver', () => {
+  it('takes a page ahead of its address back to the empty screen, as a new page', () => {
+    // The first message made x; the address is still `/` while it is sent.
+    const ahead = adopt(openView(undefined), 'x')
+    expect(startOver(ahead)).toEqual({ epoch: 1, route: undefined, shown: undefined })
+  })
+
+  it('leaves the empty screen alone, with what is typed in it', () => {
+    const empty = openView(undefined)
+    expect(startOver(empty)).toBe(empty)
+  })
+})
+
+describe('newChatState', () => {
+  it('is a different mark every time, keeping the rest of the state', () => {
+    const a = newChatState({ other: 1 } as never)
+    const b = newChatState({ other: 1 } as never)
+    expect(a.newChat).not.toBe(b.newChat)
+    expect((a as { other?: number }).other).toBe(1)
   })
 })

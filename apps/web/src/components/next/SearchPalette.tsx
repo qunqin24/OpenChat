@@ -15,6 +15,7 @@ import { useConversationSearch, useRenameConversation } from '@/hooks/use-conver
 import { useMessages } from '@/hooks/use-messages'
 import { API_BASE_URL } from '@/lib/api'
 import { useChatPaths } from '@/lib/chat-paths'
+import { newChatState } from '@/lib/chat-view'
 import { groupConversations, parseTimestamp } from '@/lib/grouping'
 import { displayTitle, useDisplayTitle } from '@/lib/titles'
 import { buildTurns, sentTurns, type AssistantTurn as Turn } from '@/lib/transcript'
@@ -97,7 +98,7 @@ export function SearchPalette({
     close()
     onNavigate()
     if (conversationId) void navigate({ to: paths.chat, params: { conversationId } })
-    else void navigate({ to: paths.home })
+    else void navigate({ to: paths.home, state: newChatState })
   }
 
   // The older conversations load as the list is scrolled to its end — and a

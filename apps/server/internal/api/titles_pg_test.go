@@ -37,6 +37,10 @@ func TestTitleAfterFirstAnswer(t *testing.T) {
 		}
 		_ = json.Unmarshal(raw, &body)
 		text := "An answer about futures."
+		if strings.Contains(string(raw), "Write a short title") && strings.Contains(string(raw), "SLOWTITLE") {
+			<-r.Context().Done() // never answers: the title request runs out of time
+			return
+		}
 		if strings.Contains(string(raw), "Write a short title") && strings.Contains(string(raw), "FAILTITLE") {
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = io.WriteString(w, `{"error":{"message":"no titles today"}}`)
@@ -151,6 +155,25 @@ func TestTitleAfterFirstAnswer(t *testing.T) {
 	if got := titleOf(unnamed.ID, "FAILTITLE 明天会下雨吗"); got != "FAILTITLE 明天会下雨吗" {
 		t.Fatalf("title after a failed title request %q, want the question", got)
 	}
+
+	// A title model that takes all its time: the question is still saved as the
+	// title, not lost with the request's deadline.
+	saved := titleTimeout
+	titleTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { titleTimeout = saved })
+	slow, err := q.CreateConversation(ctx, sqlc.CreateConversationParams{UserID: &user.ID, Title: defaultTitle})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec = httptest.NewRecorder()
+	server.CreateMessage(rec, post(fmt.Sprintf(`{"content":"SLOWTITLE 推荐几本书","model":%q}`, chatModel)), slow.ID)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("send: %d %s", rec.Code, rec.Body)
+	}
+	if got := titleOf(slow.ID, "SLOWTITLE 推荐几本书"); got != "SLOWTITLE 推荐几本书" {
+		t.Fatalf("title after a title request that timed out %q, want the question", got)
+	}
+	titleTimeout = saved
 
 	// A conversation the user named keeps its name.
 	named, err := q.CreateConversation(ctx, sqlc.CreateConversationParams{UserID: &user.ID, Title: "My own name"})

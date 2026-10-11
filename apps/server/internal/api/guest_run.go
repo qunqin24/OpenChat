@@ -990,7 +990,9 @@ func (s *Server) followGuestRun(ctx context.Context, sse *httpx.SSEWriter, sub *
 // account's is named in the background, but here before the stream ends: after
 // it the rows are gone. The stream keeps its heartbeat meanwhile.
 func (s *Server) guestTitleAfterRun(ctx context.Context, sse *httpx.SSEWriter, heartbeat *time.Ticker, run sqlc.Run, st *guestRunState) string {
-	ctx, cancel := context.WithTimeout(ctx, titleTimeout)
+	// The model's time is bounded inside (titleBy), so a model that takes all of
+	// it still leaves the question as the title; this bound is only a backstop.
+	ctx, cancel := context.WithTimeout(ctx, titleTimeout+titleSaveTimeout)
 	defer cancel()
 	done := make(chan string, 1)
 	go func() {
@@ -999,7 +1001,7 @@ func (s *Server) guestTitleAfterRun(ctx context.Context, sse *httpx.SSEWriter, h
 			done <- ""
 			return
 		}
-		title, err := s.generateTitle(ctx, st.user.ID, s.endUsers.ForRun(ctx, run), st.conv.ID, run.ModelID, run.ChannelID, exchange)
+		title, err := s.titleBy(ctx, st.user.ID, s.endUsers.ForRun(ctx, run), st.conv.ID, run.ModelID, run.ChannelID, exchange)
 		if err != nil {
 			// As for an account: the question names it (titles.go).
 			slog.WarnContext(ctx, "guest title; naming it by the question", "error", err)
