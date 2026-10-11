@@ -99,6 +99,8 @@ type Querier interface {
 	// An account's blocked messages in the window, counted from the last time it
 	// was sanctioned: an administrator who enables the account again gives it a
 	// fresh start, instead of the next message setting the same punishment off.
+	// A refusal at snapshot time is not a strike: it is old text being left out of
+	// a conversation, not something the person is sending now.
 	CountUserStrikes(ctx context.Context, arg CountUserStrikesParams) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
 	CountUsersFiltered(ctx context.Context, arg CountUsersFilteredParams) (int64, error)
@@ -521,6 +523,14 @@ type Querier interface {
 	// edit or a regeneration does (LockConversation), so none of those can be
 	// starting a run in one of them while it goes.
 	LockUserConversations(ctx context.Context, userID *uuid.UUID) ([]uuid.UUID, error)
+	// What a snapshot-time check decided about the instructions, recorded only
+	// while the text still hashes to what was checked: an edit made meanwhile is
+	// another text, and nobody has looked at it. A NULL argument leaves its column.
+	MarkInstructionsModerated(ctx context.Context, arg MarkInstructionsModeratedParams) error
+	// What a snapshot-time check decided about memories: `ok` or `blocked`, each
+	// with the hash of the text that was checked, recorded only where the memory
+	// still hashes to it. updated_at is left alone - this is not an edit.
+	MarkMemoriesModerated(ctx context.Context, arg MarkMemoriesModeratedParams) error
 	MarkMemoryEventUndone(ctx context.Context, arg MarkMemoryEventUndoneParams) (MemoryEvent, error)
 	MarkModerationSanction(ctx context.Context, arg MarkModerationSanctionParams) error
 	// What a run needs to know about its model: how its thinking is controlled,
@@ -651,6 +661,8 @@ type Querier interface {
 	// therefore "leave it", which COALESCE gives us for free.
 	UpdateChannel(ctx context.Context, arg UpdateChannelParams) (Channel, error)
 	UpdateConversationTitle(ctx context.Context, arg UpdateConversationTitleParams) (Conversation, error)
+	// The new text is unchecked (NULL hash) unless the caller vouches for it, and
+	// nothing is known to have been refused about it.
 	UpdateMemoryContent(ctx context.Context, arg UpdateMemoryContentParams) (UserMemory, error)
 	// Deliberately narrower than AdminUpdateUser: role and disabled_at are not
 	// reachable from here, so the self-service form cannot touch them even if the
@@ -658,6 +670,10 @@ type Querier interface {
 	UpdateOwnProfile(ctx context.Context, arg UpdateOwnProfileParams) (User, error)
 	// Its own statement, apart from UpdateOwnProfile, for the same reason that one
 	// is apart from AdminUpdateUser: nothing here reaches the role or the password.
+	//
+	// A field that changes takes the hash of the text that was moderated (NULL when
+	// it was not, or could not be, checked) and forgets the hash of what was
+	// refused; a field sent unchanged, or not sent, keeps both.
 	UpdatePersonalization(ctx context.Context, arg UpdatePersonalizationParams) (UpdatePersonalizationRow, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	// Writes the conversation's summary, replacing the one it had. The foreign keys

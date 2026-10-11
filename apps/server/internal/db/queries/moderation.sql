@@ -32,9 +32,12 @@ RETURNING *;
 -- An account's blocked messages in the window, counted from the last time it
 -- was sanctioned: an administrator who enables the account again gives it a
 -- fresh start, instead of the next message setting the same punishment off.
+-- A refusal at snapshot time is not a strike: it is old text being left out of
+-- a conversation, not something the person is sending now.
 SELECT count(*)::bigint
 FROM moderation_events e
 WHERE e.user_id = sqlc.arg('user_id')
+  AND e.source <> 'snapshot'
   AND e.created_at > now() - make_interval(hours => sqlc.arg('window_hours')::int)
   AND e.created_at > COALESCE((SELECT max(s.created_at)
                                FROM moderation_events s

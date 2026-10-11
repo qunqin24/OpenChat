@@ -40,6 +40,7 @@ const countUserStrikes = `-- name: CountUserStrikes :one
 SELECT count(*)::bigint
 FROM moderation_events e
 WHERE e.user_id = $1
+  AND e.source <> 'snapshot'
   AND e.created_at > now() - make_interval(hours => $2::int)
   AND e.created_at > COALESCE((SELECT max(s.created_at)
                                FROM moderation_events s
@@ -55,6 +56,8 @@ type CountUserStrikesParams struct {
 // An account's blocked messages in the window, counted from the last time it
 // was sanctioned: an administrator who enables the account again gives it a
 // fresh start, instead of the next message setting the same punishment off.
+// A refusal at snapshot time is not a strike: it is old text being left out of
+// a conversation, not something the person is sending now.
 func (q *Queries) CountUserStrikes(ctx context.Context, arg CountUserStrikesParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countUserStrikes, arg.UserID, arg.WindowHours)
 	var column_1 int64

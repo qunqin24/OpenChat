@@ -15,7 +15,7 @@ const adminCreateUser = `-- name: AdminCreateUser :one
 INSERT INTO users (email, name, password_hash, role, disabled_at)
 VALUES ($1, $2, $3, $4,
         CASE WHEN $5::boolean THEN now() ELSE NULL END)
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash
 `
 
 type AdminCreateUserParams struct {
@@ -54,6 +54,10 @@ func (q *Queries) AdminCreateUser(ctx context.Context, arg AdminCreateUserParams
 		&i.AvatarKey,
 		&i.Guest,
 		&i.Pending,
+		&i.InstructionsAboutCheckedHash,
+		&i.InstructionsAboutBlockedHash,
+		&i.InstructionsStyleCheckedHash,
+		&i.InstructionsStyleBlockedHash,
 	)
 	return i, err
 }
@@ -72,7 +76,7 @@ SET name          = COALESCE($1::text, name),
     pending       = CASE WHEN $6::boolean IS TRUE THEN false ELSE pending END,
     updated_at    = now()
 WHERE id = $7
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash
 `
 
 type AdminUpdateUserParams struct {
@@ -122,6 +126,10 @@ func (q *Queries) AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams
 		&i.AvatarKey,
 		&i.Guest,
 		&i.Pending,
+		&i.InstructionsAboutCheckedHash,
+		&i.InstructionsAboutBlockedHash,
+		&i.InstructionsStyleCheckedHash,
+		&i.InstructionsStyleBlockedHash,
 	)
 	return i, err
 }
@@ -265,7 +273,7 @@ func (q *Queries) GetContactAdmin(ctx context.Context) (GetContactAdminRow, erro
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash
 FROM users
 WHERE id = $1
 `
@@ -290,12 +298,16 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.AvatarKey,
 		&i.Guest,
 		&i.Pending,
+		&i.InstructionsAboutCheckedHash,
+		&i.InstructionsAboutBlockedHash,
+		&i.InstructionsStyleCheckedHash,
+		&i.InstructionsStyleBlockedHash,
 	)
 	return i, err
 }
 
 const getUserByAvatarKey = `-- name: GetUserByAvatarKey :one
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash
 FROM users
 WHERE avatar_key = $1
 `
@@ -322,12 +334,16 @@ func (q *Queries) GetUserByAvatarKey(ctx context.Context, avatarKey *string) (Us
 		&i.AvatarKey,
 		&i.Guest,
 		&i.Pending,
+		&i.InstructionsAboutCheckedHash,
+		&i.InstructionsAboutBlockedHash,
+		&i.InstructionsStyleCheckedHash,
+		&i.InstructionsStyleBlockedHash,
 	)
 	return i, err
 }
 
 const getUserByLogin = `-- name: GetUserByLogin :one
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash
 FROM users
 WHERE NOT guest
   AND (lower(email) = lower($1::text)
@@ -364,6 +380,10 @@ func (q *Queries) GetUserByLogin(ctx context.Context, identifier string) (User, 
 		&i.AvatarKey,
 		&i.Guest,
 		&i.Pending,
+		&i.InstructionsAboutCheckedHash,
+		&i.InstructionsAboutBlockedHash,
+		&i.InstructionsStyleCheckedHash,
+		&i.InstructionsStyleBlockedHash,
 	)
 	return i, err
 }
@@ -382,7 +402,7 @@ func (q *Queries) HasAccounts(ctx context.Context) (bool, error) {
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash
 FROM users
 WHERE NOT guest
   AND ($1::text IS NULL
@@ -438,6 +458,10 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.AvatarKey,
 			&i.Guest,
 			&i.Pending,
+			&i.InstructionsAboutCheckedHash,
+			&i.InstructionsAboutBlockedHash,
+			&i.InstructionsStyleCheckedHash,
+			&i.InstructionsStyleBlockedHash,
 		); err != nil {
 			return nil, err
 		}
@@ -450,7 +474,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 }
 
 const listUsersByIDs = `-- name: ListUsersByIDs :many
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash
 FROM users
 WHERE id = ANY ($1::uuid[])
 `
@@ -481,6 +505,10 @@ func (q *Queries) ListUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]User, 
 			&i.AvatarKey,
 			&i.Guest,
 			&i.Pending,
+			&i.InstructionsAboutCheckedHash,
+			&i.InstructionsAboutBlockedHash,
+			&i.InstructionsStyleCheckedHash,
+			&i.InstructionsStyleBlockedHash,
 		); err != nil {
 			return nil, err
 		}
@@ -528,7 +556,7 @@ SELECT $1::text,
 FROM (SELECT count(*) AS n FROM users WHERE NOT guest) c
 WHERE c.n = 0
    OR $5::boolean
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash
 `
 
 type RegisterUserParams struct {
@@ -573,6 +601,10 @@ func (q *Queries) RegisterUser(ctx context.Context, arg RegisterUserParams) (Use
 		&i.AvatarKey,
 		&i.Guest,
 		&i.Pending,
+		&i.InstructionsAboutCheckedHash,
+		&i.InstructionsAboutBlockedHash,
+		&i.InstructionsStyleCheckedHash,
+		&i.InstructionsStyleBlockedHash,
 	)
 	return i, err
 }
@@ -582,7 +614,7 @@ UPDATE users
 SET avatar_key = $1::text,
     updated_at = now()
 WHERE id = $2
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash
 `
 
 type SetUserAvatarParams struct {
@@ -613,6 +645,10 @@ func (q *Queries) SetUserAvatar(ctx context.Context, arg SetUserAvatarParams) (U
 		&i.AvatarKey,
 		&i.Guest,
 		&i.Pending,
+		&i.InstructionsAboutCheckedHash,
+		&i.InstructionsAboutBlockedHash,
+		&i.InstructionsStyleCheckedHash,
+		&i.InstructionsStyleBlockedHash,
 	)
 	return i, err
 }
@@ -634,7 +670,7 @@ SET name       = COALESCE($1::text, name),
     email      = COALESCE($2::text, email),
     updated_at = now()
 WHERE id = $3
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash
 `
 
 type UpdateOwnProfileParams struct {
@@ -666,6 +702,10 @@ func (q *Queries) UpdateOwnProfile(ctx context.Context, arg UpdateOwnProfilePara
 		&i.AvatarKey,
 		&i.Guest,
 		&i.Pending,
+		&i.InstructionsAboutCheckedHash,
+		&i.InstructionsAboutBlockedHash,
+		&i.InstructionsStyleCheckedHash,
+		&i.InstructionsStyleBlockedHash,
 	)
 	return i, err
 }

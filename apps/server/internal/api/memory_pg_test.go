@@ -408,7 +408,7 @@ func TestMemoryToolRules(t *testing.T) {
 	ctx := context.Background()
 	mine := h.remember("Mine")
 	conv := h.conversation(false)
-	if _, err := h.notes.EnsureSnapshot(ctx, h.user.ID, conv.ID); err != nil {
+	if _, err := h.notes.EnsureSnapshot(ctx, h.user.ID, conv.ID, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -421,7 +421,7 @@ func TestMemoryToolRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.notes.EnsureSnapshot(ctx, other.ID, otherConv.ID); err != nil {
+	if _, err := h.notes.EnsureSnapshot(ctx, other.ID, otherConv.ID, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -492,7 +492,7 @@ func TestMemoryUndo(t *testing.T) {
 	ctx := context.Background()
 	conv := h.conversation(false)
 	original := h.remember("Original")
-	if _, err := h.notes.EnsureSnapshot(ctx, h.user.ID, conv.ID); err != nil {
+	if _, err := h.notes.EnsureSnapshot(ctx, h.user.ID, conv.ID, nil); err != nil {
 		t.Fatal(err)
 	}
 

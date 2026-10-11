@@ -11,9 +11,12 @@ package memory
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -160,10 +163,68 @@ type SnapshotRef struct {
 
 func refOf(n int) string { return fmt.Sprintf("m%d", n) }
 
+// Hash is how a text is remembered as checked or refused by content
+// moderation: the hex SHA-256 of its UTF-8 bytes. Editing a text changes it,
+// which is all it takes for the text to count as unchecked again.
+func Hash(text string) string {
+	sum := sha256.Sum256([]byte(text))
+	return hex.EncodeToString(sum[:])
+}
+
+// PieceKind says which of a person's texts a Piece is.
+type PieceKind string
+
+const (
+	PieceAbout  PieceKind = "about"
+	PieceStyle  PieceKind = "style"
+	PieceMemory PieceKind = "memory"
+)
+
+// Piece is one text a snapshot would carry that nobody has checked yet: one of
+// the two instruction fields, or a memory (ID).
+type Piece struct {
+	Kind PieceKind
+	ID   uuid.UUID
+	Text string
+}
+
+// Verdict is what a Vet decided about the Piece at the same index. Checked is
+// whether the text really was looked at: false when moderation is off, the
+// person is exempt, or the check could not be made and was allowed to go on -
+// the text goes in either way, but it is not recorded as checked, so the next
+// snapshot asks again. Blocked texts are left out of the snapshot.
+type Verdict struct {
+	Blocked bool
+	Checked bool
+}
+
+// Vet decides about the pieces of a snapshot that have not been checked. It is
+// asked once for all of them, before the snapshot is written; an error means
+// the snapshot is not taken (content moderation could not be asked and the
+// settings say not to go on without it).
+type Vet func(ctx context.Context, pieces []Piece) ([]Verdict, error)
+
+// candidate is a text on its way into a snapshot.
+type candidate struct {
+	piece Piece
+	// checked and blocked are the hashes recorded for the text.
+	checked, blocked *string
+	out              bool   // left out of the snapshot
+	found            string // what a check made just now found: "ok", "blocked" or ""
+}
+
 // EnsureSnapshot is the conversation's snapshot, taken now if it has none.
 // Taken once: concurrent first requests agree on one, and every later call
 // returns it unchanged.
-func (s *Store) EnsureSnapshot(ctx context.Context, userID, conversationID uuid.UUID) (Snapshot, error) {
+//
+// Taking it is also where what the person wrote is moderated, if it was not
+// when it was saved - before moderation was turned on, or while it was off: of
+// the instructions and memories that go in, those whose hash is not the one
+// recorded as checked are handed to vet, and what it blocks is left out. What
+// was checked or refused is recorded by hash, so a text is asked about once. A
+// nil vet takes the snapshot as it stands, leaving out only what was refused
+// before. Memories the model wrote are vouched for and never need a check.
+func (s *Store) EnsureSnapshot(ctx context.Context, userID, conversationID uuid.UUID, vet Vet) (Snapshot, error) {
 	state, err := s.q.GetConversationMemoryState(ctx, sqlc.GetConversationMemoryStateParams{ID: conversationID, UserID: &userID})
 	if err != nil {
 		return Snapshot{}, err
@@ -176,7 +237,7 @@ func (s *Store) EnsureSnapshot(ctx context.Context, userID, conversationID uuid.
 	if err != nil {
 		return Snapshot{}, err
 	}
-	snap := Snapshot{About: p.InstructionsAbout, Style: p.InstructionsStyle}
+	var memories []sqlc.UserMemory
 	// Instructions go into every conversation, temporary or not; memories only
 	// into one that is neither temporary nor opted out of.
 	if !state.Temporary {
@@ -185,13 +246,69 @@ func (s *Store) EnsureSnapshot(ctx context.Context, userID, conversationID uuid.
 			return Snapshot{}, err
 		}
 		if on {
-			rows, err := s.q.ListMemories(ctx, userID)
-			if err != nil {
+			if memories, err = s.q.ListMemories(ctx, userID); err != nil {
 				return Snapshot{}, err
 			}
-			for i, row := range rows {
-				snap.Memories = append(snap.Memories, SnapshotMemory{Ref: refOf(i + 1), ID: row.ID, Content: row.Content})
+		}
+	}
+
+	// Each text is let in, kept out because it was refused before, or asked about.
+	var ask []*candidate
+	consider := func(piece Piece, checked, blocked *string) *candidate {
+		c := &candidate{piece: piece, checked: checked, blocked: blocked}
+		hash := Hash(piece.Text)
+		switch {
+		case strings.TrimSpace(piece.Text) == "":
+		case checked != nil && *checked == hash:
+		case blocked != nil && *blocked == hash:
+			c.out = true
+		default:
+			ask = append(ask, c)
+		}
+		return c
+	}
+	about := consider(Piece{Kind: PieceAbout, Text: p.InstructionsAbout}, p.InstructionsAboutCheckedHash, p.InstructionsAboutBlockedHash)
+	style := consider(Piece{Kind: PieceStyle, Text: p.InstructionsStyle}, p.InstructionsStyleCheckedHash, p.InstructionsStyleBlockedHash)
+	listed := make([]*candidate, len(memories))
+	for i, row := range memories {
+		listed[i] = consider(Piece{Kind: PieceMemory, ID: row.ID, Text: row.Content}, row.CheckedHash, row.BlockedHash)
+	}
+
+	if vet != nil && len(ask) > 0 {
+		pieces := make([]Piece, len(ask))
+		for i, c := range ask {
+			pieces[i] = c.piece
+		}
+		verdicts, err := vet(ctx, pieces)
+		if err != nil {
+			return Snapshot{}, err
+		}
+		if len(verdicts) != len(ask) {
+			return Snapshot{}, fmt.Errorf("moderation answered %d texts of %d", len(verdicts), len(ask))
+		}
+		for i, c := range ask {
+			c.out = verdicts[i].Blocked
+			switch {
+			case !verdicts[i].Checked:
+			case c.out:
+				c.found = "blocked"
+			default:
+				c.found = "ok"
 			}
+		}
+		s.recordChecks(ctx, userID, about, style, listed)
+	}
+
+	snap := Snapshot{}
+	if !about.out {
+		snap.About = about.piece.Text
+	}
+	if !style.out {
+		snap.Style = style.piece.Text
+	}
+	for _, c := range listed {
+		if !c.out {
+			snap.Memories = append(snap.Memories, SnapshotMemory{Ref: refOf(len(snap.Memories) + 1), ID: c.piece.ID, Content: c.piece.Text})
 		}
 	}
 	raw, err := json.Marshal(snap)
@@ -211,6 +328,47 @@ func (s *Store) EnsureSnapshot(ctx context.Context, userID, conversationID uuid.
 		return Snapshot{}, err
 	}
 	return decodeSnapshot(kept)
+}
+
+// recordChecks writes down what a snapshot-time check found out, whoever's
+// snapshot ends up standing: it is about the words, not about the conversation.
+// Best effort - the text is asked about again next time if this fails - and
+// recorded only for text that is still what was checked, which the statements
+// see to.
+func (s *Store) recordChecks(ctx context.Context, userID uuid.UUID, about, style *candidate, listed []*candidate) {
+	hashOf := func(c *candidate, verdict string) *string {
+		if c.found != verdict {
+			return nil
+		}
+		hash := Hash(c.piece.Text)
+		return &hash
+	}
+	if about.found != "" || style.found != "" {
+		if err := s.q.MarkInstructionsModerated(ctx, sqlc.MarkInstructionsModeratedParams{
+			ID:           userID,
+			AboutChecked: hashOf(about, "ok"), AboutBlocked: hashOf(about, "blocked"),
+			StyleChecked: hashOf(style, "ok"), StyleBlocked: hashOf(style, "blocked"),
+		}); err != nil {
+			slog.WarnContext(ctx, "record the instructions' moderation", "error", err, "user_id", userID)
+		}
+	}
+	var (
+		ids      []uuid.UUID
+		hashes   []string
+		verdicts []string
+	)
+	for _, c := range listed {
+		if c.found != "" {
+			ids, hashes, verdicts = append(ids, c.piece.ID), append(hashes, Hash(c.piece.Text)), append(verdicts, c.found)
+		}
+	}
+	if len(ids) > 0 {
+		if err := s.q.MarkMemoriesModerated(ctx, sqlc.MarkMemoriesModeratedParams{
+			UserID: userID, Ids: ids, Hashes: hashes, Verdicts: verdicts,
+		}); err != nil {
+			slog.WarnContext(ctx, "record the memories' moderation", "error", err, "user_id", userID)
+		}
+	}
 }
 
 func decodeSnapshot(raw []byte) (Snapshot, error) {
@@ -273,6 +431,21 @@ func (s *Store) RefOf(ctx context.Context, userID, conversationID, memoryID uuid
 type By struct {
 	Source         Source
 	ConversationID *uuid.UUID
+	// Checked says the text was checked by content moderation as it was written,
+	// and passed. What the model writes needs no check (it is output, from
+	// conversations that were checked as they were sent); what a person writes
+	// without it is checked when a conversation takes its snapshot.
+	Checked bool
+}
+
+// vouched is the hash recorded with a write: the text's own when it needs no
+// further check, nil otherwise.
+func (b By) vouched(content string) *string {
+	if b.Source == SourceUser && !b.Checked {
+		return nil
+	}
+	hash := Hash(content)
+	return &hash
 }
 
 // Change is the outcome of a write.
@@ -328,6 +501,7 @@ func (s *Store) Add(ctx context.Context, userID uuid.UUID, raw string, by By) (C
 		}
 		out.Memory, err = q.InsertMemory(ctx, sqlc.InsertMemoryParams{
 			UserID: userID, Content: content, Source: by.Source, ConversationID: by.ConversationID,
+			CheckedHash: by.vouched(content),
 		})
 		if err != nil {
 			return err
@@ -395,7 +569,9 @@ func (s *Store) Update(ctx context.Context, userID, id uuid.UUID, raw string, by
 		}
 		before := current.Content
 		out.Before = &before
-		if out.Memory, err = q.UpdateMemoryContent(ctx, sqlc.UpdateMemoryContentParams{ID: id, UserID: userID, Content: content}); err != nil {
+		if out.Memory, err = q.UpdateMemoryContent(ctx, sqlc.UpdateMemoryContentParams{
+			ID: id, UserID: userID, Content: content, CheckedHash: by.vouched(content),
+		}); err != nil {
 			return err
 		}
 		return s.log(ctx, q, userID, by, &out, sqlc.MemoryOpUpdate, &before, &content)

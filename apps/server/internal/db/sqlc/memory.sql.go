@@ -146,7 +146,7 @@ func (q *Queries) GetConversationSnapshotForUpdate(ctx context.Context, arg GetC
 }
 
 const getMemory = `-- name: GetMemory :one
-SELECT id, user_id, content, source, conversation_id, created_at, updated_at
+SELECT id, user_id, content, source, conversation_id, created_at, updated_at, checked_hash, blocked_hash
 FROM user_memories
 WHERE id = $1
   AND user_id = $2
@@ -168,6 +168,8 @@ func (q *Queries) GetMemory(ctx context.Context, arg GetMemoryParams) (UserMemor
 		&i.ConversationID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CheckedHash,
+		&i.BlockedHash,
 	)
 	return i, err
 }
@@ -204,29 +206,47 @@ func (q *Queries) GetMemoryEventForUpdate(ctx context.Context, arg GetMemoryEven
 }
 
 const getPersonalization = `-- name: GetPersonalization :one
-SELECT instructions_about, instructions_style, memory_enabled
+SELECT instructions_about,
+       instructions_style,
+       memory_enabled,
+       instructions_about_checked_hash,
+       instructions_about_blocked_hash,
+       instructions_style_checked_hash,
+       instructions_style_blocked_hash
 FROM users
 WHERE id = $1
 `
 
 type GetPersonalizationRow struct {
-	InstructionsAbout string `json:"instructions_about"`
-	InstructionsStyle string `json:"instructions_style"`
-	MemoryEnabled     bool   `json:"memory_enabled"`
+	InstructionsAbout            string  `json:"instructions_about"`
+	InstructionsStyle            string  `json:"instructions_style"`
+	MemoryEnabled                bool    `json:"memory_enabled"`
+	InstructionsAboutCheckedHash *string `json:"instructions_about_checked_hash"`
+	InstructionsAboutBlockedHash *string `json:"instructions_about_blocked_hash"`
+	InstructionsStyleCheckedHash *string `json:"instructions_style_checked_hash"`
+	InstructionsStyleBlockedHash *string `json:"instructions_style_blocked_hash"`
 }
 
 func (q *Queries) GetPersonalization(ctx context.Context, id uuid.UUID) (GetPersonalizationRow, error) {
 	row := q.db.QueryRow(ctx, getPersonalization, id)
 	var i GetPersonalizationRow
-	err := row.Scan(&i.InstructionsAbout, &i.InstructionsStyle, &i.MemoryEnabled)
+	err := row.Scan(
+		&i.InstructionsAbout,
+		&i.InstructionsStyle,
+		&i.MemoryEnabled,
+		&i.InstructionsAboutCheckedHash,
+		&i.InstructionsAboutBlockedHash,
+		&i.InstructionsStyleCheckedHash,
+		&i.InstructionsStyleBlockedHash,
+	)
 	return i, err
 }
 
 const insertMemory = `-- name: InsertMemory :one
-INSERT INTO user_memories (id, user_id, content, source, conversation_id)
+INSERT INTO user_memories (id, user_id, content, source, conversation_id, checked_hash)
 VALUES (COALESCE($1::uuid, gen_random_uuid()), $2, $3,
-        $4, $5)
-RETURNING id, user_id, content, source, conversation_id, created_at, updated_at
+        $4, $5, $6)
+RETURNING id, user_id, content, source, conversation_id, created_at, updated_at, checked_hash, blocked_hash
 `
 
 type InsertMemoryParams struct {
@@ -235,6 +255,7 @@ type InsertMemoryParams struct {
 	Content        string       `json:"content"`
 	Source         MemorySource `json:"source"`
 	ConversationID *uuid.UUID   `json:"conversation_id"`
+	CheckedHash    *string      `json:"checked_hash"`
 }
 
 func (q *Queries) InsertMemory(ctx context.Context, arg InsertMemoryParams) (UserMemory, error) {
@@ -244,6 +265,7 @@ func (q *Queries) InsertMemory(ctx context.Context, arg InsertMemoryParams) (Use
 		arg.Content,
 		arg.Source,
 		arg.ConversationID,
+		arg.CheckedHash,
 	)
 	var i UserMemory
 	err := row.Scan(
@@ -254,6 +276,8 @@ func (q *Queries) InsertMemory(ctx context.Context, arg InsertMemoryParams) (Use
 		&i.ConversationID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CheckedHash,
+		&i.BlockedHash,
 	)
 	return i, err
 }
@@ -302,7 +326,7 @@ func (q *Queries) InsertMemoryEvent(ctx context.Context, arg InsertMemoryEventPa
 }
 
 const listMemories = `-- name: ListMemories :many
-SELECT id, user_id, content, source, conversation_id, created_at, updated_at
+SELECT id, user_id, content, source, conversation_id, created_at, updated_at, checked_hash, blocked_hash
 FROM user_memories
 WHERE user_id = $1
 ORDER BY created_at, id
@@ -326,6 +350,8 @@ func (q *Queries) ListMemories(ctx context.Context, userID uuid.UUID) ([]UserMem
 			&i.ConversationID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.CheckedHash,
+			&i.BlockedHash,
 		); err != nil {
 			return nil, err
 		}
@@ -392,6 +418,81 @@ func (q *Queries) LockMemoryList(ctx context.Context, userID string) error {
 	return err
 }
 
+const markInstructionsModerated = `-- name: MarkInstructionsModerated :exec
+UPDATE users
+SET instructions_about_checked_hash = COALESCE(
+        CASE WHEN encode(sha256(convert_to(instructions_about, 'UTF8')), 'hex') = $1::text
+                 THEN $1::text END,
+        instructions_about_checked_hash),
+    instructions_about_blocked_hash = COALESCE(
+        CASE WHEN encode(sha256(convert_to(instructions_about, 'UTF8')), 'hex') = $2::text
+                 THEN $2::text END,
+        instructions_about_blocked_hash),
+    instructions_style_checked_hash = COALESCE(
+        CASE WHEN encode(sha256(convert_to(instructions_style, 'UTF8')), 'hex') = $3::text
+                 THEN $3::text END,
+        instructions_style_checked_hash),
+    instructions_style_blocked_hash = COALESCE(
+        CASE WHEN encode(sha256(convert_to(instructions_style, 'UTF8')), 'hex') = $4::text
+                 THEN $4::text END,
+        instructions_style_blocked_hash)
+WHERE id = $5
+`
+
+type MarkInstructionsModeratedParams struct {
+	AboutChecked *string   `json:"about_checked"`
+	AboutBlocked *string   `json:"about_blocked"`
+	StyleChecked *string   `json:"style_checked"`
+	StyleBlocked *string   `json:"style_blocked"`
+	ID           uuid.UUID `json:"id"`
+}
+
+// What a snapshot-time check decided about the instructions, recorded only
+// while the text still hashes to what was checked: an edit made meanwhile is
+// another text, and nobody has looked at it. A NULL argument leaves its column.
+func (q *Queries) MarkInstructionsModerated(ctx context.Context, arg MarkInstructionsModeratedParams) error {
+	_, err := q.db.Exec(ctx, markInstructionsModerated,
+		arg.AboutChecked,
+		arg.AboutBlocked,
+		arg.StyleChecked,
+		arg.StyleBlocked,
+		arg.ID,
+	)
+	return err
+}
+
+const markMemoriesModerated = `-- name: MarkMemoriesModerated :exec
+UPDATE user_memories m
+SET checked_hash = CASE WHEN d.verdict = 'ok' THEN h.hash ELSE m.checked_hash END,
+    blocked_hash = CASE WHEN d.verdict = 'blocked' THEN h.hash ELSE m.blocked_hash END
+FROM unnest($2::uuid[]) WITH ORDINALITY AS i (id, n)
+         JOIN unnest($3::text[]) WITH ORDINALITY AS h (hash, n) USING (n)
+         JOIN unnest($4::text[]) WITH ORDINALITY AS d (verdict, n) USING (n)
+WHERE m.user_id = $1
+  AND m.id = i.id
+  AND encode(sha256(convert_to(m.content, 'UTF8')), 'hex') = h.hash
+`
+
+type MarkMemoriesModeratedParams struct {
+	UserID   uuid.UUID   `json:"user_id"`
+	Ids      []uuid.UUID `json:"ids"`
+	Hashes   []string    `json:"hashes"`
+	Verdicts []string    `json:"verdicts"`
+}
+
+// What a snapshot-time check decided about memories: `ok` or `blocked`, each
+// with the hash of the text that was checked, recorded only where the memory
+// still hashes to it. updated_at is left alone - this is not an edit.
+func (q *Queries) MarkMemoriesModerated(ctx context.Context, arg MarkMemoriesModeratedParams) error {
+	_, err := q.db.Exec(ctx, markMemoriesModerated,
+		arg.UserID,
+		arg.Ids,
+		arg.Hashes,
+		arg.Verdicts,
+	)
+	return err
+}
+
 const markMemoryEventUndone = `-- name: MarkMemoryEventUndone :one
 UPDATE memory_events
 SET undone_at = now()
@@ -449,21 +550,31 @@ func (q *Queries) SetConversationSnapshot(ctx context.Context, arg SetConversati
 
 const updateMemoryContent = `-- name: UpdateMemoryContent :one
 UPDATE user_memories
-SET content    = $1,
-    updated_at = now()
-WHERE id = $2
-  AND user_id = $3
-RETURNING id, user_id, content, source, conversation_id, created_at, updated_at
+SET content      = $1,
+    checked_hash = $2,
+    blocked_hash = NULL,
+    updated_at   = now()
+WHERE id = $3
+  AND user_id = $4
+RETURNING id, user_id, content, source, conversation_id, created_at, updated_at, checked_hash, blocked_hash
 `
 
 type UpdateMemoryContentParams struct {
-	Content string    `json:"content"`
-	ID      uuid.UUID `json:"id"`
-	UserID  uuid.UUID `json:"user_id"`
+	Content     string    `json:"content"`
+	CheckedHash *string   `json:"checked_hash"`
+	ID          uuid.UUID `json:"id"`
+	UserID      uuid.UUID `json:"user_id"`
 }
 
+// The new text is unchecked (NULL hash) unless the caller vouches for it, and
+// nothing is known to have been refused about it.
 func (q *Queries) UpdateMemoryContent(ctx context.Context, arg UpdateMemoryContentParams) (UserMemory, error) {
-	row := q.db.QueryRow(ctx, updateMemoryContent, arg.Content, arg.ID, arg.UserID)
+	row := q.db.QueryRow(ctx, updateMemoryContent,
+		arg.Content,
+		arg.CheckedHash,
+		arg.ID,
+		arg.UserID,
+	)
 	var i UserMemory
 	err := row.Scan(
 		&i.ID,
@@ -473,6 +584,8 @@ func (q *Queries) UpdateMemoryContent(ctx context.Context, arg UpdateMemoryConte
 		&i.ConversationID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CheckedHash,
+		&i.BlockedHash,
 	)
 	return i, err
 }
@@ -482,8 +595,24 @@ UPDATE users
 SET instructions_about = COALESCE($1::text, instructions_about),
     instructions_style = COALESCE($2::text, instructions_style),
     memory_enabled     = COALESCE($3::boolean, memory_enabled),
+    instructions_about_checked_hash = CASE
+        WHEN $1::text IS NULL OR $1::text = instructions_about
+            THEN instructions_about_checked_hash
+        ELSE $4::text END,
+    instructions_about_blocked_hash = CASE
+        WHEN $1::text IS NULL OR $1::text = instructions_about
+            THEN instructions_about_blocked_hash
+        ELSE NULL END,
+    instructions_style_checked_hash = CASE
+        WHEN $2::text IS NULL OR $2::text = instructions_style
+            THEN instructions_style_checked_hash
+        ELSE $5::text END,
+    instructions_style_blocked_hash = CASE
+        WHEN $2::text IS NULL OR $2::text = instructions_style
+            THEN instructions_style_blocked_hash
+        ELSE NULL END,
     updated_at         = now()
-WHERE id = $4
+WHERE id = $6
 RETURNING instructions_about, instructions_style, memory_enabled
 `
 
@@ -491,6 +620,8 @@ type UpdatePersonalizationParams struct {
 	InstructionsAbout *string   `json:"instructions_about"`
 	InstructionsStyle *string   `json:"instructions_style"`
 	MemoryEnabled     *bool     `json:"memory_enabled"`
+	AboutCheckedHash  *string   `json:"about_checked_hash"`
+	StyleCheckedHash  *string   `json:"style_checked_hash"`
 	ID                uuid.UUID `json:"id"`
 }
 
@@ -502,11 +633,17 @@ type UpdatePersonalizationRow struct {
 
 // Its own statement, apart from UpdateOwnProfile, for the same reason that one
 // is apart from AdminUpdateUser: nothing here reaches the role or the password.
+//
+// A field that changes takes the hash of the text that was moderated (NULL when
+// it was not, or could not be, checked) and forgets the hash of what was
+// refused; a field sent unchanged, or not sent, keeps both.
 func (q *Queries) UpdatePersonalization(ctx context.Context, arg UpdatePersonalizationParams) (UpdatePersonalizationRow, error) {
 	row := q.db.QueryRow(ctx, updatePersonalization,
 		arg.InstructionsAbout,
 		arg.InstructionsStyle,
 		arg.MemoryEnabled,
+		arg.AboutCheckedHash,
+		arg.StyleCheckedHash,
 		arg.ID,
 	)
 	var i UpdatePersonalizationRow

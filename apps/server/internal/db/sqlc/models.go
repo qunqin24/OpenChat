@@ -597,22 +597,26 @@ type UsageLog struct {
 }
 
 type User struct {
-	ID                uuid.UUID          `json:"id"`
-	Email             string             `json:"email"`
-	Name              string             `json:"name"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	PasswordHash      string             `json:"password_hash"`
-	Role              UserRole           `json:"role"`
-	DisabledAt        pgtype.Timestamptz `json:"disabled_at"`
-	LastSeenAt        pgtype.Timestamptz `json:"last_seen_at"`
-	InstructionsAbout string             `json:"instructions_about"`
-	InstructionsStyle string             `json:"instructions_style"`
-	MemoryEnabled     bool               `json:"memory_enabled"`
-	MemoryLearn       bool               `json:"memory_learn"`
-	AvatarKey         *string            `json:"avatar_key"`
-	Guest             bool               `json:"guest"`
-	Pending           bool               `json:"pending"`
+	ID                           uuid.UUID          `json:"id"`
+	Email                        string             `json:"email"`
+	Name                         string             `json:"name"`
+	CreatedAt                    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                    pgtype.Timestamptz `json:"updated_at"`
+	PasswordHash                 string             `json:"password_hash"`
+	Role                         UserRole           `json:"role"`
+	DisabledAt                   pgtype.Timestamptz `json:"disabled_at"`
+	LastSeenAt                   pgtype.Timestamptz `json:"last_seen_at"`
+	InstructionsAbout            string             `json:"instructions_about"`
+	InstructionsStyle            string             `json:"instructions_style"`
+	MemoryEnabled                bool               `json:"memory_enabled"`
+	MemoryLearn                  bool               `json:"memory_learn"`
+	AvatarKey                    *string            `json:"avatar_key"`
+	Guest                        bool               `json:"guest"`
+	Pending                      bool               `json:"pending"`
+	InstructionsAboutCheckedHash *string            `json:"instructions_about_checked_hash"`
+	InstructionsAboutBlockedHash *string            `json:"instructions_about_blocked_hash"`
+	InstructionsStyleCheckedHash *string            `json:"instructions_style_checked_hash"`
+	InstructionsStyleBlockedHash *string            `json:"instructions_style_blocked_hash"`
 }
 
 type UserMemory struct {
@@ -623,4 +627,6 @@ type UserMemory struct {
 	ConversationID *uuid.UUID         `json:"conversation_id"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	CheckedHash    *string            `json:"checked_hash"`
+	BlockedHash    *string            `json:"blocked_hash"`
 }

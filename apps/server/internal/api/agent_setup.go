@@ -106,7 +106,10 @@ func personalPrompt(ctx context.Context, notes *memory.Store, offered []agent.To
 	if !ok {
 		return ""
 	}
-	snap, err := notes.EnsureSnapshot(ctx, scope.UserID, scope.ConversationID)
+	// Normally the snapshot exists by now: the request that started the run took
+	// it, and checked what went into it (prepareSnapshot). This only takes one
+	// for a run that did not come through there, unchecked.
+	snap, err := notes.EnsureSnapshot(ctx, scope.UserID, scope.ConversationID, nil)
 	if err != nil {
 		slog.WarnContext(ctx, "take memory snapshot", "error", err, "conversation_id", scope.ConversationID)
 		return ""

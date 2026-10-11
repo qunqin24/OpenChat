@@ -1267,6 +1267,12 @@ export interface paths {
          * Change your custom instructions or memory switch
          * @description Only the fields present are changed. New conversations take the change;
          *     one already running keeps what it began with.
+         *
+         *     With content moderation on, a custom-instructions field that changed is
+         *     checked like a message is: 422 `content_blocked` (the same `details`,
+         *     strikes counted and sanctions applied as for a message), and nothing is
+         *     saved; 503 `moderation_unavailable` when the check cannot be made and the
+         *     setting says to block.
          */
         patch: operations["updatePersonalization"];
         trace?: never;
@@ -1289,6 +1295,9 @@ export interface paths {
         /**
          * Write a memory yourself
          * @description 409 `memory_full` at the cap and `memory_duplicate` for one already there.
+         *     With content moderation on the text is checked like a message is: 422
+         *     `content_blocked` or 503 `moderation_unavailable`, as for the custom
+         *     instructions, and nothing is saved.
          */
         post: operations["createMemory"];
         /**
@@ -1317,7 +1326,10 @@ export interface paths {
         delete: operations["deleteMemory"];
         options?: never;
         head?: never;
-        /** Rewrite a memory */
+        /**
+         * Rewrite a memory
+         * @description The new text is checked by content moderation like a new memory is.
+         */
         patch: operations["updateMemory"];
         trace?: never;
     };
@@ -3341,10 +3353,13 @@ export interface components {
          */
         ModerationCategory: "sexual" | "sexual/minors" | "harassment" | "harassment/threatening" | "hate" | "hate/threatening" | "illicit" | "illicit/violent" | "self-harm" | "self-harm/intent" | "self-harm/instructions" | "violence" | "violence/graphic";
         /**
-         * @description Where the blocked message came from.
+         * @description Where the blocked text came from: a message sent, edited or answered, a
+         *     guest's, the custom instructions or a memory as they were saved, or
+         *     either of them as a conversation took its snapshot (`snapshot`, logged
+         *     but not counted as a strike).
          * @enum {string}
          */
-        ModerationSource: "send" | "edit" | "answer" | "guest";
+        ModerationSource: "send" | "edit" | "answer" | "guest" | "instructions" | "memory" | "snapshot";
         /**
          * @description What a blocked message set off, when it reached the strike threshold.
          * @enum {string}
