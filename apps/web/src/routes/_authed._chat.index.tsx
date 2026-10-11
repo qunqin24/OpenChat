@@ -1,12 +1,4 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import NextChat from '@/components/next/NextChat'
-
-export const Route = createFileRoute('/_authed/')({
-  component: HomeRoute,
-})
-
-/** Empty state: the composer is live here, and sending creates the conversation. */
-function HomeRoute() {
-  return <NextChat />
-}
+/** The new-chat screen: an address only, drawn by the chat layout (`_authed._chat.tsx`). */
+export const Route = createFileRoute('/_authed/_chat/')({})

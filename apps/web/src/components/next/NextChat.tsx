@@ -15,7 +15,7 @@ import {
 import { useCompact, useCompaction, useUndoCompaction } from '@/hooks/use-compaction'
 import { useConversationEvents } from '@/hooks/use-conversation-events'
 import { useConversation, useCreateConversation, useDeleteConversation } from '@/hooks/use-conversations'
-import { releasePreviews, useAttachments } from '@/hooks/use-attachments'
+import { useAttachments } from '@/hooks/use-attachments'
 import { useFileDrop } from '@/hooks/use-file-drop'
 import { useMessages } from '@/hooks/use-messages'
 import {
@@ -61,19 +61,27 @@ const TURN_STEP = 20
 const TOP_REACH = 800
 
 interface NextChatProps {
+  /** The conversation shown; none on the new-chat screen. */
   conversationId?: string
+  /**
+   * The first message of a new chat made a conversation, which this page shows
+   * from now on (ChatPage). The address follows when the server has answered.
+   */
+  onCreated: (conversationId: string) => void
+  /**
+   * The conversation made for the first message was removed, the server having
+   * refused the message before writing anything: this is the new-chat screen again.
+   */
+  onRemoved: (conversationId: string) => void
 }
 
-export function NextChat({ conversationId }: NextChatProps) {
+export function NextChat({ conversationId, onCreated, onRemoved }: NextChatProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const paths = useChatPaths()
 
-  // A new chat starts with the text of a refused first message, if one came back.
-  // A first message that was refused before anything was written comes back to the empty screen: its text, and its files.
-  const [returned] = useState(() => (conversationId ? null : useChatStore.getState().returnedDraft))
-  const [input, setInput] = useState(() => returned?.content ?? '')
+  const [input, setInput] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
   const columnRef = useRef<HTMLDivElement>(null)
   const parked = useRef(true)
@@ -98,16 +106,12 @@ export function NextChat({ conversationId }: NextChatProps) {
   useConversationEvents(conversationId)
 
   const live = useChatStore((s) => (conversationId ? s.live[conversationId] : undefined))
-  const setPendingPrompt = useChatStore((s) => s.setPendingPrompt)
   const outgoing = useChatStore((s) => s.outbox[conversationId ?? ''])
   const post = useChatStore((s) => s.post)
   const unpost = useChatStore((s) => s.unpost)
-  const takePendingPrompt = useChatStore((s) => s.takePendingPrompt)
-  const returnDraft = useChatStore((s) => s.returnDraft)
   // What the responses that refused sends in this page said (the strike warning),
   // by the refused message.
   const refusals = useChatStore((s) => s.refusals)
-  const takeReturnedDraft = useChatStore((s) => s.takeReturnedDraft)
   const deleteConversation = useDeleteConversation()
   const temporaryChat = useChatStore((s) => s.temporaryChat)
   const setTemporaryChat = useChatStore((s) => s.setTemporaryChat)
@@ -147,12 +151,6 @@ export function NextChat({ conversationId }: NextChatProps) {
   const accepts = useMemo(() => acceptsOf(modelById.get(modelId)), [modelById, modelId])
   const anyModelTakesFiles = available.some((m) => acceptsOf(m).image || acceptsOf(m).pdf)
   const attachments = useAttachments(accepts)
-  // The returned files go back into the composer once it is mounted (their
-  // thumbnails are made here, and the effect is safe to run twice).
-  const { adopt: adoptAttachments } = attachments
-  useEffect(() => {
-    if (returned) adoptAttachments(returned.attachments)
-  }, [returned, adoptAttachments])
   const uploadHint = accepts.image
     ? accepts.pdf
       ? t('next.file.upload-both')
@@ -472,6 +470,17 @@ export function NextChat({ conversationId }: NextChatProps) {
     fillRevision()
   }, [reviseId])
 
+  // Whether this page is still on screen. A send that was under way when the
+  // reader opened another conversation finishes in the background, and must not
+  // touch the page that has replaced this one.
+  const alive = useRef(true)
+  useEffect(() => {
+    alive.current = true
+    return () => {
+      alive.current = false
+    }
+  }, [])
+
   const handleSend = useCallback(async () => {
     const content = input.trim()
     if (!content || attachments.uploading || attachments.failed) return
@@ -562,62 +571,92 @@ export function NextChat({ conversationId }: NextChatProps) {
       return
     }
 
-    // No conversation yet: create one with the chosen model, hand the prompt
-    // and its uploads to the next route, and let it send once it owns the id.
-    setPendingPrompt({ content, attachmentIds })
+    // No conversation yet: make one with the chosen model. This page takes it as
+    // its own at once - the message stays where it is, and the answer grows under
+    // it - and sends the message to it; the address follows when the server has
+    // answered (below). Nothing is handed to another page, because there is none.
     post('', item)
-    // The uploads the composer gave up for the new page, until it has them.
-    let handedOff: ReturnType<typeof attachments.handOff> = []
+    let created
     try {
-      const created = await createConversation.mutateAsync({
+      created = await createConversation.mutateAsync({
         ...(modelId ? { model: modelId } : {}),
         ...(canThink && effort !== 'auto' ? { reasoningEffort: effort } : {}),
         ...(canSearch && !webSearch ? { webSearch: false } : {}),
         ...(temporaryChat ? { temporary: true } : {}),
       })
-      // Once made, the conversation itself says it is temporary; the switch
-      // starts the next new chat off again.
-      setTemporaryChat(false)
-      // The files go with the prompt, thumbnails and all (the bubble shows them
-      // until the server has the message): the new page owns them now, and gives
-      // them back to its composer if the send is refused.
-      handedOff = attachments.handOff()
-      setPendingPrompt({ content, attachmentIds, attachments: handedOff })
-      // The message moves with it to the conversation's own page.
-      post(created.id, item)
-      await navigate({ to: paths.chat, params: { conversationId: created.id } })
-      // Only now, with the conversation's page in place: let go of it earlier
-      // and this page, still on screen while the route loads, has no message
-      // and draws the welcome again for a frame - a flash on every first send.
-      unpost('')
     } catch {
-      // Nothing was sent: the text comes back, and the files are back where they were.
+      // Nothing was made or sent: the text comes back, and the files never left.
       unpost('')
-      setPendingPrompt(null)
-      attachments.adopt(handedOff)
       setInput((current) => current || content)
       toast.error(t('chat.send-error.generic'))
       return
     }
+    const madeId = created.id
+    // Once made, the conversation itself says it is temporary; the switch
+    // starts the next new chat off again.
+    setTemporaryChat(false)
+    // The message under the conversation's own key, which the page reads from
+    // the moment it shows the conversation. (The empty key is let go of then,
+    // not before: a frame without a message would draw the welcome again.)
+    post(madeId, item)
+    if (alive.current) onCreated(madeId)
+    else unpost('')
+
+    try {
+      await sendMessage.mutateAsync({
+        conversationId: madeId,
+        content,
+        model: modelId || undefined,
+        reasoningEffort: canThink ? effort : undefined,
+        webSearch: canSearch ? webSearch : undefined,
+        attachmentIds,
+      })
+    } catch (error) {
+      // What went wrong has been said (the mutation's own error handler).
+      // Refused before anything was written (a limit, no model): the conversation
+      // was made for this message alone and is empty, so it goes rather than
+      // leave a blank chat in the list, and this is the new-chat screen again,
+      // with the text and the files as they were. Any other failure keeps the
+      // conversation, which may hold the message after all - as it does for a
+      // message content moderation refused, which is kept in the conversation
+      // (shown there by `useSendMessage`): the address follows, and the text and
+      // the files are in its composer, which is that message's editor.
+      const wroteNothing = startWroteNothing(error)
+      if (wroteNothing) deleteConversation.mutate(madeId)
+      if (!alive.current) return
+      // Uploads the server says it cannot use would only be refused again.
+      const usable = returnableFiles(error, attachments.items)
+      for (const file of attachments.items) if (!usable.includes(file)) attachments.remove(file.key)
+      setInput((current) => current || content)
+      if (wroteNothing) onRemoved(madeId)
+      else await navigate({ to: paths.chat, params: { conversationId: madeId }, replace: true })
+      return
+    }
+    if (!alive.current) return
+    attachments.clear()
+    // `replace`: the new-chat screen was a draft, not a place to come back to.
+    await navigate({ to: paths.chat, params: { conversationId: madeId }, replace: true })
   }, [
     attachments,
     canSearch,
     canThink,
     conversationId,
     createConversation,
+    deleteConversation,
     editMessage,
     effort,
     input,
     modelById,
     modelId,
     navigate,
+    onCreated,
+    onRemoved,
     queryClient,
     paths.chat,
     post,
     revising,
     sendMessage,
     working,
-    setPendingPrompt,
     setTemporaryChat,
     t,
     temporaryChat,
@@ -630,59 +669,11 @@ export function NextChat({ conversationId }: NextChatProps) {
     if (runId) cancelRun.mutate(runId)
   }, [cancelRun, live])
 
-  // Opened by sending the first message of a new chat: the message was on
-  // screen a moment ago on the new-chat page, so the transcript does not fade
-  // in (it would blink). OpenWebUI keeps one page and only rewrites the URL;
-  // here the route changes, and this keeps it looking like one page.
-  const [arrivedSending] = useState(() => Boolean(conversationId && useChatStore.getState().outbox[conversationId]))
-
-  // The returned draft is in the composer now (the initial input); let it go.
+  // The message of a first send was shown under the empty key until the page
+  // took the conversation as its own; now it is under the conversation's.
   useEffect(() => {
-    if (!conversationId) takeReturnedDraft()
-  }, [conversationId, takeReturnedDraft])
-
-  // Consume a prompt carried over from the empty state.
-  useEffect(() => {
-    if (!conversationId) return
-    const pending = takePendingPrompt()
-    if (pending) {
-      const files = pending.attachments ?? []
-      sendMessage.mutate(
-        { content: pending.content, attachmentIds: pending.attachmentIds },
-        {
-          // The message has its files now, and the bubble that showed the local
-          // thumbnails is gone: let them go.
-          onSuccess: () => releasePreviews(files),
-          onError: (error) => {
-            unpost(conversationId)
-            // The files are the person's whatever happened: uploaded, unclaimed
-            // and good for a day, so they go back to a composer with the text
-            // instead of being lost (all but those the server says it cannot use).
-            const back = returnableFiles(error, files)
-            releasePreviews(files.filter((file) => !back.includes(file)))
-            // The conversation was made for this message alone. Refused before
-            // anything was written (a limit, no model), it is empty: remove it
-            // rather than leave a blank chat in the list, and take the text and
-            // the files back to the new-chat screen. Any other failure keeps the
-            // conversation, which may hold the message after all - as it does for
-            // a message content moderation refused: that is kept in the
-            // conversation (and shown there by `useSendMessage`), so the chat
-            // stays, with the text and the files back in its composer.
-            if (startWroteNothing(error)) {
-              returnDraft({ content: pending.content, attachments: back })
-              deleteConversation.mutate(conversationId)
-              void navigate({ to: paths.home, replace: true })
-              return
-            }
-            setInput((current) => current || pending.content)
-            attachments.adopt(back)
-          },
-        },
-      )
-    }
-    // sendMessage is a fresh object each render; the prompt is taken once.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversationId, takePendingPrompt])
+    if (conversationId) unpost('')
+  }, [conversationId, unpost])
 
   // A temporary chat, made or about to be: the chat is drawn in its dark frame.
   const temporaryMode = conversationId ? Boolean(conversation.data?.temporary) : temporaryChat
@@ -751,7 +742,7 @@ export function NextChat({ conversationId }: NextChatProps) {
           <Welcome onPick={setInput} modelName={modelName} model={modelById.get(modelId)} />
         ) : (
           <ImageSource.Provider value={images}>
-            <div className={arrivedSending ? 'n-column n-chat-fade is-carried' : 'n-column n-chat-fade'} ref={columnRef}>
+            <div className="n-column n-chat-fade" ref={columnRef}>
               {(start > floor || hasOlder) && (
                 // Room for the spinner is always kept while there is more above,
                 // so it appearing does not move the transcript.

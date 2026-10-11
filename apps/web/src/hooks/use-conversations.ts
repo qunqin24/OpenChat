@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { api, unwrap } from '@/lib/api'
 import { announceDeleted } from '@/lib/conversation-sync'
 import { queryKeys } from '@/lib/query-keys'
+import { emptyTranscript, type TranscriptPages } from '@/lib/transcript-pages'
 
 /** The conversation list, newest first, a page at a time. Shared with the route loader. */
 export const conversationsQueryOptions = infiniteQueryOptions({
@@ -107,6 +108,9 @@ export function useCreateConversation() {
       unwrap(await api.POST('/conversations', { body })),
     onSuccess: (conversation: Conversation) => {
       queryClient.setQueryData(queryKeys.conversations.detail(conversation.id), conversation)
+      // Known to be empty: the page that made it shows it at once, with the
+      // message it was made for, and has nothing to wait for.
+      queryClient.setQueryData<TranscriptPages>(queryKeys.messages.list(conversation.id), emptyTranscript())
       refreshLists(queryClient)
     },
   })
