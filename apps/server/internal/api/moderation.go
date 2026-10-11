@@ -559,6 +559,17 @@ func (s *Server) recordBlocked(ctx context.Context, cfg moderationConfig, who mo
 			}
 			sanction = string(ModerationSanctionBanned)
 		} else {
+			// The lock every change of an administrator's access takes (UpdateUser,
+			// BulkUpdateUsers), held to the end of this transaction, and only then
+			// the role is read: an account promoted at the same moment is either
+			// seen as the administrator it now is, or disabled before the promotion
+			// and promoted afterwards by an administrator who chose to - never
+			// read as a member and disabled after its promotion committed. The
+			// order is the subject's lock, then this one, and nothing holding this
+			// one waits for a subject's, so the two cannot deadlock.
+			if err := q.LockAdminMembership(ctx); err != nil {
+				return err
+			}
 			// An administrator is only logged: disabling one could lock the panel.
 			target, err := q.GetUser(ctx, who.userID)
 			if err != nil {
