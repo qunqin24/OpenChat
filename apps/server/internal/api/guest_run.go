@@ -174,7 +174,7 @@ func (s *Server) GuestRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.moderateGuest(ctx, ip, plan); err != nil {
-		httpx.Fail(w, r, err)
+		httpx.Fail(w, r, refusedAt(err, plan, time.Now()))
 		return
 	}
 	if err := s.moderateWords(ctx, ip, plan.pending); err != nil {
@@ -261,6 +261,32 @@ func (s *Server) moderateGuest(ctx context.Context, ip string, plan *guestPlan) 
 		return s.moderate(ctx, who, moderationInput{text: typedAnswers(answers)})
 	}
 	return nil
+}
+
+// refusedAt puts the time on a refusal of the new message (content_blocked),
+// for the page to keep the message by: it keeps it as a row of the conversation
+// (status blocked), and the rows are ordered by the server's clock, not its own
+// (a page with its clock five minutes ahead would otherwise put the refused row
+// after the questions asked later). The time is now, and never before the
+// newest row the request carried (its times are the server's, kept by the page,
+// though a server of another clock may have written them): `details.at`, RFC
+// 3339 in UTC.
+func refusedAt(err error, plan *guestPlan, now time.Time) error {
+	var refusal *httpx.APIError
+	if !errors.As(err, &refusal) || refusal.Code != "content_blocked" {
+		return err
+	}
+	at := now
+	if n := len(plan.rows); n > 0 {
+		if newest := plan.rows[n-1].at.Add(time.Millisecond); newest.After(at) {
+			at = newest
+		}
+	}
+	if refusal.Details == nil {
+		refusal.Details = map[string]any{}
+	}
+	refusal.Details["at"] = at.UTC().Format(time.RFC3339Nano)
+	return refusal
 }
 
 // CancelGuestRun stops a guest's run on request. The run's id is the capability:

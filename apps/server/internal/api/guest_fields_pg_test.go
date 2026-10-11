@@ -248,6 +248,56 @@ func TestGuestFileNamesAreChecked(t *testing.T) {
 	}
 }
 
+// The page keeps a refused message as a row of the conversation, and the rows
+// are in the server's clock: the refusal says what time it is there.
+func TestGuestRefusalSaysTheServersTime(t *testing.T) {
+	h, _ := newGuestModeration(t, noStrikes)
+	const ip = "198.51.100.74"
+	// The page's clock is an hour ahead of the server's: its rows say so.
+	ahead := time.Now().Add(time.Hour)
+	before := time.Now()
+	got := h.runAs(ip, map[string]any{
+		"action": "send", "conversationId": uuid.New(), "model": h.model,
+		"messages": []any{userRow(uuid.New(), "hello", ahead.Add(-time.Minute)), assistantRowSigned(t, h, ip, ahead)},
+		"input":    map[string]any{"id": uuid.New(), "role": "user", "content": "BLOCKME", "createdAt": ahead.Format(time.RFC3339Nano), "parts": []any{}},
+	})
+	if got.status != http.StatusUnprocessableEntity || got.error["code"] != "content_blocked" {
+		t.Fatalf("%d %v", got.status, got.error)
+	}
+	details, _ := got.error["details"].(map[string]any)
+	at, err := time.Parse(time.RFC3339Nano, str(details["at"]))
+	if err != nil {
+		t.Fatalf("details.at: %v (%v)", err, details)
+	}
+	if at.Before(before) || at.After(time.Now().Add(time.Second)) {
+		t.Errorf("details.at %v is not the server's now (%v to %v)", at, before, time.Now())
+	}
+	if details["history"] != nil {
+		t.Errorf("a refused new message says it is about the history: %v", details)
+	}
+
+	// A refusal of the conversation's history is not the message's: no time to keep it by.
+	got = h.runAs(ip, map[string]any{
+		"action": "send", "conversationId": uuid.New(), "model": h.model,
+		"messages": []any{userRow(uuid.New(), "BLOCKME", time.Now().Add(-time.Minute))},
+		"input":    map[string]any{"id": uuid.New(), "role": "user", "content": "fine", "createdAt": time.Now().Format(time.RFC3339Nano), "parts": []any{}},
+	})
+	details, _ = got.error["details"].(map[string]any)
+	if got.status != http.StatusUnprocessableEntity || details["history"] != true || details["at"] != nil {
+		t.Errorf("a refused history: %d %v", got.status, got.error)
+	}
+}
+
+// assistantRowSigned is a row the server wrote, stamped as the page's fast clock
+// would have it.
+func assistantRowSigned(t *testing.T, h *guestHarness, ip string, at time.Time) map[string]any {
+	t.Helper()
+	turn := firstTurn(t, h, ip, "tell me about tea", nil)
+	row := clone(turn.assistant)
+	row["createdAt"] = at.Format(time.RFC3339Nano)
+	return row
+}
+
 // Compression and titles read the same rows, so the same names.
 func TestGuestFileNamesInCompression(t *testing.T) {
 	h, _ := newGuestModeration(t, noStrikes)

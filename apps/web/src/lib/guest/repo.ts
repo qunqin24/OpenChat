@@ -34,7 +34,7 @@ import {
 import { adoptMemoryReceipts, withEndReceipts, withInstructionReceipts } from './receipts'
 import type { GuestStorage } from './storage'
 import { survivingSummary } from './summary'
-import { byRow, contextOf, deletedBy, encodeCursor, pageOf, rowKey, timeKey, transcriptOf } from './transcript'
+import { byRow, contextOf, deletedBy, encodeCursor, pageOf, rowKey, stampAfter, timeKey, transcriptOf } from './transcript'
 import type { ConversationData, StoredBlob, StoredConversation, StoredMessage, StoredPersonalization, StoredRun } from './types'
 
 /** What a new conversation is called until it is titled; the server's default too. */
@@ -473,16 +473,17 @@ export class GuestRepo {
    * composer's.
    *
    * Written nowhere a run is writing, like the server's, and returns null then.
-   * The rows are the server's, stamped by its clock and not the page's, but this
-   * one is not the server's: it goes after the newest row there is, as the failed
-   * reply of an interrupted run does (`runInterrupted`), so that it sorts last.
+   * The rows are the server's, stamped by its clock and not the page's, and so is
+   * this one: `serverTime` is the time the refusal told (`details.at`), kept if it
+   * is after the newest row there is. Without it (or when it is not) the row goes
+   * just after the newest row - never at the page's own time, which with a clock
+   * a few minutes ahead would sort it after the questions asked next.
    */
-  async keepBlocked(conversationId: string, content: string): Promise<Message | null> {
+  async keepBlocked(conversationId: string, content: string, serverTime?: string): Promise<Message | null> {
     return this.serial(conversationId, async () => {
       const data = await this.load(conversationId)
       if (this.activeRun(data)) return null
-      const newest = transcriptOf(data).at(-1)
-      const at = new Date(Math.max(this.now().getTime(), newest ? Date.parse(newest.createdAt) + 1 : 0)).toISOString()
+      const at = stampAfter(transcriptOf(data).at(-1)?.createdAt, serverTime)
       const row: StoredMessage = {
         id: this.newId(),
         conversationId,
@@ -579,11 +580,12 @@ export class GuestRepo {
     return this.serial(conversationId, async () => {
       const held = (await this.storage.runs(conversationId)).find((r) => r.id === runId)
       if (!held || held.status !== 'running') return null
-      // After the newest row there is: the rows are the server's, stamped by its
-      // clock, and the page's would otherwise sort the failed reply before the
-      // question it is the reply to.
+      // Just after the newest row there is, and not at the page's own time: the
+      // rows are the server's, stamped by its clock, and the page's - a few
+      // minutes ahead, say - would sort the failed reply after the questions
+      // asked next, behind the answers to them.
       const newest = (await this.storage.messages(conversationId)).sort(byRow).at(-1)
-      const at = new Date(Math.max(this.now().getTime(), newest ? Date.parse(newest.createdAt) + 1 : 0)).toISOString()
+      const at = stampAfter(newest?.createdAt)
       const run: StoredRun = { ...held, status: 'failed', errorCode: code, finishedAt: at, version: held.version + 1 }
       const message: Message = {
         id: this.newId(),

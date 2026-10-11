@@ -159,7 +159,9 @@ export class GuestRunner {
       // instructions the browser sent along with it (`details.history`): the new
       // message was not what failed.
       if (what.action === 'send' && refusal.code === CONTENT_BLOCKED && refusal.details?.history !== true) {
-        const kept = await repo.keepBlocked(conversationId, what.content).catch((storageError: unknown) => {
+        // In the server's clock, which the refusal tells: the page's own is not the rows'.
+        const at = typeof refusal.details?.at === 'string' ? refusal.details.at : undefined
+        const kept = await repo.keepBlocked(conversationId, what.content, at).catch((storageError: unknown) => {
           console.warn('guest data: keeping a refused message failed', storageError)
           return null
         })

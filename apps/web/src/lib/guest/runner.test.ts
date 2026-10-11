@@ -62,8 +62,8 @@ function answered(conversationId: string, request: GuestRunRequest, opts: { end?
   return frames
 }
 
-function setup(respond: (request: GuestRunRequest, url: string) => Response | Promise<Response>) {
-  const h = harness()
+function setup(respond: (request: GuestRunRequest, url: string) => Response | Promise<Response>, skew = 0) {
+  const h = harness(skew)
   const hub = new GuestHub()
   const requests: GuestRunRequest[] = []
   const signals: AbortSignal[] = []
@@ -246,6 +246,43 @@ describe('a send', () => {
       expect(JSON.stringify(t.requests.at(-1))).not.toContain('BAD')
       // It is still in the transcript, before the question that followed it.
       expect((await t.h.repo.listMessages(c, {})).items.map((m) => m.content)).toEqual(['one', 'Hello', 'BAD', 'two', 'Hello'])
+    })
+
+    // The page's clock against the script's server, whose rows are at 2026-10-11T00:00:xx.
+    it.each([
+      ['five minutes ahead', Date.parse('2026-10-11T00:05:00Z') - Date.parse('2026-10-10T10:00:00Z')],
+      ['five minutes behind', Date.parse('2026-10-10T23:55:00Z') - Date.parse('2026-10-10T10:00:00Z')],
+    ])('keeps its place among the server\'s rows when the page\'s clock is %s', async (_name, skew) => {
+      for (const told of [true, false]) {
+        let refuse = false
+        const t = setup(
+          (request) =>
+            refuse
+              ? Response.json({ code: 'content_blocked', message: 'no', details: { categories: ['violence/graphic'], ...(told ? { at: iso(8) } : {}) } }, { status: 422 })
+              : sse(answered(request.conversationId, request, { runId: `run-${t.requests.length}` })),
+          skew,
+        )
+        const c = await t.h.conversation()
+        await t.runner.start(c, { action: 'send', content: 'A', attachmentIds: [], id: 'in-1' }, {})
+        await t.runner.settled(c)
+        refuse = true
+        await t.runner.start(c, { action: 'send', content: 'BAD', attachmentIds: [], id: 'in-2' }, {}).catch(() => undefined)
+        refuse = false
+        await t.runner.start(c, { action: 'send', content: 'B', attachmentIds: [], id: 'in-3' }, {})
+        await t.runner.settled(c)
+        const texts = async () => (await t.h.repo.listMessages(c, {})).items.map((m) => m.content)
+        // A, its answer, the refused message, B and its answer: the order they were said in.
+        expect(await texts()).toEqual(['A', 'Hello', 'BAD', 'B', 'Hello'])
+
+        // Editing the refused message replaces it and everything after it, and the
+        // request that asks for the new wording carries none of that as context.
+        const blocked = (await t.h.repo.data(c)).messages.find((m) => m.status === 'blocked')!
+        await t.runner.start(c, { action: 'edit', content: 'OK', messageId: blocked.id, id: 'in-4' }, {})
+        await t.runner.settled(c)
+        expect(t.requests.at(-1)!.messages.map((m) => m.content)).toEqual(['A', 'Hello'])
+        expect(JSON.stringify(t.requests.at(-1))).not.toContain('"B"')
+        expect(await texts()).toEqual(['A', 'Hello', 'OK', 'Hello'])
+      }
     })
 
     it('is kept for a conversation that has nothing else, and a refused edit keeps nothing', async () => {

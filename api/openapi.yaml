@@ -1863,7 +1863,11 @@ paths:
         `content_blocked` with the matched categories in `details.categories`
         (and `details.strikesLeft` / `details.windowHours` before a ban; the
         server keeps nothing of a guest, so there is no `details.messageId` -
-        the browser keeps the refused message itself), or 503
+        the browser keeps the refused message itself, in the server's clock:
+        `details.at` is the time to keep it at, the server's now and never before
+        the newest row the request carried, RFC 3339; absent when the refusal is
+        about the conversation's history, `details.history` true, which is not
+        the message), or 503
         `moderation_unavailable` when the check could not be made (a guest's
         message is never sent unchecked), or 413 `message_too_large_for_moderation`
         when the message, or what the request carries that nothing vouched for,

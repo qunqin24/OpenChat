@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { GuestError } from './errors'
 import { harness, type Harness } from './testing'
-import { contextOf, deletedBy, isBlocked, lastQuestionIndex, pageOf, timeKey } from './transcript'
+import { contextOf, deletedBy, isBlocked, lastQuestionIndex, pageOf, stampAfter, timeKey } from './transcript'
 import type { StoredMessage } from './types'
 
 // The rules of a conversation (AGENTS.md, "对话是一条线"), as the guest's
@@ -143,6 +143,28 @@ describe('deletedBy', () => {
 
   it('takes nothing for a message that is not there', () => {
     expect(deletedBy(rows, { from: 'nope' })).toEqual([])
+  })
+})
+
+describe('stampAfter', () => {
+  const newest = '2026-10-10T10:00:05.123456Z'
+
+  it('keeps the time the server told when it is after the newest row', () => {
+    expect(stampAfter(newest, '2026-10-10T10:00:06.5Z')).toBe('2026-10-10T10:00:06.5Z')
+    // Microseconds count: the server's rows are finer than a Date.
+    expect(stampAfter(newest, '2026-10-10T10:00:05.123457Z')).toBe('2026-10-10T10:00:05.123457Z')
+  })
+
+  it('goes just after the newest row without it, or when it is not after the newest row', () => {
+    expect(stampAfter(newest)).toBe('2026-10-10T10:00:05.124Z')
+    expect(stampAfter(newest, '2026-10-10T09:00:00Z')).toBe('2026-10-10T10:00:05.124Z')
+    expect(stampAfter(newest, newest)).toBe('2026-10-10T10:00:05.124Z')
+    expect(stampAfter(newest, 'not a time')).toBe('2026-10-10T10:00:05.124Z')
+  })
+
+  it('has no clock of its own: with no rows it is the server\'s time, or before everything', () => {
+    expect(stampAfter(undefined, '2026-10-10T10:00:06Z')).toBe('2026-10-10T10:00:06Z')
+    expect(stampAfter(undefined)).toBe('1970-01-01T00:00:00.000Z')
   })
 })
 

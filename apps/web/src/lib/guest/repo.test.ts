@@ -438,3 +438,72 @@ describe('a refused message', () => {
     expect(await h.repo.setSummary(c, written)).toBeUndefined()
   })
 })
+
+// The rows are the server's, in its clock. A row the page writes itself must be
+// put among them by theirs, not by the page's - which can be minutes off.
+describe.each([
+  ['five minutes ahead', 5 * 60_000],
+  ['five minutes behind', -5 * 60_000],
+])('the page\'s clock %s of the server\'s', (_name, skew) => {
+  const order = async (h: ReturnType<typeof harness>, c: string) => (await h.repo.listMessages(c, {})).items.map((m) => m.content)
+
+  it.each([
+    ['with the time the server gave', true],
+    ['without it', false],
+  ])('keeps a refused message where it was said, %s', async (_how, told) => {
+    const h = harness(skew)
+    const c = await h.conversation()
+    await h.turn(c, { ask: 'A', answer: 'a' })
+    const at = h.tick() // the server's time of the refusal, after A and its answer
+    await h.repo.keepBlocked(c, 'BAD', told ? at : undefined)
+    await h.turn(c, { ask: 'B', answer: 'b' })
+    expect(await order(h, c)).toEqual(['A', 'a', 'BAD', 'B', 'b'])
+  })
+
+  it('is edited away with what came after it, and what came after is not sent as context', async () => {
+    const h = harness(skew)
+    const c = await h.conversation()
+    await h.turn(c, { ask: 'A', answer: 'a' })
+    const refused = await h.repo.keepBlocked(c, 'BAD', h.tick())
+    await h.turn(c, { ask: 'B', answer: 'b' })
+    // The edit replaces the refused message and every row after it.
+    await h.turn(c, { ask: 'ok', answer: 'fine', replaces: refused!.id })
+    expect(await order(h, c)).toEqual(['A', 'a', 'ok', 'fine'])
+  })
+
+  it('puts the failed reply of an interrupted run before the question asked next', async () => {
+    const h = harness(skew)
+    const c = await h.conversation()
+    const first = await h.turn(c, { ask: 'A', status: 'running' })
+    const lost = await h.repo.runInterrupted(c, first.run.id, 'connection_lost')
+    expect(lost).not.toBeNull()
+    await h.turn(c, { ask: 'B', answer: 'b' })
+    expect((await h.repo.listMessages(c, {})).items.map((m) => `${m.role}:${m.content}`)).toEqual(['user:A', 'assistant:', 'user:B', 'assistant:b'])
+    // Its run ended when the reply did, not at the page's time.
+    expect(Date.parse(lost!.run.finishedAt!)).toBe(Date.parse(lost!.message.createdAt))
+  })
+})
+
+describe('a refused message in a conversation with nothing else', () => {
+  it('goes before whatever the server writes next, however far ahead the page\'s clock is', async () => {
+    const h = harness(5 * 60_000)
+    const c = await h.conversation()
+    await h.repo.keepBlocked(c, 'BAD')
+    await h.turn(c, { ask: 'B', answer: 'b' })
+    expect((await h.repo.listMessages(c, {})).items.map((m) => m.content)).toEqual(['BAD', 'B', 'b'])
+  })
+
+  it('keeps the server\'s time unless it is not after the newest row', async () => {
+    const h = harness(5 * 60_000)
+    const c = await h.conversation()
+    const turn = await h.turn(c, { ask: 'A', answer: 'a' })
+    const newest = turn.rows.at(-1)!.createdAt
+    // A time the rows are already past (another server's clock): just after the newest row.
+    const early = new Date(Date.parse(newest) - 60_000).toISOString()
+    const kept = await h.repo.keepBlocked(c, 'BAD', early)
+    expect(Date.parse(kept!.createdAt)).toBe(Date.parse(newest) + 1)
+    const told = h.tick()
+    const later = await h.repo.keepBlocked(c, 'BAD 2', told)
+    expect(later!.createdAt).toBe(told)
+  })
+})

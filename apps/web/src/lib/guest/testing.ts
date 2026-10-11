@@ -40,11 +40,16 @@ export interface Turn {
 let counter = 0
 const uuid = () => `00000000-0000-4000-8000-${String(++counter).padStart(12, '0')}`
 
-export function harness(): Harness {
+/**
+ * `skew` is how far the page's clock is ahead of the server's (negative: behind):
+ * the rows `tick` stamps are the server's, and the repository's own `now` is the
+ * page's.
+ */
+export function harness(skew = 0): Harness {
   const clock = { now: Date.parse('2026-10-10T10:00:00.000Z') }
   const tick = (ms = 1000) => new Date((clock.now += ms)).toISOString()
   const repo = new GuestRepo(memoryStorage(), {
-    now: () => new Date(clock.now),
+    now: () => new Date(clock.now + skew),
     newId: uuid,
     urlFor: (_blob, id) => `blob:${id}`,
   })

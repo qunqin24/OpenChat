@@ -22,6 +22,22 @@ export function timeKey(iso: string): string {
   return `${new Date(ms).toISOString().slice(0, 19)}.${fraction.padEnd(9, '0').slice(0, 9)}`
 }
 
+/**
+ * The time of a row the page writes itself (a refused message, the failed reply
+ * of a run whose stream broke). Every other row has the server's time, and the
+ * page's clock is not the server's - five minutes fast, a row stamped with it
+ * sorts after the questions asked later - so a row of the page's own is put
+ * where it belongs by the rows themselves: `server` if the server told the time
+ * (and it is after the newest row there is), otherwise just after the newest
+ * row, and with none at all, before everything the server will write. Never the
+ * page's wall clock.
+ */
+export function stampAfter(newest: string | undefined, server?: string): string {
+  const newestMs = newest ? Date.parse(newest) : Number.NaN
+  if (server && !Number.isNaN(Date.parse(server)) && (Number.isNaN(newestMs) || timeKey(server) > timeKey(newest!))) return server
+  return new Date(Number.isNaN(newestMs) ? 0 : newestMs + 1).toISOString()
+}
+
 /** `(created_at, id)` as one comparable string. */
 export function rowKey(row: { createdAt: string; id: string }): string {
   return `${timeKey(row.createdAt)}|${row.id}`
