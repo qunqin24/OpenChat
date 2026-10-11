@@ -1529,6 +1529,15 @@ export interface paths {
          *     exempt from a cap) and the attachment errors of `createMessage`,
          *     400 `invalid_answers`, 409 `not_pending` for an answer to a question
          *     that is not the last row. Closing the connection stops the run.
+         *
+         *     With content moderation on, a new message (and its images) or the words
+         *     typed in an answer are checked before anything is written: 422
+         *     `content_blocked` with the matched categories in `details.categories`,
+         *     or 503 `moderation_unavailable` when the check could not be made (a
+         *     guest's message is never sent unchecked). A regeneration is not checked.
+         *     From a network address banned for it, this and every other guest
+         *     endpoint but cancelling a run answers 403 `guest_banned`, with
+         *     `details.until` (a time, or null for a permanent ban).
          */
         post: operations["guestRun"];
         delete?: never;
