@@ -138,7 +138,7 @@ func (s *Server) moderate(ctx context.Context, who moderationSubject, in moderat
 func (s *Server) moderated(ctx context.Context, who moderationSubject, in moderationInput) (refused bool, err error) {
 	cfg, err := loadModeration(ctx, s.q)
 	if err != nil {
-		return false, s.moderationFailed(ctx, defaultModerationConfig(), who, err)
+		return false, s.settingsUnreadable(ctx, cfg, who, err)
 	}
 	if cfg.Mode == ModerationModeOff {
 		return false, nil
@@ -202,6 +202,21 @@ type moderationSanction struct {
 
 	strikesLeft int
 	windowHours int
+}
+
+// settingsUnreadable is the answer when the settings cannot be read in full: a
+// message is held back, whatever the on-error setting says (it may be the very
+// setting that cannot be read, and the defaults must not stand in for a stored
+// "block"). The one exception is moderation known to be off - the stored mode
+// was read and is off - because then no other setting matters, and a damaged
+// threshold must not stop a deployment that is not moderating from chatting.
+func (s *Server) settingsUnreadable(ctx context.Context, cfg moderationConfig, who moderationSubject, err error) error {
+	if cfg.modeRead && cfg.Mode == ModerationModeOff {
+		slog.WarnContext(ctx, "moderation settings unreadable; moderation is off, so the message is let through", "error", err)
+		return nil
+	}
+	slog.ErrorContext(ctx, "moderation settings unreadable; the message is held back", "guest", who.guest(), "error", err)
+	return errModerationUnavailable
 }
 
 // moderationFailed is the answer when the check could not be made. A guest's

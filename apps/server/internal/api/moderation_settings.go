@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -92,10 +93,17 @@ type moderationConfig struct {
 	Strikes           int
 	StrikeWindowHours int
 	GuestBanHours     int
+
+	// modeRead is whether the stored mode was read for certain (an absent mode is
+	// off, and read). What loadModeration returns beside an error is what it
+	// could read, and this says whether the one setting that decides if
+	// moderation applies at all can be trusted.
+	modeRead bool
 }
 
 func defaultModerationConfig() moderationConfig {
 	return moderationConfig{
+		modeRead:          true,
 		Mode:              ModerationModeOff,
 		Categories:        slices.Clone(defaultBlockedCategories),
 		OnError:           ModerationOnErrorAllow,
@@ -113,13 +121,18 @@ var moderationKeys = []string{
 
 // loadModeration reads the settings in one query. A value that does not parse is
 // an error, not a default: a mode that silently read as "off" would be
-// moderation switched off by a typo.
+// moderation switched off by a typo. Every row is read even so, so that the
+// settings returned beside the error are as much as could be read (and
+// modeRead says whether the mode was among it): the check refuses a message
+// when the settings are not all readable, unless the mode that was read is off.
 func loadModeration(ctx context.Context, q *sqlc.Queries) (moderationConfig, error) {
 	c := defaultModerationConfig()
 	rows, err := q.GetSettings(ctx, moderationKeys)
 	if err != nil {
+		c.modeRead = false
 		return c, err
 	}
+	var failed []error
 	for _, row := range rows {
 		var err error
 		switch row.Key {
@@ -160,10 +173,13 @@ func loadModeration(ctx context.Context, q *sqlc.Queries) (moderationConfig, err
 			err = json.Unmarshal(row.Value, &c.GuestBanHours)
 		}
 		if err != nil {
-			return c, fmt.Errorf("moderation setting %s: %w", row.Key, err)
+			failed = append(failed, fmt.Errorf("moderation setting %s: %w", row.Key, err))
+			if row.Key == settingModerationMode {
+				c.modeRead = false
+			}
 		}
 	}
-	return c, nil
+	return c, errors.Join(failed...)
 }
 
 func (c moderationConfig) toSettings() ModerationSettings {
