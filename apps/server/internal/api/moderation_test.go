@@ -56,6 +56,8 @@ func TestModerationBlockedCategories(t *testing.T) {
 }
 
 func TestParseModelVerdict(t *testing.T) {
+	cfg := defaultModerationConfig()
+	cfg.Categories = []ModerationCategory{ModerationCategoryViolenceGraphic, ModerationCategorySexual}
 	good := `{"categories": {"violence/graphic": true, "sexual": false, "made-up": true}, "scores": {"violence/graphic": 0.91, "sexual": 0.01, "hate": 7}}`
 	for name, answer := range map[string]string{
 		"bare":               good,
@@ -63,7 +65,7 @@ func TestParseModelVerdict(t *testing.T) {
 		"after a sentence":   "Here is my classification:\n" + good,
 		"after its thinking": "<think>{\"categories\": {\"sexual\": true}}</think>\n" + good,
 	} {
-		v, err := parseModelVerdict(answer)
+		v, err := parseModelVerdict(cfg, answer)
 		if err != nil {
 			t.Errorf("%s: %v", name, err)
 			continue
@@ -86,7 +88,7 @@ func TestParseModelVerdict(t *testing.T) {
 		"wrong shape":   `{"verdict": "safe"}`,
 		"not an object": `[1, 2]`,
 	} {
-		if _, err := parseModelVerdict(answer); err == nil {
+		if _, err := parseModelVerdict(cfg, answer); err == nil {
 			t.Errorf("%s: a verdict nobody can read was accepted", name)
 		}
 	}
@@ -176,7 +178,7 @@ func TestCleanModerationBaseURL(t *testing.T) {
 func TestModerateWithOpenAIWire(t *testing.T) {
 	var gotAuth, gotPath string
 	var gotBody map[string]any
-	respond := `{"results":[{"flagged":false,"categories":{"violence":false},"category_scores":{"violence":0.2}},
+	respond := `{"results":[{"flagged":false,"categories":{"violence":false,"sexual":false},"category_scores":{"violence":0.2}},
 		{"flagged":true,"categories":{"violence":true,"sexual":false},"category_scores":{"violence":0.8,"sexual":0.1}}]}`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth, gotPath = r.Header.Get("Authorization"), r.URL.Path
@@ -188,6 +190,7 @@ func TestModerateWithOpenAIWire(t *testing.T) {
 
 	s := &Server{moderationClient: srv.Client()}
 	cfg := defaultModerationConfig()
+	cfg.Categories = []ModerationCategory{ModerationCategoryViolence, ModerationCategorySexual}
 	cfg.OpenAIKey, cfg.OpenAIBaseURL = "sk-secret-key", srv.URL+"/v1"
 	png := []byte("\x89PNG not really")
 	v, err := s.moderateWithOpenAI(context.Background(), cfg, "some words", []moderationImage{{contentType: "image/png", data: png}})

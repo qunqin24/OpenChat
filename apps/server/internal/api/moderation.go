@@ -232,7 +232,9 @@ func (s *Server) moderationFailed(ctx context.Context, cfg moderationConfig, who
 }
 
 // moderationVerdict is what a service said about a message: for each category
-// whether it applies and how strongly. Categories it did not mention are false.
+// whether it applies and how strongly. It is only built from answers that were
+// checked to be complete (verdictFrom): a category the service did not mention
+// is not "false", it is an answer that cannot be used.
 type moderationVerdict struct {
 	flagged map[string]bool
 	scores  map[string]float64
@@ -251,6 +253,42 @@ func (v moderationVerdict) merge(flagged map[string]bool, scores map[string]floa
 	for category, score := range scores {
 		v.scores[category] = max(v.scores[category], score)
 	}
+}
+
+// verdictFrom reads one answer of a service: the booleans and the scores it gave
+// per category, as pointers so that a missing or null value is told from a
+// false one. The answer is only usable when it has a boolean for every category
+// that is checked (and, with a minimum score set, a score for each), and has the
+// categories map at all: `{"categories":{}}`, or scores with no booleans, is not
+// "nothing found" but an answer that did not say - an error, which goes the way
+// of a failing service. Names that are not categories, and scores outside 0..1,
+// are ignored.
+func (c moderationConfig) verdictFrom(flagged map[string]*bool, scores map[string]*float64) (moderationVerdict, error) {
+	verdict := newVerdict()
+	if flagged == nil {
+		return verdict, errors.New("the answer names no categories")
+	}
+	known := func(name string) bool { return slices.Contains(moderationCategories, ModerationCategory(name)) }
+	for name, on := range flagged {
+		if known(name) && on != nil {
+			verdict.flagged[name] = *on
+		}
+	}
+	for name, score := range scores {
+		if known(name) && score != nil && *score >= 0 && *score <= 1 {
+			verdict.scores[name] = *score
+		}
+	}
+	for _, category := range c.Categories {
+		name := string(category)
+		if _, ok := verdict.flagged[name]; !ok {
+			return verdict, fmt.Errorf("the answer has no verdict for %s", name)
+		}
+		if _, ok := verdict.scores[name]; !ok && c.MinScore > 0 {
+			return verdict, fmt.Errorf("the answer has no score for %s", name)
+		}
+	}
+	return verdict, nil
 }
 
 // blocked is the categories of the verdict that block, in the order they are
@@ -275,8 +313,8 @@ func (c moderationConfig) blocked(v moderationVerdict) []string {
 
 type openAIModerationResponse struct {
 	Results []struct {
-		Categories     map[string]bool    `json:"categories"`
-		CategoryScores map[string]float64 `json:"category_scores"`
+		Categories     map[string]*bool    `json:"categories"`
+		CategoryScores map[string]*float64 `json:"category_scores"`
 	} `json:"results"`
 }
 
@@ -350,7 +388,11 @@ func (s *Server) moderateWithOpenAI(ctx context.Context, cfg moderationConfig, t
 		return verdict, errors.New("the moderation endpoint returned no result")
 	}
 	for _, result := range parsed.Results {
-		verdict.merge(result.Categories, result.CategoryScores)
+		got, err := cfg.verdictFrom(result.Categories, result.CategoryScores)
+		if err != nil {
+			return newVerdict(), fmt.Errorf("the moderation endpoint's result is incomplete: %w", err)
+		}
+		verdict.merge(got.flagged, got.scores)
 	}
 	return verdict, nil
 }
@@ -470,40 +512,31 @@ func (s *Server) moderateWithModel(ctx context.Context, cfg moderationConfig, wh
 	if err != nil {
 		return verdict, err
 	}
-	return parseModelVerdict(resp.Message.Text())
+	return parseModelVerdict(cfg, resp.Message.Text())
 }
 
 // parseModelVerdict reads the classifier's answer: the first JSON object in it,
 // which tolerates a code fence or a sentence around it. Anything that is not the
-// asked-for shape is an error - a verdict nobody can read is not "nothing found".
-func parseModelVerdict(answer string) (moderationVerdict, error) {
-	verdict := newVerdict()
+// asked-for shape is an error - a verdict nobody can read is not "nothing
+// found" - and so is an answer that leaves out a category that is checked (it
+// must say true or false for each; see verdictFrom).
+func parseModelVerdict(cfg moderationConfig, answer string) (moderationVerdict, error) {
 	answer = thinkTags.ReplaceAllString(answer, "")
 	start := strings.Index(answer, "{")
 	if start < 0 {
-		return verdict, errors.New("the classifier answered with no JSON")
+		return newVerdict(), errors.New("the classifier answered with no JSON")
 	}
 	var parsed struct {
-		Categories map[string]bool    `json:"categories"`
-		Scores     map[string]float64 `json:"scores"`
+		Categories map[string]*bool    `json:"categories"`
+		Scores     map[string]*float64 `json:"scores"`
 	}
 	dec := json.NewDecoder(strings.NewReader(answer[start:]))
 	if err := dec.Decode(&parsed); err != nil {
-		return verdict, fmt.Errorf("the classifier's answer is not the asked-for JSON: %w", err)
+		return newVerdict(), fmt.Errorf("the classifier's answer is not the asked-for JSON: %w", err)
 	}
-	if parsed.Categories == nil && parsed.Scores == nil {
-		return verdict, errors.New("the classifier's answer names no categories")
-	}
-	known := func(name string) bool { return slices.Contains(moderationCategories, ModerationCategory(name)) }
-	for name, on := range parsed.Categories {
-		if known(name) {
-			verdict.flagged[name] = on
-		}
-	}
-	for name, score := range parsed.Scores {
-		if known(name) && score >= 0 && score <= 1 {
-			verdict.scores[name] = score
-		}
+	verdict, err := cfg.verdictFrom(parsed.Categories, parsed.Scores)
+	if err != nil {
+		return newVerdict(), fmt.Errorf("the classifier's answer is incomplete: %w", err)
 	}
 	return verdict, nil
 }

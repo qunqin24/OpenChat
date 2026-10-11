@@ -667,9 +667,9 @@ func TestModerationByModel(t *testing.T) {
 		h.mu.Unlock()
 		if strings.Contains(body, "content-safety classifier") {
 			if strings.Contains(body, "BLOCKME") {
-				return openAIWire.text("```json\n" + `{"categories":{"violence/graphic":true,"sexual":false},"scores":{"violence/graphic":0.97}}` + "\n```")
+				return openAIWire.text("```json\n" + classifierAnswer("violence/graphic") + "\n```")
 			}
-			return openAIWire.text(`{"categories":{"violence/graphic":false},"scores":{"violence/graphic":0.01}}`)
+			return openAIWire.text(classifierAnswer())
 		}
 		return openAIWire.text("fine")
 	}
@@ -692,12 +692,17 @@ func TestModerationByModel(t *testing.T) {
 		t.Fatalf("configure: %d %s", rec.Code, rec.Body)
 	}
 
-	if rec := h.post("a fine question"); rec.Code != http.StatusAccepted {
-		t.Fatalf("a clean message: %d %s", rec.Code, rec.Body)
+	// Each run is let finish before the next message: one still writing refuses
+	// the next with a conflict.
+	for _, question := range []string{"a fine question", "another fine question"} {
+		rec := h.post(question)
+		if rec.Code != http.StatusAccepted {
+			t.Fatalf("a clean message: %d %s", rec.Code, rec.Body)
+		}
+		var started CreateMessageResponse
+		_ = json.Unmarshal(rec.Body.Bytes(), &started)
+		h.settle(started.Run.Id)
 	}
-	var started CreateMessageResponse
-	_ = json.Unmarshal(h.post("another fine question").Body.Bytes(), &started)
-	h.settle(started.Run.Id)
 
 	messages := h.count(`SELECT count(*) FROM messages WHERE conversation_id = $1 AND status <> 'blocked'`, h.conv.ID)
 	// A message cannot close the delimiters of its own check.
