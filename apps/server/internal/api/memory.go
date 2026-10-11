@@ -64,12 +64,45 @@ func (s *Server) UpdatePersonalization(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	user := auth.MustUser(r.Context())
-	if _, err := s.q.UpdatePersonalization(r.Context(), sqlc.UpdatePersonalizationParams{
+	ctx := r.Context()
+	user := auth.MustUser(ctx)
+	current, err := s.q.GetPersonalization(ctx, user.ID)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	// A field that changed is moderated before anything is saved, like a message
+	// is: the first refusal answers, and nothing is written. One sent back as it
+	// is stays as it was (checked, or to be checked when a conversation starts).
+	var aboutChecked, styleChecked *string
+	for _, field := range []struct {
+		value   *string
+		current string
+		checked **string
+	}{
+		{body.AboutYou, current.InstructionsAbout, &aboutChecked},
+		{body.ResponseStyle, current.InstructionsStyle, &styleChecked},
+	} {
+		if field.value == nil || *field.value == field.current {
+			continue
+		}
+		checked, err := s.moderateSaved(ctx, user, ModerationSourceInstructions, *field.value)
+		if err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+		if checked {
+			hash := memory.Hash(*field.value)
+			*field.checked = &hash
+		}
+	}
+	if _, err := s.q.UpdatePersonalization(ctx, sqlc.UpdatePersonalizationParams{
 		ID:                user.ID,
 		InstructionsAbout: body.AboutYou,
 		InstructionsStyle: body.ResponseStyle,
 		MemoryEnabled:     body.MemoryEnabled,
+		AboutCheckedHash:  aboutChecked,
+		StyleCheckedHash:  styleChecked,
 	}); err != nil {
 		httpx.Fail(w, r, err)
 		return
@@ -97,8 +130,19 @@ func (s *Server) CreateMemory(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, err)
 		return
 	}
-	user := auth.MustUser(r.Context())
-	change, err := s.notes().Add(r.Context(), user.ID, body.Content, memory.By{Source: memory.SourceUser})
+	ctx := r.Context()
+	user := auth.MustUser(ctx)
+	content, err := memory.Clean(body.Content)
+	if err != nil {
+		httpx.Fail(w, r, memoryErr(err))
+		return
+	}
+	checked, err := s.moderateSaved(ctx, user, ModerationSourceMemory, content)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	change, err := s.notes().Add(ctx, user.ID, content, memory.By{Source: memory.SourceUser, Checked: checked})
 	if err != nil {
 		httpx.Fail(w, r, memoryErr(err))
 		return
@@ -112,8 +156,19 @@ func (s *Server) UpdateMemory(w http.ResponseWriter, r *http.Request, memoryId o
 		httpx.Fail(w, r, err)
 		return
 	}
-	user := auth.MustUser(r.Context())
-	change, err := s.notes().Update(r.Context(), user.ID, memoryId, body.Content, memory.By{Source: memory.SourceUser})
+	ctx := r.Context()
+	user := auth.MustUser(ctx)
+	content, err := memory.Clean(body.Content)
+	if err != nil {
+		httpx.Fail(w, r, memoryErr(err))
+		return
+	}
+	checked, err := s.moderateSaved(ctx, user, ModerationSourceMemory, content)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	change, err := s.notes().Update(ctx, user.ID, memoryId, content, memory.By{Source: memory.SourceUser, Checked: checked})
 	if err != nil {
 		httpx.Fail(w, r, memoryErr(err))
 		return

@@ -254,6 +254,7 @@ func (s *Server) settingsUnreadable(ctx context.Context, cfg moderationConfig, w
 func (s *Server) moderationFailed(ctx context.Context, cfg moderationConfig, who moderationSubject, err error) error {
 	slog.WarnContext(ctx, "content moderation unavailable", "mode", cfg.Mode, "guest", who.guest(),
 		"on_error", cfg.OnError, "error", err)
+	noteModerationFailed(ctx)
 	if who.guest() || cfg.OnError == ModerationOnErrorBlock {
 		return errModerationUnavailable
 	}

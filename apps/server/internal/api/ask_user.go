@@ -87,6 +87,12 @@ func (s *Server) AnswerQuestion(w http.ResponseWriter, r *http.Request, conversa
 		httpx.Fail(w, r, err)
 		return
 	}
+	// The conversation's first run takes its memory snapshot here, with whatever
+	// it carries that was never moderated checked first (moderation_text.go).
+	if err := s.prepareSnapshot(ctx, user, conv); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
 	// The answer joins the run that asked, or the run that began the answer it
 	// is already part of.
 	head := asked.run.ID
