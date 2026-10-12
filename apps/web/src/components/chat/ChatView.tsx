@@ -339,8 +339,8 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     setShowJump(false)
   }, [])
 
-  // Where the last scroll event left the view, to tell which way it moved.
-  const lastTop = useRef(0)
+  // The furthest down the view has been since it was last parked at the end.
+  const peak = useRef(0)
   const handleScroll = () => {
     const el = scrollRef.current
     if (!el) return
@@ -349,9 +349,19 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     // its way down (the jump button's smooth scroll) passes through positions
     // short of the end, and the reply keeps growing under it; taking those for
     // "the reader left" stopped following the moment the button was pressed.
-    if (distance <= BOTTOM_SLACK) parked.current = true
-    else if (el.scrollTop < lastTop.current - 1) parked.current = false
-    lastTop.current = el.scrollTop
+    // Up is measured from the furthest point down, not from the last event: a
+    // trackpad read slowly moves a pixel or less per event, and each step
+    // alone never looked like going up.
+    if (distance <= BOTTOM_SLACK) {
+      parked.current = true
+      peak.current = el.scrollTop
+    } else if (parked.current) {
+      if (el.scrollTop < peak.current - 1) parked.current = false
+      else peak.current = Math.max(peak.current, el.scrollTop)
+    }
+    // Not following: the peak is wherever the view is, so that parking it again
+    // (the jump button, a send) measures from there and not from an old peak.
+    if (!parked.current) peak.current = el.scrollTop
     setShowJump(!parked.current)
     loadOlder()
   }
@@ -370,6 +380,53 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
   // shorter than the screen), and the browser moves nothing - so no scroll event
   // ever took down the jump button it had put up.
   const transcriptShown = !isEmpty && !(conversationId && messages.isPending && !outgoing)
+
+  // The reader going up, told by what they do rather than by where the view
+  // lands: while a reply grows, following moves the view down every frame, so
+  // a slow read upwards (a trackpad, a pixel at a time) was overtaken before
+  // it ever showed as a position above the end. Any of these lets go at once;
+  // reaching the end again (handleScroll) takes it back.
+  useEffect(() => {
+    const scroller = scrollRef.current
+    if (!transcriptShown || !scroller) return
+    const leave = () => {
+      if (!parked.current) return
+      parked.current = false
+      setShowJump(true)
+    }
+    const onWheel = (event: WheelEvent) => {
+      if (event.deltaY < 0) leave()
+    }
+    let touchY: number | null = null
+    const onTouchStart = (event: TouchEvent) => {
+      touchY = event.touches[0]?.clientY ?? null
+    }
+    const onTouchMove = (event: TouchEvent) => {
+      const y = event.touches[0]?.clientY
+      // The finger moving down scrolls the transcript up.
+      if (touchY !== null && y !== undefined && y > touchY + 2) leave()
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLElement && event.target.closest('textarea, input, [contenteditable]')) return
+      if (event.key === 'ArrowUp' || event.key === 'PageUp' || event.key === 'Home') leave()
+    }
+    // A press on the scroller itself, not on a message: its scrollbar.
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.target === scroller) leave()
+    }
+    scroller.addEventListener('wheel', onWheel, { passive: true })
+    scroller.addEventListener('touchstart', onTouchStart, { passive: true })
+    scroller.addEventListener('touchmove', onTouchMove, { passive: true })
+    scroller.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      scroller.removeEventListener('wheel', onWheel)
+      scroller.removeEventListener('touchstart', onTouchStart)
+      scroller.removeEventListener('touchmove', onTouchMove)
+      scroller.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [transcriptShown])
   useEffect(() => {
     const scroller = scrollRef.current
     const column = columnRef.current
@@ -606,7 +663,10 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
       })
     } catch {
       // Nothing was made or sent: the text comes back, and the files never left.
-      unpost('')
+      // Only this send's message: the page may have started over meanwhile, and
+      // a new first message may be on the empty key now.
+      unpost('', item)
+      if (!alive.current) return
       setInput((current) => current || content)
       toast.error(t('chat.send-error.generic'))
       return
@@ -620,7 +680,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     // not before: a frame without a message would draw the welcome again.)
     post(madeId, item)
     if (alive.current) onCreated(madeId)
-    else unpost('')
+    else unpost('', item)
 
     try {
       await sendMessage.mutateAsync({

@@ -78,10 +78,13 @@ export function release(view: ChatView, id: string): ChatView {
  * follows once the server has taken the message - and the router does nothing
  * at all for a link to where it already is. A page ahead of its address starts
  * over as the empty screen, as it would from any other conversation; one that
- * is the empty screen already is left alone, with whatever is typed in it.
+ * is the empty screen already is left alone, with whatever is typed in it -
+ * unless it is `starting`: its first message is on its way and the conversation
+ * for it not made yet (the page shows nothing it owns, but is not a draft
+ * either), and it starts over too, the send going on in the background.
  */
-export function startOver(view: ChatView): ChatView {
-  return view.shown === undefined ? view : { epoch: view.epoch + 1, route: view.route, shown: view.route }
+export function startOver(view: ChatView, starting = false): ChatView {
+  return view.shown === undefined && !starting ? view : { epoch: view.epoch + 1, route: view.route, shown: view.route }
 }
 
 let nonce = 0

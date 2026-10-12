@@ -1,6 +1,7 @@
 import { useParams, useRouterState } from '@tanstack/react-router'
-import { useCallback, useState } from 'react'
+import { useCallback, useLayoutEffect, useState } from 'react'
 
+import { useChatStore } from '@/stores/chat-store'
 import { adopt, followAddress, openView, release, startOver } from '@/lib/chat-view'
 import ChatView from './ChatView'
 
@@ -39,9 +40,16 @@ export default function ChatPage() {
     // location a render before the params, so in that render the route still
     // reads `/`: taking it as an ask would start the page over under the
     // conversation it just made.
-    if (asked !== undefined && route === undefined) current = startOver(current)
+    if (asked !== undefined && route === undefined) current = startOver(current, useChatStore.getState().outbox[''] !== undefined)
   }
   if (current !== view) setView(current)
+
+  // A page that starts over does not inherit a first message still on the empty
+  // key from the page before it (its send goes on in the background, under its
+  // conversation's own key once that is made). Before paint, so it is never drawn.
+  useLayoutEffect(() => {
+    if (current.epoch > 0) useChatStore.getState().unpost('')
+  }, [current.epoch])
 
   const onCreated = useCallback((id: string) => setView((held) => adopt(held, id)), [])
   const onRemoved = useCallback((id: string) => setView((held) => release(held, id)), [])

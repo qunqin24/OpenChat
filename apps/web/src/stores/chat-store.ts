@@ -45,7 +45,13 @@ interface ChatState {
    */
   outbox: Record<string, OutboxItem>
   post: (key: string, item: OutboxItem) => void
-  unpost: (key: string) => void
+  /**
+   * Takes the message off `key`; with `item`, only while `key` still holds that
+   * very message. The empty key is shared by every first message of a new chat,
+   * and a page that has gone (its send finishing in the background) must not
+   * take away the one the page now on screen has just posted there.
+   */
+  unpost: (key: string, item?: OutboxItem) => void
 
   /**
    * What the response that refused a send said about it (the strike warning),
@@ -109,7 +115,8 @@ export const useChatStore = create<ChatState>()((set) => ({
   post: (key, item) => set((state) => ({ outbox: { ...state.outbox, [key]: item } })),
   refusals: {},
   refuse: (messageId, refusal) => set((state) => ({ refusals: { ...state.refusals, [messageId]: refusal } })),
-  unpost: (key) => set((state) => ({ outbox: without(state.outbox, key) })),
+  unpost: (key, item) =>
+    set((state) => (item && state.outbox[key] !== item ? state : { outbox: without(state.outbox, key) })),
   redo: (conversationId, target) =>
     set((state) => ({
       replacing: target ? { ...state.replacing, [conversationId]: target } : without(state.replacing, conversationId),

@@ -153,3 +153,18 @@ describe('the memory of finished runs', () => {
     expect(state().finished).toEqual([])
   })
 })
+
+describe('unpost', () => {
+  it('with an item, takes it off only while the key still holds that item', () => {
+    resetChatStore()
+    const first = { content: 'A', attachments: [] }
+    const second = { content: 'B', attachments: [] }
+    useChatStore.getState().post('', first)
+    useChatStore.getState().post('', second)
+    // The page that posted the first one has gone; its late clean-up leaves B.
+    useChatStore.getState().unpost('', first)
+    expect(useChatStore.getState().outbox['']).toBe(second)
+    useChatStore.getState().unpost('', second)
+    expect(useChatStore.getState().outbox['']).toBeUndefined()
+  })
+})

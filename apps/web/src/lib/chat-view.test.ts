@@ -81,3 +81,10 @@ describe('newChatState', () => {
     expect((a as { other?: number }).other).toBe(1)
   })
 })
+
+describe('startOver while the first message is on its way', () => {
+  it('starts over a page whose conversation is not made yet', () => {
+    const empty = openView(undefined)
+    expect(startOver(empty, true)).toEqual({ epoch: 1, route: undefined, shown: undefined })
+  })
+})
