@@ -14,6 +14,7 @@
 | 改 `apps/web/` 或 `packages/api-client/` | [frontend.md](frontend.md) |
 | 执行一个具体任务（加端点/迁移/页面/模型…） | [tasks.md](tasks.md) |
 | 改完自检 / 排查"为什么这么写" | [pitfalls.md](pitfalls.md) |
+| 改某个功能（对话/转录、压缩、用量与上限、存储、聊天页、游客、认证、内容审核）前读它的完整设计 | [design/README.md](design/README.md) |
 | 研究自研 Chatbot 内核与成熟开源项目 | [research/README.md](research/README.md) |
 | 设计模型目录、能力解析和自动更新 | [research/models-dev.md](research/models-dev.md) |
 
