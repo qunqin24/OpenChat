@@ -36,8 +36,9 @@ interface ContextMeterProps {
  * is unknown.
  *
  * It opens to the same figures and to "compress now": the older conversation
- * is summarised and the model is sent the summary instead. The ring does not
- * move until the next request, which is the one that takes less.
+ * is summarised and the model is sent the summary instead. Until the next
+ * request reports what it took, the server estimates the compressed context
+ * (`estimated`), so the ring drops as soon as the summary is written.
  */
 export default function ContextMeter({ conversationId, limit, busy }: ContextMeterProps) {
   const { t } = useTranslation()
@@ -88,6 +89,7 @@ export default function ContextMeter({ conversationId, limit, busy }: ContextMet
           <span className="n-context-figures">
             {t('chat.context.hint', { percent, left: 100 - percent, used: compact(used), limit: compact(limit) })}
           </span>
+          {usage.data?.estimated && <span className="n-context-note">{t('chat.context.estimated')}</span>}
           {summary && <span className="n-context-note">{t('chat.context.compacted')}</span>}
         </div>
         <DropdownMenuItem

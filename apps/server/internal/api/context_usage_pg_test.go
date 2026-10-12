@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -77,6 +78,35 @@ func TestConversationContextIsTheLatestAnsweredRequest(t *testing.T) {
 	code, got := get(owner)
 	if code != http.StatusOK || got.UsedTokens == nil || *got.UsedTokens != 1000+30000+500+700 || got.Model == nil || *got.Model != "m-new" {
 		t.Fatalf("latest answered request: %d %+v", code, got)
+	}
+
+	// Compressed since that request: an estimate of the context as it now
+	// stands - the request's fixed part plus the summary - until the next
+	// request reports. Two long rows written before the request, summarised.
+	long := strings.Repeat("长", 2000)
+	var through sqlc.Message
+	for i, role := range []sqlc.MessageRole{sqlc.MessageRoleUser, sqlc.MessageRoleAssistant} {
+		row, err := q.AppendEntry(ctx, sqlc.AppendEntryParams{ConversationID: conv.ID, Role: role, Content: long, Parts: []byte(`[]`), Status: sqlc.MessageStatusComplete})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE messages SET created_at = $2 WHERE id = $1`, row.ID, base.Add(time.Duration(i)*time.Millisecond)); err != nil {
+			t.Fatal(err)
+		}
+		through = row
+	}
+	if _, err := q.UpsertContextSummary(ctx, sqlc.UpsertContextSummaryParams{ConversationID: conv.ID, ThroughMessageID: through.ID,
+		Content: "摘要", ModelID: "m-new", InputTokens: 4000, OutputTokens: 2}); err != nil {
+		t.Fatal(err)
+	}
+	code, got = get(owner)
+	full := int64(1000 + 30000 + 500 + 700)
+	if code != http.StatusOK || got.Estimated == nil || !*got.Estimated || got.UsedTokens == nil {
+		t.Fatalf("after a compression: %d %+v", code, got)
+	}
+	// The two rows (about 4000 tokens) are gone from the figure; the rest stays.
+	if used := *got.UsedTokens; used >= full-3900 || used < full-4100 {
+		t.Errorf("estimate %d, want about %d", used, full-4000)
 	}
 
 	// Another user's conversation does not exist.

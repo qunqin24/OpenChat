@@ -929,8 +929,10 @@ export interface paths {
          * How much of the model's context window the conversation fills
          * @description Read from the conversation's latest answered request: everything it
          *     was sent, cached or not, plus what it wrote. `usedTokens` is null for a
-         *     conversation nothing has been answered in yet. The window it is
-         *     measured against is the model's `contextLimit` (ChatModel).
+         *     conversation nothing has been answered in yet. After a compression
+         *     newer than that request it is an estimate of the compressed context
+         *     (`estimated`). The window it is measured against is the model's
+         *     `contextLimit` (ChatModel).
          */
         get: operations["getConversationContext"];
         put?: never;
@@ -1839,6 +1841,14 @@ export interface components {
             usedTokens?: number | null;
             /** @description The model that request went to. */
             model?: string | null;
+            /**
+             * @description True when the conversation has been compressed since that request:
+             *     `usedTokens` is then an estimate of the context as it now stands
+             *     (the request's fixed part - system prompt, tools, attachments -
+             *     plus the summary and the rows after it), until the next request
+             *     reports the real figure.
+             */
+            estimated?: boolean;
         };
         /**
          * @description A conversation's compressed context. `content` (Markdown) stands in, in

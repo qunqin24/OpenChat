@@ -327,7 +327,8 @@
       "compact": "Compress now",
       "compacting": "Compressing…",
       "compacted": "Earlier messages are compressed into a summary",
-      "compact-hint": "Summarise the older conversation to free up the context window. The original messages stay on screen."
+      "compact-hint": "Summarise the older conversation to free up the context window. The original messages stay on screen.",
+      "estimated": "Estimated after compression; the next answer reports the real figure"
     }
   },
   "state": {
