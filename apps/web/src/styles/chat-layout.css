@@ -245,7 +245,12 @@
    newest exchange, where the tail-follow reads heights and a reply streams —
    are always drawn. */
 @supports (content-visibility: auto) {
-  /* Every message keeps a remembered height, not only the skipped ones: the
+  /* Not in WebKit (Safari, and every browser on an iPhone), as in Open WebUI
+     (Message.svelte, open-webui#26712): its content-visibility has paint bugs
+     that leave messages on the screen blank. `data-webkit` is set by main.tsx
+     (lib/webkit.ts).
+
+     Every message keeps a remembered height, not only the skipped ones: the
      browser records it only while the element has `contain-intrinsic-size:
      auto`, and the newest exchange gets content-visibility the moment a new
      message is sent below it. Without a height recorded by then, it was laid
@@ -253,12 +258,12 @@
      scroll position was clamped up into the previous answer, and the page
      jumped there and back on every send. It does nothing to a message that is
      drawn. */
-  .chat-ui .n-chat-fade > :is(.n-msg-user, .n-msg-assistant) {
+  :root:not([data-webkit]) .chat-ui .n-chat-fade > :is(.n-msg-user, .n-msg-assistant) {
     contain-intrinsic-size: auto 200px;
   }
   /* A reply with reasoning or a search open is exempt: containment would make
      it a stacking context, sinking its stuck header under the top bar's fade. */
-  .chat-ui .n-chat-fade > :is(.n-msg-user, .n-msg-assistant):not(:nth-last-child(-n + 2)):not(:has(.n-reasoning-toggle[data-state='open'], .n-activity.is-open)) {
+  :root:not([data-webkit]) .chat-ui .n-chat-fade > :is(.n-msg-user, .n-msg-assistant):not(:nth-last-child(-n + 2)):not(:has(.n-reasoning-toggle[data-state='open'], .n-activity.is-open)) {
     content-visibility: auto;
     /* Containment clips painting to the message's box, and blocks as wide as
        the column (a Grid of cards, a table) drew their shadows past its right

@@ -42,6 +42,11 @@
   transition: width 250ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* The account row stays above the home indicator. */
+.chat-ui .n-sidebar-panel {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 .chat-ui .n-sidebar.collapsed .n-sidebar-panel {
   width: 0;
   pointer-events: none;
@@ -566,6 +571,12 @@
 
 .n-sidebar-mobile-frame .n-sidebar {
   width: min(var(--n-sidebar-w), calc(100vw - 48px));
+}
+
+/* The drawer starts at the screen's edge, under the notch. */
+.n-sidebar-mobile-frame .n-sidebar-panel {
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
 }
 
 .n-sidebar-mobile-frame[data-state='open'] {

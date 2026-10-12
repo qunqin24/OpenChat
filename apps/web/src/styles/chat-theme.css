@@ -76,6 +76,13 @@
   background: var(--n-bg);
   -webkit-font-smoothing: antialiased;
 }
+/* The page runs under a phone's notch and rounded corners (viewport-fit=cover):
+   kept clear of them at the top and sides. The bottom is the composer dock's
+   and the sidebar's to keep clear, so their backgrounds reach the edge. The
+   drawer is a `.chat-ui` of its own and clears them itself (sidebar.css). */
+.chat-ui:not(.n-sidebar-mobile-frame) {
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+}
 .dark {
   /* OpenWebUI's dark ramp (gray-900 page, gray-950 sidebar, gray-850
      raised surfaces): near-black rather than a mid grey, which read as muddy. */

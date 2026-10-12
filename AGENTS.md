@@ -68,6 +68,7 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 - 流式文字用 `useReveal`（`MarkdownText.tsx`，节奏在 `lib/reveal.ts`）逐步显示前缀，**不要给每个字建元素或动画**（v1.1.0 这样做，长思维链把 CPU 拖到 90%）；回复零件的 key 按位置 `r<n>` 起，不按消息 id，别改回去（显现依赖同一元素）。
 - 删除对话的新路径要发/处理 `conversation_deleted`，并走 `lib/conversation-sync.ts` 的 BroadcastChannel（`announceDeleted`）。
 - 标题一律经 `displayTitle`/`useDisplayTitle`，不要直接渲染 `conversation.title`；搜索结果键 `queryKeys.conversations.search(term)` 不放在 `list` 下；记忆、摘要查询不落本地缓存。
+- 手机上禁止缩放（viewport、`lib/no-zoom.ts`、`html` 的 `touch-action`）、安全区由根元素/输入框/侧栏各自让开；`content-visibility` 在 WebKit 上不用（`data-webkit`，有消息变空白的 bug）。
 - 脚本触发的滚动用 `smoothScrollBehavior()`（`lib/motion.ts`）；工具结果里的链接只放行 `isHttpUrl`。
 - 满额的模型在选择器里保留但禁用（`atCapacity`）；新增挑模型的前端入口要想清楚是否绕开它。
 - 所有面向用户的字符串走 `t()`（`zh`、`en`）；动效遵守 `prefers-reduced-motion`，加载指示器标 `data-motion="essential"`。

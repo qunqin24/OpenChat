@@ -8,7 +8,9 @@ import i18n from '@/lib/i18n'
 import { onBuildChange } from '@/lib/build-check'
 import { queryClient, setErrorListener } from '@/lib/query'
 import { persistQueryCache, restoreQueryCache } from '@/lib/query-persist'
+import { preventZoom } from '@/lib/no-zoom'
 import { leaveIfSessionExpired } from '@/lib/session-expired'
+import { isWebKit } from '@/lib/webkit'
 import { router } from '@/router'
 import { applyTheme, useUIStore } from '@/stores/ui-store'
 
@@ -43,6 +45,8 @@ onBuildChange(() =>
   }),
 )
 followDeletions(queryClient)
+preventZoom()
+if (isWebKit()) document.documentElement.dataset.webkit = ''
 
 const container = document.getElementById('root')
 if (!container) throw new Error('#root element is missing from index.html')

@@ -59,6 +59,15 @@
     padding: 0;
   }
 
+  /* No pinch or double-tap zoom (index.html, lib/no-zoom.ts): panning only.
+     touch-action is intersected down the tree, so this reaches every element.
+     And no grey flash over whatever is tapped: every control has its own
+     pressed and focus states. */
+  html {
+    touch-action: pan-x pan-y;
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
     background: var(--n-bg);
     color: var(--n-text);

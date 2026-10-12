@@ -59,7 +59,15 @@
 
 ## 较早消息的跳过渲染（`styles/chat-layout.css`）
 
-较早的消息用 `content-visibility: auto` 跳过屏幕外的渲染，最新的一问一答（最后两条）始终绘制。**`contain-intrinsic-size: auto 200px` 加在所有消息上**，不只加在被跳过的那些：浏览器只在元素带着 `contain-intrinsic-size: auto` 时记录它的真实高度，而发新消息的那一刻，原来的最后两条才第一次被套上 `content-visibility`——没有记录过高度，就按 200px 占位排一帧，对话骤然变矮、滚动位置被拉回上一条回答，再跳回来（v1.1.1 及之前每次发送都会闪一下）。Open WebUI 是所有消息一直带着这两个属性（`Message.svelte`，并在 WebKit 上关掉，因为它有消息变空白的绘制 bug）。改这段 CSS 后用无头 Chromium 逐帧记录发送前后滚动容器的 `scrollHeight`，不应出现骤降。
+较早的消息用 `content-visibility: auto` 跳过屏幕外的渲染（WebKit 上不用，见下），最新的一问一答（最后两条）始终绘制。**`contain-intrinsic-size: auto 200px` 加在所有消息上**，不只加在被跳过的那些：浏览器只在元素带着 `contain-intrinsic-size: auto` 时记录它的真实高度，而发新消息的那一刻，原来的最后两条才第一次被套上 `content-visibility`——没有记录过高度，就按 200px 占位排一帧，对话骤然变矮、滚动位置被拉回上一条回答，再跳回来（v1.1.1 及之前每次发送都会闪一下）。Open WebUI 是所有消息一直带着这两个属性（`Message.svelte`，并在 WebKit 上关掉，因为它有消息变空白的绘制 bug）。改这段 CSS 后用无头 Chromium 逐帧记录发送前后滚动容器的 `scrollHeight`，不应出现骤降。
+
+WebKit（Safari，以及 iPhone 上的所有浏览器）照 Open WebUI 整个跳过这两条：它的 `content-visibility` 有让屏幕上的消息变空白的绘制 bug（open-webui#26712）。`main.tsx` 用 `lib/webkit.ts` 的 `isWebKit`（同 Open WebUI 的判断：`navigator.vendor` 认出 iOS 的 WebView 和添加到主屏幕的网页，UA 认出其余）在 `<html>` 上设 `data-webkit`，CSS 用 `:root:not([data-webkit])` 限定。
+
+## 手机：禁止缩放与安全区
+
+- **禁止缩放**，照 Open WebUI：`index.html` 的 viewport 带 `maximum-scale=1, user-scalable=no`（`maximum-scale` 同时让 iOS 聚焦字号小于 16px 的输入框时不再自动放大）。iOS 10 起 Safari 双指缩放不理会这两项，靠 `lib/no-zoom.ts` 取消它的 `gesture*` 事件；`globals.css` 给 `html` 设 `touch-action: pan-x pan-y`（向下逐层取交集，所有元素都只能平移），也去掉双击放大。
+- `interactive-widget=resizes-content`：Android 弹出键盘时缩小页面，输入框留在键盘上方（iOS 不支持，键盘照旧盖在页面上、由浏览器滚动可视区）。
+- **安全区**（`viewport-fit=cover` 让页面铺到刘海和圆角下面）：`.chat-ui` 根元素让开顶部和左右；底部由输入框（`.n-composer-dock`）和侧栏（`.n-sidebar-panel`）各自让开，背景才能铺到屏幕边缘。手机抽屉是另一个 `.chat-ui`，不吃根元素的 padding，自己在 `.n-sidebar-panel` 上让开顶部和左边。Chromium 的设备模拟里 `env(safe-area-inset-*)` 都是 0，要在真机或 iOS 模拟器上看。
 
 ## 最后一条消息下面的留白
 

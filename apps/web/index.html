@@ -2,7 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- No zooming, as in Open WebUI: maximum-scale also stops iOS zooming into
+         a field whose text is under 16px when it is focused. iOS ignores the
+         rest for pinching, which lib/no-zoom.ts handles. resizes-content
+         makes Android shrink the page for the keyboard, so the composer stays
+         above it. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content"
+    />
     <meta name="color-scheme" content="light dark" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <title>OpenChat</title>
