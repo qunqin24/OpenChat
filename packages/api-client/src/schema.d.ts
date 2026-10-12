@@ -538,9 +538,9 @@ export interface paths {
         };
         /**
          * The running version, and the newest release
-         * @description `current` is the version this server was built as (`APP_VERSION`, set
-         *     from the release tag when the image is built; `dev` for a local
-         *     build). The newest release is read from the project's GitHub releases
+         * @description `current` is the version this server was built as, written into the
+         *     binary from the release tag when the image is built (`dev` for a local
+         *     build); no environment variable changes it. The newest release is read from the project's GitHub releases
          *     (`/releases/latest`: no drafts, no pre-releases) and kept for six
          *     hours; past that, this asks again, so opening the page is enough to
          *     learn of an update. A failed look is not an error of this endpoint: it

@@ -26,12 +26,21 @@ type Config struct {
 	LogFileKeep int
 }
 
+// buildVersion is the version this binary was built as, written in at build
+// time (the image: -ldflags "-X .../config.buildVersion=1.2.3", from the tag);
+// "dev" otherwise. Deliberately not an environment variable: it once was
+// (APP_VERSION, set in the image), and panels that upgrade a container by
+// recreating it - 1Panel, Portainer - carry the old container's environment
+// over, the old image's APP_VERSION with it, so an upgraded server went on
+// reporting the version it had replaced.
+var buildVersion = "dev"
+
 // Load reads configuration from the environment, applying defaults that are
 // safe for local development. It fails fast on anything that has no sane default.
 func Load() (*Config, error) {
 	c := &Config{
 		Env:             env("APP_ENV", "development"),
-		Version:         env("APP_VERSION", "dev"),
+		Version:         buildVersion,
 		HTTPAddr:        env("HTTP_ADDR", ":8080"),
 		ShutdownTimeout: envDuration("SHUTDOWN_TIMEOUT", 15*time.Second),
 		CORSOrigins:     envList("CORS_ORIGINS", []string{"http://localhost:5173"}),

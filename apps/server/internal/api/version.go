@@ -17,8 +17,8 @@ import (
 
 // The version an administrator runs, and whether a newer one has been released.
 //
-// The running version is what the binary was built as: the image's APP_VERSION,
-// which the release workflow sets from the tag (`dev` for a local build). The
+// The running version is what the binary was built as (config.buildVersion,
+// written in from the tag by the release workflow; `dev` for a local build). The
 // newest release is the project's GitHub `releases/latest` - never a draft or
 // a pre-release - asked for only when an administrator opens the settings (at
 // most every six hours) or presses "check for updates" (at most once a

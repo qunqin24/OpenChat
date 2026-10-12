@@ -22,7 +22,7 @@
 
 ## 版本与检查更新
 
-- 版本与检查更新（`api/version.go`，后台 → 系统 →「常规」第一行）：当前版本是构建时的 `APP_VERSION`（发版流程从 tag 设，本地构建是 `dev`，`dev` 不和发布版比较）。最新版本由**服务端**问 GitHub 的 `releases/latest`（不含草稿和预发布），结果在进程里缓存：打开页面时超过 6 小时才再问（`GET /admin/version`），「检查更新」按钮立即问（`POST /admin/version/check`），两次真正的请求至少隔 1 分钟；问失败不报错，带 `checkError` 返回已知的结果。没有管理员打开这一页就从不对外请求。仓库地址是 `releasesLatestURL` 常量，fork 了要改它。
+- 版本与检查更新（`api/version.go`，后台 → 系统 →「常规」第一行）：当前版本在编译时写进二进制（`config.buildVersion`，Dockerfile 用 `-ldflags -X` 从构建参数 `APP_VERSION` 写入，发版流程从 tag 传；本地构建是 `dev`，`dev` 不和发布版比较）。**不要再让环境变量决定版本**：以前是镜像里的 `ENV APP_VERSION`，而 1Panel、Portainer 这类面板「升级容器」时会把旧容器的环境变量原样带到新容器，旧镜像的 `APP_VERSION` 盖住新镜像的，升级后的服务一直报旧版本号（v1.1.3 及之前）。最新版本由**服务端**问 GitHub 的 `releases/latest`（不含草稿和预发布），结果在进程里缓存：打开页面时超过 6 小时才再问（`GET /admin/version`），「检查更新」按钮立即问（`POST /admin/version/check`），两次真正的请求至少隔 1 分钟；问失败不报错，带 `checkError` 返回已知的结果。没有管理员打开这一页就从不对外请求。仓库地址是 `releasesLatestURL` 常量，fork 了要改它。
 
 ## 日志与请求编号
 
