@@ -17,7 +17,8 @@ import (
 const ToolMemory = "memory"
 
 // Memory is the `memory` tool: the model keeps notes about the user for later
-// conversations, on its own initiative.
+// conversations - when the user asks, or states a lasting fact about themselves
+// (the system prompt's Memory section, api/agent_setup.go, says when).
 //
 // It acts at once, with no confirmation to wait for; the reader is shown what
 // changed in the reply and can undo it there. Everything it touches is the
@@ -54,7 +55,8 @@ func (Memory) Definition() llm.Tool {
 		// What to save, and when, is in the system prompt's Memory section
 		// (api/agent_setup.go); this says how to use the tool.
 		Description: "Save, change or remove a note about the user that will be given to you in future " +
-			"conversations. It takes effect at once; do not ask permission first. " +
+			"conversations, only in the cases the Memory section of your instructions allows. It takes effect at " +
+			"once; do not ask permission first. " +
 			"op=add saves a new note (content). op=update rewrites a note (id, content); use it to merge a " +
 			"related fact into an existing note rather than adding a near-duplicate. op=delete removes a note " +
 			"(id), for one that is out of date or that the user asks you to forget. " +

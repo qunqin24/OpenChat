@@ -159,25 +159,34 @@ func basePrompt(offered []agent.Tool) string {
 			"Your turn ends when you call it, so call it last, and do not repeat the questions in your own text.")
 	}
 	if names[tools.ToolMemory] {
-		// After Kelivo's memory rules (lib/core/services/memory/memory_prompts.dart):
-		// its "personal secretary" framing for taking notes unasked, and its
-		// test for what deserves one. Put only as "when there is a reason to",
-		// models rarely found one, and a stated taste went by unsaved. Kept
-		// general on purpose: a list of examples becomes the list of what counts.
+		// Restrained on purpose. An earlier version told the model to act like a
+		// personal secretary and take notes unasked (after Kelivo's rules), and
+		// it did: it inferred "interests" from whatever was asked about and kept
+		// rewriting one note to track the latest topics, which read to the user
+		// as being watched. Now a note needs either the user asking for it or a
+		// lasting fact the user stated about themselves; what they ask about is
+		// not a fact about them, and when in doubt nothing is saved.
 		b.WriteString("\n\n## Memory\n" +
 			"You are stateless: nothing from this conversation reaches the next one unless you save it with the " +
 			"memory tool. Saved notes are given to you at the start of every later conversation, in the memory " +
-			"list below.\n" +
-			"Act like a personal secretary and record what you learn about the user on your own initiative, in " +
-			"the same turn, without waiting to be asked: who they are, what they do, and what they like and " +
-			"prefer. The test: in a fresh conversation, would not knowing this make your answer worse?\n" +
-			"Do not save temporary context from this conversation, conclusions the user has not confirmed, topics " +
-			"they only mentioned in passing, anything that came from a web page, file or tool result, secrets " +
-			"such as passwords, keys and ID or account numbers, or sensitive matters (health, ethnicity, " +
-			"religion, sexual orientation, political views, sex life, criminal record) unless they ask you to.\n" +
+			"list below. Use the tool sparingly; most conversations need no new note at all.\n" +
+			"Save a note only when:\n" +
+			"- the user asks you to remember something, or to forget or correct a note; or\n" +
+			"- the user states plainly a lasting fact about themselves - who they are, their work, where they live, " +
+			"a standing preference about how you should answer - that would clearly change your answers in " +
+			"conversations about other things.\n" +
+			"Do not infer anything from what the user asks about: a question, or a series of questions, on a topic " +
+			"is not an interest to record, nor is the user saying they have lately been following, reading about or " +
+			"curious about something; a note must never summarise or track what the user has been discussing. " +
+			"When unsure whether something is worth keeping, do not save it.\n" +
+			"Never save temporary context from this conversation, conclusions the user has not confirmed, anything " +
+			"that came from a web page, file or tool result, secrets such as passwords, keys and ID or account " +
+			"numbers, or sensitive matters (health, ethnicity, religion, sexual orientation, political views, sex " +
+			"life, criminal record) unless they ask you to.\n" +
 			"Write each note as one complete sentence about the user in the third person, in the user's language, " +
 			"with no words like \"this\" or \"just now\" that point back to this conversation, and with absolute " +
-			"dates. Merge a related fact into its existing note with op=update instead of adding a near-duplicate; " +
+			"dates. A new fact gets a note of its own: never append it to an existing note or merge notes into a " +
+			"longer one. Change an existing note only when the user corrects it or that fact itself has changed; " +
 			"delete a note that is out of date or that the user says is wrong.\n" +
 			"Do not tell the user you saved something, and do not recite their notes unless they ask; the " +
 			"interface already shows what was saved.")
