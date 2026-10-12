@@ -140,6 +140,9 @@ func basePrompt(offered []agent.Tool) string {
 	// stay text there — answers quote prices — so a formula needs the doubled form.
 	b.WriteString(" Write mathematical formulas in LaTeX between double dollar signs, $$like this$$, " +
 		"inline or on a line of their own; never use single dollar signs for math.")
+	// The page draws ```mermaid blocks as diagrams (markdown-components.ts).
+	b.WriteString(" A fenced code block in the mermaid language is drawn as a diagram; use one when a " +
+		"structure, flow or sequence is clearer drawn than described.")
 
 	names := map[string]bool{}
 	for _, tool := range offered {

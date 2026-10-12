@@ -173,6 +173,12 @@
       "close": "退出全屏",
       "title": "HTML 预览"
     },
+    "diagram": {
+      "show": "图表",
+      "invalid": "图表语法有误，无法绘制，已显示源码。",
+      "label": "图表",
+      "copy": "复制图表源码"
+    },
     "memory": {
       "add": "已保存到记忆",
       "update": "已更新记忆",

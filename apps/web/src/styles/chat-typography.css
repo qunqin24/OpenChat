@@ -552,3 +552,29 @@
 .chat-ui .n-markdown .n-prose > :last-child {
   margin-bottom: 0;
 }
+
+/* A mermaid block drawn (MermaidDiagram): the diagram on the code block's
+   sheet, centred, at its natural size up to the column's width; a wider one
+   scrolls sideways inside the block rather than shrinking past reading. */
+.chat-ui .n-mermaid-canvas {
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+  padding: 8px 16px 16px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--n-line) transparent;
+}
+.chat-ui .n-mermaid-canvas svg {
+  flex-shrink: 0;
+  min-width: min(100%, 480px);
+  height: auto;
+}
+/* Mermaid's dark theme paints its own near-black page behind the diagram. */
+.chat-ui .n-mermaid-canvas svg {
+  background: transparent !important;
+}
+.chat-ui .n-mermaid-error {
+  margin: -6px 0 14px;
+  color: var(--n-chat-muted);
+  font-size: 12.5px;
+}

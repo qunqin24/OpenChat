@@ -4,6 +4,7 @@ import type { Components, LinkSafetyConfig, PluginConfig } from 'streamdown'
 
 import { HtmlPreview } from './HtmlPreview'
 import { MarkdownTable } from './MarkdownTable'
+import { MermaidDiagram } from './MermaidDiagram'
 
 /** Streamdown overrides shared by every Markdown surface in the chat. */
 export const markdownComponents: Components = { table: MarkdownTable }
@@ -28,8 +29,16 @@ export const markdownComponents: Components = { table: MarkdownTable }
  * Markdown on the page picks them up then. Until they arrive a code block is
  * plain and a formula shows as its source, for the moment it takes.
  */
-// html blocks can be previewed as the page they describe (HtmlPreview).
-let plugins: PluginConfig = { cjk, renderers: [{ language: ['html', 'htm'], component: HtmlPreview }] }
+// html blocks can be previewed as the page they describe (HtmlPreview), and
+// mermaid blocks are drawn as diagrams (MermaidDiagram, which fetches Mermaid
+// itself for the first one).
+let plugins: PluginConfig = {
+  cjk,
+  renderers: [
+    { language: ['html', 'htm'], component: HtmlPreview },
+    { language: 'mermaid', component: MermaidDiagram },
+  ],
+}
 const listeners = new Set<() => void>()
 const loading = { code: false, math: false }
 
@@ -70,6 +79,7 @@ export function useMarkdownPlugins(text: string): PluginConfig {
  * in an answer.
  */
 export const markdownLinkSafety: LinkSafetyConfig = { enabled: false }
+
 
 /**
  * A formula alone on its line is a display formula. Models write

@@ -63,6 +63,10 @@
 
 WebKit（Safari，以及 iPhone 上的所有浏览器）照 Open WebUI 整个跳过这两条：它的 `content-visibility` 有让屏幕上的消息变空白的绘制 bug（open-webui#26712）。`main.tsx` 用 `lib/webkit.ts` 的 `isWebKit`（同 Open WebUI 的判断：`navigator.vendor` 认出 iOS 的 WebView 和添加到主屏幕的网页，UA 认出其余）在 `<html>` 上设 `data-webkit`，CSS 用 `:root:not([data-webkit])` 限定。
 
+## Mermaid 图表（`components/chat/MermaidDiagram.tsx`）
+
+`mermaid` 代码块画成图，和 `html` 块的预览一样是 Streamdown 的自定义 renderer（`markdown-components.ts`）。不用 `@streamdown/mermaid`：它的外框是这个构建不生成的 Tailwind 类和聊天里没有的 shadcn 令牌，画出来是黑边框。Mermaid 很大，第一次遇到图表才动态加载；全局配置，所以渲染排队一个一个来。`securityLevel: 'strict'`（不执行脚本、标签里不放 HTML、输出经它净化），浅色用 `neutral`、深色用 `dark`，主题切换时重画（`hooks/use-dark.ts`）。还在输出、或语法错误时显示源码（错误时下面一行说明），画好后可在图和代码间切换。系统提示词只告诉模型这种代码块会画成图，用不用由它判断。
+
 ## 手机：禁止缩放与安全区
 
 - **禁止缩放**，照 Open WebUI：`index.html` 的 viewport 带 `maximum-scale=1, user-scalable=no`（`maximum-scale` 同时让 iOS 聚焦字号小于 16px 的输入框时不再自动放大）。iOS 10 起 Safari 双指缩放不理会这两项，靠 `lib/no-zoom.ts` 取消它的 `gesture*` 事件；`globals.css` 给 `html` 设 `touch-action: pan-x pan-y`（向下逐层取交集，所有元素都只能平移），也去掉双击放大。

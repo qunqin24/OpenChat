@@ -173,6 +173,12 @@
       "close": "Exit full screen",
       "title": "HTML preview"
     },
+    "diagram": {
+      "show": "Diagram",
+      "invalid": "The diagram has a syntax error and could not be drawn; its source is shown.",
+      "label": "Diagram",
+      "copy": "Copy diagram source"
+    },
     "memory": {
       "add": "Saved to memory",
       "update": "Memory updated",
