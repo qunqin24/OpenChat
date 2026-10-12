@@ -64,7 +64,7 @@ grep -rn -- "--n-\|prism-next" apps/web/src/features/admin apps/web/src/componen
 - 聊天页只有一个 `NextChat` 实例（`components/next/ChatPage.tsx`，规则在 `lib/chat-view.ts`）：子路由不渲染组件；首条消息的流程只在服务器答复后才 `navigate`；在该路径上写页面状态要过 `alive`；新增「新对话」入口必须带 `newChatState`。
 - 消息列表从尾部分页：对消息键不要 `invalidateQueries`，用 `refreshNewestMessages`（`transcript_changed` 先截缓存再重取）；交接走 `lib/hand-over.ts`，只有 `refreshConfirmed` 之后才 `settle`。
 - 新增由响应或旧快照驱动、会写 `live` 的路径，必须过 `finished` 检查（`rememberFinished`）；`outbox` 由 `useSendMessage` 的 hook 级 `onError` 撤掉，别用调用级回调。
-- 回复零件的 key 按位置 `r<n>` 起，不按消息 id，别改回去（流式显现依赖同一元素）。
+- 流式文字用 `useReveal`（`MarkdownText.tsx`，节奏在 `lib/reveal.ts`）逐步显示前缀，**不要给每个字建元素或动画**（v1.1.0 这样做，长思维链把 CPU 拖到 90%）；回复零件的 key 按位置 `r<n>` 起，不按消息 id，别改回去（显现依赖同一元素）。
 - 删除对话的新路径要发/处理 `conversation_deleted`，并走 `lib/conversation-sync.ts` 的 BroadcastChannel（`announceDeleted`）。
 - 标题一律经 `displayTitle`/`useDisplayTitle`，不要直接渲染 `conversation.title`；搜索结果键 `queryKeys.conversations.search(term)` 不放在 `list` 下；记忆、摘要查询不落本地缓存。
 - 脚本触发的滚动用 `smoothScrollBehavior()`（`lib/motion.ts`）；工具结果里的链接只放行 `isHttpUrl`。
