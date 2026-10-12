@@ -339,26 +339,46 @@ export function NextChat({ conversationId, onCreated, onRemoved }: NextChatProps
     setShowJump(false)
   }, [])
 
+  // Where the last scroll event left the view, to tell which way it moved.
+  const lastTop = useRef(0)
   const handleScroll = () => {
     const el = scrollRef.current
     if (!el) return
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight
-    parked.current = distance <= BOTTOM_SLACK
+    // Only the reader going up lets go of the end. A scroll that is still on
+    // its way down (the jump button's smooth scroll) passes through positions
+    // short of the end, and the reply keeps growing under it; taking those for
+    // "the reader left" stopped following the moment the button was pressed.
+    if (distance <= BOTTOM_SLACK) parked.current = true
+    else if (el.scrollTop < lastTop.current - 1) parked.current = false
+    lastTop.current = el.scrollTop
     setShowJump(!parked.current)
     loadOlder()
   }
 
-  // The transcript can also stop overflowing without a scroll: a section the
-  // reader opened, scrolled through and folded away again leaves it shorter
-  // than the screen, and the browser moves nothing — so no scroll event ever
-  // took down the jump button it had put up. Whenever the column or the
-  // screen changes size, a reader who is now at the end is parked again.
+  // Whenever the column or the screen changes size: a reader parked at the end
+  // is kept there, and one who is now at the end is parked again.
+  //
+  // Kept there: the text of a reply grows every frame as it is revealed
+  // (Markdown's useReveal), not only when a batch arrives, and goes on growing
+  // after the stream has ended - following only on new tokens left the view
+  // trailing by a few lines while it streamed and the last lines of every
+  // answer below the screen once it was done.
+  //
+  // Parked again: the transcript can stop overflowing without a scroll (a
+  // section the reader opened, scrolled through and folded away again leaves it
+  // shorter than the screen), and the browser moves nothing - so no scroll event
+  // ever took down the jump button it had put up.
   const transcriptShown = !isEmpty && !(conversationId && messages.isPending && !outgoing)
   useEffect(() => {
     const scroller = scrollRef.current
     const column = columnRef.current
     if (!transcriptShown || !scroller || !column) return
     const observer = new ResizeObserver(() => {
+      if (parked.current) {
+        scroller.scrollTop = scroller.scrollHeight
+        return
+      }
       if (scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight > BOTTOM_SLACK) return
       parked.current = true
       setShowJump(false)

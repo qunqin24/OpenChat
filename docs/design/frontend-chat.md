@@ -65,3 +65,9 @@
 
 照 Open WebUI（`Messages.svelte` 的 `pb-18`，输入框有附件时再加 `pb-6`）：对话列 `.n-column.n-chat-fade` 底部留 72px，输入框里有文件时 96px（`has-files`），用 padding 而不是加一个空白子元素——`content-visibility` 那条规则按列的最后两个子元素认定「最新的一问一答」，多一个子元素就会把它们挤出去。两个类名一起写，才压得过 `.n-column` 的 `padding` 简写（窄屏的媒体查询里也有一条）。
 
+## 贴底跟随（`NextChat` 的 `parked`）
+
+- 打开一个对话（包括从别的对话切回正在输出的那个）停在最新输出处，并继续跟随，和 Open WebUI 一样（它在 `loadChat` 里设 `autoScroll = true` 并滚到底）。
+- 跟随靠对话列的 `ResizeObserver`：`parked` 时内容一变高就贴底。不能只在新 token 到达时滚——文字是逐帧显现的（`useReveal`），流结束后还在长，只按 token 跟随会一路落后几行，答案最后几行停在屏幕下面。Open WebUI 每个 delta 滚一次就够，因为它的文字只在 delta 时变。
+- 只有**用户往上滚**（`scrollTop` 变小）才离开底部；到达底部 `BOTTOM_SLACK` 以内重新贴底。不要用「离底部的距离」判断离开：「回到底部」按钮的平滑滚动在途中离底部很远，内容还在长，那样一按按钮就断了跟随。
+
