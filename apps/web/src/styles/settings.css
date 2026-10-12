@@ -480,7 +480,6 @@
 .prism-next .n-memory-chip-icon { width: 15px; height: 15px; flex: none; }
 .prism-next .n-memory-chip-label { flex: none; color: var(--n-text); font-weight: 500; }
 .prism-next .n-memory-chip-text { flex: 1 1 12em; min-width: 0; overflow-wrap: anywhere; }
-.prism-next .n-memory-chip-before { margin-right: 6px; color: var(--n-text-3); }
 .prism-next .n-memory-chip-text .is-removed { text-decoration: line-through; color: var(--n-text-3); }
 .prism-next .n-memory-chip.is-undone { opacity: 0.75; }
 .prism-next .n-memory-chip-state { flex: none; color: var(--n-text-3); font-size: 12px; }

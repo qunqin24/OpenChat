@@ -35,13 +35,15 @@ export function MemoryChip({ change }: { change: MemoryChange }) {
     }
   }, [event, events])
 
+  // An update shows what the note says now, not the old wording struck through
+  // beside it: two near-identical paragraphs in a reply read as noise, and the
+  // old one is a click away (Undo, or the manager's recent changes).
   const note = change.op === 'delete' ? change.before : change.content
   return (
     <div className={cn('n-memory-chip', undone && 'is-undone')} role="status">
       <Brain className="n-memory-chip-icon" aria-hidden="true" />
       <span className="n-memory-chip-label">{t(`chat.memory.${change.op}`)}</span>
       <span className="n-memory-chip-text">
-        {change.op === 'update' && change.before && <s className="n-memory-chip-before">{change.before}</s>}
         <span className={cn(change.op === 'delete' && 'is-removed')}>{note}</span>
       </span>
       {undone ? (
