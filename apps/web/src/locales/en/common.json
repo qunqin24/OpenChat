@@ -1355,7 +1355,9 @@
       "add-memory": "Add memory",
       "clear-memory": "Clear memory",
       "clear-confirm": "Clear all memories?",
-      "delete-confirm": "Delete this memory?"
+      "delete-confirm": "Delete this memory?",
+      "edit-memory": "Edit memory",
+      "editor-hint": "One lasting fact or preference, in a sentence. ⌘/Ctrl + Enter saves."
     },
     "account": {
       "name": "Username",

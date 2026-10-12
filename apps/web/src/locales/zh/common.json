@@ -1355,7 +1355,9 @@
       "add-memory": "添加记忆",
       "clear-memory": "清空记忆",
       "clear-confirm": "确认清空全部记忆？",
-      "delete-confirm": "删除这条记忆？"
+      "delete-confirm": "删除这条记忆？",
+      "edit-memory": "编辑记忆",
+      "editor-hint": "一条记忆写一个长期事实或偏好，一句话即可。⌘/Ctrl + Enter 保存。"
     },
     "account": {
       "name": "用户名",
