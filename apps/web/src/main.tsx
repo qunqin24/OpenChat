@@ -36,7 +36,7 @@ setErrorListener((error) => void leaveIfSessionExpired(error, router))
 // so, and let the reader reload when it suits them (lib/build-check.ts). It
 // stays until dismissed or acted on.
 onBuildChange(() =>
-  toast(i18n.t('app.updated.message'), {
+  toast.info(i18n.t('app.updated.message'), {
     id: 'build-updated',
     duration: Infinity,
     action: { label: i18n.t('app.updated.reload'), onClick: () => window.location.reload() },

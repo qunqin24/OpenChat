@@ -86,6 +86,24 @@
   color: oklch(0.92 0 0);
 }
 
+/* A toast's action (the update notice's Reload) in the toast's own colours,
+ * an outlined button on its tinted background, rather than Sonner's black
+ * button on what is otherwise a coloured, icon-led notice like the others. */
+.n-toast[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button] {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.9;
+}
+.n-toast[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button]:hover {
+  opacity: 1;
+}
+
 /* Loading is essential feedback. Only this wrapper animates; under reduced
  * motion it pulses without rotation while Sonner disables toast travel. */
 .n-toast[data-sonner-toaster] .n-toast-spinner {
