@@ -45,8 +45,9 @@ type ModelProfile struct {
 }
 
 // Compression is the policy of compressing runs. A nil *Compression in the
-// options means requests are never compressed on their own (a summary a person
-// asked for is still applied).
+// options means requests are never compressed (a summary the conversation
+// already has is still applied). Compressing is only ever automatic: nobody can
+// ask for it.
 type Compression struct {
 	// Auto reports whether requests are compressed when they near the window:
 	// the administrator's switch, asked before every request so a change
@@ -76,34 +77,15 @@ var (
 	errNoSummary      = errors.New("agent: the model wrote no summary")
 )
 
-// Mode is how much a compression covers.
-type Mode int
-
-const (
-	// ModeAuto summarises everything up to the last row except the latest user
-	// message, which is kept as it was written: the active instruction is never
-	// turned into history. What a run does before a request.
-	ModeAuto Mode = iota
-	// ModeManual summarises the whole conversation, the latest question
-	// included - the person asked for it, and none needs to be kept. Except
-	// when that question has no answer yet (it failed, or was stopped): the
-	// summary then ends at the question and keeps it, so that answering it
-	// again - which deletes what follows it - leaves the summary in place.
-	ModeManual
-)
-
 // CompactParams says whose conversation to compress and with what.
 type CompactParams struct {
 	ConversationID uuid.UUID
-	// UserID is whose request it is for the ledger; the zero value is nobody's
-	// (a guest's summary on request).
-	UserID    uuid.UUID
-	RunID     *uuid.UUID
-	ChannelID *uuid.UUID
-	ModelID   string
-	Client    llm.ModelClient
-	Profile   ModelProfile
-	Mode      Mode
+	UserID         uuid.UUID
+	RunID          *uuid.UUID
+	ChannelID      *uuid.UUID
+	ModelID        string
+	Client         llm.ModelClient
+	Profile        ModelProfile
 	// EndUser is the identifier of the person the summary is for, sent with
 	// the request (llm.Request.User).
 	EndUser string
@@ -192,32 +174,14 @@ func (c *Compactor) Compact(ctx context.Context, p CompactParams) (*Summary, err
 			lastUser = i
 		}
 	}
-	var keep *sqlc.Message // the user message sent as written
-	switch p.Mode {
-	case ModeAuto:
-		switch {
-		case lastUser >= 0:
-			keep = &rows[lastUser]
-		case carried != nil:
-			keep = carried // no new question since: the old one is still the one
-		}
-	case ModeManual:
-		// Only failures since a summary that kept the question: nothing to add,
-		// and folding the question into the summary would take it from the
-		// answer that is to follow it.
-		if lastUser < 0 && carried != nil {
-			if tail, err := BuildContext(rows); err == nil && len(tail) == 0 {
-				return nil, ErrNothingToCompact
-			}
-		}
-		// A question with no answer to go with it stays out of the summary.
-		if lastUser >= 0 {
-			if tail, err := BuildContext(rows[lastUser+1:]); err == nil && len(tail) == 0 {
-				keep = &rows[lastUser]
-				through = rows[lastUser]
-				rows = rows[:lastUser+1]
-			}
-		}
+	// The latest user message is sent as written, not summarised: the active
+	// instruction is never turned into history.
+	var keep *sqlc.Message
+	switch {
+	case lastUser >= 0:
+		keep = &rows[lastUser]
+	case carried != nil:
+		keep = carried // no new question since: the old one is still the one
 	}
 
 	covered := rows
@@ -271,21 +235,6 @@ func (c *Compactor) Compact(ctx context.Context, p CompactParams) (*Summary, err
 		return nil, err
 	}
 	return LoadSummary(ctx, c.q, p.ConversationID)
-}
-
-// Summarise has the model write a summary of messages, folded into an existing
-// one, without touching the database: the compression of a conversation the
-// server does not keep (a guest's, which the browser holds). messages are the
-// rows to add as BuildContext makes them, latest the text of the question that
-// is kept as written, if one is. It returns the summary and what writing it
-// took.
-func (c *Compactor) Summarise(ctx context.Context, p CompactParams, existing, latest string, messages []llm.Message) (content string, inputTokens, outputTokens int, err error) {
-	elements := elementsOf(messages)
-	if len(elements) == 0 {
-		return "", 0, 0, ErrNothingToCompact
-	}
-	out, err := c.summarise(ctx, p, existing, latest, elements)
-	return out.content, out.input, out.output, err
 }
 
 // lock takes the conversation's compression lock, or reports ErrCompactionBusy.
@@ -371,12 +320,6 @@ func (c *Compactor) fold(ctx context.Context, p CompactParams, existing, latest 
 	ctx, cancel := context.WithTimeout(ctx, foldTimeout)
 	defer cancel()
 
-	var ledgerConversation *uuid.UUID
-	session := ""
-	if p.ConversationID != uuid.Nil {
-		id := p.ConversationID
-		ledgerConversation, session = &id, id.String()
-	}
 	request := llm.Request{
 		Model: p.ModelID,
 		Messages: []llm.Message{
@@ -384,13 +327,13 @@ func (c *Compactor) fold(ctx context.Context, p CompactParams, existing, latest 
 			llm.TextMessage(llm.RoleUser, summaryRequest(existing, latest, elements)),
 		},
 		Options: llm.Options{MaxTokens: &maxTokens, Reasoning: p.Profile.Effort},
-		Session: session,
+		Session: p.ConversationID.String(),
 		User:    p.EndUser,
 	}
 	meter := c.usage.Begin(ledger.Call{
 		Kind:           ledger.KindCompression,
 		UserID:         p.UserID,
-		ConversationID: ledgerConversation,
+		ConversationID: &p.ConversationID,
 		RunID:          p.RunID,
 		ChannelID:      p.ChannelID,
 		ModelID:        p.ModelID,
@@ -621,6 +564,11 @@ type runCompression struct {
 	// summary cannot shrink, and compressing would be paying for nothing.
 	grownFrom int
 	compacted bool
+	// wroteRound is the round (+1) a compression last wrote a summary in.
+	wroteRound int
+	// forced: the one compression a run makes after the model refused a
+	// request for its length, which it may not make again (recoverContextLength).
+	forced bool
 	// failures counts this run's failed compressions, and failedAt is the
 	// estimate the last one failed at. A summariser that keeps failing (one
 	// that spends its whole allowance thinking, say) would otherwise be paid
@@ -640,9 +588,15 @@ const maxCompressionFailures = 2
 // context again). Any failure is the request going out as it is: the summary is
 // an optimisation, and the answer a person is waiting for is not given up for it.
 //
+// force compresses whatever the estimate says: the model refused a request for
+// its length, so the estimate was wrong. It skips the two checks that go by the
+// estimate (the threshold, and growth since the last compression) and keeps the
+// rest: a summariser that failed is not paid for again at once, and a round
+// that has been compressed already has nothing new to fold in.
+//
 // stop reports that the run was stopped or the process is going away, which the
 // caller leaves to the loop.
-func (ex *execution) compress(ctx context.Context, client llm.ModelClient, system string, tools []llm.Tool, summary *Summary, rows []sqlc.Message) (wrote, stop bool, err error) {
+func (ex *execution) compress(ctx context.Context, client llm.ModelClient, system string, tools []llm.Tool, summary *Summary, rows []sqlc.Message, force bool) (wrote, stop bool, err error) {
 	r := ex.r
 	policy := r.opts.Compression
 	if policy == nil || policy.Auto == nil || !policy.Auto(ctx) {
@@ -655,15 +609,21 @@ func (ex *execution) compress(ctx context.Context, client llm.ModelClient, syste
 		content = summary.Content
 	}
 	estimate := EstimateRequest(system, content, rows, tools)
-	if estimate <= CompressThreshold(profile.ContextWindow, summary != nil) {
-		return false, false, nil
-	}
 	window := profile.ContextWindow
 	if window <= 0 {
 		window = DefaultContextWindow
 	}
-	if ex.compression.compacted && estimate-ex.compression.grownFrom < int(window)/10 {
-		return false, false, nil
+	if force {
+		if ex.compression.wroteRound == ex.cp.Round+1 {
+			return false, false, nil
+		}
+	} else {
+		if estimate <= CompressThreshold(profile.ContextWindow, summary != nil) {
+			return false, false, nil
+		}
+		if ex.compression.compacted && estimate-ex.compression.grownFrom < int(window)/10 {
+			return false, false, nil
+		}
 	}
 	if ex.compression.failedRound == ex.cp.Round+1 {
 		return false, false, nil
@@ -688,7 +648,6 @@ func (ex *execution) compress(ctx context.Context, client llm.ModelClient, syste
 		ModelID:        ex.run.ModelID,
 		Client:         client,
 		Profile:        profile,
-		Mode:           ModeAuto,
 		EndUser:        ex.endUser(ctx),
 	})
 	if cerr != nil && (ctx.Err() != nil || errors.Is(context.Cause(ctx), errShutdown)) {
@@ -715,7 +674,58 @@ func (ex *execution) compress(ctx context.Context, client llm.ModelClient, syste
 	}); err != nil {
 		return false, false, err
 	}
+	if made != nil {
+		ex.compression.wroteRound = ex.cp.Round + 1
+	}
 	return made != nil, false, nil
+}
+
+// recoverContextLength is what a run does when the model refuses a request for
+// its length: the estimate that decided the request was small enough was
+// wrong, so the context is compressed once even though the estimate is under
+// the threshold, and the request is made again at once - no backoff, the
+// refusal is not a fault of the provider's. Once per run: whatever the
+// compression comes to, a second refusal ends the run as it always did, with
+// context_too_long. So does a compression that writes nothing (it failed,
+// there was nothing new to fold in, or compressing is switched off).
+//
+// retry reports that a summary was written and the request is to be made again.
+func (ex *execution) recoverContextLength(ctx context.Context, client llm.ModelClient, system string, offered []Tool, resp llm.ModelResponse, streamErr error) (retry bool, err error) {
+	var llmErr *llm.Error
+	if !errors.As(streamErr, &llmErr) || llmErr.Kind != llm.ErrorContextLength {
+		return false, nil
+	}
+	// A response that already has words in it is shown to the user as it is.
+	if ex.compression.forced || len(resp.Message.Parts) > 0 {
+		return false, nil
+	}
+	ex.compression.forced = true
+
+	summary, rows, err := LoadContextRows(ctx, ex.r.q, ex.run.ConversationID, ex.r.opts.HistoryLimit)
+	if err != nil {
+		return false, err
+	}
+	wrote, stop, err := ex.compress(ctx, client, system, definitions(offered), summary, rows, true)
+	if err != nil || stop || !wrote {
+		return false, err
+	}
+	ex.logger().Info("model refused the request for its length; compressed the context and trying again", "attempt", ex.cp.Attempt)
+	if summary, rows, err = LoadContextRows(ctx, ex.r.q, ex.run.ConversationID, ex.r.opts.HistoryLimit); err != nil {
+		return false, err
+	}
+	ex.noteCompressed(system, offered, summary, rows)
+	return true, nil
+}
+
+// noteCompressed records the size of the context a compression left, so that
+// the next one waits until the request has grown.
+func (ex *execution) noteCompressed(system string, offered []Tool, summary *Summary, rows []sqlc.Message) {
+	ex.compression.compacted = true
+	content := ""
+	if summary != nil {
+		content = summary.Content
+	}
+	ex.compression.grownFrom = EstimateRequest(system, content, rows, definitions(offered))
 }
 
 // settleCompaction ends a compression a previous process left unfinished: the

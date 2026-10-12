@@ -102,7 +102,7 @@ type Options struct {
 	// request ends, is not the only thing a request is checked against. Without
 	// it a request is checked against the ledger alone. It serves every path
 	// that records in the ledger: the run's requests, its compressions, and the
-	// titles and manual compressions the server makes (api.NewServer takes the
+	// titles the server makes (api.NewServer takes the
 	// runner's Recorder).
 	Reserver ledger.Reserver
 }

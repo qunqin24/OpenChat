@@ -258,7 +258,6 @@ func TestGuestModerationBansTheAddress(t *testing.T) {
 		{http.MethodGet, "/guest/config"},
 		{http.MethodPost, "/guest/runs"},
 		{http.MethodPost, "/guest/title"},
-		{http.MethodPost, "/guest/compaction"},
 		{http.MethodGet, "/guest/images?url=http://example.com/a.png"},
 		{http.MethodGet, "/guest/favicons/example.com"},
 	} {

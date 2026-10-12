@@ -210,37 +210,13 @@ type asking struct {
 	questions tools.Questions
 }
 
-// pendingQuestion finds the ask_user call with this id if it is the one the
-// conversation is waiting on (see the note at the top of the file).
-var errQuestionWaiting = httpx.NewError(http.StatusConflict, "question_pending",
-	"the model is waiting for an answer to its question; answer or skip it first")
-
-// questionWaiting is whether the conversation's newest reply ends on a question
-// the model is still waiting to have answered.
-func questionWaiting(ctx context.Context, q *sqlc.Queries, conversationID uuid.UUID) (bool, error) {
-	rows, err := q.ListRecentMessages(ctx, sqlc.ListRecentMessagesParams{ConversationID: conversationID, RowLimit: pendingLookback})
-	if err != nil {
-		return false, err
-	}
-	at := len(rows) - 1
-	for at >= 0 && rows[at].Role == sqlc.MessageRoleTool {
-		at--
-	}
-	if at < 0 || rows[at].Role != sqlc.MessageRoleAssistant || rows[at].RunID == nil {
-		return false, nil
-	}
-	run, err := q.GetRun(ctx, *rows[at].RunID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
-	}
-	return err == nil && run.Status == sqlc.RunStatusAwaitingInput, err
-}
-
 // pendingLookback is how far back the question is looked for: the asking row
 // and the results of the calls it made beside the question, of which a reply
 // has at most a round's worth.
 const pendingLookback = 64
 
+// pendingQuestion finds the ask_user call with this id if it is the one the
+// conversation is waiting on (see the note at the top of the file).
 func pendingQuestion(ctx context.Context, q *sqlc.Queries, conversationID uuid.UUID, callID string) (asking, error) {
 	var out asking
 	// The question is in the newest assistant row. Only the results of the
