@@ -742,7 +742,7 @@ export function NextChat({ conversationId, onCreated, onRemoved }: NextChatProps
           <Welcome onPick={setInput} modelName={modelName} model={modelById.get(modelId)} />
         ) : (
           <ImageSource.Provider value={images}>
-            <div className="n-column n-chat-fade" ref={columnRef}>
+            <div className={attachments.items.length > 0 ? 'n-column n-chat-fade has-files' : 'n-column n-chat-fade'} ref={columnRef}>
               {(start > floor || hasOlder) && (
                 // Room for the spinner is always kept while there is more above,
                 // so it appearing does not move the transcript.

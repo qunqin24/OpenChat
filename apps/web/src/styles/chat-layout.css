@@ -226,6 +226,19 @@
   .prism-next .n-chat-fade { animation: none; }
 }
 
+/* Room below the last message, as in Open WebUI (Messages.svelte: `pb-18`, and
+   `pb-6` more while the composer holds files, which make it taller): the end of
+   an answer and its actions sit clear of the composer rather than against it.
+   Padding, not a spacer element: the rule below counts the column's last two
+   children as the newest exchange. Both classes, to win over `.n-column`'s
+   `padding` shorthand, here and on narrow screens. */
+.prism-next .n-column.n-chat-fade {
+  padding-bottom: 72px;
+}
+.prism-next .n-column.n-chat-fade.has-files {
+  padding-bottom: 96px;
+}
+
 /* A long conversation lays out and paints only the messages near the screen:
    the browser skips the rest until they scroll close, keeping each one's last
    measured height (`auto`) so the scrollbar does not jump. The last two — the

@@ -61,3 +61,7 @@
 
 较早的消息用 `content-visibility: auto` 跳过屏幕外的渲染，最新的一问一答（最后两条）始终绘制。**`contain-intrinsic-size: auto 200px` 加在所有消息上**，不只加在被跳过的那些：浏览器只在元素带着 `contain-intrinsic-size: auto` 时记录它的真实高度，而发新消息的那一刻，原来的最后两条才第一次被套上 `content-visibility`——没有记录过高度，就按 200px 占位排一帧，对话骤然变矮、滚动位置被拉回上一条回答，再跳回来（v1.1.1 及之前每次发送都会闪一下）。Open WebUI 是所有消息一直带着这两个属性（`Message.svelte`，并在 WebKit 上关掉，因为它有消息变空白的绘制 bug）。改这段 CSS 后用无头 Chromium 逐帧记录发送前后滚动容器的 `scrollHeight`，不应出现骤降。
 
+## 最后一条消息下面的留白
+
+照 Open WebUI（`Messages.svelte` 的 `pb-18`，输入框有附件时再加 `pb-6`）：对话列 `.n-column.n-chat-fade` 底部留 72px，输入框里有文件时 96px（`has-files`），用 padding 而不是加一个空白子元素——`content-visibility` 那条规则按列的最后两个子元素认定「最新的一问一答」，多一个子元素就会把它们挤出去。两个类名一起写，才压得过 `.n-column` 的 `padding` 简写（窄屏的媒体查询里也有一条）。
+
