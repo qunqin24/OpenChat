@@ -451,12 +451,31 @@
 .chat-ui .n-memory-clearall:disabled { opacity: 0.45; cursor: not-allowed; }
 .chat-ui .n-memory-confirm { display: inline-flex; align-items: center; gap: 8px; color: var(--n-text-2); font-size: 12px; }
 .chat-ui .n-memory-confirm button { padding: 3px 10px; font-size: 12px; }
-.chat-ui .n-memory-recent { margin: 8px 0 6px; padding: 8px 4px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--n-line); }
-.chat-ui .n-memory-recent-title { padding: 0 8px 4px; color: var(--n-text-2); font-size: 12px; font-weight: 500; }
-.chat-ui .n-memory-recent ul { margin: 0; padding: 0; list-style: none; }
+.chat-ui .n-memory-recent { margin: 8px 0 6px; padding: 4px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--n-line); }
+.chat-ui .n-memory-recent-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--n-text-2);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.chat-ui .n-memory-recent-title:hover { background: var(--n-hover); color: var(--n-text); }
+.chat-ui .n-memory-recent-count { color: var(--n-text-3); font-variant-numeric: tabular-nums; }
+.chat-ui .n-memory-recent-chevron { width: 14px; height: 14px; margin-left: auto; transition: transform 150ms ease; }
+.chat-ui .n-memory-recent.is-open .n-memory-recent-chevron { transform: rotate(180deg); }
+.chat-ui .n-memory-recent ul { margin: 2px 0 4px; padding: 0; list-style: none; }
 .chat-ui .n-memory-recent-row { display: flex; align-items: center; gap: 8px; padding: 3px 8px; font-size: 13px; }
 .chat-ui .n-memory-recent-row.is-undone .n-memory-recent-text { color: var(--n-text-3); text-decoration: line-through; }
-.chat-ui .n-memory-recent-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.chat-ui .n-memory-recent-text { display: -webkit-box; flex: 1; min-width: 0; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .chat-ui .n-memory-undone { flex: none; color: var(--n-text-3); font-size: 12px; }
 .chat-ui .n-memory-row.is-confirming { background: var(--n-hover); }
 .chat-ui .n-memory-row.is-confirming .n-memory-actions { gap: 6px; }
@@ -479,7 +498,11 @@
 }
 .chat-ui .n-memory-chip-icon { width: 15px; height: 15px; flex: none; }
 .chat-ui .n-memory-chip-label { flex: none; color: var(--n-text); font-weight: 500; }
-.chat-ui .n-memory-chip-text { flex: 1 1 12em; min-width: 0; overflow-wrap: anywhere; }
+/* One line, cut with an ellipsis; a cut note opens to its whole text on a
+   click (a note may be up to 200 characters, several lines on a phone). */
+.chat-ui .n-memory-chip-text { flex: 1 1 12em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-ui .n-memory-chip-text.is-cut { cursor: pointer; }
+.chat-ui .n-memory-chip-text.is-open { overflow: visible; overflow-wrap: anywhere; white-space: normal; }
 .chat-ui .n-memory-chip-text .is-removed { text-decoration: line-through; color: var(--n-text-3); }
 .chat-ui .n-memory-chip.is-undone { opacity: 0.75; }
 .chat-ui .n-memory-chip-state { flex: none; color: var(--n-text-3); font-size: 12px; }

@@ -1,5 +1,5 @@
 import { Brain, Undo2 } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -43,9 +43,9 @@ export function MemoryChip({ change }: { change: MemoryChange }) {
     <div className={cn('n-memory-chip', undone && 'is-undone')} role="status">
       <Brain className="n-memory-chip-icon" aria-hidden="true" />
       <span className="n-memory-chip-label">{t(`chat.memory.${change.op}`)}</span>
-      <span className="n-memory-chip-text">
+      <ChipText>
         <span className={cn(change.op === 'delete' && 'is-removed')}>{note}</span>
-      </span>
+      </ChipText>
       {undone ? (
         <span className="n-memory-chip-state">{t('chat.memory.undone')}</span>
       ) : (
@@ -65,6 +65,52 @@ export function MemoryChip({ change }: { change: MemoryChange }) {
         {t('chat.memory.manage')}
       </button>
     </div>
+  )
+}
+
+/**
+ * The note, on one line: cut with an ellipsis when it does not fit, and then
+ * opened to its whole text by a click (and closed by another).
+ */
+function ChipText({ children }: { children: ReactNode }) {
+  const { t } = useTranslation()
+  const box = useRef<HTMLSpanElement>(null)
+  const [cut, setCut] = useState(false)
+  const [open, setOpen] = useState(false)
+
+  useLayoutEffect(() => {
+    const el = box.current
+    if (!el || open) return
+    const measure = () => setCut(el.scrollWidth > el.clientWidth + 1)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [open])
+
+  const toggles = cut || open
+  return (
+    <span
+      ref={box}
+      className={cn('n-memory-chip-text', cut && !open && 'is-cut', open && 'is-open')}
+      role={toggles ? 'button' : undefined}
+      tabIndex={toggles ? 0 : undefined}
+      aria-expanded={toggles ? open : undefined}
+      aria-label={toggles ? t(open ? 'chat.memory.collapse' : 'chat.memory.expand') : undefined}
+      onClick={toggles ? () => setOpen(!open) : undefined}
+      onKeyDown={
+        toggles
+          ? (event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                setOpen(!open)
+              }
+            }
+          : undefined
+      }
+    >
+      {children}
+    </span>
   )
 }
 

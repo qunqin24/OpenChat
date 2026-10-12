@@ -187,7 +187,9 @@
       "undo": "撤销",
       "undone": "已撤销",
       "manage": "管理记忆",
-      "step": "更新记忆"
+      "step": "更新记忆",
+      "expand": "展开全文",
+      "collapse": "收起"
     },
     "more": "更多",
     "scroll-bottom": "回到底部",

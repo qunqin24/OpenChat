@@ -1,7 +1,7 @@
 import type { Memory, MemoryEvent } from '@openchat/api-client'
 import { Check, ChevronDown, ChevronUp, Pencil, Search, Trash2, X } from 'lucide-react'
 import { Dialog } from 'radix-ui'
-import { useMemo, useRef, useState, type FormEvent } from 'react'
+import { useId, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -376,13 +376,22 @@ function RecentChanges() {
   const undo = useUndoMemoryEvent()
   const errorText = useUndoErrorText()
 
+  // Folded away until asked for: the memories are what the manager is for, and
+  // a list of the model's edits above them pushed them down the dialog.
+  const [open, setOpen] = useState(false)
+  const listId = useId()
+
   const recent = (events.data ?? []).slice(0, RECENT)
   if (recent.length === 0) return null
 
   return (
-    <section className="n-memory-recent" aria-label={t('settings.memory.recent')}>
-      <div className="n-memory-recent-title">{t('settings.memory.recent')}</div>
-      <ul>
+    <section className={cn('n-memory-recent', open && 'is-open')} aria-label={t('settings.memory.recent')}>
+      <button type="button" className="n-memory-recent-title" aria-expanded={open} aria-controls={listId} onClick={() => setOpen(!open)}>
+        <span>{t('settings.memory.recent')}</span>
+        <span className="n-memory-recent-count">{recent.length}</span>
+        <ChevronDown className="n-memory-recent-chevron" aria-hidden="true" />
+      </button>
+      <ul id={listId} hidden={!open}>
         {recent.map((event) => (
           <li key={event.id} className={cn('n-memory-recent-row', event.undoneAt && 'is-undone')}>
             <span className="n-settings-badge">{t(`settings.memory.op-${event.op}`)}</span>

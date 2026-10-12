@@ -187,7 +187,9 @@
       "undo": "Undo",
       "undone": "Undone",
       "manage": "Manage memory",
-      "step": "Updating memory"
+      "step": "Updating memory",
+      "expand": "Show the whole note",
+      "collapse": "Show less"
     },
     "more": "More",
     "scroll-bottom": "Scroll to bottom",
