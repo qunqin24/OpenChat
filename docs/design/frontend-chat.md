@@ -56,3 +56,8 @@
 - 所有面向用户的字符串都走 `t()`（`zh`、`en`，键有类型约束）；服务端 `message` 不直接渲染。
 - 动效：全局遵守 `prefers-reduced-motion`，加载指示器标 `data-motion="essential"`，用透明度脉动代替位移。
 - 设置对话框（通用/个性化/账户/数据）是 `?settings=<tab>` 搜索参数（`lib/settings.ts`），挂在 `_authed` 布局上，渲染进 `.prism-next` 里；样式照搬 Open WebUI 经典设置弹窗，在 `styles/settings.css`。记忆列表是它里面的第二层弹窗（`MemoryManager`）。记忆相关查询键在 `queryKeys.memory`，不写入本地缓存（`query-persist` 只存白名单），临时对话的转录同样不落本地缓存。
+
+## 较早消息的跳过渲染（`styles/chat-layout.css`）
+
+较早的消息用 `content-visibility: auto` 跳过屏幕外的渲染，最新的一问一答（最后两条）始终绘制。**`contain-intrinsic-size: auto 200px` 加在所有消息上**，不只加在被跳过的那些：浏览器只在元素带着 `contain-intrinsic-size: auto` 时记录它的真实高度，而发新消息的那一刻，原来的最后两条才第一次被套上 `content-visibility`——没有记录过高度，就按 200px 占位排一帧，对话骤然变矮、滚动位置被拉回上一条回答，再跳回来（v1.1.1 及之前每次发送都会闪一下）。Open WebUI 是所有消息一直带着这两个属性（`Message.svelte`，并在 WebKit 上关掉，因为它有消息变空白的绘制 bug）。改这段 CSS 后用无头 Chromium 逐帧记录发送前后滚动容器的 `scrollHeight`，不应出现骤降。
+

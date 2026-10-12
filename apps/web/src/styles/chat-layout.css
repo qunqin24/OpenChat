@@ -232,11 +232,21 @@
    newest exchange, where the tail-follow reads heights and a reply streams —
    are always drawn. */
 @supports (content-visibility: auto) {
+  /* Every message keeps a remembered height, not only the skipped ones: the
+     browser records it only while the element has `contain-intrinsic-size:
+     auto`, and the newest exchange gets content-visibility the moment a new
+     message is sent below it. Without a height recorded by then, it was laid
+     out at the 200px placeholder for a frame - the transcript shrank, the
+     scroll position was clamped up into the previous answer, and the page
+     jumped there and back on every send. It does nothing to a message that is
+     drawn. */
+  .prism-next .n-chat-fade > :is(.n-msg-user, .n-msg-assistant) {
+    contain-intrinsic-size: auto 200px;
+  }
   /* A reply with reasoning or a search open is exempt: containment would make
      it a stacking context, sinking its stuck header under the top bar's fade. */
   .prism-next .n-chat-fade > :is(.n-msg-user, .n-msg-assistant):not(:nth-last-child(-n + 2)):not(:has(.n-reasoning-toggle[data-state='open'], .n-activity.is-open)) {
     content-visibility: auto;
-    contain-intrinsic-size: auto 200px;
     /* Containment clips painting to the message's box, and blocks as wide as
        the column (a Grid of cards, a table) drew their shadows past its right
        edge, which came out cut. The box reaches 16px further right, given back
