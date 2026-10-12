@@ -47,6 +47,7 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 - 新的软删除对话路径必须在同一事务里 `CancelConversationRuns`，提交后 `runner.Cancel`，并发 `conversation_deleted`。
 - 被审核拒绝的行是 `messages.status = 'blocked'`：凡构造模型看到的内容的查询都要 `status <> 'blocked'`，只有 `ListMessages`（显示）和 `GetInput`（改写）看得见它；`agent.BuildContext`、`EstimateRow` 再各跳一次。
 - 给模型的上下文用 `LoadContextRows` + `BuildRequestContext`；压缩从不改行，摘要的一致性靠 `context_summaries` 的 `ON DELETE CASCADE`；`HistoryLimit` 只是安全上限。
+- 压缩只有 run 自己会做，用户没有手动入口（只能读 `GET`、撤销 `DELETE` `/conversations/{id}/compaction`）；不要加回去。模型因长度拒绝请求（`context_too_long`）时，开着自动压缩的 run 会强制压一次（估算低于门槛也压）并立即重试，每个 run 至多一次（`recoverContextLength`），压不出来或再被拒绝就照旧以 `context_too_long` 结束。
 - 新增模型请求路径：先构造 `llm.Request`（带 `User`），`Begin(Call{InputEstimate: llm.EstimateInput(req)})` → `Reserve` → `Stream` → `End`；`partialStream` 在 `Reserve` 之后才创建；挑模型走 `pickChannel`（用户请求传 `isStaff(ctx)`，服务端任务传 `true`）并过容量检查；新 kind 要加 `usage_logs_kind` 约束。
 - 容量上限按请求的 `model_id`（不是 `served_model`）、金额全程 `numeric` 在 SQL 里比较，不经 float。
 - 读用户上传文件并发给模型必须走 `agent.attachmentResolver`（SHA-256 收据），别自己 `Read`；本地 `PUT` 用 `Local.PutNew`，写一次。
@@ -80,7 +81,7 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 
 - 唯一要模型的请求是 `POST /guest/runs`（`api/guest_run.go`），复用 `chooseRun`/`createRun`/`startRun`，跑完删临时用户；其余 `/guest/*` 在开关关着时 404（`requireGuestMode`）。
 - 新增聊天用的端点必须决定游客怎么答：本地服务（`lib/guest/router.ts`）还是服务端（`/guest/*`）；hooks 和组件不知道在跟谁说话（`appFetch`）。
-- 对话规则在两边各有一份，要一起改：`transcript.ts`/`summary.ts`/`memory.ts` ↔ Go 的 SQL 与 `ModeManual`；每个删行的地方过 `survivingSummary`。
+- 对话规则在两边各有一份，要一起改：`transcript.ts`/`summary.ts`/`memory.ts` ↔ Go 的 SQL；每个删行的地方过 `survivingSummary`。
 - 浏览器带来的一切都要有服务端收据：新增把浏览器内容送给模型的路径必须过 `verifyGuest`；带收据的东西先 `guestIDs` 翻译、后签名。
 - 浏览器指定、又落在全表主键上的 id 要换成请求自己的（`guestIDs`）；文件 key 里绝不放浏览器给的 id（`guestFileKey`）。
 - 本地消息行的时间只用服务端的或 `stampAfter`，绝不用浏览器的 `now()`；浏览器绝不能把本地 `blocked` 行发给服务端。

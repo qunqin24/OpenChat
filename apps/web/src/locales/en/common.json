@@ -719,7 +719,7 @@
         "ask-user-on": "Asking the user is on",
         "ask-user-off": "Asking the user is off",
         "compress-context": "Compress context automatically",
-        "compress-context-hint": "When a request would fill more than half of the model's context window (65% once the conversation has a summary), the conversation's own model first summarises the older part, and the model is sent the summary in its place. The original messages stay on screen. Off, requests go out as they are and people can still compress by hand. On by default; runs in progress pick it up at their next request.",
+        "compress-context-hint": "When a request would fill more than half of the model's context window (65% once the conversation has a summary), the conversation's own model first summarises the older part, and the model is sent the summary in its place. The original messages stay on screen. A request the model refuses for its length is compressed once and retried at once. Compression is only ever automatic; people cannot compress by hand. Off, requests go out as they are. On by default; runs in progress pick it up at their next request.",
         "compress-context-on": "Automatic context compression is on",
         "compress-context-off": "Automatic context compression is off",
         "avatars": "Profile picture uploads",
