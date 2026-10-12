@@ -656,16 +656,27 @@ func TestModerationNeverDisablesAnAdministrator(t *testing.T) {
 }
 
 // Parallel blocked messages of one account all see each other's strikes: exactly
-// one reaches the threshold.
+// one reaches the threshold. Each goes to a conversation of its own: in one
+// conversation the first refused message to be kept stops the others before
+// moderation (revise_refused), and they would count no strike at all.
 func TestModerationStrikesAreCountedUnderParallelRequests(t *testing.T) {
 	h, _ := newModerationHarness(t, "")
+	convs := make([]uuid.UUID, 3)
+	for i := range convs {
+		conv, err := h.q.CreateConversation(context.Background(), sqlc.CreateConversationParams{UserID: &h.user.ID, Title: defaultTitle, Model: h.conv.Model})
+		if err != nil {
+			t.Fatal(err)
+		}
+		convs[i] = conv.ID
+	}
 	var wg sync.WaitGroup
 	for i := range 3 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			// Blocked, or (the one that reaches the threshold) signed out.
-			rec := h.post(fmt.Sprintf("BLOCKME %d", i))
+			rec := httptest.NewRecorder()
+			h.server.CreateMessage(rec, h.request(http.MethodPost, fmt.Sprintf(`{"content":"BLOCKME %d","model":%q}`, i, h.model)), convs[i])
 			if rec.Code != http.StatusUnprocessableEntity && rec.Code != http.StatusUnauthorized {
 				t.Errorf("status %d: %s", rec.Code, rec.Body)
 			}
