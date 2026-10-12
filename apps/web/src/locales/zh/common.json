@@ -1,7 +1,11 @@
 {
   "app": {
     "name": "OpenChat",
-    "tagline": "开放的流式对话工作台。"
+    "tagline": "开放的流式对话工作台。",
+    "updated": {
+      "message": "服务端已更新，请刷新页面以使用新版本。",
+      "reload": "刷新"
+    }
   },
   "nav": {
     "toggleSidebar": "切换侧边栏",

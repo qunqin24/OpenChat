@@ -32,3 +32,8 @@
 
 - 服务端自带前端：`make build` 先建 web（vite 同时预压缩出 `.br`/`.gz`），再拷进 `internal/webui/dist` 嵌入二进制，一个进程、一个源。`/assets/*` 带 `immutable` 长缓存，`index.html` 是 `no-cache`；缺失的 `/assets/x.js` 是真 404，不回落到 index.html。开发仍走 `make web`。
 - 没跑过 web 构建时 `webui/dist` 里只有 `.gitkeep`，服务端只提供 API，`/` 返回一行纯文本说明；该目录除 `.gitkeep` 外都被 gitignore，不要提交。
+
+## 升级后提示刷新（`webui.BuildID`、`X-OpenChat-Build`、`lib/build-check.ts`）
+
+服务端在每个响应里带 `X-OpenChat-Build`：嵌进二进制的前端 `index.html` 的 SHA-256 前 12 位。`index.html` 列出了所有带哈希的资源名，所以只有前端真的变了它才变——重启、只改服务端都不变；没有嵌前端（开发时 Vite 提供页面）就不带。前端所有请求都经过 `appFetch`（账号）或游客的 `network`，两处都调 `noteBuild`：记住第一次看到的值，之后看到不同的值就通过 `onBuildChange` 弹一次不会自动消失的通知「服务端已更新，请刷新页面」和「刷新」按钮（`main.tsx`）。镜像升级、服务重启后，事件流的自动重连通常是第一个发现的请求。和 Open WebUI 不同：它在 WebSocket 重连后比对版本号和部署 ID，不同就直接强制刷新页面；这里只提示，免得丢掉输入框里写了一半的消息。新增不经 `appFetch` 的网络请求时，也要调 `noteBuild`。
+

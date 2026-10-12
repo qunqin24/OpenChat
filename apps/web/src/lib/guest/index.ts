@@ -1,6 +1,7 @@
 import type { GuestConfig } from '@openchat/api-client'
 
 import { API_BASE_URL } from '@/lib/api-base'
+import { noteBuild } from '@/lib/build-check'
 import { queryClient } from '@/lib/query'
 import { queryKeys } from '@/lib/query-keys'
 import { markGuestBanned } from '@/stores/guest-ban-store'
@@ -38,6 +39,7 @@ const CONFIG_TTL_MS = 30_000
 /** Every request to the network goes through here, never through the page's own fetch (which would serve it locally). */
 const network: typeof globalThis.fetch = async (input, init) => {
   const response = await globalThis.fetch(input, init)
+  noteBuild(response)
   // A banned address is refused by every guest endpoint; the shell is told, and
   // covers the page.
   if (response.status === 403) {

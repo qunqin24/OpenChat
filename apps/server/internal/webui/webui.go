@@ -53,6 +53,30 @@ func Handler() http.Handler {
 	return New(sub)
 }
 
+// BuildID names the embedded front end: the first hex of the SHA-256 of its
+// index.html, which lists every hashed asset by name, so it changes exactly
+// when the front end does - not on a restart, nor on a server-only change. ""
+// when nothing is embedded (placeholder mode; development, where Vite serves
+// the page and reloads it itself). Sent with every response (the router's
+// X-OpenChat-Build), so a page left open across an upgrade can tell it is out
+// of date.
+func BuildID() string {
+	buildID.once.Do(func() {
+		index, err := embedded.ReadFile("dist/index.html")
+		if err != nil {
+			return
+		}
+		sum := sha256.Sum256(index)
+		buildID.id = hex.EncodeToString(sum[:6])
+	})
+	return buildID.id
+}
+
+var buildID struct {
+	once sync.Once
+	id   string
+}
+
 // New serves the build in fsys, whose root holds index.html.
 //
 // If fsys has no index.html the handler runs in placeholder mode (see the

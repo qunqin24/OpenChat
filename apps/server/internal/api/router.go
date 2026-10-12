@@ -26,6 +26,7 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 	r := chi.NewRouter()
 
 	r.Use(httpx.RequestID)
+	r.Use(buildHeader(webui.BuildID()))
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(httpx.RequestLogger)
@@ -35,7 +36,7 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 		AllowedOrigins: cfg.CORSOrigins,
 		AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "X-Request-Id"},
-		ExposedHeaders: []string{"X-Request-Id"},
+		ExposedHeaders: []string{"X-Request-Id", buildHeaderName},
 		// Required for the session cookie to survive a cross-origin request.
 		AllowCredentials: true,
 		MaxAge:           int((12 * time.Hour).Seconds()),
@@ -217,4 +218,23 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 	r.NotFound(webui.Handler().ServeHTTP)
 
 	return r
+}
+
+// buildHeaderName carries the embedded front end's build (webui.BuildID) on
+// every response. A page loaded before an upgrade sees a different value on its
+// next request - the event stream reconnecting after the restart is one - and
+// asks the reader to reload (lib/build-check.ts in the web app).
+const buildHeaderName = "X-OpenChat-Build"
+
+func buildHeader(id string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		if id == "" {
+			// Nothing embedded (development): no build to compare.
+			return next
+		}
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(buildHeaderName, id)
+			next.ServeHTTP(w, r)
+		})
+	}
 }

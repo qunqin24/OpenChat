@@ -2,6 +2,7 @@ import { createApiClient, OpenChatError } from '@openchat/api-client'
 import type { ApiError } from '@openchat/api-client'
 
 import { API_BASE_URL } from './api-base'
+import { noteBuild } from './build-check'
 import { isGuestMode } from './guest/mode'
 
 export { API_BASE_URL }
@@ -13,7 +14,11 @@ export { API_BASE_URL }
  * an account never downloads it.
  */
 export const appFetch: typeof globalThis.fetch = async (input, init) => {
-  if (!isGuestMode()) return globalThis.fetch(input, init)
+  if (!isGuestMode()) {
+    const response = await globalThis.fetch(input, init)
+    noteBuild(response)
+    return response
+  }
   const { guestFetch } = await import('./guest')
   return guestFetch(input, init)
 }

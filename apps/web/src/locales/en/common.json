@@ -1,7 +1,11 @@
 {
   "app": {
     "name": "OpenChat",
-    "tagline": "An open, streaming chat workspace."
+    "tagline": "An open, streaming chat workspace.",
+    "updated": {
+      "message": "The server has been updated. Reload the page to use the new version.",
+      "reload": "Reload"
+    }
   },
   "nav": {
     "toggleSidebar": "Toggle sidebar",
