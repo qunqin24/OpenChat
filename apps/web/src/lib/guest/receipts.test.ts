@@ -1,7 +1,6 @@
-import type { ContextSummary, GuestCompactRequest, GuestEndEvent, GuestRunRequest, Memory, Message, Run } from '@openchat/api-client'
+import type { ContextSummary, GuestEndEvent, GuestRunRequest, Memory, Message, Run } from '@openchat/api-client'
 import { describe, expect, it } from 'vitest'
 
-import { compactGuestConversation } from './compaction'
 import { GuestHub } from './hub'
 import { applyModelChanges, rewriteMemory } from './memory'
 import { adoptMemoryReceipts, requestReceipts, signedSummary, withEndReceipts, withInstructionReceipts } from './receipts'
@@ -239,35 +238,5 @@ describe('old data, from before receipts', () => {
     expect(JSON.stringify(built.request)).not.toContain('receipt')
     // And it all still reads for the page.
     expect((await h.repo.listMessages(c, {})).items).toHaveLength(4)
-  })
-})
-
-describe('compressing on request', () => {
-  it('sends the receipts of what it summarises, and keeps the one the summary comes with', async () => {
-    const h = harness()
-    const sent: GuestCompactRequest[] = []
-    const deps = {
-      repo: h.repo,
-      hub: new GuestHub(),
-      baseUrl: '/api/v1',
-      now: () => new Date('2026-10-11T12:00:00Z'),
-      fetch: async (_input: RequestInfo | URL, init?: RequestInit) => {
-        sent.push(JSON.parse(String(init?.body)) as GuestCompactRequest)
-        return Response.json({ content: '- new', model: 'model-a', inputTokens: 3, outputTokens: 2, receipt: 'receipt-summary' })
-      },
-    }
-    const c = await h.conversation()
-    const one = await h.turn(c, { ask: 'one', answer: 'a1' })
-    await h.repo.messageAppended(c, { ...one.input, receipt: 'receipt-q1' })
-    await h.repo.messageAppended(c, { ...one.rows[0]!, receipt: 'receipt-a1' })
-    await h.repo.setSummary(c, { content: '- old', throughMessageId: one.rows[0]!.id, keptMessageId: one.input.id, model: 'm', inputTokens: 1, outputTokens: 1, createdAt: iso(1), receipt: 'receipt-old' })
-    const two = await h.turn(c, { ask: 'two' })
-    await h.repo.messageAppended(c, { ...two.input, receipt: 'receipt-q2' })
-
-    const summary = await compactGuestConversation(deps, c)
-    expect(sent[0]).toMatchObject({ existing: '- old', existingReceipt: 'receipt-old', latest: 'two', latestReceipt: 'receipt-q2' })
-    expect(sent[0]!.messages.map((m) => [m.content, m.receipt])).toEqual([['one', 'receipt-q1']])
-    expect(summary.receipt).toBe('receipt-summary')
-    expect((await h.repo.compaction(c)).summary?.receipt).toBe('receipt-summary')
   })
 })

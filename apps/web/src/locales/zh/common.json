@@ -69,7 +69,7 @@
       "model_error": "模型服务出错了，请稍后重试。",
       "model_auth": "模型服务拒绝了渠道的密钥，请联系管理员检查渠道配置。",
       "model_rate_limited": "模型服务繁忙（请求过于频繁），请稍后重试。",
-      "context_too_long": "对话太长，超出了模型的上下文上限。可以压缩上下文后再试。",
+      "context_too_long": "对话太长，即使压缩过上下文也超出了模型的上限。可以新建一个对话，或换一个上下文窗口更大的模型。",
       "internal": "服务器内部出错，这次回复没有完成。",
       "tool_markup": "模型把下一步的工具调用写成了文字，这次回答没有完成。可以点重新生成再试一次。",
       "connection_lost": "连接中断，这次回答没有完成。可以点重新生成再试一次。",
@@ -81,14 +81,8 @@
       "undo": "撤销压缩",
       "undone": "已撤销压缩，模型会看到完整的对话",
       "running": "正在压缩上下文…",
-      "action": "压缩上下文",
-      "done": "上下文已压缩",
-      "error-nothing_to_compact": "没有需要压缩的新内容。",
       "error-conversation_busy": "对话正在回答，等它结束或先停止。",
-      "error-compaction_busy": "这个对话正在压缩，请稍等。",
-      "error-question_pending": "模型还在等你回答它的问题，回答或跳过之后再压缩。",
-      "error-compaction_failed": "模型没能写出摘要，请稍后再试。",
-      "error-generic": "压缩没有成功，请稍后再试。"
+      "error-generic": "撤销压缩没有成功，请稍后再试。"
     },
     "refused": {
       "title": "内容违规",
@@ -324,10 +318,7 @@
       "label": "上下文窗口",
       "hint": "已用 {{percent}}%（剩余 {{left}}%）\n{{used}} / {{limit}} tokens",
       "aria": "上下文窗口已用 {{percent}}%",
-      "compact": "立即压缩",
-      "compacting": "正在压缩…",
       "compacted": "更早的内容已压缩为摘要",
-      "compact-hint": "把较早的对话总结成摘要，腾出上下文窗口。原来的消息仍然显示。",
       "estimated": "压缩后的估算，下一次回答后更新为实际用量"
     }
   },

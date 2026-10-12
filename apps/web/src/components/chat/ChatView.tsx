@@ -12,7 +12,7 @@ import {
   useChatModels,
   useUpdateConversationSettings,
 } from '@/hooks/use-chat-models'
-import { useCompact, useCompaction, useUndoCompaction } from '@/hooks/use-compaction'
+import { useCompaction, useUndoCompaction } from '@/hooks/use-compaction'
 import { useConversationEvents } from '@/hooks/use-conversation-events'
 import { useConversation, useCreateConversation, useDeleteConversation } from '@/hooks/use-conversations'
 import { useAttachments } from '@/hooks/use-attachments'
@@ -97,7 +97,6 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
   const editMessage = useEditMessage(conversationId ?? '')
   const answerQuestion = useAnswerQuestion(conversationId ?? '')
   const summary = useCompaction(conversationId)
-  const compress = useCompact(conversationId ?? '')
   const undoCompaction = useUndoCompaction(conversationId ?? '')
   const updateSettings = useUpdateConversationSettings()
 
@@ -286,12 +285,6 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
       reasoningEffort: canThink ? effort : undefined,
       webSearch: canSearch ? webSearch : undefined,
     })
-  }
-
-  // An answer that failed for the conversation's length: compress the context,
-  // then answer again. A compression that cannot be done says why and stops.
-  const handleCompressAndRetry = () => {
-    compress.mutate(undefined, { onSuccess: () => handleRegenerate() })
   }
 
   // Taking the compression back is not offered under a run: it would change
@@ -779,7 +772,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
       modelSlot={
         <>
           {conversationId && (
-            <ContextMeter conversationId={conversationId} limit={modelById.get(modelId)?.contextLimit} busy={working || Boolean(outgoing)} />
+            <ContextMeter conversationId={conversationId} limit={modelById.get(modelId)?.contextLimit} />
           )}
           {canThink && <ThinkingPicker levels={thinkingLevels} value={effort} onChange={pickEffort} />}
           <ModelPicker models={available} value={modelId} onChange={pickModel} />
@@ -853,8 +846,6 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
                       askingCallId={askingCallId}
                       onOpenQuestion={() => setDismissedCallId(null)}
                       onRegenerate={turn === last?.answer && !working && !outgoing ? handleRegenerate : undefined}
-                      onCompress={turn === last?.answer && !working && !outgoing ? handleCompressAndRetry : undefined}
-                      compressing={compress.isPending}
                       divider={divider}
                     />
                   )}

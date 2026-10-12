@@ -97,5 +97,3 @@ export type GuestRunEvent = Schemas['GuestRunEvent']
 
 export type ContextSummary = Schemas['ContextSummary']
 export type CompactionState = Schemas['CompactionState']
-export type GuestCompactRequest = Schemas['GuestCompactRequest']
-export type GuestCompactResponse = Schemas['GuestCompactResponse']

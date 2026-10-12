@@ -352,12 +352,6 @@
 }
 .chat-ui .n-context-meter:hover,
 .chat-ui .n-context-meter[data-state='open'] { background: var(--n-hover); }
-/* While a compression the person asked for is under way: opacity only, so it
-   keeps moving under reduced motion (essential). */
-.chat-ui .n-context-meter.is-busy { animation: n-context-busy 1.1s ease-in-out infinite; }
-@keyframes n-context-busy {
-  50% { opacity: 0.35; }
-}
 .chat-ui .n-context-meter:focus-visible { outline-offset: -2px; }
 .chat-ui .n-context-meter svg { width: 18px; height: 18px; transform: rotate(-90deg); }
 .chat-ui .n-context-track { fill: none; stroke: var(--n-line); stroke-width: 2.5; }
@@ -371,7 +365,7 @@
 .chat-ui .n-context-meter.is-high { color: #d97706; }
 .chat-ui .n-context-meter.is-full { color: var(--n-err); }
 
-/* The meter's menu: the figures, then what can be done about them. It is
+/* The meter's menu: the figures and notes. It is
    portalled out of .chat-ui, so it is written against the menu's own tokens. */
 .n-context-menu {
   min-width: 220px;

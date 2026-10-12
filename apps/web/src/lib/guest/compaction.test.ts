@@ -1,7 +1,7 @@
-import type { BatchEvent, ContextSummary, ConversationEvent, GuestCompactRequest, GuestRunRequest, Run } from '@openchat/api-client'
+import type { BatchEvent, ContextSummary, ConversationEvent, GuestRunRequest, Run } from '@openchat/api-client'
 import { describe, expect, it } from 'vitest'
 
-import { compactGuestConversation, undoGuestCompaction, type CompactionDeps } from './compaction'
+import { undoGuestCompaction, type CompactionDeps } from './compaction'
 import { GuestHub } from './hub'
 import { buildRunRequest, MAX_ROWS } from './request'
 import { createGuestApi } from './router'
@@ -9,8 +9,8 @@ import { GuestRunner } from './runner'
 import { harness } from './testing'
 
 // A guest's compressed context: kept with the conversation, sent with a run,
-// kept again from the run's events, made on request through the server's model,
-// and gone with the rows it is tied to.
+// kept again from the run's events, taken back, and gone with the rows it is
+// tied to.
 
 const summaryOf = (through: string, over: Partial<ContextSummary> = {}): ContextSummary => ({
   content: '- earlier things',
@@ -238,161 +238,65 @@ describe('a run that compresses', () => {
   })
 })
 
-describe('compressing on request', () => {
-  function setup(respond: (request: GuestCompactRequest) => Response | Promise<Response>) {
+describe('taking the compression back', () => {
+  function setup() {
     const h = harness()
     const hub = new GuestHub()
-    const sent: GuestCompactRequest[] = []
     const changed: string[] = []
     const seen: ConversationEvent[] = []
-    const deps: CompactionDeps = {
-      repo: h.repo,
-      hub,
-      baseUrl: '/api/v1',
-      changed: (id) => changed.push(id),
-      now: () => new Date('2026-10-11T12:00:00Z'),
-      fetch: async (input, init) => {
-        expect(String(input)).toBe('/api/v1/guest/compaction')
-        const body = JSON.parse(String(init?.body)) as GuestCompactRequest
-        sent.push(body)
-        return respond(body)
-      },
-    }
-    return { h, hub, deps, sent, changed, seen, listen: (id: string) => hub.subscribe(id, (e) => seen.push(e)) }
+    const deps: CompactionDeps = { repo: h.repo, hub, changed: (id) => changed.push(id) }
+    return { h, hub, deps, changed, seen, listen: (id: string) => hub.subscribe(id, (e) => seen.push(e)) }
   }
-  const written = (content = '- the summary') => Response.json({ content, model: 'model-a', inputTokens: 30, outputTokens: 8 })
 
-  it('summarises the whole conversation, keeps the summary, and tells the page and other pages', async () => {
-    const t = setup(() => written())
+  it('deletes the summary: the originals were never removed', async () => {
+    const t = setup()
     const c = await t.h.conversation()
     t.listen(c)
-    await t.h.turn(c, { ask: 'one', answer: 'a1' })
-    const t2 = await t.h.turn(c, { ask: 'two', answer: 'a2' })
-    await t.h.repo.updateConversation(c, { model: 'model-a' })
-
-    const summary = await compactGuestConversation(t.deps, c)
-    expect(summary).toMatchObject({
-      content: '- the summary', throughMessageId: t2.rows[0]!.id, model: 'model-a', inputTokens: 30, outputTokens: 8,
-      createdAt: '2026-10-11T12:00:00.000Z',
-    })
-    expect(summary.keptMessageId).toBeUndefined()
-    expect(t.sent[0]).toMatchObject({ model: 'model-a' })
-    expect(t.sent[0]!.messages.map((m) => m.content)).toEqual(['one', 'a1', 'two', 'a2'])
-    expect(t.sent[0]).not.toHaveProperty('existing')
-    expect((await t.h.repo.compaction(c)).summary?.content).toBe('- the summary')
-    expect(t.changed).toEqual([c])
-    expect(t.seen.flatMap((e) => (e.type === 'batch' ? e.events.map((x) => x.type) : []))).toEqual(['compaction_changed'])
-  })
-
-  it('folds the old summary and what came after into the new one', async () => {
-    const t = setup(() => written('- the new summary'))
-    const c = await t.h.conversation()
     const t1 = await t.h.turn(c, { ask: 'one', answer: 'a1' })
-    await t.h.repo.setSummary(c, summaryOf(t1.rows[0]!.id, { keptMessageId: t1.input.id, content: '- the old summary' }))
-    await t.h.turn(c, { ask: 'two', answer: 'a2' })
-
-    await compactGuestConversation(t.deps, c)
-    expect(t.sent[0]!.existing).toBe('- the old summary')
-    // The question the old summary kept was never written into it.
-    expect(t.sent[0]!.messages.map((m) => m.content)).toEqual(['one', 'two', 'a2'])
-    expect((await t.h.repo.compaction(c)).summary?.content).toBe('- the new summary')
-  })
-
-  it('keeps a question that has no answer, and sends it only as the latest message', async () => {
-    const t = setup(() => written())
-    const c = await t.h.conversation()
-    await t.h.turn(c, { ask: 'one', answer: 'a1' })
-    const failed = await t.h.turn(c, { ask: 'two', status: 'failed' })
-
-    const summary = await compactGuestConversation(t.deps, c)
-    expect(summary.throughMessageId).toBe(failed.input.id)
-    expect(summary.keptMessageId).toBe(failed.input.id)
-    expect(t.sent[0]!.latest).toBe('two')
-    expect(t.sent[0]!.messages.map((m) => m.content)).toEqual(['one', 'a1'])
-  })
-
-  it('refuses while a run is going, and when there is nothing new', async () => {
-    const t = setup(() => written())
-    const c = await t.h.conversation()
-    await expect(compactGuestConversation(t.deps, c)).rejects.toMatchObject({ status: 409, code: 'nothing_to_compact' })
-
-    const t1 = await t.h.turn(c, { ask: 'one', answer: 'a1' })
-    await compactGuestConversation(t.deps, c)
-    await expect(compactGuestConversation(t.deps, c)).rejects.toMatchObject({ code: 'nothing_to_compact' })
-
-    // A run going: the conversation is its.
-    await t.h.repo.runStarted(c, { run: { ...run('r2', 'running'), conversationId: c }, input: t1.input, action: 'regenerate', choice: {} }, 'tab')
-    await expect(compactGuestConversation(t.deps, c)).rejects.toMatchObject({ status: 409, code: 'conversation_busy' })
-    await expect(undoGuestCompaction(t.deps, c)).rejects.toMatchObject({ status: 409, code: 'conversation_busy' })
-  })
-
-  it('passes the server\'s refusal on as it was, and writes nothing', async () => {
-    const t = setup(() => Response.json({ code: 'guest_ip_limit', message: 'slow down' }, { status: 429 }))
-    const c = await t.h.conversation()
-    await t.h.turn(c, { ask: 'one', answer: 'a1' })
-    await expect(compactGuestConversation(t.deps, c)).rejects.toMatchObject({ status: 429, code: 'guest_ip_limit' })
-    expect((await t.h.repo.compaction(c)).summary).toBeUndefined()
-    expect(t.changed).toEqual([])
-  })
-
-  it('does not keep a summary of rows that an edit deleted while the model was writing it', async () => {
-    let edit = async () => {}
-    const t = setup(async () => {
-      await edit()
-      return written()
-    })
-    const c = await t.h.conversation()
-    const t1 = await t.h.turn(c, { ask: 'one', answer: 'a1' })
-    edit = async () => {
-      await t.h.turn(c, { ask: 'one, reworded', answer: 'a1b', replaces: t1.input.id })
-    }
-    await expect(compactGuestConversation(t.deps, c)).rejects.toMatchObject({ status: 409 })
-    expect((await t.h.repo.compaction(c)).summary).toBeUndefined()
-  })
-
-  it('takes the compression back: the originals were never removed', async () => {
-    const t = setup(() => written())
-    const c = await t.h.conversation()
-    t.listen(c)
-    await t.h.turn(c, { ask: 'one', answer: 'a1' })
-    await compactGuestConversation(t.deps, c)
+    await t.h.repo.setSummary(c, summaryOf(t1.rows[0]!.id))
     const rows = (await t.h.repo.data(c)).messages.length
 
     await undoGuestCompaction(t.deps, c)
     expect((await t.h.repo.compaction(c)).summary).toBeUndefined()
     expect((await t.h.repo.data(c)).messages).toHaveLength(rows)
-    expect(t.seen.flatMap((e) => (e.type === 'batch' ? e.events : [])).filter((e) => e.type === 'compaction_changed')).toHaveLength(2)
+    expect(t.changed).toEqual([c])
+    expect(t.seen.flatMap((e) => (e.type === 'batch' ? e.events : [])).filter((e) => e.type === 'compaction_changed')).toHaveLength(1)
 
     // Idempotent, and silent when there was nothing to take back.
     t.changed.length = 0
     await undoGuestCompaction(t.deps, c)
     expect(t.changed).toEqual([])
   })
+
+  it('is refused while a run is going', async () => {
+    const t = setup()
+    const c = await t.h.conversation()
+    const t1 = await t.h.turn(c, { ask: 'one', answer: 'a1' })
+    await t.h.repo.setSummary(c, summaryOf(t1.rows[0]!.id))
+    await t.h.repo.runStarted(c, { run: { ...run('r2', 'running'), conversationId: c }, input: t1.input, action: 'regenerate', choice: {} }, 'tab')
+    await expect(undoGuestCompaction(t.deps, c)).rejects.toMatchObject({ status: 409, code: 'conversation_busy' })
+  })
 })
 
 describe('the guest API', () => {
-  it('answers the compaction routes of the contract', async () => {
+  it('answers the compaction routes of the contract: read and take back, nothing else', async () => {
     const h = harness()
     const hub = new GuestHub()
     const runner = new GuestRunner({ repo: h.repo, hub, baseUrl: '/api/v1', tab: 'tab', fetch: async () => new Response(null, { status: 500 }) })
     const api = createGuestApi({
       repo: h.repo, runner, hub, baseUrl: '/api/v1', config: async () => ({}) as never,
-      fetch: async () => Response.json({ content: '- the summary', model: 'model-a', inputTokens: 1, outputTokens: 1 }),
+      fetch: async () => new Response(null, { status: 500 }),
     })
     const c = await h.conversation()
-    await h.turn(c, { ask: 'one', answer: 'a1' })
+    const t1 = await h.turn(c, { ask: 'one', answer: 'a1' })
     const call = async (method: string) => api.handle(new Request(`http://x/api/v1/conversations/${c}/compaction`, { method }), `/conversations/${c}/compaction`)
 
     expect(await (await call('GET'))!.json()).toEqual({})
-    const made = await call('POST')
-    expect(made!.status).toBe(200)
-    expect(((await made!.json()) as { summary: ContextSummary }).summary.content).toBe('- the summary')
+    await h.repo.setSummary(c, summaryOf(t1.rows[0]!.id, { content: '- the summary' }))
     expect(((await (await call('GET'))!.json()) as { summary?: ContextSummary }).summary?.content).toBe('- the summary')
     expect((await call('DELETE'))!.status).toBe(204)
     expect(await (await call('GET'))!.json()).toEqual({})
-    const again = await call('POST')
-    expect(again!.status).toBe(200)
-    // Nothing more to compress now.
-    expect((await call('POST'))!.status).toBe(409)
+    // Nobody can ask for a compression: the route is not served.
+    expect(await call('POST')).toBeNull()
   })
 })

@@ -1,10 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
-import { Minimize2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { useCompact, useCompaction } from '@/hooks/use-compaction'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { useCompaction } from '@/hooks/use-compaction'
 import { api, unwrap } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
 import { cn } from '@/lib/utils'
@@ -23,8 +21,6 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS
 interface ContextMeterProps {
   conversationId: string
   limit?: number | null
-  /** The conversation is answering: it cannot be compressed from under the run. */
-  busy?: boolean
 }
 
 /**
@@ -35,12 +31,12 @@ interface ContextMeterProps {
  * Nothing shows until something has been answered, or for a model whose window
  * is unknown.
  *
- * It opens to the same figures and to "compress now": the older conversation
- * is summarised and the model is sent the summary instead. Until the next
- * request reports what it took, the server estimates the compressed context
- * (`estimated`), so the ring drops as soon as the summary is written.
+ * It opens to the same figures and notes. Compressing is only ever a run's
+ * doing, so there is nothing to press: once a run has written a summary, the
+ * server estimates the compressed context until the next request reports what
+ * it took (`estimated`), so the ring drops as soon as the summary is written.
  */
-export default function ContextMeter({ conversationId, limit, busy }: ContextMeterProps) {
+export default function ContextMeter({ conversationId, limit }: ContextMeterProps) {
   const { t } = useTranslation()
   const usage = useQuery({
     queryKey: queryKeys.conversations.context(conversationId),
@@ -48,7 +44,6 @@ export default function ContextMeter({ conversationId, limit, busy }: ContextMet
       unwrap(await api.GET('/conversations/{conversationId}/context', { params: { path: { conversationId } }, signal })),
   })
   const summary = useCompaction(conversationId)
-  const compress = useCompact(conversationId)
   const used = usage.data?.usedTokens
   if (used == null || !limit) return null
 
@@ -60,14 +55,12 @@ export default function ContextMeter({ conversationId, limit, busy }: ContextMet
       <Tooltip
         label={t('chat.context.label')}
         hint={t('chat.context.hint', { percent, left: 100 - percent, used: compact(used), limit: compact(limit) })}
-        disabled={compress.isPending}
       >
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className={cn('n-context-meter', level, compress.isPending && 'is-busy')}
+            className={cn('n-context-meter', level)}
             aria-label={t('chat.context.aria', { percent })}
-            data-motion={compress.isPending ? 'essential' : undefined}
           >
             <svg viewBox="0 0 18 18" aria-hidden="true">
               <circle className="n-context-track" cx="9" cy="9" r={RADIUS} />
@@ -92,13 +85,6 @@ export default function ContextMeter({ conversationId, limit, busy }: ContextMet
           {usage.data?.estimated && <span className="n-context-note">{t('chat.context.estimated')}</span>}
           {summary && <span className="n-context-note">{t('chat.context.compacted')}</span>}
         </div>
-        <DropdownMenuItem
-          disabled={busy || compress.isPending}
-          onSelect={() => compress.mutate(undefined, { onSuccess: () => toast.success(t('chat.compaction.done')) })}
-        >
-          <Minimize2 aria-hidden="true" />
-          <span>{compress.isPending ? t('chat.context.compacting') : t('chat.context.compact')}</span>
-        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

@@ -69,7 +69,7 @@
       "model_error": "The model service failed. Try again in a moment.",
       "model_auth": "The model service rejected the channel's key. Ask an administrator to check the channel.",
       "model_rate_limited": "The model service is busy (too many requests). Try again shortly.",
-      "context_too_long": "This conversation is too long for the model. Compress its context and try again.",
+      "context_too_long": "This conversation is too long for the model, even after compressing its context. Start a new conversation, or switch to a model with a larger context window.",
       "internal": "The server failed and this reply was not finished.",
       "tool_markup": "The model wrote its next tool call out as text, so this answer did not finish. Regenerate to try again.",
       "connection_lost": "The connection dropped before the reply was finished. Regenerate to try again.",
@@ -81,14 +81,8 @@
       "undo": "Undo compression",
       "undone": "Compression undone; the model sees the whole conversation again",
       "running": "Compressing context…",
-      "action": "Compress context",
-      "done": "Context compressed",
-      "error-nothing_to_compact": "There is nothing new to compress.",
       "error-conversation_busy": "The conversation is answering. Wait for it or stop it first.",
-      "error-compaction_busy": "This conversation is being compressed already. Wait a moment.",
-      "error-question_pending": "The model is waiting for an answer to its question. Answer or skip it, then compress.",
-      "error-compaction_failed": "The model did not write a summary. Try again later.",
-      "error-generic": "Compressing did not work. Try again later."
+      "error-generic": "Undoing the compression did not work. Try again later."
     },
     "refused": {
       "title": "Content not allowed",
@@ -324,10 +318,7 @@
       "label": "Context window",
       "hint": "{{percent}}% used ({{left}}% left)\n{{used}} / {{limit}} tokens",
       "aria": "Context window {{percent}}% used",
-      "compact": "Compress now",
-      "compacting": "Compressing…",
       "compacted": "Earlier messages are compressed into a summary",
-      "compact-hint": "Summarise the older conversation to free up the context window. The original messages stay on screen.",
       "estimated": "Estimated after compression; the next answer reports the real figure"
     }
   },

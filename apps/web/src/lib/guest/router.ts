@@ -1,6 +1,6 @@
 import type { GuestConfig, Message, ReasoningEffort } from '@openchat/api-client'
 
-import { compactGuestConversation, undoGuestCompaction } from './compaction'
+import { undoGuestCompaction } from './compaction'
 import { GuestError, notFound } from './errors'
 import { eventStream, type GuestHub } from './hub'
 import type { GuestRepo } from './repo'
@@ -28,7 +28,7 @@ export interface GuestApiDeps {
   fetch: typeof globalThis.fetch
   /** What the server offers a guest; read once in a while. */
   config: () => Promise<GuestConfig>
-  /** A conversation's summary was made or taken back: the guest's other pages are told. */
+  /** A conversation's summary was taken back: the guest's other pages are told. */
   compactionChanged?: (conversationId: string) => void
   /** Conversations were deleted: the guest's other pages are told. */
   conversationsDeleted?: (conversationIds: string[]) => void
@@ -67,7 +67,7 @@ export function createGuestApi(deps: GuestApiDeps) {
   const { repo, runner, hub } = deps
   const newId = deps.newId ?? (() => crypto.randomUUID())
   const id = '([^/]+)'
-  const compaction = { repo, hub, baseUrl: deps.baseUrl, fetch: deps.fetch, changed: deps.compactionChanged }
+  const compaction = { repo, hub, changed: deps.compactionChanged }
 
   /** The settings a run is asked with, from a request body. */
   const choiceOf = (body: { model?: string; reasoningEffort?: ReasoningEffort; webSearch?: boolean }) => ({
@@ -159,19 +159,11 @@ export function createGuestApi(deps: GuestApiDeps) {
       pattern: new RegExp(`^/conversations/${id}/context$`),
       handler: async ({ params }) => ok(await repo.context(params[0]!)),
     },
-    // ---- the compressed context: kept in the page, written by the server's model
+    // ---- the compressed context: kept in the page, made by a run and taken back here
     {
       method: 'GET',
       pattern: new RegExp(`^/conversations/${id}/compaction$`),
       handler: async ({ params }) => ok(await repo.compaction(params[0]!)),
-    },
-    {
-      method: 'POST',
-      pattern: new RegExp(`^/conversations/${id}/compaction$`),
-      handler: async ({ params }) => {
-        const summary = await compactGuestConversation(compaction, params[0]!)
-        return ok({ summary })
-      },
     },
     {
       method: 'DELETE',
