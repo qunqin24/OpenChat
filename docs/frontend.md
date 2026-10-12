@@ -44,7 +44,7 @@ apps/web/
       admin/                  管理面板（dashboard/settings/users + context providers）
       dev/
     components/
-      next/                   聊天 UI（prism 移植）：NextShell/Sidebar/Composer/MessageItem/...
+      next/                   聊天 UI（prism 移植）：ChatShell/Sidebar/Composer/MessageItem/...
       auth/                   登录/注册页 + validation.ts
       shadcn/                 vendored satnaing/shadcn-admin（见下）
       ui/                     聊天侧用的少量 Radix 包装（alert-dialog、dropdown-menu）
@@ -148,8 +148,8 @@ admin 用户表是 manual 模式（`manualPagination` + `manualFiltering`）：
 | | 聊天 / auth | admin |
 | --- | --- | --- |
 | token | `:root` 的 `--n-*` | shadcn 的 `--background`/`--border`/... |
-| scope class | `.prism-next`、`.n-auth` | `.shadcn-scope` |
-| 样式文件 | `next-theme.css`（prism Less 编译产物，**逐字保留**以便 re-sync）、`auth.css`、`menu.css`、`sidebar.css`、`chat-*.css` | `shadcn-theme.css`、`shadcn-base.css` |
+| scope class | `.chat-ui`、`.n-auth` | `.shadcn-scope` |
+| 样式文件 | `chat-theme.css`（prism Less 编译产物，**逐字保留**以便 re-sync）、`auth.css`、`menu.css`、`sidebar.css`、`chat-*.css` | `shadcn-theme.css`、`shadcn-base.css` |
 
 三条铁律（违反任意一条都会渲染出黑框）：
 

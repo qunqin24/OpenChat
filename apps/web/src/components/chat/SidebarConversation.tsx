@@ -76,8 +76,8 @@ export function SidebarConversation({ conversation, active, running = false, onD
               if (event.key === 'Escape' && !rename.isPending) { event.preventDefault(); event.stopPropagation(); cancelEditing() }
             }}
           />
-          <button type="submit" className="n-sidebar-inline-button" disabled={!title.trim() || rename.isPending} aria-label={t('next.sidebar.save')}><Check /></button>
-          <button type="button" className="n-sidebar-inline-button" disabled={rename.isPending} onClick={cancelEditing} aria-label={t('next.conversation.cancel')}><X /></button>
+          <button type="submit" className="n-sidebar-inline-button" disabled={!title.trim() || rename.isPending} aria-label={t('chat.sidebar.save')}><Check /></button>
+          <button type="button" className="n-sidebar-inline-button" disabled={rename.isPending} onClick={cancelEditing} aria-label={t('chat.conversation.cancel')}><X /></button>
         </form>
       ) : (
         <>
@@ -95,7 +95,7 @@ export function SidebarConversation({ conversation, active, running = false, onD
               // Ahead of the title, where the row's menu never covers it and a
               // phone shows it too: the conversation left working is easy to
               // find again.
-              <span className="n-row-running" role="status" aria-label={t('next.sidebar.running')}>
+              <span className="n-row-running" role="status" aria-label={t('chat.sidebar.running')}>
                 <ThinkingOrb />
               </span>
             )}
@@ -108,7 +108,7 @@ export function SidebarConversation({ conversation, active, running = false, onD
           </Link>
           <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
             <DropdownMenuTrigger asChild>
-              <button type="button" className="n-row-menu n-sidebar-inline-button" aria-label={t('next.more')}><MoreHorizontal /></button>
+              <button type="button" className="n-row-menu n-sidebar-inline-button" aria-label={t('chat.more')}><MoreHorizontal /></button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" onCloseAutoFocus={(event) => { if (editing) event.preventDefault() }}>
               <DropdownMenuItem onSelect={startEditing}><PencilLine /><span>{t('chat.rename')}</span></DropdownMenuItem>

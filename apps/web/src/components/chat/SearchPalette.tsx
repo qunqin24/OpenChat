@@ -23,7 +23,7 @@ import { ImageSource, proxiedImages } from './genui/image-source'
 import { AssistantTurn, UserMessage } from './MessageItem'
 
 interface Props {
-  /** The `.prism-next` element to render into: the one the sidebar is in. */
+  /** The `.chat-ui` element to render into: the one the sidebar is in. */
   host: HTMLElement | null
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -49,7 +49,7 @@ const NEW_CHAT = 'action:new'
  * the server answers the first time, the loaded titles are filtered here so
  * the list responds to the first keystroke.
  *
- * Portalled into the sidebar's own `.prism-next` scope rather than <body>, so
+ * Portalled into the sidebar's own `.chat-ui` scope rather than <body>, so
  * the ported `.n-palette*` styles and the transcript's styles apply inside it —
  * and, on a phone, so it opens over the sidebar drawer it was opened from
  * rather than behind it.
@@ -125,9 +125,9 @@ export function SearchPalette({
             className="n-palette"
             onCloseAutoFocus={(event) => { event.preventDefault(); onRestoreFocus() }}
           >
-            <Dialog.Title className="sr-only">{t('next.sidebar.search')}</Dialog.Title>
-            <Dialog.Description className="sr-only">{t('next.search.description')}</Dialog.Description>
-            <Command label={t('next.sidebar.search')} shouldFilter={false} loop value={cursor} onValueChange={setCursor}>
+            <Dialog.Title className="sr-only">{t('chat.sidebar.search')}</Dialog.Title>
+            <Dialog.Description className="sr-only">{t('chat.search.description')}</Dialog.Description>
+            <Command label={t('chat.sidebar.search')} shouldFilter={false} loop value={cursor} onValueChange={setCursor}>
               <div className="n-palette-head">
                 <Search className="n-palette-icon" aria-hidden="true" />
                 <Command.Input
@@ -135,20 +135,20 @@ export function SearchPalette({
                   className="n-palette-input"
                   value={query}
                   onValueChange={setQuery}
-                  placeholder={t('next.search.placeholder')}
+                  placeholder={t('chat.search.placeholder')}
                 />
                 {query && (
-                  <button type="button" className="n-palette-clear" aria-label={t('next.search.clear')} onClick={() => setQuery('')}>
+                  <button type="button" className="n-palette-clear" aria-label={t('chat.search.clear')} onClick={() => setQuery('')}>
                     <X aria-hidden="true" />
                   </button>
                 )}
               </div>
               <div className="n-palette-body">
                 <Command.List ref={results} className="n-palette-results">
-                  <Command.Group heading={t('next.search.actions')} className="n-palette-group">
+                  <Command.Group heading={t('chat.search.actions')} className="n-palette-group">
                     <Command.Item value={NEW_CHAT} className="n-palette-item" onSelect={() => go()}>
                       <SquarePen className="n-palette-item-icon" aria-hidden="true" />
-                      <span className="n-palette-title">{t('next.search.new-chat')}</span>
+                      <span className="n-palette-title">{t('chat.search.new-chat')}</span>
                     </Command.Item>
                   </Command.Group>
 
@@ -170,7 +170,7 @@ export function SearchPalette({
                   ))}
 
                   {matches.length === 0 && !more && !(searching && (!found || search.isFetching)) && (
-                    <div className="n-palette-empty">{t('next.sidebar.search-empty')}</div>
+                    <div className="n-palette-empty">{t('chat.sidebar.search-empty')}</div>
                   )}
                   {more && (
                     <div ref={sentinel} className="n-palette-more" role="status">
@@ -250,7 +250,7 @@ function PaletteRow({ conversation, term, renaming, onRename, onOpen, onDelete, 
             }}
             onBlur={() => { if (!rename.isPending) void save() }}
           />
-          <button type="submit" className="n-palette-row-button" aria-label={t('next.sidebar.save')} onMouseDown={(event) => event.preventDefault()}>
+          <button type="submit" className="n-palette-row-button" aria-label={t('chat.sidebar.save')} onMouseDown={(event) => event.preventDefault()}>
             <Check aria-hidden="true" />
           </button>
         </form>
@@ -273,7 +273,7 @@ function PaletteRow({ conversation, term, renaming, onRename, onOpen, onDelete, 
             <button
               type="button"
               className="n-palette-row-button"
-              aria-label={t('next.more')}
+              aria-label={t('chat.more')}
               // Not a click on the row, which would open the conversation.
               onClick={(event) => event.stopPropagation()}
               onPointerDown={(event) => event.stopPropagation()}
@@ -347,11 +347,11 @@ function Preview({ conversationId, term }: { conversationId: string | null; term
   return (
     <div ref={scroll} className="n-palette-preview" aria-hidden="true">
       {!shown ? (
-        <div className="n-palette-preview-idle">{t('next.search.preview-idle')}</div>
+        <div className="n-palette-preview-idle">{t('chat.search.preview-idle')}</div>
       ) : messages.isPending ? (
         <div className="n-palette-preview-idle"><span className="n-spinner" data-motion="essential" /></div>
       ) : sentTurns(turns).length === 0 ? (
-        <div className="n-palette-preview-idle">{t('next.search.preview-empty')}</div>
+        <div className="n-palette-preview-idle">{t('chat.search.preview-empty')}</div>
       ) : (
         // Inert: a preview to read, not a transcript to act on.
         <ImageSource.Provider value={proxiedImages(API_BASE_URL, shown)}>
@@ -431,8 +431,8 @@ function formatDay(value: string | undefined, t: T, locale?: string): string {
   if (!date) return ''
   const day = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
   const days = Math.round((day(new Date()) - day(date)) / 86_400_000)
-  if (days <= 0) return t('next.group.today')
-  if (days === 1) return t('next.group.yesterday')
+  if (days <= 0) return t('chat.group.today')
+  if (days === 1) return t('chat.group.yesterday')
   return new Intl.DateTimeFormat(locale, { year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
 }
 

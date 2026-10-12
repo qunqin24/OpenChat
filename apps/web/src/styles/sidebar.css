@@ -1,10 +1,10 @@
 /**
  * Chat sidebar, measured against OpenWebUI's Sidebar/Section/ChatItem at
  * 0a7c15832f: 245px panel, 42px rail, 13px/20px text, 32px chat rows.
- * Layered on next-theme.css, which still supplies the shared row, group and
+ * Layered on chat-theme.css, which still supplies the shared row, group and
  * palette rules; where both set a property, this sheet wins by coming later.
  */
-.prism-next .n-sidebar {
+.chat-ui .n-sidebar {
   --n-sidebar-bg: oklch(0.98 0 0);
   --n-sidebar-text: oklch(0.25 0 0);
   --n-sidebar-muted: oklch(0.56 0 0);
@@ -31,7 +31,7 @@
 
 /* The panel slides over the rail by its clipping width; its content keeps the
    full width throughout, so the move is a reveal with nothing reflowing. */
-.prism-next .n-sidebar-panel {
+.chat-ui .n-sidebar-panel {
   position: absolute;
   inset: 0 auto 0 0;
   z-index: 1;
@@ -42,19 +42,19 @@
   transition: width 250ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.prism-next .n-sidebar.collapsed .n-sidebar-panel {
+.chat-ui .n-sidebar.collapsed .n-sidebar-panel {
   width: 0;
   pointer-events: none;
 }
 
-.prism-next .n-sidebar.is-mobile .n-sidebar-panel {
+.chat-ui .n-sidebar.is-mobile .n-sidebar-panel {
   position: static;
   flex: 1;
   width: auto;
   transition: none;
 }
 
-.dark .prism-next .n-sidebar {
+.dark .chat-ui .n-sidebar {
   --n-sidebar-bg: oklch(0.16 0 0);
   --n-sidebar-text: oklch(0.9 0 0);
   --n-sidebar-muted: oklch(0.69 0 0);
@@ -66,7 +66,7 @@
   --n-sidebar-selected: rgb(255 255 255 / 4.5%);
 }
 
-.prism-next .n-sidebar-inner {
+.chat-ui .n-sidebar-inner {
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
@@ -77,12 +77,12 @@
   border-right: 1px solid var(--n-sidebar-line);
 }
 
-.prism-next .n-sidebar.is-mobile .n-sidebar-inner {
+.chat-ui .n-sidebar.is-mobile .n-sidebar-inner {
   flex: 1;
   width: auto;
 }
 
-.prism-next .n-sidebar-header {
+.chat-ui .n-sidebar-header {
   position: relative;
   z-index: 2;
   display: flex;
@@ -93,7 +93,7 @@
   padding: 6px 4px 4px;
 }
 
-.prism-next .n-sidebar-brand {
+.chat-ui .n-sidebar-brand {
   display: flex;
   flex: 1;
   align-items: center;
@@ -106,7 +106,7 @@
   text-decoration: none;
 }
 
-.prism-next .n-sidebar-brand-label {
+.chat-ui .n-sidebar-brand-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -114,31 +114,31 @@
 
 /* The logo mark is reused as an alpha mask so the mark follows the
    surface's text colour, instead of the SVG's own OS dark-mode stroke. */
-.prism-next .n-sidebar-logo,
-.prism-next .n-sidebar-rail-logo {
+.chat-ui .n-sidebar-logo,
+.chat-ui .n-sidebar-rail-logo {
   flex-shrink: 0;
   background-color: currentColor;
   -webkit-mask: url('/logo-mark.svg') center / contain no-repeat;
   mask: url('/logo-mark.svg') center / contain no-repeat;
 }
 
-.prism-next .n-sidebar-logo {
+.chat-ui .n-sidebar-logo {
   display: block;
   width: 20px;
   height: 20px;
 }
 
-.prism-next .n-sidebar-rail-logo {
+.chat-ui .n-sidebar-rail-logo {
   display: none;
   width: 20px;
   height: 20px;
 }
 
-.dark .prism-next .n-sidebar-brand {
+.dark .chat-ui .n-sidebar-brand {
   color: oklch(0.92 0 0);
 }
 
-.prism-next .n-sidebar-toggle {
+.chat-ui .n-sidebar-toggle {
   display: flex;
   flex-shrink: 0;
   align-items: center;
@@ -153,14 +153,14 @@
   cursor: pointer;
 }
 
-.prism-next .n-sidebar-toggle > svg,
-.prism-next .n-sidebar-nav-row > svg {
+.chat-ui .n-sidebar-toggle > svg,
+.chat-ui .n-sidebar-nav-row > svg {
   flex-shrink: 0;
   width: 16px;
   height: 16px;
 }
 
-.prism-next .n-sidebar .n-row {
+.chat-ui .n-sidebar .n-row {
   gap: 8px;
   min-height: 32px;
   padding: 6px 8px;
@@ -171,40 +171,40 @@
   text-decoration: none;
 }
 
-.prism-next .n-sidebar .n-row::before {
+.chat-ui .n-sidebar .n-row::before {
   border-radius: 12px;
   transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.prism-next .n-sidebar .n-row:hover::before,
-.prism-next .n-sidebar .n-row:focus-visible::before,
-.prism-next .n-sidebar .n-row[data-state='open']::before,
-.prism-next .n-sidebar .n-conversation-row:is(:hover, :focus-within, .menu-open) .n-row::before {
+.chat-ui .n-sidebar .n-row:hover::before,
+.chat-ui .n-sidebar .n-row:focus-visible::before,
+.chat-ui .n-sidebar .n-row[data-state='open']::before,
+.chat-ui .n-sidebar .n-conversation-row:is(:hover, :focus-within, .menu-open) .n-row::before {
   background: var(--n-sidebar-hover);
 }
 
-.prism-next .n-sidebar .n-row.active::before,
-.prism-next .n-sidebar .n-conversation-row:is(.active, .editing) .n-row::before {
+.chat-ui .n-sidebar .n-row.active::before,
+.chat-ui .n-sidebar .n-conversation-row:is(.active, .editing) .n-row::before {
   background: var(--n-sidebar-selected);
 }
 
-.prism-next .n-sidebar .n-conversation-row.active .n-row:focus-visible::before {
+.chat-ui .n-sidebar .n-conversation-row.active .n-row:focus-visible::before {
   background: var(--n-sidebar-hover);
 }
 
 /* Focus uses the rounded fill; no outer frame when a menu restores focus. */
-.prism-next .n-sidebar :is(.n-row, .n-sidebar-toggle, .n-sidebar-inline-button, .n-sidebar-section-toggle):focus-visible {
+.chat-ui .n-sidebar :is(.n-row, .n-sidebar-toggle, .n-sidebar-inline-button, .n-sidebar-section-toggle):focus-visible {
   border-radius: 12px;
   outline: none;
 }
 
-.prism-next .n-sidebar-toggle:is(:hover, :focus-visible),
-.prism-next .n-sidebar-inline-button:is(:hover, :focus-visible) {
+.chat-ui .n-sidebar-toggle:is(:hover, :focus-visible),
+.chat-ui .n-sidebar-inline-button:is(:hover, :focus-visible) {
   background: var(--n-sidebar-hover);
   color: var(--n-sidebar-text);
 }
 
-.prism-next .n-sidebar-scroll {
+.chat-ui .n-sidebar-scroll {
   position: relative;
   flex: 1;
   min-height: 0;
@@ -215,15 +215,15 @@
   overscroll-behavior: contain;
 }
 
-.prism-next .n-sidebar-scroll::-webkit-scrollbar {
+.chat-ui .n-sidebar-scroll::-webkit-scrollbar {
   display: none;
 }
 
-.prism-next .n-sidebar-nav {
+.chat-ui .n-sidebar-nav {
   padding: 0 4px 4px;
 }
 
-.prism-next .n-sidebar-hotkey {
+.chat-ui .n-sidebar-hotkey {
   flex-shrink: 0;
   opacity: 0;
   margin-left: auto;
@@ -234,15 +234,15 @@
   transition: opacity 100ms;
 }
 
-.prism-next .n-sidebar-nav-row:is(:hover, :focus-visible) .n-sidebar-hotkey {
+.chat-ui .n-sidebar-nav-row:is(:hover, :focus-visible) .n-sidebar-hotkey {
   opacity: 1;
 }
 
-.prism-next .n-sidebar-history {
+.chat-ui .n-sidebar-history {
   margin-top: 6px;
 }
 
-.prism-next .n-sidebar-section-toggle {
+.chat-ui .n-sidebar-section-toggle {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -259,31 +259,31 @@
   cursor: pointer;
 }
 
-.prism-next .n-sidebar-section-toggle > svg {
+.chat-ui .n-sidebar-section-toggle > svg {
   width: 11px;
   height: 11px;
   opacity: 0;
   transition: transform 100ms, opacity 100ms;
 }
 
-.prism-next .n-sidebar-section-toggle:is(:hover, :focus-visible) {
+.chat-ui .n-sidebar-section-toggle:is(:hover, :focus-visible) {
   background: var(--n-sidebar-hover);
   border-radius: 8px;
 }
 
-.prism-next .n-sidebar-section-toggle:is(:hover, :focus-visible) > svg {
+.chat-ui .n-sidebar-section-toggle:is(:hover, :focus-visible) > svg {
   opacity: 1;
 }
 
-.prism-next .n-sidebar-section-toggle[data-state='open'] > svg {
+.chat-ui .n-sidebar-section-toggle[data-state='open'] > svg {
   transform: rotate(90deg);
 }
 
-.prism-next .n-sidebar-groups {
+.chat-ui .n-sidebar-groups {
   padding: 6px 6px 0;
 }
 
-.prism-next .n-sidebar .n-group {
+.chat-ui .n-sidebar .n-group {
   margin: 0;
   padding: 0 10px 4px;
   color: var(--n-sidebar-muted);
@@ -292,19 +292,19 @@
   line-height: 16px;
 }
 
-.prism-next .n-sidebar-group + .n-sidebar-group .n-group {
+.chat-ui .n-sidebar-group + .n-sidebar-group .n-group {
   padding-top: 16px;
 }
 
-.prism-next .n-conversation-row {
+.chat-ui .n-conversation-row {
   position: relative;
 }
 
-.prism-next .n-sidebar .n-conversation-link {
+.chat-ui .n-sidebar .n-conversation-link {
   padding-inline: 11px;
 }
 
-.prism-next .n-sidebar .n-row-meta {
+.chat-ui .n-sidebar .n-row-meta {
   max-width: 64px;
   overflow: hidden;
   color: var(--n-sidebar-faint);
@@ -314,7 +314,7 @@
   transition: opacity 100ms;
 }
 
-.prism-next .n-sidebar-inline-button {
+.chat-ui .n-sidebar-inline-button {
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
@@ -334,7 +334,7 @@
   height: 14px;
 }
 
-.prism-next .n-sidebar .n-conversation-row > .n-row-menu {
+.chat-ui .n-sidebar .n-conversation-row > .n-row-menu {
   position: absolute;
   inset: 6px 10px auto auto;
   opacity: 0;
@@ -343,30 +343,30 @@
   transition: opacity 100ms;
 }
 
-.prism-next .n-sidebar .n-row-running {
+.chat-ui .n-sidebar .n-row-running {
   display: inline-flex;
   flex-shrink: 0;
   /* The row's 8px gap less 2: the orb sits with the title, not apart from it. */
   margin-inline-end: -2px;
 }
-.prism-next .n-sidebar .n-row-running .n-orb {
+.chat-ui .n-sidebar .n-row-running .n-orb {
   color: var(--n-sidebar-text);
 }
-.prism-next .n-conversation-row:is(:hover, :focus-within, .active, .menu-open) .n-row-meta {
+.chat-ui .n-conversation-row:is(:hover, :focus-within, .active, .menu-open) .n-row-meta {
   opacity: 0;
 }
 
-.prism-next .n-sidebar .n-conversation-row:is(:hover, :focus-within, .active, .menu-open) > .n-row-menu {
+.chat-ui .n-sidebar .n-conversation-row:is(:hover, :focus-within, .active, .menu-open) > .n-row-menu {
   opacity: 1;
   pointer-events: auto;
 }
 
-.prism-next .n-sidebar .n-conversation-edit {
+.chat-ui .n-sidebar .n-conversation-edit {
   gap: 2px;
   padding-inline: 11px 6px;
 }
 
-.prism-next .n-conversation-edit input {
+.chat-ui .n-conversation-edit input {
   width: 0;
   min-width: 0;
   flex: 1;
@@ -377,11 +377,11 @@
   font: inherit;
 }
 
-.prism-next .n-conversation-edit input:focus-visible {
+.chat-ui .n-conversation-edit input:focus-visible {
   outline: none;
 }
 
-.prism-next .n-sidebar-error {
+.chat-ui .n-sidebar-error {
   padding: 2px 11px 6px;
   color: var(--n-err);
   font-size: 12px;
@@ -395,8 +395,8 @@
   text-align: center;
 }
 
-.prism-next .n-sidebar-retry,
-.prism-next .n-sidebar-load-more {
+.chat-ui .n-sidebar-retry,
+.chat-ui .n-sidebar-load-more {
   width: 100%;
   border: 0;
   background: transparent;
@@ -405,19 +405,19 @@
   cursor: pointer;
 }
 
-.prism-next .n-sidebar-load-more {
+.chat-ui .n-sidebar-load-more {
   min-height: 32px;
 }
 
-.prism-next .n-sidebar-account {
+.chat-ui .n-sidebar-account {
   position: relative;
   z-index: 2;
   margin-top: -8px;
   padding: 4px 4px max(6px, env(safe-area-inset-bottom));
 }
 
-.prism-next .n-sidebar-header::before,
-.prism-next .n-sidebar-account::before {
+.chat-ui .n-sidebar-header::before,
+.chat-ui .n-sidebar-account::before {
   content: '';
   position: absolute;
   inset: 0 0 -24px;
@@ -426,33 +426,33 @@
   pointer-events: none;
 }
 
-.prism-next .n-sidebar-header::before {
+.chat-ui .n-sidebar-header::before {
   opacity: 0;
   transition: opacity 100ms;
 }
 
-.prism-next .n-sidebar.has-scrolled .n-sidebar-header::before {
+.chat-ui .n-sidebar.has-scrolled .n-sidebar-header::before {
   opacity: 1;
 }
 
-.prism-next .n-sidebar-account::before {
+.chat-ui .n-sidebar-account::before {
   inset: -24px 0 0;
   background: linear-gradient(to top, var(--n-sidebar-bg) 50%, transparent);
 }
 
-.prism-next .n-sidebar .n-account-trigger {
+.chat-ui .n-sidebar .n-account-trigger {
   min-height: 34px;
   padding: 6px;
   gap: 12px;
 }
 
 /* Compact desktop rail: icons only, in the layout while the panel is shut. */
-.prism-next .n-sidebar.collapsed {
+.chat-ui .n-sidebar.collapsed {
   width: 42px;
   background: transparent;
 }
 
-.prism-next .n-sidebar-rail {
+.chat-ui .n-sidebar-rail {
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -461,19 +461,19 @@
   transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.prism-next .n-sidebar-rail:hover {
+.chat-ui .n-sidebar-rail:hover {
   background: color-mix(in oklch, var(--n-sidebar-hover) 30%, transparent);
 }
 
-.prism-next .n-sidebar-rail .n-sidebar-header {
+.chat-ui .n-sidebar-rail .n-sidebar-header {
   justify-content: center;
 }
 
-.prism-next .n-sidebar-rail .n-row-label {
+.chat-ui .n-sidebar-rail .n-row-label {
   display: none;
 }
 
-.prism-next .n-sidebar-rail-fill {
+.chat-ui .n-sidebar-rail-fill {
   flex: 1;
   min-height: 0;
   padding: 0;
@@ -484,41 +484,41 @@
 
 /* The rail button is the logo until hover/keyboard focus swaps in the panels
    icon; clicking the logo still toggles the sidebar open. */
-.prism-next .n-sidebar-rail .n-sidebar-rail-logo {
+.chat-ui .n-sidebar-rail .n-sidebar-rail-logo {
   display: block;
 }
 
-.prism-next .n-sidebar-rail .n-sidebar-toggle > svg {
+.chat-ui .n-sidebar-rail .n-sidebar-toggle > svg {
   display: none;
 }
 
-.prism-next .n-sidebar-rail .n-sidebar-toggle:is(:hover, :focus-visible) .n-sidebar-rail-logo {
+.chat-ui .n-sidebar-rail .n-sidebar-toggle:is(:hover, :focus-visible) .n-sidebar-rail-logo {
   display: none;
 }
 
-.prism-next .n-sidebar-rail .n-sidebar-toggle:is(:hover, :focus-visible) > svg {
+.chat-ui .n-sidebar-rail .n-sidebar-toggle:is(:hover, :focus-visible) > svg {
   display: block;
 }
 
-.prism-next .n-sidebar-rail .n-row {
+.chat-ui .n-sidebar-rail .n-row {
   justify-content: center;
   gap: 0;
   padding-inline: 0;
 }
 
-.prism-next .n-sidebar-rail .n-sidebar-account::before {
+.chat-ui .n-sidebar-rail .n-sidebar-account::before {
   display: none;
 }
 
-.prism-next .n-sidebar.resizing {
+.chat-ui .n-sidebar.resizing {
   user-select: none;
 }
 
-.prism-next .n-sidebar.resizing .n-sidebar-panel {
+.chat-ui .n-sidebar.resizing .n-sidebar-panel {
   transition: none;
 }
 
-.prism-next .n-sidebar-resize {
+.chat-ui .n-sidebar-resize {
   position: absolute;
   inset: 0 -3px 0 auto;
   z-index: 3;
@@ -527,7 +527,7 @@
   cursor: col-resize;
 }
 
-.prism-next .n-sidebar-resize::after {
+.chat-ui .n-sidebar-resize::after {
   content: '';
   position: absolute;
   inset: 0 auto 0 2px;
@@ -536,12 +536,12 @@
   transition: background-color 150ms;
 }
 
-.prism-next .n-sidebar-resize:is(:hover, :focus-visible)::after,
-.prism-next .n-sidebar.resizing .n-sidebar-resize::after {
+.chat-ui .n-sidebar-resize:is(:hover, :focus-visible)::after,
+.chat-ui .n-sidebar.resizing .n-sidebar-resize::after {
   background: var(--n-sidebar-faint);
 }
 
-.prism-next .n-sidebar-resize:focus-visible {
+.chat-ui .n-sidebar-resize:focus-visible {
   outline: none;
 }
 
@@ -553,7 +553,7 @@
   background: rgb(0 0 0 / 50%);
 }
 
-.prism-next.n-sidebar-mobile-frame {
+.chat-ui.n-sidebar-mobile-frame {
   inset: 0 auto 0 0;
   z-index: 50;
   width: max-content;
@@ -585,22 +585,22 @@
 @keyframes n-sidebar-fade-out { from { opacity: 1; } to { opacity: 0; } }
 
 @media (hover: none) {
-  .prism-next .n-sidebar .n-row-meta { visibility: hidden; }
-  .prism-next .n-sidebar .n-conversation-row > .n-row-menu { opacity: 1; pointer-events: auto; }
-  .prism-next .n-sidebar-hotkey { display: none; }
+  .chat-ui .n-sidebar .n-row-meta { visibility: hidden; }
+  .chat-ui .n-sidebar .n-conversation-row > .n-row-menu { opacity: 1; pointer-events: auto; }
+  .chat-ui .n-sidebar-hotkey { display: none; }
 }
 
 /* Search palette. The base layout (overlay, two panes, rows, preview) is
-   `.n-palette*` in next-theme.css; this adds what cmdk and our rows need on
-   top of it and overrides its size and spacing. Portalled into the shell root, so `.prism-next` scopes it. */
-.prism-next .n-palette-overlay { z-index: 70; }
-.prism-next .n-palette { border-radius: 24px; }
-.dark .prism-next .n-palette { box-shadow: 0 0 0 1px rgb(255 255 255 / 8%), 0 12px 40px rgb(0 0 0 / 50%); }
-.prism-next .n-palette [cmdk-root] { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.prism-next .n-palette-head { gap: 12px; padding: 18px 22px 10px; }
-.prism-next .n-palette-icon { width: 18px; height: 18px; flex-shrink: 0; color: var(--n-text-2); }
-.prism-next .n-palette-clear,
-.prism-next .n-palette-row-button {
+   `.n-palette*` in chat-theme.css; this adds what cmdk and our rows need on
+   top of it and overrides its size and spacing. Portalled into the shell root, so `.chat-ui` scopes it. */
+.chat-ui .n-palette-overlay { z-index: 70; }
+.chat-ui .n-palette { border-radius: 24px; }
+.dark .chat-ui .n-palette { box-shadow: 0 0 0 1px rgb(255 255 255 / 8%), 0 12px 40px rgb(0 0 0 / 50%); }
+.chat-ui .n-palette [cmdk-root] { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.chat-ui .n-palette-head { gap: 12px; padding: 18px 22px 10px; }
+.chat-ui .n-palette-icon { width: 18px; height: 18px; flex-shrink: 0; color: var(--n-text-2); }
+.chat-ui .n-palette-clear,
+.chat-ui .n-palette-row-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -614,29 +614,29 @@
   color: var(--n-text-2);
   cursor: pointer;
 }
-.prism-next .n-palette-clear svg,
-.prism-next .n-palette-row-button svg { width: 16px; height: 16px; }
-.prism-next .n-palette-clear:is(:hover, :focus-visible),
-.prism-next .n-palette-row-button:is(:hover, :focus-visible, [data-state='open']) {
+.chat-ui .n-palette-clear svg,
+.chat-ui .n-palette-row-button svg { width: 16px; height: 16px; }
+.chat-ui .n-palette-clear:is(:hover, :focus-visible),
+.chat-ui .n-palette-row-button:is(:hover, :focus-visible, [data-state='open']) {
   outline: none;
   background: var(--n-hover-strong);
   color: var(--n-text);
 }
-.prism-next .n-palette-results { padding: 0 12px 16px; }
-.prism-next .n-palette-group [cmdk-group-heading] {
+.chat-ui .n-palette-results { padding: 0 12px 16px; }
+.chat-ui .n-palette-group [cmdk-group-heading] {
   padding: 16px 10px 6px;
   color: var(--n-text-3);
   font-size: 12px;
   font-weight: 500;
   user-select: none;
 }
-.prism-next .n-palette-group:first-child [cmdk-group-heading] { padding-top: 6px; }
-.prism-next .n-palette-item { min-height: 38px; padding: 0 8px 0 10px; }
-.prism-next .n-palette-item[data-selected='true']::before { background: var(--n-hover); }
-.prism-next .n-palette-item-icon { width: 17px; height: 17px; flex-shrink: 0; color: var(--n-text-2); }
-.prism-next .n-palette-date { min-width: 4.5em; text-align: right; font-variant-numeric: tabular-nums; }
-.prism-next .n-palette-rename { display: flex; flex: 1; min-width: 0; align-items: center; gap: 4px; }
-.prism-next .n-palette-rename input {
+.chat-ui .n-palette-group:first-child [cmdk-group-heading] { padding-top: 6px; }
+.chat-ui .n-palette-item { min-height: 38px; padding: 0 8px 0 10px; }
+.chat-ui .n-palette-item[data-selected='true']::before { background: var(--n-hover); }
+.chat-ui .n-palette-item-icon { width: 17px; height: 17px; flex-shrink: 0; color: var(--n-text-2); }
+.chat-ui .n-palette-date { min-width: 4.5em; text-align: right; font-variant-numeric: tabular-nums; }
+.chat-ui .n-palette-rename { display: flex; flex: 1; min-width: 0; align-items: center; gap: 4px; }
+.chat-ui .n-palette-rename input {
   flex: 1;
   min-width: 0;
   height: 28px;
@@ -648,21 +648,21 @@
   color: var(--n-text);
   font: inherit;
 }
-.prism-next .n-palette-rename input[aria-invalid='true'] { border-color: var(--n-danger, #dc2626); }
-.prism-next .n-palette-more { min-height: 40px; padding: 10px; color: var(--n-text-3); font-size: 12px; text-align: center; }
-.prism-next .n-palette-preview { padding: 8px 24px 24px 12px; }
-.prism-next .n-palette-preview-idle .n-spinner { width: 18px; height: 18px; }
+.chat-ui .n-palette-rename input[aria-invalid='true'] { border-color: var(--n-danger, #dc2626); }
+.chat-ui .n-palette-more { min-height: 40px; padding: 10px; color: var(--n-text-3); font-size: 12px; text-align: center; }
+.chat-ui .n-palette-preview { padding: 8px 24px 24px 12px; }
+.chat-ui .n-palette-preview-idle .n-spinner { width: 18px; height: 18px; }
 /* The transcript at a reading size for a pane half the width of the chat. */
-.prism-next .n-palette-transcript { font-size: 14px; }
-.prism-next .n-palette-transcript .n-actions { display: none; }
+.chat-ui .n-palette-transcript { font-size: 14px; }
+.chat-ui .n-palette-transcript .n-actions { display: none; }
 
 @media (max-width: 767px) {
-  .prism-next .n-palette { height: min(640px, 82dvh); }
-  .prism-next .n-palette-results { flex-basis: 100%; }
-  .prism-next .n-palette-preview { display: none; }
+  .chat-ui .n-palette { height: min(640px, 82dvh); }
+  .chat-ui .n-palette-results { flex-basis: 100%; }
+  .chat-ui .n-palette-preview { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .prism-next .n-sidebar-panel { transition: none; }
+  .chat-ui .n-sidebar-panel { transition: none; }
   .n-sidebar-mobile-frame[data-state], .n-sidebar-backdrop[data-state] { animation: none; }
 }

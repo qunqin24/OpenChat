@@ -22,7 +22,7 @@ export function AttachmentTray({
   if (items.length === 0) return null
 
   return (
-    <ul className="n-attach-tray" aria-label={t('next.file.attached')}>
+    <ul className="n-attach-tray" aria-label={t('chat.file.attached')}>
       {items.map((item) => (
         <AttachmentCard key={item.key} item={item} onRemove={() => onRemove(item.key)} />
       ))}
@@ -33,11 +33,11 @@ export function AttachmentTray({
 function AttachmentCard({ item, onRemove }: { item: PendingAttachment; onRemove: () => void }) {
   const { t } = useTranslation()
   const percent = Math.round(item.progress * 100)
-  const failure = item.error ? t(`next.file.error.${item.error}`) : ''
+  const failure = item.error ? t(`chat.file.error.${item.error}`) : ''
 
   const status =
     item.status === 'uploading'
-      ? t('next.file.uploading', { percent })
+      ? t('chat.file.uploading', { percent })
       : item.status === 'error'
         ? failure
         : formatSize(item.size)
@@ -76,7 +76,7 @@ function AttachmentCard({ item, onRemove }: { item: PendingAttachment; onRemove:
         <span
           className="n-attach-progress"
           role="progressbar"
-          aria-label={t('next.file.uploading', { percent })}
+          aria-label={t('chat.file.uploading', { percent })}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={percent}
@@ -84,7 +84,7 @@ function AttachmentCard({ item, onRemove }: { item: PendingAttachment; onRemove:
           <span style={{ width: `${percent}%` }} />
         </span>
       )}
-      <button type="button" className="n-attach-remove" aria-label={t('next.file.remove', { name: item.name })} onClick={onRemove}>
+      <button type="button" className="n-attach-remove" aria-label={t('chat.file.remove', { name: item.name })} onClick={onRemove}>
         <X className="h-3 w-3" aria-hidden />
       </button>
     </li>

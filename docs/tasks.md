@@ -55,7 +55,7 @@ make migrate                        # 本地应用（make ser 启动时也会自
 2. 需要登录 → 放 `_authed.` 前缀下；需要 admin → 放 `admin.` 前缀下。
    守卫在 layout 的 `beforeLoad` 里，页面本身不用查会话。
 3. `routeTree.gen.ts` 由 vite 插件自动更新（dev 启动或 build 时生成）。
-4. 导航入口按需加到 `components/next/Sidebar*`（聊天侧）或
+4. 导航入口按需加到 `components/chat/Sidebar*`（聊天侧）或
    `features/admin` 的 sidebar data hook（admin 侧）。
 
 ## 加 admin 表格/页面

@@ -183,19 +183,7 @@
       "undone": "已撤销",
       "manage": "管理记忆",
       "step": "更新记忆"
-    }
-  },
-  "state": {
-    "loading": "加载中…",
-    "error": "出错了",
-    "notFound": "页面不存在",
-    "backHome": "返回对话"
-  },
-  "notifications": {
-    "region": "通知",
-    "close": "关闭通知"
-  },
-  "next": {
+    },
     "more": "更多",
     "scroll-bottom": "回到底部",
     "sidebar": {
@@ -337,6 +325,16 @@
       "compacted": "更早的内容已压缩为摘要",
       "compact-hint": "把较早的对话总结成摘要，腾出上下文窗口。原来的消息仍然显示。"
     }
+  },
+  "state": {
+    "loading": "加载中…",
+    "error": "出错了",
+    "notFound": "页面不存在",
+    "backHome": "返回对话"
+  },
+  "notifications": {
+    "region": "通知",
+    "close": "关闭通知"
   },
   "auth": {
     "logout": "退出登录",
@@ -703,7 +701,13 @@
             "unexpected": "检查失败：GitHub 返回了无法识别的内容。"
           }
         },
-        "tabs": {"general": "常规", "chat": "对话", "access": "访问", "moderation": "审核", "data": "数据"},
+        "tabs": {
+          "general": "常规",
+          "chat": "对话",
+          "access": "访问",
+          "moderation": "审核",
+          "data": "数据"
+        },
         "title": "系统",
         "subtitle": "影响整个服务端的设置，对所有人生效。",
         "debug": "调试模式",
@@ -1409,7 +1413,7 @@
     "notice-unsaved": "游客模式：这个浏览器不允许此页面保存数据，刷新后对话会丢失",
     "sign-in": "登录",
     "name": "游客",
-        "menu-hint": "未登录",
+    "menu-hint": "未登录",
     "banned": {
       "title": "你已被封禁",
       "subtitle": "游客模式已不可用",

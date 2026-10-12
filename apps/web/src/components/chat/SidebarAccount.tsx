@@ -66,7 +66,7 @@ export function SidebarAccount({ collapsed, onNavigate }: { collapsed: boolean; 
             {THEMES.map(({ value, icon: Icon }) => (
               <DropdownMenuItem key={value} onSelect={() => setTheme(value)}>
                 <Icon aria-hidden="true" />
-                <span>{t(`next.theme.${value}`)}</span>
+                <span>{t(`chat.theme.${value}`)}</span>
                 {theme === value && <Check className="n-menu-check" aria-hidden="true" />}
               </DropdownMenuItem>
             ))}

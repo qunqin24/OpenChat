@@ -3,7 +3,7 @@
  * gray palette is overridden to zero-chroma oklch; use that palette rather
  * than Tailwind's default blue-gray. blur-sm in Tailwind 4 is 8px.
  */
-.prism-next .n-files-overlay {
+.chat-ui .n-files-overlay {
   position: absolute;
   inset: 0;
   z-index: 9999;
@@ -19,24 +19,24 @@
   touch-action: none;
 }
 
-.dark .prism-next .n-files-overlay {
+.dark .chat-ui .n-files-overlay {
   background: oklch(0.2 0 0 / 80%);
 }
 
-.prism-next .n-files-overlay-copy {
+.chat-ui .n-files-overlay-copy {
   width: 100%;
   max-width: 448px;
   padding: 0 12px;
 }
 
-.prism-next .n-files-overlay h2 {
+.chat-ui .n-files-overlay h2 {
   margin: 0;
   font-size: 24px;
   font-weight: 400;
   line-height: 32px;
 }
 
-.prism-next .n-files-overlay p {
+.chat-ui .n-files-overlay p {
   margin: 8px 0 0;
   padding: 0 8px;
   color: oklch(0.42 0 0);
@@ -45,5 +45,5 @@
   line-height: 24px;
 }
 
-.dark .prism-next .n-files-overlay h2 { color: #fff; }
-.dark .prism-next .n-files-overlay p { color: oklch(0.92 0 0); }
+.dark .chat-ui .n-files-overlay h2 { color: #fff; }
+.dark .chat-ui .n-files-overlay p { color: oklch(0.92 0 0); }

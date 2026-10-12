@@ -48,7 +48,7 @@ export function kindOf(mediaType: string): FileKind | null {
   return mediaType === PDF_TYPE ? 'pdf' : null
 }
 
-/** Why a file cannot be attached; each is a `next.file.reject.*` key. */
+/** Why a file cannot be attached; each is a `chat.file.reject.*` key. */
 export type RejectReason = 'type' | 'model-image' | 'model-pdf' | 'size-image' | 'size-pdf' | 'empty'
 
 export function rejectionOf(file: File, accepts: Accepts): RejectReason | null {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
-import { ImageSource } from '@/components/next/genui/image-source'
-import { AnswerText } from '@/components/next/MessageItem'
+import { ImageSource } from '@/components/chat/genui/image-source'
+import { AnswerText } from '@/components/chat/MessageItem'
 
 /** A stand-in picture: a gradient, drawn in place, since this page has no sources. */
 const art = (from: string, to: string) =>
@@ -171,7 +171,7 @@ export function GenUIPreview() {
 
   const streaming = length < SAMPLE.length
   return (
-    <div className="prism-next" style={{ minHeight: '100vh', background: 'var(--n-bg)', padding: 32 }}>
+    <div className="chat-ui" style={{ minHeight: '100vh', background: 'var(--n-bg)', padding: 32 }}>
       <div style={{ maxWidth: 760, margin: '0 auto' }}>
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="button" onClick={() => { setLength(0); setPlaying(true) }}>

@@ -9,7 +9,7 @@
  * (`--color-gray-*` in src/tailwind.css) is zero-chroma oklch, quoted
  * verbatim below.
  *
- * Kept out of next-theme.css, which is the chat surface's base layer.
+ * Kept out of chat-theme.css, which is the chat surface's base layer.
  *
  * The look is deliberately bare: a plain white/black page, a centred column
  * no wider than 448px, borderless transparent inputs whose placeholders carry

@@ -18,7 +18,7 @@ export function SidebarResizeHandle({ width, onResize, onCommit }: Props) {
       className="n-sidebar-resize"
       role="separator"
       tabIndex={0}
-      aria-label={t('next.sidebar.resize')}
+      aria-label={t('chat.sidebar.resize')}
       aria-orientation="vertical"
       aria-controls="chat-sidebar"
       aria-valuenow={Math.round(width)}

@@ -53,25 +53,25 @@ export function Welcome({ onPick, modelName, model }: WelcomeProps) {
           {temporary ? (
             <>
               <Ghost className="n-welcome-ghost" aria-hidden="true" />
-              {t('next.temporary.title')}
+              {t('chat.temporary.title')}
             </>
           ) : (
             modelName
           )}
         </h1>
-        {temporary ? <TemporaryNote /> : <p className="n-welcome-sub">{t('next.welcome.greeting')}</p>}
+        {temporary ? <TemporaryNote /> : <p className="n-welcome-sub">{t('chat.welcome.greeting')}</p>}
       </div>
 
       <div className="n-welcome-suggestions" hidden={temporary}>
         <div className="n-suggest-head">
           <Zap className="h-3.5 w-3.5" aria-hidden="true" />
-          {t('next.welcome.suggestions')}
+          {t('chat.welcome.suggestions')}
         </div>
         <div className="n-suggest-viewport">
           <div
             className="n-suggest-grid"
             role="group"
-            aria-label={t('next.welcome.suggestions')}
+            aria-label={t('chat.welcome.suggestions')}
           >
             {SUGGESTIONS.map((id, index) => (
               <button
@@ -80,12 +80,12 @@ export function Welcome({ onPick, modelName, model }: WelcomeProps) {
                 className="n-suggest"
                 style={{ animationDelay: `${index * 45}ms` }}
                 onClick={() => {
-                  onPick(t(`next.welcome.items.${id}.prompt`))
+                  onPick(t(`chat.welcome.items.${id}.prompt`))
                   document.getElementById('input')?.focus()
                 }}
               >
-                <span className="n-suggest-title">{t(`next.welcome.items.${id}.title`)}</span>
-                <span className="n-suggest-detail">{t(`next.welcome.items.${id}.detail`)}</span>
+                <span className="n-suggest-title">{t(`chat.welcome.items.${id}.title`)}</span>
+                <span className="n-suggest-detail">{t(`chat.welcome.items.${id}.detail`)}</span>
               </button>
             ))}
           </div>

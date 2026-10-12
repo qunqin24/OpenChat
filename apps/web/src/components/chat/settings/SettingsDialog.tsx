@@ -28,7 +28,7 @@ const ICONS: Record<SettingsTab, typeof Brain> = {
  * (lib/settings.ts), so the memory chip in a reply can link straight to
  * personalization.
  *
- * Portalled into the shell's `.prism-next` scope rather than <body>, as the
+ * Portalled into the shell's `.chat-ui` scope rather than <body>, as the
  * search palette is, so the chat's tokens and control styles reach it.
  */
 export function SettingsDialog({ host }: { host: HTMLElement | null }) {

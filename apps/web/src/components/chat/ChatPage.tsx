@@ -2,7 +2,7 @@ import { useParams, useRouterState } from '@tanstack/react-router'
 import { useCallback, useState } from 'react'
 
 import { adopt, followAddress, openView, release, startOver } from '@/lib/chat-view'
-import NextChat from './NextChat'
+import ChatView from './ChatView'
 
 /**
  * The one chat page, for the new-chat screen and for every conversation.
@@ -46,5 +46,5 @@ export default function ChatPage() {
   const onCreated = useCallback((id: string) => setView((held) => adopt(held, id)), [])
   const onRemoved = useCallback((id: string) => setView((held) => release(held, id)), [])
 
-  return <NextChat key={current.epoch} conversationId={current.shown} onCreated={onCreated} onRemoved={onRemoved} />
+  return <ChatView key={current.epoch} conversationId={current.shown} onCreated={onCreated} onRemoved={onRemoved} />
 }

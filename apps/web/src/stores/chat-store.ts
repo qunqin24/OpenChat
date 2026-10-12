@@ -41,7 +41,7 @@ interface ChatState {
    * Each conversation's message being sent, until the server has taken it
    * (its run starts) or refused it. Keyed by conversation id, or by '' on the
    * empty screen between the send and the moment the page takes the conversation
-   * it made for the message as its own (NextChat).
+   * it made for the message as its own (ChatView).
    */
   outbox: Record<string, OutboxItem>
   post: (key: string, item: OutboxItem) => void

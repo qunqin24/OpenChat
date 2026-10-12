@@ -50,16 +50,16 @@
 
 /* A guest's route area stacks the notice above the chat; the chat fills what
    is left instead of the full height it has beside an account's sidebar. */
-.prism-next .n-route-motion.is-guest {
+.chat-ui .n-route-motion.is-guest {
   flex-direction: column;
 }
 
-.prism-next .n-route-motion.is-guest > .n-main {
+.chat-ui .n-route-motion.is-guest > .n-main {
   height: auto;
   min-height: 0;
 }
 
-.prism-next .n-guest-notice {
+.chat-ui .n-guest-notice {
   display: flex;
   flex: none;
   align-items: center;
@@ -75,7 +75,7 @@
   text-align: center;
 }
 
-.prism-next .n-guest-notice-login {
+.chat-ui .n-guest-notice-login {
   flex: none;
   padding: 2px 10px;
   border-radius: 9999px;
@@ -87,12 +87,12 @@
   transition: background-color 120ms;
 }
 
-.prism-next .n-guest-notice-login:hover {
+.chat-ui .n-guest-notice-login:hover {
   background: var(--n-accent-hover);
 }
 
 /* The account row of a guest has a line under the name instead of an avatar's initial. */
-.prism-next .n-account-hint {
+.chat-ui .n-account-hint {
   color: var(--n-text-3);
   font-size: 12px;
 }

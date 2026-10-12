@@ -202,8 +202,8 @@ Zustand + Radix + Tailwind 4 + i18next（en/zh）。
 | | 聊天 / auth | admin 面板 |
 | --- | --- | --- |
 | 设计 token | `:root` 上的 `--n-*` | shadcn 的 `--background`、`--border` 等 |
-| scope class | `.prism-next`、`.n-auth` | `.shadcn-scope` |
-| 样式文件 | `next-theme.css`（prism Less 编译产物，原样保留以便 re-sync）、`auth.css`、`menu.css` | `shadcn-theme.css`、`shadcn-base.css` |
+| scope class | `.chat-ui`、`.n-auth` | `.shadcn-scope` |
+| 样式文件 | `chat-theme.css`（prism Less 编译产物，原样保留以便 re-sync）、`auth.css`、`menu.css` | `shadcn-theme.css`、`shadcn-base.css` |
 
 三条规则把它们隔开：
 

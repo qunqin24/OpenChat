@@ -33,4 +33,4 @@
 
 ## 容量上限的前端
 
-- 容量上限的前端：设置面板的「容量」一节（`features/admin/models/capacity.ts` 是纯逻辑，有 vitest）、卡片上的用量条、`ChatModel.atCapacity`。选择器里满的模型**保留在列表里但禁用**，原因写在名字下面（禁用项没有指针事件，tooltip 出不来）；对话自己的模型或用户明确选的模型即使满了也不会被悄悄换掉——新对话的默认模型才会绕开满的（`defaultModelId`）；在满的模型上发送时 `NextChat` 先重取一次模型列表（列表最多旧一分钟、还会本地持久化），仍满就弹提示、什么都不创建，取不到就交给服务器决定。重新生成/改写/回答由服务器拒绝，`useSendError` 弹同一句话并让模型列表失效；运行中途被拦住，错误行按 `chat.error.model_capacity_reached` 显示，`use-conversation-events` 看到 `run_finished` 带这个码也会让模型列表失效。
+- 容量上限的前端：设置面板的「容量」一节（`features/admin/models/capacity.ts` 是纯逻辑，有 vitest）、卡片上的用量条、`ChatModel.atCapacity`。选择器里满的模型**保留在列表里但禁用**，原因写在名字下面（禁用项没有指针事件，tooltip 出不来）；对话自己的模型或用户明确选的模型即使满了也不会被悄悄换掉——新对话的默认模型才会绕开满的（`defaultModelId`）；在满的模型上发送时 `ChatView` 先重取一次模型列表（列表最多旧一分钟、还会本地持久化），仍满就弹提示、什么都不创建，取不到就交给服务器决定。重新生成/改写/回答由服务器拒绝，`useSendError` 弹同一句话并让模型列表失效；运行中途被拦住，错误行按 `chat.error.model_capacity_reached` 显示，`use-conversation-events` 看到 `run_finished` 带这个码也会让模型列表失效。

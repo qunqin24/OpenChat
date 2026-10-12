@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
-import NextShell from '@/components/next/NextShell'
+import ChatShell from '@/components/chat/ChatShell'
 import { guestStatusQueryOptions } from '@/hooks/use-guest'
 import { chatFeaturesQueryOptions, chatModelsQueryOptions } from '@/hooks/use-chat-models'
 import { conversationsQueryOptions } from '@/hooks/use-conversations'
@@ -34,5 +34,5 @@ export const Route = createFileRoute('/guest')({
     void queryClient.prefetchQuery(chatModelsQueryOptions)
     void queryClient.prefetchQuery(chatFeaturesQueryOptions)
   },
-  component: NextShell,
+  component: ChatShell,
 })

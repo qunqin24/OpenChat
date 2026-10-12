@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { useSaveRefusalText } from '@/hooks/use-memory-errors'
 import { useMemories, usePersonalization, useUpdatePersonalization } from '@/hooks/use-memory'
 import { cn } from '@/lib/utils'
-import NextSwitch from '../NextSwitch'
+import ToggleSwitch from '../ToggleSwitch'
 import MemoryManager from './MemoryManager'
 
 /**
@@ -120,7 +120,7 @@ function Loaded({ host }: { host: HTMLElement | null }) {
           <label className="n-settings-subheading" htmlFor="memory-enabled">
             {t('settings.personalization.memory')}
           </label>
-          <NextSwitch
+          <ToggleSwitch
             id="memory-enabled"
             checked={data.memoryEnabled}
             disabled={update.isPending}
@@ -148,7 +148,7 @@ function Loaded({ host }: { host: HTMLElement | null }) {
             {t('settings.personalization.learn')}
             <span className="n-settings-badge">{t('settings.personalization.soon')}</span>
           </div>
-          <NextSwitch checked={false} disabled aria-label={t('settings.personalization.learn')} />
+          <ToggleSwitch checked={false} disabled aria-label={t('settings.personalization.learn')} />
         </div>
       </div>
 

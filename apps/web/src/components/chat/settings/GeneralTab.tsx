@@ -30,7 +30,7 @@ export function GeneralTab() {
             onChange={(e) => setTheme(e.target.value as Theme)}
           >
             {THEMES.map((value) => (
-              <option key={value} value={value}>{t(`next.theme.${value}`)}</option>
+              <option key={value} value={value}>{t(`chat.theme.${value}`)}</option>
             ))}
           </select>
         </div>

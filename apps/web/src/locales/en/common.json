@@ -183,19 +183,7 @@
       "undone": "Undone",
       "manage": "Manage memory",
       "step": "Updating memory"
-    }
-  },
-  "state": {
-    "loading": "Loading…",
-    "error": "Something went wrong",
-    "notFound": "Page not found",
-    "backHome": "Back to chat"
-  },
-  "notifications": {
-    "region": "Notifications",
-    "close": "Dismiss notification"
-  },
-  "next": {
+    },
     "more": "More",
     "scroll-bottom": "Scroll to bottom",
     "sidebar": {
@@ -337,6 +325,16 @@
       "compacted": "Earlier messages are compressed into a summary",
       "compact-hint": "Summarise the older conversation to free up the context window. The original messages stay on screen."
     }
+  },
+  "state": {
+    "loading": "Loading…",
+    "error": "Something went wrong",
+    "notFound": "Page not found",
+    "backHome": "Back to chat"
+  },
+  "notifications": {
+    "region": "Notifications",
+    "close": "Dismiss notification"
   },
   "auth": {
     "logout": "Sign out",
@@ -703,7 +701,13 @@
             "unexpected": "GitHub answered with something unexpected."
           }
         },
-        "tabs": {"general": "General", "chat": "Chat", "access": "Access", "moderation": "Moderation", "data": "Data"},
+        "tabs": {
+          "general": "General",
+          "chat": "Chat",
+          "access": "Access",
+          "moderation": "Moderation",
+          "data": "Data"
+        },
         "title": "System",
         "subtitle": "Server-wide settings. They apply to everyone.",
         "debug": "Debug mode",
@@ -1409,7 +1413,7 @@
     "notice-unsaved": "Guest mode: this browser would not let the page store anything, so conversations are lost when you reload",
     "sign-in": "Sign in",
     "name": "Guest",
-        "menu-hint": "Not signed in",
+    "menu-hint": "Not signed in",
     "banned": {
       "title": "You've been banned",
       "subtitle": "Guest mode is no longer available",

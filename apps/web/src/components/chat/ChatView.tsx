@@ -49,7 +49,7 @@ import { AssistantTurn, PendingReply, RefusedReply, UserMessage } from './Messag
 import ModelPicker from './ModelPicker'
 import ThinkingPicker from './ThinkingPicker'
 import WebSearchToggle from './WebSearchToggle'
-import { SidebarToggle } from './NextShell'
+import { SidebarToggle } from './ChatShell'
 import { TemporaryBar, TemporaryToggle } from './TemporaryChat'
 import Welcome from './Welcome'
 
@@ -60,7 +60,7 @@ const TURN_STEP = 20
 /** How close to the top, in px, the reader must be before older turns are drawn (or loaded). */
 const TOP_REACH = 800
 
-interface NextChatProps {
+interface ChatViewProps {
   /** The conversation shown; none on the new-chat screen. */
   conversationId?: string
   /**
@@ -75,7 +75,7 @@ interface NextChatProps {
   onRemoved: (conversationId: string) => void
 }
 
-export function NextChat({ conversationId, onCreated, onRemoved }: NextChatProps) {
+export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -153,13 +153,13 @@ export function NextChat({ conversationId, onCreated, onRemoved }: NextChatProps
   const attachments = useAttachments(accepts)
   const uploadHint = accepts.image
     ? accepts.pdf
-      ? t('next.file.upload-both')
-      : t('next.file.upload-image')
+      ? t('chat.file.upload-both')
+      : t('chat.file.upload-image')
     : accepts.pdf
-      ? t('next.file.upload-pdf')
+      ? t('chat.file.upload-pdf')
       : anyModelTakesFiles
-        ? t('next.file.unsupported')
-        : t('next.file.none')
+        ? t('chat.file.unsupported')
+        : t('chat.file.none')
   const canAttach = accepts.image || accepts.pdf
   const fileDrop = useFileDrop((files) => {
     if (canAttach) attachments.add(files)
@@ -702,7 +702,7 @@ export function NextChat({ conversationId, onCreated, onRemoved }: NextChatProps
     if (conversationId) void navigate({ to: paths.home })
   }
 
-  const title = conversationId ? displayTitle(conversation.data?.title, t) : t('next.nav.new')
+  const title = conversationId ? displayTitle(conversation.data?.title, t) : t('chat.nav.new')
   const modelName = modelById.get(modelId)?.name ?? (modelId || 'OpenChat')
 
   // Exactly one composer for every state; on the empty state it docks beneath
@@ -733,9 +733,9 @@ export function NextChat({ conversationId, onCreated, onRemoved }: NextChatProps
         onAdd: attachments.add,
         onRemove: attachments.remove,
         blocked: attachments.uploading
-          ? t('next.file.wait')
+          ? t('chat.file.wait')
           : attachments.failed
-            ? t('next.file.failed')
+            ? t('chat.file.failed')
             : undefined,
       }}
     />
@@ -841,7 +841,7 @@ export function NextChat({ conversationId, onCreated, onRemoved }: NextChatProps
             <button
               type="button"
               className="n-scroll-bottom"
-              aria-label={t('next.scroll-bottom')}
+              aria-label={t('chat.scroll-bottom')}
               onClick={() => scrollToBottom()}
             >
               <ArrowDown className="h-4 w-4" />
@@ -861,4 +861,4 @@ function turnModel(turn: Extract<ReturnType<typeof buildTurns>[number], { kind: 
   return turn.live?.run.model ?? turn.responses.find((m) => m.model)?.model
 }
 
-export default NextChat
+export default ChatView

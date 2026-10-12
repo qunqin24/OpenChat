@@ -22,11 +22,11 @@ export function formatRelative(value: string | undefined, t: Translate): string 
   if (!date) return ''
 
   const delta = Date.now() - date.getTime()
-  if (delta < MINUTE) return t('next.time.now')
-  if (delta < HOUR) return t('next.time.minutes', { n: Math.floor(delta / MINUTE) })
-  if (delta < DAY) return t('next.time.hours', { n: Math.floor(delta / HOUR) })
-  if (delta < WEEK) return t('next.time.days', { n: Math.floor(delta / DAY) })
-  return t('next.time.weeks', { n: Math.floor(delta / WEEK) })
+  if (delta < MINUTE) return t('chat.time.now')
+  if (delta < HOUR) return t('chat.time.minutes', { n: Math.floor(delta / MINUTE) })
+  if (delta < DAY) return t('chat.time.hours', { n: Math.floor(delta / HOUR) })
+  if (delta < WEEK) return t('chat.time.days', { n: Math.floor(delta / DAY) })
+  return t('chat.time.weeks', { n: Math.floor(delta / WEEK) })
 }
 
 export interface ConversationGroup {
@@ -63,15 +63,15 @@ export function groupConversations(history: Conversation[], t: Translate, locale
   for (const conversation of history) {
     const date = parseTimestamp(conversation.updatedAt)
     if (!date) {
-      push('recent', t('next.group.today'), conversation)
+      push('recent', t('chat.group.today'), conversation)
       continue
     }
 
     const days = Math.round((today - startOfDay(date)) / DAY)
-    if (days <= 0) push('recent', t('next.group.today'), conversation)
-    else if (days === 1) push('yesterday', t('next.group.yesterday'), conversation)
-    else if (days <= 7) push('week', t('next.group.week'), conversation)
-    else if (days <= 30) push('month', t('next.group.month'), conversation)
+    if (days <= 0) push('recent', t('chat.group.today'), conversation)
+    else if (days === 1) push('yesterday', t('chat.group.yesterday'), conversation)
+    else if (days <= 7) push('week', t('chat.group.week'), conversation)
+    else if (days <= 30) push('month', t('chat.group.month'), conversation)
     else {
       const key = `${date.getFullYear()}-${date.getMonth()}`
       const label = new Intl.DateTimeFormat(locale, {

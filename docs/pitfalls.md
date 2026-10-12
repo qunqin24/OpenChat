@@ -56,7 +56,7 @@
 - 把 `shadcn-base.css` 的规则挪出 `@layer base`：无 layer 规则胜过
   cascade layer，`border-transparent` 会被画成实线。
 - 把 `focus.css` 的 `:focus-visible` 全局化：shadcn 组件叠双 ring。
-- 改 `next-theme.css`：它是 prism Less 的编译产物，改了会失去 re-sync
+- 改 `chat-theme.css`：它是 prism Less 的编译产物，改了会失去 re-sync
   能力；本地适配写到 `sidebar.css`/`chat-*.css` 等覆盖层。
 - 在模块顶层调 `t()`：i18n 实例未必就绪且脱离 react 生命周期——
   做成 hook。

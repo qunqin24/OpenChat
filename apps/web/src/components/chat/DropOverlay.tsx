@@ -11,8 +11,8 @@ export function DropOverlay({ show, unavailable }: { show: boolean; unavailable?
   return (
     <div className="n-files-overlay" role="status" aria-live="polite">
       <div className="n-files-overlay-copy">
-        <h2>{t('next.file.add')}</h2>
-        <p>{unavailable ?? t('next.file.drop')}</p>
+        <h2>{t('chat.file.add')}</h2>
+        <p>{unavailable ?? t('chat.file.drop')}</p>
       </div>
     </div>
   )

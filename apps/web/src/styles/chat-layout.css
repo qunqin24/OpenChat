@@ -3,20 +3,20 @@
  * 0a7c15832f): the avatar owns the first line, the model name and grey greeting
  * follow it, then a two-column starter grid. The composer is always docked
  * below, so the welcome centres itself in the scroll region left above it.
- * Layered on next-theme.css: where both set a property, this sheet wins by
+ * Layered on chat-theme.css: where both set a property, this sheet wins by
  * coming later in the import order.
  */
 /* Messages.svelte's empty state is `h-full flex pt-18`; ChatPlaceholder then
    centres itself with `m-auto`. Auto margins fall to zero once the frame is
    taller than the scroller, so a short viewport starts at the top padding and
    scrolls instead of clipping the heading. */
-.prism-next .n-scroll-welcome {
+.chat-ui .n-scroll-welcome {
   display: flex;
   flex-direction: column;
   padding-top: calc(72px + var(--n-topbar-h, 0px));
 }
 
-.prism-next .n-welcome {
+.chat-ui .n-welcome {
   flex: 0 0 auto;
   width: 100%;
   max-width: 58rem;
@@ -27,40 +27,40 @@
 }
 
 /* ChatPlaceholder's size-2.7 (43.2px), a full circle. */
-.prism-next .n-welcome-avatar {
+.chat-ui .n-welcome-avatar {
   display: flex;
   border-radius: 9999px;
 }
 
 /* `mt-2 mb-4` around the name and greeting; both use chat-typography's 30px. */
-.prism-next .n-welcome-heading {
+.chat-ui .n-welcome-heading {
   margin: 8px 0 16px;
 }
 
-.prism-next .n-welcome :is(.n-welcome-title, .n-welcome-sub) {
+.chat-ui .n-welcome :is(.n-welcome-title, .n-welcome-sub) {
   overflow: hidden;
   margin: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.prism-next .n-welcome-suggestions {
+.chat-ui .n-welcome-suggestions {
   width: 100%;
 }
 
 /* Suggestions.svelte head: mb-1, gap-1, text-xs. */
-.prism-next .n-welcome .n-suggest-head {
+.chat-ui .n-welcome .n-suggest-head {
   gap: 4px;
   margin: 0 0 4px;
   text-align: left;
 }
 
-.prism-next .n-suggest-viewport {
+.chat-ui .n-suggest-viewport {
   height: 144px;
 }
 
 /* grid-cols-2 with no gap, kept at every width; h-36 scrolls any overflow. */
-.prism-next .n-welcome .n-suggest-grid {
+.chat-ui .n-welcome .n-suggest-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-content: start;
@@ -71,12 +71,12 @@
   scrollbar-width: none;
 }
 
-.prism-next .n-welcome .n-suggest-grid::-webkit-scrollbar {
+.chat-ui .n-welcome .n-suggest-grid::-webkit-scrollbar {
   display: none;
 }
 
 /* px-2.5 py-1.5 (10/6) and rounded-lg (8px), one row per suggestion. */
-.prism-next .n-welcome .n-suggest {
+.chat-ui .n-welcome .n-suggest {
   flex-shrink: 0;
   width: 100%;
   gap: 0;
@@ -86,16 +86,16 @@
 }
 
 /* Upstream suggestions lift the text colour on hover, not a filled card. */
-.prism-next .n-welcome .n-suggest::before {
+.chat-ui .n-welcome .n-suggest::before {
   display: none;
 }
 
-.prism-next .n-welcome .n-suggest:focus-visible {
+.chat-ui .n-welcome .n-suggest:focus-visible {
   outline: none;
   background: var(--n-hover);
 }
 
-.prism-next .n-welcome :is(.n-suggest-title, .n-suggest-detail) {
+.chat-ui .n-welcome :is(.n-suggest-title, .n-suggest-detail) {
   display: block;
   width: 100%;
   overflow: hidden;
@@ -105,11 +105,11 @@
 
 /* ChatPlaceholder's `lg:px-20`; below 1024px the frame keeps px-8 (32px). */
 @media (min-width: 1024px) {
-  .prism-next .n-welcome { padding-inline: 80px; }
+  .chat-ui .n-welcome { padding-inline: 80px; }
 }
 
 /* One material and control scale for the single docked composer. */
-.prism-next .n-composer {
+.chat-ui .n-composer {
   --n-composer-border: oklch(0.94 0 0 / 30%);
   --n-composer-hover-border: oklch(0.92 0 0);
   --n-composer-focus-border: oklch(0.94 0 0);
@@ -124,7 +124,7 @@
   transition: border-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.dark .prism-next .n-composer {
+.dark .chat-ui .n-composer {
   --n-composer-border: oklch(0.27 0 0 / 30%);
   --n-composer-hover-border: oklch(0.32 0 0);
   --n-composer-focus-border: oklch(0.32 0 0);
@@ -133,7 +133,7 @@
 
 /* What sending from the box does, when it is not the usual: said quietly above
    it, in the type of the activity lines, not as a warning. */
-.prism-next .n-composer-note {
+.chat-ui .n-composer-note {
   margin: 0 0 6px;
   padding-inline: 14px;
   color: var(--n-text-2);
@@ -141,58 +141,58 @@
   line-height: 20px;
 }
 
-.prism-next .n-composer:hover { border-color: var(--n-composer-hover-border); }
-.prism-next .n-composer:focus-within { border-color: var(--n-composer-focus-border); }
+.chat-ui .n-composer:hover { border-color: var(--n-composer-hover-border); }
+.chat-ui .n-composer:focus-within { border-color: var(--n-composer-focus-border); }
 
-.prism-next .n-composer-field {
+.chat-ui .n-composer-field {
   /* A little more writing room: +16px over the upstream compact composer. */
   padding: 16px 10px 10px;
 }
 
-.prism-next .n-composer-input {
+.chat-ui .n-composer-input {
   padding: 0 4px;
   max-height: 384px;
   scrollbar-width: none;
 }
 
-.prism-next .n-composer-input::-webkit-scrollbar { display: none; }
+.chat-ui .n-composer-input::-webkit-scrollbar { display: none; }
 
-.prism-next .n-composer.expanded .n-composer-input {
+.chat-ui .n-composer.expanded .n-composer-input {
   max-height: max(384px, calc(100dvh - 240px));
 }
 
-.prism-next .n-composer-bar {
+.chat-ui .n-composer-bar {
   min-height: 42px;
   padding: 6px;
   gap: 4px;
 }
 
-.prism-next .n-composer-bar .n-icon-btn {
+.chat-ui .n-composer-bar .n-icon-btn {
   width: 30px;
   height: 30px;
 }
 
-.prism-next .n-composer-bar .n-icon-btn.primary:disabled {
+.chat-ui .n-composer-bar .n-icon-btn.primary:disabled {
   color: #fff;
 }
 
-.prism-next .n-composer-bar .n-icon-btn.primary:disabled::before {
+.chat-ui .n-composer-bar .n-icon-btn.primary:disabled::before {
   background: oklch(0.92 0 0);
 }
 
-.dark .prism-next .n-composer-bar .n-icon-btn.primary:disabled {
+.dark .chat-ui .n-composer-bar .n-icon-btn.primary:disabled {
   color: oklch(0.2 0 0);
 }
 
-.dark .prism-next .n-composer-bar .n-icon-btn.primary:disabled::before {
+.dark .chat-ui .n-composer-bar .n-icon-btn.primary:disabled::before {
   background: oklch(0.42 0 0);
 }
 
-.prism-next .n-composer-dock {
+.chat-ui .n-composer-dock {
   padding-bottom: max(8px, env(safe-area-inset-bottom));
 }
 
-.prism-next .n-composer-dock .n-column {
+.chat-ui .n-composer-dock .n-column {
   max-width: 58rem;
   padding-inline: 8px;
 }
@@ -203,14 +203,14 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .prism-next .n-welcome .n-suggest { animation: none; }
+  .chat-ui .n-welcome .n-suggest { animation: none; }
 }
 
 /* OpenWebUI Chat.svelte at 0a7c15832f: no page exit or translation; ready
  * content mounts with `in:fade={{ duration: 50 }}`. The loading branch never
  * carries this class, and streaming updates reuse the mounted content node.
  */
-.prism-next .n-chat-fade {
+.chat-ui .n-chat-fade {
   /* `backwards`, not `both`: a fill that outlives the fade keeps the column a
      stacking context, and the headers that stick under the top bar
      (agent.css) could then never be drawn above the bar's fade. */
@@ -223,7 +223,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .prism-next .n-chat-fade { animation: none; }
+  .chat-ui .n-chat-fade { animation: none; }
 }
 
 /* Room below the last message, as in Open WebUI (Messages.svelte: `pb-18`, and
@@ -232,10 +232,10 @@
    Padding, not a spacer element: the rule below counts the column's last two
    children as the newest exchange. Both classes, to win over `.n-column`'s
    `padding` shorthand, here and on narrow screens. */
-.prism-next .n-column.n-chat-fade {
+.chat-ui .n-column.n-chat-fade {
   padding-bottom: 72px;
 }
-.prism-next .n-column.n-chat-fade.has-files {
+.chat-ui .n-column.n-chat-fade.has-files {
   padding-bottom: 96px;
 }
 
@@ -253,12 +253,12 @@
      scroll position was clamped up into the previous answer, and the page
      jumped there and back on every send. It does nothing to a message that is
      drawn. */
-  .prism-next .n-chat-fade > :is(.n-msg-user, .n-msg-assistant) {
+  .chat-ui .n-chat-fade > :is(.n-msg-user, .n-msg-assistant) {
     contain-intrinsic-size: auto 200px;
   }
   /* A reply with reasoning or a search open is exempt: containment would make
      it a stacking context, sinking its stuck header under the top bar's fade. */
-  .prism-next .n-chat-fade > :is(.n-msg-user, .n-msg-assistant):not(:nth-last-child(-n + 2)):not(:has(.n-reasoning-toggle[data-state='open'], .n-activity.is-open)) {
+  .chat-ui .n-chat-fade > :is(.n-msg-user, .n-msg-assistant):not(:nth-last-child(-n + 2)):not(:has(.n-reasoning-toggle[data-state='open'], .n-activity.is-open)) {
     content-visibility: auto;
     /* Containment clips painting to the message's box, and blocks as wide as
        the column (a Grid of cards, a table) drew their shadows past its right
@@ -274,10 +274,10 @@
 /* Editing the last question in place (UserMessage): the bubble widens into a
    box holding the field, with Cancel and Send beneath the text on the right.
    On the bubble's own colour, so it reads as the same message opened up. */
-.prism-next .n-msg-user.is-editing {
+.chat-ui .n-msg-user.is-editing {
   align-items: stretch;
 }
-.prism-next .n-edit {
+.chat-ui .n-edit {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -286,7 +286,7 @@
   border-radius: 22px;
   background: var(--n-bubble);
 }
-.prism-next .n-edit-field {
+.chat-ui .n-edit-field {
   width: 100%;
   max-height: 40vh;
   padding: 0;
@@ -300,12 +300,12 @@
   overflow-y: auto;
   scrollbar-width: thin;
 }
-.prism-next .n-edit-actions {
+.chat-ui .n-edit-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
 }
-.prism-next .n-edit-btn {
+.chat-ui .n-edit-btn {
   height: 32px;
   padding: 0 14px;
   border: 0;
@@ -319,25 +319,25 @@
   cursor: pointer;
   transition: background-color 120ms ease, opacity 120ms ease;
 }
-.prism-next .n-edit-btn:hover {
+.chat-ui .n-edit-btn:hover {
   background: color-mix(in srgb, var(--n-bg) 92%, var(--n-text));
 }
-.prism-next .n-edit-btn.is-primary {
+.chat-ui .n-edit-btn.is-primary {
   background: var(--n-accent);
   box-shadow: none;
   color: var(--n-accent-fg);
 }
-.prism-next .n-edit-btn.is-primary:not(:disabled):hover {
+.chat-ui .n-edit-btn.is-primary:not(:disabled):hover {
   background: var(--n-accent-hover);
 }
-.prism-next .n-edit-btn:disabled {
+.chat-ui .n-edit-btn:disabled {
   opacity: 0.35;
   cursor: default;
 }
 
 /* The composer's context meter (ContextMeter): a ring that fills as the
    conversation uses up the model's window, amber past 80%, red past 95%. */
-.prism-next .n-context-meter {
+.chat-ui .n-context-meter {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -350,29 +350,29 @@
   color: var(--n-text-2);
   cursor: pointer;
 }
-.prism-next .n-context-meter:hover,
-.prism-next .n-context-meter[data-state='open'] { background: var(--n-hover); }
+.chat-ui .n-context-meter:hover,
+.chat-ui .n-context-meter[data-state='open'] { background: var(--n-hover); }
 /* While a compression the person asked for is under way: opacity only, so it
    keeps moving under reduced motion (essential). */
-.prism-next .n-context-meter.is-busy { animation: n-context-busy 1.1s ease-in-out infinite; }
+.chat-ui .n-context-meter.is-busy { animation: n-context-busy 1.1s ease-in-out infinite; }
 @keyframes n-context-busy {
   50% { opacity: 0.35; }
 }
-.prism-next .n-context-meter:focus-visible { outline-offset: -2px; }
-.prism-next .n-context-meter svg { width: 18px; height: 18px; transform: rotate(-90deg); }
-.prism-next .n-context-track { fill: none; stroke: var(--n-line); stroke-width: 2.5; }
-.prism-next .n-context-fill {
+.chat-ui .n-context-meter:focus-visible { outline-offset: -2px; }
+.chat-ui .n-context-meter svg { width: 18px; height: 18px; transform: rotate(-90deg); }
+.chat-ui .n-context-track { fill: none; stroke: var(--n-line); stroke-width: 2.5; }
+.chat-ui .n-context-fill {
   fill: none;
   stroke: currentColor;
   stroke-width: 2.5;
   stroke-linecap: round;
   transition: stroke-dashoffset 300ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.prism-next .n-context-meter.is-high { color: #d97706; }
-.prism-next .n-context-meter.is-full { color: var(--n-err); }
+.chat-ui .n-context-meter.is-high { color: #d97706; }
+.chat-ui .n-context-meter.is-full { color: var(--n-err); }
 
 /* The meter's menu: the figures, then what can be done about them. It is
-   portalled out of .prism-next, so it is written against the menu's own tokens. */
+   portalled out of .chat-ui, so it is written against the menu's own tokens. */
 .n-context-menu {
   min-width: 220px;
 }

@@ -444,7 +444,7 @@ export function AssistantTurn({
           {response.runId && <ErrorId id={response.runId.slice(0, 8)} />}
           {response.errorCode === 'context_too_long' && onCompress && (
             <button type="button" className="n-notice-action" disabled={compressing} onClick={onCompress}>
-              {compressing ? t('next.context.compacting') : t('chat.compaction.action')}
+              {compressing ? t('chat.context.compacting') : t('chat.compaction.action')}
             </button>
           )}
         </Notice>,

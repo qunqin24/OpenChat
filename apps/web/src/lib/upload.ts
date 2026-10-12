@@ -4,7 +4,7 @@ import { api, unwrap } from '@/lib/api'
 import { mediaTypeOf } from '@/lib/attachments'
 import { isGuestMode } from '@/lib/guest/mode'
 
-/** Why an upload failed, as the `next.file.error.*` key that explains it. */
+/** Why an upload failed, as the `chat.file.error.*` key that explains it. */
 export type UploadError = 'type' | 'size' | 'failed'
 
 export class UploadFailed extends Error {

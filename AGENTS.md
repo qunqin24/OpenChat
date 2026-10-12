@@ -25,11 +25,11 @@ make generate   # 重新生成 sqlc、API 契约、GenUI 目录
 
 ## 两套设计系统，不要混用
 
-聊天/登录界面用 `--n-*` 令牌、`n-` 类名、`.prism-next`；后台面板用 shadcn（`components/shadcn/**`，`.shadcn-scope`）。两边共用的东西放 `lib/`、`hooks/`，或者各写一份。以下两条命令应当无输出：
+聊天/登录界面用 `--n-*` 令牌、`n-` 类名、`.chat-ui`；后台面板用 shadcn（`components/shadcn/**`，`.shadcn-scope`）。两边共用的东西放 `lib/`、`hooks/`，或者各写一份。以下两条命令应当无输出：
 
 ```bash
-grep -rn "components/shadcn" apps/web/src/components/next apps/web/src/components/auth
-grep -rn -- "--n-\|prism-next" apps/web/src/features/admin apps/web/src/components/shadcn
+grep -rn "components/shadcn" apps/web/src/components/chat apps/web/src/components/auth
+grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/shadcn
 ```
 
 - Tailwind 4 的 `border` 只设宽度，没有默认颜色时画成黑框；两套系统各自在作用域内提供默认边框色。
@@ -61,7 +61,7 @@ grep -rn -- "--n-\|prism-next" apps/web/src/features/admin apps/web/src/componen
 
 - 服务端数据用 TanStack Query（键在 `lib/query-keys.ts`、`features/admin/use-admin.ts`），流式中间态和 UI 状态用 Zustand；含筛选条件的键加 `placeholderData: (previous) => previous`。会话用 `currentSession(queryClient)`，别用 `ensureQueryData`。
 - 路由守卫挂在无路径布局的 `beforeLoad`（`_authed.tsx`、`admin.tsx`）。不经查询缓存的网络调用遇 401 要 `reportError`；换人要 `queryClient.clear()` + `resetChatStore()` + `forgetQueryCache()`。
-- 聊天页只有一个 `NextChat` 实例（`components/next/ChatPage.tsx`，规则在 `lib/chat-view.ts`）：子路由不渲染组件；首条消息的流程只在服务器答复后才 `navigate`；在该路径上写页面状态要过 `alive`；新增「新对话」入口必须带 `newChatState`。
+- 聊天页只有一个 `ChatView` 实例（`components/chat/ChatPage.tsx`，规则在 `lib/chat-view.ts`）：子路由不渲染组件；首条消息的流程只在服务器答复后才 `navigate`；在该路径上写页面状态要过 `alive`；新增「新对话」入口必须带 `newChatState`。
 - 消息列表从尾部分页：对消息键不要 `invalidateQueries`，用 `refreshNewestMessages`（`transcript_changed` 先截缓存再重取）；交接走 `lib/hand-over.ts`，只有 `refreshConfirmed` 之后才 `settle`。
 - 新增由响应或旧快照驱动、会写 `live` 的路径，必须过 `finished` 检查（`rememberFinished`）；`outbox` 由 `useSendMessage` 的 hook 级 `onError` 撤掉，别用调用级回调。
 - 流式文字用 `useReveal`（`MarkdownText.tsx`，节奏在 `lib/reveal.ts`）逐步显示前缀，**不要给每个字建元素或动画**（v1.1.0 这样做，长思维链把 CPU 拖到 90%）；回复零件的 key 按位置 `r<n>` 起，不按消息 id，别改回去（显现依赖同一元素）。

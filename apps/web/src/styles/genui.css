@@ -4,7 +4,7 @@
  * around it and reads as part of the answer, not an embedded page.
  */
 
-.prism-next .n-ui {
+.chat-ui .n-ui {
   width: 100%;
   /* Blocks sit inside prose like figures in an article, so they get a figure's
      breathing room above and below rather than a paragraph's. */
@@ -14,19 +14,19 @@
   color: var(--n-text);
 }
 
-.prism-next .n-ui-pending {
+.chat-ui .n-ui-pending {
   height: 72px;
   border-radius: 14px;
   background: var(--n-panel);
   animation: n-agent-pulse 1.4s ease-in-out infinite;
 }
 
-.prism-next .n-ui-fallback summary {
+.chat-ui .n-ui-fallback summary {
   cursor: pointer;
   font-size: 13px;
   color: var(--n-text-2);
 }
-.prism-next .n-ui-fallback pre {
+.chat-ui .n-ui-fallback pre {
   margin-top: 6px;
   padding: 10px 12px;
   border-radius: 10px;
@@ -41,7 +41,7 @@
 /* Cards are lifted with the theme's card shadow rather than outlined: a
    hairline around every card reads as a form, not an answer. Tables are the
    exception: chat-table.css frames them with a tinted ring. */
-.prism-next .n-ui-card {
+.chat-ui .n-ui-card {
   display: flex;
   flex-direction: column;
   padding: 16px 18px;
@@ -49,7 +49,7 @@
   background: var(--n-card);
   box-shadow: var(--n-shadow-card);
 }
-.prism-next .n-ui-card.is-muted {
+.chat-ui .n-ui-card.is-muted {
   background: var(--n-ui-tint);
   box-shadow: none;
 }
@@ -57,62 +57,62 @@
    plain one read as two different kinds of thing, which the model rarely
    means. A muted card stands alone, or in a row of muted ones; the accent
    tone, which marks the recommended one, still shows. */
-.prism-next .n-ui-grid:has(> .n-ui-card:not(.is-muted)) > .n-ui-card.is-muted {
+.chat-ui .n-ui-grid:has(> .n-ui-card:not(.is-muted)) > .n-ui-card.is-muted {
   background: var(--n-card);
   box-shadow: var(--n-shadow-card);
 }
-.prism-next .n-ui-card.is-accent {
+.chat-ui .n-ui-card.is-accent {
   box-shadow: var(--n-shadow-card-hover);
 }
 /* An icon sits above the title, in the muted ink, at the size of a heading's
    cap height times two: a mark that names the card, not a picture. */
-.prism-next .n-ui-card-icon {
+.chat-ui .n-ui-card-icon {
   width: 22px;
   height: 22px;
   margin: 2px 0 14px;
   color: var(--n-chat-muted);
   stroke-width: 1.75;
 }
-.prism-next .n-ui-card-head {
+.chat-ui .n-ui-card-head {
   display: flex;
   align-items: flex-start;
   gap: 12px;
 }
-.prism-next .n-ui-card-head:not(:last-child) {
+.chat-ui .n-ui-card-head:not(:last-child) {
   margin-bottom: 10px;
 }
-.prism-next .n-ui-card-titles {
+.chat-ui .n-ui-card-titles {
   display: flex;
   flex: 1;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
 }
-.prism-next .n-ui-card-badge {
+.chat-ui .n-ui-card-badge {
   flex-shrink: 0;
 }
 /* A panel's header is set off from its content by a rule. */
-.prism-next .n-ui-card.is-panel > .n-ui-card-head {
+.chat-ui .n-ui-card.is-panel > .n-ui-card-head {
   margin-bottom: 14px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--n-table-rule);
 }
-.prism-next .n-ui-card-icon.is-inline {
+.chat-ui .n-ui-card-icon.is-inline {
   width: 20px;
   height: 20px;
   margin: 2px 0 0;
   color: var(--n-chat-heading);
 }
-.prism-next .n-ui-card.is-panel .n-ui-card-subtitle {
+.chat-ui .n-ui-card.is-panel .n-ui-card-subtitle {
   font-size: 12px;
   line-height: 18px;
 }
-.prism-next .n-ui-card-footer {
+.chat-ui .n-ui-card-footer {
   margin-top: 14px;
   color: var(--n-chat-muted);
   font-size: 12px;
 }
-.prism-next .n-ui-card-title {
+.chat-ui .n-ui-card-title {
   /* Titles are medium, as the answer's headings are (chat-typography.css);
      figures keep their semibold, where weight helps the number read. */
   margin: 0;
@@ -121,64 +121,64 @@
   font-weight: 500;
   line-height: 24px;
 }
-.prism-next .n-ui-card-subtitle {
+.chat-ui .n-ui-card-subtitle {
   margin: 0;
   color: var(--n-chat-muted);
   font-size: 14px;
   line-height: 21px;
 }
 
-.prism-next .n-ui-stack {
+.chat-ui .n-ui-stack {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
-.prism-next .n-ui-row {
+.chat-ui .n-ui-row {
   display: flex;
   flex-wrap: wrap;
   align-items: stretch;
 }
-.prism-next .n-ui-row > * {
+.chat-ui .n-ui-row > * {
   flex: 1 1 160px;
   min-width: 0;
 }
 /* Badges are labels, not columns or blocks: they keep their own width in a
    row, and in a stack (a card, a tab, folded detail) they sit at the start
    rather than stretching across it. */
-.prism-next .n-ui-row > .n-ui-badge {
+.chat-ui .n-ui-row > .n-ui-badge {
   flex: 0 0 auto;
 }
-.prism-next .n-ui-stack > .n-ui-badge {
+.chat-ui .n-ui-stack > .n-ui-badge {
   align-self: flex-start;
 }
-.prism-next .n-ui-grid > .n-ui-badge {
+.chat-ui .n-ui-grid > .n-ui-badge {
   justify-self: start;
 }
-.prism-next .n-ui-row:has(> .n-ui-badge) {
+.chat-ui .n-ui-row:has(> .n-ui-badge) {
   align-items: center;
 }
-.prism-next :is(.n-ui-stack, .n-ui-row).is-sm {
+.chat-ui :is(.n-ui-stack, .n-ui-row).is-sm {
   gap: 6px;
 }
-.prism-next :is(.n-ui-stack, .n-ui-row).is-md {
+.chat-ui :is(.n-ui-stack, .n-ui-row).is-md {
   gap: 12px;
 }
-.prism-next :is(.n-ui-stack, .n-ui-row).is-lg {
+.chat-ui :is(.n-ui-stack, .n-ui-row).is-lg {
   gap: 20px;
 }
 
-.prism-next .n-ui-grid {
+.chat-ui .n-ui-grid {
   display: grid;
   grid-template-columns: repeat(var(--n-ui-cols, 2), minmax(0, 1fr));
   gap: 12px;
 }
 @media (max-width: 640px) {
-  .prism-next .n-ui-grid {
+  .chat-ui .n-ui-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
-.prism-next .n-ui-divider {
+.chat-ui .n-ui-divider {
   margin: 4px 0;
   border: 0;
   border-top: 1px solid var(--n-line);
@@ -186,62 +186,62 @@
 
 /* ---- text ---------------------------------------------------------------- */
 
-.prism-next .n-ui-heading {
+.chat-ui .n-ui-heading {
   margin: 0;
   font-weight: 500;
   line-height: 1.35;
 }
-.prism-next .n-ui-heading.is-l1 {
+.chat-ui .n-ui-heading.is-l1 {
   font-size: 18px;
 }
-.prism-next .n-ui-heading.is-l2 {
+.chat-ui .n-ui-heading.is-l2 {
   font-size: 16px;
 }
-.prism-next .n-ui-heading.is-l3 {
+.chat-ui .n-ui-heading.is-l3 {
   font-size: 14px;
   color: var(--n-text-2);
 }
-.prism-next .n-ui-text > :first-child {
+.chat-ui .n-ui-text > :first-child {
   margin-top: 0;
 }
-.prism-next .n-ui-text > :last-child {
+.chat-ui .n-ui-text > :last-child {
   margin-bottom: 0;
 }
 
-.prism-next .n-ui-callout {
+.chat-ui .n-ui-callout {
   display: flex;
   gap: 10px;
   padding: 12px 14px;
   border-radius: 12px;
   background: var(--n-ui-tint);
 }
-.prism-next .n-ui-callout-icon {
+.chat-ui .n-ui-callout-icon {
   flex-shrink: 0;
   width: 16px;
   height: 16px;
   margin-top: 3px;
   color: var(--n-text-2);
 }
-.prism-next .n-ui-callout.is-success .n-ui-callout-icon {
+.chat-ui .n-ui-callout.is-success .n-ui-callout-icon {
   color: var(--n-ok);
 }
-.prism-next .n-ui-callout.is-warning .n-ui-callout-icon {
+.chat-ui .n-ui-callout.is-warning .n-ui-callout-icon {
   color: #d97706;
 }
-.prism-next .n-ui-callout.is-danger .n-ui-callout-icon {
+.chat-ui .n-ui-callout.is-danger .n-ui-callout-icon {
   color: var(--n-err);
 }
-.prism-next .n-ui-callout-body {
+.chat-ui .n-ui-callout-body {
   min-width: 0;
 }
-.prism-next .n-ui-callout-title {
+.chat-ui .n-ui-callout-title {
   font-weight: 500;
 }
 
 /* ---- data ---------------------------------------------------------------- */
 
 /* A figure in its own small frame, so a row of them reads as a dashboard. */
-.prism-next .n-ui-stat {
+.chat-ui .n-ui-stat {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -250,54 +250,54 @@
   background: var(--n-card);
   box-shadow: inset 0 0 0 1px var(--n-table-rule);
 }
-.prism-next .n-ui-stat-label,
-.prism-next .n-ui-stat-hint {
+.chat-ui .n-ui-stat-label,
+.chat-ui .n-ui-stat-hint {
   font-size: 12px;
   color: var(--n-text-2);
 }
-.prism-next .n-ui-stat-value {
+.chat-ui .n-ui-stat-value {
   color: var(--n-chat-heading);
   font-size: 26px;
   font-weight: 600;
   line-height: 1.25;
   font-variant-numeric: tabular-nums;
 }
-.prism-next .n-ui-stat-change {
+.chat-ui .n-ui-stat-change {
   display: inline-flex;
   align-items: center;
   gap: 2px;
   font-size: 12px;
   color: var(--n-text-2);
 }
-.prism-next .n-ui-stat-change svg {
+.chat-ui .n-ui-stat-change svg {
   width: 13px;
   height: 13px;
 }
 /* Colour is good or bad news, not direction: more bugs goes up and is bad. */
-.prism-next .n-ui-stat-change.is-good {
+.chat-ui .n-ui-stat-change.is-good {
   color: var(--n-ok);
 }
-.prism-next .n-ui-stat-change.is-bad {
+.chat-ui .n-ui-stat-change.is-bad {
   color: var(--n-err);
 }
 
 /* The table's frame, header and rows are drawn in chat-table.css, shared with
    Markdown tables; only what is particular to interface tables is here. */
-.prism-next .n-ui-table .is-number {
+.chat-ui .n-ui-table .is-number {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.prism-next .n-ui-table .is-progress {
+.chat-ui .n-ui-table .is-progress {
   width: 32%;
   min-width: 160px;
 }
 
-.prism-next .n-ui-progress {
+.chat-ui .n-ui-progress {
   display: flex;
   align-items: center;
   gap: 10px;
 }
-.prism-next .n-ui-progress-track {
+.chat-ui .n-ui-progress-track {
   position: relative;
   flex: 1;
   height: 6px;
@@ -305,50 +305,50 @@
   border-radius: 999px;
   background: var(--n-hover-strong);
 }
-.prism-next .n-ui-progress-fill {
+.chat-ui .n-ui-progress-fill {
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: inherit;
   background: var(--n-chat-strong);
   transition: width 400ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.prism-next .n-ui-progress.is-complete .n-ui-progress-fill {
+.chat-ui .n-ui-progress.is-complete .n-ui-progress-fill {
   background: var(--n-ok);
 }
-.prism-next .n-ui-progress-label {
+.chat-ui .n-ui-progress-label {
   min-width: 3.5em;
   color: var(--n-chat-body);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
 
-.prism-next .n-ui-kv {
+.chat-ui .n-ui-kv {
   margin: 0;
 }
-.prism-next .n-ui-kv-row {
+.chat-ui .n-ui-kv-row {
   display: grid;
   grid-template-columns: minmax(96px, 30%) 1fr;
   gap: 12px;
   padding: 7px 0;
   border-bottom: 1px solid var(--n-line);
 }
-.prism-next .n-ui-kv-row:last-child {
+.chat-ui .n-ui-kv-row:last-child {
   border-bottom: 0;
 }
-.prism-next .n-ui-kv dt {
+.chat-ui .n-ui-kv dt {
   color: var(--n-text-2);
 }
-.prism-next .n-ui-kv dd {
+.chat-ui .n-ui-kv dd {
   margin: 0;
   min-width: 0;
 }
 
-.prism-next .n-ui-tags {
+.chat-ui .n-ui-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
-.prism-next .n-ui-tag {
+.chat-ui .n-ui-tag {
   padding: 2px 10px;
   border-radius: 999px;
   background: var(--n-panel);
@@ -357,24 +357,24 @@
 
 /* ---- sequences ----------------------------------------------------------- */
 
-.prism-next :is(.n-ui-steps, .n-ui-timeline) {
+.chat-ui :is(.n-ui-steps, .n-ui-timeline) {
   display: flex;
   flex-direction: column;
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.prism-next .n-ui-step {
+.chat-ui .n-ui-step {
   position: relative;
   display: flex;
   gap: 12px;
   padding-bottom: 14px;
 }
-.prism-next .n-ui-step:last-child {
+.chat-ui .n-ui-step:last-child {
   padding-bottom: 0;
 }
 /* The rail between markers. */
-.prism-next .n-ui-step:not(:last-child)::before {
+.chat-ui .n-ui-step:not(:last-child)::before {
   content: '';
   position: absolute;
   top: 22px;
@@ -383,7 +383,7 @@
   width: 1px;
   background: var(--n-line);
 }
-.prism-next .n-ui-step-marker {
+.chat-ui .n-ui-step-marker {
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
@@ -395,13 +395,13 @@
   border-radius: 999px;
 }
 /* An ordinary procedure: the number, light on a dark disc. */
-.prism-next .n-ui-steps {
+.chat-ui .n-ui-steps {
   counter-reset: n-ui-step;
 }
-.prism-next .n-ui-step {
+.chat-ui .n-ui-step {
   counter-increment: n-ui-step;
 }
-.prism-next .n-ui-step.is-plain .n-ui-step-marker {
+.chat-ui .n-ui-step.is-plain .n-ui-step-marker {
   border: 0;
   background: var(--n-chat-heading, var(--n-text));
   color: var(--n-bg);
@@ -410,53 +410,53 @@
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
-.prism-next .n-ui-step.is-plain .n-ui-step-marker::before {
+.chat-ui .n-ui-step.is-plain .n-ui-step-marker::before {
   content: counter(n-ui-step);
 }
-.prism-next .n-ui-step.is-current .n-ui-step-marker {
+.chat-ui .n-ui-step.is-current .n-ui-step-marker {
   border-color: var(--n-text);
   box-shadow: inset 0 0 0 3px var(--n-bg), inset 0 0 0 9px var(--n-text);
 }
-.prism-next .n-ui-step.is-done .n-ui-step-marker {
+.chat-ui .n-ui-step.is-done .n-ui-step-marker {
   border: 0;
   color: var(--n-text);
 }
-.prism-next .n-ui-step.is-done .n-ui-step-marker svg {
+.chat-ui .n-ui-step.is-done .n-ui-step-marker svg {
   width: 18px;
   height: 18px;
 }
-.prism-next .n-ui-step-body {
+.chat-ui .n-ui-step-body {
   min-width: 0;
 }
-.prism-next .n-ui-step-title,
-.prism-next .n-ui-event-title {
+.chat-ui .n-ui-step-title,
+.chat-ui .n-ui-event-title {
   font-weight: 500;
 }
-.prism-next .n-ui-step.is-todo .n-ui-step-title {
+.chat-ui .n-ui-step.is-todo .n-ui-step-title {
   color: var(--n-text-2);
 }
 
-.prism-next .n-ui-event {
+.chat-ui .n-ui-event {
   display: grid;
   grid-template-columns: minmax(72px, 22%) 1fr;
   gap: 12px;
   padding: 8px 0;
   border-bottom: 1px solid var(--n-line);
 }
-.prism-next .n-ui-event:last-child {
+.chat-ui .n-ui-event:last-child {
   border-bottom: 0;
 }
-.prism-next .n-ui-event-time {
+.chat-ui .n-ui-event-time {
   color: var(--n-text-2);
   font-variant-numeric: tabular-nums;
 }
-.prism-next .n-ui-event-body {
+.chat-ui .n-ui-event-body {
   min-width: 0;
 }
 
 /* ---- charts --------------------------------------------------------------- */
 
-.prism-next .n-ui {
+.chat-ui .n-ui {
   --n-chart-1: #4f9bfa;
   --n-chart-2: #6cc57f;
   --n-chart-3: #ee8b57;
@@ -468,7 +468,7 @@
   --n-chart-9: #a3e635;
   --n-chart-10: #fb7185;
 }
-.dark .prism-next .n-ui {
+.dark .chat-ui .n-ui {
   --n-chart-1: #60a5fa;
   --n-chart-2: #74d68a;
   --n-chart-3: #f59e6b;
@@ -480,73 +480,73 @@
   --n-chart-9: #b5ec4f;
   --n-chart-10: #fd8a9b;
 }
-.prism-next .n-ui-chart {
+.chat-ui .n-ui-chart {
   margin: 0;
   padding: 16px 18px 14px;
   border-radius: 16px;
   background: var(--n-card);
   box-shadow: inset 0 0 0 1px var(--n-table-rule);
 }
-.prism-next .n-ui-chart-title {
+.chat-ui .n-ui-chart-title {
   margin-bottom: 10px;
   color: var(--n-chat-heading);
   font-size: 15px;
   font-weight: 500;
 }
-.prism-next .n-ui-chart-frame {
+.chat-ui .n-ui-chart-frame {
   position: relative;
   width: 100%;
   min-height: 1px;
 }
-.prism-next .n-ui-chart-plot {
+.chat-ui .n-ui-chart-plot {
   position: relative;
 }
-.prism-next .n-ui-chart svg {
+.chat-ui .n-ui-chart svg {
   display: block;
   overflow: visible;
 }
-.prism-next .n-ui-chart-grid {
+.chat-ui .n-ui-chart-grid {
   stroke: var(--n-table-rule);
   stroke-dasharray: 3 4;
 }
-.prism-next .n-ui-chart-tick {
+.chat-ui .n-ui-chart-tick {
   fill: var(--n-chat-muted);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
-.prism-next .n-ui-chart-line {
+.chat-ui .n-ui-chart-line {
   fill: none;
   stroke-width: 2.25;
   stroke-linejoin: round;
   stroke-linecap: round;
 }
-.prism-next .n-ui-chart-area {
+.chat-ui .n-ui-chart-area {
   fill-opacity: 0.14;
 }
-.prism-next .n-ui-chart-dot {
+.chat-ui .n-ui-chart-dot {
   stroke: var(--n-card);
   stroke-width: 1.5;
   transition: r 120ms ease;
 }
-.prism-next .n-ui-chart-guide {
+.chat-ui .n-ui-chart-guide {
   stroke: var(--n-line);
   stroke-dasharray: 2 3;
 }
-.prism-next :is(.n-ui-chart-bar, .n-ui-chart-slice) {
+.chat-ui :is(.n-ui-chart-bar, .n-ui-chart-slice) {
   transition: opacity 150ms ease;
 }
-.prism-next .n-ui-chart-slice {
+.chat-ui .n-ui-chart-slice {
   stroke: var(--n-card);
   stroke-width: 2;
   cursor: default;
 }
-.prism-next :is(.n-ui-chart-bar, .n-ui-chart-slice).is-dim {
+.chat-ui :is(.n-ui-chart-bar, .n-ui-chart-slice).is-dim {
   opacity: 0.4;
 }
-.prism-next .n-ui-chart-hit {
+.chat-ui .n-ui-chart-hit {
   fill: transparent;
 }
-.prism-next .n-ui-chart-tip {
+.chat-ui .n-ui-chart-tip {
   position: absolute;
   z-index: 1;
   min-width: 96px;
@@ -561,32 +561,32 @@
   /* Placed by the chart at the pointer, then nudged off it (Chart.tsx). */
   transition: transform 80ms ease-out;
 }
-.prism-next .n-ui-chart-tip-label {
+.chat-ui .n-ui-chart-tip-label {
   margin-bottom: 2px;
   color: var(--n-chat-muted);
 }
-.prism-next .n-ui-chart-tip-row {
+.chat-ui .n-ui-chart-tip-row {
   display: flex;
   align-items: center;
   gap: 6px;
 }
-.prism-next .n-ui-chart-tip-name {
+.chat-ui .n-ui-chart-tip-name {
   color: var(--n-chat-muted);
 }
-.prism-next .n-ui-chart-tip-value {
+.chat-ui .n-ui-chart-tip-value {
   margin-left: auto;
   color: var(--n-chat-heading);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.prism-next .n-ui-chart-swatch {
+.chat-ui .n-ui-chart-swatch {
   display: inline-block;
   flex-shrink: 0;
   width: 8px;
   height: 8px;
   border-radius: 999px;
 }
-.prism-next .n-ui-chart-legend {
+.chat-ui .n-ui-chart-legend {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -597,27 +597,27 @@
   color: var(--n-chat-body);
   font-size: 13px;
 }
-.prism-next .n-ui-chart-legend li {
+.chat-ui .n-ui-chart-legend li {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   transition: opacity 150ms ease;
 }
-.prism-next .n-ui-chart-legend li.is-dim {
+.chat-ui .n-ui-chart-legend li.is-dim {
   opacity: 0.45;
 }
-.prism-next .n-ui-chart-caption {
+.chat-ui .n-ui-chart-caption {
   margin: 10px 0 0;
   color: var(--n-chat-muted);
   font-size: 12px;
 }
-.prism-next .n-ui-chart-round {
+.chat-ui .n-ui-chart-round {
   position: relative;
   display: flex;
   justify-content: center;
   padding: 8px 0 0;
 }
-.prism-next .n-ui-chart-center {
+.chat-ui .n-ui-chart-center {
   position: absolute;
   top: calc(50% + 4px);
   left: 50%;
@@ -629,35 +629,35 @@
   pointer-events: none;
   transform: translate(-50%, -50%);
 }
-.prism-next .n-ui-chart-center-value {
+.chat-ui .n-ui-chart-center-value {
   color: var(--n-chat-heading);
   font-size: 22px;
   font-weight: 600;
   line-height: 1.2;
 }
-.prism-next .n-ui-chart-center-label {
+.chat-ui .n-ui-chart-center-label {
   color: var(--n-chat-body);
   font-size: 12px;
 }
-.prism-next .n-ui-chart-center-sub {
+.chat-ui .n-ui-chart-center-sub {
   color: var(--n-chat-muted);
   font-size: 11px;
 }
 
 /* ---- tabs ------------------------------------------------------------------ */
 
-.prism-next .n-ui-tabs {
+.chat-ui .n-ui-tabs {
   padding: 8px;
   border-radius: 16px;
   background: var(--n-card);
   box-shadow: inset 0 0 0 1px var(--n-table-rule);
 }
-.prism-next .n-ui-tabs-list {
+.chat-ui .n-ui-tabs-list {
   display: grid;
   grid-template-columns: repeat(var(--n-ui-tabs, 3), minmax(0, 1fr));
   gap: 4px;
 }
-.prism-next .n-ui-tabs-trigger {
+.chat-ui .n-ui-tabs-trigger {
   height: 34px;
   padding: 0 12px;
   overflow: hidden;
@@ -672,27 +672,27 @@
   cursor: pointer;
   transition: background-color 150ms ease, color 150ms ease;
 }
-.prism-next .n-ui-tabs-trigger:hover {
+.chat-ui .n-ui-tabs-trigger:hover {
   color: var(--n-chat-body);
 }
-.prism-next .n-ui-tabs-trigger[data-state='active'] {
+.chat-ui .n-ui-tabs-trigger[data-state='active'] {
   background: var(--n-ui-tint);
   color: var(--n-chat-heading);
   font-weight: 500;
 }
-.prism-next .n-ui-tabs-panel {
+.chat-ui .n-ui-tabs-panel {
   padding: 14px 10px 8px;
   outline: none;
 }
 
 /* ---- details ------------------------------------------------------------- */
 
-.prism-next .n-ui-details {
+.chat-ui .n-ui-details {
   border-radius: 14px;
   background: var(--n-card);
   box-shadow: inset 0 0 0 1px var(--n-table-rule);
 }
-.prism-next .n-ui-details-trigger {
+.chat-ui .n-ui-details-trigger {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -709,26 +709,26 @@
   text-align: left;
   cursor: pointer;
 }
-.prism-next .n-ui-details-trigger:hover {
+.chat-ui .n-ui-details-trigger:hover {
   background: var(--n-ui-tint);
 }
-.prism-next .n-ui-details-chevron {
+.chat-ui .n-ui-details-chevron {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
   color: var(--n-chat-muted);
   transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.prism-next .n-ui-details-trigger[data-state='open'] .n-ui-details-chevron {
+.chat-ui .n-ui-details-trigger[data-state='open'] .n-ui-details-chevron {
   transform: rotate(180deg);
 }
-.prism-next .n-ui-details-content {
+.chat-ui .n-ui-details-content {
   overflow: hidden;
 }
-.prism-next .n-ui-details-content[data-state='open'] {
+.chat-ui .n-ui-details-content[data-state='open'] {
   animation: n-ui-details-open 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.prism-next .n-ui-details-content[data-state='closed'] {
+.chat-ui .n-ui-details-content[data-state='closed'] {
   animation: n-ui-details-close 180ms cubic-bezier(0.4, 0, 1, 1);
 }
 @keyframes n-ui-details-open {
@@ -739,13 +739,13 @@
   from { height: var(--radix-collapsible-content-height); opacity: 1; }
   to { height: 0; opacity: 0; }
 }
-.prism-next .n-ui-details-body {
+.chat-ui .n-ui-details-body {
   padding: 2px 16px 14px;
 }
 
 /* ---- badges ------------------------------------------------------------------ */
 
-.prism-next .n-ui-badge {
+.chat-ui .n-ui-badge {
   display: inline-flex;
   align-items: center;
   height: 24px;
@@ -755,48 +755,48 @@
   font-weight: 500;
   white-space: nowrap;
 }
-.prism-next .n-ui-badge.is-neutral { background: var(--n-ui-tint); color: var(--n-chat-body); }
-.prism-next .n-ui-badge.is-info { background: #e8f1fe; color: #1d64d8; }
-.prism-next .n-ui-badge.is-success { background: #e6f6eb; color: #18794e; }
-.prism-next .n-ui-badge.is-warning { background: #fff0e5; color: #c2410c; }
-.prism-next .n-ui-badge.is-danger { background: #fde8e8; color: #c81e1e; }
-.dark .prism-next .n-ui-badge.is-info { background: rgb(96 165 250 / 16%); color: #93c5fd; }
-.dark .prism-next .n-ui-badge.is-success { background: rgb(74 222 128 / 14%); color: #86efac; }
-.dark .prism-next .n-ui-badge.is-warning { background: rgb(251 146 60 / 15%); color: #fdba74; }
-.dark .prism-next .n-ui-badge.is-danger { background: rgb(248 113 113 / 15%); color: #fca5a5; }
+.chat-ui .n-ui-badge.is-neutral { background: var(--n-ui-tint); color: var(--n-chat-body); }
+.chat-ui .n-ui-badge.is-info { background: #e8f1fe; color: #1d64d8; }
+.chat-ui .n-ui-badge.is-success { background: #e6f6eb; color: #18794e; }
+.chat-ui .n-ui-badge.is-warning { background: #fff0e5; color: #c2410c; }
+.chat-ui .n-ui-badge.is-danger { background: #fde8e8; color: #c81e1e; }
+.dark .chat-ui .n-ui-badge.is-info { background: rgb(96 165 250 / 16%); color: #93c5fd; }
+.dark .chat-ui .n-ui-badge.is-success { background: rgb(74 222 128 / 14%); color: #86efac; }
+.dark .chat-ui .n-ui-badge.is-warning { background: rgb(251 146 60 / 15%); color: #fdba74; }
+.dark .chat-ui .n-ui-badge.is-danger { background: rgb(248 113 113 / 15%); color: #fca5a5; }
 
 /* ---- checklist ------------------------------------------------------------- */
 
-.prism-next .n-ui-checklist {
+.chat-ui .n-ui-checklist {
   padding: 14px 16px 16px;
   border-radius: 16px;
   background: var(--n-card);
   box-shadow: inset 0 0 0 1px var(--n-table-rule);
 }
-.prism-next .n-ui-checklist-head {
+.chat-ui .n-ui-checklist-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 6px;
 }
-.prism-next .n-ui-checklist-title {
+.chat-ui .n-ui-checklist-title {
   color: var(--n-chat-heading);
   font-size: 15px;
   font-weight: 500;
 }
-.prism-next .n-ui-checklist-count {
+.chat-ui .n-ui-checklist-count {
   margin-left: auto;
   color: var(--n-chat-muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
-.prism-next .n-ui-checklist-items {
+.chat-ui .n-ui-checklist-items {
   margin: 0 0 12px;
   padding: 0;
   list-style: none;
 }
-.prism-next .n-ui-check {
+.chat-ui .n-ui-check {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -811,7 +811,7 @@
   text-align: left;
   cursor: pointer;
 }
-.prism-next .n-ui-check-box {
+.chat-ui .n-ui-check-box {
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
@@ -822,23 +822,23 @@
   box-shadow: inset 0 0 0 1.5px var(--n-line);
   transition: background-color 150ms ease, box-shadow 150ms ease;
 }
-.prism-next .n-ui-check-box svg {
+.chat-ui .n-ui-check-box svg {
   width: 12px;
   height: 12px;
   stroke-width: 3;
 }
-.prism-next .n-ui-check.is-done .n-ui-check-box {
+.chat-ui .n-ui-check.is-done .n-ui-check-box {
   background: var(--n-chat-heading);
   box-shadow: none;
   color: var(--n-card);
 }
-.prism-next .n-ui-checklist-bar {
+.chat-ui .n-ui-checklist-bar {
   height: 6px;
   overflow: hidden;
   border-radius: 999px;
   background: var(--n-ui-tint);
 }
-.prism-next .n-ui-checklist-bar > span {
+.chat-ui .n-ui-checklist-bar > span {
   display: block;
   height: 100%;
   border-radius: inherit;
@@ -850,24 +850,24 @@
 
 /* KaTeX's display formulas centre on their own line and scroll, rather than
    overflow, when one is wider than the column. */
-.prism-next .n-markdown .katex-display {
+.chat-ui .n-markdown .katex-display {
   margin: 16px 0;
   overflow-x: auto;
   overflow-y: hidden;
   padding: 4px 0;
 }
-.prism-next .n-markdown .katex {
+.chat-ui .n-markdown .katex {
   font-size: 1.08em;
 }
 
 /* Inside a card the card is the frame: figures and charts drop their own. */
-.prism-next .n-ui-card :is(.n-ui-stat, .n-ui-chart) {
+.chat-ui .n-ui-card :is(.n-ui-stat, .n-ui-chart) {
   padding: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
-.prism-next .n-ui-card .n-ui-chart {
+.chat-ui .n-ui-card .n-ui-chart {
   margin-top: 4px;
 }
 
@@ -876,10 +876,10 @@
    proxy. Frames hold a fixed shape and crop to it, so pictures of any size
    line up; one that cannot load takes its frame with it. */
 
-.prism-next .n-ui-image {
+.chat-ui .n-ui-image {
   margin: 0;
 }
-.prism-next .n-ui-image-frame {
+.chat-ui .n-ui-image-frame {
   position: relative;
   display: block;
   overflow: hidden;
@@ -887,19 +887,19 @@
   background: var(--n-ui-tint);
   box-shadow: inset 0 0 0 1px var(--n-table-rule);
 }
-.prism-next .n-ui-image-frame img {
+.chat-ui .n-ui-image-frame img {
   display: block;
   width: 100%;
   max-height: 460px;
   object-fit: cover;
 }
-.prism-next .n-ui-image-caption {
+.chat-ui .n-ui-image-caption {
   margin-top: 8px;
   color: var(--n-chat-muted);
   font-size: 13px;
   line-height: 19px;
 }
-.prism-next .n-ui-source-chip {
+.chat-ui .n-ui-source-chip {
   position: absolute;
   bottom: 10px;
   left: 10px;
@@ -915,42 +915,42 @@
   white-space: nowrap;
   backdrop-filter: blur(6px);
 }
-.prism-next a.n-ui-image-frame:hover img,
-.prism-next a.n-ui-article-media:hover img {
+.chat-ui a.n-ui-image-frame:hover img,
+.chat-ui a.n-ui-article-media:hover img {
   filter: brightness(0.96);
 }
-.prism-next :is(.n-ui-image-frame, .n-ui-article-media, .n-ui-card-cover) img {
+.chat-ui :is(.n-ui-image-frame, .n-ui-article-media, .n-ui-card-cover) img {
   transition: filter 150ms ease;
 }
 
 /* A gallery is a grid of equal tiles. */
-.prism-next .n-ui-gallery {
+.chat-ui .n-ui-gallery {
   display: grid;
   grid-template-columns: repeat(var(--n-ui-cols, 2), minmax(0, 1fr));
   gap: 10px;
 }
-.prism-next .n-ui-gallery .n-ui-image-frame img {
+.chat-ui .n-ui-gallery .n-ui-image-frame img {
   aspect-ratio: 4 / 3;
   height: auto;
   max-height: none;
 }
 @media (max-width: 640px) {
-  .prism-next .n-ui-gallery {
+  .chat-ui .n-ui-gallery {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 /* A card with a cover: the picture on top, flush with the card's corners. */
-.prism-next .n-ui-card.has-image {
+.chat-ui .n-ui-card.has-image {
   overflow: hidden;
   padding-top: 0;
 }
-.prism-next .n-ui-card-cover {
+.chat-ui .n-ui-card-cover {
   margin: 0 -18px 14px;
   overflow: hidden;
   background: var(--n-ui-tint);
 }
-.prism-next .n-ui-card-cover img {
+.chat-ui .n-ui-card-cover img {
   display: block;
   width: 100%;
   aspect-ratio: 16 / 10;
@@ -959,10 +959,10 @@
 
 /* ---- carousel ---------------------------------------------------------------- */
 
-.prism-next .n-ui-scroller {
+.chat-ui .n-ui-scroller {
   position: relative;
 }
-.prism-next .n-ui-scroller-track {
+.chat-ui .n-ui-scroller-track {
   display: flex;
   gap: 12px;
   margin: -4px;
@@ -972,14 +972,14 @@
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
 }
-.prism-next .n-ui-scroller-track::-webkit-scrollbar {
+.chat-ui .n-ui-scroller-track::-webkit-scrollbar {
   display: none;
 }
-.prism-next .n-ui-scroller-track > * {
+.chat-ui .n-ui-scroller-track > * {
   flex: 0 0 min(260px, 78%);
   scroll-snap-align: start;
 }
-.prism-next .n-ui-scroller-arrow {
+.chat-ui .n-ui-scroller-arrow {
   position: absolute;
   top: calc(50% - 18px);
   display: inline-flex;
@@ -996,36 +996,36 @@
   opacity: 0;
   transition: opacity 150ms ease;
 }
-.prism-next .n-ui-scroller-arrow svg {
+.chat-ui .n-ui-scroller-arrow svg {
   width: 18px;
   height: 18px;
 }
-.prism-next .n-ui-scroller-arrow.is-prev {
+.chat-ui .n-ui-scroller-arrow.is-prev {
   left: -10px;
 }
-.prism-next .n-ui-scroller-arrow.is-next {
+.chat-ui .n-ui-scroller-arrow.is-next {
   right: -10px;
 }
 @media (hover: hover) {
-  .prism-next .n-ui-scroller:hover .n-ui-scroller-arrow:not(.is-hidden) {
+  .chat-ui .n-ui-scroller:hover .n-ui-scroller-arrow:not(.is-hidden) {
     opacity: 1;
   }
 }
-.prism-next .n-ui-scroller-arrow.is-hidden {
+.chat-ui .n-ui-scroller-arrow.is-hidden {
   pointer-events: none;
 }
 
 /* ---- article ----------------------------------------------------------------- */
 
-.prism-next .n-ui-article {
+.chat-ui .n-ui-article {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.prism-next .n-ui-article + .n-ui-article {
+.chat-ui .n-ui-article + .n-ui-article {
   margin-top: 18px;
 }
-.prism-next .n-ui-article-media {
+.chat-ui .n-ui-article-media {
   position: relative;
   display: block;
   overflow: hidden;
@@ -1033,40 +1033,40 @@
   border-radius: 18px;
   background: var(--n-ui-tint);
 }
-.prism-next .n-ui-article-media img {
+.chat-ui .n-ui-article-media img {
   display: block;
   width: 100%;
   aspect-ratio: 16 / 9;
   object-fit: cover;
 }
-.prism-next .n-ui-article-meta {
+.chat-ui .n-ui-article-meta {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.prism-next .n-ui-article-meta .n-ui-source-chip {
+.chat-ui .n-ui-article-meta .n-ui-source-chip {
   position: static;
   background: var(--n-ui-tint);
   color: var(--n-chat-muted);
   backdrop-filter: none;
 }
-.prism-next .n-ui-article-date {
+.chat-ui .n-ui-article-date {
   margin-left: auto;
   color: var(--n-chat-muted);
   font-size: 13px;
 }
-.prism-next .n-ui-article-title {
+.chat-ui .n-ui-article-title {
   margin: 2px 0 0;
   color: var(--n-chat-heading);
   font-size: 20px;
   font-weight: 500;
   line-height: 1.35;
 }
-.prism-next .n-ui-article-title a {
+.chat-ui .n-ui-article-title a {
   color: inherit;
   text-decoration: none;
 }
-.prism-next .n-ui-article-title a:hover {
+.chat-ui .n-ui-article-title a:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
 }

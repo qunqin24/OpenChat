@@ -86,7 +86,7 @@ export function HtmlPreview({ code, isIncomplete, language }: CustomRendererProp
             </div>
             <PreviewFrame html={code} onEscape={() => setFull(false)} />
           </div>,
-          document.querySelector('.prism-next') ?? document.body,
+          document.querySelector('.chat-ui') ?? document.body,
         )}
     </div>
   )

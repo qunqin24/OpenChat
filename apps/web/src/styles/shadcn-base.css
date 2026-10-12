@@ -1,5 +1,5 @@
 /**
- * shadcn's base layer, confined so it cannot reach the prism side.
+ * shadcn's base layer, confined so it cannot reach the chat side (`.chat-ui`).
  *
  * Upstream applies `* { border-color: … }` and paints `body` globally. Both
  * would leak into the chat UI, which has its own tokens and its own surfaces.
@@ -52,7 +52,7 @@
   /* FontProvider writes `font-<name>` onto <html>, but `body` sets its own
      font-family, which an inherited value cannot beat. Reapplying it here also
      confines the choice to the admin panel: the chat UI's typography is part of
-     the ported prism design and is not the reader's to swap.
+     the chat design and is not the reader's to swap.
 
      Portalled shadcn surfaces sit outside `.shadcn-scope`, hence `[data-slot]`
      — the same reason as the border rule above. */

@@ -4,7 +4,7 @@
  * without a palette of its own.
  */
 
-.prism-next .n-msg-body {
+.chat-ui .n-msg-body {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -12,7 +12,7 @@
 }
 
 /* The reply's model mark, sized to the avatar slot with no crop. */
-.prism-next .n-msg-mark {
+.chat-ui .n-msg-mark {
   display: flex;
   width: 32px;
   height: 32px;
@@ -22,7 +22,7 @@
 
 /* ---- reasoning ---------------------------------------------------------- */
 
-.prism-next .n-reasoning-toggle {
+.chat-ui .n-reasoning-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -37,11 +37,11 @@
   user-select: none;
   vertical-align: top;
 }
-.prism-next .n-reasoning-toggle::after {
+.chat-ui .n-reasoning-toggle::after {
   content: '›';
   transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.prism-next .n-reasoning-toggle[data-state='open'] {
+.chat-ui .n-reasoning-toggle[data-state='open'] {
   /* Room above and below once it is stuck, taken back so nothing moves —
      which holds only aligned to the top of its line (see vertical-align
      below): on the baseline, the padding pushed the label 4px down the moment
@@ -49,23 +49,23 @@
   padding-block: 4px;
   margin-block: -4px;
 }
-.prism-next .n-reasoning-toggle[data-state='open']::after {
+.chat-ui .n-reasoning-toggle[data-state='open']::after {
   transform: rotate(90deg);
 }
 /* The reasoning and the tool activity open and close the same small way: the
    height Radix measured, with a light fade, 200ms on quintOut both ways. The
    fade is what keeps a long section from smearing as its height sweeps: the
    text is gone before the box has much shrunk. Off under reduced motion. */
-.prism-next .n-reasoning-content,
-.prism-next .n-activity-content {
+.chat-ui .n-reasoning-content,
+.chat-ui .n-activity-content {
   overflow: hidden;
 }
-.prism-next .n-reasoning-content[data-state='open'],
-.prism-next .n-activity-content[data-state='open'] {
+.chat-ui .n-reasoning-content[data-state='open'],
+.chat-ui .n-activity-content[data-state='open'] {
   animation: n-section-open 200ms cubic-bezier(0.23, 1, 0.32, 1);
 }
-.prism-next .n-reasoning-content[data-state='closed'],
-.prism-next .n-activity-content[data-state='closed'] {
+.chat-ui .n-reasoning-content[data-state='closed'],
+.chat-ui .n-activity-content[data-state='closed'] {
   /* Held at its end (forwards) until Radix hides it: otherwise, between the
      animation's last frame and the hidden attribute, the whole section
      flashes back at full height. */
@@ -80,18 +80,18 @@
   to { height: 0; opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .prism-next .n-reasoning-content[data-state],
-  .prism-next .n-activity-content[data-state] {
+  .chat-ui .n-reasoning-content[data-state],
+  .chat-ui .n-activity-content[data-state] {
     animation: none;
   }
 }
-.prism-next .n-reasoning-body {
+.chat-ui .n-reasoning-body {
   margin-top: 6px;
   padding-left: 12px;
   border-left: 2px solid var(--n-line);
 }
 /* The reasoning reads as body text, a size down from the answer's. */
-.prism-next .n-reasoning-body .n-markdown {
+.chat-ui .n-reasoning-body .n-markdown {
   color: var(--n-chat-body);
   font-size: 14px;
   line-height: 1.7;
@@ -99,7 +99,7 @@
 /* While thinking, the label shimmers: a band of light sweeps across the
    letters, the text itself filled with a gradient that slides. Colour only,
    no movement, so it stays on under reduced motion (data-motion). */
-.prism-next .n-reasoning-live {
+.chat-ui .n-reasoning-live {
   background: linear-gradient(
       90deg,
       var(--n-text-3) 0%,
@@ -124,12 +124,12 @@
 /* A run of tool calls, folded into one quiet line of secondary text — no box,
    so it reads as a note on how the answer was made, not as content. Opened,
    the steps hang off a hairline like a short timeline. */
-.prism-next .n-activity {
+.chat-ui .n-activity {
   max-width: 100%;
   font-size: 13.5px;
   line-height: 20px;
 }
-.prism-next .n-activity-head {
+.chat-ui .n-activity-head {
   /* Body size, like the reasoning toggle and OpenWebUI's collapsible titles;
      the steps inside stay a size down. */
   font-size: 15px;
@@ -145,7 +145,7 @@
   text-align: start;
   transition: background-color 150ms ease, color 150ms ease;
 }
-.prism-next .n-activity-head:hover {
+.chat-ui .n-activity-head:hover {
   background: var(--n-hover);
   color: var(--n-text);
 }
@@ -154,8 +154,8 @@
    within the activity, so it lets go once the steps have scrolled past. Open
    reasoning does the same with its toggle. Both stick right under the floating
    top bar, drawn over its fade. */
-.prism-next .n-reasoning-toggle[data-state='open'],
-.prism-next .n-activity.is-open .n-activity-head {
+.chat-ui .n-reasoning-toggle[data-state='open'],
+.chat-ui .n-activity.is-open .n-activity-head {
   position: sticky;
   /* 0, not the bar's height: the transcript's top padding (room for the
      floating bar) already offsets where a sticky box stops. */
@@ -171,8 +171,8 @@
    edges, so the two read as one header with the transcript fading in beneath
    it — not as a band floating over text that still shows above it. Only while
    pinned: in the flow, the fade would fog the text below it. */
-.prism-next .n-reasoning-toggle[data-stuck]::before,
-.prism-next .n-activity-head[data-stuck]::before {
+.chat-ui .n-reasoning-toggle[data-stuck]::before,
+.chat-ui .n-activity-head[data-stuck]::before {
   content: '';
   position: absolute;
   z-index: -1;
@@ -181,11 +181,11 @@
   background: linear-gradient(to bottom, var(--n-bg) calc(100% - 20px), transparent 100%);
   pointer-events: none;
 }
-.prism-next .n-main:has([data-stuck]) .n-topbar::before {
+.chat-ui .n-main:has([data-stuck]) .n-topbar::before {
   inset: 0;
   background: var(--n-bg);
 }
-.prism-next .n-activity-icon {
+.chat-ui .n-activity-icon {
   display: inline-flex;
   width: 16px;
   flex-shrink: 0;
@@ -194,56 +194,56 @@
 }
 /* A box of its own, not an inline span: inline, the orb sat on the text's
    baseline and hung below the middle of the line. */
-.prism-next .n-activity-orb {
+.chat-ui .n-activity-orb {
   display: flex;
 }
-.prism-next .n-activity-icon svg,
-.prism-next .n-activity-chevron,
-.prism-next .n-activity-step-icon svg {
+.chat-ui .n-activity-icon svg,
+.chat-ui .n-activity-chevron,
+.chat-ui .n-activity-step-icon svg {
   width: 14px;
   height: 14px;
   flex-shrink: 0;
 }
-.prism-next .n-activity-title {
+.chat-ui .n-activity-title {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 /* While working, the line is the live status: it shimmers gently. */
-.prism-next .n-activity.is-active .n-activity-title {
+.chat-ui .n-activity.is-active .n-activity-title {
   animation: n-agent-pulse 1.6s ease-in-out infinite;
 }
-.prism-next .n-activity-pulse {
+.chat-ui .n-activity-pulse {
   width: 7px;
   height: 7px;
   border-radius: 999px;
   background: currentColor;
   animation: n-agent-pulse 1.1s ease-in-out infinite;
 }
-.prism-next .n-activity-failed {
+.chat-ui .n-activity-failed {
   flex-shrink: 0;
   color: var(--n-err);
   font-size: 12px;
 }
-.prism-next .n-activity-chevron {
+.chat-ui .n-activity-chevron {
   color: var(--n-text-3);
   transition: transform 150ms ease;
 }
-.prism-next .n-activity.is-open .n-activity-chevron {
+.chat-ui .n-activity.is-open .n-activity-chevron {
   transform: rotate(90deg);
 }
 
 /* Sources: letter discs, overlapping in the collapsed line. */
-.prism-next .n-activity-sources {
+.chat-ui .n-activity-sources {
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
 }
-.prism-next .n-activity-sources .n-activity-mark + .n-activity-mark {
+.chat-ui .n-activity-sources .n-activity-mark + .n-activity-mark {
   margin-inline-start: -4px;
 }
-.prism-next .n-activity-mark {
+.chat-ui .n-activity-mark {
   display: inline-flex;
   width: 16px;
   height: 16px;
@@ -259,11 +259,11 @@
   line-height: 1;
 }
 /* The icon sits over the letter, which shows only until it loads or if it fails. */
-.prism-next .n-activity-mark {
+.chat-ui .n-activity-mark {
   position: relative;
   overflow: hidden;
 }
-.prism-next .n-activity-mark img {
+.chat-ui .n-activity-mark img {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -271,13 +271,13 @@
   object-fit: cover;
   background: var(--n-bg);
 }
-.prism-next .n-activity-more {
+.chat-ui .n-activity-more {
   margin-inline-start: 4px;
   color: var(--n-text-3);
   font-size: 12px;
 }
 
-.prism-next .n-activity-steps {
+.chat-ui .n-activity-steps {
   margin: 4px 0 2px 1px;
   padding: 0 0 0 14px;
   border-inline-start: 1px solid var(--n-line);
@@ -292,48 +292,48 @@
 }
 /* What the model said between rounds, in the body colour: it is the account of
    how the search went, worth reading, not a footnote. Its thinking is a step quieter. */
-.prism-next .n-activity-note {
+.chat-ui .n-activity-note {
   padding: 5px 0 5px 22px;
   color: var(--n-chat-body);
   font-size: 14px;
   line-height: 22px;
   white-space: pre-wrap;
 }
-.prism-next .n-activity-note.is-reasoning {
+.chat-ui .n-activity-note.is-reasoning {
   /* Quieter than what the model said, but read, not skimmed past: the same
      muted ink as the reasoning outside a search, upright. */
   color: var(--n-chat-muted);
 }
-.prism-next .n-activity-step {
+.chat-ui .n-activity-step {
   display: flex;
   gap: 8px;
   padding: 5px 0;
 }
-.prism-next .n-activity-step-icon {
+.chat-ui .n-activity-step-icon {
   display: inline-flex;
   height: 20px;
   align-items: center;
   color: var(--n-text-3);
 }
-.prism-next .n-activity-step.is-failed .n-activity-step-icon {
+.chat-ui .n-activity-step.is-failed .n-activity-step-icon {
   color: var(--n-err);
 }
-.prism-next .n-activity-step-body {
+.chat-ui .n-activity-step-body {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 6px;
 }
-.prism-next .n-activity-step-label {
+.chat-ui .n-activity-step-label {
   color: var(--n-text);
 }
-.prism-next .n-activity-hits {
+.chat-ui .n-activity-hits {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
-.prism-next .n-activity-hit {
+.chat-ui .n-activity-hit {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -347,20 +347,20 @@
   text-decoration: none;
   transition: background-color 150ms ease, color 150ms ease;
 }
-.prism-next .n-activity-hit > span:last-child {
+.chat-ui .n-activity-hit > span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.prism-next .n-activity-hit:hover {
+.chat-ui .n-activity-hit:hover {
   background: var(--n-hover-strong);
   color: var(--n-text);
 }
-.prism-next .n-activity-hit .n-activity-mark {
+.chat-ui .n-activity-hit .n-activity-mark {
   background: var(--n-bg);
   box-shadow: none;
 }
-.prism-next .n-activity-link {
+.chat-ui .n-activity-link {
   overflow: hidden;
   color: var(--n-text-2);
   font-size: 12.5px;
@@ -370,11 +370,11 @@
   text-decoration-color: var(--n-line);
   text-underline-offset: 3px;
 }
-.prism-next .n-activity-link:hover {
+.chat-ui .n-activity-link:hover {
   color: var(--n-text);
   text-decoration-color: currentColor;
 }
-.prism-next .n-activity-error {
+.chat-ui .n-activity-error {
   margin: 0;
   color: var(--n-text-2);
   font-size: 12.5px;
@@ -382,16 +382,16 @@
 
 /* ---- notices ------------------------------------------------------------ */
 
-.prism-next .n-notice {
+.chat-ui .n-notice {
   margin: 0;
   font-size: 13px;
   color: var(--n-text-2);
 }
-.prism-next .n-notice.is-error {
+.chat-ui .n-notice.is-error {
   color: var(--n-err);
 }
 /* The error's id after its message: quiet, and a button only to copy it. */
-.prism-next .n-error-id {
+.chat-ui .n-error-id {
   margin-inline-start: 8px;
   padding: 0;
   border: 0;
@@ -402,11 +402,11 @@
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
-.prism-next .n-error-id:hover {
+.chat-ui .n-error-id:hover {
   color: var(--n-text-2);
 }
 /* The way out a notice offers (compress the context and answer again). */
-.prism-next .n-notice-action {
+.chat-ui .n-notice-action {
   margin-inline-start: 10px;
   padding: 2px 10px;
   border: 0;
@@ -420,10 +420,10 @@
   cursor: pointer;
   transition: background-color 120ms ease, opacity 120ms ease;
 }
-.prism-next .n-notice-action:not(:disabled):hover {
+.chat-ui .n-notice-action:not(:disabled):hover {
   background: color-mix(in srgb, var(--n-bg) 92%, var(--n-text));
 }
-.prism-next .n-notice-action:disabled {
+.chat-ui .n-notice-action:disabled {
   opacity: 0.45;
   cursor: default;
 }
@@ -432,11 +432,11 @@
 
 /* Where a conversation's summary ends: a thin line with a label, open to the
    summary itself. The messages above it are drawn as ever. */
-.prism-next .n-compaction {
+.chat-ui .n-compaction {
   margin-block: 4px;
   color: var(--n-text-2);
 }
-.prism-next .n-compaction-toggle {
+.chat-ui .n-compaction-toggle {
   display: flex;
   width: 100%;
   align-items: center;
@@ -450,20 +450,20 @@
   cursor: pointer;
   user-select: none;
 }
-.prism-next .n-compaction-rule {
+.chat-ui .n-compaction-rule {
   height: 1px;
   flex: 1;
   background: var(--n-line);
 }
-.prism-next .n-compaction-label {
+.chat-ui .n-compaction-label {
   flex: none;
   transition: color 120ms ease;
 }
-.prism-next .n-compaction-toggle:hover .n-compaction-label,
-.prism-next .n-compaction[data-open] .n-compaction-label {
+.chat-ui .n-compaction-toggle:hover .n-compaction-label,
+.chat-ui .n-compaction[data-open] .n-compaction-label {
   color: var(--n-text);
 }
-.prism-next .n-compaction-body {
+.chat-ui .n-compaction-body {
   margin-top: 6px;
   padding: 12px 14px;
   border-radius: 12px;
@@ -471,7 +471,7 @@
   color: var(--n-text);
   font-size: 14px;
 }
-.prism-next .n-compaction-actions {
+.chat-ui .n-compaction-actions {
   display: flex;
   justify-content: flex-end;
   margin-top: 8px;
@@ -482,7 +482,7 @@
 /* The avatar slot from chat-layout.css, holding a brand mark or our logo on no
    background of its own: a grey disc behind a mark that has its own shape
    reads as a placeholder around it. */
-.prism-next .n-welcome-avatar {
+.chat-ui .n-welcome-avatar {
   width: 2.7rem;
   height: 2.7rem;
   align-items: center;
@@ -490,11 +490,11 @@
   background: transparent;
   color: var(--n-text);
 }
-.prism-next .n-welcome-mark {
+.chat-ui .n-welcome-mark {
   width: 2.4rem;
   height: 2.4rem;
 }
-.prism-next .n-welcome-logo {
+.chat-ui .n-welcome-logo {
   width: 2.2rem;
   height: 2.2rem;
   background-color: currentColor;
@@ -504,7 +504,7 @@
 
 /* ---- model picker ------------------------------------------------------- */
 
-.prism-next .n-model-trigger {
+.chat-ui .n-model-trigger {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -519,31 +519,31 @@
 }
 /* Fainter than the shared hover fill: these sit in a row inside the composer
    card, and a full-strength fill read as a heavy grey block. */
-.prism-next .n-model-trigger:hover,
-.prism-next .n-model-trigger[data-state='open'] {
+.chat-ui .n-model-trigger:hover,
+.chat-ui .n-model-trigger[data-state='open'] {
   background: rgb(0 0 0 / 3.5%);
   color: var(--n-text);
 }
-.dark .prism-next .n-model-trigger:hover,
-.dark .prism-next .n-model-trigger[data-state='open'] {
+.dark .chat-ui .n-model-trigger:hover,
+.dark .chat-ui .n-model-trigger[data-state='open'] {
   background: rgb(255 255 255 / 5%);
 }
-.prism-next .n-model-trigger > span {
+.chat-ui .n-model-trigger > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.prism-next .n-model-trigger svg {
+.chat-ui .n-model-trigger svg {
   width: 14px;
   height: 14px;
   flex-shrink: 0;
 }
 
-.prism-next .n-model-trigger.is-active {
+.chat-ui .n-model-trigger.is-active {
   color: var(--n-text);
 }
 
-/* The menu renders in a portal, outside `.prism-next`. */
+/* The menu renders in a portal, outside `.chat-ui`. */
 .n-model-menu {
   min-width: 240px;
   max-width: 320px;
@@ -579,7 +579,7 @@
   opacity: 0.8;
 }
 /* On the trigger, beside the name of a selected model that is at its cap. */
-.prism-next .n-model-trigger > .n-model-full {
+.chat-ui .n-model-trigger > .n-model-full {
   flex-shrink: 0;
   padding: 0 6px;
   border-radius: 999px;
@@ -587,7 +587,7 @@
   font-size: 11px;
   line-height: 18px;
 }
-.dark .prism-next .n-model-trigger > .n-model-full {
+.dark .chat-ui .n-model-trigger > .n-model-full {
   background: rgb(255 255 255 / 10%);
 }
 
@@ -605,7 +605,7 @@
 
 /* Rising bars, one per level the model has, filled up to the chosen one: in
    the composer's thinking button and beside each level in its menu (which
-   renders in a portal, outside `.prism-next`, so these are unscoped). */
+   renders in a portal, outside `.chat-ui`, so these are unscoped). */
 .n-effort-meter {
   display: inline-flex;
   align-items: flex-end;
@@ -637,7 +637,7 @@
 
 /* The composer's web switch. Off it is quiet like the other controls; on it
    takes the link blue, the one hue the chat keeps for "this is live". */
-.prism-next .n-web-toggle {
+.chat-ui .n-web-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -650,41 +650,41 @@
   font-size: 13px;
   transition: background-color 150ms ease, color 150ms ease;
 }
-.prism-next .n-web-toggle svg {
+.chat-ui .n-web-toggle svg {
   width: 16px;
   height: 16px;
 }
-.prism-next .n-web-toggle:hover:not(:disabled) {
+.chat-ui .n-web-toggle:hover:not(:disabled) {
   background: var(--n-hover);
   color: var(--n-text);
 }
-.prism-next .n-web-toggle.is-on {
+.chat-ui .n-web-toggle.is-on {
   background: rgb(37 99 235 / 10%);
   color: #2563eb;
 }
-.prism-next .n-web-toggle.is-on:hover:not(:disabled) {
+.chat-ui .n-web-toggle.is-on:hover:not(:disabled) {
   background: rgb(37 99 235 / 16%);
   color: #1d4ed8;
 }
-.dark .prism-next .n-web-toggle.is-on {
+.dark .chat-ui .n-web-toggle.is-on {
   background: rgb(96 165 250 / 14%);
   color: #60a5fa;
 }
-.dark .prism-next .n-web-toggle.is-on:hover:not(:disabled) {
+.dark .chat-ui .n-web-toggle.is-on:hover:not(:disabled) {
   background: rgb(96 165 250 / 20%);
   color: #93c5fd;
 }
 
 /* ---- thinking orb -------------------------------------------------------- */
 
-.prism-next .n-orb {
+.chat-ui .n-orb {
   display: inline-grid;
   grid-template-columns: repeat(3, 2.5px);
   gap: 1.75px;
   flex-shrink: 0;
   color: var(--n-text);
 }
-.prism-next .n-orb-dot {
+.chat-ui .n-orb-dot {
   width: 2.5px;
   height: 2.5px;
   border-radius: 50%;
@@ -706,7 +706,7 @@
 /* Before the first word: the mark and the same shimmering label the
    reasoning toggle wears, so the line carries on into it unchanged when the
    model starts to think. */
-.prism-next .n-thinking {
+.chat-ui .n-thinking {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -714,10 +714,10 @@
 }
 /* Directly under an empty body, it takes the body's place: without this the
    column's gap set it 4px lower than the toggle that replaces it. */
-.prism-next .n-msg-body:empty + .n-thinking {
+.chat-ui .n-msg-body:empty + .n-thinking {
   margin-top: -4px;
 }
-.prism-next .n-reasoning-toggle .n-orb {
+.chat-ui .n-reasoning-toggle .n-orb {
   margin-inline-end: 2px;
 }
 
@@ -726,12 +726,12 @@
 /* Written as a reply: the status line takes the tool activity line's place and
    look (body size, muted, a 16px icon), the text is the body's own, and red is
    only the small "not sent" mark - as the activity line marks its failures. */
-.prism-next .n-refusal {
+.chat-ui .n-refusal {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.prism-next .n-refusal-head {
+.chat-ui .n-refusal-head {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -740,19 +740,19 @@
   font-size: 15px;
   line-height: 22px;
 }
-.prism-next .n-refusal-icon {
+.chat-ui .n-refusal-icon {
   flex: none;
   width: 16px;
   height: 16px;
 }
-.prism-next .n-refusal-tag {
+.chat-ui .n-refusal-tag {
   color: var(--n-err);
   font-size: 12px;
 }
-.prism-next .n-refusal-text {
+.chat-ui .n-refusal-text {
   margin: 0;
 }
-.prism-next .n-refusal-warning {
+.chat-ui .n-refusal-warning {
   margin: 0;
   color: var(--n-text-2);
   font-size: 13px;

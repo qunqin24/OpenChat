@@ -8,11 +8,11 @@
  * the value here is only the starting point. A property should live in one
  * place; if a later sheet owns it, delete it here instead of restating it.
  *
- * Layout rules are scoped under `.prism-next` so they cannot collide with the
+ * Layout rules are scoped under `.chat-ui` so they cannot collide with the
  * admin panel's styles. Two things deliberately sit at the top level instead:
  * the `--n-*` tokens, and the tooltip rules — both are needed by content Radix
  * renders through a portal attached to <body>, which is outside the
- * `.prism-next` element and so beyond any descendant selector or variable
+ * `.chat-ui` element and so beyond any descendant selector or variable
  * inherited from it. The `--n-` prefix keeps the chat tokens from colliding
  * with the admin theme's `--background` / `--foreground` set.
  *
@@ -67,7 +67,7 @@
   --n-sidebar-w: 260px;
   --n-column: 860px;
 }
-.prism-next {
+.chat-ui {
   position: fixed;
   inset: 0;
   display: flex;
@@ -105,11 +105,11 @@
   --n-shadow-card: inset 0 0.5px 0 rgba(255, 255, 255, 0.06), 0 0 0 0.5px rgba(255, 255, 255, 0.08), 0 1px 1px rgba(0, 0, 0, 0.28), 0 2px 5px -2px rgba(0, 0, 0, 0.32), 0 6px 10px -7px rgba(0, 0, 0, 0.4);
   --n-shadow-card-hover: inset 0 0.5px 0 rgba(255, 255, 255, 0.1), 0 0 0 0.5px rgba(255, 255, 255, 0.12), 0 1px 2px rgba(0, 0, 0, 0.32), 0 4px 9px -3px rgba(0, 0, 0, 0.38), 0 10px 16px -10px rgba(0, 0, 0, 0.48);
 }
-.prism-next .n-sidebar {
+.chat-ui .n-sidebar {
   display: flex;
   flex-direction: column;
 }
-.prism-next .n-row {
+.chat-ui .n-row {
   position: relative;
   display: flex;
   align-items: center;
@@ -120,35 +120,35 @@
   cursor: pointer;
   user-select: none;
 }
-.prism-next .n-row::before {
+.chat-ui .n-row::before {
   content: "";
   position: absolute;
   inset: 0;
   background: transparent;
 }
-.prism-next .n-row > * {
+.chat-ui .n-row > * {
   position: relative;
 }
-.prism-next .n-row-label {
+.chat-ui .n-row-label {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.prism-next .n-group {
+.chat-ui .n-group {
   user-select: none;
 }
-.prism-next .n-row-meta {
+.chat-ui .n-row-meta {
   flex-shrink: 0;
 }
-.prism-next .n-route-motion {
+.chat-ui .n-route-motion {
   display: flex;
   flex: 1;
   min-width: 0;
   height: 100%;
 }
-.prism-next .n-main {
+.chat-ui .n-main {
   position: relative;
   display: flex;
   flex: 1;
@@ -163,12 +163,12 @@
    title rather than being cut off — and only in a conversation; the empty
    screen has nothing to scroll under it. The transcript starts below the bar
    (padding); anything sticky sticks below the fade, where it is not washed. */
-.prism-next .n-main {
+.chat-ui .n-main {
   --n-topbar-h: 52px;
   /* How far the fade reaches below the bar (`-bottom-10`). */
   --n-topbar-fade: 40px;
 }
-.prism-next .n-topbar {
+.chat-ui .n-topbar {
   position: absolute;
   inset: 0 0 auto;
   z-index: 10;
@@ -179,7 +179,7 @@
   height: var(--n-topbar-h);
   padding: 0 14px;
 }
-.prism-next .n-topbar.has-chat::before {
+.chat-ui .n-topbar.has-chat::before {
   content: '';
   position: absolute;
   inset: 0 0 calc(-1 * var(--n-topbar-fade));
@@ -192,7 +192,7 @@
   );
   pointer-events: none;
 }
-.prism-next .n-scroll {
+.chat-ui .n-scroll {
   position: relative;
   flex: 1;
   min-height: 0;
@@ -209,27 +209,27 @@
   scrollbar-width: thin;
   scrollbar-color: var(--n-line) transparent;
 }
-.prism-next .n-scroll::-webkit-scrollbar {
+.chat-ui .n-scroll::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
-.prism-next .n-scroll::-webkit-scrollbar-track {
+.chat-ui .n-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
-.prism-next .n-scroll::-webkit-scrollbar-thumb {
+.chat-ui .n-scroll::-webkit-scrollbar-thumb {
   background: var(--n-line);
   border-radius: 999px;
 }
-.prism-next .n-scroll::-webkit-scrollbar-thumb:hover {
+.chat-ui .n-scroll::-webkit-scrollbar-thumb:hover {
   background: var(--n-text-3);
 }
-.prism-next .n-column {
+.chat-ui .n-column {
   width: 100%;
   max-width: var(--n-column);
   margin: 0 auto;
   padding: 0 24px;
 }
-.prism-next .n-loading {
+.chat-ui .n-loading {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -237,7 +237,7 @@
      and the composer; 60vh from the top left it well above the middle. */
   height: 100%;
 }
-.prism-next .n-spinner {
+.chat-ui .n-spinner {
   width: 22px;
   height: 22px;
   border: 2px solid var(--n-line);
@@ -245,14 +245,14 @@
   border-radius: 50%;
   animation: n-spin 700ms linear infinite;
 }
-.prism-next .n-msg-user {
+.chat-ui .n-msg-user {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 4px;
   margin: 26px 0;
 }
-.prism-next .n-bubble {
+.chat-ui .n-bubble {
   max-width: 78%;
   padding: 10px 16px;
   border-radius: 18px;
@@ -261,7 +261,7 @@
   word-break: break-word;
   overflow-wrap: anywhere;
 }
-.prism-next .n-msg-assistant {
+.chat-ui .n-msg-assistant {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -274,37 +274,37 @@
   padding: 5px 0 0 44px;
   margin: 21px 0 26px;
 }
-.prism-next .n-msg-assistant > * {
+.chat-ui .n-msg-assistant > * {
   max-width: 100%;
   min-width: 0;
 }
-.prism-next .n-msg-avatar {
+.chat-ui .n-msg-avatar {
   position: absolute;
   top: 0;
   left: 0;
 }
-.prism-next .n-actions {
+.chat-ui .n-actions {
   display: flex;
   gap: 2px;
 }
 /* The buttons of a message (copy, edit, regenerate) come with the pointer or
    with keyboard focus; on the last answer they stay in view, as the place to
    go next. */
-.prism-next .n-actions > * {
+.chat-ui .n-actions > * {
   opacity: 0;
   transition: opacity 150ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.prism-next .n-msg-user:hover .n-actions > *,
-.prism-next .n-msg-assistant:hover .n-actions > *,
-.prism-next .n-actions:focus-within > *,
-.prism-next .n-actions.always > * {
+.chat-ui .n-msg-user:hover .n-actions > *,
+.chat-ui .n-msg-assistant:hover .n-actions > *,
+.chat-ui .n-actions:focus-within > *,
+.chat-ui .n-actions.always > * {
   opacity: 1;
 }
-.prism-next .n-suggest-head {
+.chat-ui .n-suggest-head {
   display: flex;
   align-items: center;
 }
-.prism-next .n-suggest {
+.chat-ui .n-suggest {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -313,17 +313,17 @@
   text-align: left;
   cursor: pointer;
 }
-.prism-next .n-suggest > * {
+.chat-ui .n-suggest > * {
   position: relative;
 }
-.prism-next .n-composer-dock {
+.chat-ui .n-composer-dock {
   position: relative;
   flex-shrink: 0;
   /* The transcript ends flush against this dock, which reads as a hard cut
        mid-sentence. A short wash to the page colour lets the last lines
        dissolve instead. Non-interactive so it never eats a click. */
 }
-.prism-next .n-composer-dock::before {
+.chat-ui .n-composer-dock::before {
   content: "";
   position: absolute;
   left: 0;
@@ -333,33 +333,33 @@
   background: linear-gradient(to bottom, transparent, var(--n-bg));
   pointer-events: none;
 }
-.prism-next .n-composer {
+.chat-ui .n-composer {
   position: relative;
   display: flex;
   flex-direction: column;
 }
-.prism-next .n-composer .n-composer-toggle {
+.chat-ui .n-composer .n-composer-toggle {
   position: absolute;
   top: 6px;
   right: 6px;
   z-index: 2;
 }
-.prism-next .n-composer.has-toggle .n-composer-input {
+.chat-ui .n-composer.has-toggle .n-composer-input {
   padding-right: 34px;
 }
-.prism-next .n-composer.editing .n-composer-toggle {
+.chat-ui .n-composer.editing .n-composer-toggle {
   top: 46px;
 }
-.prism-next .n-composer-field {
+.chat-ui .n-composer-field {
   display: flex;
   align-items: flex-start;
   gap: 6px;
 }
-.prism-next .n-composer-field .n-composer-input {
+.chat-ui .n-composer-field .n-composer-input {
   flex: 1;
   min-width: 0;
 }
-.prism-next .n-composer-input {
+.chat-ui .n-composer-input {
   width: 100%;
   border: 0;
   outline: none;
@@ -368,11 +368,11 @@
   font: inherit;
   overflow-y: auto;
 }
-.prism-next .n-composer-bar {
+.chat-ui .n-composer-bar {
   display: flex;
   align-items: center;
 }
-.prism-next .n-icon-btn {
+.chat-ui .n-icon-btn {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -385,7 +385,7 @@
   color: var(--n-text);
   cursor: pointer;
 }
-.prism-next .n-icon-btn::before {
+.chat-ui .n-icon-btn::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -393,44 +393,44 @@
   background: transparent;
   transition: background 150ms cubic-bezier(0.22, 1, 0.36, 1), transform 150ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.prism-next .n-icon-btn:not(:disabled):hover::before {
+.chat-ui .n-icon-btn:not(:disabled):hover::before {
   background: var(--n-hover);
 }
-.prism-next .n-icon-btn:not(:disabled):active::before {
+.chat-ui .n-icon-btn:not(:disabled):active::before {
   transform: scale(0.98);
   background: var(--n-hover-strong);
 }
-.prism-next .n-icon-btn.on::before {
+.chat-ui .n-icon-btn.on::before {
   background: var(--n-hover-strong);
 }
-.prism-next .n-icon-btn > svg {
+.chat-ui .n-icon-btn > svg {
   position: relative;
 }
-.prism-next .n-icon-btn:disabled {
+.chat-ui .n-icon-btn:disabled {
   color: var(--n-text-3);
   cursor: default;
 }
-.prism-next .n-icon-btn.primary {
+.chat-ui .n-icon-btn.primary {
   color: var(--n-accent-fg);
 }
-.prism-next .n-icon-btn.primary::before {
+.chat-ui .n-icon-btn.primary::before {
   background: var(--n-accent);
 }
-.prism-next .n-icon-btn.primary:not(:disabled):hover::before {
+.chat-ui .n-icon-btn.primary:not(:disabled):hover::before {
   background: var(--n-accent-hover);
 }
-.prism-next .n-icon-btn.primary:not(:disabled):active::before {
+.chat-ui .n-icon-btn.primary:not(:disabled):active::before {
   background: var(--n-accent-hover);
 }
-.prism-next .n-icon-btn.sm {
+.chat-ui .n-icon-btn.sm {
   width: 28px;
   height: 28px;
   color: var(--n-text-2);
 }
-.prism-next .n-icon-btn.sm:not(:disabled):hover {
+.chat-ui .n-icon-btn.sm:not(:disabled):hover {
   color: var(--n-text);
 }
-.prism-next .n-scroll-bottom {
+.chat-ui .n-scroll-bottom {
   position: absolute;
   left: 50%;
   bottom: calc(100% + 12px);
@@ -449,10 +449,10 @@
   transform: translateX(-50%);
   animation: n-pill-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
-.prism-next .n-scroll-bottom:hover {
+.chat-ui .n-scroll-bottom:hover {
   color: var(--n-text);
 }
-.prism-next .n-palette-overlay {
+.chat-ui .n-palette-overlay {
   position: fixed;
   inset: 0;
   display: flex;
@@ -462,7 +462,7 @@
   background: rgba(0, 0, 0, 0.28);
   animation: n-fade-in 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
-.prism-next .n-palette {
+.chat-ui .n-palette {
   display: flex;
   flex-direction: column;
   width: min(1120px, 94vw);
@@ -474,18 +474,18 @@
 }
 /* Closing plays the opening backwards, a little quicker: Radix keeps the
    dialog mounted until this animation ends. */
-.prism-next .n-palette-overlay[data-state='closed'] {
+.chat-ui .n-palette-overlay[data-state='closed'] {
   animation: n-fade-out 150ms cubic-bezier(0.4, 0, 1, 1) both;
 }
-.prism-next .n-palette[data-state='closed'] {
+.chat-ui .n-palette[data-state='closed'] {
   animation: n-palette-out 150ms cubic-bezier(0.4, 0, 1, 1) both;
 }
-.prism-next .n-palette-head {
+.chat-ui .n-palette-head {
   display: flex;
   align-items: center;
   flex-shrink: 0;
 }
-.prism-next .n-palette-input {
+.chat-ui .n-palette-input {
   flex: 1;
   min-width: 0;
   border: 0;
@@ -495,15 +495,15 @@
   font: inherit;
   font-size: 15px;
 }
-.prism-next .n-palette-input::placeholder {
+.chat-ui .n-palette-input::placeholder {
   color: var(--n-text-3);
 }
-.prism-next .n-palette-body {
+.chat-ui .n-palette-body {
   display: flex;
   flex: 1;
   min-height: 0;
 }
-.prism-next .n-palette-results {
+.chat-ui .n-palette-results {
   /* Half and half with the preview, padding included: the two panes are
      padded differently, so splitting only the room inside them was not even. */
   flex: 0 0 50%;
@@ -514,21 +514,21 @@
   scrollbar-width: thin;
   scrollbar-color: var(--n-line) transparent;
 }
-.prism-next .n-palette-results::-webkit-scrollbar {
+.chat-ui .n-palette-results::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
-.prism-next .n-palette-results::-webkit-scrollbar-track {
+.chat-ui .n-palette-results::-webkit-scrollbar-track {
   background: transparent;
 }
-.prism-next .n-palette-results::-webkit-scrollbar-thumb {
+.chat-ui .n-palette-results::-webkit-scrollbar-thumb {
   background: var(--n-line);
   border-radius: 999px;
 }
-.prism-next .n-palette-results::-webkit-scrollbar-thumb:hover {
+.chat-ui .n-palette-results::-webkit-scrollbar-thumb:hover {
   background: var(--n-text-3);
 }
-.prism-next .n-palette-item {
+.chat-ui .n-palette-item {
   position: relative;
   display: flex;
   align-items: center;
@@ -541,7 +541,7 @@
   text-align: left;
   cursor: pointer;
 }
-.prism-next .n-palette-item::before {
+.chat-ui .n-palette-item::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -549,32 +549,32 @@
   background: transparent;
   transition: background 120ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.prism-next .n-palette-item.cursor::before {
+.chat-ui .n-palette-item.cursor::before {
   background: var(--n-hover);
 }
-.prism-next .n-palette-item > * {
+.chat-ui .n-palette-item > * {
   position: relative;
 }
-.prism-next .n-palette-title {
+.chat-ui .n-palette-title {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.prism-next .n-palette-text {
+.chat-ui .n-palette-text {
   display: flex;
   flex: 1;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
 }
-.prism-next .n-palette-text > .n-palette-title {
+.chat-ui .n-palette-text > .n-palette-title {
   flex: none;
 }
 /* The passage a search found the conversation by: one quiet line under the
    title, so a result reads as "this conversation, because of this". */
-.prism-next .n-palette-excerpt {
+.chat-ui .n-palette-excerpt {
   overflow: hidden;
   color: var(--n-text-3);
   font-size: 12.5px;
@@ -582,27 +582,27 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.prism-next .n-palette-mark {
+.chat-ui .n-palette-mark {
   border-radius: 3px;
   background: var(--n-search-mark);
   color: inherit;
 }
-.prism-next ::highlight(n-search) {
+.chat-ui ::highlight(n-search) {
   background-color: var(--n-search-mark);
   color: inherit;
 }
-.prism-next .n-palette-date {
+.chat-ui .n-palette-date {
   flex-shrink: 0;
   color: var(--n-text-3);
   font-size: 12px;
 }
-.prism-next .n-palette-empty {
+.chat-ui .n-palette-empty {
   padding: 26px 10px;
   color: var(--n-text-3);
   font-size: 14px;
   text-align: center;
 }
-.prism-next .n-palette-preview {
+.chat-ui .n-palette-preview {
   flex: 0 0 50%;
   box-sizing: border-box;
   min-width: 0;
@@ -611,21 +611,21 @@
   scrollbar-width: thin;
   scrollbar-color: var(--n-line) transparent;
 }
-.prism-next .n-palette-preview::-webkit-scrollbar {
+.chat-ui .n-palette-preview::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
-.prism-next .n-palette-preview::-webkit-scrollbar-track {
+.chat-ui .n-palette-preview::-webkit-scrollbar-track {
   background: transparent;
 }
-.prism-next .n-palette-preview::-webkit-scrollbar-thumb {
+.chat-ui .n-palette-preview::-webkit-scrollbar-thumb {
   background: var(--n-line);
   border-radius: 999px;
 }
-.prism-next .n-palette-preview::-webkit-scrollbar-thumb:hover {
+.chat-ui .n-palette-preview::-webkit-scrollbar-thumb:hover {
   background: var(--n-text-3);
 }
-.prism-next .n-palette-preview-idle {
+.chat-ui .n-palette-preview-idle {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -634,15 +634,15 @@
   font-size: 14px;
   user-select: none;
 }
-.prism-next .n-palette-preview .n-msg-user,
-.prism-next .n-palette-preview .n-msg-assistant {
+.chat-ui .n-palette-preview .n-msg-user,
+.chat-ui .n-palette-preview .n-msg-assistant {
   margin: 16px 0;
 }
-.prism-next .n-palette-preview .n-msg-assistant {
+.chat-ui .n-palette-preview .n-msg-assistant {
   margin-top: 11px; /* 16px, less the 5px the avatar's room takes inside */
 }
-.prism-next .n-palette-preview .n-msg-user:first-child,
-.prism-next .n-palette-preview .n-msg-assistant:first-child {
+.chat-ui .n-palette-preview .n-msg-user:first-child,
+.chat-ui .n-palette-preview .n-msg-assistant:first-child {
   margin-top: 0;
 }
 @keyframes n-spin {
@@ -697,40 +697,40 @@
    and search palette have their own narrow-screen rules in sidebar.css and
    chat-layout.css. */
 @media (max-width: 768px) {
-  .prism-next {
+  .chat-ui {
     /* Fallback only: the live drawer width is set inline from the ui-store. */
     --n-sidebar-w: 82vw;
   }
-  .prism-next .n-column {
+  .chat-ui .n-column {
     padding: 0 14px;
   }
-  .prism-next .n-bubble {
+  .chat-ui .n-bubble {
     max-width: 88%;
   }
-  .prism-next .n-msg-assistant {
+  .chat-ui .n-msg-assistant {
     padding-left: 38px;
   }
   /* Touch has no hover, so keep actions visible. */
-  .prism-next .n-actions > * {
+  .chat-ui .n-actions > * {
     opacity: 1;
   }
 }
 /* Answers are laid out by `.n-prose` (chat-typography.css); this trims the
    outer spacing of the `.markdown-body` wrapper so assistant text sits flush
    in the full-width column. */
-.prism-next .n-markdown > .markdown-body > :first-child {
+.chat-ui .n-markdown > .markdown-body > :first-child {
   margin-top: 0;
 }
-.prism-next .n-markdown > .markdown-body > :last-child {
+.chat-ui .n-markdown > .markdown-body > :last-child {
   margin-bottom: 0;
 }
 /* Same exception as the global rule in globals.css: elements marked
    `data-motion='essential'` (loading indicators, the reasoning shimmer) keep
    their animation, because a frozen one reads as a hung page. */
 @media (prefers-reduced-motion: reduce) {
-  .prism-next *:not([data-motion='essential']),
-  .prism-next *:not([data-motion='essential'])::before,
-  .prism-next *:not([data-motion='essential'])::after {
+  .chat-ui *:not([data-motion='essential']),
+  .chat-ui *:not([data-motion='essential'])::before,
+  .chat-ui *:not([data-motion='essential'])::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
@@ -738,13 +738,13 @@
   /* Also exempt: a spinner's motion is the message, not decoration. Frozen it
      reads as a broken ring rather than as "loading", so it is slowed instead
      of stopped. */
-  .prism-next .n-spinner {
+  .chat-ui .n-spinner {
     animation-duration: 1.4s !important;
     animation-iteration-count: infinite !important;
   }
 }
 /* ---------------------------------------------------------------- tooltip
-   Portalled to <body>, outside `.prism-next`, so it is styled at the top
+   Portalled to <body>, outside `.chat-ui`, so it is styled at the top
    level. The surface is an inversion of the page rather than another panel:
    `--n-accent` / `--n-accent-fg` already flip with the theme, and an inverted
    chip reads as an overlay instead of as one more card floating in the UI. */

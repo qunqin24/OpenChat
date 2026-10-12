@@ -30,7 +30,7 @@ function ImageFile({ item }: { item: Attachment }) {
   if (broken) return <FileChip item={item} />
 
   return (
-    <a className="n-msg-image" href={item.url} target="_blank" rel="noreferrer" aria-label={t('next.file.open', { name: item.filename })}>
+    <a className="n-msg-image" href={item.url} target="_blank" rel="noreferrer" aria-label={t('chat.file.open', { name: item.filename })}>
       <img src={item.url} alt={item.filename} loading="lazy" onError={() => setBroken(true)} />
     </a>
   )
@@ -39,7 +39,7 @@ function ImageFile({ item }: { item: Attachment }) {
 function FileChip({ item }: { item: Attachment }) {
   const { t } = useTranslation()
   return (
-    <a className="n-msg-chip" href={item.url} target="_blank" rel="noreferrer" aria-label={t('next.file.open', { name: item.filename })}>
+    <a className="n-msg-chip" href={item.url} target="_blank" rel="noreferrer" aria-label={t('chat.file.open', { name: item.filename })}>
       <span className="n-attach-icon" aria-hidden>
         <FileText className="h-4 w-4" />
       </span>

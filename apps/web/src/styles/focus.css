@@ -15,28 +15,28 @@
  * but keyboard navigation always does. Removing it outright would leave anyone
  * tabbing through the app with no idea where they are.
  *
- * Scoped to the prism surfaces rather than applied globally: shadcn components
+ * Scoped to the chat surfaces (`.chat-ui`) rather than applied globally: shadcn components
  * bring their own focus treatment (`focus-visible:ring-[3px]` and friends), and
  * an unscoped rule stacks a second outline on top of it — which is what put a
  * large rounded box around the command palette's input.
  */
 
-.prism-next :focus-visible,
+.chat-ui :focus-visible,
 .n-auth :focus-visible,
 .n-menu :focus-visible {
   outline: 2px solid color-mix(in oklab, var(--n-text) 40%, transparent);
   outline-offset: 2px;
 }
 
-.prism-next .n-row:focus-visible {
+.chat-ui .n-row:focus-visible {
   border-radius: 8px;
 }
 
-.prism-next .n-suggest:focus-visible {
+.chat-ui .n-suggest:focus-visible {
   border-radius: 10px;
 }
 
-.prism-next .n-icon-btn:focus-visible,
+.chat-ui .n-icon-btn:focus-visible,
 .n-auth-reveal:focus-visible {
   border-radius: 999px;
 }
@@ -57,14 +57,14 @@
    indicator for a text field, and the card around it never goes away, so the
    ring has no work to do. The theme sets `outline: none` on both; this is only
    restating it at the specificity the rule above introduced. */
-.prism-next .n-composer-input:focus-visible {
+.chat-ui .n-composer-input:focus-visible {
   outline: none;
 }
 
 /* The same for the search palette's field, which sits in the palette's own
    header: the caret says where focus is. The rows show the cursor as their
    fill, and focus never leaves the field while arrowing through them. */
-.prism-next .n-palette-input:focus-visible,
-.prism-next .n-palette-rename input:focus-visible {
+.chat-ui .n-palette-input:focus-visible,
+.chat-ui .n-palette-rename input:focus-visible {
   outline: none;
 }

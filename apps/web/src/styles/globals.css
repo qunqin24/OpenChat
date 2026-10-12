@@ -6,12 +6,12 @@
 @import '@fontsource-variable/inter';
 @import '@fontsource-variable/manrope';
 
-/* next-theme.css is the chat surface's base layer: tokens plus the layout every
+/* chat-theme.css is the chat surface's base layer: tokens plus the layout every
    other chat sheet builds on. It is a local file, edited in place. The sheets
    after it (sidebar, typography, layout, ...) adapt it to OpenWebUI's visual
    specifications, mostly at the same specificity, so a later import wins.
    All of these rules are scoped, and outrank Tailwind's preflight layer. */
-@import './next-theme.css';
+@import './chat-theme.css';
 @import './sidebar.css';
 
 /* Sign-in / sign-up screens and dropdown menus, built on the same tokens. */

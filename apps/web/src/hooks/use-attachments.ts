@@ -66,7 +66,7 @@ export function useAttachments(accepts: Accepts) {
       const rejected = new Map<string, string>()
       const reject = (reason: RejectReason | 'count' | 'total', name: string) => {
         if (!rejected.has(reason)) {
-          rejected.set(reason, t(`next.file.reject.${reason}`, { name, max: reason === 'total' ? MAX_TOTAL_BYTES >> 20 : MAX_FILES }))
+          rejected.set(reason, t(`chat.file.reject.${reason}`, { name, max: reason === 'total' ? MAX_TOTAL_BYTES >> 20 : MAX_FILES }))
         }
       }
 

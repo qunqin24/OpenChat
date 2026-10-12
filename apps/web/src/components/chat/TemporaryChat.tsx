@@ -16,16 +16,16 @@ export function TemporaryToggle() {
   return (
     // The top bar is outside the sidebar's tooltip group.
     <TooltipGroup>
-      <Tooltip label={t('next.temporary.label')} hint={t(on ? 'next.temporary.on-hint' : 'next.temporary.off-hint')} side="bottom">
+      <Tooltip label={t('chat.temporary.label')} hint={t(on ? 'chat.temporary.on-hint' : 'chat.temporary.off-hint')} side="bottom">
         <button
           type="button"
           className={on ? 'n-temp-toggle is-on' : 'n-temp-toggle'}
           aria-pressed={on}
-          aria-label={t('next.temporary.label')}
+          aria-label={t('chat.temporary.label')}
           onClick={() => set(!on)}
         >
           <Ghost aria-hidden="true" />
-          <span>{t('next.temporary.label')}</span>
+          <span>{t('chat.temporary.label')}</span>
         </button>
       </Tooltip>
     </TooltipGroup>
@@ -43,9 +43,9 @@ export function TemporaryBar({ onExit }: { onExit: () => void }) {
     <div className="n-temp-bar">
       <span className="n-temp-bar-label">
         <Ghost aria-hidden="true" />
-        {t('next.temporary.label')}
+        {t('chat.temporary.label')}
       </span>
-      <button type="button" className="n-temp-bar-exit" aria-label={t('next.temporary.exit')} onClick={onExit}>
+      <button type="button" className="n-temp-bar-exit" aria-label={t('chat.temporary.exit')} onClick={onExit}>
         <X aria-hidden="true" />
       </button>
     </div>
@@ -57,7 +57,7 @@ export function TemporaryNote() {
   const { t } = useTranslation()
   return (
     <p className="n-temp-note" role="status">
-      {t('next.temporary.note')}
+      {t('chat.temporary.note')}
     </p>
   )
 }

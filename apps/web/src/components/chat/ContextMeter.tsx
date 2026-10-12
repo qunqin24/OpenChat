@@ -57,15 +57,15 @@ export default function ContextMeter({ conversationId, limit, busy }: ContextMet
   return (
     <DropdownMenu>
       <Tooltip
-        label={t('next.context.label')}
-        hint={t('next.context.hint', { percent, left: 100 - percent, used: compact(used), limit: compact(limit) })}
+        label={t('chat.context.label')}
+        hint={t('chat.context.hint', { percent, left: 100 - percent, used: compact(used), limit: compact(limit) })}
         disabled={compress.isPending}
       >
         <DropdownMenuTrigger asChild>
           <button
             type="button"
             className={cn('n-context-meter', level, compress.isPending && 'is-busy')}
-            aria-label={t('next.context.aria', { percent })}
+            aria-label={t('chat.context.aria', { percent })}
             data-motion={compress.isPending ? 'essential' : undefined}
           >
             <svg viewBox="0 0 18 18" aria-hidden="true">
@@ -84,18 +84,18 @@ export default function ContextMeter({ conversationId, limit, busy }: ContextMet
       </Tooltip>
       <DropdownMenuContent className="n-context-menu" align="end" side="top">
         <div className="n-context-info">
-          <span className="n-context-title">{t('next.context.label')}</span>
+          <span className="n-context-title">{t('chat.context.label')}</span>
           <span className="n-context-figures">
-            {t('next.context.hint', { percent, left: 100 - percent, used: compact(used), limit: compact(limit) })}
+            {t('chat.context.hint', { percent, left: 100 - percent, used: compact(used), limit: compact(limit) })}
           </span>
-          {summary && <span className="n-context-note">{t('next.context.compacted')}</span>}
+          {summary && <span className="n-context-note">{t('chat.context.compacted')}</span>}
         </div>
         <DropdownMenuItem
           disabled={busy || compress.isPending}
           onSelect={() => compress.mutate(undefined, { onSuccess: () => toast.success(t('chat.compaction.done')) })}
         >
           <Minimize2 aria-hidden="true" />
-          <span>{compress.isPending ? t('next.context.compacting') : t('next.context.compact')}</span>
+          <span>{compress.isPending ? t('chat.context.compacting') : t('chat.context.compact')}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

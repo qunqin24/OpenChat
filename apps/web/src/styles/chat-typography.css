@@ -2,7 +2,7 @@
  * OpenWebUI type scale and neutral text ramp, from ChatPlaceholder, Suggestions,
  * Navbar, Messages/Name and app.css's markdown-prose at 0a7c15832f.
  * The welcome screen here uses the left-aligned ChatPlaceholder variant.
- * Layered on next-theme.css (the base layer, a local edited file) and kept
+ * Layered on chat-theme.css (the base layer, a local edited file) and kept
  * separate from the admin theme. Where both set a property, this sheet wins by
  * coming later in the import order.
  */
@@ -11,7 +11,7 @@
     system-ui, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif;
 }
 
-.prism-next {
+.chat-ui {
   /* Darker than OpenWebUI's ramp, which sets body text at oklch(0.42) and the
      welcome line at 0.77: on a white page that reads as grey haze, not as
      de-emphasis. Body text is near-black now and the steps below it are spaced
@@ -43,7 +43,7 @@
   font-optical-sizing: auto;
 }
 
-.dark .prism-next {
+.dark .chat-ui {
   --n-chat-body: oklch(0.9 0 0);
   --n-chat-heading: oklch(0.94 0 0);
   --n-chat-strong: #fff;
@@ -80,7 +80,7 @@
   line-height: 18px;
 }
 
-.prism-next .n-chat-title {
+.chat-ui .n-chat-title {
   overflow: hidden;
   color: var(--n-chat-body);
   font-size: 15px;
@@ -90,7 +90,7 @@
   white-space: nowrap;
 }
 
-.prism-next .n-welcome-title {
+.chat-ui .n-welcome-title {
   color: var(--n-chat-heading);
   font-size: 30px;
   /* OpenWebUI sets its greeting at the regular weight; medium keeps a little
@@ -100,7 +100,7 @@
   letter-spacing: 0;
 }
 
-.prism-next .n-welcome-sub {
+.chat-ui .n-welcome-sub {
   color: var(--n-chat-faint);
   font-size: 30px;
   font-weight: 400;
@@ -108,41 +108,41 @@
   letter-spacing: 0;
 }
 
-.prism-next .n-suggest-head {
+.chat-ui .n-suggest-head {
   color: var(--n-chat-muted);
   font-size: 12px;
   font-weight: 400;
   line-height: 16px;
 }
 
-.prism-next .n-suggest-title {
+.chat-ui .n-suggest-title {
   color: var(--n-chat-body);
   font-size: 14px;
   font-weight: 400;
   line-height: 19.25px;
 }
 
-.prism-next .n-suggest-detail {
+.chat-ui .n-suggest-detail {
   color: var(--n-chat-muted);
   font-size: 12px;
   font-weight: 400;
   line-height: 16.5px;
 }
 
-.prism-next .n-suggest-title,
-.prism-next .n-suggest-detail {
+.chat-ui .n-suggest-title,
+.chat-ui .n-suggest-detail {
   transition: color 150ms;
 }
 
-.prism-next .n-suggest:is(:hover, :focus-visible) .n-suggest-title {
+.chat-ui .n-suggest:is(:hover, :focus-visible) .n-suggest-title {
   color: var(--n-chat-label);
 }
 
-.prism-next .n-suggest:is(:hover, :focus-visible) .n-suggest-detail {
+.chat-ui .n-suggest:is(:hover, :focus-visible) .n-suggest-detail {
   color: var(--n-chat-strong);
 }
 
-.prism-next .n-composer-input {
+.chat-ui .n-composer-input {
   color: var(--n-chat-input);
   font-size: 15px;
   font-weight: 400;
@@ -150,20 +150,20 @@
   letter-spacing: 0;
 }
 
-.prism-next .n-composer-input::placeholder {
+.chat-ui .n-composer-input::placeholder {
   color: var(--n-chat-placeholder);
   opacity: 1;
 }
 
-.prism-next .n-msg-head {
+.chat-ui .n-msg-head {
   color: var(--n-chat-label);
   font-size: 15px;
   font-weight: 400;
   line-height: 22.5px;
 }
 
-.prism-next .n-bubble,
-.prism-next .n-markdown {
+.chat-ui .n-bubble,
+.chat-ui .n-markdown {
   color: var(--n-chat-body);
   font-size: 15px;
   font-weight: 400;
@@ -174,25 +174,25 @@
 /* Own the renderer's typography explicitly instead of relying on utilities
  * inside node_modules. The imported Streamdown stylesheet only supplies motion.
  */
-.prism-next .n-markdown .n-prose {
+.chat-ui .n-markdown .n-prose {
   min-width: 0;
   max-width: 100%;
   overflow-wrap: anywhere;
   white-space: normal;
 }
 
-.prism-next .n-markdown :where(.n-prose) > * {
+.chat-ui .n-markdown :where(.n-prose) > * {
   margin-block: 0;
 }
 
-.prism-next .n-markdown .n-prose p {
+.chat-ui .n-markdown .n-prose p {
   margin: 0 0 8px;
   color: inherit;
   font-weight: 400;
   line-height: 1.625;
 }
 
-.prism-next .n-markdown :is(h1, h2, h3, h4, h5, h6) {
+.chat-ui .n-markdown :is(h1, h2, h3, h4, h5, h6) {
   margin: 8px 0 4px;
   color: var(--n-chat-strong);
   /* Medium, as OpenWebUI's prose sets headings and bold: PingFang's
@@ -204,38 +204,38 @@
 
 /* A section heading opens a new part of the answer, so it gets clear space
    above it — more than a paragraph's, and enough to read past a block. */
-.prism-next .n-markdown :is(h1, h2, h3) { margin: 20px 0 6px; }
-.prism-next .n-markdown h1 { font-size: 20px; }
-.prism-next .n-markdown h2 { font-size: 18px; }
-.prism-next .n-markdown h3 { font-size: 16px; }
-.prism-next .n-markdown h4 { font-size: 15px; }
-.prism-next .n-markdown :is(h5, h6) { font-size: 14px; }
+.chat-ui .n-markdown :is(h1, h2, h3) { margin: 20px 0 6px; }
+.chat-ui .n-markdown h1 { font-size: 20px; }
+.chat-ui .n-markdown h2 { font-size: 18px; }
+.chat-ui .n-markdown h3 { font-size: 16px; }
+.chat-ui .n-markdown h4 { font-size: 15px; }
+.chat-ui .n-markdown :is(h5, h6) { font-size: 14px; }
 
-.prism-next .n-markdown :is(strong, b, [data-streamdown='strong']) {
+.chat-ui .n-markdown :is(strong, b, [data-streamdown='strong']) {
   color: var(--n-chat-strong);
   font-weight: 500;
 }
 
-.prism-next .n-markdown :is(ul, ol) {
+.chat-ui .n-markdown :is(ul, ol) {
   margin-block: 8px;
   padding-inline-start: 1.625em;
   list-style-position: outside;
 }
 
-.prism-next .n-markdown ul { list-style-type: disc; }
-.prism-next .n-markdown ul ul { list-style-type: circle; }
-.prism-next .n-markdown ol { list-style-type: decimal; }
+.chat-ui .n-markdown ul { list-style-type: disc; }
+.chat-ui .n-markdown ul ul { list-style-type: circle; }
+.chat-ui .n-markdown ol { list-style-type: decimal; }
 
-.prism-next .n-markdown li {
+.chat-ui .n-markdown li {
   margin-block: 2px;
   padding-block: 0;
   padding-inline-start: 0.375em;
   font-weight: 400;
 }
 
-.prism-next .n-markdown li::marker { color: var(--n-chat-muted); }
+.chat-ui .n-markdown li::marker { color: var(--n-chat-muted); }
 
-.prism-next .n-markdown blockquote {
+.chat-ui .n-markdown blockquote {
   margin-block: 12px;
   padding-inline-start: 1em;
   border-inline-start: 2px solid var(--n-line);
@@ -243,17 +243,17 @@
   font-weight: 400;
 }
 
-.prism-next .n-markdown blockquote p::before,
-.prism-next .n-markdown blockquote p::after { content: none; }
+.chat-ui .n-markdown blockquote p::before,
+.chat-ui .n-markdown blockquote p::after { content: none; }
 
-.prism-next .n-markdown :is(a, [data-streamdown='link']) {
+.chat-ui .n-markdown :is(a, [data-streamdown='link']) {
   color: var(--n-chat-strong);
   font-weight: 500;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
-.prism-next .n-markdown [data-streamdown='inline-code'] {
+.chat-ui .n-markdown [data-streamdown='inline-code'] {
   margin-inline: 2px;
   padding: 0.15rem 0.3rem;
   border-radius: 6px;
@@ -271,7 +271,7 @@
    highlighting to plain text. Everything is spelled out here instead, on its
    data-streamdown hooks: one sheet with a hairline edge, the language and the
    actions in its top row. */
-.prism-next .n-markdown [data-streamdown='code-block'] {
+.chat-ui .n-markdown [data-streamdown='code-block'] {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -286,7 +286,7 @@
   box-shadow: inset 0 0 0 1px var(--n-table-rule);
 }
 
-.prism-next .n-markdown [data-streamdown='code-block-header'] {
+.chat-ui .n-markdown [data-streamdown='code-block-header'] {
   position: relative;
   z-index: 1;
   display: flex;
@@ -303,7 +303,7 @@
 
 /* A macOS window's traffic lights ahead of the language: one dot, its two
    siblings drawn as offset shadows of it, and room left for them after. */
-.prism-next .n-markdown [data-streamdown='code-block-header']::before {
+.chat-ui .n-markdown [data-streamdown='code-block-header']::before {
   content: '';
   flex-shrink: 0;
   width: 11px;
@@ -320,7 +320,7 @@
    being cut off at its edge: the top bar's fade (OpenWebUI's navbar curve),
    on the code surface, over the body's top padding — so code at rest, which
    starts below that padding, is never under it. */
-.prism-next .n-markdown [data-streamdown='code-block-header']::after {
+.chat-ui .n-markdown [data-streamdown='code-block-header']::after {
   content: '';
   position: absolute;
   inset: 100% 0 auto;
@@ -337,7 +337,7 @@
 /* The actions ride in the header's row and stay there — Streamdown makes the
    wrapper sticky, so they would float down over the code of a long block;
    the buttons take the pointer, the wrapper lets it through. */
-.prism-next .n-markdown [data-streamdown='code-block'] > div:has(> [data-streamdown='code-block-actions']) {
+.chat-ui .n-markdown [data-streamdown='code-block'] > div:has(> [data-streamdown='code-block-actions']) {
   position: relative;
   top: auto;
   z-index: 1;
@@ -350,7 +350,7 @@
   pointer-events: none;
 }
 
-.prism-next .n-markdown [data-streamdown='code-block-actions'] {
+.chat-ui .n-markdown [data-streamdown='code-block-actions'] {
   display: flex;
   align-items: center;
   gap: 2px;
@@ -361,7 +361,7 @@
   pointer-events: auto;
 }
 
-.prism-next .n-markdown :is([data-streamdown='code-block-copy-button'], [data-streamdown='code-block-download-button']) {
+.chat-ui .n-markdown :is([data-streamdown='code-block-copy-button'], [data-streamdown='code-block-download-button']) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -376,17 +376,17 @@
   transition: background-color 120ms ease, color 120ms ease;
 }
 
-.prism-next .n-markdown :is([data-streamdown='code-block-copy-button'], [data-streamdown='code-block-download-button']):hover {
+.chat-ui .n-markdown :is([data-streamdown='code-block-copy-button'], [data-streamdown='code-block-download-button']):hover {
   background: var(--n-hover-strong);
   color: var(--n-chat-body);
 }
 
-.prism-next .n-markdown :is([data-streamdown='code-block-copy-button'], [data-streamdown='code-block-download-button']) svg {
+.chat-ui .n-markdown :is([data-streamdown='code-block-copy-button'], [data-streamdown='code-block-download-button']) svg {
   width: 15px;
   height: 15px;
 }
 
-.prism-next .n-markdown [data-streamdown='code-block-body'] {
+.chat-ui .n-markdown [data-streamdown='code-block-body'] {
   overflow-x: auto;
   padding: 14px 16px;
   border: 0;
@@ -396,7 +396,7 @@
   scrollbar-color: var(--n-line) transparent;
 }
 
-.prism-next .n-markdown pre {
+.chat-ui .n-markdown pre {
   margin: 0;
   background: transparent;
   font-family: var(--font-mono);
@@ -406,7 +406,7 @@
   white-space: pre;
 }
 
-.prism-next .n-markdown pre code {
+.chat-ui .n-markdown pre code {
   display: block;
   font: inherit;
   white-space: inherit;
@@ -415,14 +415,14 @@
 /* One line per span, numbered in the gutter. The numbers are generated
    content, so selecting or copying the code never picks them up. A block that
    starts part-way through a file resets the counter inline. */
-.prism-next .n-markdown [data-streamdown='code-block-body'] code {
+.chat-ui .n-markdown [data-streamdown='code-block-body'] code {
   counter-reset: line;
 }
-.prism-next .n-markdown [data-streamdown='code-block-body'] code > span {
+.chat-ui .n-markdown [data-streamdown='code-block-body'] code > span {
   display: block;
   min-height: 22px;
 }
-.prism-next .n-markdown [data-streamdown='code-block-body'] code > span::before {
+.chat-ui .n-markdown [data-streamdown='code-block-body'] code > span::before {
   counter-increment: line;
   content: counter(line);
   display: inline-block;
@@ -435,17 +435,17 @@
 
 /* Shiki's colours arrive as custom properties on each token: the light
    theme's as --sdm-c, the dark theme's as --shiki-dark. */
-.prism-next .n-markdown [data-streamdown='code-block-body'] code > span > span {
+.chat-ui .n-markdown [data-streamdown='code-block-body'] code > span > span {
   color: var(--sdm-c, inherit);
 }
-.dark .prism-next .n-markdown [data-streamdown='code-block-body'] code > span > span {
+.dark .chat-ui .n-markdown [data-streamdown='code-block-body'] code > span > span {
   color: var(--shiki-dark, var(--sdm-c, inherit));
 }
 
 /* An html block's own actions (HtmlPreview): a labelled toggle between the
    code and the page, and the preview's full-screen button — sized and coloured
    like the copy and download buttons beside them. */
-.prism-next .n-code-action {
+.chat-ui .n-code-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -461,31 +461,31 @@
   cursor: pointer;
   transition: background-color 120ms ease, color 120ms ease;
 }
-.prism-next .n-code-action.is-icon {
+.chat-ui .n-code-action.is-icon {
   width: 28px;
   padding: 0;
 }
-.prism-next .n-code-action:not(:disabled):hover {
+.chat-ui .n-code-action:not(:disabled):hover {
   background: var(--n-hover-strong);
   color: var(--n-chat-body);
 }
-.prism-next .n-code-action:disabled {
+.chat-ui .n-code-action:disabled {
   opacity: 0.4;
   cursor: default;
 }
-.prism-next .n-code-action svg {
+.chat-ui .n-code-action svg {
   width: 15px;
   height: 15px;
 }
 
 /* A preview does not scroll under the header, so it gets no fade over it. */
-.prism-next .n-markdown .n-html-preview [data-streamdown='code-block-header']::after {
+.chat-ui .n-markdown .n-html-preview [data-streamdown='code-block-header']::after {
   display: none;
 }
 
 /* The page itself, on white whatever the theme: a page that sets no
    background assumes one. Inset in the block like the code body. */
-.prism-next .n-html-frame {
+.chat-ui .n-html-frame {
   display: block;
   width: 100%;
   border: 0;
@@ -494,7 +494,7 @@
 }
 
 /* Full screen: the page over the whole chat, under a slim bar to leave by. */
-.prism-next .n-html-full {
+.chat-ui .n-html-full {
   position: fixed;
   inset: 0;
   z-index: 60;
@@ -502,7 +502,7 @@
   flex-direction: column;
   background: var(--n-bg);
 }
-.prism-next .n-html-full-bar {
+.chat-ui .n-html-full-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -512,7 +512,7 @@
   font-size: 13px;
   box-shadow: inset 0 -1px 0 var(--n-line);
 }
-.prism-next .n-html-full .n-html-frame {
+.chat-ui .n-html-full .n-html-frame {
   flex: 1;
   height: auto;
   border-radius: 0;
@@ -520,35 +520,35 @@
 
 /* MarkdownTable replaces Streamdown's nested frames with one scroller, drawn
    in chat-table.css; the copy button floats over its top right on hover. */
-.prism-next .n-md-table {
+.chat-ui .n-md-table {
   position: relative;
   /* Hugs the table, so the copy button sits on its corner, not the column's. */
   width: fit-content;
   max-width: 100%;
   margin: 12px 0;
 }
-.prism-next .n-md-table-copy {
+.chat-ui .n-md-table-copy {
   position: absolute;
   top: 3px;
   right: 3px;
   opacity: 0;
   transition: opacity 150ms ease;
 }
-.prism-next .n-md-table:is(:hover, :focus-within) .n-md-table-copy {
+.chat-ui .n-md-table:is(:hover, :focus-within) .n-md-table-copy {
   opacity: 1;
 }
 
-.prism-next .n-markdown hr {
+.chat-ui .n-markdown hr {
   margin-block: 16px;
   border: 0;
   border-top: 1px solid var(--n-chat-rule);
 }
 
-.prism-next .n-markdown .n-prose > :first-child,
-.prism-next .n-markdown :is(h1, h2, h3, h4, h5, h6):first-child {
+.chat-ui .n-markdown .n-prose > :first-child,
+.chat-ui .n-markdown :is(h1, h2, h3, h4, h5, h6):first-child {
   margin-top: 0;
 }
 
-.prism-next .n-markdown .n-prose > :last-child {
+.chat-ui .n-markdown .n-prose > :last-child {
   margin-bottom: 0;
 }

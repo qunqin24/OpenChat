@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import ChatPage from '@/components/next/ChatPage'
+import ChatPage from '@/components/chat/ChatPage'
 
 /**
  * The chat itself: one page for the new-chat screen (`/`) and for every

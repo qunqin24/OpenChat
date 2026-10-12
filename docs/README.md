@@ -31,7 +31,7 @@ UI/UX、多端同步和流式体验。当前系统行为仍以本目录现状手
 3. 越权访问回 404，不回 403。
 4. 前端：server state 归 TanStack Query，高频/ephemeral state 归 Zustand；
    带过滤 key 的 query 必须有 `placeholderData: (previous) => previous`。
-5. 两套设计系统不混用：`.prism-next`/`.n-auth` 用 `--n-*`，
+5. 两套设计系统不混用：`.chat-ui`/`.n-auth` 用 `--n-*`，
    `.shadcn-scope` 用 shadcn token；portal 里靠 `[data-slot]` 命中。
 6. 一切用户可见字符串走 `t()`（en + zh 两个 locale 文件同步改）。
 7. 验证：`make check`；前端没有测试框架，验证 = tsc + eslint + build。

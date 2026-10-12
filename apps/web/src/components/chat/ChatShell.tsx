@@ -29,32 +29,32 @@ import GuestNotice from './GuestNotice'
 import Sidebar from './Sidebar'
 import SettingsDialog from './settings/SettingsDialog'
 
-interface NextShellContextValue {
+interface ChatShellContextValue {
   collapsed: boolean
   toggleCollapsed: () => void
   mobile: boolean
 }
 
-const NextShellContext = createContext<NextShellContextValue | null>(null)
+const ChatShellContext = createContext<ChatShellContextValue | null>(null)
 
 export function SidebarToggle() {
-  const context = useContext(NextShellContext)
+  const context = useContext(ChatShellContext)
   const { t } = useTranslation()
 
-  if (!context) throw new Error('SidebarToggle must be rendered inside NextShell')
+  if (!context) throw new Error('SidebarToggle must be rendered inside ChatShell')
 
   if (!context.mobile) return null
 
   return (
     <Dialog.Trigger asChild>
-      <button type="button" className="n-icon-btn" aria-label={t('next.sidebar.open')}>
+      <button type="button" className="n-icon-btn" aria-label={t('chat.sidebar.open')}>
         <PanelLeft className="h-[18px] w-[18px]" />
       </button>
     </Dialog.Trigger>
   )
 }
 
-export function NextShell() {
+export function ChatShell() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const paths = useChatPaths()
@@ -105,7 +105,7 @@ export function NextShell() {
       if (isOpenChatError(error) && error.status === 404) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all })
       } else {
-        toast.error(t('next.conversation.remove-failed'))
+        toast.error(t('chat.conversation.remove-failed'))
         return
       }
     }
@@ -113,14 +113,14 @@ export function NextShell() {
   }, [activeId, deleteConversation, navigate, paths.home, pendingDelete, queryClient, t])
 
   return (
-    <NextShellContext.Provider value={shellContext}>
+    <ChatShellContext.Provider value={shellContext}>
       <Dialog.Root open={mobile && mobileOpen} onOpenChange={setMobileOpen}>
-        <div className="prism-next" ref={setHost}>
+        <div className="chat-ui" ref={setHost}>
           {mobile ? (
             <Dialog.Portal>
               <Dialog.Overlay className="n-sidebar-backdrop" />
-              <Dialog.Content className="prism-next n-sidebar-mobile-frame" aria-describedby={undefined}>
-                <Dialog.Title className="sr-only">{t('next.sidebar.history')}</Dialog.Title>
+              <Dialog.Content className="chat-ui n-sidebar-mobile-frame" aria-describedby={undefined}>
+                <Dialog.Title className="sr-only">{t('chat.sidebar.history')}</Dialog.Title>
                 <Sidebar
                   mobile
                   collapsed={false}
@@ -168,13 +168,13 @@ export function NextShell() {
               }}
             >
               <AlertDialogHeader>
-                <AlertDialogTitle>{t('next.conversation.remove-title')}</AlertDialogTitle>
+                <AlertDialogTitle>{t('chat.conversation.remove-title')}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  {t('next.conversation.remove-description', { title: displayTitle(pendingDelete?.title, t) })}
+                  {t('chat.conversation.remove-description', { title: displayTitle(pendingDelete?.title, t) })}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>{t('next.conversation.cancel')}</AlertDialogCancel>
+                <AlertDialogCancel>{t('chat.conversation.cancel')}</AlertDialogCancel>
                 <AlertDialogAction onClick={() => void handleDelete()}>
                   {t('chat.delete')}
                 </AlertDialogAction>
@@ -183,8 +183,8 @@ export function NextShell() {
           </AlertDialog>
         </div>
       </Dialog.Root>
-    </NextShellContext.Provider>
+    </ChatShellContext.Provider>
   )
 }
 
-export default NextShell
+export default ChatShell

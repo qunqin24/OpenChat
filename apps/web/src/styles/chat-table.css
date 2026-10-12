@@ -6,14 +6,14 @@
  *
  * Each rule names both tables in a selector list rather than an `:is()`, so each
  * selector keeps its own specificity. The Markdown table gets all of its table
- * styling from this sheet; the base layer (next-theme.css) has no table rules.
+ * styling from this sheet; the base layer (chat-theme.css) has no table rules.
  *
  * The frame's edge is an inset outline, not a border, so the body's cells
  * reach the frame's edges and the frame's rounding clips them cleanly.
  */
 
-.prism-next .n-ui-table-wrap,
-.prism-next .n-md-table-scroll {
+.chat-ui .n-ui-table-wrap,
+.chat-ui .n-md-table-scroll {
   /* Sized to the table, not stretched across the column: short tables stay
      compact, a wide one still scrolls inside it. */
   width: fit-content;
@@ -34,7 +34,7 @@
 
 /* An interface table's title sits above the frame, not inside it, so the tinted
    band holds only the column labels. */
-.prism-next .n-ui-table-caption {
+.chat-ui .n-ui-table-caption {
   padding: 0 2px 8px;
   color: var(--n-chat-strong);
   font-size: 14px;
@@ -42,8 +42,8 @@
   line-height: 20px;
 }
 
-.prism-next .n-ui-table,
-.prism-next .n-markdown .markdown-body table {
+.chat-ui .n-ui-table,
+.chat-ui .n-markdown .markdown-body table {
   display: table;
   width: auto;
   max-width: none;
@@ -58,8 +58,8 @@
   line-height: 21px;
 }
 
-.prism-next .n-ui-table th,
-.prism-next .n-markdown .markdown-body table th {
+.chat-ui .n-ui-table th,
+.chat-ui .n-markdown .markdown-body table th {
   padding: 7px 14px;
   border: 0;
   background: transparent;
@@ -71,8 +71,8 @@
   white-space: nowrap;
 }
 
-.prism-next .n-ui-table td,
-.prism-next .n-markdown .markdown-body table td {
+.chat-ui .n-ui-table td,
+.chat-ui .n-markdown .markdown-body table td {
   min-width: 4em;
   padding: 7px 14px;
   border: 0;
@@ -86,41 +86,41 @@
   transition: background-color 120ms ease;
 }
 
-.prism-next .n-ui-table :is(th, td):not(:last-child),
-.prism-next .n-markdown .markdown-body table :is(th, td):not(:last-child) {
+.chat-ui .n-ui-table :is(th, td):not(:last-child),
+.chat-ui .n-markdown .markdown-body table :is(th, td):not(:last-child) {
   border-right: 1px solid var(--n-table-rule);
 }
 
 /* Rows are see-through so the frame's tint shows past the body's rounded top
    corners; the cells carry the body colour. */
-.prism-next .n-ui-table tbody tr,
-.prism-next .n-markdown .markdown-body table tbody tr,
-.prism-next .n-markdown .markdown-body table tbody tr:nth-child(2n) {
+.chat-ui .n-ui-table tbody tr,
+.chat-ui .n-markdown .markdown-body table tbody tr,
+.chat-ui .n-markdown .markdown-body table tbody tr:nth-child(2n) {
   border: 0;
   background: transparent;
 }
 
-.prism-next .n-ui-table tbody tr:hover td,
-.prism-next .n-markdown .markdown-body table tbody tr:hover td {
+.chat-ui .n-ui-table tbody tr:hover td,
+.chat-ui .n-markdown .markdown-body table tbody tr:hover td {
   background: var(--n-table-hover);
 }
 
 /* The body's top edge, which curves down at each end into the frame. */
-.prism-next .n-ui-table tbody tr:first-child td,
-.prism-next .n-markdown .markdown-body table tbody tr:first-child td {
+.chat-ui .n-ui-table tbody tr:first-child td,
+.chat-ui .n-markdown .markdown-body table tbody tr:first-child td {
   border-top-color: var(--n-line);
 }
-.prism-next .n-ui-table tbody tr:first-child td:first-child,
-.prism-next .n-markdown .markdown-body table tbody tr:first-child td:first-child {
+.chat-ui .n-ui-table tbody tr:first-child td:first-child,
+.chat-ui .n-markdown .markdown-body table tbody tr:first-child td:first-child {
   border-top-left-radius: 10px;
 }
-.prism-next .n-ui-table tbody tr:first-child td:last-child,
-.prism-next .n-markdown .markdown-body table tbody tr:first-child td:last-child {
+.chat-ui .n-ui-table tbody tr:first-child td:last-child,
+.chat-ui .n-markdown .markdown-body table tbody tr:first-child td:last-child {
   border-top-right-radius: 10px;
 }
 
 /* Room for the copy button, which floats over the last column's label now
    that the table is only as wide as its content. */
-.prism-next .n-markdown .markdown-body table th:last-child {
+.chat-ui .n-markdown .markdown-body table th:last-child {
   padding-right: 40px;
 }

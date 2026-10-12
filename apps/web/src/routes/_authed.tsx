@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
-import NextShell from '@/components/next/NextShell'
+import ChatShell from '@/components/chat/ChatShell'
 import { currentSession } from '@/features/auth/use-auth'
 import { chatFeaturesQueryOptions, chatModelsQueryOptions } from '@/hooks/use-chat-models'
 import { conversationsQueryOptions } from '@/hooks/use-conversations'
@@ -38,5 +38,5 @@ export const Route = createFileRoute('/_authed')({
       throw redirect({ to: '/login', search: { redirect: location.href } })
     }
   },
-  component: NextShell,
+  component: ChatShell,
 })

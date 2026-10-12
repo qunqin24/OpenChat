@@ -100,14 +100,14 @@ export function Composer({
       <div className={cn('n-composer', expanded && 'expanded', showToggle && 'has-toggle')}>
         {showToggle && (
           <Tooltip
-            label={expanded ? t('next.composer.collapse') : t('next.composer.expand')}
+            label={expanded ? t('chat.composer.collapse') : t('chat.composer.expand')}
             side="left"
           >
             <button
               type="button"
               className="n-composer-toggle n-icon-btn sm"
               aria-expanded={expanded}
-              aria-label={expanded ? t('next.composer.collapse') : t('next.composer.expand')}
+              aria-label={expanded ? t('chat.composer.collapse') : t('chat.composer.expand')}
               onClick={() => setExpanded(!expanded)}
             >
               {expanded ? (
@@ -147,13 +147,13 @@ export function Composer({
           {/* A disabled trigger fires no pointer events, so the tooltip would go
               silent exactly when the reader most needs to know why the button is
               dead — hence the wrapper span picking the hover up for it. */}
-          <Tooltip label={attach?.hint ?? t('next.file.none')}>
+          <Tooltip label={attach?.hint ?? t('chat.file.none')}>
             <span className="n-tip-wrap">
               <button
                 type="button"
                 className="n-icon-btn"
                 disabled={!canUpload}
-                aria-label={t('next.file.upload')}
+                aria-label={t('chat.file.upload')}
                 onClick={() => picker.current?.click()}
               >
                 <Plus className="h-[18px] w-[18px]" />

@@ -11,7 +11,7 @@ declare module '@tanstack/react-router' {
  * Which conversation the chat page shows, and which "copy" of the page that is.
  *
  * There is one chat page for the empty new-chat screen and for every
- * conversation (components/next/ChatPage.tsx). Opening a different conversation
+ * conversation (components/chat/ChatPage.tsx). Opening a different conversation
  * starts the page over, as a new component instance would: nothing typed,
  * scrolled or chosen on the old one may leak into the new. But sending the first
  * message of a new chat is not "opening another conversation": the page makes
