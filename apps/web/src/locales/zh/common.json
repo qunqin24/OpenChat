@@ -694,7 +694,7 @@
           "latest-is": "最新发布版本是 v{{version}}。",
           "current": "已是最新版本。",
           "available": "有新版本 v{{version}}",
-          "how": "升级方法：拉取新镜像后重启，数据库迁移会自动执行。",
+          "how": "升级方法：拉取新镜像后重新创建容器（Docker Compose：先 pull 再 up -d；只 restart 仍是旧版本）。如果在 deploy/.env 里用 OPENCHAT_IMAGE 固定了版本号，先改成新版本。数据库迁移会在启动时自动执行。",
           "notes": "查看更新内容",
           "checked-at": "上次检查：{{time}}。",
           "error": {

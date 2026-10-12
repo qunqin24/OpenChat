@@ -694,7 +694,7 @@
           "latest-is": "The latest release is v{{version}}.",
           "current": "You are on the latest version.",
           "available": "Version v{{version}} is available",
-          "how": "To upgrade, pull the new image and restart; database migrations run on start.",
+          "how": "To upgrade, pull the new image and recreate the container (Docker Compose: pull, then up -d; a plain restart keeps the old version). If deploy/.env pins a version in OPENCHAT_IMAGE, change it to the new one first. Database migrations run on start.",
           "notes": "Release notes",
           "checked-at": "Last checked {{time}}.",
           "error": {
