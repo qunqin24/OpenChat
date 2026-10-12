@@ -139,7 +139,8 @@
       "failed": "This interface could not be shown. Expand to see the source.",
       "checklist-progress": "{{done}}/{{total}} done",
       "previous": "Previous",
-      "next": "Next"
+      "next": "Next",
+      "choices-send": "Send"
     },
     "copy-table": "Copy table",
     "web-search": {

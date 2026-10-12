@@ -546,6 +546,45 @@
       ]
     },
     {
+      "name": "Choices",
+      "description": "A few directions the conversation could take next, offered at the end of an answer for the reader to pick one, such as which of several stories to go into or which of several approaches to work out. Picking one sends that Choice's message as the reader's next message. Whether an answer is better for offering one is yours to judge. Its items are two to four Choice components. action is the button's label, a short verb phrase in the reader's language; left out, it says Send.",
+      "params": [
+        {
+          "name": "question",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "items",
+          "type": "nodes",
+          "of": [
+            "Choice"
+          ],
+          "required": true
+        },
+        {
+          "name": "action",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "Choice",
+      "description": "One option of Choices. label is what the reader sees, a few words; message is what is sent for them when they pick it, written as they would ask it themselves: complete and specific, in their language, understandable without the label.",
+      "params": [
+        {
+          "name": "label",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "message",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
       "name": "Image",
       "description": "One picture from a source, with an optional caption. link is the page it came from; its site is shown on the picture. src must be an image address listed in a web_fetch or web_search result in this conversation (a page lists its images under \"Images on this page\"); never invent or guess one. With none listed, leave pictures out.",
       "params": [

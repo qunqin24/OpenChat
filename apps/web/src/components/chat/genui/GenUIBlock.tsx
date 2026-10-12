@@ -1,6 +1,6 @@
 import { ArrowDownRight, ArrowRight, ArrowUpRight, Check, ChevronDown, CircleAlert, CircleCheck, Info, TriangleAlert } from 'lucide-react'
 import { Collapsible, Tabs as RadixTabs } from 'radix-ui'
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Streamdown } from 'streamdown'
 
@@ -9,6 +9,7 @@ import { resolveBlock, type Cell, type UINode } from '@/lib/genui/resolve'
 import { cn } from '@/lib/utils'
 import { markdownComponents, markdownLinkSafety, prepareMarkdown, useMarkdownPlugins } from '../markdown-components'
 import { Chart, type ChartSeries } from './Chart'
+import { ChoicesBlock } from './choices'
 import { CARD_ICONS } from './icons'
 import { MaybeLink, Picture, Scroller, SourceChip } from './media'
 
@@ -44,8 +45,16 @@ export function GenUIBlock({ source, complete }: GenUIBlockProps) {
       </details>
     )
   }
-  return <div className="n-ui">{render(resolved.root)}</div>
+  return (
+    <BlockComplete value={complete}>
+      <div className="n-ui">{render(resolved.root)}</div>
+    </BlockComplete>
+  )
 }
+
+/** Whether the block is finished, for the components that act on it (Choices). */
+const BlockCompleteContext = createContext(true)
+const BlockComplete = BlockCompleteContext.Provider
 
 function render(node: UINode): ReactNode {
   const Component = renderers[node.component]
@@ -266,6 +275,13 @@ const renderers: Record<string, (props: Props) => ReactNode> = {
     />
   ),
   Divider: () => <hr className="n-ui-divider" />,
+  Choices: (p) => <Choices question={str(p.question)} items={(p.items as UINode[] | undefined) ?? []} action={str(p.action)} />,
+  // Drawn only inside Choices.
+  Choice: () => null,
+}
+
+function Choices(props: { question: string; items: UINode[]; action: string }) {
+  return <ChoicesBlock {...props} complete={useContext(BlockCompleteContext)} />
 }
 
 /** A picture from a source, with its site and caption; gone if it will not load. */

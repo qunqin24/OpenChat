@@ -67,6 +67,10 @@ WebKit（Safari，以及 iPhone 上的所有浏览器）照 Open WebUI 整个跳
 
 `mermaid` 代码块画成图，和 `html` 块的预览一样是 Streamdown 的自定义 renderer（`markdown-components.ts`）。不用 `@streamdown/mermaid`：它的外框是这个构建不生成的 Tailwind 类和聊天里没有的 shadcn 令牌，画出来是黑边框。Mermaid 很大，第一次遇到图表才动态加载；全局配置，所以渲染排队一个一个来。`securityLevel: 'strict'`（不执行脚本、标签里不放 HTML、输出经它净化），浅色用 `neutral`、深色用 `dark`，主题切换时重画（`hooks/use-dark.ts`）。还在输出、或语法错误时显示源码（错误时下面一行说明），画好后可在图和代码间切换。系统提示词只告诉模型这种代码块会画成图，用不用由它判断。
 
+## 智能 UI 的「选项」（`components/chat/genui/choices.tsx`）
+
+`Choices`/`Choice` 组件：一个问题加 2~4 个选项，每个选项有给读者看的短标签（`label`）和选中后替读者发出的完整消息（`message`）。点按钮走 `ChatView` 的 `handlePick`，和输入框发送同一条路（同样的忙碌检查、满额检查、`post` + `useSendMessage`，服务端照常审核，游客模式同样适用），不带输入框里的文件；没被接受时消息放回输入框。只有最后一条回答的选项能发（`ChoicesContext` 只给它 `pick`），有回答在输出、有消息在路上、或末尾是要改写的被拒消息时没有 `pick`，按钮禁用。每条回答都会拿到它后面发出的那条消息（`next`，发送途中就是 outbox 里的那条）：等于某个选项的 `message` 就标出它，卡片只读；不等于则只读、不标。状态规则在 `lib/genui/choices.ts`（有测试）。组件说明里只说它能做什么、用不用由模型判断，不写「什么时候必须用」。
+
 ## 手机：禁止缩放与安全区
 
 - **禁止缩放**，照 Open WebUI：`index.html` 的 viewport 带 `maximum-scale=1, user-scalable=no`（`maximum-scale` 同时让 iOS 聚焦字号小于 16px 的输入框时不再自动放大）。iOS 10 起 Safari 双指缩放不理会这两项，靠 `lib/no-zoom.ts` 取消它的 `gesture*` 事件；`globals.css` 给 `html` 设 `touch-action: pan-x pan-y`（向下逐层取交集，所有元素都只能平移），也去掉双击放大。

@@ -44,6 +44,7 @@ import CompactionDivider from './CompactionDivider'
 import Composer from './Composer'
 import ContextMeter from './ContextMeter'
 import { DropOverlay } from './DropOverlay'
+import { ChoicesContext, type ChoicesActions } from './genui/choices-context'
 import { ImageSource, proxiedImages } from './genui/image-source'
 import { AssistantTurn, PendingReply, RefusedReply, UserMessage } from './MessageItem'
 import ModelPicker from './ModelPicker'
@@ -59,6 +60,8 @@ const BOTTOM_SLACK = 24
 const TURN_STEP = 20
 /** How close to the top, in px, the reader must be before older turns are drawn (or loaded). */
 const TOP_REACH = 800
+/** A reply's Choices when the page offers them nothing (genui/choices.tsx). */
+const NO_CHOICES: ChoicesActions = {}
 
 interface ChatViewProps {
   /** The conversation shown; none on the new-chat screen. */
@@ -551,6 +554,18 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     }
   }, [])
 
+  // Whether the model is at its spending cap, said to the reader if so. The
+  // list may be a minute old, or kept from an earlier visit, so it is asked
+  // again before refusing - the cap may have been raised since.
+  const capacityRefused = useCallback(async () => {
+    if (!modelById.get(modelId)?.atCapacity) return false
+    const fresh = await queryClient.fetchQuery({ ...chatModelsQueryOptions, staleTime: 0 }).catch(() => undefined)
+    // Could not be asked: let the server decide, as it always does.
+    if (!fresh?.find((m) => m.id === modelId)?.atCapacity) return false
+    toast.error(t('chat.send-error.model_capacity_reached'), { id: 'model-capacity' })
+    return true
+  }, [modelById, modelId, queryClient, t])
+
   const handleSend = useCallback(async () => {
     const content = input.trim()
     if (!content || attachments.uploading || attachments.failed) return
@@ -567,17 +582,8 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
       return
     }
     // The model is at its cap: nothing is sent, and nothing is made for it (a
-    // new chat would otherwise be created only to be refused). The list may be
-    // a minute old, or kept from an earlier visit, so it is asked again before
-    // refusing - the cap may have been raised since.
-    if (modelById.get(modelId)?.atCapacity) {
-      const fresh = await queryClient.fetchQuery({ ...chatModelsQueryOptions, staleTime: 0 }).catch(() => undefined)
-      // Could not be asked: let the server decide, as it always does.
-      if (fresh?.find((m) => m.id === modelId)?.atCapacity) {
-        toast.error(t('chat.send-error.model_capacity_reached'), { id: 'model-capacity' })
-        return
-      }
-    }
+    // new chat would otherwise be created only to be refused).
+    if (await capacityRefused()) return
     const attachmentIds = attachments.ids
     setInput('')
     // Shown at once, at the bottom, while the request is on its way.
@@ -713,18 +719,17 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     attachments,
     canSearch,
     canThink,
+    capacityRefused,
     conversationId,
     createConversation,
     deleteConversation,
     editMessage,
     effort,
     input,
-    modelById,
     modelId,
     navigate,
     onCreated,
     onRemoved,
-    queryClient,
     paths.chat,
     post,
     revising,
@@ -736,6 +741,53 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     unpost,
     webSearch,
   ])
+
+  // A choice picked in the last answer (genui/choices.tsx): sent as the
+  // reader's next message, the way the composer sends one, leaving whatever is
+  // in the composer where it is. Not while a refused message is being reworded.
+  const handlePick = useCallback(
+    async (content: string) => {
+      if (!conversationId || revising) return
+      const now = useChatStore.getState()
+      if (working || now.outbox[conversationId] || isRunning(now.live[conversationId])) return
+      if (await capacityRefused()) return
+      const item = { content, attachments: [] }
+      parked.current = true
+      post(conversationId, item)
+      sendMessage.mutate(
+        {
+          content,
+          model: modelId || undefined,
+          reasoningEffort: canThink ? effort : undefined,
+          webSearch: canSearch ? webSearch : undefined,
+        },
+        {
+          // Not taken: the message goes to the composer, to send again or change.
+          // (A message moderation refused stays as the one to reword instead.)
+          onError: () => {
+            unpost(conversationId, item)
+            setInput((current) => current || content)
+          },
+        },
+      )
+    },
+    [canSearch, canThink, capacityRefused, conversationId, effort, modelId, post, revising, sendMessage, unpost, webSearch, working],
+  )
+
+  // What was sent after each reply, for its Choices blocks to mark the choice
+  // it was (genui/choices.tsx). Only the last answer's can send (below).
+  const sentAfter = useMemo(() => {
+    const byTurn = new Map<string, ChoicesActions>()
+    let next: string | undefined = outgoing?.content
+    for (let i = turns.length - 1; i >= 0; i--) {
+      const turn = turns[i]
+      if (!turn) continue
+      if (turn.kind === 'user') next = turn.message.content
+      else if (turn.kind === 'assistant') byTurn.set(turn.key, { next })
+    }
+    return byTurn
+  }, [outgoing, turns])
+  const canPick = !working && !outgoing && !revising
 
   const handleStop = useCallback(() => {
     const runId = live?.run?.run.id
@@ -839,6 +891,13 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
                     // The reply to a message moderation refused, where the model's would be.
                     <RefusedReply modelId={modelId} model={modelById.get(modelId)} refusal={refusals[turn.message.id] ?? {}} />
                   ) : (
+                    <ChoicesContext
+                      value={
+                        turn === last?.answer && canPick
+                          ? { next: sentAfter.get(turn.key)?.next, pick: (message) => void handlePick(message) }
+                          : (sentAfter.get(turn.key) ?? NO_CHOICES)
+                      }
+                    >
                     <AssistantTurn
                       turn={turn}
                       modelId={turnModel(turn) ?? modelId}
@@ -848,6 +907,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
                       onRegenerate={turn === last?.answer && !working && !outgoing ? handleRegenerate : undefined}
                       divider={divider}
                     />
+                    </ChoicesContext>
                   )}
                   {/* Where the compressed context ends. The messages above are all still here. */}
                   {turn.after && <CompactionDivider summary={turn.after} {...divider} />}

@@ -139,7 +139,8 @@
       "failed": "这个界面无法显示，展开查看原始内容",
       "checklist-progress": "{{done}}/{{total}} 已完成",
       "previous": "上一组",
-      "next": "下一组"
+      "next": "下一组",
+      "choices-send": "发送"
     },
     "copy-table": "复制表格",
     "web-search": {
