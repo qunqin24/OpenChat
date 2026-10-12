@@ -1184,30 +1184,6 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/CompactionState" }
         default: { $ref: "#/components/responses/Error" }
-    post:
-      tags: [conversations]
-      summary: Compress the conversation's context now
-      description: |
-        Summarises the whole conversation, the last question included, with the
-        conversation's own model, and replaces the summary it had. Counted in
-        the usage ledger as kind `compression`. A question with no answer yet
-        (one that failed for its length, say) is not summarised but kept, and
-        the summary ends at it, so that answering it again leaves the summary
-        in place. Other followers of the conversation are told with a
-        `compaction_changed` event.
-
-        409 `conversation_busy` while a run is going; 409 `nothing_to_compact`
-        when nothing has been written since the last summary; 409
-        `compaction_busy` when the conversation is being compressed already;
-        502 `compaction_failed` when the model gave no summary.
-      operationId: compactConversation
-      responses:
-        "200":
-          description: the conversation's summary now
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/CompactionState" }
-        default: { $ref: "#/components/responses/Error" }
     delete:
       tags: [conversations]
       summary: Take back the compression
@@ -1957,31 +1933,6 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/GuestTitle" }
-        default: { $ref: "#/components/responses/Error" }
-
-  /guest/compaction:
-    post:
-      tags: [guest]
-      security: []
-      summary: Summarise a guest's conversation on request
-      description: |
-        The guest's browser keeps the conversation and decides what is to be
-        summarised; the server only has the model write it, with the model the
-        browser names, and keeps nothing. Counts against the guest limits like
-        a run. Compression during a run needs no request of its own: it is part
-        of the run (`compaction_finished`).
-      operationId: guestCompact
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/GuestCompactRequest" }
-      responses:
-        "200":
-          description: the summary
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/GuestCompactResponse" }
         default: { $ref: "#/components/responses/Error" }
 
   /guest/favicons/{domain}:
@@ -2850,10 +2801,10 @@ components:
     CompactionChangedEvent:
       type: object
       description: |
-        The conversation's summary was made or taken back by a request of the
-        person's (`compactConversation`, `undoCompaction`) and not by a run.
-        Sent in a batch of its own, with the nil run id and version 0. `summary`
-        is the one it has now, absent for none. A summary deleted along with the
+        The conversation's summary was taken back by a request of the person's
+        (`undoCompaction`) and not by a run. Sent in a batch of its own, with
+        the nil run id and version 0. `summary` is the one it has now, absent
+        for none. A summary deleted along with the
         rows it ended at (an edit, a regeneration) is not announced: the
         `transcript_changed` of that edit says the transcript changed, and the
         summary is read again with it.
@@ -3830,42 +3781,6 @@ components:
             `throughMessageId` and `keptMessageId` have to be among `messages`.
           allOf: [{ $ref: "#/components/schemas/ContextSummary" }]
 
-    GuestCompactRequest:
-      type: object
-      required: [messages]
-      properties:
-        model: { type: string }
-        existing:
-          type: string
-          description: The text of the summary the conversation has, to be folded into the new one.
-        existingReceipt:
-          type: string
-          description: The `ContextSummary.receipt` of `existing`; without a valid one 400 `invalid_summary`.
-        latestReceipt:
-          type: string
-          description: The receipt of the user message `latest` is the text of; without one it is checked.
-        messages:
-          type: array
-          description: |
-            The rows to add to the summary, in order, without the question being
-            kept (`latest`) - rows the summary already covers are not sent.
-          items: { $ref: "#/components/schemas/GuestMessage" }
-        latest:
-          type: string
-          description: The text of the user message that is kept as written, if one is.
-
-    GuestCompactResponse:
-      type: object
-      required: [content, model, inputTokens, outputTokens]
-      properties:
-        content: { type: string }
-        model: { type: string }
-        inputTokens: { type: integer }
-        outputTokens: { type: integer }
-        receipt:
-          type: string
-          description: The signature for `content`, to be kept as the summary's `ContextSummary.receipt`.
-
     GuestEndEvent:
       type: object
       description: |
@@ -4025,9 +3940,11 @@ components:
             context window (65% once the conversation has a summary) is
             compressed first: the older part of the conversation is summarised
             by the conversation's own model and the model is sent the summary
-            in its place. On by default. Off, requests go out as they are, and
-            people can still compress a conversation themselves. Takes effect
-            at the next model request, including for runs in progress.
+            in its place. A request the model refuses for its length
+            (`context_too_long`) is compressed once whatever its size and made
+            again, once per run. On by default. Off, requests go out as they
+            are: compression is only ever automatic. Takes effect at the next
+            model request, including for runs in progress.
         avatarUploads:
           type: boolean
           description: |

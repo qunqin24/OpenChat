@@ -17,10 +17,11 @@ import (
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
 )
 
-// Compressing a conversation's context over the HTTP handlers and a scripted
+// A conversation's compressed context over the HTTP handlers and a scripted
 // model that echoes what it was last asked, and answers a summarising request
-// with "SUMMARY #<n>" (n being the number of the request). Needs the same
-// scratch database as the other agent tests (TEST_DATABASE_URL).
+// with "SUMMARY #<n>" (n being the number of the request). Compressing is only
+// ever a run's doing; the tests that need a summary to start from write one.
+// Needs the same scratch database as the other agent tests (TEST_DATABASE_URL).
 
 // compacting is a conversation whose model also writes summaries.
 type compacting struct {
@@ -58,13 +59,6 @@ func (b *compacting) compressesOnItsOwn(limit int64) {
 	b.server.runner = runner
 }
 
-func (b *compacting) compact() *httptest.ResponseRecorder {
-	b.t.Helper()
-	rec := httptest.NewRecorder()
-	b.server.CompactConversation(rec, b.request(http.MethodPost, ""), b.conv.ID)
-	return rec
-}
-
 func (b *compacting) undo() *httptest.ResponseRecorder {
 	b.t.Helper()
 	rec := httptest.NewRecorder()
@@ -87,79 +81,37 @@ func (b *compacting) state() *ContextSummary {
 	return out.Summary
 }
 
+// compacted gives the conversation a summary that covers all of it, as the
+// last row of the transcript the model is sent.
 func (b *compacting) compacted() *ContextSummary {
 	b.t.Helper()
-	rec := b.compact()
-	if rec.Code != http.StatusOK {
-		b.t.Fatalf("compact: %d %s", rec.Code, rec.Body)
+	var last uuid.UUID
+	if err := b.pool.QueryRow(context.Background(), `
+		SELECT id FROM messages WHERE conversation_id = $1 AND status <> 'blocked'
+		ORDER BY created_at DESC, id DESC LIMIT 1`, b.conv.ID).Scan(&last); err != nil {
+		b.t.Fatal(err)
 	}
-	var out CompactionState
-	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil || out.Summary == nil {
-		b.t.Fatalf("compact: %s (%v)", rec.Body, err)
+	return b.summarised(last, nil)
+}
+
+// summarised writes a summary ending at the row through, keeping the question kept.
+func (b *compacting) summarised(through uuid.UUID, kept *uuid.UUID) *ContextSummary {
+	b.t.Helper()
+	if _, err := b.q.UpsertContextSummary(context.Background(), sqlc.UpsertContextSummaryParams{
+		ConversationID: b.conv.ID, ThroughMessageID: through, KeptMessageID: kept, Content: "SUMMARY WRITTEN BY THE TEST", ModelID: b.model,
+	}); err != nil {
+		b.t.Fatal(err)
 	}
-	return out.Summary
+	got := b.state()
+	if got == nil {
+		b.t.Fatal("the summary was not written")
+	}
+	return got
 }
 
 // holds says whether a request message starts as the summary does.
 func isSummary(message string) bool {
 	return strings.HasPrefix(message, "user:<compressed_history_summary>")
-}
-
-// A person's compression summarises the whole conversation with the
-// conversation's own model, goes in the ledger as its own kind, and is what the
-// model is sent in place of the rows - which are all still in the transcript.
-func TestCompactionOnRequest(t *testing.T) {
-	b := newCompacting(t)
-	b.send("q1")
-	b.send("q2")
-	transcript := b.path()
-	last := b.transcript()[3].Id
-
-	summary := b.compacted()
-	if !strings.HasPrefix(summary.Content, "SUMMARY #") || summary.ThroughMessageId != last || summary.KeptMessageId != nil || summary.Model != b.model {
-		t.Fatalf("summary = %+v, want it to end at the last answer %s and keep nothing", summary, last)
-	}
-	if got := b.state(); got == nil || got.Content != summary.Content {
-		t.Fatalf("GET after compacting: %+v", got)
-	}
-
-	// The summariser was shown the history, and with the conversation's own model.
-	read := b.body(3) // q1, q2, then the summary
-	for _, want := range []string{"chat_history", "q1", "re: q2", b.model} {
-		if !strings.Contains(read, want) {
-			t.Errorf("the summariser's request lacks %q", want)
-		}
-	}
-
-	// In the ledger, as the person's, under the conversation, with no run.
-	var kind string
-	var owner, conversation *uuid.UUID
-	var run *uuid.UUID
-	if err := b.pool.QueryRow(context.Background(),
-		`SELECT kind, user_id, conversation_id, run_id FROM usage_logs WHERE conversation_id = $1 AND kind = 'compression'`,
-		b.conv.ID).Scan(&kind, &owner, &conversation, &run); err != nil {
-		t.Fatalf("ledger: %v", err)
-	}
-	if owner == nil || *owner != b.user.ID || run != nil {
-		t.Errorf("ledger row: user %v, run %v", owner, run)
-	}
-
-	// The transcript is untouched; the model is sent the summary, then the new question.
-	same(t, "transcript", b.path(), transcript)
-	b.send("q3")
-	history := b.lastHistory()
-	if len(history) != 2 || !isSummary(history[0]) || !strings.Contains(history[0], summary.Content) || history[1] != "user:q3" {
-		t.Fatalf("the request after compressing: %q", history)
-	}
-
-	// Nothing new since: nothing to do.
-	b2 := b.compact()
-	if b2.Code != http.StatusOK { // q3 and its answer are new
-		t.Fatalf("compacting what q3 added: %d %s", b2.Code, b2.Body)
-	}
-	if again := b.compact(); again.Code != http.StatusConflict || !strings.Contains(again.Body.String(), "nothing_to_compact") {
-		t.Fatalf("compacting twice: %d %s", again.Code, again.Body)
-	}
 }
 
 // Taking the compression back deletes only the summary: the model is sent the
@@ -207,32 +159,10 @@ func TestUndoCompaction(t *testing.T) {
 	}
 }
 
-// Making a summary is announced to the conversation's other followers.
-func TestCompactionIsAnnounced(t *testing.T) {
+// Taking the compression back is not possible under a run: it would change the
+// context in the middle of its tool loop.
+func TestUndoCompactionRefusedUnderARun(t *testing.T) {
 	b := newCompacting(t)
-	b.send("q1")
-	sub := b.server.runner.Hub().Subscribe(b.conv.ID)
-	defer sub.Close()
-	made := b.compacted()
-	batches, _ := sub.Drain()
-	for _, batch := range batches {
-		for _, e := range batch.Events {
-			if c, ok := e.(agent.CompactionChanged); ok && c.Summary != nil && c.Summary.Content == made.Content {
-				return
-			}
-		}
-	}
-	t.Fatalf("no compaction_changed with the summary in %v", batches)
-}
-
-// Neither is possible under a run: it adds to the conversation, and compresses
-// it itself. Nor is a compression of a conversation with nothing to compress.
-func TestCompactionRefusals(t *testing.T) {
-	b := newCompacting(t)
-
-	if rec := b.compact(); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "nothing_to_compact") {
-		t.Fatalf("an empty conversation: %d %s", rec.Code, rec.Body)
-	}
 	q1, _ := b.send("q1")
 	b.compacted()
 
@@ -246,9 +176,6 @@ func TestCompactionRefusals(t *testing.T) {
 	t.Cleanup(func() {
 		_, _ = b.pool.Exec(context.Background(), `UPDATE runs SET status = 'cancelled', finished_at = now() WHERE id = $1`, run.ID)
 	})
-	if rec := b.compact(); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "conversation_busy") {
-		t.Fatalf("compacting under a run: %d %s", rec.Code, rec.Body)
-	}
 	if rec := b.undo(); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "conversation_busy") {
 		t.Fatalf("undoing under a run: %d %s", rec.Code, rec.Body)
 	}
@@ -257,8 +184,7 @@ func TestCompactionRefusals(t *testing.T) {
 	}
 }
 
-// Someone else's conversation does not exist, for reading, compressing or
-// taking back.
+// Someone else's conversation does not exist, for reading or taking back.
 func TestCompactionBelongsToTheConversationsOwner(t *testing.T) {
 	b := newCompacting(t)
 	b.send("q1")
@@ -277,11 +203,6 @@ func TestCompactionBelongsToTheConversationsOwner(t *testing.T) {
 	b.server.GetCompaction(rec, as(b.request(http.MethodGet, "")), b.conv.ID)
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("GET: %d", rec.Code)
-	}
-	rec = httptest.NewRecorder()
-	b.server.CompactConversation(rec, as(b.request(http.MethodPost, "")), b.conv.ID)
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("POST: %d", rec.Code)
 	}
 	rec = httptest.NewRecorder()
 	b.server.UndoCompaction(rec, as(b.request(http.MethodDelete, "")), b.conv.ID)
@@ -372,8 +293,8 @@ func TestSummaryAgainstEditsAndRegeneration(t *testing.T) {
 	})
 
 	t.Run("regenerating leaves a summary that ends at the question", func(t *testing.T) {
-		// The answer failed because the conversation was too long; compressing
-		// and answering again must keep the compression.
+		// The answer failed because the conversation was too long, after the run
+		// compressed it; answering again must keep the compression.
 		b := newCompacting(t)
 		b.send("q1")
 		ctx := context.Background()
@@ -386,10 +307,7 @@ func TestSummaryAgainstEditsAndRegeneration(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
-		summary := b.compacted()
-		if summary.ThroughMessageId != q2.ID || summary.KeptMessageId == nil || *summary.KeptMessageId != q2.ID {
-			t.Fatalf("summary %+v: should end at the unanswered question and keep it", summary)
-		}
+		summary := b.summarised(q2.ID, &q2.ID) // as a run's compression leaves it
 		b.regenerate()
 		if got := b.state(); got == nil || got.Content != summary.Content {
 			t.Fatalf("answering again lost the summary: %+v", got)
@@ -443,6 +361,16 @@ func TestAutomaticCompression(t *testing.T) {
 		if n := len(b.transcript()); n != 6 {
 			t.Errorf("%d rows shown, want all 6", n)
 		}
+		// In the ledger as the person's, under the conversation and the run.
+		var owner, run *uuid.UUID
+		if err := b.pool.QueryRow(context.Background(),
+			`SELECT user_id, run_id FROM usage_logs WHERE conversation_id = $1 AND kind = 'compression' ORDER BY created_at LIMIT 1`,
+			b.conv.ID).Scan(&owner, &run); err != nil {
+			t.Fatalf("ledger: %v", err)
+		}
+		if owner == nil || *owner != b.user.ID || run == nil {
+			t.Errorf("ledger row: user %v, run %v", owner, run)
+		}
 	})
 
 	t.Run("switched off", func(t *testing.T) {
@@ -463,10 +391,6 @@ func TestAutomaticCompression(t *testing.T) {
 		}
 		if got := len(b.lastHistory()); got != 5 {
 			t.Fatalf("the request had %d messages, want the whole conversation", got)
-		}
-		// People can still ask.
-		if rec := b.compact(); rec.Code != http.StatusOK {
-			t.Fatalf("manual compression with the switch off: %d %s", rec.Code, rec.Body)
 		}
 	})
 }

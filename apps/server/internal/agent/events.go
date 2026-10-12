@@ -102,9 +102,9 @@ type CompactionStarted struct{}
 // case the request went out as it was.
 type CompactionFinished struct{ Summary *Summary }
 
-// CompactionChanged: the conversation's summary was made or removed by
-// something other than a run - a person asked for it, or took it back. Summary
-// is the one it has now, nil for none. Published outside any run (nil run id,
+// CompactionChanged: the conversation's summary was changed by something other
+// than a run - a person took it back. Summary is the one it has now, nil for
+// none. Published outside any run (nil run id,
 // version 0), like a title.
 type CompactionChanged struct{ Summary *Summary }
 

@@ -102,10 +102,10 @@ func equalStrings(t *testing.T, what string, got, want []string) {
 	}
 }
 
-func (f *fixture) compactParams(mode Mode) CompactParams {
+func (f *fixture) compactParams() CompactParams {
 	return CompactParams{
 		ConversationID: f.conv, UserID: f.user, ModelID: "m", Client: f.models,
-		Profile: ModelProfile{ContextWindow: 100_000}, Mode: mode,
+		Profile: ModelProfile{ContextWindow: 100_000},
 	}
 }
 
@@ -380,7 +380,7 @@ func TestIncrementalCompressionReplacesTheSummary(t *testing.T) {
 	q2 := f.row(sqlc.MessageRoleUser, "second question")
 	a2 := f.row(sqlc.MessageRoleAssistant, "second answer", StopStop)
 
-	first, err := f.runner.Compactor().Compact(ctx, f.compactParams(ModeAuto))
+	first, err := f.runner.Compactor().Compact(ctx, f.compactParams())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -394,7 +394,7 @@ func TestIncrementalCompressionReplacesTheSummary(t *testing.T) {
 
 	q3 := f.row(sqlc.MessageRoleUser, "third question")
 	a3 := f.row(sqlc.MessageRoleAssistant, "third answer", StopStop)
-	second, err := f.runner.Compactor().Compact(ctx, f.compactParams(ModeAuto))
+	second, err := f.runner.Compactor().Compact(ctx, f.compactParams())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -432,67 +432,17 @@ func TestCompactNothingNew(t *testing.T) {
 	ctx := context.Background()
 	f.row(sqlc.MessageRoleUser, "q")
 	f.row(sqlc.MessageRoleAssistant, "a", StopStop)
-	if _, err := f.runner.Compactor().Compact(ctx, f.compactParams(ModeManual)); err != nil {
+	if _, err := f.runner.Compactor().Compact(ctx, f.compactParams()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.runner.Compactor().Compact(ctx, f.compactParams(ModeManual)); !errors.Is(err, ErrNothingToCompact) {
+	if _, err := f.runner.Compactor().Compact(ctx, f.compactParams()); !errors.Is(err, ErrNothingToCompact) {
 		t.Fatalf("second compaction = %v, want ErrNothingToCompact", err)
 	}
 	// Nor a conversation with no rows at all.
 	empty := newFixture(t, nil)
-	if _, err := empty.runner.Compactor().Compact(ctx, empty.compactParams(ModeManual)); !errors.Is(err, ErrNothingToCompact) {
+	if _, err := empty.runner.Compactor().Compact(ctx, empty.compactParams()); !errors.Is(err, ErrNothingToCompact) {
 		t.Fatalf("empty conversation = %v", err)
 	}
-}
-
-// A person asking covers everything, the last question included; except that a
-// question with no answer stays out of the summary and is kept, so that
-// answering it again leaves the summary in place.
-func TestManualCompactionCoversTheWholeConversation(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("answered", func(t *testing.T) {
-		f := newFixture(t, nil, answer(t, "WHOLE"))
-		f.row(sqlc.MessageRoleUser, "q1")
-		a1 := f.row(sqlc.MessageRoleAssistant, "a1", StopStop)
-		s, err := f.runner.Compactor().Compact(ctx, f.compactParams(ModeManual))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if s.ThroughID != a1.ID || s.KeptID != nil {
-			t.Fatalf("summary %+v: everything, nothing kept", s)
-		}
-		if body := f.models.reqs[0].Messages[1].Text(); !strings.Contains(body, "q1</user>") || !strings.Contains(body, "<assistant>a1</assistant>") ||
-			strings.Contains(body, "latest_user_message") {
-			t.Fatalf("history:\n%s", body)
-		}
-	})
-	t.Run("unanswered question", func(t *testing.T) {
-		f := newFixture(t, nil, answer(t, "EARLIER"))
-		f.row(sqlc.MessageRoleUser, "q1")
-		f.row(sqlc.MessageRoleAssistant, "a1", StopStop)
-		q2 := f.row(sqlc.MessageRoleUser, "q2")
-		f.row(sqlc.MessageRoleAssistant, "", StopError) // the answer that failed for length
-		s, err := f.runner.Compactor().Compact(ctx, f.compactParams(ModeManual))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if s.ThroughID != q2.ID || s.KeptID == nil || *s.KeptID != q2.ID {
-			t.Fatalf("summary %+v: should end at the unanswered question and keep it", s)
-		}
-		if body := f.models.reqs[0].Messages[1].Text(); strings.Contains(body, "q2</user>") || !strings.Contains(body, "q1</user>") {
-			t.Fatalf("history:\n%s", body)
-		}
-
-		// Again, while the answer still fails: nothing to add, and the question
-		// stays out of the summary so that answering it leaves the summary be.
-		if _, err := f.runner.Compactor().Compact(ctx, f.compactParams(ModeManual)); !errors.Is(err, ErrNothingToCompact) {
-			t.Fatalf("compressing again over a failure: %v", err)
-		}
-		if again := f.summary(); again.ThroughID != q2.ID || again.Content != "EARLIER" {
-			t.Fatalf("the summary changed: %+v", again)
-		}
-	})
 }
 
 // Two compressions of one conversation do not run at once.
@@ -505,11 +455,11 @@ func TestCompactionIsExclusivePerConversation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.runner.Compactor().Compact(context.Background(), f.compactParams(ModeManual)); !errors.Is(err, ErrCompactionBusy) {
+	if _, err := f.runner.Compactor().Compact(context.Background(), f.compactParams()); !errors.Is(err, ErrCompactionBusy) {
 		t.Fatalf("while another holds it: %v", err)
 	}
 	release()
-	if _, err := f.runner.Compactor().Compact(context.Background(), f.compactParams(ModeManual)); err != nil {
+	if _, err := f.runner.Compactor().Compact(context.Background(), f.compactParams()); err != nil {
 		t.Fatalf("after it is released: %v", err)
 	}
 }

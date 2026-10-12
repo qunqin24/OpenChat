@@ -48,7 +48,7 @@
 
 ## 压缩上下文
 
-- 压缩上下文：摘要在查询 `queryKeys.conversations.compaction(id)`（`hooks/use-compaction.ts`，不落本地缓存），由事件流维护：`compaction_finished`（带摘要）、`compaction_changed` 直接写进缓存，`transcript_changed` 和 run 结束时重新读。原消息**照常全部显示**，`buildTurns(…, summary)` 只在摘要终点那条消息之后标一个 `after`（整个回复的末尾）或回复内部的 `inside`（run 还在继续、或终点在一轮工具的中间时，分隔线在那条回复的零件之间，不拆回复），`CompactionDivider` 画成细线「以上内容已压缩为摘要」，点开是用聊天同一个 `Markdown` 渲染的摘要和「撤销压缩」（run 在跑时不给）。运行中压缩的状态行是 `CompactingLine`（`ThinkingOrb` + 「正在压缩上下文…」），取代「正在思考…」。上下文圆环（`ContextMeter`）点开是同样的数字加「立即压缩」；圆环读的是上一次请求的用量，所以压完要到下一次请求才降。因上下文过长失败的回答，错误提示不再叫人开新对话，而是带「压缩上下文」按钮：先手动压缩再重新生成（只在最后一条回答、且不在忙时给）。所有字符串走 `t()`。
+- 压缩上下文：摘要在查询 `queryKeys.conversations.compaction(id)`（`hooks/use-compaction.ts`，不落本地缓存），由事件流维护：`compaction_finished`（带摘要）、`compaction_changed` 直接写进缓存，`transcript_changed` 和 run 结束时重新读。原消息**照常全部显示**，`buildTurns(…, summary)` 只在摘要终点那条消息之后标一个 `after`（整个回复的末尾）或回复内部的 `inside`（run 还在继续、或终点在一轮工具的中间时，分隔线在那条回复的零件之间，不拆回复），`CompactionDivider` 画成细线「以上内容已压缩为摘要」，点开是用聊天同一个 `Markdown` 渲染的摘要和「撤销压缩」（run 在跑时不给）。运行中压缩的状态行是 `CompactingLine`（`ThinkingOrb` + 「正在压缩上下文…」），取代「正在思考…」。上下文圆环（`ContextMeter`）点开只有数字和备注，没有按钮——压缩只有 run 自己会做，用户不能手动压；圆环读的是上一次请求的用量，run 压完后服务端给的是估算（`estimated`），到下一次请求才报真数。因上下文过长失败的回答（服务端已经强制压缩并重试过一次，见 conversations.md），错误提示不带按钮，只说压缩过也装不下，建议新开对话或换窗口更大的模型。`hooks/use-compaction.ts` 只剩读取（`useCompaction`）和撤销（`useUndoCompaction`）。所有字符串走 `t()`。
 
 ## 表单、i18n、动效与设置对话框
 

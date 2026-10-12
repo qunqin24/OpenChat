@@ -964,22 +964,7 @@ export interface paths {
          */
         get: operations["getCompaction"];
         put?: never;
-        /**
-         * Compress the conversation's context now
-         * @description Summarises the whole conversation, the last question included, with the
-         *     conversation's own model, and replaces the summary it had. Counted in
-         *     the usage ledger as kind `compression`. A question with no answer yet
-         *     (one that failed for its length, say) is not summarised but kept, and
-         *     the summary ends at it, so that answering it again leaves the summary
-         *     in place. Other followers of the conversation are told with a
-         *     `compaction_changed` event.
-         *
-         *     409 `conversation_busy` while a run is going; 409 `nothing_to_compact`
-         *     when nothing has been written since the last summary; 409
-         *     `compaction_busy` when the conversation is being compressed already;
-         *     502 `compaction_failed` when the model gave no summary.
-         */
-        post: operations["compactConversation"];
+        post?: never;
         /**
          * Take back the compression
          * @description Deletes the summary. The messages it covered were never removed, so the
@@ -1704,30 +1689,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/guest/compaction": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Summarise a guest's conversation on request
-         * @description The guest's browser keeps the conversation and decides what is to be
-         *     summarised; the server only has the model write it, with the model the
-         *     browser names, and keeps nothing. Counts against the guest limits like
-         *     a run. Compression during a run needs no request of its own: it is part
-         *     of the run (`compaction_finished`).
-         */
-        post: operations["guestCompact"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/guest/favicons/{domain}": {
         parameters: {
             query?: never;
@@ -2428,10 +2389,10 @@ export interface components {
             type: "conversation_deleted";
         };
         /**
-         * @description The conversation's summary was made or taken back by a request of the
-         *     person's (`compactConversation`, `undoCompaction`) and not by a run.
-         *     Sent in a batch of its own, with the nil run id and version 0. `summary`
-         *     is the one it has now, absent for none. A summary deleted along with the
+         * @description The conversation's summary was taken back by a request of the person's
+         *     (`undoCompaction`) and not by a run. Sent in a batch of its own, with
+         *     the nil run id and version 0. `summary` is the one it has now, absent
+         *     for none. A summary deleted along with the
          *     rows it ended at (an edit, a regeneration) is not announced: the
          *     `transcript_changed` of that edit says the transcript changed, and the
          *     summary is read again with it.
@@ -3302,30 +3263,6 @@ export interface components {
              */
             summary?: components["schemas"]["ContextSummary"];
         };
-        GuestCompactRequest: {
-            model?: string;
-            /** @description The text of the summary the conversation has, to be folded into the new one. */
-            existing?: string;
-            /** @description The `ContextSummary.receipt` of `existing`; without a valid one 400 `invalid_summary`. */
-            existingReceipt?: string;
-            /** @description The receipt of the user message `latest` is the text of; without one it is checked. */
-            latestReceipt?: string;
-            /**
-             * @description The rows to add to the summary, in order, without the question being
-             *     kept (`latest`) - rows the summary already covers are not sent.
-             */
-            messages: components["schemas"]["GuestMessage"][];
-            /** @description The text of the user message that is kept as written, if one is. */
-            latest?: string;
-        };
-        GuestCompactResponse: {
-            content: string;
-            model: string;
-            inputTokens: number;
-            outputTokens: number;
-            /** @description The signature for `content`, to be kept as the summary's `ContextSummary.receipt`. */
-            receipt?: string;
-        };
         /**
          * @description The last frame of a guest's run: what the browser has to keep, because
          *     the server keeps nothing. Sent after `run_finished`.
@@ -3448,9 +3385,11 @@ export interface components {
              *     context window (65% once the conversation has a summary) is
              *     compressed first: the older part of the conversation is summarised
              *     by the conversation's own model and the model is sent the summary
-             *     in its place. On by default. Off, requests go out as they are, and
-             *     people can still compress a conversation themselves. Takes effect
-             *     at the next model request, including for runs in progress.
+             *     in its place. A request the model refuses for its length
+             *     (`context_too_long`) is compressed once whatever its size and made
+             *     again, once per run. On by default. Off, requests go out as they
+             *     are: compression is only ever automatic. Takes effect at the next
+             *     model request, including for runs in progress.
              */
             compressContext: boolean;
             /**
@@ -5580,29 +5519,6 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    compactConversation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                conversationId: components["parameters"]["ConversationId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description the conversation's summary now */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompactionState"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
     undoCompaction: {
         parameters: {
             query?: never;
@@ -6298,31 +6214,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GuestTitle"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    guestCompact: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GuestCompactRequest"];
-            };
-        };
-        responses: {
-            /** @description the summary */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GuestCompactResponse"];
                 };
             };
             default: components["responses"]["Error"];

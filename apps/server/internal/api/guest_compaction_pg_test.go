@@ -1,9 +1,7 @@
 package api
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -175,61 +173,4 @@ func TestGuestRunCompressesItself(t *testing.T) {
 		t.Errorf("the answer's request: %.300s", answer)
 	}
 	h.noGuestRows(conv)
-}
-
-func TestGuestCompactEndpoint(t *testing.T) {
-	h := newGuestHarness(t)
-	var seen string
-	h.script = func(n int, body string) string {
-		seen = body
-		return openAIWire.text("- the guest talked about tea")
-	}
-	post := func(body any) (int, map[string]any) {
-		raw, _ := json.Marshal(body)
-		resp, err := http.Post(h.http.URL+"/api/v1/guest/compaction", "application/json", bytes.NewReader(raw))
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer resp.Body.Close()
-		var out map[string]any
-		_ = json.NewDecoder(resp.Body).Decode(&out)
-		return resp.StatusCode, out
-	}
-	base := time.Now().Add(-time.Hour)
-	code, out := post(map[string]any{
-		"model":    h.model,
-		"existing": "AN OLD SUMMARY",
-		"latest":   "the kept question",
-		"messages": []any{userRow(uuid.New(), "I like tea", base), assistantRow(uuid.New(), "Noted.", base.Add(time.Second))},
-	})
-	if code != http.StatusOK || out["content"] != "- the guest talked about tea" || out["model"] != h.model {
-		t.Fatalf("%d %v", code, out)
-	}
-	for _, want := range []string{"AN OLD SUMMARY", "I like tea", "Noted.", "the kept question", "conversation-context compressor"} {
-		if !strings.Contains(seen, want) {
-			t.Errorf("the model's request lacks %q", want)
-		}
-	}
-	// Billed to no one, and in the ledger as a compression.
-	var n int
-	if err := h.pool.QueryRow(context.Background(),
-		`SELECT count(*) FROM usage_logs WHERE kind = 'compression' AND model_id = $1 AND user_id IS NULL AND status = 'ok'`, h.model).Scan(&n); err != nil || n != 1 {
-		t.Errorf("%d compression rows in the ledger (%v)", n, err)
-	}
-
-	// Nothing to summarise is refused, and a limit applies as to a run.
-	if code, out := post(map[string]any{"model": h.model, "messages": []any{}}); code != http.StatusConflict || out["code"] != "nothing_to_compact" {
-		t.Errorf("empty: %d %v", code, out)
-	}
-	h.set(settingGuestHourlyLimit, 1)
-	if _, err := h.pool.Exec(context.Background(), `DELETE FROM guest_requests`); err != nil {
-		t.Fatal(err)
-	}
-	row := []any{userRow(uuid.New(), "q", base)}
-	if code, _ := post(map[string]any{"model": h.model, "messages": row}); code != http.StatusOK {
-		t.Fatalf("within the limit: %d", code)
-	}
-	if code, out := post(map[string]any{"model": h.model, "messages": row}); code != http.StatusTooManyRequests {
-		t.Errorf("over the limit: %d %v", code, out)
-	}
 }

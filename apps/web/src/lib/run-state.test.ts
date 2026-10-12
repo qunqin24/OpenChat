@@ -212,7 +212,7 @@ describe('compressing the context', () => {
     expect(state.run?.compacting).toBe(false)
   })
 
-  it('does not touch the state without a run: a manual compression is not a run’s', () => {
+  it('does not touch the state without a run: taking a compression back is not a run’s', () => {
     const none = applyBatch(idle, batch(run('00000000-0000-0000-0000-000000000000', { version: 0 }), 0, [{ type: 'compaction_changed' }]))
     expect(none).toBe(idle)
   })

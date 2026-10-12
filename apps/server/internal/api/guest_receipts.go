@@ -241,16 +241,14 @@ type guestFresh struct {
 // guestContent is everything of a request that reaches a model and is the
 // browser's to claim.
 type guestContent struct {
-	rows        []guestRow
-	about       string
-	style       string
-	receipts    GuestReceipts
-	memories    []GuestMemory
-	snapshot    []byte // canonical, nil for none
-	snapTexts   []string
-	summary     *ContextSummary
-	summaryText string // a summary given as text (manual compression)
-	summaryRcpt *string
+	rows      []guestRow
+	about     string
+	style     string
+	receipts  GuestReceipts
+	memories  []GuestMemory
+	snapshot  []byte // canonical, nil for none
+	snapTexts []string
+	summary   *ContextSummary
 }
 
 // errInvalidHistory is a row of the model's the server did not write.
@@ -343,9 +341,6 @@ func (g *receiptSigner) verify(c guestContent) (pending []checkedWords, fresh gu
 	}
 
 	if c.summary != nil && !receiptMatches(c.summary.Receipt, g.summary(c.summary.Content)) {
-		return nil, fresh, guestBad("invalid_summary", "the summary was not written by this server")
-	}
-	if c.summaryText != "" && !receiptMatches(c.summaryRcpt, g.summary(c.summaryText)) {
 		return nil, fresh, guestBad("invalid_summary", "the summary was not written by this server")
 	}
 	return pending, fresh, nil

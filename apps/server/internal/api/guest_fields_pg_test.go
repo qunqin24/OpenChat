@@ -297,21 +297,3 @@ func assistantRowSigned(t *testing.T, h *guestHarness, ip string, at time.Time) 
 	row["createdAt"] = at.Format(time.RFC3339Nano)
 	return row
 }
-
-// Compression and titles read the same rows, so the same names.
-func TestGuestFileNamesInCompression(t *testing.T) {
-	h, _ := newGuestModeration(t, noStrikes)
-	const ip = "198.51.100.73"
-	file := imageFile("holiday.png", "\x89PNG fine")
-	user := userRow(uuid.New(), "look", time.Now().Add(-time.Minute))
-	user["attachments"] = []any{file}
-	status, out := h.postAs(ip, "/guest/compaction", map[string]any{"model": h.model, "messages": []any{user}})
-	if status != http.StatusOK {
-		t.Fatalf("an honest name: %d %v", status, out)
-	}
-	bad := imageFile("BLOCKME.png", "\x89PNG fine")
-	user["attachments"] = []any{bad}
-	if status, out := h.postAs(ip, "/guest/compaction", map[string]any{"model": h.model, "messages": []any{user}}); status != http.StatusUnprocessableEntity {
-		t.Errorf("a refused name: %d %v", status, out)
-	}
-}

@@ -53,7 +53,7 @@ The server is a Go program with the web app embedded in the binary, and PostgreS
 - **Attachments.** Images (PNG, JPEG, WebP, GIF, up to 5 MB each) and PDFs (up to 10 MB), when the model accepts that kind of input.
 - **Editing and regenerating.** Rewriting a question, or having the model answer the last turn again, **replaces** everything that came after it. What was replaced is deleted.
 - **Context window meter.** Shows how much of the model's context window the conversation has used.
-- **Automatic context compression.** When a conversation nears the model's context window, earlier history is summarised by the conversation's own model and the latest question is kept verbatim. The original messages stay visible with a divider between them, and the compression can be undone. On by default, with an admin switch.
+- **Automatic context compression.** When a conversation nears the model's context window, earlier history is summarised by the conversation's own model and the latest question is kept verbatim. The original messages stay visible with a divider between them, and the compression can be undone. A request the model refuses for its length is compressed once and retried. Compression is only ever automatic; there is no manual button. On by default, with an admin switch.
 - **Conversation search.** Search the titles and message contents of all your conversations.
 - **Temporary chats.** Not listed, not titled, no memory; deleted automatically after 24 hours.
 

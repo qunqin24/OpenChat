@@ -322,13 +322,6 @@ interface AssistantTurnProps {
   askingCallId?: string | null
   /** Brings the waiting question's panel back over the composer. */
   onOpenQuestion?: () => void
-  /**
-   * The last answer only, when it failed for the conversation's length:
-   * compress the context and answer again. Absent while that cannot be done.
-   */
-  onCompress?: () => void
-  /** The compression `onCompress` starts is under way. */
-  compressing?: boolean
   /** What the divider drawn inside this reply (`turn.inside`) can do. */
   divider?: { onUndo?: () => void; undoing?: boolean }
 }
@@ -344,8 +337,6 @@ export function AssistantTurn({
   onRegenerate,
   askingCallId,
   onOpenQuestion,
-  onCompress,
-  compressing,
   divider,
 }: AssistantTurnProps) {
   const { t } = useTranslation()
@@ -442,11 +433,6 @@ export function AssistantTurn({
         <Notice key={`${response.id}:error`} tone="error">
           {errorText(t, response.errorCode)}
           {response.runId && <ErrorId id={response.runId.slice(0, 8)} />}
-          {response.errorCode === 'context_too_long' && onCompress && (
-            <button type="button" className="n-notice-action" disabled={compressing} onClick={onCompress}>
-              {compressing ? t('chat.context.compacting') : t('chat.compaction.action')}
-            </button>
-          )}
         </Notice>,
       )
     } else if (response.stopReason === 'cancelled') {

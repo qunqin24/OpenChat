@@ -35,8 +35,8 @@ const RECONNECT_DELAYS = [500, 1000, 2000, 5000, 10000, 15000]
  * drawn beside the run that replaces them in between.
  *
  * The conversation's compressed context rides on the same stream: a run
- * announces the summary it made (`compaction_finished`), a person's own
- * compression or its undoing is announced outside any run (`compaction_changed`),
+ * announces the summary it made (`compaction_finished`), a person taking it back
+ * is announced outside any run (`compaction_changed`),
  * and rows that were deleted may have taken the summary with them, so it is
  * read again with the transcript (`transcript_changed`).
  *
@@ -183,7 +183,7 @@ export function useConversationEvents(conversationId: string | undefined) {
               if (runEvent.type === 'compaction_finished' && runEvent.summary) {
                 setCompaction(queryClient, conversationId, runEvent.summary)
               }
-              // Made or taken back by a person, here or in another tab.
+              // Taken back by a person, here or in another tab.
               if (runEvent.type === 'compaction_changed') {
                 setCompaction(queryClient, conversationId, runEvent.summary)
                 void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.context(conversationId) })

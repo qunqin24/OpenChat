@@ -390,7 +390,7 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 	// Before every request - the first, and each after a tool round - the
 	// context is compressed if it has grown too large for the window. A failed
 	// compression is the request going out as it is.
-	wrote, stop, err := ex.compress(ctx, client, system, definitions(offered), summary, rows)
+	wrote, stop, err := ex.compress(ctx, client, system, definitions(offered), summary, rows, false)
 	if err != nil {
 		return false, err
 	}
@@ -401,8 +401,7 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 		if summary, rows, err = LoadContextRows(ctx, r.q, ex.run.ConversationID, r.opts.HistoryLimit); err != nil {
 			return false, err
 		}
-		ex.compression.compacted = true
-		ex.compression.grownFrom = EstimateRequest(system, summary.Content, rows, definitions(offered))
+		ex.noteCompressed(system, offered, summary, rows)
 	}
 	messages, err := BuildRequestContext(summary, rows)
 	if err != nil {
@@ -495,6 +494,11 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 		return true, ex.finishCancelled()
 	}
 	if streamErr != nil {
+		// A refusal for the request's length is answered by compressing and
+		// asking again, once; the loop makes the request again.
+		if retry, err := ex.recoverContextLength(ctx, client, system, offered, resp, streamErr); err != nil || retry {
+			return false, err
+		}
 		return ex.requestFailed(resp, streamErr)
 	}
 	return ex.responded(resp, offered, final)

@@ -197,14 +197,33 @@ func TestStoppedCompressionIsEstimated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A conversation with something to summarise: a question and its answer,
+	// then the question the compression keeps.
+	conv, err := f.q.CreateConversation(context.Background(), sqlc.CreateConversationParams{UserID: &f.member.ID, Title: "t"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range []struct {
+		role sqlc.MessageRole
+		text string
+	}{
+		{sqlc.MessageRoleUser, strings.Repeat("something to remember ", 50)},
+		{sqlc.MessageRoleAssistant, strings.Repeat("something that was said ", 50)},
+		{sqlc.MessageRoleUser, "and now?"},
+	} {
+		if _, err := f.q.AppendEntry(context.Background(), sqlc.AppendEntryParams{
+			ConversationID: conv.ID, Role: row.role, Content: row.text,
+			Parts:  agent.EncodeParts([]llm.Part{llm.TextPart{Text: row.text}}),
+			Status: sqlc.MessageStatusComplete,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		_, _, _, err := f.runner.Compactor().Summarise(ctx, agent.CompactParams{
-			UserID: f.member.ID, ChannelID: &channel, ModelID: f.modelID, Client: client,
-		}, "", "", []llm.Message{
-			llm.TextMessage(llm.RoleUser, strings.Repeat("something to remember ", 50)),
-			llm.TextMessage(llm.RoleAssistant, strings.Repeat("something that was said ", 50)),
+		_, err := f.runner.Compactor().Compact(ctx, agent.CompactParams{
+			ConversationID: conv.ID, UserID: f.member.ID, ChannelID: &channel, ModelID: f.modelID, Client: client,
 		})
 		done <- err
 	}()

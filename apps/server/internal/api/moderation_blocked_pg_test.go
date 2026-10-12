@@ -35,7 +35,7 @@ func blockedBy(t *testing.T, h *askHarness) *fakeModeration {
 }
 
 // blocking is a conversation whose model echoes the last thing it was asked and
-// writes summaries on request, with moderation on.
+// writes summaries, with moderation on.
 func newBlocking(t *testing.T) *compacting {
 	t.Helper()
 	b := newCompacting(t)
@@ -248,9 +248,8 @@ func TestBlockedFirstMessageOfAConversation(t *testing.T) {
 	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "nothing_to_title") {
 		t.Errorf("title: %d %s", rec.Code, rec.Body)
 	}
-	// Nor anything to regenerate or compress.
+	// Nor anything to regenerate.
 	b.refused(b.tryRegenerate(), http.StatusConflict, "revise_refused")
-	b.refused(b.compact(), http.StatusConflict, "nothing_to_compact")
 
 	// Reworded, it starts the conversation as usual.
 	b.edit(b.transcript()[0].Id, "a real question")
@@ -312,62 +311,9 @@ func TestBlockedMessageIsNotSearchedOrExported(t *testing.T) {
 	}
 }
 
-// A summary never covers, ends at or keeps a refused message, when a person
-// compresses and when a run does.
+// A summary never covers, ends at or keeps a refused message.
 func TestBlockedMessageAndCompaction(t *testing.T) {
-	t.Run("manual", func(t *testing.T) {
-		b := newBlocking(t)
-		b.send("q1")
-		answer := b.transcript()[1].Id
-		blocked := b.blockedWith("BLOCKME at the end")
-
-		summary := b.compacted()
-		if summary.ThroughMessageId != answer || summary.KeptMessageId != nil {
-			t.Fatalf("summary ends at %v keeping %v, want the answer %v and nothing", summary.ThroughMessageId, summary.KeptMessageId, answer)
-		}
-		if summary.ThroughMessageId == blocked {
-			t.Fatal("the summary ends at a refused message")
-		}
-		for n := 1; n <= b.requests(); n++ {
-			if strings.Contains(b.body(n), "BLOCKME") {
-				t.Errorf("request %d, the summariser's, was shown the refused message", n)
-			}
-		}
-
-		// Only a refused message since: nothing new to cover.
-		b.refused(b.compact(), http.StatusConflict, "nothing_to_compact")
-
-		// The refused message is reworded to go on: the next question is answered
-		// from the summary and itself.
-		b.edit(blocked, "q2")
-		history := b.lastHistory()
-		if len(history) != 2 || !isSummary(history[0]) || history[1] != "user:q2" {
-			t.Fatalf("the request after compressing: %q", history)
-		}
-		if got := b.state(); got == nil || got.ThroughMessageId != answer {
-			t.Errorf("summary after the next send: %+v", got)
-		}
-	})
-
-	t.Run("a refused message between the last answer and a question without one", func(t *testing.T) {
-		b := newBlocking(t)
-		b.send("q1")
-		b.blockedWith("BLOCKME in between")
-		// A question the model has not answered yet (it failed, say): the summary
-		// ends at it and keeps it, and the refused message before it is not read.
-		question := b.appendUser("q2")
-		summary := b.compacted()
-		if summary.ThroughMessageId != question.ID || summary.KeptMessageId == nil || *summary.KeptMessageId != question.ID {
-			t.Fatalf("summary = %+v, want it to end at and keep %s", summary, question.ID)
-		}
-		for n := 1; n <= b.requests(); n++ {
-			if strings.Contains(b.body(n), "BLOCKME") {
-				t.Errorf("request %d was shown the refused message", n)
-			}
-		}
-	})
-
-	t.Run("on its own", func(t *testing.T) {
+	t.Run("a run compresses", func(t *testing.T) {
 		long := strings.Repeat("lorem ipsum ", 120)
 		b := newBlocking(t)
 		b.compressesOnItsOwn(1200)
@@ -505,13 +451,7 @@ func TestBlockedMessageAndAQuestionTheModelAsked(t *testing.T) {
 			}
 			blocked := h.blockedWith("BLOCKME instead of answering")
 
-			// Still waiting for its answer: compression says so.
-			rec := httptest.NewRecorder()
-			h.server.CompactConversation(rec, h.request(http.MethodPost, ""), h.conv.ID)
-			if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "question_pending") {
-				t.Fatalf("compress while a question waits: %d %s", rec.Code, rec.Body)
-			}
-			// But it cannot be answered past the refused message, and nothing is written.
+			// It cannot be answered past the refused message, and nothing is written.
 			rows := h.count(`SELECT count(*) FROM messages WHERE conversation_id = $1`, h.conv.ID)
 			runs := h.count(`SELECT count(*) FROM runs WHERE conversation_id = $1`, h.conv.ID)
 			if rec := h.answer("call_ask_1", answersJSON); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "revise_refused") {
@@ -523,7 +463,7 @@ func TestBlockedMessageAndAQuestionTheModelAsked(t *testing.T) {
 			}
 
 			// Reworded, the message is the person's reply instead of an answer.
-			rec = h.tryEdit(blocked, "never mind")
+			rec := h.tryEdit(blocked, "never mind")
 			var out CreateMessageResponse
 			h.accepted(rec, &out)
 			if status := h.settle(out.Run.Id); status != sqlc.RunStatusCompleted && status != sqlc.RunStatusAwaitingInput {

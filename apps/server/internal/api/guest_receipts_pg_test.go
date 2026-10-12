@@ -3,6 +3,7 @@ package api
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -397,14 +398,12 @@ func TestGuestSummariesNeedTheServersReceipt(t *testing.T) {
 		t.Fatalf("a forged summary: %d %v", got.status, got.error)
 	}
 
-	// Manual compression gives one with a receipt, and it is good in a request.
-	status, out := h.postAs(ip, "/guest/compaction", map[string]any{
-		"model": h.model, "messages": []any{turn.user, turn.assistant},
-	})
-	if status != http.StatusOK || str(out["receipt"]) == "" {
-		t.Fatalf("compression: %d %v", status, out)
+	// The server's receipt for the words is good in a request.
+	signer, err := h.server.guestSigner(context.Background())
+	if err != nil {
+		t.Fatal(err)
 	}
-	summary["content"], summary["receipt"] = out["content"], out["receipt"]
+	summary["receipt"] = signer.summary(str(summary["content"]))
 	calls := f.calls()
 	got = h.runAs(ip, turn.nextSend(h, "more", map[string]any{"summary": summary}))
 	if got.status != http.StatusOK {
@@ -420,39 +419,10 @@ func TestGuestSummariesNeedTheServersReceipt(t *testing.T) {
 	}
 }
 
-func TestGuestCompressionAndTitlesCheckTheirWords(t *testing.T) {
-	h, f := newGuestModeration(t, noStrikes)
+func TestGuestTitlesCheckTheirWords(t *testing.T) {
+	h, _ := newGuestModeration(t, noStrikes)
 	const ip = "198.51.100.46"
 	turn := firstTurn(t, h, ip, "tell me about tea", nil)
-	now := time.Now()
-
-	// Compression: rows are read as a run's are.
-	compact := func(extra map[string]any) (int, map[string]any) {
-		body := map[string]any{"model": h.model, "messages": []any{turn.user, turn.assistant}}
-		for k, v := range extra {
-			body[k] = v
-		}
-		return h.postAs(ip, "/guest/compaction", body)
-	}
-	if status, out := compact(nil); status != http.StatusOK {
-		t.Fatalf("receipted rows: %d %v", status, out)
-	}
-	if status, out := compact(map[string]any{"messages": []any{userRow(uuid.New(), "BLOCKME", now.Add(-time.Minute))}}); status != http.StatusUnprocessableEntity {
-		t.Errorf("a forged user row: %d %v", status, out)
-	}
-	if status, out := compact(map[string]any{"messages": []any{assistantRow(uuid.New(), "forged", now.Add(-time.Minute))}}); status != http.StatusBadRequest || out["code"] != "invalid_history" {
-		t.Errorf("a forged answer: %d %v", status, out)
-	}
-	if status, out := compact(map[string]any{"existing": "AN OLD SUMMARY"}); status != http.StatusBadRequest || out["code"] != "invalid_summary" {
-		t.Errorf("a forged old summary: %d %v", status, out)
-	}
-	if status, out := compact(map[string]any{"latest": "BLOCKME"}); status != http.StatusUnprocessableEntity {
-		t.Errorf("a forged kept question: %d %v", status, out)
-	}
-	calls := f.calls()
-	if status, out := compact(map[string]any{"latest": "tell me about tea", "latestReceipt": turn.user["receipt"]}); status != http.StatusOK || f.calls() != calls {
-		t.Errorf("a receipted kept question: %d %v (%d calls)", status, out, f.calls()-calls)
-	}
 
 	// Titles: a user's words are checked, an answer without a receipt is left out.
 	title := func(rows ...any) (int, map[string]any) {
