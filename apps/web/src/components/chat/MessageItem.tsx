@@ -363,14 +363,14 @@ export function AssistantTurn({
           return {
             key,
             node: <Reasoning key={key} text={part.text} durationMs={part.durationMs} streaming={streaming && isLast} />,
-            fold: { kind: 'reasoning', text: part.text },
+            fold: { kind: 'reasoning', text: part.text, streaming: streaming && isLast },
           }
         case 'text':
           return part.text.trim()
             ? {
                 key,
                 node: <AnswerText key={key} text={part.text} streaming={streaming && isLast} />,
-                fold: { kind: 'note', text: part.text },
+                fold: { kind: 'note', text: part.text, streaming: streaming && isLast },
               }
             : null
         case 'tool_call': {

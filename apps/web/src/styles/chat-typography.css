@@ -582,8 +582,12 @@
 /* The fade over the newest characters of a reply being revealed
    (MarkdownText.tsx, placeTail): placed by script each render, gone once the
    reveal has caught up. */
-.chat-ui .n-markdown {
+.chat-ui .n-markdown,
+.chat-ui .n-reveal-plain {
   position: relative;
+}
+.chat-ui .n-reveal-plain {
+  display: block;
 }
 .chat-ui .n-reveal-tail {
   position: absolute;

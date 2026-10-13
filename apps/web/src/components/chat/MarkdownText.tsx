@@ -30,6 +30,25 @@ export function Markdown({ text, streaming = false }: { text: string; streaming?
   )
 }
 
+/**
+ * Plain text revealed the way an answer's Markdown is - the pace and the fade
+ * over the newest characters - for what is not drawn as Markdown: the model's
+ * thinking and notes inside the activity line.
+ */
+export function PlainReveal({ text, streaming }: { text: string; streaming: boolean }) {
+  const shown = useReveal(text, streaming)
+  const behind = shown.length < text.length
+  const box = useRef<HTMLSpanElement>(null)
+  const tail = useRef<HTMLSpanElement>(null)
+  useLayoutEffect(() => placeTail(box.current, tail.current, behind))
+  return (
+    <span className="n-reveal-plain" ref={box}>
+      <span>{shown}</span>
+      <span ref={tail} className="n-reveal-tail" aria-hidden="true" />
+    </span>
+  )
+}
+
 /** How far back from the newest character the fade reaches, in em. */
 const TAIL_EM = 2.5
 

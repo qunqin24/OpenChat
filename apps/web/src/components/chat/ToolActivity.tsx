@@ -11,6 +11,7 @@ import { isGuestMode } from '@/lib/guest/mode'
 import { isHttpUrl, siteName } from '@/lib/urls'
 import { cn } from '@/lib/utils'
 import { ThinkingOrb } from './ThinkingOrb'
+import { PlainReveal } from './MarkdownText'
 
 export type ToolStatus = 'pending' | 'running' | ToolResultPart['status']
 
@@ -24,6 +25,8 @@ export interface ToolActivityStep {
 export interface ActivityNote {
   kind: 'note' | 'reasoning'
   text: string
+  /** Still being written: revealed as an answer's text is (PlainReveal). */
+  streaming?: boolean
 }
 
 /** One entry of the activity, in the order it happened. */
@@ -140,7 +143,7 @@ export function ToolActivity({ items, thinking = false }: { items: ActivityItem[
                 <Step key={item.key} step={item} />
               ) : (
                 <li key={item.key} className={cn('n-activity-note', item.kind === 'reasoning' && 'is-reasoning')}>
-                  {item.text}
+                  <PlainReveal text={item.text} streaming={item.streaming ?? false} />
                 </li>
               ),
             )}
