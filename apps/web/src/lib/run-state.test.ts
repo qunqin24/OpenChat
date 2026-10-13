@@ -1,7 +1,7 @@
 import type { Attachment } from '@openchat/api-client'
 import { describe, expect, it } from 'vitest'
 
-import { applyBatch, fromSnapshot, idle, isRunning, type ConversationLive } from './run-state'
+import { applyBatch, fromSnapshot, idle, isRunning, withSentInput, type ConversationLive } from './run-state'
 import { assistant, batch, id, liveRun, run, text, user } from './testing'
 
 const started = (r = run('r1'), input = user('q')) => ({ type: 'run_started' as const, run: r, message: input })
@@ -64,6 +64,24 @@ describe('applyBatch', () => {
       const state = applyBatch(held, batch(r, 1, [started(r, user('q'))]))
       expect(state.run?.run.id).toBe(r.id)
       expect(state.run?.messages[0]?.attachments).toBeUndefined()
+    })
+
+    it('puts the response’s attachments on a question the stream told first', () => {
+      const r = run('r1')
+      // The event arrived before the send's response: its copy has no attachments.
+      const live = liveRun(r, [user('q'), assistant('a', r.id)])
+      const next = withSentInput(live, user('q', { attachments: [attachment] }))
+      expect(next.messages[0]?.attachments).toEqual([attachment])
+      expect(next.messages[1]).toBe(live.messages[1])
+    })
+
+    it('leaves the held run alone when there is nothing to add', () => {
+      const r = run('r1')
+      const live = liveRun(r, [user('q', { attachments: [attachment] })])
+      expect(withSentInput(live, user('q', { attachments: [{ ...attachment, url: 'other' }] }))).toBe(live)
+      const plain = liveRun(r, [user('q')])
+      expect(withSentInput(plain, user('q'))).toBe(plain)
+      expect(withSentInput(plain, user('other', { attachments: [attachment] }))).toBe(plain)
     })
 
     it('resets the partial, retry and tools of a restarted run', () => {

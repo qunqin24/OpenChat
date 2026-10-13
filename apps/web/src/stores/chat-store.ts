@@ -1,7 +1,7 @@
 import type { Attachment, BatchEvent, Message, Run, SnapshotEvent } from '@openchat/api-client'
 import { create } from 'zustand'
 
-import { applyBatch, finishedBy, fromSnapshot, idle, rememberFinished, type ConversationLive } from '@/lib/run-state'
+import { applyBatch, finishedBy, fromSnapshot, idle, rememberFinished, withSentInput, type ConversationLive } from '@/lib/run-state'
 import type { Refusal } from '@/lib/moderation-refusal'
 import type { Replacing } from '@/lib/transcript'
 
@@ -153,8 +153,14 @@ export const useChatStore = create<ChatState>()((set) => ({
   startRun: (conversationId, run, input, rows = []) =>
     set((state) => {
       const current = state.live[conversationId]
-      // The stream may already have announced it.
-      if (current?.run?.run.id === run.id) return settled(state, conversationId)
+      // The stream may already have announced it - with a copy of the question
+      // that has no attachments, so the response's are put on it (run-state).
+      if (current?.run?.run.id === run.id) {
+        return {
+          ...settled(state, conversationId),
+          live: { ...state.live, [conversationId]: { run: withSentInput(current.run, input) } },
+        }
+      }
       // Or told all of it, and had it handed over to the message list: the
       // response says "running" because that is what it was when it was written.
       if (state.finished.includes(run.id)) return settled(state, conversationId)

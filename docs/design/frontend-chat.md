@@ -24,6 +24,7 @@
 
 - 发送：`outbox` 里的气泡由 `useSendMessage` 的 hook 级 `onError` 撤掉（调用级的 `mutate(…, { onError })` 在组件卸载后不执行，发完立刻切对话就会留下永远等回复的气泡）；新对话的第一条消息也一样：它用 `sendMessage.mutateAsync({ conversationId: 刚建的 id, … })` 发出，id 由调用传入（`useSendMessage` 的 `variables.conversationId`），hook 级的 `onSuccess`/`onError` 照样用它。运行中（`working`、`outbox`、`live` 在跑）不能再发：输入框的回车、`handleSend` 都挡掉，游客的 `runner.start` 对同一对话已有未结束的 run 直接 409 `conversation_busy`，不排队。
 - 发送的响应可能晚于事件流：SSE 上 `run_started → run_finished → 重取消息 → settle` 全走完，那个 POST 的响应才回来，它（以及重连时拍得更早的 snapshot）仍写着 `running`。store 的 `finished`（有界，最近 `FINISHED_RUNS_KEPT` 个 run id，`rememberFinished`）记住已结束的 run：`run_finished` 批次、非 running 的 snapshot、`settle` 都会登记；`startRun`（发送、重新生成、改写、回答 ask_user 都走它，游客的响应也一样）、`applySnapshot`、`applyBatch` 里的 `run_started` 遇到登记过的 run 一律不写回 `live`（`startRun` 仍清掉 `outbox`/`replacing`）。run 只前进不后退；新增任何由响应或旧快照驱动、会写 `live` 的路径都要过这道检查。`resetChatStore` 一并清空。
+- 附件只在发送响应里有：`run_started` 事件里的那份提问不带附件（链接按读者签名，所有订阅者共用的事件给不了）。两种先后都要保住响应那份的附件：响应先到，`applyBatch` 处理 `run_started` 时保留已有的附件；事件先到，`startRun` 用 `withSentInput`（`lib/run-state.ts`）把响应的附件放到已有的提问上。少了后一种，图片在发出后消失、直到回答结束重取消息才出现（v1.1.6 及之前）。其他标签页只收到事件，回答期间看不到图，结束后重取即正常。
 
 ## 对话标题的显示
 

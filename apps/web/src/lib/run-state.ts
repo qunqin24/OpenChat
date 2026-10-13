@@ -143,6 +143,22 @@ function appendDelta(part: MessagePart, delta: string): MessagePart {
   }
 }
 
+/**
+ * The other order of the same race as `run_started` above: the stream told of
+ * the run before the send's response arrived, so the question it holds is the
+ * event's copy, without the attachments. The response's copy has them signed
+ * for this reader; they go onto the held question. Nothing else changes.
+ */
+export function withSentInput(live: LiveRun, input: Message): LiveRun {
+  if (!input.attachments?.length) return live
+  const index = live.messages.findIndex((m) => m.id === input.id)
+  const held = live.messages[index]
+  if (!held || held.attachments?.length) return live
+  const messages = [...live.messages]
+  messages[index] = { ...held, attachments: input.attachments }
+  return { ...live, messages }
+}
+
 export function isRunning(live: ConversationLive | undefined): boolean {
   return live?.run?.run.status === 'running'
 }
