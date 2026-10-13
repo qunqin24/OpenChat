@@ -27,8 +27,17 @@
  * show, and a slow model reads as even typing rather than stop and go.
  */
 export const REVEAL_LAG_S = 0.25
-/** How quickly the reveal closes on that lag, in seconds; a burst is shown within about this. */
-export const REVEAL_CATCH_UP_S = 0.4
+/**
+ * How quickly the reveal closes on that lag, in seconds: a burst - a slow
+ * commit, a relay that held the stream, the first batch of a part - is shown
+ * over about this, as typing. (At 0.4 s a paragraph went by too fast to see as
+ * anything but appearing.)
+ */
+export const REVEAL_CATCH_UP_S = 1
+/** The pace the last of a burst is shown at, in characters a second. */
+export const REVEAL_CLOSE_CPS = 30
+/** After how long without anything arriving the stream counts as quiet, in seconds. */
+const REVEAL_QUIET_S = 1
 /** The slowest the reveal goes while anything is left, in characters a second. */
 export const REVEAL_MIN_CPS = 6
 /** Over how long the arrival rate is averaged, in seconds. */
@@ -45,10 +54,21 @@ export interface RevealState {
   rate: number
   /** The length of the text at the last step, to tell what has arrived since. */
   seen: number
+  /** How long since anything arrived, in seconds. */
+  quiet: number
 }
 
+/**
+ * Where the reveal of a part that mounts while streaming starts: this many
+ * characters from its end at most. Enough for the first batch of a new part to
+ * be typed rather than appear; little enough that a page opened part-way
+ * through a long answer only retypes its last line or two.
+ */
+export const REVEAL_FRESH_CHARS = 160
+export const revealFrom = (length: number) => Math.max(0, length - REVEAL_FRESH_CHARS)
+
 /** The state of a reveal that has shown all of `length` characters. */
-export const revealDone = (length: number, rate = 0): RevealState => ({ shown: length, speed: 0, rate, seen: length })
+export const revealDone = (length: number, rate = 0): RevealState => ({ shown: length, speed: 0, rate, seen: length, quiet: 0 })
 
 /**
  * One step of the reveal: `dt` ms after `state`, with `target` characters held.
@@ -64,11 +84,17 @@ export function revealStep(state: RevealState, target: number, dt: number): Reve
   const seconds = dt / 1000
   const arrived = Math.max(0, target - state.seen)
   const rate = seconds > 0 ? state.rate + (arrived / seconds - state.rate) * Math.min(1, seconds / RATE_WINDOW_S) : state.rate
-  if (state.shown >= target) return revealDone(target, rate)
+  const quiet = arrived > 0 ? 0 : state.quiet + seconds
+  if (state.shown >= target) return { ...revealDone(target, rate), quiet }
   const backlog = target - state.shown
-  const aim = Math.max(REVEAL_MIN_CPS, rate + (backlog - rate * REVEAL_LAG_S) / REVEAL_CATCH_UP_S)
+  // Once nothing has arrived for a while (the stream has ended, or a part
+  // came in one piece), what is left is finished at a typing pace: closing
+  // the gap in proportion to its size would show the last characters ever
+  // more slowly.
+  const floor = quiet >= REVEAL_QUIET_S ? Math.max(REVEAL_MIN_CPS, Math.min(REVEAL_CLOSE_CPS, backlog * 10)) : REVEAL_MIN_CPS
+  const aim = Math.max(floor, rate + (backlog - rate * REVEAL_LAG_S) / REVEAL_CATCH_UP_S)
   const speed = state.speed + (aim - state.speed) * Math.min(1, dt / SPEED_EASE_MS)
-  return { shown: Math.min(target, state.shown + speed * seconds), speed, rate, seen: target }
+  return { shown: Math.min(target, state.shown + speed * seconds), speed, rate, seen: target, quiet }
 }
 
 /**

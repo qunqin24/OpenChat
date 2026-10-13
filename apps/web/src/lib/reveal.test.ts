@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { REVEAL_MIN_CPS, revealDone, revealed, revealStep, type RevealState } from './reveal'
+import { REVEAL_FRESH_CHARS, REVEAL_MIN_CPS, revealDone, revealed, revealFrom, revealStep, type RevealState } from './reveal'
 
 const FRAME = 1000 / 60
 const start: RevealState = revealDone(0)
@@ -45,11 +45,28 @@ describe('revealStep', () => {
     expect(REVEAL_MIN_CPS).toBeGreaterThan(0)
   })
 
-  it('spreads a burst over a fraction of a second rather than showing it at once', () => {
-    const { steps } = run(start, () => 500, 1500)
-    expect(steps[0]!.shown).toBeLessThan(50)
-    expect(steps.find((s) => s.t >= 500)!.shown).toBeGreaterThan(250)
+  it('types a burst out over about a second rather than showing it at once', () => {
+    const { steps } = run(start, () => 500, 2500)
+    expect(steps[0]!.shown).toBeLessThan(20)
+    // Visibly typing a third of a second in, most of it shown within a second.
+    expect(steps.find((s) => s.t >= 300)!.shown).toBeLessThan(250)
+    expect(steps.find((s) => s.t >= 1000)!.shown).toBeGreaterThan(350)
     expect(steps.at(-1)!.shown).toBe(500)
+  })
+
+  it('types the first batch of a part that starts mid-stream', () => {
+    // A short answer whose first batch is a whole sentence: 60 characters.
+    const from = revealFrom(60)
+    expect(from).toBe(0)
+    const { steps } = run({ ...revealDone(60), shown: from }, () => 60, 2500)
+    // Typed out at reading pace - not there at once, all there within two seconds,
+    // and the last of it not crawling.
+    expect(steps.find((s) => s.t >= 200)!.shown).toBeLessThan(20)
+    expect(steps.find((s) => s.t >= 2000)!.shown).toBe(60)
+    const tenToGo = steps.find((s) => s.shown >= 50)!.t
+    expect(steps.find((s) => s.shown === 60)!.t - tenToGo).toBeLessThan(500)
+    // A long part opened part-way through retypes only its end.
+    expect(revealFrom(5000)).toBe(5000 - REVEAL_FRESH_CHARS)
   })
 
   it('shows a slow model at an even pace, not in sprints between batches', () => {
@@ -73,8 +90,8 @@ describe('revealStep', () => {
     // 25 characters every 150 ms, for three seconds.
     const { steps } = run(start, batches(25, 150), 3000)
     const worst = Math.max(...steps.filter((s) => s.t > 1000).map((s) => s.held - s.shown))
-    // About the lag kept in hand plus a batch: well under half a second's worth.
-    expect(worst).toBeLessThan(90)
+    // The lag kept in hand plus a batch: about half a second's worth at most.
+    expect(worst).toBeLessThan(110)
   })
 
   it('finishes what is left soon after the stream ends', () => {

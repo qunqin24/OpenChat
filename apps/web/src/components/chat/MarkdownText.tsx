@@ -2,12 +2,12 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Streamdown } from 'streamdown'
 
 import { prefersReducedMotion } from '@/lib/motion'
-import { revealDone, revealed, revealStep, type RevealState } from '@/lib/reveal'
+import { revealDone, revealed, revealFrom, revealStep, type RevealState } from '@/lib/reveal'
 import { markdownComponents, markdownLinkSafety, prepareMarkdown, useMarkdownPlugins } from './markdown-components'
 
 /** Markdown as the chat draws it: an answer's text, the reasoning, a conversation's summary. */
 export function Markdown({ text, streaming = false }: { text: string; streaming?: boolean }) {
-  const shown = useReveal(text)
+  const shown = useReveal(text, streaming)
   const behind = shown.length < text.length
   const revealing = streaming || behind
   const plugins = useMarkdownPlugins(shown)
@@ -105,15 +105,19 @@ const REVEAL_FRAME_MS = 32
 /**
  * The part of `text` to show (lib/reveal.ts). What the element holds when it
  * mounts is shown at once - a page opened, or reloaded, part-way through an
- * answer does not type out what was already there - and what is added after is
+ * answer does not type out what was already there - except, while it streams,
+ * its last few lines (`revealFrom`): a part that has only just begun (the
+ * answer after the reasoning, the text after an interface block) mounts with
+ * the whole of its first batch, which is often a sentence or two of a short
+ * answer, and appeared in one piece. What is added after is
  * revealed at a pace, including after the stream has ended: the element is the
  * same one across the hand-over (the part keys in `AssistantTurn`), so the end
  * of an answer finishes typing rather than jumping in. Text that is not a
  * continuation (replaced, shortened) is shown as it is. A hidden tab, and a
  * reader who asked for reduced motion, get the text as it is.
  */
-function useReveal(text: string): string {
-  const [shown, setShown] = useState(text.length)
+function useReveal(text: string, streaming: boolean): string {
+  const [shown, setShown] = useState(() => (streaming ? revealFrom(text.length) : text.length))
   // The text as last rendered, to tell a continuation from a replacement.
   const [held, setHeld] = useState(text)
   if (held !== text) {
@@ -125,7 +129,7 @@ function useReveal(text: string): string {
   // characters; a render moves it only forward (text shown at once) or back to
   // the text's end (text cut short).
   const target = useRef(text)
-  const state = useRef<RevealState>(revealDone(text.length))
+  const state = useRef<RevealState>({ ...revealDone(text.length), shown })
   useLayoutEffect(() => {
     target.current = text
     state.current.shown = Math.min(Math.max(state.current.shown, shown), text.length)
