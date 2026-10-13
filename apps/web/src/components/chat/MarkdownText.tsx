@@ -8,10 +8,16 @@ import { markdownComponents, markdownLinkSafety, prepareMarkdown, useMarkdownPlu
 /** Markdown as the chat draws it: an answer's text, the reasoning, a conversation's summary. */
 export function Markdown({ text, streaming = false }: { text: string; streaming?: boolean }) {
   const shown = useReveal(text)
-  const revealing = streaming || shown.length < text.length
+  const behind = shown.length < text.length
+  const revealing = streaming || behind
   const plugins = useMarkdownPlugins(shown)
+  const box = useRef<HTMLDivElement>(null)
+  const tail = useRef<HTMLSpanElement>(null)
+  // After every render: the fade sits on the newest characters while any are
+  // still being revealed.
+  useLayoutEffect(() => placeTail(box.current, tail.current, behind))
   return (
-    <div className="n-markdown">
+    <div className="n-markdown" ref={box}>
       {/* The local typography layer styles the actual Streamdown output;
           markdown-body keeps the ported table selectors working. */}
       <div className="markdown-body">
@@ -19,8 +25,73 @@ export function Markdown({ text, streaming = false }: { text: string; streaming?
           {prepareMarkdown(shown)}
         </Streamdown>
       </div>
+      <span ref={tail} className="n-reveal-tail" aria-hidden="true" />
     </div>
   )
+}
+
+/** How far back from the newest character the fade reaches, in em. */
+const TAIL_EM = 2.5
+
+/**
+ * The newest characters fade in: a short gradient from clear to the page's
+ * colour lies over the end of the last line, so the character just shown is
+ * mostly hidden and each one before it a little less, and as the reveal moves
+ * on every character comes out from under it. One element, placed once a
+ * render - the cost does not grow with the answer, unlike a fading element per
+ * character (v1.1.0, which took long reasoning to 90% of a core). Text inside a
+ * code block, table, diagram or interface block has a surface of its own and
+ * gets no fade.
+ */
+function placeTail(box: HTMLElement | null, tail: HTMLElement | null, on: boolean) {
+  if (!box || !tail) return
+  const hide = () => {
+    tail.style.opacity = '0'
+  }
+  if (!on) return hide()
+  const node = lastText(box.firstElementChild)
+  const parent = node?.parentElement
+  if (!node || !parent || parent.closest('pre, table, .n-ui, .n-mermaid, [data-streamdown="code-block"]')) return hide()
+  const end = node.data.trimEnd().length
+  const range = document.createRange()
+  range.setStart(node, Math.max(0, end - 1))
+  range.setEnd(node, end)
+  const rects = range.getClientRects()
+  const rect = rects[rects.length - 1]
+  if (!rect || rect.height === 0) return hide()
+  const origin = box.getBoundingClientRect()
+  const width = TAIL_EM * parseFloat(getComputedStyle(parent).fontSize)
+  const left = Math.max(0, rect.right - origin.left - width)
+  tail.style.width = `${rect.right - origin.left - left}px`
+  tail.style.height = `${rect.height}px`
+  tail.style.transform = `translate(${left}px, ${rect.top - origin.top}px)`
+  tail.style.setProperty('--n-tail-bg', surfaceOf(parent))
+  tail.style.opacity = '1'
+}
+
+/** The last text node under `root` with anything but whitespace in it. */
+function lastText(root: Node | null): Text | null {
+  let node: Node | null = root?.lastChild ?? null
+  while (node) {
+    if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim()) return node as Text
+    if (node.nodeType === Node.ELEMENT_NODE && node.lastChild) {
+      node = node.lastChild
+      continue
+    }
+    while (node && node !== root && !node.previousSibling) node = node.parentNode
+    if (!node || node === root) return null
+    node = node.previousSibling
+  }
+  return null
+}
+
+/** The colour behind `element`: its own background, or the nearest one above it. */
+function surfaceOf(element: Element): string {
+  for (let at: Element | null = element; at; at = at.parentElement) {
+    const color = getComputedStyle(at).backgroundColor
+    if (color && color !== 'transparent' && !/rgba\(.*,\s*0\)$/.test(color)) return color
+  }
+  return 'var(--n-bg)'
 }
 
 /**
