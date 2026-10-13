@@ -385,10 +385,21 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
   useEffect(() => {
     const scroller = scrollRef.current
     if (!transcriptShown || !scroller) return
+    // Only a view that can go up lets go, and the button follows where the view
+    // then is, not the gesture: a wheel or key up with nothing above (a short
+    // transcript, already at the top), or a press on the scrollbar that moves
+    // nothing, put the button up over a view still at the end - and stopped
+    // following, so a reply growing past the screen went on below it unseen.
+    let check = 0
     const leave = () => {
-      if (!parked.current) return
+      if (!parked.current || scroller.scrollTop <= 0) return
       parked.current = false
-      setShowJump(true)
+      cancelAnimationFrame(check)
+      check = requestAnimationFrame(() => {
+        if (parked.current) return
+        if (scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= BOTTOM_SLACK) parked.current = true
+        setShowJump(!parked.current)
+      })
     }
     const onWheel = (event: WheelEvent) => {
       if (event.deltaY < 0) leave()
@@ -402,8 +413,12 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
       // The finger moving down scrolls the transcript up.
       if (touchY !== null && y !== undefined && y > touchY + 2) leave()
     }
+    // Keys scroll the transcript only when nothing else has the focus: arrows
+    // in a menu, a picker or a field move through that, and showed the button.
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLElement && event.target.closest('textarea, input, [contenteditable]')) return
+      const target = event.target
+      if (target instanceof Node && target !== document.body && !scroller.contains(target)) return
+      if (target instanceof HTMLElement && target.closest('textarea, input, select, button, [contenteditable], [role]')) return
       if (event.key === 'ArrowUp' || event.key === 'PageUp' || event.key === 'Home') leave()
     }
     // A press on the scroller itself, not on a message: its scrollbar.
@@ -416,6 +431,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     scroller.addEventListener('pointerdown', onPointerDown)
     window.addEventListener('keydown', onKeyDown)
     return () => {
+      cancelAnimationFrame(check)
       scroller.removeEventListener('wheel', onWheel)
       scroller.removeEventListener('touchstart', onTouchStart)
       scroller.removeEventListener('touchmove', onTouchMove)
