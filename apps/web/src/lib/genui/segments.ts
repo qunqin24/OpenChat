@@ -32,5 +32,9 @@ export function splitSegments(text: string, streaming: boolean): Segment[] {
     segments.push({ kind: 'ui', source: body.slice(0, close.index), complete: true })
     rest = body.slice(close.index + close[0].length)
   }
-  return segments.filter((s) => s.kind === 'ui' || s.text.trim() !== '')
+  // An empty block is dropped: models sometimes open one and close it at once
+  // (about to write a table, which belongs outside blocks), and it drew as
+  // "this interface cannot be shown" over an empty box. One still being written
+  // stays, for its placeholder.
+  return segments.filter((s) => (s.kind === 'ui' ? !s.complete || s.source.trim() !== '' : s.text.trim() !== ''))
 }
