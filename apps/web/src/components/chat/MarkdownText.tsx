@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Streamdown } from 'streamdown'
 
 import { prefersReducedMotion } from '@/lib/motion'
-import { revealed, revealStep, type RevealState } from '@/lib/reveal'
+import { revealDone, revealed, revealStep, type RevealState } from '@/lib/reveal'
 import { markdownComponents, markdownLinkSafety, prepareMarkdown, useMarkdownPlugins } from './markdown-components'
 
 /** Markdown as the chat draws it: an answer's text, the reasoning, a conversation's summary. */
@@ -50,21 +50,25 @@ function useReveal(text: string): string {
     if (!text.startsWith(revealed(held, shown))) setShown(text.length)
   }
   // What the frame loop reads: the latest text, and where the reveal stands.
+  // The loop's position is fractional and runs ahead of the rendered whole
+  // characters; a render moves it only forward (text shown at once) or back to
+  // the text's end (text cut short).
   const target = useRef(text)
-  const state = useRef<RevealState>({ shown, speed: 0 })
+  const state = useRef<RevealState>(revealDone(text.length))
   useLayoutEffect(() => {
     target.current = text
-    state.current.shown = Math.min(state.current.shown, shown)
+    state.current.shown = Math.min(Math.max(state.current.shown, shown), text.length)
   }, [text, shown])
   const behind = shown < text.length
 
   useEffect(() => {
+    // Caught up: the arrival rate is kept, for the pace of what comes next.
     if (!behind) {
-      state.current = { shown: target.current.length, speed: 0 }
+      state.current = revealDone(target.current.length, state.current.rate)
       return
     }
     if (prefersReducedMotion() || document.hidden) {
-      state.current = { shown: target.current.length, speed: 0 }
+      state.current = revealDone(target.current.length)
       setShown(target.current.length)
       return
     }
@@ -78,7 +82,8 @@ function useReveal(text: string): string {
       const done = next.shown >= target.current.length
       if (done || now - drawn >= REVEAL_FRAME_MS || document.hidden) {
         drawn = now
-        setShown(document.hidden ? target.current.length : next.shown)
+        // Whole characters: a render only when one more can be shown.
+        setShown(document.hidden ? target.current.length : Math.floor(next.shown))
       }
       if (!done && !document.hidden) frame = requestAnimationFrame(tick)
     }
