@@ -10,6 +10,7 @@ import { queryClient, setErrorListener } from '@/lib/query'
 import { persistQueryCache, restoreQueryCache } from '@/lib/query-persist'
 import { preventZoom } from '@/lib/no-zoom'
 import { leaveIfSessionExpired } from '@/lib/session-expired'
+import { keepToastsInteractive } from '@/lib/toast-layer'
 import { isWebKit } from '@/lib/webkit'
 import { router } from '@/router'
 import { applyTheme, useUIStore } from '@/stores/ui-store'
@@ -46,6 +47,7 @@ onBuildChange(() =>
 )
 followDeletions(queryClient)
 preventZoom()
+keepToastsInteractive()
 if (isWebKit()) document.documentElement.dataset.webkit = ''
 
 const container = document.getElementById('root')

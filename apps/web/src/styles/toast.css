@@ -16,6 +16,13 @@
   }
 }
 
+/* Pressable while a dialog is open: a Radix modal turns pointer events off on
+   <body>, and the toasts inherited that (lib/toast-layer.ts keeps the dialog
+   from closing on the press). */
+.n-toast[data-sonner-toaster] [data-sonner-toast] {
+  pointer-events: auto;
+}
+
 .n-toast[data-sonner-toaster],
 .n-toast[data-sonner-toaster] :is([data-sonner-toast], [data-sonner-toast] *) {
   font-family: var(--n-chat-font);
