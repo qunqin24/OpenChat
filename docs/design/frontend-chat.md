@@ -32,7 +32,7 @@
 
 ## 流式文字的显现与滚动
 
-- 流式文字的显现（`components/chat/MarkdownText.tsx` 的 `useReveal`，节奏是纯函数 `lib/reveal.ts`，有 vitest）：答案是一批一批到的（服务端每 150ms 提交一次，写库慢、反代或中转站攒着、标签页从后台回来时一批会很大），所以页面显示的是已收到文字的**前缀**，每帧多显示一点，速度跟着积压走（约 0.4 秒追上，最慢每秒 40 字，速度平滑变化），和 LobeChat 的 `createSmoothMessage` 同一个思路；渲染最多每 32ms 一次（每次都要把显示的文字解析成 Markdown，越长越贵）。挂载时已有的文字直接显示（中途打开、刷新不会重打一遍），不是延续的文字（被替换、变短）直接显示，标签页隐藏或 `prefers-reduced-motion` 时直接显示。**不要给每个字建元素**：v1.1.0 用 Streamdown 的 `animated` 给每个字包一个带淡入动画的 span，长思维链展开时有上万个节点和动画，主线程占用随时间涨到一个核的 90%，线上弱电脑直接卡死。流结束后仍会把排队的字放完，这要求同一段文字在「流式 partial → 存好的回复 → 交给消息列表」之间是**同一个元素**，所以 `AssistantTurn` 里回复的零件按位置（第几个回复 `r<n>`、第几个零件）起 key，不按消息 id——别改回去。思维链折叠时内容不渲染（Radix Collapsible），开销和展开时一样低。性能回归用无头 Chromium 测（`Performance.getMetrics` 的 `TaskDuration`），浏览器面板在后台时 rAF 被节流，测不准。
+- 流式文字的显现（`components/chat/MarkdownText.tsx` 的 `useReveal`，节奏是纯函数 `lib/reveal.ts`，有 vitest）：答案是一批一批到的（服务端每 150ms 提交一次，写库慢、反代或中转站攒着、标签页从后台回来时一批会很大），所以页面显示的是已收到文字的**前缀**，每帧多显示一点（和 LobeChat 的 `createSmoothMessage` 同一个思路）。速度 = 文字到达的速度（约 1 秒的滑动平均）+ 把积压拉回「落后约 0.25 秒」的修正（0.4 秒内收敛），最慢每秒 6 字，平滑变化，位置是小数、整字才显示。手里总留着约 0.25 秒的字，下一批到之前不会放空，所以慢模型、每半秒一批的中转站也是匀速一个字一个字出来；v1.1.7 及之前按积压追（最慢每秒 40 字、每帧至少一字），慢速时是「一批的字瞬间冒出→停到下一批」。无头 Chromium 实测相邻两次出字的间隔离散度（标准差/均值）：每秒 20 字、每 150ms 一批，旧 0.01（每 150ms 蹦 3 个字）→ 新每字间隔约 50ms；每半秒一批，旧 1.28（最长停 460ms）→ 新 0.34（95% 的间隔在 68ms 内）。Open WebUI 没有节奏控制，靠服务端逐 token 推送，加上每个词（按空格切）一个 100ms 淡入的 span；中文没有空格，整段是一个 span，实际上只有新段落淡入。渲染最多每 32ms 一次（每次都要把显示的文字解析成 Markdown，越长越贵）。挂载时已有的文字直接显示（中途打开、刷新不会重打一遍），不是延续的文字（被替换、变短）直接显示，标签页隐藏或 `prefers-reduced-motion` 时直接显示。**不要给每个字建元素**：v1.1.0 用 Streamdown 的 `animated` 给每个字包一个带淡入动画的 span，长思维链展开时有上万个节点和动画，主线程占用随时间涨到一个核的 90%，线上弱电脑直接卡死。流结束后仍会把排队的字放完，这要求同一段文字在「流式 partial → 存好的回复 → 交给消息列表」之间是**同一个元素**，所以 `AssistantTurn` 里回复的零件按位置（第几个回复 `r<n>`、第几个零件）起 key，不按消息 id——别改回去。思维链折叠时内容不渲染（Radix Collapsible），开销和展开时一样低。性能回归用无头 Chromium 测（`Performance.getMetrics` 的 `TaskDuration`），浏览器面板在后台时 rAF 被节流，测不准。
 - 脚本触发的滚动（`scrollTo`/`scrollBy` 的 `behavior`）用 `lib/motion.ts` 的 `smoothScrollBehavior()`，CSS 的 reduced-motion 管不到它。工具结果里来的链接（`ToolActivity`）只允许 `isHttpUrl`（`lib/urls.ts`）通过，和 GenUI 的链接一样。
 
 ## 表格与后台
@@ -56,6 +56,7 @@
 - 后台表单用 react-hook-form + zod，schema 建在组件内部（文案要翻译）；用 `useWatch` 而不是 `form.watch()`。登录注册页是手写校验。
 - 所有面向用户的字符串都走 `t()`（`zh`、`en`，键有类型约束）；服务端 `message` 不直接渲染。
 - 动效：全局遵守 `prefers-reduced-motion`，加载指示器标 `data-motion="essential"`，用透明度脉动代替位移。
+- 通知（sonner，`components/Toaster.tsx`）在所有弹窗之上（z-index 999999999），但 Radix 模态框会把 `<body>` 设成 `pointer-events: none`、并在外部按下时关闭：`toast.css` 给 toast 恢复 `pointer-events`，`lib/toast-layer.ts` 在捕获阶段取消发自 toast 的 `dismissableLayer.*Outside` 事件，点通知里的按钮不会关掉下面的弹窗。
 - 设置对话框（通用/个性化/账户/数据）是 `?settings=<tab>` 搜索参数（`lib/settings.ts`），挂在 `_authed` 布局上，渲染进 `.chat-ui` 里；样式照搬 Open WebUI 经典设置弹窗，在 `styles/settings.css`。记忆列表是它里面的第二层弹窗（`MemoryManager`），新增和编辑一条记忆都在第三层弹窗里（`MemoryEditor`，照 Open WebUI 的 Add/Edit Memory：多行文本框、字数、取消/保存，⌘/Ctrl+Enter 保存，Escape 只关最上层）；其中「最近由模型更改」默认折起，点标题展开（每条最多两行）。回复里的记忆提示（`MemoryChip`）只占一行，放不下时省略号截断，点文字展开全文、再点收起；一条记忆服务端上限 200 字（`memory.MaxContent`），手机上会有好几行。记忆相关查询键在 `queryKeys.memory`，不写入本地缓存（`query-persist` 只存白名单），临时对话的转录同样不落本地缓存。
 
 ## 较早消息的跳过渲染（`styles/chat-layout.css`）
@@ -67,6 +68,10 @@ WebKit（Safari，以及 iPhone 上的所有浏览器）照 Open WebUI 整个跳
 ## Mermaid 图表（`components/chat/MermaidDiagram.tsx`）
 
 `mermaid` 代码块画成图，和 `html` 块的预览一样是 Streamdown 的自定义 renderer（`markdown-components.ts`）。不用 `@streamdown/mermaid`：它的外框是这个构建不生成的 Tailwind 类和聊天里没有的 shadcn 令牌，画出来是黑边框。Mermaid 很大，第一次遇到图表才动态加载；全局配置，所以渲染排队一个一个来。`securityLevel: 'strict'`（不执行脚本、标签里不放 HTML、输出经它净化），浅色用 `neutral`、深色用 `dark`，主题切换时重画（`hooks/use-dark.ts`）。还在输出、或语法错误时显示源码（错误时下面一行说明），画好后可在图和代码间切换。系统提示词只告诉模型这种代码块会画成图，用不用由它判断。
+
+## 智能 UI 的空块
+
+模型偶尔开了一个 `openchat-ui` 块又马上关上（多半是要写表格，而表格规定写在块外），以前显示成「这个界面无法显示」加一个空灰框；`splitSegments` 现在丢掉已结束的空块，还在输出的保留占位。
 
 ## 智能 UI 的「选项」（`components/chat/genui/choices.tsx`）
 
