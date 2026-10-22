@@ -37,3 +37,11 @@
 
 服务端在每个响应里带 `X-OpenChat-Build`：嵌进二进制的前端 `index.html` 的 SHA-256 前 12 位。`index.html` 列出了所有带哈希的资源名，所以只有前端真的变了它才变——重启、只改服务端都不变；没有嵌前端（开发时 Vite 提供页面）就不带。前端所有请求都经过 `appFetch`（账号）或游客的 `network`，两处都调 `noteBuild`：记住第一次看到的值，之后看到不同的值就通过 `onBuildChange` 弹一次不会自动消失的提示类通知（`toast.info`，和其他通知同一套带图标的彩色样式）「服务端已更新，请刷新页面」，带「刷新」按钮，按钮在 `toast.css` 里画成跟随通知颜色的描边小按钮（`main.tsx`）。镜像升级、服务重启后，事件流的自动重连通常是第一个发现的请求。和 Open WebUI 不同：它在 WebSocket 重连后比对版本号和部署 ID，不同就直接强制刷新页面；这里只提示，免得丢掉输入框里写了一半的消息。新增不经 `appFetch` 的网络请求时，也要调 `noteBuild`。
 
+
+## 模型目录（models.dev）的更新
+
+模型的名称、上下文长度、价格、能力等元数据来自 models.dev（`internal/catalog`），存成本地快照，市场卡片和模型设置只读快照，不实时请求。快照超过一天（`catalog.StaleAfter`）才更新：启动时查一次，之后每小时查一次（`StartCatalogRefresh`，`catalogCheckEvery`），过期才去拉，请求带 ETag，没变时 models.dev 只回 304。以前只在启动时查，服务不重启快照就一直不更新。拉取失败不影响服务，快照保持原样，原因记在 `catalog_state.last_error`，下一次检查重试。
+
+模型市场标题下的状态行（`catalog-status-line.tsx`）显示快照的模型数、更新时间、是否过期和失败原因，旁边的「刷新目录」按钮立即拉一次（`POST /admin/catalog`，不看是否过期）。这两样在 `478c312`（模型覆盖设置）里被一起删掉过，接口留着、前端没有入口，之后恢复。
+
+模型设置的「恢复默认」删掉这个模型的整行覆盖（`DELETE /admin/models/{id}/settings` → `DeleteModelOverride`）：类型、推理、工具、输入模态、上下文/输入/输出长度回到快照里的值（models.dev 没有这个模型时按 id 推断：含 `rerank`/`embed` 的是重排/嵌入，其余是文本，工具开），**同时**清掉 models.dev 里没有的管理员设置——「向普通用户开放」回到开、容量上限和统计周期清空、管理员豁免关闭。已花费的统计不受影响（`usage_logs` 不动）。

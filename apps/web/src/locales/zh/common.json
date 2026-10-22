@@ -986,7 +986,14 @@
       "capacity-total": "总计 {{spent}} / {{cap}}",
       "capacity-monthly": "本月 {{spent}} / {{cap}}",
       "capacity-daily": "今日 {{spent}} / {{cap}}",
-      "capacity-reached": "已达上限"
+      "capacity-reached": "已达上限",
+      "refresh": "刷新目录",
+      "refreshing": "正在刷新…",
+      "stale": "models.dev 目录已超过一天未更新",
+      "never-synced": "尚未获取 models.dev 目录",
+      "synced": "models.dev 目录更新于 {{time}}，每天自动更新",
+      "sync-failed": "刷新失败，仍在使用上一次的目录",
+      "count": "models.dev：{{models}} 个模型 · {{providers}} 家供应商"
     },
     "web-search": {
       "title": "联网搜索",

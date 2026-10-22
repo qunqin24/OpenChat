@@ -20,17 +20,39 @@ func (s *Server) catalogSyncer() *catalog.Syncer {
 	return catalog.NewSyncer(catalog.NewClient(), catalog.NewStore(s.pool))
 }
 
-// StartCatalogRefresh brings the snapshot up to date in the background when it
-// is missing or older than catalog.StaleAfter.
+// catalogCheckEvery is how often a running server looks at the snapshot's age.
+// Most looks do nothing: a refresh happens only once it is older than
+// catalog.StaleAfter, and then it is a conditional request (the ETag) that
+// models.dev answers with "not modified" when nothing changed. Checking hourly
+// rather than daily means a refresh that failed is tried again within the hour.
+const catalogCheckEvery = time.Hour
+
+// StartCatalogRefresh keeps the snapshot up to date in the background: at boot,
+// and then every catalogCheckEvery, it is refreshed when missing or older than
+// catalog.StaleAfter. A server left running used to keep whatever it fetched at
+// boot for as long as it ran.
 //
 // It returns immediately and reports nothing to its caller. models.dev is
 // somebody else's server, and a boot that waited on it would be a boot a third
-// party could hold up; a failure is logged, recorded, and retryable from the
-// admin panel.
+// party could hold up; a failure is logged, recorded (the panel shows it), and
+// retried at the next check or from the panel.
 func (s *Server) StartCatalogRefresh(ctx context.Context) {
 	go func() {
-		if _, err := s.catalogSyncer().RefreshIfStale(ctx); err != nil {
-			slog.WarnContext(ctx, "catalog refresh on boot", "error", err)
+		check := func() {
+			if _, err := s.catalogSyncer().RefreshIfStale(ctx); err != nil && ctx.Err() == nil {
+				slog.WarnContext(ctx, "catalog refresh", "error", err)
+			}
+		}
+		check()
+		ticker := time.NewTicker(catalogCheckEvery)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				check()
+			}
 		}
 	}()
 }

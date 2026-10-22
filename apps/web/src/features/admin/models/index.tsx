@@ -6,6 +6,7 @@ import { Header } from '@/components/shadcn/layout/header'
 import { Main } from '@/components/shadcn/layout/main'
 import { ProfileDropdown } from '@/components/shadcn/profile-dropdown'
 import { Search } from '@/components/shadcn/search'
+import { CatalogStatusLine } from './components/catalog-status-line'
 import { ModelsGrid } from './components/models-grid'
 import { ModelsToolbar } from './components/models-toolbar'
 import { useCatalogModels, useChannelReach, useHasChannels } from './use-catalog'
@@ -71,6 +72,7 @@ export function Models() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight">{t('admin.models.title')}</h2>
           <p className="text-muted-foreground">{t('admin.models.subtitle')}</p>
+          <CatalogStatusLine className="mt-2" />
         </div>
 
         <ModelsToolbar

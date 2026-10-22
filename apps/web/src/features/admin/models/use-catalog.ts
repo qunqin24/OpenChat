@@ -7,6 +7,7 @@ import { useAdminChannels } from '@/features/admin/use-admin'
 
 type Schemas = components['schemas']
 
+export type CatalogStatus = Schemas['CatalogStatus']
 export type CatalogModel = Schemas['CatalogModel']
 export type ModelChannel = Schemas['ModelChannel']
 export type ModelSettings = Schemas['ModelSettings']
@@ -23,6 +24,8 @@ export type ModelCapacity = Schemas['ModelCapacity']
  */
 export const catalogKeys = {
   all: ['admin', 'catalog'] as const,
+  /** When models.dev was last fetched, and whether that failed (GET /admin/catalog). */
+  status: () => [...catalogKeys.all, 'status'] as const,
   models: () => [...catalogKeys.all, 'models'] as const,
   modelPage: (filters: CatalogFilters) => [...catalogKeys.models(), filters] as const,
   /** The unfiltered probe behind the empty state; see `useChannelReach`. */
@@ -182,3 +185,35 @@ export function useResetModelCapacity() {
  * invalidates this feature's keys when it moves, so the marketplace follows
  * along without ever writing.
  */
+
+/** When the models.dev snapshot was fetched, how big it is, and why the last refresh failed if it did. */
+export function useCatalogStatus() {
+  return useQuery({
+    queryKey: catalogKeys.status(),
+    queryFn: async ({ signal }) => unwrap(await api.GET('/admin/catalog', { signal })),
+  })
+}
+
+/**
+ * Fetches models.dev now. The server also does this on its own once the
+ * snapshot is a day old (it checks hourly); this is for not waiting.
+ */
+export function useRefreshCatalog() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async () => unwrap(await api.POST('/admin/catalog', {})),
+    onSuccess: (status) => {
+      // The response is the new status; no need to go and ask for it again.
+      queryClient.setQueryData(catalogKeys.status(), status)
+      // What a card shows from models.dev (name, limits, prices) may have changed.
+      void queryClient.invalidateQueries({ queryKey: catalogKeys.models() })
+    },
+    onError: () => {
+      // A failed refresh answers 502, so there is no status in the response to
+      // read - the server recorded `lastError` against the snapshot it kept.
+      // Without this the button would simply stop spinning and say nothing.
+      void queryClient.invalidateQueries({ queryKey: catalogKeys.status() })
+    },
+  })
+}

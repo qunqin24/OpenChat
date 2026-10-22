@@ -986,7 +986,14 @@
       "capacity-total": "Total {{spent}} / {{cap}}",
       "capacity-monthly": "This month {{spent}} / {{cap}}",
       "capacity-daily": "Today {{spent}} / {{cap}}",
-      "capacity-reached": "At capacity"
+      "capacity-reached": "At capacity",
+      "refresh": "Refresh catalogue",
+      "refreshing": "Refreshing…",
+      "stale": "The models.dev catalogue is over a day old",
+      "never-synced": "The models.dev catalogue has not been fetched",
+      "synced": "models.dev catalogue updated {{time}}, refreshed daily",
+      "sync-failed": "Refresh failed — still serving the previous catalogue",
+      "count": "models.dev: {{models}} models · {{providers}} providers"
     },
     "web-search": {
       "title": "Web search",
