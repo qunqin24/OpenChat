@@ -989,11 +989,11 @@
       "capacity-reached": "At capacity",
       "refresh": "Refresh catalogue",
       "refreshing": "Refreshing…",
-      "stale": "The models.dev catalogue is over a day old",
-      "never-synced": "The models.dev catalogue has not been fetched",
-      "synced": "models.dev catalogue updated {{time}}, refreshed daily",
-      "sync-failed": "Refresh failed — still serving the previous catalogue",
-      "count": "models.dev: {{models}} models · {{providers}} providers"
+      "stale": "Catalogue out of date",
+      "never-synced": "Catalogue not fetched yet",
+      "synced": "Catalogue updated {{time}}",
+      "sync-failed": "Catalogue refresh failed",
+      "sync-hint": "Model names, context lengths, prices and the like come from models.dev, refreshed daily"
     },
     "web-search": {
       "title": "Web search",

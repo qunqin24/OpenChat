@@ -989,11 +989,11 @@
       "capacity-reached": "已达上限",
       "refresh": "刷新目录",
       "refreshing": "正在刷新…",
-      "stale": "models.dev 目录已超过一天未更新",
-      "never-synced": "尚未获取 models.dev 目录",
-      "synced": "models.dev 目录更新于 {{time}}，每天自动更新",
-      "sync-failed": "刷新失败，仍在使用上一次的目录",
-      "count": "models.dev：{{models}} 个模型 · {{providers}} 家供应商"
+      "stale": "目录已过期",
+      "never-synced": "尚未获取目录",
+      "synced": "目录更新于 {{time}}",
+      "sync-failed": "目录刷新失败",
+      "sync-hint": "模型名称、上下文长度、价格等信息来自 models.dev，每天自动更新"
     },
     "web-search": {
       "title": "联网搜索",

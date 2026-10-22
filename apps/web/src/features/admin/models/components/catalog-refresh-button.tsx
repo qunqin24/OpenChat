@@ -10,7 +10,7 @@ import { useRefreshCatalog } from '../use-catalog'
  * refresh. Beside the catalogue's status line on the model marketplace.
  */
 export function CatalogRefreshButton({
-  size = 'sm',
+  size = 'default',
   variant = 'outline',
 }: {
   size?: 'sm' | 'default'
