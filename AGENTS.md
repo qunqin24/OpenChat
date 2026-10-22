@@ -48,7 +48,7 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 - 被审核拒绝的行是 `messages.status = 'blocked'`：凡构造模型看到的内容的查询都要 `status <> 'blocked'`，只有 `ListMessages`（显示）和 `GetInput`（改写）看得见它；`agent.BuildContext`、`EstimateRow` 再各跳一次。
 - 给模型的上下文用 `LoadContextRows` + `BuildRequestContext`；压缩从不改行，摘要的一致性靠 `context_summaries` 的 `ON DELETE CASCADE`；`HistoryLimit` 只是安全上限。
 - 压缩只有 run 自己会做，用户没有手动入口（只能读 `GET`、撤销 `DELETE` `/conversations/{id}/compaction`）；不要加回去。模型因长度拒绝请求（`context_too_long`）时，开着自动压缩的 run 会强制压一次（估算低于门槛也压）并立即重试，每个 run 至多一次（`recoverContextLength`），压不出来或再被拒绝就照旧以 `context_too_long` 结束。
-- 新增模型请求路径：先构造 `llm.Request`（带 `User`），`Begin(Call{InputEstimate: llm.EstimateInput(req)})` → `Reserve` → `Stream` → `End`；`partialStream` 在 `Reserve` 之后才创建；挑模型走 `pickChannel`（用户请求传 `isStaff(ctx)`，服务端任务传 `true`）并过容量检查；新 kind 要加 `usage_logs_kind` 约束。
+- 新增模型请求路径：先构造 `llm.Request`（带 `User`），`Begin(Call{InputEstimate: llm.EstimateInput(req)})` → `Reserve` → `Stream` → `End`；`partialStream` 在 `Reserve` 之后才创建；挑模型走 `pickChannel`（用户请求传 `isStaff(ctx)`，服务端任务传 `true`）并过容量检查，渠道按优先级、同级按权重选（`servingOrder`），run 在模型还没输出时失败会自动换渠道（`agent` 的 `failover`），别改回只取第一个；新 kind 要加 `usage_logs_kind` 约束。
 - 容量上限按请求的 `model_id`（不是 `served_model`）、金额全程 `numeric` 在 SQL 里比较，不经 float。
 - 读用户上传文件并发给模型必须走 `agent.attachmentResolver`（SHA-256 收据），别自己 `Read`；本地 `PUT` 用 `Local.PutNew`，写一次。
 - 附件行消失的地方先收集 `storage_key`、`DELETE ... RETURNING`、再尽力删文件（`cleanup.go`）。头像放 `avatars/`，不放 `uploads/`（孤儿清扫只看后者）。存储配置只在后台，没有环境变量。

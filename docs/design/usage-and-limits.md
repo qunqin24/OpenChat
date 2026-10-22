@@ -34,3 +34,13 @@
 ## 容量上限的前端
 
 - 容量上限的前端：设置面板的「容量」一节（`features/admin/models/capacity.ts` 是纯逻辑，有 vitest）、卡片上的用量条、`ChatModel.atCapacity`。选择器里满的模型**保留在列表里但禁用**，原因写在名字下面（禁用项没有指针事件，tooltip 出不来）；对话自己的模型或用户明确选的模型即使满了也不会被悄悄换掉——新对话的默认模型才会绕开满的（`defaultModelId`）；在满的模型上发送时 `ChatView` 先重取一次模型列表（列表最多旧一分钟、还会本地持久化），仍满就弹提示、什么都不创建，取不到就交给服务器决定。重新生成/改写/回答由服务器拒绝，`useSendError` 弹同一句话并让模型列表失效；运行中途被拦住，错误行按 `chat.error.model_capacity_reached` 显示，`use-conversation-events` 看到 `run_finished` 带这个码也会让模型列表失效。
+
+## 一个模型多个渠道：优先级、权重与自动换渠道
+
+渠道有 `priority`（大的先用，默认 0）和 `weight`（1~1000，默认 1），取代从没有界面可改的 `sort_order`（迁移 `20261025000007`，旧值取负保留顺序）。`ServingChannels` 列出提供某模型、渠道和模型都启用的渠道，按优先级降序；`servingOrder`（`api/channel_routing.go`）在同一优先级内按权重无放回抽签，得到这次 run 的渠道顺序，`pickChannel` 取第一个钉在 run 上（权重 3 和 1 约 3:1 先被选中，有测试）。
+
+**自动换渠道**（`agent` 的 `failover`）：一次请求失败、且模型还**没有输出任何内容**（`resp.Message.Parts` 为空）时，立即换到这个模型下一个没试过的渠道重发，不等待、不占重试次数；run 的 `channel_id` 跟着改（`MoveRunChannel`），之后的请求、用量日志、压缩都走新渠道。上下文过长（`ErrorContextLength`）不换——每个渠道都一样；已经输出了部分内容的不换——另一个渠道会把回答重新开头，照旧在原渠道重试。钉住的渠道在 run 进行中被停用、删除或不再提供该模型（`ErrNoModel`）时也换。试过的渠道在一次成功的请求后清空；所有渠道都失败后按原来的规则（可重试的错误在当前渠道延时重试，否则报错）。下一个渠道每次重新按优先级/权重算，期间新增或停用的渠道会被考虑。标题、审核等服务端任务只用 `pickChannel` 选出的那个，不换。
+
+**渠道名唯一**：忽略大小写和首尾空格（`channels_name_lower_idx`），迁移把已有的重名改成「名称 (2)」「名称 (3)」，保留最早的那个。重名时创建/修改返回 400 `channel_name_taken`，表单显示在名称字段上。
+
+**接口地址补全**（`endpointFor`）：留空用类型默认地址；只有域名、没有路径（包括只带一个结尾 `/`）时补上类型默认地址的路径（`/v1`、`/compatible-mode/v1`、`/api/v3`……），没有默认地址的中转类型按协议补（OpenAI/Anthropic `/v1`，Gemini `/v1beta`）；带任何路径的原样使用。以前只填域名会请求 `https://域名/chat/completions` 得到 404。

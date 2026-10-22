@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"log/slog"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
@@ -97,6 +99,10 @@ type execution struct {
 	// compression is what the run has done about the size of its context; used
 	// by the run loop only.
 	compression runCompression
+
+	// tried holds the channels this run has failed over from since its last
+	// successful request (failover); used by the run loop only.
+	tried []uuid.UUID
 }
 
 // change is the body of one commit. It runs inside the transaction, may append
@@ -361,6 +367,11 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 	if err != nil {
 		code := CodeModelError
 		if errors.Is(err, ErrNoModel) {
+			// The pinned channel was switched off or deleted, or stopped
+			// offering the model: another channel of the model takes the run.
+			if moved, err := ex.failover(ctx, err); moved || err != nil {
+				return false, err
+			}
 			code = CodeNoModel
 		} else {
 			ex.logger().Error("resolve model", "error", err)
@@ -499,9 +510,75 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 		if retry, err := ex.recoverContextLength(ctx, client, system, offered, resp, streamErr); err != nil || retry {
 			return false, err
 		}
+		// A request that failed before the model wrote anything is made again
+		// at once on another channel of the model, if there is one: nobody has
+		// seen a word of it, so nothing on the page changes but the wait. One
+		// that wrote something stays where it is, retried as before - a second
+		// channel would start the answer over.
+		if len(resp.Message.Parts) == 0 && failsOver(streamErr) {
+			if moved, err := ex.failover(ctx, streamErr); moved || err != nil {
+				return false, err
+			}
+		}
 		return ex.requestFailed(resp, streamErr)
 	}
+	// A channel that answered is where the run stays; any it failed over from
+	// may be tried again after a later failure.
+	ex.tried = ex.tried[:0]
 	return ex.responded(resp, offered, final)
+}
+
+// failsOver: every failure of a request is one another channel may not have -
+// a key that stopped working, a relay that is down or rate-limited, a provider
+// error - except a context too long for the model, which every channel of it
+// would refuse alike.
+func failsOver(err error) bool {
+	var llmErr *llm.Error
+	if errors.As(err, &llmErr) && llmErr.Kind == llm.ErrorContextLength {
+		return false
+	}
+	return true
+}
+
+// failover moves the run to the next channel of its model it has not tried
+// since its last successful request, and reports whether it did. Moved, the
+// loop makes the same request again at once there; not moved (no other
+// channel, or the resolver cannot fail over), the failure is handled as before.
+// The run's pinned channel changes with it, so a request after a restart, the
+// usage log and compression all go to the new one.
+func (ex *execution) failover(ctx context.Context, cause error) (bool, error) {
+	failover, ok := ex.r.models.(ChannelFailover)
+	if !ok || ctx.Err() != nil {
+		return false, nil
+	}
+	from := ex.run.ChannelID
+	if from != nil && !slices.Contains(ex.tried, *from) {
+		ex.tried = append(ex.tried, *from)
+	}
+	next, err := failover.NextChannel(ctx, ex.run.ModelID, ex.tried)
+	if err != nil {
+		if ctx.Err() != nil {
+			return false, nil
+		}
+		// Not being able to look is no reason to fail the run: it is handled
+		// as if there were no other channel.
+		ex.logger().Error("looking for another channel", "error", err)
+		return false, nil
+	}
+	if next == nil {
+		return false, nil
+	}
+	if err := ex.r.q.MoveRunChannel(ctx, sqlc.MoveRunChannelParams{ID: ex.run.ID, ChannelID: next}); err != nil {
+		if ctx.Err() != nil {
+			return false, nil
+		}
+		return false, err
+	}
+	ex.mu.Lock()
+	ex.run.ChannelID = next
+	ex.mu.Unlock()
+	ex.logger().Warn("model request failed; failing over to another channel", "from_channel", from, "to_channel", *next, "error", cause)
+	return true, nil
 }
 
 // endUser is the identifier of the person the run is for, or "".

@@ -146,6 +146,8 @@ func conflictingField(err error) string {
 		return "name"
 	case "users_email_lower_idx":
 		return "email"
+	case "channels_name_lower_idx":
+		return "channel_name"
 	default:
 		// A unique index we have not taught this function about. Blaming a
 		// field at random would be worse than owning up to a server error.
@@ -161,6 +163,8 @@ func duplicateError(err error) error {
 		return httpx.NewFieldError("email", "email_taken", "that email is already registered")
 	case "name":
 		return httpx.NewFieldError("name", "name_taken", "that username is already taken")
+	case "channel_name":
+		return httpx.NewFieldError("name", "channel_name_taken", "a channel with that name already exists")
 	default:
 		return nil
 	}

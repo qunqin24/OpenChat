@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/qunqin/openchat/apps/server/internal/httpx"
@@ -312,6 +313,37 @@ func wireApiFor(t ChannelType) (WireApi, bool) {
 		}
 	}
 	return "", false
+}
+
+// endpointFor is the base URL a channel is reached at: the operator's, or the
+// type's default when left blank. An address that is only a host - no path, as
+// people paste a relay's site - gets the path the protocol's endpoints live
+// under: the type's default one ("/v1", "/compatible-mode/v1", ...), and for
+// a type with no default (a relay) the protocol's ("/v1", Gemini's "/v1beta").
+// Without it the requests went to https://relay.example/chat/completions and
+// came back 404. An address with any path is used as it is: a relay may serve
+// from "/api", "/openai/v1" or anywhere. "" when there is nothing to go on.
+func endpointFor(t ChannelType, baseURL string) string {
+	baseURL = strings.TrimSpace(baseURL)
+	if baseURL == "" {
+		return defaultEndpointFor(t)
+	}
+	u, err := url.Parse(baseURL)
+	if err != nil || u.Host == "" || (u.Path != "" && u.Path != "/") || u.RawQuery != "" {
+		return baseURL
+	}
+	return strings.TrimSuffix(baseURL, "/") + defaultPathFor(t)
+}
+
+// defaultPathFor is the path a type's endpoints live under (see endpointFor).
+func defaultPathFor(t ChannelType) string {
+	if def, err := url.Parse(defaultEndpointFor(t)); err == nil && def.Host != "" && def.Path != "" && def.Path != "/" {
+		return strings.TrimSuffix(def.Path, "/")
+	}
+	if wire, _ := wireApiFor(t); wire == "gemini" {
+		return "/v1beta"
+	}
+	return "/v1"
 }
 
 // defaultEndpointFor is the base URL used when the operator left it blank.

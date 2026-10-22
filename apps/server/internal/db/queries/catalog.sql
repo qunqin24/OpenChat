@@ -246,7 +246,7 @@ FROM channel_models cm
          JOIN channels c ON c.id = cm.channel_id
 WHERE cm.model_id = ANY (sqlc.arg('model_ids')::text[])
   AND cm.enabled
-ORDER BY c.sort_order, c.created_at;
+ORDER BY c.priority DESC, c.created_at;
 
 -- name: ModelProfile :one
 -- What a run needs to know about its model: how its thinking is controlled,

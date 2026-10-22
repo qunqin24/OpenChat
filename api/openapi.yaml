@@ -4551,7 +4551,7 @@ components:
 
     Channel:
       type: object
-      required: [id, name, type, wireApi, apiFormat, enabled, hasKey, sendUserId, sortOrder, createdAt, modelCount]
+      required: [id, name, type, wireApi, apiFormat, enabled, hasKey, sendUserId, priority, weight, createdAt, modelCount]
       properties:
         id: { type: string, format: uuid }
         name: { type: string, description: What the operator calls this connection. }
@@ -4581,7 +4581,20 @@ components:
             OpenAI's APIs, `metadata.user_id` on Anthropic's. A third-party
             endpoint may reject the field, so it is on by default only for
             api.openai.com and api.anthropic.com.
-        sortOrder: { type: integer }
+        priority:
+          type: integer
+          description: |
+            Among the channels offering a model, a run goes to one of the highest
+            priority; the others take over, in order, when a request fails before
+            the model has written anything.
+        weight:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          description: |
+            Among channels of the same priority, the share of runs this one
+            gets: a channel of weight 3 beside one of weight 1 answers about
+            three runs in four.
         createdAt: { type: string, format: date-time }
         spent:
           type: number
@@ -4620,6 +4633,8 @@ components:
         apiKey: { type: string, maxLength: 500 }
         enabled: { type: boolean, default: true }
         apiFormat: { $ref: "#/components/schemas/ApiFormat" }
+        priority: { type: integer, minimum: -1000000, maximum: 1000000, default: 0 }
+        weight: { type: integer, minimum: 1, maximum: 1000, default: 1 }
         sendUserId:
           type: boolean
           description: |
@@ -4643,7 +4658,8 @@ components:
         baseUrl: { type: string, maxLength: 500 }
         apiKey: { type: string, maxLength: 500 }
         enabled: { type: boolean }
-        sortOrder: { type: integer }
+        priority: { type: integer, minimum: -1000000, maximum: 1000000 }
+        weight: { type: integer, minimum: 1, maximum: 1000 }
         apiFormat: { $ref: "#/components/schemas/ApiFormat" }
         sendUserId: { type: boolean }
 

@@ -80,6 +80,16 @@ WHERE id = sqlc.arg('id')
   AND status = 'running'
 RETURNING *;
 
+-- name: MoveRunChannel :exec
+-- Fails a run over to another channel of its model (agent failover): the
+-- request that failed produced nothing, so the next one is made there instead.
+-- Guarded on `running` like every other step.
+UPDATE runs
+SET channel_id = sqlc.arg('channel_id'),
+    updated_at = now()
+WHERE id = sqlc.arg('id')
+  AND status = 'running';
+
 -- name: FinishRun :one
 -- Terminal. Live state is cleared in the same statement: whatever it held has
 -- already been written as messages by the commit that calls this.

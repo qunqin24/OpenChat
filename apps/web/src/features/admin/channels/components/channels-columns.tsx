@@ -108,6 +108,26 @@ export function channelsColumns(
       enableSorting: false,
     },
     {
+      // Where a run of a model several channels offer goes: the highest
+      // priority first, then by weight among equals (shown only where it
+      // matters, as "×3").
+      accessorKey: 'priority',
+      meta: { title: t('admin.channels.priority'), className: 'text-end' },
+      header: ({ column }) => <DataTableColumnHeader column={column} title={t('admin.channels.priority')} />,
+      cell: ({ row }) => (
+        <span className="text-sm tabular-nums">
+          {row.original.priority}
+          {row.original.weight !== 1 && (
+            <span className="text-muted-foreground" title={t('admin.channels.weight')}>
+              {' '}
+              ×{row.original.weight}
+            </span>
+          )}
+        </span>
+      ),
+      enableSorting: false,
+    },
+    {
       accessorKey: 'spent',
       meta: { title: t('admin.channels.spent'), className: 'text-end' },
       header: ({ column }) => (

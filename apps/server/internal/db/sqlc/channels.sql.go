@@ -12,9 +12,10 @@ import (
 )
 
 const createChannel = `-- name: CreateChannel :one
-INSERT INTO channels (name, type, base_url, api_key, enabled, api_format, send_user_id)
-VALUES ($1, $2, $3, $4, $5, COALESCE(NULLIF($6::text, ''), 'chat'), $7::boolean)
-RETURNING id, name, base_url, api_key, enabled, sort_order, created_at, updated_at, type, api_format, send_user_id
+INSERT INTO channels (name, type, base_url, api_key, enabled, api_format, send_user_id, priority, weight)
+VALUES ($1, $2, $3, $4, $5, COALESCE(NULLIF($6::text, ''), 'chat'), $7::boolean,
+        $8::integer, COALESCE(NULLIF($9::integer, 0), 1))
+RETURNING id, name, base_url, api_key, enabled, created_at, updated_at, type, api_format, send_user_id, priority, weight
 `
 
 type CreateChannelParams struct {
@@ -25,10 +26,13 @@ type CreateChannelParams struct {
 	Enabled    bool        `json:"enabled"`
 	ApiFormat  string      `json:"api_format"`
 	SendUserID bool        `json:"send_user_id"`
+	Priority   int32       `json:"priority"`
+	Weight     int32       `json:"weight"`
 }
 
 // An empty format is the default, so a caller that has no opinion — tests,
-// older code — gets Chat Completions rather than a constraint violation.
+// older code — gets Chat Completions rather than a constraint violation; a zero
+// weight is the default weight, 1, the same way.
 func (q *Queries) CreateChannel(ctx context.Context, arg CreateChannelParams) (Channel, error) {
 	row := q.db.QueryRow(ctx, createChannel,
 		arg.Name,
@@ -38,6 +42,8 @@ func (q *Queries) CreateChannel(ctx context.Context, arg CreateChannelParams) (C
 		arg.Enabled,
 		arg.ApiFormat,
 		arg.SendUserID,
+		arg.Priority,
+		arg.Weight,
 	)
 	var i Channel
 	err := row.Scan(
@@ -46,12 +52,13 @@ func (q *Queries) CreateChannel(ctx context.Context, arg CreateChannelParams) (C
 		&i.BaseUrl,
 		&i.ApiKey,
 		&i.Enabled,
-		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Type,
 		&i.ApiFormat,
 		&i.SendUserID,
+		&i.Priority,
+		&i.Weight,
 	)
 	return i, err
 }
@@ -71,7 +78,7 @@ func (q *Queries) DeleteChannel(ctx context.Context, id uuid.UUID) (int64, error
 }
 
 const getChannel = `-- name: GetChannel :one
-SELECT id, name, base_url, api_key, enabled, sort_order, created_at, updated_at, type, api_format, send_user_id
+SELECT id, name, base_url, api_key, enabled, created_at, updated_at, type, api_format, send_user_id, priority, weight
 FROM channels
 WHERE id = $1
 `
@@ -85,20 +92,21 @@ func (q *Queries) GetChannel(ctx context.Context, id uuid.UUID) (Channel, error)
 		&i.BaseUrl,
 		&i.ApiKey,
 		&i.Enabled,
-		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Type,
 		&i.ApiFormat,
 		&i.SendUserID,
+		&i.Priority,
+		&i.Weight,
 	)
 	return i, err
 }
 
 const listChannels = `-- name: ListChannels :many
-SELECT id, name, base_url, api_key, enabled, sort_order, created_at, updated_at, type, api_format, send_user_id
+SELECT id, name, base_url, api_key, enabled, created_at, updated_at, type, api_format, send_user_id, priority, weight
 FROM channels
-ORDER BY sort_order, created_at
+ORDER BY priority DESC, created_at
 `
 
 func (q *Queries) ListChannels(ctx context.Context) ([]Channel, error) {
@@ -116,12 +124,13 @@ func (q *Queries) ListChannels(ctx context.Context) ([]Channel, error) {
 			&i.BaseUrl,
 			&i.ApiKey,
 			&i.Enabled,
-			&i.SortOrder,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Type,
 			&i.ApiFormat,
 			&i.SendUserID,
+			&i.Priority,
+			&i.Weight,
 		); err != nil {
 			return nil, err
 		}
@@ -140,12 +149,13 @@ SET name       = COALESCE($1::text, name),
     base_url   = COALESCE($3::text, base_url),
     api_key    = COALESCE($4::text, api_key),
     enabled    = COALESCE($5::boolean, enabled),
-    sort_order = COALESCE($6::integer, sort_order),
-    api_format = COALESCE($7::text, api_format),
-    send_user_id = COALESCE($8::boolean, send_user_id),
+    priority   = COALESCE($6::integer, priority),
+    weight     = COALESCE($7::integer, weight),
+    api_format = COALESCE($8::text, api_format),
+    send_user_id = COALESCE($9::boolean, send_user_id),
     updated_at = now()
-WHERE id = $9
-RETURNING id, name, base_url, api_key, enabled, sort_order, created_at, updated_at, type, api_format, send_user_id
+WHERE id = $10
+RETURNING id, name, base_url, api_key, enabled, created_at, updated_at, type, api_format, send_user_id, priority, weight
 `
 
 type UpdateChannelParams struct {
@@ -154,7 +164,8 @@ type UpdateChannelParams struct {
 	BaseUrl    *string      `json:"base_url"`
 	ApiKey     *string      `json:"api_key"`
 	Enabled    *bool        `json:"enabled"`
-	SortOrder  *int32       `json:"sort_order"`
+	Priority   *int32       `json:"priority"`
+	Weight     *int32       `json:"weight"`
 	ApiFormat  *string      `json:"api_format"`
 	SendUserID *bool        `json:"send_user_id"`
 	ID         uuid.UUID    `json:"id"`
@@ -172,7 +183,8 @@ func (q *Queries) UpdateChannel(ctx context.Context, arg UpdateChannelParams) (C
 		arg.BaseUrl,
 		arg.ApiKey,
 		arg.Enabled,
-		arg.SortOrder,
+		arg.Priority,
+		arg.Weight,
 		arg.ApiFormat,
 		arg.SendUserID,
 		arg.ID,
@@ -184,12 +196,13 @@ func (q *Queries) UpdateChannel(ctx context.Context, arg UpdateChannelParams) (C
 		&i.BaseUrl,
 		&i.ApiKey,
 		&i.Enabled,
-		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Type,
 		&i.ApiFormat,
 		&i.SendUserID,
+		&i.Priority,
+		&i.Weight,
 	)
 	return i, err
 }

@@ -106,7 +106,8 @@ type Querier interface {
 	CountUsersFiltered(ctx context.Context, arg CountUsersFilteredParams) (int64, error)
 	CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (Attachment, error)
 	// An empty format is the default, so a caller that has no opinion — tests,
-	// older code — gets Chat Completions rather than a constraint violation.
+	// older code — gets Chat Completions rather than a constraint violation; a zero
+	// weight is the default weight, 1, the same way.
 	CreateChannel(ctx context.Context, arg CreateChannelParams) (Channel, error)
 	CreateConversation(ctx context.Context, arg CreateConversationParams) (Conversation, error)
 	// A file the browser sent with a question, under the id its message refers to.
@@ -565,10 +566,10 @@ type Querier interface {
 	// Hands the files of one message to another: an edited question's files go to
 	// the question that replaces it.
 	MoveAttachments(ctx context.Context, arg MoveAttachmentsParams) error
-	// The channel a new run of this model is answered from: the first enabled one
-	// that offers it, in the operator's order. Pinned on the run, so a later change
-	// here affects the next run, never one already going.
-	PickServingChannel(ctx context.Context, modelID string) (uuid.UUID, error)
+	// Fails a run over to another channel of its model (agent failover): the
+	// request that failed produced nothing, so the next one is made there instead.
+	// Guarded on `running` like every other step.
+	MoveRunChannel(ctx context.Context, arg MoveRunChannelParams) error
 	// Nothing counts an attempt for longer than the longest window.
 	PurgeAuthAttempts(ctx context.Context, before pgtype.Timestamptz) (int64, error)
 	// The hard delete behind a user's delete: a conversation they deleted stays
@@ -610,6 +611,12 @@ type Querier interface {
 	// and not a message moderation refused, which was never sent.
 	// A conversation found by its title alone has no hit: empty strings, not NULLs.
 	SearchConversations(ctx context.Context, arg SearchConversationsParams) ([]SearchConversationsRow, error)
+	// The channels a run of this model may be answered from: the enabled ones that
+	// offer it, highest priority first. Which of a priority's channels goes first
+	// is drawn by weight in Go (servingOrder); the run pins the one it starts on,
+	// and moves down this list only when a request fails before the model wrote
+	// anything (agent failover).
+	ServingChannels(ctx context.Context, modelID string) ([]ServingChannelsRow, error)
 	// The only statement in this file that changes `enabled` on a row that already
 	// exists. The inserts set it once, when the row is created and there is no
 	// decision to preserve; a refresh never touches it. That is the whole point of

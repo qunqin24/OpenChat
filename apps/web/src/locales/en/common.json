@@ -814,7 +814,7 @@
       "base-url": "Base URL",
       "spent": "Spent",
       "spent-hint": "What all of this channel's requests have cost, as the usage log priced them; models without a price add nothing.",
-      "base-url-hint": "Leave blank to use the provider's default.",
+      "base-url-hint": "Leave blank to use the provider’s default. A host alone gets the default path (such as /v1) added.",
       "api-key": "API key",
       "api-key-hint": "Leave blank to keep the stored key; it cannot be read back.",
       "api-key-create-hint": "Use this key to fetch models. It is saved only when you create the channel. Optional for local services such as Ollama and LM Studio.",
@@ -889,7 +889,16 @@
       "region": "Site",
       "region-cn": "Mainland China",
       "region-global": "International",
-      "region-hint": "The two sites have separate accounts and keys; pick the one your key is from."
+      "region-hint": "The two sites have separate accounts and keys; pick the one your key is from.",
+      "priority": "Priority",
+      "weight": "Weight",
+      "section-routing": "Routing",
+      "routing-hint": "When several channels offer the same model, this decides which is used first. A request that fails before the model has written anything is retried on the next channel.",
+      "priority-hint": "Higher goes first. Default 0.",
+      "weight-hint": "Among equal priorities, the share of requests: 3 and 1 split about 3:1. 1–1000.",
+      "priority-invalid": "A whole number from -1000000 to 1000000",
+      "weight-invalid": "A whole number from 1 to 1000",
+      "name-taken": "Another channel already has this name"
     },
     "models": {
       "title": "Models",

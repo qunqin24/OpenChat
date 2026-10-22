@@ -3861,7 +3861,18 @@ export interface components {
              *     api.openai.com and api.anthropic.com.
              */
             sendUserId: boolean;
-            sortOrder: number;
+            /**
+             * @description Among the channels offering a model, a run goes to one of the highest
+             *     priority; the others take over, in order, when a request fails before
+             *     the model has written anything.
+             */
+            priority: number;
+            /**
+             * @description Among channels of the same priority, the share of runs this one
+             *     gets: a channel of weight 3 beside one of weight 1 answers about
+             *     three runs in four.
+             */
+            weight: number;
             /** Format: date-time */
             createdAt: string;
             /**
@@ -3894,6 +3905,10 @@ export interface components {
             /** @default true */
             enabled: boolean;
             apiFormat?: components["schemas"]["ApiFormat"];
+            /** @default 0 */
+            priority: number;
+            /** @default 1 */
+            weight: number;
             /**
              * @description Absent: on when the endpoint (`baseUrl`, else the type's default)
              *     is api.openai.com or api.anthropic.com, off otherwise.
@@ -3913,7 +3928,8 @@ export interface components {
             baseUrl?: string;
             apiKey?: string;
             enabled?: boolean;
-            sortOrder?: number;
+            priority?: number;
+            weight?: number;
             apiFormat?: components["schemas"]["ApiFormat"];
             sendUserId?: boolean;
         };

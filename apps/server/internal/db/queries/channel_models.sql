@@ -168,18 +168,19 @@ FROM catalog_models m
 WHERE m.model_id = ANY (sqlc.arg('model_ids')::text[])
 ORDER BY m.model_id, (m.provider_id = sqlc.arg('wire_api')::text) DESC, m.provider_id;
 
--- name: PickServingChannel :one
--- The channel a new run of this model is answered from: the first enabled one
--- that offers it, in the operator's order. Pinned on the run, so a later change
--- here affects the next run, never one already going.
-SELECT c.id
+-- name: ServingChannels :many
+-- The channels a run of this model may be answered from: the enabled ones that
+-- offer it, highest priority first. Which of a priority's channels goes first
+-- is drawn by weight in Go (servingOrder); the run pins the one it starts on,
+-- and moves down this list only when a request fails before the model wrote
+-- anything (agent failover).
+SELECT c.id, c.priority, c.weight
 FROM channel_models cm
          JOIN channels c ON c.id = cm.channel_id
 WHERE cm.model_id = sqlc.arg('model_id')
   AND cm.enabled
   AND c.enabled
-ORDER BY c.sort_order, c.created_at
-LIMIT 1;
+ORDER BY c.priority DESC, c.created_at;
 
 -- name: FirstServedModel :one
 -- What a conversation that never picked a model is answered with.
@@ -188,7 +189,7 @@ FROM channel_models cm
          JOIN channels c ON c.id = cm.channel_id
 WHERE cm.enabled
   AND c.enabled
-ORDER BY c.sort_order, c.created_at, cm.model_id
+ORDER BY c.priority DESC, c.created_at, cm.model_id
 LIMIT 1;
 
 -- name: GetServingChannel :one

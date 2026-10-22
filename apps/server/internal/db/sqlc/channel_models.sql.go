@@ -215,7 +215,7 @@ FROM channel_models cm
          JOIN channels c ON c.id = cm.channel_id
 WHERE cm.enabled
   AND c.enabled
-ORDER BY c.sort_order, c.created_at, cm.model_id
+ORDER BY c.priority DESC, c.created_at, cm.model_id
 LIMIT 1
 `
 
@@ -255,7 +255,7 @@ func (q *Queries) GetChannelModel(ctx context.Context, arg GetChannelModelParams
 }
 
 const getServingChannel = `-- name: GetServingChannel :one
-SELECT c.id, c.name, c.base_url, c.api_key, c.enabled, c.sort_order, c.created_at, c.updated_at, c.type, c.api_format, c.send_user_id
+SELECT c.id, c.name, c.base_url, c.api_key, c.enabled, c.created_at, c.updated_at, c.type, c.api_format, c.send_user_id, c.priority, c.weight
 FROM channels c
          JOIN channel_models cm ON cm.channel_id = c.id
 WHERE c.id = $1
@@ -281,12 +281,13 @@ func (q *Queries) GetServingChannel(ctx context.Context, arg GetServingChannelPa
 		&i.BaseUrl,
 		&i.ApiKey,
 		&i.Enabled,
-		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Type,
 		&i.ApiFormat,
 		&i.SendUserID,
+		&i.Priority,
+		&i.Weight,
 	)
 	return i, err
 }
@@ -444,25 +445,45 @@ func (q *Queries) ListChannelModels(ctx context.Context, channelID uuid.UUID) ([
 	return items, nil
 }
 
-const pickServingChannel = `-- name: PickServingChannel :one
-SELECT c.id
+const servingChannels = `-- name: ServingChannels :many
+SELECT c.id, c.priority, c.weight
 FROM channel_models cm
          JOIN channels c ON c.id = cm.channel_id
 WHERE cm.model_id = $1
   AND cm.enabled
   AND c.enabled
-ORDER BY c.sort_order, c.created_at
-LIMIT 1
+ORDER BY c.priority DESC, c.created_at
 `
 
-// The channel a new run of this model is answered from: the first enabled one
-// that offers it, in the operator's order. Pinned on the run, so a later change
-// here affects the next run, never one already going.
-func (q *Queries) PickServingChannel(ctx context.Context, modelID string) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, pickServingChannel, modelID)
-	var id uuid.UUID
-	err := row.Scan(&id)
-	return id, err
+type ServingChannelsRow struct {
+	ID       uuid.UUID `json:"id"`
+	Priority int32     `json:"priority"`
+	Weight   int32     `json:"weight"`
+}
+
+// The channels a run of this model may be answered from: the enabled ones that
+// offer it, highest priority first. Which of a priority's channels goes first
+// is drawn by weight in Go (servingOrder); the run pins the one it starts on,
+// and moves down this list only when a request fails before the model wrote
+// anything (agent failover).
+func (q *Queries) ServingChannels(ctx context.Context, modelID string) ([]ServingChannelsRow, error) {
+	rows, err := q.db.Query(ctx, servingChannels, modelID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ServingChannelsRow{}
+	for rows.Next() {
+		var i ServingChannelsRow
+		if err := rows.Scan(&i.ID, &i.Priority, &i.Weight); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const setChannelModelEnabled = `-- name: SetChannelModelEnabled :one

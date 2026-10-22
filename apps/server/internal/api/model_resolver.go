@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
+	"math/rand/v2"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -134,10 +134,7 @@ func clientFor(channel sqlc.Channel, modelID string, thinks bool) (llm.ModelClie
 	if !ok {
 		return nil, fmt.Errorf("api: channel %s has unknown type %q", channel.ID, channel.Type)
 	}
-	baseURL := strings.TrimSpace(channel.BaseUrl)
-	if baseURL == "" {
-		baseURL = defaultEndpointFor(kind)
-	}
+	baseURL := endpointFor(kind, channel.BaseUrl)
 	if baseURL == "" {
 		// The relay type has no default, and guessing one would send the
 		// operator's key somewhere they did not choose.
@@ -204,13 +201,16 @@ func (s *Server) pickChannel(ctx context.Context, modelID string, who asker) (st
 			return "", uuid.Nil, errModelUnavailable
 		}
 	}
-	channelID, err := s.q.PickServingChannel(ctx, modelID)
+	// The highest priority's channels by weight (servingOrder); the run fails
+	// over to the rest itself.
+	serving, err := s.q.ServingChannels(ctx, modelID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return "", uuid.Nil, errModelUnavailable
-		}
 		return "", uuid.Nil, err
 	}
+	if len(serving) == 0 {
+		return "", uuid.Nil, errModelUnavailable
+	}
+	channelID := servingOrder(serving, rand.Float64)[0]
 	if err := s.refusedForCapacity(ctx, modelID, who); err != nil {
 		return "", uuid.Nil, err
 	}

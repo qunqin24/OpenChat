@@ -44,6 +44,13 @@ type ModelResolver interface {
 	Client(ctx context.Context, channelID *uuid.UUID, modelID string) (llm.ModelClient, error)
 }
 
+// ChannelFailover is implemented by a resolver that can move a run to another
+// channel offering its model: the next in the serving order (priority, then
+// weight) that the run has not tried, or nil when none is left.
+type ChannelFailover interface {
+	NextChannel(ctx context.Context, modelID string, tried []uuid.UUID) (*uuid.UUID, error)
+}
+
 // ToolCapable is implemented by a client that knows whether its model may be
 // offered tools. A client that does not implement it is offered them.
 type ToolCapable interface {

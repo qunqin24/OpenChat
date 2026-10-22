@@ -41,10 +41,7 @@ func discoverChannelModels(ctx context.Context, kind ChannelType, baseURL, key s
 	if !ok {
 		return nil, httpx.NewFieldError("type", "type_invalid", "a known channel type is required")
 	}
-	baseURL = strings.TrimSpace(baseURL)
-	if baseURL == "" {
-		baseURL = defaultEndpointFor(kind)
-	}
+	baseURL = endpointFor(kind, baseURL)
 	// A relay has no default. Falling through to the OpenAI adapter's default
 	// would send its key to an endpoint the operator did not select.
 	if baseURL == "" {

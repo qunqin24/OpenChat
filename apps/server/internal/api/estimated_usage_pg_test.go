@@ -189,10 +189,11 @@ func TestStoppedCompressionIsEstimated(t *testing.T) {
 	f.hold = make(chan struct{})
 	defer close(f.hold)
 
-	channel, err := f.q.PickServingChannel(context.Background(), f.modelID)
-	if err != nil {
-		t.Fatal(err)
+	serving, err := f.q.ServingChannels(context.Background(), f.modelID)
+	if err != nil || len(serving) == 0 {
+		t.Fatal("no channel serves the model", err)
 	}
+	channel := serving[0].ID
 	client, err := NewModelResolver(f.pool).Client(context.Background(), &channel, f.modelID)
 	if err != nil {
 		t.Fatal(err)

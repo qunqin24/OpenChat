@@ -65,9 +65,9 @@ func TestOnlyOneQueryTogglesAModel(t *testing.T) {
 		"CountEnabledChannelModelsFor": true,
 		"ListCatalogModelsForChannel":  true,
 		// Model routing for runs: which channel answers, and whether it still may.
-		"PickServingChannel": true,
-		"FirstServedModel":   true,
-		"GetServingChannel":  true,
+		"ServingChannels":   true,
+		"FirstServedModel":  true,
+		"GetServingChannel": true,
 	}
 
 	for name, body := range namedChannelModelQueries(t) {

@@ -132,6 +132,16 @@ function ChannelForm({
     apiKey: z.string(),
     enabled: z.boolean(),
     apiFormat: z.enum(['chat', 'responses']),
+    // Typed as text and read as whole numbers (the server's bounds): a number
+    // input's stepper and scroll-to-change are more trouble than help here.
+    priority: z
+      .string()
+      .trim()
+      .refine((v) => /^-?\d{1,7}$/.test(v) && Math.abs(Number(v)) <= 1_000_000, t('admin.channels.priority-invalid')),
+    weight: z
+      .string()
+      .trim()
+      .refine((v) => /^\d{1,4}$/.test(v) && Number(v) >= 1 && Number(v) <= 1000, t('admin.channels.weight-invalid')),
   })
 
   const form = useForm<z.input<typeof schema>>({
@@ -145,6 +155,8 @@ function ChannelForm({
       apiKey: '',
       enabled: channel?.enabled ?? true,
       apiFormat: channel?.apiFormat ?? 'chat',
+      priority: String(channel?.priority ?? 0),
+      weight: String(channel?.weight ?? 1),
     },
   })
 
@@ -247,6 +259,8 @@ function ChannelForm({
           ...(values.enabled !== channel.enabled ? { enabled: values.enabled } : {}),
           ...(values.apiFormat !== channel.apiFormat ? { apiFormat: values.apiFormat } : {}),
           ...(sendUserId !== channel.sendUserId ? { sendUserId } : {}),
+          ...(Number(values.priority) !== channel.priority ? { priority: Number(values.priority) } : {}),
+          ...(Number(values.weight) !== channel.weight ? { weight: Number(values.weight) } : {}),
           // The load-bearing line: the property exists only when the admin
           // actually typed a key, or asked for the stored one to go. Blank and
           // untouched leaves it in place, because the field is absent rather
@@ -260,6 +274,8 @@ function ChannelForm({
           type: values.type,
           enabled: values.enabled,
           models: selectedModels,
+          priority: Number(values.priority),
+          weight: Number(values.weight),
           // Only where the vendor offers the choice; elsewhere the server
           // ignores it, and sending it would only mislead a reader of the
           // request.
@@ -272,6 +288,12 @@ function ChannelForm({
       }
       onOpenChange(false)
     } catch (error) {
+      // Another channel already has this name: said on the field, which is
+      // where it is fixed.
+      if (error instanceof OpenChatError && error.code === 'channel_name_taken') {
+        form.setError('name', { message: t('admin.channels.name-taken') })
+        return
+      }
       // `models_invalid` is the one failure the picker can be blamed for — it
       // is the contract's cap or a duplicate id. Everything else is a connection
       // or database fault with no field to point at.
@@ -599,6 +621,40 @@ function ChannelForm({
                   className="mt-0.5 shrink-0"
                   checked={sendUserId}
                   onCheckedChange={setSendUserChoice}
+                />
+              </div>
+            </PanelSection>
+
+            <PanelSection title={t('admin.channels.section-routing')}>
+              <p className="text-muted-foreground text-xs">{t('admin.channels.routing-hint')}</p>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="priority"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('admin.channels.priority')}</FormLabel>
+                      <FormControl>
+                        <Input inputMode="numeric" autoComplete="off" {...field} />
+                      </FormControl>
+                      <FormDescription className="text-xs">{t('admin.channels.priority-hint')}</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="weight"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('admin.channels.weight')}</FormLabel>
+                      <FormControl>
+                        <Input inputMode="numeric" autoComplete="off" {...field} />
+                      </FormControl>
+                      <FormDescription className="text-xs">{t('admin.channels.weight-hint')}</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
               </div>
             </PanelSection>

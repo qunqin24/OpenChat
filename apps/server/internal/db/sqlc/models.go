@@ -410,12 +410,13 @@ type Channel struct {
 	BaseUrl    string             `json:"base_url"`
 	ApiKey     string             `json:"api_key"`
 	Enabled    bool               `json:"enabled"`
-	SortOrder  int32              `json:"sort_order"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 	Type       ChannelType        `json:"type"`
 	ApiFormat  string             `json:"api_format"`
 	SendUserID bool               `json:"send_user_id"`
+	Priority   int32              `json:"priority"`
+	Weight     int32              `json:"weight"`
 }
 
 type ChannelModel struct {

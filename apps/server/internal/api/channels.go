@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -45,7 +46,8 @@ func toChannel(row sqlc.Channel, modelCount int64) Channel {
 		// on — a channel that lists two hundred models and offers none is
 		// configured but not yet useful, and the number is what says so.
 		ModelCount: int(modelCount),
-		SortOrder:  int(row.SortOrder),
+		Priority:   int(row.Priority),
+		Weight:     int(row.Weight),
 		CreatedAt:  row.CreatedAt.Time,
 	}
 	if row.BaseUrl != "" {
@@ -142,6 +144,10 @@ func (s *Server) CreateChannel(w http.ResponseWriter, r *http.Request) {
 		}
 		format = *body.ApiFormat
 	}
+	if err := validateRouting(body.Priority, body.Weight); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
 
 	models := derefOr(body.Models, []ChannelModelInput{})
 	if err := validateChannelModels(models); err != nil {
@@ -167,8 +173,14 @@ func (s *Server) CreateChannel(w http.ResponseWriter, r *http.Request) {
 		ApiFormat: string(format),
 		// The vendors' own endpoints take the identifier; a relay may reject it.
 		SendUserID: derefOr(body.SendUserId, defaultSendUserID(body.Type, derefOr(body.BaseUrl, ""))),
+		Priority:   int32(derefOr(body.Priority, 0)),
+		Weight:     int32(derefOr(body.Weight, 1)),
 	})
 	if err != nil {
+		// Another channel goes by this name already (channels_name_lower_idx).
+		if dup := duplicateError(err); dup != nil {
+			err = dup
+		}
 		httpx.Fail(w, r, err)
 		return
 	}
@@ -261,13 +273,24 @@ func (s *Server) UpdateChannel(w http.ResponseWriter, r *http.Request, channelId
 		format := string(*body.ApiFormat)
 		params.ApiFormat = &format
 	}
-	if body.SortOrder != nil {
-		order := int32(*body.SortOrder)
-		params.SortOrder = &order
+	if err := validateRouting(body.Priority, body.Weight); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	if body.Priority != nil {
+		priority := int32(*body.Priority)
+		params.Priority = &priority
+	}
+	if body.Weight != nil {
+		weight := int32(*body.Weight)
+		params.Weight = &weight
 	}
 
 	row, err := s.q.UpdateChannel(r.Context(), params)
 	if err != nil {
+		if dup := duplicateError(err); dup != nil {
+			err = dup
+		}
 		httpx.Fail(w, r, dbErr(err))
 		return
 	}
@@ -321,4 +344,22 @@ func derefOr[T any](value *T, fallback T) T {
 		return fallback
 	}
 	return *value
+}
+
+// Bounds of a channel's routing fields (see ServingChannels). The weight is a
+// share, so it is at least 1: a channel nobody should send to is switched off,
+// not weighted zero.
+const (
+	maxChannelPriority = 1_000_000
+	maxChannelWeight   = 1000
+)
+
+func validateRouting(priority, weight *int) error {
+	if priority != nil && (*priority < -maxChannelPriority || *priority > maxChannelPriority) {
+		return httpx.NewFieldError("priority", "priority_out_of_range", fmt.Sprintf("the priority is between %d and %d", -maxChannelPriority, maxChannelPriority))
+	}
+	if weight != nil && (*weight < 1 || *weight > maxChannelWeight) {
+		return httpx.NewFieldError("weight", "weight_out_of_range", fmt.Sprintf("the weight is between 1 and %d", maxChannelWeight))
+	}
+	return nil
 }

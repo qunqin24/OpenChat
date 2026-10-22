@@ -368,6 +368,27 @@ func (q *Queries) LockRunSlots(ctx context.Context, key string) error {
 	return err
 }
 
+const moveRunChannel = `-- name: MoveRunChannel :exec
+UPDATE runs
+SET channel_id = $1,
+    updated_at = now()
+WHERE id = $2
+  AND status = 'running'
+`
+
+type MoveRunChannelParams struct {
+	ChannelID *uuid.UUID `json:"channel_id"`
+	ID        uuid.UUID  `json:"id"`
+}
+
+// Fails a run over to another channel of its model (agent failover): the
+// request that failed produced nothing, so the next one is made there instead.
+// Guarded on `running` like every other step.
+func (q *Queries) MoveRunChannel(ctx context.Context, arg MoveRunChannelParams) error {
+	_, err := q.db.Exec(ctx, moveRunChannel, arg.ChannelID, arg.ID)
+	return err
+}
+
 const requestRunCancel = `-- name: RequestRunCancel :one
 UPDATE runs
 SET cancel_requested = true,
