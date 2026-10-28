@@ -23,7 +23,6 @@ const values = (patch: Record<string, unknown> = {}) => ({
   onError: 'allow',
   strikes: 3,
   strikeWindowHours: 24,
-  guestBanHours: 168,
   ...patch,
 })
 
@@ -36,15 +35,15 @@ const issues = (result: ReturnType<typeof parse>) =>
 describe('the moderation form', () => {
   it('accepts the stored settings and reads typed numbers', () => {
     expect(parse().success).toBe(true)
-    expect(parse({ strikes: '5', strikeWindowHours: '48', guestBanHours: '0', minScore: '0.4' })).toMatchObject({
+    expect(parse({ strikes: '5', strikeWindowHours: '48', minScore: '0.4' })).toMatchObject({
       success: true,
-      data: { strikes: 5, strikeWindowHours: 48, guestBanHours: 0, minScore: 0.4 },
+      data: { strikes: 5, strikeWindowHours: 48, minScore: 0.4 },
     })
   })
 
   it('does not read an empty box as zero, which would switch a sanction off', () => {
     expect(issues(parse({ strikes: '' }))).toEqual(['strikes:required'])
-    expect(issues(parse({ guestBanHours: '  ' }))).toEqual(['guestBanHours:required'])
+    expect(issues(parse({ strikeWindowHours: '  ' }))).toEqual(['strikeWindowHours:required'])
     expect(issues(parse({ minScore: '' }))).toEqual(['minScore:required'])
   })
 
@@ -52,7 +51,7 @@ describe('the moderation form', () => {
     expect(issues(parse({ strikes: '1.5' }))).toEqual(['strikes:whole'])
     expect(issues(parse({ strikes: '-1' }))).toEqual(['strikes:0-1000'])
     expect(issues(parse({ strikeWindowHours: '0' }))).toEqual(['strikeWindowHours:1-8760'])
-    expect(issues(parse({ guestBanHours: '999999' }))).toEqual(['guestBanHours:0-87600'])
+    expect(issues(parse({ strikeWindowHours: '999999' }))).toEqual(['strikeWindowHours:1-8760'])
     expect(issues(parse({ minScore: '1.5' }))).toEqual(['minScore:score'])
     expect(issues(parse({ minScore: 'high' }))).toEqual(['minScore:score'])
   })

@@ -13,8 +13,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	ledger "github.com/qunqin/openchat/apps/server/internal/usage"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	ledger "github.com/qunqin24/openchat/apps/server/internal/usage"
 )
 
 func TestEndUserIdentifiers(t *testing.T) {
@@ -37,26 +37,15 @@ func TestEndUserIdentifiers(t *testing.T) {
 	if users.Account(ctx, b) == idA {
 		t.Error("two accounts share an identifier")
 	}
-	guest := users.Guest(ctx, "203.0.113.7")
-	if guest == "" || guest == idA || guest == users.Guest(ctx, "203.0.113.8") {
-		t.Errorf("guest identifiers are not told apart: %q", guest)
-	}
-	if guest != users.Guest(ctx, "203.0.113.7") {
-		t.Error("a guest address's identifier changed")
-	}
-	if strings.Contains(idA, a.String()) || strings.Contains(guest, "203.0.113.7") {
+	if strings.Contains(idA, a.String()) {
 		t.Error("the identifier carries what it was made from")
 	}
-	// A run is for the address it came from when it is a guest's, else the account.
-	ip := "203.0.113.7"
-	if got := users.ForRun(ctx, sqlc.Run{UserID: uuid.New(), ClientIp: &ip}); got != guest {
-		t.Errorf("a guest's run: %q, want the address's %q", got, guest)
-	}
+	// A run is for its account.
 	if got := users.ForRun(ctx, sqlc.Run{UserID: a}); got != idA {
 		t.Errorf("an account's run: %q, want %q", got, idA)
 	}
 	// Nobody has no identifier; neither has an unreadable secret's request.
-	if users.Account(ctx, uuid.Nil) != "" || users.Guest(ctx, "") != "" {
+	if users.Account(ctx, uuid.Nil) != "" {
 		t.Error("an identifier was made for nobody")
 	}
 

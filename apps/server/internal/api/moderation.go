@@ -19,13 +19,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
-	"github.com/qunqin/openchat/apps/server/internal/llm"
-	"github.com/qunqin/openchat/apps/server/internal/storage"
-	ledger "github.com/qunqin/openchat/apps/server/internal/usage"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/storage"
+	ledger "github.com/qunqin24/openchat/apps/server/internal/usage"
 )
 
 // Content moderation.
@@ -34,16 +33,14 @@ import (
 // Anthropic, a relay) under the operator's name, and those accounts are banned
 // for abusive content. So the text a person writes, and the images they attach,
 // are checked before they are sent on; what fails is refused, logged, and
-// counted against the person: enough strikes disable the account, or ban the
-// guest address.
+// counted against the person: enough strikes disable the account.
 //
 // What is checked is the input of every new run, and only that:
 //
 //   - a message sent (CreateMessage), its text and its images;
 //   - a message edited (EditMessage), its new text - its images were checked
 //     when it was first sent;
-//   - the words a person types in answer to the model's question (AnswerQuestion);
-//   - a guest's new message or answer (GuestRun), the same.
+//   - the words a person types in answer to the model's question (AnswerQuestion).
 //
 // A regeneration re-sends what was already checked and is not checked again.
 // Never moderated: tool results, web pages the model read, the history, titles
@@ -59,7 +56,7 @@ import (
 var (
 	// errModerationUnavailable is a message held back because the moderation
 	// service could not be asked (and the settings say not to send it
-	// unchecked, or it is a guest's).
+	// unchecked).
 	errModerationUnavailable = httpx.NewError(http.StatusServiceUnavailable, "moderation_unavailable",
 		"content moderation is unavailable right now; the message was not sent")
 
@@ -139,9 +136,8 @@ const (
 
 // moderationSubject is whose message it is.
 type moderationSubject struct {
-	// userID is the account; uuid.Nil for a guest, who has guestIP instead.
-	userID  uuid.UUID
-	guestIP string
+	// userID is the account.
+	userID uuid.UUID
 	// admin is an administrator: exempt when the settings say so, and never
 	// sanctioned.
 	admin          bool
@@ -149,14 +145,15 @@ type moderationSubject struct {
 	source         ModerationSource
 }
 
-func (m moderationSubject) guest() bool { return m.userID == uuid.Nil }
-
 // moderationInput is what is checked: the text, and the images as a loader that
 // is called only when the check can use them (reading files costs a round trip
 // to the store, and most installations have moderation off).
 type moderationInput struct {
 	text   string
 	images func(ctx context.Context) ([]moderationImage, error)
+	// files are the words of the text files the message carries, checked
+	// with its text.
+	files func(ctx context.Context) (string, error)
 }
 
 type moderationImage struct {
@@ -188,6 +185,13 @@ func (s *Server) moderated(ctx context.Context, who moderationSubject, in modera
 		return false, nil
 	}
 	text := strings.TrimSpace(in.text)
+	if in.files != nil {
+		words, err := in.files(ctx)
+		if err != nil {
+			return false, s.checkFailed(ctx, cfg, who, err)
+		}
+		text = strings.TrimSpace(text + words)
+	}
 	if text == "" && in.images == nil {
 		return false, nil
 	}
@@ -225,13 +229,10 @@ func (s *Server) moderated(ctx context.Context, who moderationSubject, in modera
 	}
 	// The message that reaches the threshold is answered with the sanction
 	// itself, so the page shows it at once rather than on the next attempt: a
-	// banned address is told so, and a disabled account - its sessions are
-	// gone - is signed out, which takes its page to sign-in.
+	// disabled account - its sessions are gone - is signed out, which takes its
+	// page to sign-in.
 	sanction := s.recordBlocked(ctx, cfg, who, text, hits)
-	switch {
-	case sanction.banned:
-		return true, errGuestBanned(sanction.until)
-	case sanction.disabled:
+	if sanction.disabled {
 		return true, httpx.ErrUnauthorized
 	}
 	return true, contentBlocked(hits, sanction)
@@ -242,8 +243,6 @@ func (s *Server) moderated(ctx context.Context, who moderationSubject, in modera
 // sanction (0 when none will: no limit, an administrator, or the count failed).
 type moderationSanction struct {
 	disabled bool
-	banned   bool
-	until    *time.Time // a ban's end; nil for good
 
 	strikesLeft int
 	windowHours int
@@ -260,7 +259,7 @@ func (s *Server) settingsUnreadable(ctx context.Context, cfg moderationConfig, w
 		slog.WarnContext(ctx, "moderation settings unreadable; moderation is off, so the message is let through", "error", err)
 		return nil
 	}
-	slog.ErrorContext(ctx, "moderation settings unreadable; the message is held back", "guest", who.guest(), "error", err)
+	slog.ErrorContext(ctx, "moderation settings unreadable; the message is held back", "user_id", who.userID, "error", err)
 	return errModerationUnavailable
 }
 
@@ -278,18 +277,17 @@ func (s *Server) checkFailed(ctx context.Context, cfg moderationConfig, who mode
 // tooLargeToModerate logs a message that cannot be checked whole and returns
 // its refusal.
 func tooLargeToModerate(ctx context.Context, cfg moderationConfig, who moderationSubject, why error) error {
-	slog.WarnContext(ctx, "message too large to be moderated; it is refused", "mode", cfg.Mode, "guest", who.guest(), "reason", why)
+	slog.WarnContext(ctx, "message too large to be moderated; it is refused", "mode", cfg.Mode, "user_id", who.userID, "reason", why)
 	return errMessageTooLarge
 }
 
-// moderationFailed is the answer when the check could not be made. A guest's
-// message is not sent unchecked: there is no account to answer for it. An
-// account's is, unless the settings say otherwise.
+// moderationFailed is the answer when the check could not be made. The
+// message is sent unchecked, unless the settings say otherwise.
 func (s *Server) moderationFailed(ctx context.Context, cfg moderationConfig, who moderationSubject, err error) error {
-	slog.WarnContext(ctx, "content moderation unavailable", "mode", cfg.Mode, "guest", who.guest(),
+	slog.WarnContext(ctx, "content moderation unavailable", "mode", cfg.Mode, "user_id", who.userID,
 		"on_error", cfg.OnError, "error", err)
 	noteModerationFailed(ctx)
-	if who.guest() || cfg.OnError == ModerationOnErrorBlock {
+	if cfg.OnError == ModerationOnErrorBlock {
 		return errModerationUnavailable
 	}
 	return nil
@@ -626,12 +624,7 @@ func (s *Server) moderateWithModel(ctx context.Context, cfg moderationConfig, wh
 		return verdict, err
 	}
 
-	var endUser string
-	if who.guest() {
-		endUser = s.endUsers.Guest(ctx, who.guestIP)
-	} else {
-		endUser = s.endUsers.Account(ctx, who.userID)
-	}
+	endUser := s.endUsers.Account(ctx, who.userID)
 	session := ""
 	if who.conversationID != nil {
 		session = who.conversationID.String()
@@ -722,21 +715,17 @@ func parseModelVerdict(cfg moderationConfig, answer string) (moderationVerdict, 
 
 // recordBlocked logs a blocked message and sanctions the person if it is the one
 // that reaches the strike threshold. Recording, counting and sanctioning are one
-// step under a lock on the subject, so parallel messages of one account or
-// address each see the others' strikes. A failure to record is logged and does
+// step under a lock on the subject, so parallel messages of one account each
+// see the others' strikes. A failure to record is logged and does
 // not un-block the message.
 func (s *Server) recordBlocked(ctx context.Context, cfg moderationConfig, who moderationSubject, text string, categories []string) moderationSanction {
 	// The message is already refused; the record is kept even if the page went away.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 	defer cancel()
 
-	subject := "ip:" + who.guestIP
-	if !who.guest() {
-		subject = "user:" + who.userID.String()
-	}
+	subject := "user:" + who.userID.String()
 	var (
 		sanction string
-		until    *time.Time
 		strikes  int64
 	)
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -744,19 +733,14 @@ func (s *Server) recordBlocked(ctx context.Context, cfg moderationConfig, who mo
 		if err := q.LockModerationSubject(ctx, subject); err != nil {
 			return err
 		}
+		id := who.userID
 		params := sqlc.InsertModerationEventParams{
+			UserID:         &id,
 			ConversationID: who.conversationID,
 			Source:         string(who.source),
 			Mode:           string(cfg.Mode),
 			Categories:     categories,
 			Excerpt:        firstRunes(text, moderationExcerptRunes),
-		}
-		if who.guest() {
-			ip := who.guestIP
-			params.GuestIp = &ip
-		} else {
-			id := who.userID
-			params.UserID = &id
 		}
 		event, err := q.InsertModerationEvent(ctx, params)
 		if err != nil {
@@ -766,11 +750,7 @@ func (s *Server) recordBlocked(ctx context.Context, cfg moderationConfig, who mo
 			return nil
 		}
 
-		if who.guest() {
-			strikes, err = q.CountGuestStrikes(ctx, sqlc.CountGuestStrikesParams{GuestIp: &who.guestIP, WindowHours: int32(cfg.StrikeWindowHours)})
-		} else {
-			strikes, err = q.CountUserStrikes(ctx, sqlc.CountUserStrikesParams{UserID: &who.userID, WindowHours: int32(cfg.StrikeWindowHours)})
-		}
+		strikes, err = q.CountUserStrikes(ctx, sqlc.CountUserStrikesParams{UserID: &who.userID, WindowHours: int32(cfg.StrikeWindowHours)})
 		if err != nil {
 			return err
 		}
@@ -778,47 +758,40 @@ func (s *Server) recordBlocked(ctx context.Context, cfg moderationConfig, who mo
 			return nil
 		}
 
-		if who.guest() {
-			if until, err = banGuest(ctx, q, who.guestIP, cfg.GuestBanHours, "content moderation", &event.ID); err != nil {
-				return err
-			}
-			sanction = string(ModerationSanctionBanned)
-		} else {
-			// The lock every change of an administrator's access takes (UpdateUser,
-			// BulkUpdateUsers), held to the end of this transaction, and only then
-			// the role is read: an account promoted at the same moment is either
-			// seen as the administrator it now is, or disabled before the promotion
-			// and promoted afterwards by an administrator who chose to - never
-			// read as a member and disabled after its promotion committed. The
-			// order is the subject's lock, then this one, and nothing holding this
-			// one waits for a subject's, so the two cannot deadlock.
-			if err := q.LockAdminMembership(ctx); err != nil {
-				return err
-			}
-			// An administrator is only logged: disabling one could lock the panel.
-			target, err := q.GetUser(ctx, who.userID)
-			if err != nil {
-				return err
-			}
-			if target.Role == sqlc.UserRoleAdmin {
-				return nil
-			}
-			// The same two steps as an administrator disabling the account
-			// (UpdateUser): the flag, then the sessions, so its open pages are
-			// told by their next request.
-			disabled := true
-			if _, err := q.AdminUpdateUser(ctx, sqlc.AdminUpdateUserParams{ID: who.userID, Disabled: &disabled}); err != nil {
-				return err
-			}
-			if err := q.DeleteUserSessions(ctx, who.userID); err != nil {
-				return err
-			}
-			sanction = string(ModerationSanctionDisabled)
+		// The lock every change of an administrator's access takes (UpdateUser,
+		// BulkUpdateUsers), held to the end of this transaction, and only then
+		// the role is read: an account promoted at the same moment is either
+		// seen as the administrator it now is, or disabled before the promotion
+		// and promoted afterwards by an administrator who chose to - never
+		// read as a member and disabled after its promotion committed. The
+		// order is the subject's lock, then this one, and nothing holding this
+		// one waits for a subject's, so the two cannot deadlock.
+		if err := q.LockAdminMembership(ctx); err != nil {
+			return err
 		}
+		// An administrator is only logged: disabling one could lock the panel.
+		target, err := q.GetUser(ctx, who.userID)
+		if err != nil {
+			return err
+		}
+		if target.Role == sqlc.UserRoleAdmin {
+			return nil
+		}
+		// The same two steps as an administrator disabling the account
+		// (UpdateUser): the flag, then the sessions, so its open pages are
+		// told by their next request.
+		disabled := true
+		if _, err := q.AdminUpdateUser(ctx, sqlc.AdminUpdateUserParams{ID: who.userID, Disabled: &disabled}); err != nil {
+			return err
+		}
+		if err := q.DeleteUserSessions(ctx, who.userID); err != nil {
+			return err
+		}
+		sanction = string(ModerationSanctionDisabled)
 		return q.MarkModerationSanction(ctx, sqlc.MarkModerationSanctionParams{ID: event.ID, Sanction: &sanction})
 	})
 	if err != nil {
-		slog.ErrorContext(ctx, "record a blocked message", "error", err, "guest", who.guest())
+		slog.ErrorContext(ctx, "record a blocked message", "error", err, "user_id", who.userID)
 		return moderationSanction{}
 	}
 	if sanction == "" {
@@ -828,30 +801,9 @@ func (s *Server) recordBlocked(ctx context.Context, cfg moderationConfig, who mo
 		}
 		return moderationSanction{strikesLeft: max(cfg.Strikes-int(strikes), 0), windowHours: cfg.StrikeWindowHours}
 	}
-	if who.guest() {
-		slog.WarnContext(ctx, "moderation sanction", "sanction", sanction, "guest_ip", who.guestIP,
-			"strikes", cfg.Strikes, "window_hours", cfg.StrikeWindowHours)
-		return moderationSanction{banned: true, until: until}
-	}
 	slog.WarnContext(ctx, "moderation sanction", "sanction", sanction, "user_id", who.userID,
 		"strikes", cfg.Strikes, "window_hours", cfg.StrikeWindowHours)
 	return moderationSanction{disabled: true}
-}
-
-// banGuest bans an address for hours (0 is for good) and returns when the ban
-// ends, nil for good.
-func banGuest(ctx context.Context, q *sqlc.Queries, ip string, hours int, reason string, eventID *uuid.UUID) (*time.Time, error) {
-	var (
-		expires pgtype.Timestamptz
-		until   *time.Time
-	)
-	if hours > 0 {
-		end := time.Now().Add(time.Duration(hours) * time.Hour)
-		expires = pgtype.Timestamptz{Time: end, Valid: true}
-		until = &end
-	}
-	_, err := q.UpsertGuestBan(ctx, sqlc.UpsertGuestBanParams{Ip: ip, ExpiresAt: expires, Reason: reason, EventID: eventID})
-	return until, err
 }
 
 // subjectOfRequest is the person behind a signed-in request.

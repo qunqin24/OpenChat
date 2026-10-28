@@ -12,35 +12,11 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const countGuestStrikes = `-- name: CountGuestStrikes :one
-SELECT count(*)::bigint
-FROM moderation_events e
-WHERE e.guest_ip = $1
-  AND e.created_at > now() - make_interval(hours => $2::int)
-  AND e.created_at > COALESCE((SELECT max(s.created_at)
-                               FROM moderation_events s
-                               WHERE s.guest_ip = $1
-                                 AND s.sanction IS NOT NULL), '-infinity'::timestamptz)
-`
-
-type CountGuestStrikesParams struct {
-	GuestIp     *string `json:"guest_ip"`
-	WindowHours int32   `json:"window_hours"`
-}
-
-// The same for a guest address.
-func (q *Queries) CountGuestStrikes(ctx context.Context, arg CountGuestStrikesParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countGuestStrikes, arg.GuestIp, arg.WindowHours)
-	var column_1 int64
-	err := row.Scan(&column_1)
-	return column_1, err
-}
-
 const countUserStrikes = `-- name: CountUserStrikes :one
 SELECT count(*)::bigint
 FROM moderation_events e
 WHERE e.user_id = $1
-  AND e.source <> 'snapshot'
+  AND e.source NOT IN ('snapshot', 'task_run')
   AND e.created_at > now() - make_interval(hours => $2::int)
   AND e.created_at > COALESCE((SELECT max(s.created_at)
                                FROM moderation_events s
@@ -57,7 +33,8 @@ type CountUserStrikesParams struct {
 // was sanctioned: an administrator who enables the account again gives it a
 // fresh start, instead of the next message setting the same punishment off.
 // A refusal at snapshot time is not a strike: it is old text being left out of
-// a conversation, not something the person is sending now.
+// a conversation, not something the person is sending now. Nor is a task's
+// prompt checked as it is about to be sent, or as a model wrote it (task_run).
 func (q *Queries) CountUserStrikes(ctx context.Context, arg CountUserStrikesParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countUserStrikes, arg.UserID, arg.WindowHours)
 	var column_1 int64
@@ -65,44 +42,8 @@ func (q *Queries) CountUserStrikes(ctx context.Context, arg CountUserStrikesPara
 	return column_1, err
 }
 
-const deleteGuestBan = `-- name: DeleteGuestBan :execrows
-DELETE
-FROM guest_bans
-WHERE ip = $1
-`
-
-func (q *Queries) DeleteGuestBan(ctx context.Context, ip string) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteGuestBan, ip)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const getGuestBan = `-- name: GetGuestBan :one
-SELECT ip, created_at, expires_at, reason, event_id
-FROM guest_bans
-WHERE ip = $1
-  AND (expires_at IS NULL OR expires_at > now())
-`
-
-// The ban in force on an address: a ban past its expiry is ignored whether or
-// not the cleanup has removed it yet.
-func (q *Queries) GetGuestBan(ctx context.Context, ip string) (GuestBan, error) {
-	row := q.db.QueryRow(ctx, getGuestBan, ip)
-	var i GuestBan
-	err := row.Scan(
-		&i.Ip,
-		&i.CreatedAt,
-		&i.ExpiresAt,
-		&i.Reason,
-		&i.EventID,
-	)
-	return i, err
-}
-
 const getModerationEvent = `-- name: GetModerationEvent :one
-SELECT id, created_at, user_id, guest_ip, conversation_id, source, mode, categories, excerpt, action, sanction
+SELECT id, created_at, user_id, conversation_id, source, mode, categories, excerpt, action, sanction
 FROM moderation_events
 WHERE id = $1
 `
@@ -114,7 +55,6 @@ func (q *Queries) GetModerationEvent(ctx context.Context, id uuid.UUID) (Moderat
 		&i.ID,
 		&i.CreatedAt,
 		&i.UserID,
-		&i.GuestIp,
 		&i.ConversationID,
 		&i.Source,
 		&i.Mode,
@@ -139,7 +79,7 @@ type GetSettingsRow struct {
 }
 
 // Content moderation (api/moderation.go): the log of what was turned away, the
-// strikes counted from it, and the guest addresses banned for them.
+// and the strikes counted from it.
 // Several settings in one round trip: the moderation settings are read on every
 // message, and a request should not cost a query per key.
 func (q *Queries) GetSettings(ctx context.Context, keys []string) ([]GetSettingsRow, error) {
@@ -163,15 +103,14 @@ func (q *Queries) GetSettings(ctx context.Context, keys []string) ([]GetSettings
 }
 
 const insertModerationEvent = `-- name: InsertModerationEvent :one
-INSERT INTO moderation_events (user_id, guest_ip, conversation_id, source, mode, categories, excerpt)
-VALUES ($1, $2, $3, $4,
-        $5, $6::text[], $7)
-RETURNING id, created_at, user_id, guest_ip, conversation_id, source, mode, categories, excerpt, action, sanction
+INSERT INTO moderation_events (user_id, conversation_id, source, mode, categories, excerpt)
+VALUES ($1, $2, $3,
+        $4, $5::text[], $6)
+RETURNING id, created_at, user_id, conversation_id, source, mode, categories, excerpt, action, sanction
 `
 
 type InsertModerationEventParams struct {
 	UserID         *uuid.UUID `json:"user_id"`
-	GuestIp        *string    `json:"guest_ip"`
 	ConversationID *uuid.UUID `json:"conversation_id"`
 	Source         string     `json:"source"`
 	Mode           string     `json:"mode"`
@@ -182,7 +121,6 @@ type InsertModerationEventParams struct {
 func (q *Queries) InsertModerationEvent(ctx context.Context, arg InsertModerationEventParams) (ModerationEvent, error) {
 	row := q.db.QueryRow(ctx, insertModerationEvent,
 		arg.UserID,
-		arg.GuestIp,
 		arg.ConversationID,
 		arg.Source,
 		arg.Mode,
@@ -194,7 +132,6 @@ func (q *Queries) InsertModerationEvent(ctx context.Context, arg InsertModeratio
 		&i.ID,
 		&i.CreatedAt,
 		&i.UserID,
-		&i.GuestIp,
 		&i.ConversationID,
 		&i.Source,
 		&i.Mode,
@@ -206,42 +143,6 @@ func (q *Queries) InsertModerationEvent(ctx context.Context, arg InsertModeratio
 	return i, err
 }
 
-const listGuestBans = `-- name: ListGuestBans :many
-SELECT ip, created_at, expires_at, reason, event_id
-FROM guest_bans
-WHERE expires_at IS NULL
-   OR expires_at > now()
-ORDER BY created_at DESC, ip
-LIMIT 500
-`
-
-// The bans in force, newest first.
-func (q *Queries) ListGuestBans(ctx context.Context) ([]GuestBan, error) {
-	rows, err := q.db.Query(ctx, listGuestBans)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GuestBan{}
-	for rows.Next() {
-		var i GuestBan
-		if err := rows.Scan(
-			&i.Ip,
-			&i.CreatedAt,
-			&i.ExpiresAt,
-			&i.Reason,
-			&i.EventID,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listModerationEvents = `-- name: ListModerationEvents :many
 SELECT e.id,
        e.created_at,
@@ -249,8 +150,6 @@ SELECT e.id,
        u.name                                       AS user_name,
        u.email                                      AS user_email,
        (u.disabled_at IS NOT NULL)::boolean         AS user_disabled,
-       e.guest_ip,
-       (b.ip IS NOT NULL)::boolean                  AS ip_banned,
        e.conversation_id,
        e.source,
        e.mode,
@@ -259,21 +158,18 @@ SELECT e.id,
        e.sanction
 FROM moderation_events e
          LEFT JOIN users u ON u.id = e.user_id
-         LEFT JOIN guest_bans b ON b.ip = e.guest_ip AND (b.expires_at IS NULL OR b.expires_at > now())
 WHERE ($1::timestamptz IS NULL
     OR (e.created_at, e.id) < ($1::timestamptz, $2::uuid))
   AND ($3::uuid IS NULL OR e.user_id = $3::uuid)
-  AND ($4::text IS NULL OR e.guest_ip = $4::text)
-  AND ($5::text IS NULL OR e.categories @> ARRAY [$5::text])
+  AND ($4::text IS NULL OR e.categories @> ARRAY [$4::text])
 ORDER BY e.created_at DESC, e.id DESC
-LIMIT $6
+LIMIT $5
 `
 
 type ListModerationEventsParams struct {
 	CursorCreatedAt pgtype.Timestamptz `json:"cursor_created_at"`
 	CursorID        *uuid.UUID         `json:"cursor_id"`
 	UserID          *uuid.UUID         `json:"user_id"`
-	GuestIp         *string            `json:"guest_ip"`
 	Category        *string            `json:"category"`
 	RowLimit        int32              `json:"row_limit"`
 }
@@ -285,8 +181,6 @@ type ListModerationEventsRow struct {
 	UserName       *string            `json:"user_name"`
 	UserEmail      *string            `json:"user_email"`
 	UserDisabled   bool               `json:"user_disabled"`
-	GuestIp        *string            `json:"guest_ip"`
-	IpBanned       bool               `json:"ip_banned"`
 	ConversationID *uuid.UUID         `json:"conversation_id"`
 	Source         string             `json:"source"`
 	Mode           string             `json:"mode"`
@@ -296,14 +190,13 @@ type ListModerationEventsRow struct {
 }
 
 // Newest first, by keyset on (created_at, id): the order of
-// moderation_events_created_idx. The account's name and whether it is disabled,
-// and whether a guest's address is banned now, are read alongside.
+// moderation_events_created_idx. The account's name and whether it is disabled
+// are read alongside.
 func (q *Queries) ListModerationEvents(ctx context.Context, arg ListModerationEventsParams) ([]ListModerationEventsRow, error) {
 	rows, err := q.db.Query(ctx, listModerationEvents,
 		arg.CursorCreatedAt,
 		arg.CursorID,
 		arg.UserID,
-		arg.GuestIp,
 		arg.Category,
 		arg.RowLimit,
 	)
@@ -321,8 +214,6 @@ func (q *Queries) ListModerationEvents(ctx context.Context, arg ListModerationEv
 			&i.UserName,
 			&i.UserEmail,
 			&i.UserDisabled,
-			&i.GuestIp,
-			&i.IpBanned,
 			&i.ConversationID,
 			&i.Source,
 			&i.Mode,
@@ -382,21 +273,6 @@ func (q *Queries) MarkModerationSanction(ctx context.Context, arg MarkModeration
 	return err
 }
 
-const purgeExpiredGuestBans = `-- name: PurgeExpiredGuestBans :execrows
-DELETE
-FROM guest_bans
-WHERE expires_at IS NOT NULL
-  AND expires_at <= now()
-`
-
-func (q *Queries) PurgeExpiredGuestBans(ctx context.Context) (int64, error) {
-	result, err := q.db.Exec(ctx, purgeExpiredGuestBans)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const purgeModerationEvents = `-- name: PurgeModerationEvents :execrows
 DELETE
 FROM moderation_events
@@ -409,48 +285,4 @@ func (q *Queries) PurgeModerationEvents(ctx context.Context, before pgtype.Times
 		return 0, err
 	}
 	return result.RowsAffected(), nil
-}
-
-const upsertGuestBan = `-- name: UpsertGuestBan :one
-INSERT INTO guest_bans (ip, expires_at, reason, event_id)
-VALUES ($1, $2, $3, $4)
-ON CONFLICT (ip) DO UPDATE
-    SET expires_at = CASE
-                         WHEN guest_bans.expires_at IS NULL OR excluded.expires_at IS NULL THEN NULL
-                         ELSE GREATEST(guest_bans.expires_at, excluded.expires_at)
-        END,
-        created_at = CASE
-                         WHEN guest_bans.expires_at IS NOT NULL AND guest_bans.expires_at <= now() THEN now()
-                         ELSE guest_bans.created_at
-            END,
-        reason     = excluded.reason,
-        event_id   = excluded.event_id
-RETURNING ip, created_at, expires_at, reason, event_id
-`
-
-type UpsertGuestBanParams struct {
-	Ip        string             `json:"ip"`
-	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
-	Reason    string             `json:"reason"`
-	EventID   *uuid.UUID         `json:"event_id"`
-}
-
-// A ban on an address already banned lengthens it, never shortens: the later
-// expiry stands, and a permanent ban stays permanent.
-func (q *Queries) UpsertGuestBan(ctx context.Context, arg UpsertGuestBanParams) (GuestBan, error) {
-	row := q.db.QueryRow(ctx, upsertGuestBan,
-		arg.Ip,
-		arg.ExpiresAt,
-		arg.Reason,
-		arg.EventID,
-	)
-	var i GuestBan
-	err := row.Scan(
-		&i.Ip,
-		&i.CreatedAt,
-		&i.ExpiresAt,
-		&i.Reason,
-		&i.EventID,
-	)
-	return i, err
 }

@@ -2,13 +2,12 @@ import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { Skeleton } from '@/components/shadcn/ui/skeleton'
-import { GuestBans } from './guest-bans'
 import { ModerationForm } from './moderation-form'
 import { useModerationSettings } from './use-moderation'
 
 /**
- * The 审核 tab of the system settings: the settings form, the guest addresses
- * banned now, and the way to the log.
+ * The 审核 tab of the system settings: the settings form and the way to the
+ * log.
  */
 export function ModerationPanel() {
   const { t } = useTranslation()
@@ -30,8 +29,6 @@ export function ModerationPanel() {
       ) : (
         <ModerationForm settings={settings.data} />
       )}
-
-      <GuestBans />
     </div>
   )
 }

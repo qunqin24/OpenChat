@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
 )
 
 // End-user identifiers.
@@ -25,12 +25,11 @@ import (
 // another's (OpenAI's safety_identifier, Anthropic's metadata.user_id), so that
 // they can act on the one and leave the account alone.
 //
-// The identifier is a keyed hash: HMAC-SHA256 of the account's id, or for a
-// guest of `guest:` and the address their requests come from (clientIP), with a
+// The identifier is a keyed hash: HMAC-SHA256 of the account's id, with a
 // secret of the server's own, hex, cut to endUserLength characters. It is stable
 // (the same person is the same identifier for as long as the secret is), says
-// nothing about who they are, and cannot be turned back into an id or an
-// address by anyone without the secret. Never the email or the name.
+// nothing about who they are, and cannot be turned back into an id by anyone
+// without the secret. Never the email or the name.
 
 // settingEndUserKey holds the secret: 32 random bytes, hex, made on first use
 // and kept in app_settings. No API reads or writes it. Replacing it would make
@@ -114,20 +113,7 @@ func (e *EndUsers) Account(ctx context.Context, userID uuid.UUID) string {
 	return e.of(ctx, userID.String())
 }
 
-// Guest is a guest's identifier: all guests behind one address are one, which
-// is also the unit they are limited and banned by.
-func (e *EndUsers) Guest(ctx context.Context, ip string) string {
-	if ip == "" {
-		return ""
-	}
-	return e.of(ctx, "guest:"+ip)
-}
-
-// ForRun is the identifier of the person a run is for: the address it came
-// from when it is a guest's (createRun records it), else the account.
+// ForRun is the identifier of the person a run is for: its account.
 func (e *EndUsers) ForRun(ctx context.Context, run sqlc.Run) string {
-	if run.ClientIp != nil && *run.ClientIp != "" {
-		return e.Guest(ctx, *run.ClientIp)
-	}
 	return e.Account(ctx, run.UserID)
 }

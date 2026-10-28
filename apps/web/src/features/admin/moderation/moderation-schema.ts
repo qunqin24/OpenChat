@@ -37,7 +37,6 @@ export const DEFAULT_BLOCKED_CATEGORIES: readonly ModerationCategory[] = [
 /** The ranges the server enforces too (400 `invalid_moderation_*`). */
 export const MAX_STRIKES = 1000
 export const MAX_WINDOW_HOURS = 24 * 365
-export const MAX_BAN_HOURS = 24 * 365 * 10
 
 /** `sexual/minors` as it is spelled in a translation key. */
 export const categorySlug = (category: ModerationCategory) => category.replace('/', '-')
@@ -111,7 +110,6 @@ export function moderationSchema(messages: ModerationMessages, context: { keySto
       onError: z.enum(['allow', 'block']),
       strikes: wholeField(0, MAX_STRIKES, messages),
       strikeWindowHours: wholeField(1, MAX_WINDOW_HOURS, messages),
-      guestBanHours: wholeField(0, MAX_BAN_HOURS, messages),
     })
     .superRefine((values, ctx) => {
       const hasKey = values.openaiApiKey.trim() !== '' || (context.keyStored && !context.clearingKey)

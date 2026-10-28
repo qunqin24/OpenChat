@@ -15,9 +15,9 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/qunqin/openchat/apps/server/internal/auth"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/auth"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
 )
 
 // The content moderation settings (admin → system → moderation), each its own
@@ -48,16 +48,11 @@ const (
 	settingModerationStrikes = "moderation_strikes"
 	// settingModerationStrikeWindow is that window, in hours.
 	settingModerationStrikeWindow = "moderation_strike_window_hours"
-	// settingGuestBanHours is how long a banned guest address stays banned; 0
-	// is for good.
-	settingGuestBanHours = "guest_ban_hours"
 
 	defaultModerationStrikes     = 3
 	defaultModerationWindowHours = 24
-	defaultGuestBanHours         = 168
 	maxModerationStrikes         = 1000
 	maxModerationWindowHours     = 24 * 365
-	maxGuestBanHours             = 24 * 365 * 10
 	defaultModerationOpenAIBase  = "https://api.openai.com/v1"
 	moderationOpenAIModel        = "omni-moderation-latest"
 	maxModerationBaseURLLength   = 500
@@ -92,7 +87,6 @@ type moderationConfig struct {
 	OnError           ModerationOnError
 	Strikes           int
 	StrikeWindowHours int
-	GuestBanHours     int
 
 	// modeRead is whether the stored mode was read for certain (an absent mode is
 	// off, and read). What loadModeration returns beside an error is what it
@@ -109,14 +103,13 @@ func defaultModerationConfig() moderationConfig {
 		OnError:           ModerationOnErrorAllow,
 		Strikes:           defaultModerationStrikes,
 		StrikeWindowHours: defaultModerationWindowHours,
-		GuestBanHours:     defaultGuestBanHours,
 	}
 }
 
 var moderationKeys = []string{
 	settingModerationMode, settingModerationOpenAIKey, settingModerationOpenAIBaseURL, settingModerationModel,
 	settingModerationCategories, settingModerationMinScore, settingModerationExemptAdmins, settingModerationOnError,
-	settingModerationStrikes, settingModerationStrikeWindow, settingGuestBanHours,
+	settingModerationStrikes, settingModerationStrikeWindow,
 }
 
 // loadModeration reads the settings in one query. A value that does not parse is
@@ -169,8 +162,6 @@ func loadModeration(ctx context.Context, q *sqlc.Queries) (moderationConfig, err
 			err = json.Unmarshal(row.Value, &c.Strikes)
 		case settingModerationStrikeWindow:
 			err = json.Unmarshal(row.Value, &c.StrikeWindowHours)
-		case settingGuestBanHours:
-			err = json.Unmarshal(row.Value, &c.GuestBanHours)
 		}
 		if err != nil {
 			failed = append(failed, fmt.Errorf("moderation setting %s: %w", row.Key, err))
@@ -194,7 +185,6 @@ func (c moderationConfig) toSettings() ModerationSettings {
 		OnError:           c.OnError,
 		Strikes:           c.Strikes,
 		StrikeWindowHours: c.StrikeWindowHours,
-		GuestBanHours:     c.GuestBanHours,
 	}
 	if out.Categories == nil {
 		out.Categories = []ModerationCategory{}
@@ -346,13 +336,6 @@ func (c *moderationConfig) apply(body UpdateModerationSettingsRequest) error {
 		}
 		c.StrikeWindowHours = *body.StrikeWindowHours
 	}
-	if body.GuestBanHours != nil {
-		if *body.GuestBanHours < 0 || *body.GuestBanHours > maxGuestBanHours {
-			return invalidModeration("invalid_guest_ban_hours",
-				fmt.Sprintf("the ban must be between 0 (permanent) and %d hours", maxGuestBanHours))
-		}
-		c.GuestBanHours = *body.GuestBanHours
-	}
 	return nil
 }
 
@@ -394,7 +377,6 @@ func saveModeration(ctx context.Context, q *sqlc.Queries, c moderationConfig) er
 		{settingModerationOnError, string(c.OnError)},
 		{settingModerationStrikes, c.Strikes},
 		{settingModerationStrikeWindow, c.StrikeWindowHours},
-		{settingGuestBanHours, c.GuestBanHours},
 	} {
 		value, err := json.Marshal(set.value)
 		if err != nil {

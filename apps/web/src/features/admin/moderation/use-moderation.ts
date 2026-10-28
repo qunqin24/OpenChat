@@ -9,12 +9,10 @@ type Schemas = components['schemas']
 
 export type ModerationSettings = Schemas['ModerationSettings']
 export type ModerationEvent = Schemas['ModerationEvent']
-export type GuestBan = Schemas['GuestBan']
 
 /** What the log page narrows the list by. An absent field is no constraint. */
 export type ModerationFilters = {
   userId?: string
-  guestIp?: string
   category?: ModerationCategory
 }
 
@@ -22,7 +20,6 @@ export type ModerationFilters = {
 export const moderationKeys = {
   all: [...adminKeys.all, 'moderation'] as const,
   settings: () => [...moderationKeys.all, 'settings'] as const,
-  bans: () => [...moderationKeys.all, 'bans'] as const,
   events: (cursor: string | undefined, limit: number, filters: ModerationFilters) =>
     [...moderationKeys.all, 'events', cursor ?? null, limit, filters] as const,
 }
@@ -40,35 +37,6 @@ export function useUpdateModeration() {
   return useMutation({
     mutationFn: async (body: UpdateModerationSettingsRequest) => unwrap(await api.PATCH('/admin/moderation', { body })),
     onSuccess: (next) => queryClient.setQueryData(moderationKeys.settings(), next),
-  })
-}
-
-export function useGuestBans() {
-  return useQuery({
-    queryKey: moderationKeys.bans(),
-    queryFn: async ({ signal }) => unwrap(await api.GET('/admin/moderation/bans', { signal })),
-  })
-}
-
-/** Bans the address of a logged guest message, for the length the settings give. */
-export function useBanGuest() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (eventId: string) => unwrap(await api.POST('/admin/moderation/bans', { body: { eventId } })),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: moderationKeys.all })
-    },
-  })
-}
-
-export function useLiftBan() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (ip: string) =>
-      unwrap(await api.DELETE('/admin/moderation/bans', { params: { query: { ip } } })),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: moderationKeys.all })
-    },
   })
 }
 
@@ -95,7 +63,6 @@ export function useModerationEvents({
               limit,
               ...(cursor ? { cursor } : {}),
               ...(filters.userId ? { userId: filters.userId } : {}),
-              ...(filters.guestIp ? { guestIp: filters.guestIp } : {}),
               ...(filters.category ? { category: filters.category } : {}),
             },
           },

@@ -20,13 +20,9 @@ export function categoryLabel(t: TFunction<'common'>, category: string): string 
 
 /**
  * Built from `t` rather than calling useTranslation in each cell, so the column
- * set stays a plain value the table can memoise. `ban` bans a guest address
- * from the row that was logged against it.
+ * set stays a plain value the table can memoise.
  */
-export function moderationLogColumns(
-  t: TFunction<'common'>,
-  ban: { run: (event: ModerationEvent) => void; pending: boolean },
-): ColumnDef<ModerationEvent>[] {
+export function moderationLogColumns(t: TFunction<'common'>): ColumnDef<ModerationEvent>[] {
   return [
     {
       id: 'time',
@@ -48,14 +44,8 @@ export function moderationLogColumns(
       header: t('admin.moderation.log.who'),
       cell: ({ row }) => {
         const event = row.original
-        if (!event.userId) {
-          return (
-            <div className="flex flex-col gap-0.5">
-              <span className="text-sm">{t('admin.usage.guest')}</span>
-              <span className="text-muted-foreground font-mono text-xs break-all">{event.guestIp ?? DASH}</span>
-            </div>
-          )
-        }
+        // Rows logged before accounts were required have no one to name.
+        if (!event.userId) return <span className="text-muted-foreground text-sm">{t('admin.usage.no-account')}</span>
         return (
           <div className="flex items-center gap-2">
             <UserAvatar
@@ -115,24 +105,10 @@ export function moderationLogColumns(
       meta: { title: t('admin.moderation.log.actions') },
       header: t('admin.moderation.log.actions'),
       cell: ({ row }) => {
-        const event = row.original
-        if (event.userId) {
-          return (
-            <Button asChild variant="ghost" size="sm" className="h-7 px-2">
-              <Link to="/admin/users">{t('admin.moderation.log.open-account')}</Link>
-            </Button>
-          )
-        }
-        if (event.ipBanned) {
-          return (
-            <Badge variant="outline" className="px-1.5 py-0 text-[11px] whitespace-nowrap">
-              {t('admin.moderation.log.banned')}
-            </Badge>
-          )
-        }
+        if (!row.original.userId) return <span className="text-muted-foreground">{DASH}</span>
         return (
-          <Button variant="outline" size="sm" className="h-7 px-2" disabled={ban.pending} onClick={() => ban.run(event)}>
-            {t('admin.moderation.log.ban')}
+          <Button asChild variant="ghost" size="sm" className="h-7 px-2">
+            <Link to="/admin/users">{t('admin.moderation.log.open-account')}</Link>
           </Button>
         )
       },

@@ -18,7 +18,6 @@ import { useChatModels } from '@/hooks/use-chat-models'
 import { cn } from '@/lib/utils'
 import {
   DEFAULT_BLOCKED_CATEGORIES,
-  MAX_BAN_HOURS,
   MAX_STRIKES,
   MAX_WINDOW_HOURS,
   MODERATION_CATEGORIES,
@@ -72,7 +71,6 @@ export function ModerationForm({ settings }: { settings: ModerationSettings }) {
       onError: settings.onError,
       strikes: settings.strikes,
       strikeWindowHours: settings.strikeWindowHours,
-      guestBanHours: settings.guestBanHours,
     },
   })
   const mode = useWatch({ control: form.control, name: 'mode' })
@@ -93,7 +91,6 @@ export function ModerationForm({ settings }: { settings: ModerationSettings }) {
       onError: values.onError,
       strikes: values.strikes,
       strikeWindowHours: values.strikeWindowHours,
-      guestBanHours: values.guestBanHours,
       // Present only when the key is to change: absent keeps the stored one.
       ...(clearKey ? { openaiApiKey: '' } : values.openaiApiKey.trim() ? { openaiApiKey: values.openaiApiKey.trim() } : {}),
     }
@@ -353,7 +350,6 @@ export function ModerationForm({ settings }: { settings: ModerationSettings }) {
             [
               { name: 'strikes', unit: 'strikes-unit', max: MAX_STRIKES },
               { name: 'strikeWindowHours', unit: 'hours', max: MAX_WINDOW_HOURS },
-              { name: 'guestBanHours', unit: 'hours', max: MAX_BAN_HOURS },
             ] as const
           ).map((item) => (
             <FormField

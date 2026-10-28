@@ -62,15 +62,4 @@ func TestUnreadableModerationSettingsHoldMessagesBack(t *testing.T) {
 	var sent CreateMessageResponse
 	_ = json.Unmarshal(rec.Body.Bytes(), &sent)
 	h.settle(sent.Run.Id)
-
-	// A guest's message goes the same way (and was always held back on a failure).
-	if err := h.server.moderate(ctx, moderationSubject{guestIP: "203.0.113.9", source: ModerationSourceGuest},
-		moderationInput{text: "hello"}); err != nil {
-		t.Errorf("a guest with moderation off: %v", err)
-	}
-	corrupt(settingModerationMode, `"openai"`)
-	if err := h.server.moderate(ctx, moderationSubject{guestIP: "203.0.113.9", source: ModerationSourceGuest},
-		moderationInput{text: "hello"}); err != errModerationUnavailable {
-		t.Errorf("a guest on unreadable settings: %v", err)
-	}
 }

@@ -1,13 +1,11 @@
 import { flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
 import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 
 import { DataTableCursorPagination } from '@/components/shadcn/data-table'
 import { Skeleton } from '@/components/shadcn/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/shadcn/ui/table'
 import {
-  useBanGuest,
   useModerationEvents,
   type ModerationEvent,
   type ModerationFilters,
@@ -37,7 +35,6 @@ export function ModerationLogsTable() {
     limit: pageSize,
     filters,
   })
-  const ban = useBanGuest()
 
   const backToStart = useCallback(() => setTrail({ cursors: [undefined], index: 0 }), [])
   const goNext = useCallback(() => {
@@ -77,18 +74,7 @@ export function ModerationLogsTable() {
   }, [backToStart])
 
   const rows = useMemo(() => data?.items ?? [], [data])
-  const banAddress = useCallback(
-    (event: ModerationEvent) =>
-      ban.mutate(event.id, {
-        onSuccess: (made) => toast.success(t('admin.moderation.log.banned-toast', { ip: made.ip })),
-        onError: () => toast.error(t('admin.settings.system.save-failed')),
-      }),
-    [ban, t],
-  )
-  const columns = useMemo(
-    () => moderationLogColumns(t, { run: banAddress, pending: ban.isPending }),
-    [t, banAddress, ban.isPending],
-  )
+  const columns = useMemo(() => moderationLogColumns(t), [t])
 
   const table = useReactTable<ModerationEvent>({
     data: rows,

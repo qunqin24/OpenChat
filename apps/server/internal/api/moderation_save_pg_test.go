@@ -81,7 +81,7 @@ func TestInterruptedModerationSaveLeavesTheOldSettings(t *testing.T) {
 func TestConcurrentModerationSavesDoNotUndoEachOther(t *testing.T) {
 	h, _ := newModerationHarness(t, "")
 	patches := []string{
-		`{"strikes":11}`, `{"strikeWindowHours":12}`, `{"guestBanHours":13}`, `{"minScore":0.25}`,
+		`{"strikes":11}`, `{"strikeWindowHours":12}`, `{"minScore":0.25}`,
 		`{"exemptAdmins":true}`, `{"onError":"block"}`, `{"categories":["hate"]}`, `{"openaiBaseUrl":"http://localhost:1/v1"}`,
 	}
 	var wg sync.WaitGroup
@@ -99,7 +99,7 @@ func TestConcurrentModerationSavesDoNotUndoEachOther(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Strikes != 11 || cfg.StrikeWindowHours != 12 || cfg.GuestBanHours != 13 || cfg.MinScore != 0.25 || !cfg.ExemptAdmins ||
+	if cfg.Strikes != 11 || cfg.StrikeWindowHours != 12 || cfg.MinScore != 0.25 || !cfg.ExemptAdmins ||
 		cfg.OnError != ModerationOnErrorBlock || len(cfg.Categories) != 1 || cfg.Categories[0] != ModerationCategoryHate ||
 		cfg.OpenAIBaseURL != "http://localhost:1/v1" {
 		t.Errorf("a save was undone by another: %+v", cfg)
@@ -110,8 +110,8 @@ func TestConcurrentModerationSavesDoNotUndoEachOther(t *testing.T) {
 // before the save or from after it, never a mixture of the two.
 func TestModerationSettingsAreNeverReadHalfSaved(t *testing.T) {
 	h, _ := newModerationHarness(t, "")
-	one := `{"onError":"allow","strikes":2,"strikeWindowHours":5,"guestBanHours":7,"minScore":0.1,"exemptAdmins":false,"openaiBaseUrl":"http://localhost:1/a","categories":["hate"]}`
-	two := `{"onError":"block","strikes":4,"strikeWindowHours":6,"guestBanHours":8,"minScore":0.2,"exemptAdmins":true,"openaiBaseUrl":"http://localhost:1/b","categories":["sexual","violence"]}`
+	one := `{"onError":"allow","strikes":2,"strikeWindowHours":5,"minScore":0.1,"exemptAdmins":false,"openaiBaseUrl":"http://localhost:1/a","categories":["hate"]}`
+	two := `{"onError":"block","strikes":4,"strikeWindowHours":6,"minScore":0.2,"exemptAdmins":true,"openaiBaseUrl":"http://localhost:1/b","categories":["sexual","violence"]}`
 	signature := func(c moderationConfig) string {
 		var names []string
 		for _, category := range c.Categories {
@@ -119,7 +119,7 @@ func TestModerationSettingsAreNeverReadHalfSaved(t *testing.T) {
 		}
 		return strings.Join([]string{
 			string(c.OnError), strings.Join(names, "+"), c.OpenAIBaseURL,
-			strconv.Itoa(c.Strikes), strconv.Itoa(c.StrikeWindowHours), strconv.Itoa(c.GuestBanHours),
+			strconv.Itoa(c.Strikes), strconv.Itoa(c.StrikeWindowHours),
 			strconv.FormatBool(c.ExemptAdmins), strconv.FormatFloat(c.MinScore, 'g', -1, 64),
 		}, "|")
 	}

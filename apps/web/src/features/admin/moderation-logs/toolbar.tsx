@@ -1,10 +1,8 @@
 import { Cross2Icon } from '@radix-ui/react-icons'
 import { RefreshCw } from 'lucide-react'
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/shadcn/ui/button'
-import { Input } from '@/components/shadcn/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/shadcn/ui/select'
 import { MODERATION_CATEGORIES, categorySlug, type ModerationCategory } from '@/features/admin/moderation/moderation-schema'
 import type { ModerationFilters } from '@/features/admin/moderation/use-moderation'
@@ -15,9 +13,7 @@ import { cn } from '@/lib/utils'
 const ANY = '__any__'
 
 /**
- * Narrows the log by account, by guest address and by category. The address is
- * applied when the box is left or Enter is pressed, not on every keystroke: each
- * change is a new query, and half an address matches nothing.
+ * Narrows the log by account and by category.
  */
 export function ModerationLogsToolbar({
   filters,
@@ -37,26 +33,11 @@ export function ModerationLogsToolbar({
   refreshing: boolean
 }) {
   const { t } = useTranslation()
-  const [draft, setDraft] = useState(filters.guestIp ?? '')
   const filtered = Object.values(filters).some(Boolean)
-  const applyAddress = () => {
-    const next = draft.trim() || undefined
-    if (next !== filters.guestIp) onChange({ guestIp: next })
-  }
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       <UserFilter picked={pickedUser} onPick={onPickUser} />
-
-      <Input
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={applyAddress}
-        onKeyDown={(event) => event.key === 'Enter' && applyAddress()}
-        placeholder={t('admin.moderation.log.address')}
-        aria-label={t('admin.moderation.log.address')}
-        className="h-8 w-48 font-mono text-xs"
-      />
 
       <Select
         value={filters.category ?? ANY}
@@ -76,14 +57,7 @@ export function ModerationLogsToolbar({
       </Select>
 
       {filtered && (
-        <Button
-          variant="ghost"
-          onClick={() => {
-            setDraft('')
-            onReset()
-          }}
-          className="h-8 px-2 lg:px-3"
-        >
+        <Button variant="ghost" onClick={onReset} className="h-8 px-2 lg:px-3">
           {t('admin.ui.table.reset')}
           <Cross2Icon className="ms-2 h-4 w-4" />
         </Button>

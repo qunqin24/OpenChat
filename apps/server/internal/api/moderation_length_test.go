@@ -227,9 +227,6 @@ func TestOverlongMessageIsNotPartlyChecked(t *testing.T) {
 		if err := h.server.moderate(ctx, who, moderationInput{text: long}); err != errMessageTooLarge {
 			t.Fatalf("one character past the limit, on_error allow: %v", err)
 		}
-		if err := h.server.moderate(ctx, moderationSubject{guestIP: "203.0.113.5", source: ModerationSourceGuest}, moderationInput{text: long}); err != errMessageTooLarge {
-			t.Fatalf("a guest: %v", err)
-		}
 		if f.calls() != 0 {
 			t.Error("part of a message too long to check was sent for a check")
 		}
@@ -272,7 +269,6 @@ func TestOverlongMessageIsNotPartlyChecked(t *testing.T) {
 			t.Fatalf("configure: %d %s", rec.Code, rec.Body)
 		}
 		who := moderationSubject{userID: h.user.ID, source: ModerationSourceSend}
-		guest := moderationSubject{guestIP: "203.0.113.6", source: ModerationSourceGuest}
 
 		// Eight pieces' worth of text is classified; more than that cannot be.
 		fits := strings.Repeat("a", 180_000)
@@ -292,13 +288,10 @@ func TestOverlongMessageIsNotPartlyChecked(t *testing.T) {
 		}
 
 		// More than a check makes is refused, not passed: on_error allow does
-		// not let an account's through (no model was asked), nor a guest's, nor
-		// does block turn it into an outage.
+		// not let an account's through (no model was asked), nor does block turn
+		// it into an outage.
 		if err := h.server.moderate(ctx, who, moderationInput{text: tooMany}); err != errMessageTooLarge {
 			t.Errorf("too many pieces, on_error allow: %v", err)
-		}
-		if err := h.server.moderate(ctx, guest, moderationInput{text: tooMany}); err != errMessageTooLarge {
-			t.Errorf("too many pieces, a guest: %v", err)
 		}
 		if rec := h.patchModeration(`{"onError":"block"}`); rec.Code != http.StatusOK {
 			t.Fatal(rec.Body)
