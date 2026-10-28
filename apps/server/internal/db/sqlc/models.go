@@ -452,19 +452,37 @@ type Conversation struct {
 	WebSearch       bool               `json:"web_search"`
 	MemorySnapshot  []byte             `json:"memory_snapshot"`
 	Temporary       bool               `json:"temporary"`
+	Kind            string             `json:"kind"`
+	ParentID        *uuid.UUID         `json:"parent_id"`
+	LaunchedBy      *uuid.UUID         `json:"launched_by"`
+	LaunchCallID    *string            `json:"launch_call_id"`
+	Background      bool               `json:"background"`
+	StoppedByUser   bool               `json:"stopped_by_user"`
 }
 
-type GuestBan struct {
-	Ip        string             `json:"ip"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
-	Reason    string             `json:"reason"`
-	EventID   *uuid.UUID         `json:"event_id"`
+type Document struct {
+	ID             uuid.UUID          `json:"id"`
+	ConversationID uuid.UUID          `json:"conversation_id"`
+	UserID         uuid.UUID          `json:"user_id"`
+	RunID          uuid.UUID          `json:"run_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
-type GuestRequest struct {
-	Ip        string             `json:"ip"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+type DocumentVersion struct {
+	DocumentID uuid.UUID          `json:"document_id"`
+	Version    int32              `json:"version"`
+	Title      string             `json:"title"`
+	Content    string             `json:"content"`
+	Source     string             `json:"source"`
+	RunID      *uuid.UUID         `json:"run_id"`
+	Checked    *string            `json:"checked"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+type ImageSearch struct {
+	Query      string             `json:"query"`
+	PictureID  *uuid.UUID         `json:"picture_id"`
+	SearchedAt pgtype.Timestamptz `json:"searched_at"`
 }
 
 type LinearKeep struct {
@@ -500,6 +518,7 @@ type Message struct {
 	Usage          []byte             `json:"usage"`
 	ErrorCode      *string            `json:"error_code"`
 	RunID          *uuid.UUID         `json:"run_id"`
+	Origin         *string            `json:"origin"`
 }
 
 type ModelOverride struct {
@@ -524,7 +543,6 @@ type ModerationEvent struct {
 	ID             uuid.UUID          `json:"id"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UserID         *uuid.UUID         `json:"user_id"`
-	GuestIp        *string            `json:"guest_ip"`
 	ConversationID *uuid.UUID         `json:"conversation_id"`
 	Source         string             `json:"source"`
 	Mode           string             `json:"mode"`
@@ -532,6 +550,43 @@ type ModerationEvent struct {
 	Excerpt        string             `json:"excerpt"`
 	Action         string             `json:"action"`
 	Sanction       *string            `json:"sanction"`
+}
+
+type Passkey struct {
+	ID           uuid.UUID          `json:"id"`
+	UserID       uuid.UUID          `json:"user_id"`
+	CredentialID []byte             `json:"credential_id"`
+	Credential   []byte             `json:"credential"`
+	Name         string             `json:"name"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	LastUsedAt   pgtype.Timestamptz `json:"last_used_at"`
+}
+
+type Picture struct {
+	ID          uuid.UUID          `json:"id"`
+	Provider    string             `json:"provider"`
+	ProviderID  string             `json:"provider_id"`
+	StorageKey  string             `json:"storage_key"`
+	ContentType string             `json:"content_type"`
+	Width       int32              `json:"width"`
+	Height      int32              `json:"height"`
+	Title       string             `json:"title"`
+	Creator     string             `json:"creator"`
+	CreatorUrl  string             `json:"creator_url"`
+	License     string             `json:"license"`
+	LicenseUrl  string             `json:"license_url"`
+	LandingUrl  string             `json:"landing_url"`
+	Source      string             `json:"source"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+type RequestTrace struct {
+	UsageLogID     uuid.UUID          `json:"usage_log_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UserID         uuid.UUID          `json:"user_id"`
+	ConversationID uuid.UUID          `json:"conversation_id"`
+	Request        []byte             `json:"request"`
+	Response       []byte             `json:"response"`
 }
 
 type Run struct {
@@ -554,7 +609,28 @@ type Run struct {
 	ReasoningEffort *string            `json:"reasoning_effort"`
 	WebSearch       bool               `json:"web_search"`
 	Continues       *uuid.UUID         `json:"continues"`
-	ClientIp        *string            `json:"client_ip"`
+}
+
+type ScheduledTask struct {
+	ID             uuid.UUID          `json:"id"`
+	UserID         uuid.UUID          `json:"user_id"`
+	ConversationID uuid.UUID          `json:"conversation_id"`
+	Title          string             `json:"title"`
+	Prompt         string             `json:"prompt"`
+	PromptChecked  *string            `json:"prompt_checked"`
+	Kind           string             `json:"kind"`
+	RunAt          pgtype.Timestamptz `json:"run_at"`
+	MinuteOfDay    *int32             `json:"minute_of_day"`
+	Weekdays       []int16            `json:"weekdays"`
+	MonthDay       *int16             `json:"month_day"`
+	TimeZone       string             `json:"time_zone"`
+	Enabled        bool               `json:"enabled"`
+	NextRunAt      pgtype.Timestamptz `json:"next_run_at"`
+	LastRunAt      pgtype.Timestamptz `json:"last_run_at"`
+	LastRunID      *uuid.UUID         `json:"last_run_id"`
+	LastError      *string            `json:"last_error"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Session struct {
@@ -565,6 +641,25 @@ type Session struct {
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	LastUsedAt pgtype.Timestamptz `json:"last_used_at"`
 	UserAgent  string             `json:"user_agent"`
+}
+
+type SubagentInbox struct {
+	ID             uuid.UUID          `json:"id"`
+	ConversationID uuid.UUID          `json:"conversation_id"`
+	Content        string             `json:"content"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type SubagentReport struct {
+	RunID              uuid.UUID          `json:"run_id"`
+	ConversationID     uuid.UUID          `json:"conversation_id"`
+	ParentID           uuid.UUID          `json:"parent_id"`
+	State              string             `json:"state"`
+	Report             string             `json:"report"`
+	DurationMs         int64              `json:"duration_ms"`
+	ViaTool            bool               `json:"via_tool"`
+	DeliveredMessageID *uuid.UUID         `json:"delivered_message_id"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 }
 
 type UsageLog struct {
@@ -595,6 +690,7 @@ type UsageLog struct {
 	FirstTokenMs     *int32             `json:"first_token_ms"`
 	DurationMs       int32              `json:"duration_ms"`
 	Estimated        bool               `json:"estimated"`
+	DeletedUser      *string            `json:"deleted_user"`
 }
 
 type User struct {
@@ -612,12 +708,12 @@ type User struct {
 	MemoryEnabled                bool               `json:"memory_enabled"`
 	MemoryLearn                  bool               `json:"memory_learn"`
 	AvatarKey                    *string            `json:"avatar_key"`
-	Guest                        bool               `json:"guest"`
 	Pending                      bool               `json:"pending"`
 	InstructionsAboutCheckedHash *string            `json:"instructions_about_checked_hash"`
 	InstructionsAboutBlockedHash *string            `json:"instructions_about_blocked_hash"`
 	InstructionsStyleCheckedHash *string            `json:"instructions_style_checked_hash"`
 	InstructionsStyleBlockedHash *string            `json:"instructions_style_blocked_hash"`
+	TimeZone                     *string            `json:"time_zone"`
 }
 
 type UserMemory struct {
@@ -630,4 +726,12 @@ type UserMemory struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 	CheckedHash    *string            `json:"checked_hash"`
 	BlockedHash    *string            `json:"blocked_hash"`
+}
+
+type WebauthnChallenge struct {
+	ID        uuid.UUID          `json:"id"`
+	Kind      string             `json:"kind"`
+	UserID    *uuid.UUID         `json:"user_id"`
+	Session   []byte             `json:"session"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }

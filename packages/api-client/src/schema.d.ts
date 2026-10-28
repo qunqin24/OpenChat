@@ -32,7 +32,7 @@ export interface paths {
          * What the sign-in pages offer
          * @description Public and always there, so the login and register pages know what to
          *     show before anyone has typed anything: whether to link to registration,
-         *     and whether to offer "continue as guest".
+         *     and whether a new account waits for approval.
          */
         get: operations["getAuthOptions"];
         put?: never;
@@ -161,6 +161,121 @@ export interface paths {
          *     self-service form has no path to privilege escalation.
          */
         patch: operations["updateMe"];
+        trace?: never;
+    };
+    "/auth/passkey/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Begin signing in with a passkey
+         * @description A challenge for the browser's passkey prompt (`navigator.credentials.get`
+         *     with `publicKey`). No account is named: the passkey the person picks
+         *     says whose it is. The challenge is good for five minutes and one answer.
+         *     404 when passkeys are off (`AuthOptions.passkeys`).
+         */
+        post: operations["beginPasskeySignIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/passkey": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign in with a passkey
+         * @description The browser's answer to `beginPasskeySignIn`. A passkey that is not
+         *     known, or an answer that does not verify, is 401
+         *     `invalid_passkey`; failures are counted per client address like
+         *     password sign-ins (429 `login_rate_limited`). The account is then
+         *     treated as a password sign-in treats it: 403 `pending_approval` or
+         *     `account_disabled`, otherwise a session.
+         */
+        post: operations["passkeySignIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/passkeys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your passkeys */
+        get: operations["listPasskeys"];
+        put?: never;
+        /**
+         * Add a passkey
+         * @description The browser's answer to `beginPasskeyRegistration`. 400
+         *     `invalid_passkey` when it does not verify; 404 when passkeys are off.
+         */
+        post: operations["addPasskey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/passkeys/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Begin adding a passkey
+         * @description A challenge for the browser's passkey creation
+         *     (`navigator.credentials.create` with `publicKey`), leaving out the
+         *     authenticators already registered. Good for five minutes and one answer.
+         */
+        post: operations["beginPasskeyRegistration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/passkeys/{passkeyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                passkeyId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove one of your passkeys
+         * @description It can no longer sign in. 404 for one that is not yours.
+         */
+        delete: operations["deletePasskey"];
+        options?: never;
+        head?: never;
+        /** Rename one of your passkeys */
+        patch: operations["renamePasskey"];
         trace?: never;
     };
     "/auth/password": {
@@ -625,32 +740,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/admin/moderation/bans": {
+    "/admin/subagents": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** The guest addresses banned now */
-        get: operations["listGuestBans"];
+        /** Sub-agent settings */
+        get: operations["getSubagentSettings"];
         put?: never;
-        /**
-         * Ban the guest address of a logged message
-         * @description Bans the address the event was logged against, for the length set in
-         *     `ModerationSettings.guestBanHours`. 409 `not_a_guest` for the event of
-         *     an account: an account is disabled from the users page.
-         */
-        post: operations["createGuestBan"];
-        /**
-         * Lift the ban on a guest address
-         * @description The address is a query parameter, not a path segment: an IPv6 network
-         *     reads `2001:db8:1:2::/64`.
-         */
-        delete: operations["deleteGuestBan"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Change sub-agent settings
+         * @description Only the fields present are changed. Read whenever a sub-agent is
+         *     launched or a run is offered the tools, so a change applies from the
+         *     next request.
+         */
+        patch: operations["updateSubagentSettings"];
+        trace?: never;
+    };
+    "/admin/authentication/passkeys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Passkey settings */
+        get: operations["getPasskeySettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change passkey settings
+         * @description Changing the relying party ID makes the passkeys registered under the
+         *     old one unusable: browsers bind a passkey to the domain it was made for.
+         */
+        patch: operations["updatePasskeySettings"];
         trace?: never;
     };
     "/admin/web-search": {
@@ -690,6 +822,51 @@ export interface paths {
          *     is a 200 with `ok: false`: the request worked, the search did not.
          */
         post: operations["testWebSearch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/image-search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Image search settings */
+        get: operations["getImageSearchSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change image search settings
+         * @description Runs started after the change are told about it: whether answers
+         *     describe their pictures or give addresses is part of a run's
+         *     instructions.
+         */
+        patch: operations["updateImageSearchSettings"];
+        trace?: never;
+    };
+    "/admin/image-search/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Find one picture with the current settings
+         * @description Searches the configured service the way an answer's picture is
+         *     searched - without keeping what it finds - and reports the first
+         *     match. A failed search is a 200 with `ok: false`.
+         */
+        post: operations["testImageSearch"];
         delete?: never;
         options?: never;
         head?: never;
@@ -820,7 +997,18 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete an account for good
+         * @description Deletes the account and everything that is only its: sessions,
+         *     conversations and their messages and files, memories, custom
+         *     instructions, scheduled tasks, its picture. Runs it has going are
+         *     stopped. Its requests stay in the usage log - spend and caps are
+         *     counted from it - without an owner, labelled with the name the
+         *     account had (`UsageLog.deletedUser`). Cannot be undone. 409
+         *     `self_delete` for your own account, `last_admin` for the last
+         *     enabled administrator; 404 for an account that is not there.
+         */
+        delete: operations["deleteUser"];
         options?: never;
         head?: never;
         /** Change an account's role or enabled state */
@@ -864,6 +1052,33 @@ export interface paths {
         head?: never;
         /** Rename or update a conversation */
         patch: operations["updateConversation"];
+        trace?: never;
+    };
+    "/conversations/{conversationId}/trace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The model requests of one of your conversations, as sent
+         * @description Administrators only (404 otherwise, and while request traces are off
+         *     in System settings), and only their own conversations: each model request the conversation's runs made -
+         *     the messages, tools and options it carried, what came back - with
+         *     its timing and tokens, oldest first. Recorded for administrators'
+         *     requests only and kept for `retentionDays`; a request older than
+         *     that, or made before recording began, is not listed.
+         */
+        get: operations["getConversationTrace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/conversations/{conversationId}/title": {
@@ -973,6 +1188,134 @@ export interface paths {
          *     a `compaction_changed` event (without a summary).
          */
         delete: operations["undoCompaction"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/conversations/{conversationId}/subagents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The conversation's sub-agents
+         * @description Every sub-agent (子智能体) the conversation's runs launched, oldest
+         *     first, with the state of its latest run. A sub-agent is a hidden
+         *     conversation of its own; none of the conversation endpoints reach it,
+         *     and nothing a person types reaches its model.
+         */
+        get: operations["listSubagents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/conversations/{conversationId}/subagents/{subagentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                subagentId: components["parameters"]["SubagentId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * One sub-agent's work, read-only
+         * @description The sub-agent's transcript - the task, its thinking, its tool steps, its
+         *     reports - oldest first (its latest 500 rows), and the run it has going
+         *     with its live state. There is no way to write to it.
+         */
+        get: operations["getSubagent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/conversations/{conversationId}/subagents/{subagentId}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                subagentId: components["parameters"]["SubagentId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop a sub-agent
+         * @description The person stops it. Its run ends cancelled and what it had found is
+         *     reported to the main agent as usual. Stopped by the person, the main
+         *     agent's messages no longer wake it; `resumeSubagent` does. A queued
+         *     one is cancelled: it never starts, and goes.
+         */
+        post: operations["stopSubagent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/conversations/{conversationId}/subagents/{subagentId}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                subagentId: components["parameters"]["SubagentId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Let a stopped sub-agent go on
+         * @description Starts another run of the sub-agent, which carries on from where it
+         *     was, in the background, and reports again when it is done. Takes no
+         *     text: a person's words reach the sub-agent only through the main agent.
+         *     409 `subagent_busy` while it is working; 429 `too_many_subagents` at
+         *     the limit of sub-agents working at once.
+         */
+        post: operations["resumeSubagent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/conversations/{conversationId}/subagents/{subagentId}/background": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                subagentId: components["parameters"]["SubagentId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move a foreground sub-agent to the background
+         * @description The tool call waiting for it returns at once, telling the main agent
+         *     the work goes on in the background, so the turn ends and the person
+         *     can write again; the report is delivered when it is ready. Idempotent.
+         */
+        post: operations["backgroundSubagent"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1342,6 +1685,147 @@ export interface paths {
         patch: operations["updatePersonalization"];
         trace?: never;
     };
+    "/conversations/{conversationId}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * The writing blocks of a conversation
+         * @description Every document a model wrote in this conversation, each at its latest
+         *     version, most recently changed first: for reopening one without
+         *     scrolling back to where it was written. 404 for a conversation that
+         *     is not yours.
+         */
+        get: operations["listConversationDocuments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/documents/{documentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                documentId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * A writing block, with every version of it
+         * @description A document a model wrote in one of your conversations (the
+         *     `document` tool), oldest version first; the last is what it says
+         *     now. 404 for one that is not yours, or whose conversation is deleted.
+         */
+        get: operations["getDocument"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Save your edit of a writing block
+         * @description Saves a new version with your title and text. `baseVersion` is the
+         *     version the edit was made on: 409 `version_conflict` when another
+         *     version came since (the model changed it meanwhile), so nothing is
+         *     overwritten unseen. Your text is checked by content moderation when
+         *     a model next reads it, not now.
+         */
+        patch: operations["updateDocument"];
+        trace?: never;
+    };
+    "/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List your scheduled tasks
+         * @description Your scheduled tasks, newest first; a task whose conversation you
+         *     deleted goes with it. 404 when an administrator has switched scheduled
+         *     tasks off (System settings).
+         */
+        get: operations["listTasks"];
+        put?: never;
+        /**
+         * Schedule a task
+         * @description Makes the task and its own conversation, named after it, where every
+         *     run goes: at each time the schedule names, `prompt` is sent there as
+         *     your message and answered as if you had sent it. The prompt is checked
+         *     by content moderation as a message is (422 `content_blocked`). 400
+         *     `invalid_schedule` for a schedule that is not one, or a one-off in the
+         *     past; 409 `too_many_tasks` past the limit of tasks still to run.
+         */
+        post: operations["createTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tasks/{taskId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: components["parameters"]["TaskId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a task
+         * @description Its conversation, and what it has written there, stays.
+         */
+        delete: operations["deleteTask"];
+        options?: never;
+        head?: never;
+        /**
+         * Change, pause or resume a task
+         * @description Only the fields present change. `enabled: false` pauses the task,
+         *     `true` resumes it from the next time its schedule names (a one-off
+         *     whose time has passed cannot be resumed: change its time). The errors
+         *     of `createTask`.
+         */
+        patch: operations["updateTask"];
+        trace?: never;
+    };
+    "/tasks/{taskId}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: components["parameters"]["TaskId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run a task now
+         * @description Sends the prompt to the task's conversation now, as its schedule would,
+         *     without moving its schedule. The errors of `createMessage` (409
+         *     `conversation_busy` while that conversation is answering).
+         */
+        post: operations["runTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/memories": {
         parameters: {
             query?: never;
@@ -1519,6 +2003,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/images/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Find a picture for an answer by what it shows
+         * @description With image search on (`getImageSearchSettings`), a reply's interface
+         *     components describe the pictures they want - a few words such as
+         *     "laptop keyboard" - rather than give an address. This finds one: a
+         *     freely licensed photo from the configured service, the first that
+         *     matches, kept so the same words show the same picture on every reload
+         *     and for every reader. The image itself is served by
+         *     `getPicture`, so the reader's browser asks no third party. 404
+         *     `image_not_found` when nothing matches or image search is off; 503
+         *     `image_search_unavailable` when the service cannot be reached or is
+         *     limiting this server. The client then leaves the picture out.
+         */
+        get: operations["searchImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pictures/{pictureId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pictureId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * A picture found for an answer, fetched for the reader
+         * @description The bytes of an image `searchImage` found, fetched by the server from
+         *     public addresses only and cached. Only images a search here found are
+         *     served. 404 otherwise, or when the image cannot be had.
+         */
+        get: operations["getPicture"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/models": {
         parameters: {
             query?: never;
@@ -1542,196 +2079,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/guest/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Whether guests are let in
-         * @description Public and always there, so the sign-in page knows whether to offer
-         *     "continue as guest".
-         */
-        get: operations["getGuestStatus"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/guest/config": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * What the chat offers a guest
-         * @description The models an ordinary user sees (those kept for administrators are
-         *     left out), the composer's features and the personalization limits - the
-         *     three things a signed-in chat reads from `/models`, `/features` and
-         *     `/me/personalization`, in one answer a guest can get without a session.
-         *     404 `not_found` while guest mode is off.
-         */
-        get: operations["getGuestConfig"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/guest/runs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Answer a guest's message, stateless
-         * @description The one request that needs a model. The body carries everything the
-         *     server would have read from a database: the conversation as the
-         *     browser holds it, the new message (or which answer to redo, or the
-         *     answers to a question), the guest's custom instructions and memories.
-         *     The server writes them as rows of a user that exists for this request
-         *     alone, runs the agent on them exactly as for an account, and deletes
-         *     them when the stream ends. The response is the conversation's events
-         *     (`BatchEvent`, as `GET /conversations/{id}/events` sends them, from
-         *     `run_started` on) with the rows under the ids the browser sent, then a
-         *     last `GuestEndEvent` with what the browser has to keep.
-         *
-         *     Refused before anything is written, as JSON: 429 `guest_ip_limit` and
-         *     `guest_daily_limit` (the administrator's limits), 429 `too_many_runs`
-         *     (this address already has `SystemSettings.guestMaxConcurrentRuns` runs
-         *     going), 409 `no_models`,
-         *     400 `model_unavailable`, 409 `model_capacity_reached` (a guest is never
-         *     exempt from a cap) and the attachment errors of `createMessage`,
-         *     400 `invalid_answers`, 409 `not_pending` for an answer to a question
-         *     that is not the last row. Closing the connection stops the run.
-         *
-         *     With content moderation on, a new message (and its images) or the words
-         *     typed in an answer are checked before anything is written: 422
-         *     `content_blocked` with the matched categories in `details.categories`
-         *     (and `details.strikesLeft` / `details.windowHours` before a ban; the
-         *     server keeps nothing of a guest, so there is no `details.messageId` -
-         *     the browser keeps the refused message itself, in the server's clock:
-         *     `details.at` is the time to keep it at, the server's now and never before
-         *     the newest row the request carried, RFC 3339; absent when the refusal is
-         *     about the conversation's history, `details.history` true, which is not
-         *     the message), or 503
-         *     `moderation_unavailable` when the check could not be made (a guest's
-         *     message is never sent unchecked), or 413 `message_too_large_for_moderation`
-         *     when the message, or what the request carries that nothing vouched for,
-         *     is too large to be checked whole (as for `createMessage`; the
-         *     `history_too_large` of the history is a separate 413). The message that earns the ban is
-         *     answered with it (403 `guest_banned`). A regeneration is not checked.
-         *     From a network address banned for it, this and every other guest
-         *     endpoint but cancelling a run answers 403 `guest_banned`, with
-         *     `details.until` (a time, or null for a permanent ban).
-         */
-        post: operations["guestRun"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/guest/runs/{runId}/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                runId: string;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Stop a guest's run
-         * @description Asks the run to stop; what it generated is kept and the stream ends as
-         *     for any run. The run's id was only told to the page that started it.
-         */
-        post: operations["cancelGuestRun"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/guest/title": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Name a guest's conversation
-         * @description The task model reads the last exchanges the browser sends and answers
-         *     with a title. Counts against the guest limits like a run.
-         */
-        post: operations["guestTitle"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/guest/favicons/{domain}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * A site's icon, for a guest
-         * @description The same as `getFavicon`, without a session.
-         */
-        get: operations["getGuestFavicon"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/guest/images": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * A picture an answer shows, fetched for a guest
-         * @description As `getConversationImage`, but a guest has no conversation on the
-         *     server to check the address against: any public image address is
-         *     served, from public addresses only, and each client is limited in how
-         *     often it can ask.
-         */
-        get: operations["getGuestImage"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/files": {
         parameters: {
             query?: never;
@@ -1739,7 +2086,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List your files
+         * @description The library: the files you sent with your messages, newest first, each
+         *     with the conversation it was sent in. Only conversations you can still
+         *     open - not deleted or temporary ones. `url` is a signed read URL, as
+         *     `Attachment.url`.
+         */
+        get: operations["listFiles"];
         put?: never;
         /**
          * Issue a presigned upload URL for blob storage
@@ -1750,11 +2104,64 @@ export interface paths {
          *     (`/api/v1/files/content/...`, a relative reference unless the server
          *     has a public URL configured), signed and valid for 15 minutes. The
          *     read URLs in `Attachment.url` follow the same rule. Only PNG, JPEG,
-         *     WebP and GIF images (5 MiB each) and PDFs (10 MiB) are accepted — 415
-         *     `unsupported_file_type` otherwise, and 413 `file_too_large` over the
-         *     size. The upload belongs to the caller; nobody else can attach it.
+         *     WebP and GIF images (5 MiB each), PDFs (10 MiB) and text files
+         *     (`text/plain`, 256 KiB: notes, Markdown, CSV, code - the client sends
+         *     `text/plain` for each, whatever the browser calls it; the model is sent
+         *     the text, so any model takes them, and bytes that are not UTF-8 text
+         *     are left out) are accepted — 415 `unsupported_file_type` otherwise,
+         *     and 413 `file_too_large` over the size. The upload belongs to the caller; nobody else can attach it.
          */
         post: operations["createUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/files/{fileId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fileId: components["parameters"]["FileId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete one of your files
+         * @description Deletes a file of the library (`listFiles`) for good, with its stored
+         *     bytes. The message it was sent with stays, and lists it in
+         *     `removedAttachments`; a model reading the conversation is told the
+         *     file is no longer available. 404 for a file that is not in your
+         *     library.
+         */
+        delete: operations["deleteFile"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/files/{fileId}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fileId: components["parameters"]["FileId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A download link for one of your files
+         * @description A signed read URL, like `url` in `listFiles`, whose response asks the
+         *     browser to save the file under its name rather than show it. 404 for a
+         *     file that is not in your library.
+         */
+        get: operations["getFileDownload"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1837,13 +2244,6 @@ export interface components {
             inputTokens: number;
             /** @description Tokens it took to write */
             outputTokens: number;
-            /**
-             * @description Guest only. The server's signature that it wrote `content`; a
-             *     guest's summary without a valid one is refused, since it would be
-             *     words the browser made up (`invalid_summary`). Opaque. Absent for
-             *     an account's.
-             */
-            receipt?: string;
             /** Format: date-time */
             createdAt: string;
         };
@@ -1920,6 +2320,30 @@ export interface components {
             reasoningEffort?: components["schemas"]["ReasoningEffort"];
             webSearch?: boolean;
         };
+        /**
+         * @description A freely licensed picture found for an answer, with what its licence
+         *     asks to be shown: its title, who made it and under which licence, and
+         *     the page it is from.
+         */
+        FoundImage: {
+            /**
+             * Format: uuid
+             * @description The picture's id; `getPicture` serves it.
+             */
+            id: string;
+            width: number;
+            height: number;
+            title: string;
+            creator?: string;
+            creatorUrl?: string;
+            /** @description The licence's short name as Creative Commons writes it, such as "CC BY 2.0" or "CC0 1.0". */
+            license: string;
+            licenseUrl?: string;
+            /** @description The page the picture is from. */
+            landingUrl?: string;
+            /** @description Where Openverse found it */
+            source: string;
+        };
         Attachment: {
             /** Format: uuid */
             id: string;
@@ -1961,22 +2385,21 @@ export interface components {
              */
             errorCode?: string;
             usage?: components["schemas"]["Usage"];
+            /**
+             * @description User rows no person wrote. `subagent` is a sub-agent's report
+             *     delivered to the main conversation (its content is one or more
+             *     `<subagent-report>` blocks): shown as a line, never editable, not a
+             *     question to regenerate. `agent` is the main agent's task or
+             *     message to a sub-agent, seen only in a sub-agent's transcript.
+             * @enum {string}
+             */
+            origin?: "agent" | "subagent";
             attachments?: components["schemas"]["Attachment"][];
             /**
-             * @description Guest streams only, on assistant rows. What a provider wants back
-             *     with this response that is not for display - a reasoning
-             *     signature, redacted reasoning - kept opaque. The server never gives
-             *     it to a signed-in browser, which has no use for it; a guest's
-             *     browser keeps the transcript, so it has to hold it for the next
-             *     request (`GuestMessage.providerState`). Absent elsewhere.
+             * @description User messages only: the files it was sent with that were deleted
+             *     since (`deleteFile`), to show where they were.
              */
-            providerState?: string;
-            /**
-             * @description Guest streams only. The server's signature that it wrote this row
-             *     (assistant, tool) or checked its words (user), to be handed back
-             *     as `GuestMessage.receipt`. Opaque. Absent elsewhere.
-             */
-            receipt?: string;
+            removedAttachments?: components["schemas"]["RemovedAttachment"][];
             /** Format: date-time */
             createdAt: string;
         };
@@ -2210,7 +2633,7 @@ export interface components {
             version: number;
             events: components["schemas"]["RunEvent"][];
         };
-        RunEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["RunFinishedEvent"] | components["schemas"]["GenerationStartedEvent"] | components["schemas"]["PartStartedEvent"] | components["schemas"]["PartDeltaEvent"] | components["schemas"]["PartEndedEvent"] | components["schemas"]["MessageAppendedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"] | components["schemas"]["RetryScheduledEvent"] | components["schemas"]["TitleChangedEvent"] | components["schemas"]["TranscriptChangedEvent"] | components["schemas"]["CompactionStartedEvent"] | components["schemas"]["CompactionFinishedEvent"] | components["schemas"]["CompactionChangedEvent"] | components["schemas"]["ConversationDeletedEvent"];
+        RunEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["RunFinishedEvent"] | components["schemas"]["GenerationStartedEvent"] | components["schemas"]["PartStartedEvent"] | components["schemas"]["PartDeltaEvent"] | components["schemas"]["PartEndedEvent"] | components["schemas"]["MessageAppendedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"] | components["schemas"]["RetryScheduledEvent"] | components["schemas"]["TitleChangedEvent"] | components["schemas"]["TranscriptChangedEvent"] | components["schemas"]["CompactionStartedEvent"] | components["schemas"]["CompactionFinishedEvent"] | components["schemas"]["CompactionChangedEvent"] | components["schemas"]["ConversationDeletedEvent"] | components["schemas"]["SubagentsChangedEvent"];
         RunStartedEvent: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -2389,6 +2812,20 @@ export interface components {
             type: "conversation_deleted";
         };
         /**
+         * @description One of the conversation's sub-agents started, took a step, or ended
+         *     (`listSubagents` says how it stands now). Sent in a batch of its own,
+         *     with the nil run id and version 0. A report it delivers arrives as a
+         *     transcript row - in the batch of the run that received it, or as the
+         *     input of a run started for it (`run_started`).
+         */
+        SubagentsChangedEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "subagents_changed";
+        };
+        /**
          * @description The conversation's summary was taken back by a request of the person's
          *     (`undoCompaction`) and not by a run. Sent in a batch of its own, with
          *     the nil run id and version 0. `summary` is the one it has now, absent
@@ -2494,11 +2931,6 @@ export interface components {
              * @description The conversation it was learned in, while that still exists.
              */
             conversationId?: string | null;
-            /**
-             * @description Guest streams only. The server's signature that `content` has been
-             *     checked (`GuestMemory.receipt`). Opaque. Absent elsewhere.
-             */
-            receipt?: string;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -2534,8 +2966,108 @@ export interface components {
         MemoryEventList: {
             items: components["schemas"]["MemoryEvent"][];
         };
+        SubagentList: {
+            items: components["schemas"]["Subagent"][];
+        };
+        /**
+         * @description A sub-agent (子智能体): work the main agent handed over, done in a
+         *     hidden conversation of its own. `state` is its latest run's.
+         */
+        Subagent: {
+            /** Format: uuid */
+            id: string;
+            /** @description The short name the main agent gave it. */
+            name: string;
+            /** @description The model its latest run uses (the one it will use */
+            model: string;
+            /**
+             * @description `queued` is a foreground sub-agent waiting for a free slot (the
+             *     limits of sub-agents working at once): launched, not started yet.
+             *     It becomes `running` when it gets one.
+             * @enum {string}
+             */
+            state: "queued" | "running" | "completed" | "failed" | "cancelled";
+            /** @description Its reports are delivered to the conversation, rather than taken by a call waiting for it. */
+            background: boolean;
+            /** @description The person stopped it; only `resumeSubagent` starts it again. */
+            stoppedByUser: boolean;
+            /** @description How many tool calls it has made. */
+            toolCalls: number;
+            /** @description While running, the tool it is using now (`web_search`, `web_fetch`, `document`), if any. */
+            activity?: string;
+            /**
+             * Format: uuid
+             * @description The run that launched it.
+             */
+            launchedBy?: string;
+            /** @description The tool call that launched it. */
+            callId?: string;
+            /** @description Its latest report has reached the main agent. */
+            reportDelivered?: boolean;
+            /**
+             * Format: int64
+             * @description How long its latest run took, once it ended.
+             */
+            durationMs?: number;
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description When its latest run started; while queued
+             */
+            startedAt: string;
+            /** Format: date-time */
+            finishedAt?: string;
+        };
+        SubagentDetail: {
+            subagent: components["schemas"]["Subagent"];
+            messages: components["schemas"]["Message"][];
+            run?: components["schemas"]["Run"];
+            live?: components["schemas"]["LiveState"];
+        };
+        SubagentSettings: {
+            /** @description Whether models are offered the sub-agent tools. Off by default. */
+            enabled: boolean;
+            /** @description The model sub-agents use. Empty is the model of the run that launches one. */
+            model: string;
+            /** @description Whether the main agent may launch sub-agents in the background. On by default. */
+            background: boolean;
+            /** @description Sub-agents one run may launch. 4 by default. */
+            maxPerRun: number;
+            /** @description Sub-agents working at once for one conversation. 3 by default. */
+            maxPerConversation: number;
+            /** @description Sub-agents working at once for one person */
+            maxPerUser: number;
+            /** @description The longest report delivered; a longer one is cut and says so. 30000 by default. */
+            maxReportChars: number;
+        };
+        /** @description Only the fields present are changed. */
+        UpdateSubagentSettingsRequest: {
+            enabled?: boolean;
+            /** @description A model an enabled channel offers (400 `model_unavailable` otherwise), or empty. */
+            model?: string;
+            background?: boolean;
+            /** @description 1 to 20 (400 `invalid_subagent_limit`). */
+            maxPerRun?: number;
+            /** @description 1 to 20 (400 `invalid_subagent_limit`). */
+            maxPerConversation?: number;
+            /** @description 1 to 100 (400 `invalid_subagent_limit`). */
+            maxPerUser?: number;
+            /** @description 1000 to 200000 (400 `invalid_subagent_limit`). */
+            maxReportChars?: number;
+        };
         ChatFeatures: {
+            /**
+             * @description Whether the caller may open the 轨迹 view of their conversations:
+             *     true only for an administrator, while request traces are on
+             *     (System settings).
+             */
+            requestTraces: boolean;
             webSearch: boolean;
+            /** @description Whether models may launch sub-agents (Sub-agent settings). */
+            subagents?: boolean;
+            /** @description Whether scheduled tasks are on (System settings); off, `/tasks` is 404. */
+            scheduledTasks: boolean;
             /** @description Whether the account settings offer uploading a picture. */
             avatarUploads: boolean;
         };
@@ -2590,6 +3122,189 @@ export interface components {
             expiresAt: string;
         };
         /** @enum {string} */
+        LibraryFileType: "image" | "pdf" | "text";
+        LibraryFile: {
+            /** Format: uuid */
+            id: string;
+            filename: string;
+            contentType: string;
+            /** Format: int64 */
+            size: number;
+            /** Format: uri */
+            url: string;
+            /** Format: uuid */
+            conversationId: string;
+            conversationTitle: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        LibraryFilePage: {
+            items: components["schemas"]["LibraryFile"][];
+            nextCursor?: string | null;
+        };
+        FileDownload: {
+            /** Format: uri */
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        /** @description A file a message was sent with that has since been deleted (`deleteFile`). */
+        RemovedAttachment: {
+            /** Format: uuid */
+            id: string;
+            filename: string;
+            contentType: string;
+        };
+        ConversationTrace: {
+            requests: components["schemas"]["TraceRequest"][];
+            retentionDays: number;
+        };
+        /**
+         * @description One model request. `request` and `response` are the server's own
+         *     encoding (llm's codec), for reading, not for a client to depend on:
+         *     `request` has `messages` (role and parts), `tools` (name,
+         *     description, parameters) and `options`; `response` has `message`,
+         *     `finishReason` and `endedAt`. A file is its reference, never its bytes.
+         */
+        TraceRequest: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            runId?: string;
+            /** @description `chat`, a run's request; `compression`, a summary of its context. */
+            kind: string;
+            /** @enum {string} */
+            status: "ok" | "error";
+            errorCode?: string;
+            errorMessage?: string;
+            /** Format: date-time */
+            startedAt: string;
+            durationMs: number;
+            firstTokenMs?: number;
+            modelId: string;
+            servedModel: string;
+            channelName: string;
+            /** @description Excludes the cached part. */
+            inputTokens: number;
+            /** @description Includes reasoning. */
+            outputTokens: number;
+            reasoningTokens: number;
+            cacheReadTokens: number;
+            cacheWriteTokens: number;
+            estimated: boolean;
+            /** Format: double */
+            cost?: number;
+            request: {
+                [key: string]: unknown;
+            };
+            response: {
+                [key: string]: unknown;
+            };
+        };
+        Document: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            conversationId: string;
+            /** Format: date-time */
+            createdAt: string;
+            versions: components["schemas"]["DocumentVersion"][];
+        };
+        DocumentSummary: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            version: number;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        DocumentVersion: {
+            version: number;
+            title: string;
+            /** @description Markdown. */
+            content: string;
+            /** @enum {string} */
+            source: "model" | "user";
+            /** Format: date-time */
+            createdAt: string;
+        };
+        UpdateDocumentRequest: {
+            title: string;
+            content: string;
+            baseVersion: number;
+        };
+        /** @enum {string} */
+        TaskScheduleKind: "once" | "daily" | "weekly" | "monthly";
+        /**
+         * @description When a task runs, in `timeZone` (an IANA name such as Asia/Shanghai).
+         *     `once` runs at `at`; the others at `time` - every day, on `weekdays`
+         *     (0 = Sunday), or on `monthDay` (a month too short for it, on its last
+         *     day).
+         */
+        TaskSchedule: {
+            kind: components["schemas"]["TaskScheduleKind"];
+            /** Format: date-time */
+            at?: string;
+            /** @description HH:MM, 24-hour, local to `timeZone`. */
+            time?: string;
+            weekdays?: number[];
+            monthDay?: number;
+            timeZone: string;
+        };
+        /**
+         * @description `active` will run at `nextRunAt`; `paused` will not until resumed;
+         *     `completed` is a one-off that has run.
+         * @enum {string}
+         */
+        TaskStatus: "active" | "paused" | "completed";
+        Task: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            prompt: string;
+            schedule: components["schemas"]["TaskSchedule"];
+            status: components["schemas"]["TaskStatus"];
+            /**
+             * Format: uuid
+             * @description Where its runs go.
+             */
+            conversationId: string;
+            /** Format: date-time */
+            nextRunAt?: string;
+            /** Format: date-time */
+            lastRunAt?: string;
+            /**
+             * @description Why the last time it was due started nothing, as a code to
+             *     localise: `conversation_busy`, `content_blocked`,
+             *     `moderation_unavailable`, `model_unavailable`, `no_models`,
+             *     `model_capacity_reached`, `too_many_runs`, `revise_refused`,
+             *     `account_unavailable`, `missed` (the server could not run it
+             *     within an hour of its time; it runs again at its next), `failed`.
+             */
+            lastError?: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        TaskList: {
+            items: components["schemas"]["Task"][];
+            /** @description How many tasks still to run a person may have. */
+            limit: number;
+        };
+        CreateTaskRequest: {
+            title: string;
+            prompt: string;
+            schedule: components["schemas"]["TaskSchedule"];
+            /** @description The model its conversation answers with; the default one when absent. */
+            model?: string;
+        };
+        /** @description Only the fields present change. */
+        UpdateTaskRequest: {
+            title?: string;
+            prompt?: string;
+            schedule?: components["schemas"]["TaskSchedule"];
+            enabled?: boolean;
+        };
+        /** @enum {string} */
         UserRole: "user" | "admin";
         SessionUser: {
             /** Format: uuid */
@@ -2599,6 +3314,8 @@ export interface components {
             name: string;
             role: components["schemas"]["UserRole"];
             avatarUrl?: components["schemas"]["AvatarUrl"];
+            /** @description The time zone the browser last reported (`updateMe`), for times a model schedules. */
+            timeZone?: string;
         };
         /**
          * Format: uri
@@ -2611,7 +3328,77 @@ export interface components {
          *     looked at, from every page that shows a name.
          */
         AvatarUrl: string;
+        PasskeyOptions: {
+            /**
+             * Format: uuid
+             * @description Sent back with the browser's answer.
+             */
+            challengeId: string;
+            /**
+             * @description The WebAuthn options as JSON (PublicKeyCredentialCreationOptionsJSON
+             *     or PublicKeyCredentialRequestOptionsJSON), for the browser.
+             */
+            publicKey: {
+                [key: string]: unknown;
+            };
+        };
+        PasskeyAnswer: {
+            /** Format: uuid */
+            challengeId: string;
+            /** @description The browser's credential as JSON (RegistrationResponseJSON or AuthenticationResponseJSON). */
+            credential: {
+                [key: string]: unknown;
+            };
+            /** @description What to call a passkey being added; the browser's name for its kind when absent. */
+            name?: string;
+        };
+        Passkey: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            lastUsedAt?: string;
+            /** @description Whether it is backed up and synced across devices (a password manager or platform account), rather than bound to one device. */
+            synced: boolean;
+        };
+        RenamePasskeyRequest: {
+            name: string;
+        };
+        PasskeySettings: {
+            /** @description Whether accounts may add passkeys and sign in with them. Off, the passkeys stay but cannot be used. */
+            enabled: boolean;
+            /**
+             * @description The relying party ID: the domain passkeys are made for, such as
+             *     chat.example.com. Empty takes the domain the page is served from.
+             */
+            rpId: string;
+            /** @description Origins a passkey answer may come from, such as https://chat.example.com. Empty takes the page's own origin. */
+            origins: string[];
+            /**
+             * @description Whether the authenticator must verify the person (fingerprint, face, PIN) or only should.
+             * @enum {string}
+             */
+            userVerification: "required" | "preferred";
+            /** @description The relying party ID in force for this request. */
+            effectiveRpId: string;
+            /** @description The origins in force for this request. */
+            effectiveOrigins: string[];
+            /** @description Passkeys registered across all accounts. */
+            registered: number;
+        };
+        /** @description Only the fields present are changed. */
+        UpdatePasskeySettingsRequest: {
+            enabled?: boolean;
+            rpId?: string;
+            origins?: string[];
+            /** @enum {string} */
+            userVerification?: "required" | "preferred";
+        };
         AuthOptions: {
+            /** @description Whether accounts may sign in with a passkey (`beginPasskeySignIn`). */
+            passkeys: boolean;
             /**
              * @description Whether `POST /auth/register` is open. True too while no account
              *     exists yet, whatever the administrator's switch says: the first
@@ -2624,8 +3411,6 @@ export interface components {
              *     while no account exists yet, since the first one is never pending.
              */
             approval: boolean;
-            /** @description The same as `GuestStatus.enabled`. */
-            guest: boolean;
         };
         RegisterPending: {
             /** @enum {string} */
@@ -2680,10 +3465,11 @@ export interface components {
          *     that names a conversation; `compression` is a request that writes a
          *     conversation's context summary, made with the conversation's own model;
          *     `moderation` is a request that has a model classify a message
-         *     (`ModerationSettings.mode` `model`).
+         *     (`ModerationSettings.mode` `model`); `subagent` is a model request of a
+         *     sub-agent's run, logged on the conversation it works for.
          * @enum {string}
          */
-        UsageKind: "chat" | "title" | "compression" | "moderation";
+        UsageKind: "chat" | "title" | "compression" | "moderation" | "subagent";
         /**
          * @description A user stopping a reply is `ok`; only a failed request is `error`.
          * @enum {string}
@@ -2708,6 +3494,11 @@ export interface components {
             userName?: string | null;
             userEmail?: string | null;
             userAvatarUrl?: components["schemas"]["AvatarUrl"];
+            /**
+             * @description The name of the account this request was made for, when an
+             *     administrator has deleted it since.
+             */
+            deletedUser?: string | null;
             /** Format: uuid */
             conversationId?: string | null;
             /** Format: uuid */
@@ -2845,6 +3636,8 @@ export interface components {
             name?: components["schemas"]["Username"];
             /** Format: email */
             email?: string;
+            /** @description An IANA time zone name; the page sends the browser's when it differs. */
+            timeZone?: string;
         };
         ChangePasswordRequest: {
             currentPassword: string;
@@ -3080,236 +3873,6 @@ export interface components {
             page: number;
             limit: number;
         };
-        GuestStatus: {
-            enabled: boolean;
-            /**
-             * @description Whether the caller's network address is banned from guest mode
-             *     (content moderation). Every other `/guest/*` endpoint answers 403
-             *     `guest_banned` then.
-             */
-            banned: boolean;
-            /**
-             * Format: date-time
-             * @description When the ban ends; null for a permanent one. Only with `banned`.
-             */
-            bannedUntil?: string | null;
-        };
-        GuestConfig: {
-            models: components["schemas"]["ChatModel"][];
-            features: components["schemas"]["ChatFeatures"];
-            personalization: {
-                /** @description The administrator's memory switch (`SystemSettings.memory`). */
-                memoryAllowed: boolean;
-                instructionLimit: number;
-                memoryLimit: number;
-                memoryLength: number;
-            };
-        };
-        GuestAttachment: {
-            /** Format: uuid */
-            id: string;
-            /**
-             * @description 1 to 255 characters, no control characters (400 `invalid_filename`).
-             *     The model is told it, so it is checked as words are: with the new
-             *     message, or in history unless the file's `receipt` covers it.
-             */
-            filename: string;
-            contentType: string;
-            /** Format: int64 */
-            size: number;
-            /**
-             * Format: byte
-             * @description The file, base64. Left out for the files that no longer fit what a
-             *     request can carry (the newest are sent, as the model gets the newest);
-             *     the model is told those were not included, as for an account.
-             */
-            data?: string;
-            /**
-             * @description The server's signature that this file's name and (for a picture
-             *     sent with its bytes) bytes have been checked, from
-             *     `GuestEndEvent.receipts.files`. Opaque, and kept as received. It
-             *     has two halves; a picture whose bytes are no longer sent still has
-             *     its name vouched for. Without one the name, and a picture's bytes,
-             *     are checked again.
-             */
-            receipt?: string;
-        };
-        /**
-         * @description Signatures the server gives for content it has checked or written, so
-         *     that the browser, which keeps the conversation and could write anything
-         *     into it, is not believed about it. All opaque: a signature covers
-         *     exactly the words (or, for a row of the model's, the blocks) it was
-         *     made for, so a changed byte is a missing receipt. Kept next to the
-         *     thing they sign and sent back with it. In a request only
-         *     `aboutYou`, `responseStyle` and `memorySnapshot` are read; the rest
-         *     ride on the rows, memories and files themselves.
-         */
-        GuestReceipts: {
-            /** @description For the custom instructions' `aboutYou`. */
-            aboutYou?: string;
-            /** @description For `responseStyle`. */
-            responseStyle?: string;
-            /** @description For the conversation's `memorySnapshot`. */
-            memorySnapshot?: string;
-            /**
-             * @description Only in `GuestEndEvent`. User rows the server checked in this
-             *     request (the new question, and any row that was sent without a
-             *     receipt), by message id.
-             */
-            messages?: {
-                [key: string]: string;
-            };
-            /** @description Only in `GuestEndEvent`. The files whose name (and bytes, for a picture) were checked, by attachment id. */
-            files?: {
-                [key: string]: string;
-            };
-        };
-        /**
-         * @description A row of the conversation as the guest's browser holds it. Assistant
-         *     and tool rows are what the server sent back earlier (`Message`).
-         *     Nothing in a row is taken on the browser's word: a user row's words
-         *     are checked again unless it comes with its `receipt`, and an assistant
-         *     or tool row that does not (with the blocks it is sent with) is not
-         *     something the server wrote, so the request is refused
-         *     (`invalid_history`).
-         */
-        GuestMessage: {
-            /** Format: uuid */
-            id: string;
-            role: components["schemas"]["Role"];
-            content: string;
-            parts: components["schemas"]["MessagePart"][];
-            /** @description The `Message.providerState` the row came with; used in place of `parts` when sent. */
-            providerState?: string;
-            /** @description The `Message.receipt` the row came with, or `GuestReceipts.messages` for a user row. */
-            receipt?: string;
-            /** @enum {string} */
-            stopReason?: "stop" | "length" | "tool_calls" | "content_filter" | "cancelled" | "error";
-            model?: string;
-            errorCode?: string;
-            usage?: components["schemas"]["Usage"];
-            attachments?: components["schemas"]["GuestAttachment"][];
-            /** Format: date-time */
-            createdAt: string;
-        };
-        GuestMemory: {
-            /** Format: uuid */
-            id: string;
-            content: string;
-            source?: components["schemas"]["MemorySource"];
-            /** @description The `Memory.receipt` it came with. Without a valid one the note is checked again. */
-            receipt?: string;
-        };
-        GuestRunRequest: {
-            /**
-             * @description `send`: `input` is a new message after `messages` (also an edit:
-             *     `messages` ends before the question it rewords). `regenerate`:
-             *     answer the last message of `messages` again. `answer`: `callId` and `answers` are the reply to
-             *     the question the last row of `messages` asks.
-             * @enum {string}
-             */
-            action: "send" | "regenerate" | "answer";
-            /** Format: uuid */
-            conversationId: string;
-            temporary?: boolean;
-            /** @description The conversation has a title already; none is generated after the run. */
-            titled?: boolean;
-            /**
-             * @description The conversation, in order. For `send` it stops before `input`; for
-             *     `regenerate` it ends with the question and without the answer being
-             *     redone.
-             */
-            messages: components["schemas"]["GuestMessage"][];
-            /** @description For `send`. */
-            input?: components["schemas"]["GuestMessage"];
-            callId?: string;
-            answers?: {
-                selected: string[];
-                other?: string;
-            }[];
-            /**
-             * Format: uuid
-             * @description For `answer`. The run that began the reply the question is part of.
-             */
-            continues?: string;
-            model?: string;
-            reasoningEffort?: components["schemas"]["ReasoningEffort"];
-            webSearch?: boolean;
-            aboutYou?: string;
-            responseStyle?: string;
-            memoryEnabled?: boolean;
-            memories?: components["schemas"]["GuestMemory"][];
-            receipts?: components["schemas"]["GuestReceipts"];
-            /**
-             * @description The conversation's snapshot from `GuestEndEvent`, sent back so the
-             *     system prompt is the same bytes at every turn. Absent on its first run.
-             *     It has to be exactly what the server wrote (notes numbered `m1`,
-             *     `m2`, … in order, saved notes numbered on from there, each note one
-             *     line of at most 200 characters, ids set and unique): the prompt
-             *     prints the numbers next to the notes, so any other is 400
-             *     `invalid_snapshot`.
-             */
-            memorySnapshot?: {
-                [key: string]: unknown;
-            } | null;
-            /**
-             * @description The conversation's compressed context, if the browser holds one,
-             *     sent back so the run builds its requests from it as an account's do.
-             *     `messages` then begins at the summary's `keptMessageId` (when it has
-             *     one) and its `throughMessageId` - the rows between them, which the
-             *     summary replaces, are not sent - and goes on from there; the server
-             *     writes them as they are and the summary over them.
-             *     `throughMessageId` and `keptMessageId` have to be among `messages`.
-             */
-            summary?: components["schemas"]["ContextSummary"];
-        };
-        /**
-         * @description The last frame of a guest's run: what the browser has to keep, because
-         *     the server keeps nothing. Sent after `run_finished`.
-         */
-        GuestEndEvent: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "guest_end";
-            run: components["schemas"]["Run"];
-            memorySnapshot: {
-                [key: string]: unknown;
-            } | null;
-            /** @description The guest's memories now - the model's memory tool may have changed them. */
-            memories: components["schemas"]["Memory"][];
-            /** @description What the model changed during this run, for the undo list. */
-            memoryEvents: components["schemas"]["MemoryEvent"][];
-            receipts?: components["schemas"]["GuestReceipts"];
-            /** @description Set when the conversation was given a title after this run. */
-            title?: string;
-            /**
-             * @description The conversation's compressed context as the run left it; absent
-             *     when it has none. The same summary was announced in the run's own
-             *     events (`compaction_finished`) when the run made it.
-             */
-            summary?: components["schemas"]["ContextSummary"];
-        };
-        /** @description One SSE frame of a guest run. */
-        GuestRunEvent: components["schemas"]["SnapshotEvent"] | components["schemas"]["BatchEvent"] | components["schemas"]["GuestEndEvent"];
-        GuestTitleRequest: {
-            messages: {
-                /** @enum {string} */
-                role: "user" | "assistant";
-                content: string;
-                /**
-                 * @description The row's receipt. A user row without a valid one is checked
-                 *     first; an assistant row without one is left out of the title.
-                 */
-                receipt?: string;
-            }[];
-            /** @description The conversation's model, used when no task model is set. */
-            model?: string;
-        };
-        GuestTitle: {
-            title: string;
-        };
         SystemSettings: {
             /**
              * @description Whether anyone may create an account by registering. Off, only
@@ -3324,21 +3887,6 @@ export interface components {
              *     first account ever, are never pending.
              */
             registrationApproval: boolean;
-            /**
-             * @description Whether anyone may use the chat without an account. A guest's
-             *     conversations are kept in their own browser; the server holds none
-             *     of them. Off by default.
-             */
-            guestMode: boolean;
-            /** @description Requests one address may make as a guest per hour; 0 is unlimited. */
-            guestHourlyLimit: number;
-            /** @description Requests all guests together may make per day (the last 24 hours); 0 is unlimited. */
-            guestDailyLimit: number;
-            /**
-             * @description How many runs one address may have going at once as a guest (the
-             *     address the hourly limit counts); 0 is unlimited. 2 unless changed.
-             */
-            guestMaxConcurrentRuns: number;
             /**
              * @description How many runs one account may have going at once across all its
              *     conversations; 0 is unlimited. 3 unless changed. Administrators
@@ -3399,6 +3947,22 @@ export interface components {
              */
             avatarUploads: boolean;
             /**
+             * @description Whether administrators' model requests are recorded as sent - the
+             *     messages, tools and options, and what came back - for the 轨迹
+             *     view of their own conversations (`getConversationTrace`). Off by
+             *     default: a debugging aid. Off, nothing new is recorded and the
+             *     view and its endpoint are gone (404); what was recorded is
+             *     deleted after its week as usual.
+             */
+            requestTraces: boolean;
+            /**
+             * @description Whether people may schedule tasks (`/tasks`) and models are offered
+             *     the tool that does. On by default. Off, nothing scheduled runs and
+             *     `/tasks` is 404; the tasks are kept, and run again from their next
+             *     time once it is switched back on.
+             */
+            scheduledTasks: boolean;
+            /**
              * @description The kill switch for personal memory. Off, no conversation reads or
              *     writes memories and the memory tool is not offered; people can still
              *     see and delete theirs, and their custom instructions still apply.
@@ -3420,15 +3984,10 @@ export interface components {
             compressContext?: boolean;
             memory?: boolean;
             avatarUploads?: boolean;
+            scheduledTasks?: boolean;
+            requestTraces?: boolean;
             allowRegistration?: boolean;
             registrationApproval?: boolean;
-            guestMode?: boolean;
-            /** @description 0 to 100000 (400 `invalid_guest_limit` otherwise); 0 is unlimited. */
-            guestHourlyLimit?: number;
-            /** @description 0 to 10000000 (400 `invalid_guest_limit` otherwise); 0 is unlimited. */
-            guestDailyLimit?: number;
-            /** @description 0 to 1000 (400 `invalid_run_limit` otherwise); 0 is unlimited. */
-            guestMaxConcurrentRuns?: number;
             /** @description 0 to 1000 (400 `invalid_run_limit` otherwise); 0 is unlimited. */
             maxConcurrentRuns?: number;
             /**
@@ -3474,7 +4033,7 @@ export interface components {
         /**
          * @description What an account's message does when the moderation service fails (an
          *     error, a timeout, no channel, the model's spending cap): `allow` sends
-         *     it anyway, `block` refuses it. A guest's is always refused.
+         *     it anyway, `block` refuses it.
          * @enum {string}
          */
         ModerationOnError: "allow" | "block";
@@ -3484,18 +4043,21 @@ export interface components {
          */
         ModerationCategory: "sexual" | "sexual/minors" | "harassment" | "harassment/threatening" | "hate" | "hate/threatening" | "illicit" | "illicit/violent" | "self-harm" | "self-harm/intent" | "self-harm/instructions" | "violence" | "violence/graphic";
         /**
-         * @description Where the blocked text came from: a message sent, edited or answered, a
-         *     guest's, the custom instructions or a memory as they were saved, or
+         * @description Where the blocked text came from: a message sent, edited or answered,
+         *     the custom instructions or a memory as they were saved, or
          *     either of them as a conversation took its snapshot (`snapshot`, logged
-         *     but not counted as a strike).
+         *     but not counted as a strike); a scheduled task's prompt as its owner
+         *     saved it (`task`), or as it was about to be sent or a model wrote it
+         *     (`task_run`, logged but not counted as a strike); the person's text
+         *     of a writing block as a model was about to read it (`document`).
          * @enum {string}
          */
-        ModerationSource: "send" | "edit" | "answer" | "guest" | "instructions" | "memory" | "snapshot";
+        ModerationSource: "send" | "edit" | "answer" | "instructions" | "memory" | "snapshot" | "task" | "task_run" | "document";
         /**
          * @description What a blocked message set off, when it reached the strike threshold.
          * @enum {string}
          */
-        ModerationSanction: "disabled" | "banned";
+        ModerationSanction: "disabled";
         VersionInfo: {
             /** @description This server's version, `1.2.3` (no `v`), or `dev` for a local build. */
             current: string;
@@ -3547,13 +4109,11 @@ export interface components {
             onError: components["schemas"]["ModerationOnError"];
             /**
              * @description How many blocked messages within `strikeWindowHours` disable the
-             *     account (or ban the guest address). 0 never sanctions. An
+             *     account. 0 never sanctions. An
              *     administrator is only logged.
              */
             strikes: number;
             strikeWindowHours: number;
-            /** @description How long a banned guest address stays banned; 0 is permanent. */
-            guestBanHours: number;
         };
         /** @description Only the fields present are changed. An absent `openaiApiKey` keeps the stored one; an empty string clears it. */
         UpdateModerationSettingsRequest: {
@@ -3568,7 +4128,6 @@ export interface components {
             onError?: components["schemas"]["ModerationOnError"];
             strikes?: number;
             strikeWindowHours?: number;
-            guestBanHours?: number;
         };
         ModerationEvent: {
             /** Format: uuid */
@@ -3579,12 +4138,8 @@ export interface components {
             userId?: string | null;
             userName?: string | null;
             userEmail?: string | null;
-            /** @description Whether the account is disabled now; null for a guest. */
+            /** @description Whether the account is disabled now; null once it is deleted. */
             userDisabled?: boolean | null;
-            /** @description A guest's network address (an IPv6 one as its /64); null for an account. */
-            guestIp?: string | null;
-            /** @description Whether the guest address is banned now; null for an account. */
-            ipBanned?: boolean | null;
             /** Format: uuid */
             conversationId?: string | null;
             source: components["schemas"]["ModerationSource"];
@@ -3601,19 +4156,63 @@ export interface components {
             nextCursor?: string;
             limit: number;
         };
-        GuestBan: {
-            ip: string;
-            /** Format: date-time */
-            createdAt: string;
+        ImageSearchSettings: {
             /**
-             * Format: date-time
-             * @description Null for a permanent ban.
+             * @description Whether answers describe their pictures for the server to find
+             *     (`searchImage`). Off, an answer can show only a picture whose
+             *     address one of its own sources listed - a page it read or a
+             *     search it ran - as before.
              */
-            expiresAt?: string | null;
-            reason: string;
-            /** Format: uuid */
-            eventId?: string | null;
+            enabled: boolean;
+            provider: components["schemas"]["ImageSearchProvider"];
+            /** @description Whether a Pixabay API key is stored; `pixabay` needs one. Write-only, like a channel's. */
+            pixabayKeySet: boolean;
+            /** @description The Pixabay key's last four characters. */
+            pixabayKeyPreview?: string;
         };
+        /** @description Only the fields present are changed. */
+        UpdateImageSearchSettingsRequest: {
+            enabled?: boolean;
+            provider?: components["schemas"]["ImageSearchProvider"];
+            /** @description The Pixabay API key. Empty removes the stored one. */
+            pixabayKey?: string;
+        };
+        ImageSearchTestRequest: {
+            query: string;
+            /** @description A service to try before choosing it. The configured one when absent. */
+            provider?: components["schemas"]["ImageSearchProvider"];
+            /** @description A Pixabay key to try before saving it. The stored key when absent. */
+            pixabayKey?: string;
+        };
+        ImageSearchTestResult: {
+            ok: boolean;
+            latencyMs: number;
+            /** @description Why the search failed */
+            error?: string;
+            /** @description The first match; absent when nothing matched. */
+            image?: components["schemas"]["ImageSearchHit"];
+        };
+        ImageSearchHit: {
+            /** @description The picture at the service */
+            url: string;
+            width: number;
+            height: number;
+            title: string;
+            creator?: string;
+            license: string;
+            landingUrl?: string;
+            source: string;
+        };
+        /**
+         * @description Where the pictures answers describe are found (`searchImage`).
+         *     `wikimedia` is Wikimedia Commons' own search: no key, quick, but with
+         *     no safe-search filter. `openverse` searches Creative Commons images
+         *     from many sites with mature content filtered out, no key, but allows
+         *     an anonymous server 200 searches a day and is often slow. `pixabay`
+         *     is Pixabay's stock photos with safe search, and needs a free key.
+         * @enum {string}
+         */
+        ImageSearchProvider: "wikimedia" | "openverse" | "pixabay";
         WebSearchSettings: {
             /**
              * @description Whether runs are offered the web_search tool. Tavily also needs a
@@ -4042,6 +4641,8 @@ export interface components {
             userName?: string | null;
             userEmail?: string | null;
             userAvatarUrl?: components["schemas"]["AvatarUrl"];
+            /** @description The name of a deleted account whose requests these are. */
+            deletedUser?: string | null;
             /** Format: int64 */
             requests: number;
             /** Format: double */
@@ -4137,6 +4738,9 @@ export interface components {
     };
     parameters: {
         ConversationId: string;
+        SubagentId: string;
+        TaskId: string;
+        FileId: string;
         Limit: number;
         Cursor: string;
     };
@@ -4319,6 +4923,169 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionUser"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    beginPasskeySignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the challenge */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeyOptions"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    passkeySignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasskeyAnswer"];
+            };
+        };
+        responses: {
+            /** @description signed in, session cookie set */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionUser"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listPasskeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Passkey"][];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    addPasskey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasskeyAnswer"];
+            };
+        };
+        responses: {
+            /** @description added */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Passkey"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    beginPasskeyRegistration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the challenge */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeyOptions"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deletePasskey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                passkeyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    renamePasskey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                passkeyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenamePasskeyRequest"];
+            };
+        };
+        responses: {
+            /** @description renamed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Passkey"];
                 };
             };
             default: components["responses"]["Error"];
@@ -4938,8 +5705,6 @@ export interface operations {
                 limit?: components["parameters"]["Limit"];
                 cursor?: components["parameters"]["Cursor"];
                 userId?: string;
-                /** @description A guest's network address, as the log shows it. */
-                guestIp?: string;
                 category?: components["schemas"]["ModerationCategory"];
             };
             header?: never;
@@ -4960,7 +5725,7 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    listGuestBans: {
+    getSubagentSettings: {
         parameters: {
             query?: never;
             header?: never;
@@ -4975,13 +5740,13 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GuestBan"][];
+                    "application/json": components["schemas"]["SubagentSettings"];
                 };
             };
             default: components["responses"]["Error"];
         };
     };
-    createGuestBan: {
+    updateSubagentSettings: {
         parameters: {
             query?: never;
             header?: never;
@@ -4990,10 +5755,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    /** Format: uuid */
-                    eventId: string;
-                };
+                "application/json": components["schemas"]["UpdateSubagentSettingsRequest"];
             };
         };
         responses: {
@@ -5003,29 +5765,54 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GuestBan"];
+                    "application/json": components["schemas"]["SubagentSettings"];
                 };
             };
             default: components["responses"]["Error"];
         };
     };
-    deleteGuestBan: {
+    getPasskeySettings: {
         parameters: {
-            query: {
-                ip: string;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description lifted */
-            204: {
+            /** @description ok */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PasskeySettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updatePasskeySettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePasskeySettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeySettings"];
+                };
             };
             default: components["responses"]["Error"];
         };
@@ -5096,6 +5883,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WebSearchTestResult"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getImageSearchSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageSearchSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateImageSearchSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateImageSearchSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageSearchSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    testImageSearch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImageSearchTestRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageSearchTestResult"];
                 };
             };
             default: components["responses"]["Error"];
@@ -5291,6 +6149,27 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    deleteUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     updateUser: {
         parameters: {
             query?: never;
@@ -5445,6 +6324,29 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    getConversationTrace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationTrace"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     generateConversationTitle: {
         parameters: {
             query?: never;
@@ -5548,6 +6450,119 @@ export interface operations {
         responses: {
             /** @description the conversation has no summary now */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listSubagents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubagentList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getSubagent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                subagentId: components["parameters"]["SubagentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubagentDetail"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    stopSubagent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                subagentId: components["parameters"]["SubagentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description asked to stop */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    resumeSubagent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                subagentId: components["parameters"]["SubagentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description started */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    backgroundSubagent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                subagentId: components["parameters"]["SubagentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description moved */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5875,6 +6890,198 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    listConversationDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["DocumentSummary"][];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                documentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Document"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                documentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDocumentRequest"];
+            };
+        };
+        responses: {
+            /** @description the document, with the new version last */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Document"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: components["parameters"]["TaskId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: components["parameters"]["TaskId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description the task */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    runTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: components["parameters"]["TaskId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description started */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     listMemories: {
         parameters: {
             query?: never;
@@ -6101,6 +7308,52 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    searchImage: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The picture found. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FoundImage"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getPicture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pictureId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": string;
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     listChatModels: {
         parameters: {
             query?: never;
@@ -6122,146 +7375,18 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    getGuestStatus: {
+    listFiles: {
         parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description ok */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GuestStatus"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    getGuestConfig: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description ok */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GuestConfig"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    guestRun: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GuestRunRequest"];
-            };
-        };
-        responses: {
-            /** @description The events of the run, as server-sent events. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/event-stream": components["schemas"]["GuestRunEvent"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    cancelGuestRun: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                runId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description asked */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    guestTitle: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GuestTitleRequest"];
-            };
-        };
-        responses: {
-            /** @description ok */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GuestTitle"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    getGuestFavicon: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                domain: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The icon. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "image/*": string;
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    getGuestImage: {
-        parameters: {
-            query: {
-                url: string;
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                /**
+                 * @description Only files whose name contains this, ignoring case. Keep it (and
+                 *     `type`) the same while following `nextCursor`.
+                 */
+                search?: string;
+                /** @description Only images, or only PDFs. */
+                type?: components["schemas"]["LibraryFileType"];
             };
             header?: never;
             path?: never;
@@ -6269,13 +7394,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The image. */
+            /** @description a page of files */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "image/*": string;
+                    "application/json": components["schemas"]["LibraryFilePage"];
                 };
             };
             default: components["responses"]["Error"];
@@ -6301,6 +7426,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Upload"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fileId: components["parameters"]["FileId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getFileDownload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fileId: components["parameters"]["FileId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the link */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDownload"];
                 };
             };
             default: components["responses"]["Error"];

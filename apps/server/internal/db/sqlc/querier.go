@@ -34,6 +34,9 @@ type Querier interface {
 	// pending. It is independent of `disabled`: enabling an account does not
 	// approve it, and approving one does not enable it.
 	AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams) (User, error)
+	// A due task's turn is taken: when it runs next (NULL: a one-off that has now
+	// had its turn). The run it starts, or why none, is recorded after.
+	AdvanceTask(ctx context.Context, arg AdvanceTaskParams) error
 	// The only way a transcript row is written by the agent layer. Rows are never
 	// updated afterwards: a reply still being generated lives in runs.live, and
 	// becomes a row only when it is finished.
@@ -41,10 +44,6 @@ type Querier interface {
 	// created_at is the wall clock, not now(): now() is the transaction's start, so
 	// two rows written by one commit would tie and fall back to ordering by a
 	// random uuid.
-	//
-	// `id` and `created_at` are for guest mode, which writes a transcript the
-	// browser kept, under the ids and in the order the browser has it; every other
-	// caller leaves both out.
 	AppendEntry(ctx context.Context, arg AppendEntryParams) (Message, error)
 	AppendMessageContent(ctx context.Context, arg AppendMessageContentParams) (Message, error)
 	// Claims uploads for a message. Only the caller's own, only unclaimed ones: the
@@ -64,12 +63,24 @@ type Querier interface {
 	// endpoint does for one: recorded here, and the runner told after the commit.
 	// Deleting a conversation does this, because nothing can stop a run in a
 	// deleted conversation afterwards (the stop endpoint no longer finds it) and
-	// it would go on calling the model and holding its owner's run slot.
+	// it would go on calling the model and holding its owner's run slot. The
+	// runs of their sub-agents go too.
 	CancelConversationRuns(ctx context.Context, ids []uuid.UUID) ([]uuid.UUID, error)
+	// Stop pressed for every run the account has going, before it is deleted:
+	// the runner is told after the commit.
+	CancelUserRuns(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
 	// What each channel's requests have cost, all time, from the usage ledger: one
 	// grouped read for the whole channel list. Requests with no price (a model
 	// the catalogue does not price) add nothing. A channel never used is absent.
 	ChannelSpend(ctx context.Context) ([]ChannelSpendRow, error)
+	// The scheduler's pick: tasks whose time has come, locked so that another
+	// server's pass skips them. The caller moves each one's next_run_at on in the
+	// same transaction, so it is taken once.
+	ClaimDueTasks(ctx context.Context, arg ClaimDueTasksParams) ([]ScheduledTask, error)
+	// The reports waiting for a conversation, oldest first, held until the
+	// transaction that delivers them ends. Only a background sub-agent's: a
+	// foreground one's is taken by the call waiting for it (TakeReportForTool).
+	ClaimPendingReports(ctx context.Context, parentID uuid.UUID) ([]SubagentReport, error)
 	CountAdmins(ctx context.Context) (int64, error)
 	CountCatalogModels(ctx context.Context) (int64, error)
 	CountCatalogProviders(ctx context.Context) (int64, error)
@@ -78,29 +89,34 @@ type Querier interface {
 	// answer a caller reading a map gets for free.
 	CountEnabledChannelModels(ctx context.Context) ([]CountEnabledChannelModelsRow, error)
 	CountEnabledChannelModelsFor(ctx context.Context, channelID uuid.UUID) (int64, error)
-	// How many requests this address has made in the last hour, and everyone in
-	// the last day.
-	CountGuestRequests(ctx context.Context, ip string) (CountGuestRequestsRow, error)
-	// The same for a guest address.
-	CountGuestStrikes(ctx context.Context, arg CountGuestStrikesParams) (int64, error)
-	// How many guest runs from this address are going. A guest's run lives inside
-	// the request that follows it and is never resumed after a restart, so one that
-	// has committed nothing for a long while is a leftover of a process that died
-	// (the sweep deletes its user within hours), not a run that is going: it does
-	// not hold a slot.
-	CountIPRunningRuns(ctx context.Context, ip string) (int64, error)
+	// What the per-person limit counts: tasks still to run.
+	CountEnabledTasks(ctx context.Context, userID uuid.UUID) (int64, error)
+	// How many sub-agents one run has launched.
+	CountLaunchedSubagents(ctx context.Context, launchedBy *uuid.UUID) (int64, error)
 	CountMemories(ctx context.Context, userID uuid.UUID) (int64, error)
+	CountPasskeys(ctx context.Context) (int64, error)
+	// A conversation's sub-agents launched before this one that are still
+	// queued (no run yet): a queued sub-agent starts only when none ahead of it
+	// waits, so they start in the order they were launched.
+	CountQueuedSubagentsBefore(ctx context.Context, arg CountQueuedSubagentsBeforeParams) (int64, error)
 	// The total behind ListServedModels; see the comments there. Counting `served`
 	// rather than channel_models is what keeps a model served by three channels
 	// from counting three times.
 	CountServedModels(ctx context.Context, arg CountServedModelsParams) (int64, error)
-	// How many runs of this account are going, in all its conversations.
+	// The person's sub-agent runs that are going: in one conversation, and in all.
+	CountSubagentRuns(ctx context.Context, arg CountSubagentRunsParams) (CountSubagentRunsRow, error)
+	// How many tool calls each of a conversation's sub-agents has made.
+	CountSubagentToolCalls(ctx context.Context, parentID *uuid.UUID) ([]CountSubagentToolCallsRow, error)
+	// How many runs of this account are going, in all its conversations. A
+	// sub-agent's runs are counted apart (CountUserSubagentRuns): two of them
+	// working in the background must not keep the person from sending.
 	CountUserRunningRuns(ctx context.Context, userID uuid.UUID) (int64, error)
 	// An account's blocked messages in the window, counted from the last time it
 	// was sanctioned: an administrator who enables the account again gives it a
 	// fresh start, instead of the next message setting the same punishment off.
 	// A refusal at snapshot time is not a strike: it is old text being left out of
-	// a conversation, not something the person is sending now.
+	// a conversation, not something the person is sending now. Nor is a task's
+	// prompt checked as it is about to be sent, or as a model wrote it (task_run).
 	CountUserStrikes(ctx context.Context, arg CountUserStrikesParams) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
 	CountUsersFiltered(ctx context.Context, arg CountUsersFilteredParams) (int64, error)
@@ -110,39 +126,35 @@ type Querier interface {
 	// weight is the default weight, 1, the same way.
 	CreateChannel(ctx context.Context, arg CreateChannelParams) (Channel, error)
 	CreateConversation(ctx context.Context, arg CreateConversationParams) (Conversation, error)
-	// A file the browser sent with a question, under the id its message refers to.
-	CreateGuestAttachment(ctx context.Context, arg CreateGuestAttachmentParams) (Attachment, error)
-	// The conversation under the id the browser knows it by, with the memory
-	// snapshot the browser kept from its first run (NULL: this is the first).
-	CreateGuestConversation(ctx context.Context, arg CreateGuestConversationParams) (Conversation, error)
-	// The run that asked a question, standing in for the one the browser answers:
-	// the run that goes on after an answer `continues` it, and says so by its id.
-	// The stub holds no rows (the question is a transcript row of the shape older
-	// conversations have) and is never executed.
-	CreateGuestStubRun(ctx context.Context, arg CreateGuestStubRunParams) (Run, error)
-	// Guest mode. A guest has no account: each run is executed against rows that
-	// are written when the request arrives and deleted when it ends (see
-	// api/guest_run.go). Everything here is either that write, that delete, or the
-	// counting behind the limits an administrator sets.
-	// The throwaway owner of one run's rows. No password and no session: it can
-	// never sign in, and the queries behind sign-in, the user list and the user
-	// counts leave `guest` rows out. The personalization is the guest's own, kept
-	// in their browser and sent with the request.
-	CreateGuestUser(ctx context.Context, arg CreateGuestUserParams) (User, error)
+	// Writing blocks (api/documents.go). Every statement names the owner, so
+	// another person's document reads as missing.
+	CreateDocument(ctx context.Context, arg CreateDocumentParams) (Document, error)
 	CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error)
 	CreateRun(ctx context.Context, arg CreateRunParams) (Run, error)
 	// These are the operator's selections at creation, not the endpoint's entire
 	// list. Insert them together with the channel in one transaction.
 	CreateSelectedChannelModels(ctx context.Context, arg CreateSelectedChannelModelsParams) error
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
+	// Sub-agents (docs/design/sub-agents.md): hidden child conversations whose
+	// runs do work the main agent handed over, and the reports they hand back.
+	CreateSubagentConversation(ctx context.Context, arg CreateSubagentConversationParams) (Conversation, error)
+	CreateTask(ctx context.Context, arg CreateTaskParams) (ScheduledTask, error)
+	CreateWebAuthnChallenge(ctx context.Context, arg CreateWebAuthnChallengeParams) (uuid.UUID, error)
+	// Deletes an account and, by
+	// cascade, its sessions, conversations, messages, runs, attachments, memories
+	// and scheduled tasks. The storage keys of its files and its picture come back
+	// in the same statement, for the files to be removed after the commit.
+	DeleteAccount(ctx context.Context, id *uuid.UUID) (DeleteAccountRow, error)
 	DeleteAllMemories(ctx context.Context, userID uuid.UUID) error
 	DeleteAllMemoryEvents(ctx context.Context, userID uuid.UUID) error
 	// Deletes the answer to a question: every run on it - the ones that carry on
 	// after a question the model asked included - and every row that follows it.
 	// A question is only regenerated while it is the last one, so what follows it
-	// is its answer - and the messages moderation refused since, which are user
-	// rows but not questions. Files hang on user messages that were sent, so a
-	// refused one has none to hand back.
+	// is its answer - and the messages moderation refused since, and the
+	// sub-agents' reports delivered since, which are user rows but not questions.
+	// Files hang on user messages that were sent, so neither has any to hand back.
+	// A report whose row goes is pending again (subagent_reports, ON DELETE SET
+	// NULL), and the new answer receives it.
 	DeleteAnswerTo(ctx context.Context, arg DeleteAnswerToParams) error
 	// A sign-in whose password turned out right gives its slot back: only failures
 	// count.
@@ -162,14 +174,12 @@ type Querier interface {
 	// NULL). SKIP LOCKED lets servers run this at once without waiting on each
 	// other, and a batch keeps one pass from holding a million rows.
 	DeleteExpiredTemporaryConversations(ctx context.Context, arg DeleteExpiredTemporaryConversationsParams) ([]DeleteExpiredTemporaryConversationsRow, error)
-	DeleteGuestBan(ctx context.Context, ip string) (int64, error)
-	// The end of a run: the user goes, and the conversation, transcript, runs,
-	// attachments and memories go with it by cascade. The usage ledger keeps its
-	// rows with the user (and conversation, and run) set to NULL - an account is
-	// never deleted otherwise, so a request without an owner is a guest's. The
-	// storage keys of the attachments are handed back in the same statement, for
-	// the files to be removed after (api/cleanup.go does the same for chats).
-	DeleteGuestUser(ctx context.Context, id *uuid.UUID) ([]string, error)
+	// Removes a file of the library, in its scope. The message keeps naming the
+	// file in its parts, which is how it is shown as deleted and how the model is
+	// told it is gone (agent.attachmentResolver). The storage key comes back for
+	// the caller to delete the file once the row is gone, and the conversation for
+	// it to tell the pages showing it.
+	DeleteLibraryFile(ctx context.Context, arg DeleteLibraryFileParams) (DeleteLibraryFileRow, error)
 	// Only a manual row can be deleted by hand. A fetched row is removed by the
 	// endpoint no longer listing it; deleting one here would just bring it back on
 	// the next refresh, which reads as the button not working.
@@ -179,25 +189,31 @@ type Querier interface {
 	DeleteMemoryEventsFor(ctx context.Context, arg DeleteMemoryEventsForParams) error
 	DeleteModelOverride(ctx context.Context, modelID string) error
 	DeleteOldMemoryEvents(ctx context.Context, before pgtype.Timestamptz) (int64, error)
+	DeleteOldRequestTraces(ctx context.Context, arg DeleteOldRequestTracesParams) (int64, error)
+	// Queued sub-agents nothing waits for any more: the run that launched them
+	// is over (a process died while they waited, and the run was stopped before
+	// it could take up the wait again). One moved to the background waits on the
+	// queue alone (ListBackgroundQueuedSubagents), and is not one of these.
+	DeleteOrphanedQueuedSubagents(ctx context.Context) (int64, error)
 	// Used when someone changes their own password: every session issued under the
 	// old credential goes, except the one asking, so the change does not sign the
 	// person out of the tab they are standing in.
 	DeleteOtherUserSessions(ctx context.Context, arg DeleteOtherUserSessionsParams) error
+	DeletePasskey(ctx context.Context, arg DeletePasskeyParams) (int64, error)
+	// A queued sub-agent whose wait ended without a start - the reply that
+	// launched it stopped, or the person cancelled it: it never did anything.
+	DeleteQueuedSubagent(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteSession(ctx context.Context, tokenHash []byte) error
 	DeleteSessionsForUsers(ctx context.Context, userIds []uuid.UUID) error
 	// Models the endpoint stopped listing. Scoped to `source = 'fetched'`: a manual
 	// row was never the endpoint's to mention, so its absence says nothing about
 	// it.
 	DeleteStaleChannelModels(ctx context.Context, arg DeleteStaleChannelModelsParams) (int64, error)
-	// Guests whose run should long be over: the process that made them died before
-	// it could clean up. Same shape as the other cleanup statements - one DELETE
-	// with the age in its WHERE clause, the storage keys handed back, SKIP LOCKED
-	// so servers can sweep at once.
-	DeleteStaleGuestUsers(ctx context.Context, arg DeleteStaleGuestUsersParams) ([]DeleteStaleGuestUsersRow, error)
 	// Uploads no message ever claimed: the user attached a file and never sent, or
 	// the send failed. Anything this old has no request in flight that could still
 	// claim it.
 	DeleteStaleUploads(ctx context.Context, arg DeleteStaleUploadsParams) ([]string, error)
+	DeleteTask(ctx context.Context, arg DeleteTaskParams) (int64, error)
 	// Deletes the row given and every row after it in the conversation, except
 	// one to keep (the question that replaces the first of them, written before
 	// this runs). That is what editing a question does: it and everything after
@@ -208,6 +224,10 @@ type Querier interface {
 	// statement, for the caller to delete once this commits (cleanup.go).
 	DeleteTranscriptFrom(ctx context.Context, arg DeleteTranscriptFromParams) ([]string, error)
 	DeleteUserSessions(ctx context.Context, userID uuid.UUID) error
+	ExistingRuns(ctx context.Context, ids []uuid.UUID) ([]uuid.UUID, error)
+	// A conversation's sub-agents with this name, newest first: the main agent
+	// addresses them by the names it gave.
+	FindSubagentsByName(ctx context.Context, arg FindSubagentsByNameParams) ([]Conversation, error)
 	FinishMessage(ctx context.Context, arg FinishMessageParams) (Message, error)
 	// Terminal. Live state is cleared in the same statement: whatever it held has
 	// already been written as messages by the commit that calls this.
@@ -221,6 +241,9 @@ type Querier interface {
 	GetCatalogModel(ctx context.Context, arg GetCatalogModelParams) (GetCatalogModelRow, error)
 	GetChannel(ctx context.Context, id uuid.UUID) (Channel, error)
 	GetChannelModel(ctx context.Context, arg GetChannelModelParams) (ChannelModel, error)
+	// A conversation by id alone, for the server's own work on it (delivering
+	// reports), which has no person asking.
+	GetChatConversationByID(ctx context.Context, id uuid.UUID) (Conversation, error)
 	// Who an account that cannot sign in (waiting for approval, or disabled) is
 	// told to contact: the longest-standing administrator still enabled - on most
 	// instances the one who installed it.
@@ -231,7 +254,12 @@ type Querier interface {
 	// Ownership is part of the lookup, not a separate check: a conversation
 	// belonging to someone else must read as "not found", never as "forbidden",
 	// or the response tells a stranger the id exists.
+	// A sub-agent's conversation (kind 'subagent') is not one either: nothing a
+	// person sends reaches it, so no endpoint that takes their words finds it.
 	GetConversation(ctx context.Context, arg GetConversationParams) (Conversation, error)
+	// What the runner needs to know of a run's conversation: whether it is a
+	// sub-agent's, and whose.
+	GetConversationKind(ctx context.Context, id uuid.UUID) (GetConversationKindRow, error)
 	// Whether the conversation exists for this user, is temporary, and its snapshot.
 	GetConversationMemoryState(ctx context.Context, arg GetConversationMemoryStateParams) (GetConversationMemoryStateRow, error)
 	// The snapshot, with the row locked: the tool adds to it as memories are saved.
@@ -249,8 +277,9 @@ type Querier interface {
 	// One row per bucket from `since` to now, empty ones included: a gap in the
 	// series would draw as a straight line across the chart.
 	GetDashboardTrend(ctx context.Context, arg GetDashboardTrendParams) ([]GetDashboardTrendRow, error)
-	// Who spends the most. Requests with no owner group as one: they are guests'
-	// (an account is never deleted, and a guest is deleted when its run ends).
+	// Who spends the most. Requests with no owner group by the name of the
+	// account an administrator deleted (DeleteUser), and those with neither as
+	// one.
 	GetDashboardUsers(ctx context.Context, arg GetDashboardUsersParams) ([]GetDashboardUsersRow, error)
 	// The dashboard: operational figures from the usage ledger over a window, each
 	// a single pass over the rows from `since` on.
@@ -268,27 +297,42 @@ type Querier interface {
 	// window before, the one the figures are compared with. Worked out here, in
 	// the database's time zone, so the buckets of the trend line up with it.
 	GetDashboardWindow(ctx context.Context, arg GetDashboardWindowParams) (GetDashboardWindowRow, error)
-	// The ban in force on an address: a ban past its expiry is ignored whether or
-	// not the cleanup has removed it yet.
-	GetGuestBan(ctx context.Context, ip string) (GuestBan, error)
+	GetDocument(ctx context.Context, arg GetDocumentParams) (Document, error)
+	GetDocumentVersion(ctx context.Context, arg GetDocumentVersionParams) (DocumentVersion, error)
+	// The pictures answers describe, as a search service found them (api/images.go).
+	// What a description found before: the picture, or no picture (a search that
+	// found nothing); no row for words never searched.
+	GetImageSearch(ctx context.Context, query string) (ImageSearch, error)
 	// A user message of the conversation - a refused one too: it can be edited like
-	// any other, and the new wording is checked again.
+	// any other, and the new wording is checked again. A sub-agent's report is not
+	// the person's to edit.
 	GetInput(ctx context.Context, arg GetInputParams) (Message, error)
 	// The conversation's last user message: the one a regenerated answer answers.
 	// A message moderation refused is not a question that was asked, so the last
-	// question is the one before it.
+	// question is the one before it; nor is a sub-agent's report, which no person
+	// wrote.
 	GetLastInput(ctx context.Context, conversationID uuid.UUID) (Message, error)
 	// The conversation's last row, whatever it is: where the transcript stops. A
 	// conversation whose last row is a refused message (status 'blocked') does not
 	// go on until that message is reworded, so every request that would write
 	// after it asks this first, with the conversation held.
 	GetLastMessage(ctx context.Context, conversationID uuid.UUID) (Message, error)
+	GetLatestRun(ctx context.Context, conversationID uuid.UUID) (Run, error)
+	// The sub-agent a tool call started, for the same call replayed after a restart.
+	GetLaunchedSubagent(ctx context.Context, arg GetLaunchedSubagentParams) (Conversation, error)
+	// One file of the library, in the same scope as ListLibraryFiles.
+	GetLibraryFile(ctx context.Context, arg GetLibraryFileParams) (Attachment, error)
 	GetMemory(ctx context.Context, arg GetMemoryParams) (UserMemory, error)
 	GetMemoryEventForUpdate(ctx context.Context, arg GetMemoryEventForUpdateParams) (MemoryEvent, error)
 	GetMessage(ctx context.Context, id uuid.UUID) (Message, error)
 	GetModelOverride(ctx context.Context, modelID string) (ModelOverride, error)
 	GetModerationEvent(ctx context.Context, id uuid.UUID) (ModerationEvent, error)
+	// The passkey a sign-in presented, with its account.
+	GetPasskeyByCredential(ctx context.Context, credentialID []byte) (GetPasskeyByCredentialRow, error)
 	GetPersonalization(ctx context.Context, id uuid.UUID) (GetPersonalizationRow, error)
+	GetPicture(ctx context.Context, id uuid.UUID) (Picture, error)
+	// A picture already kept, found again by other words.
+	GetPictureAt(ctx context.Context, arg GetPictureAtParams) (Picture, error)
 	GetRun(ctx context.Context, id uuid.UUID) (Run, error)
 	GetRunByRequestID(ctx context.Context, arg GetRunByRequestIDParams) (Run, error)
 	// A run's pinned channel, as long as it still serves the model. Anything else
@@ -302,10 +346,19 @@ type Querier interface {
 	GetSessionUser(ctx context.Context, tokenHash []byte) (GetSessionUserRow, error)
 	GetSetting(ctx context.Context, key string) ([]byte, error)
 	// Content moderation (api/moderation.go): the log of what was turned away, the
-	// strikes counted from it, and the guest addresses banned for them.
+	// and the strikes counted from it.
 	// Several settings in one round trip: the moderation settings are read on every
 	// message, and a request should not cost a query per key.
 	GetSettings(ctx context.Context, keys []string) ([]GetSettingsRow, error)
+	// One of a conversation's sub-agents. The parent and its owner are part of the
+	// lookup: anyone else's reads as not found.
+	GetSubagent(ctx context.Context, arg GetSubagentParams) (Conversation, error)
+	// A sub-agent by its own id, for the runner's hooks, which have no person.
+	GetSubagentByID(ctx context.Context, id uuid.UUID) (Conversation, error)
+	// A queued sub-agent's task: the first row of its conversation.
+	GetSubagentInput(ctx context.Context, conversationID uuid.UUID) (Message, error)
+	GetSubagentReport(ctx context.Context, runID uuid.UUID) (SubagentReport, error)
+	GetTask(ctx context.Context, arg GetTaskParams) (ScheduledTask, error)
 	GetUser(ctx context.Context, id uuid.UUID) (User, error)
 	// Who a stored picture belongs to: the signed read URL of a locally kept file
 	// is served to anyone holding it, and this is what says the key is a picture.
@@ -322,29 +375,64 @@ type Querier interface {
 	// Whether anyone has registered yet. While nobody has, registration is open to
 	// the one account that becomes the administrator, however the switch is set.
 	HasAccounts(ctx context.Context) (bool, error)
+	// Whether a report waits for the conversation: asked before every request of
+	// its runs, so cheap and outside any transaction.
+	HasPendingReports(ctx context.Context, parentID uuid.UUID) (bool, error)
+	HasSubagentInbox(ctx context.Context, conversationID uuid.UUID) (bool, error)
 	InsertAuthAttempt(ctx context.Context, arg InsertAuthAttemptParams) (int64, error)
 	InsertCatalogModels(ctx context.Context, arg []InsertCatalogModelsParams) (int64, error)
 	InsertCatalogProviders(ctx context.Context, arg []InsertCatalogProvidersParams) (int64, error)
-	InsertGuestRequest(ctx context.Context, ip string) error
+	// The next version of a document. The caller holds the document's row lock
+	// (LockDocument), so two changes at once are numbered one after the other.
+	InsertDocumentVersion(ctx context.Context, arg InsertDocumentVersionParams) (DocumentVersion, error)
 	InsertMemory(ctx context.Context, arg InsertMemoryParams) (UserMemory, error)
 	InsertMemoryEvent(ctx context.Context, arg InsertMemoryEventParams) (MemoryEvent, error)
 	InsertModerationEvent(ctx context.Context, arg InsertModerationEventParams) (ModerationEvent, error)
+	InsertPasskey(ctx context.Context, arg InsertPasskeyParams) (InsertPasskeyRow, error)
+	// A picture newly kept. Two searches that found it at once: the first kept
+	// wins, and the second's stored copy is the caller's to remove.
+	InsertPicture(ctx context.Context, arg InsertPictureParams) (Picture, error)
+	// Request traces: what an administrator's model requests carried (the 轨迹
+	// view), next to their usage_logs rows.
+	InsertRequestTrace(ctx context.Context, arg InsertRequestTraceParams) error
 	// Writes a setting only when there is none yet, so two processes that both find
 	// it missing cannot overwrite each other's value. Read it back afterwards.
 	InsertSettingIfMissing(ctx context.Context, arg InsertSettingIfMissingParams) error
+	// In the transaction that ends the run. Keyed by the run: written once.
+	InsertSubagentReport(ctx context.Context, arg InsertSubagentReportParams) error
 	// Prices and cost arrive as double precision and are stored as numeric rounded
 	// to ten places, so a float's tail (0.30000000000000004) never reaches the
 	// ledger.
-	InsertUsageLog(ctx context.Context, arg InsertUsageLogParams) error
-	IsGuestUser(ctx context.Context, id uuid.UUID) (bool, error)
+	//
+	// The row is written when the request ends, and what it names may have gone
+	// meanwhile: an account or a channel an administrator deleted, a conversation
+	// or a run that was removed. The request still cost what it cost, so a name
+	// that is gone is written as NULL, as the foreign key would have set it, and
+	// the row keeps the account's name (deleted_user) and the channel's, both
+	// taken when the request began. deleted_user is read only where user_id is
+	// NULL, so writing it for every account's request is what labels the one whose
+	// account is deleted while it is out.
+	InsertUsageLog(ctx context.Context, arg InsertUsageLogParams) (uuid.UUID, error)
+	// Before an account is deleted: its requests keep the name it had, as the
+	// foreign key is about to set their owner to NULL.
+	LabelDeletedUserUsage(ctx context.Context, arg LabelDeletedUserUsageParams) error
 	// How much of the model's window the conversation's latest answered request
 	// took: everything it was sent, cached or not, plus what it wrote, which the
 	// next request carries back.
 	LatestContextTokens(ctx context.Context, conversationID *uuid.UUID) (LatestContextTokensRow, error)
+	LatestDocumentVersion(ctx context.Context, documentID uuid.UUID) (DocumentVersion, error)
+	// The last version a model wrote: what it last knew of the text, unless it
+	// has read the document since.
+	LatestModelDocumentVersion(ctx context.Context, documentID uuid.UUID) (DocumentVersion, error)
 	ListAttachmentsByMessages(ctx context.Context, messageIds []uuid.UUID) ([]Attachment, error)
 	// Attachments by id, within one user's scope: what the context builder resolves
 	// a reference through, so a reference to someone else's file reads as missing.
 	ListAttachmentsForUser(ctx context.Context, arg ListAttachmentsForUserParams) ([]Attachment, error)
+	// Queued sub-agents nothing waits for but the queue: moved to the background
+	// while queued, so the call that launched them returned. Oldest first; for
+	// one person, or everyone (the sweep). Not the ones the person cancelled, nor
+	// those of a deleted conversation.
+	ListBackgroundQueuedSubagents(ctx context.Context, userID *uuid.UUID) ([]Conversation, error)
 	// What models.dev knows about the models one channel lists.
 	//
 	// Deliberately the same column list as ListServedModels, so the row converts to
@@ -377,12 +465,27 @@ type Querier interface {
 	// model with three channels would otherwise appear three times and break both
 	// the paging and the count.
 	ListChannelsServingModels(ctx context.Context, modelIds []string) ([]ListChannelsServingModelsRow, error)
+	// A conversation's documents, each at its latest version.
+	ListConversationDocuments(ctx context.Context, arg ListConversationDocumentsParams) ([]ListConversationDocumentsRow, error)
+	// A conversation's recorded requests, oldest first, each with its figures.
+	// Only the caller's own conversation: an administrator reads their own.
+	ListConversationTrace(ctx context.Context, arg ListConversationTraceParams) ([]ListConversationTraceRow, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]Conversation, error)
-	// The bans in force, newest first.
-	ListGuestBans(ctx context.Context) ([]GuestBan, error)
+	// The sweep's work: conversations a report is waiting for.
+	ListConversationsWithPendingReports(ctx context.Context) ([]uuid.UUID, error)
+	// Oldest first: the panel steps through them.
+	ListDocumentVersions(ctx context.Context, documentID uuid.UUID) ([]DocumentVersion, error)
+	// Sub-agents a message waits for with no run going to read it: the sweep
+	// starts the run (a process that died between the two leaves this).
+	ListIdleSubagentInboxes(ctx context.Context) ([]uuid.UUID, error)
 	// Which of these keys an attachment row still wants: what the orphan sweep
 	// asks before it removes a file from the disk.
 	ListKnownStorageKeys(ctx context.Context, keys []string) ([]string, error)
+	// The library: the files a user sent, newest first, each with the conversation
+	// it was sent in. Only conversations the user can still open - not deleted
+	// ones, not temporary ones, which are not history - and only the user's own,
+	// on both the file and the conversation.
+	ListLibraryFiles(ctx context.Context, arg ListLibraryFilesParams) ([]ListLibraryFilesRow, error)
 	// Oldest first, so a memory keeps its place in the list (and in the prompt).
 	ListMemories(ctx context.Context, userID uuid.UUID) ([]UserMemory, error)
 	ListMemoryEvents(ctx context.Context, arg ListMemoryEventsParams) ([]MemoryEvent, error)
@@ -404,9 +507,12 @@ type Querier interface {
 	ListMessagesFrom(ctx context.Context, arg ListMessagesFromParams) ([]Message, error)
 	ListModelOverrides(ctx context.Context, modelIds []string) ([]ModelOverride, error)
 	// Newest first, by keyset on (created_at, id): the order of
-	// moderation_events_created_idx. The account's name and whether it is disabled,
-	// and whether a guest's address is banned now, are read alongside.
+	// moderation_events_created_idx. The account's name and whether it is disabled
+	// are read alongside.
 	ListModerationEvents(ctx context.Context, arg ListModerationEventsParams) ([]ListModerationEventsRow, error)
+	// Passkeys and the WebAuthn ceremonies that make and use them (api/passkeys.go).
+	// Every statement about a person's passkeys names the person.
+	ListPasskeys(ctx context.Context, userID uuid.UUID) ([]ListPasskeysRow, error)
 	// The caller's own uploads that no message has claimed yet.
 	ListPendingAttachments(ctx context.Context, arg ListPendingAttachmentsParams) ([]Attachment, error)
 	// The newest rows of the conversation, oldest first: the raw material of a
@@ -415,6 +521,8 @@ type Querier interface {
 	// context: it is shown to the person and never read back, so it neither fills
 	// the window nor hides the question it follows.
 	ListRecentMessages(ctx context.Context, arg ListRecentMessagesParams) ([]Message, error)
+	// What a run of a sub-agent wrote as its answers, oldest first: its report.
+	ListRunAssistantRows(ctx context.Context, runID *uuid.UUID) ([]Message, error)
 	// Every row a run wrote, its input included: what a subscriber's snapshot
 	// carries alongside the run's live state. The runs that continue it (the answer
 	// after a question) are its rows too.
@@ -422,9 +530,7 @@ type Querier interface {
 	// The caller's listed conversations with a run in progress; at most one run
 	// per conversation is (runs_one_active_per_conversation), so no duplicates.
 	ListRunningConversations(ctx context.Context, userID *uuid.UUID) ([]uuid.UUID, error)
-	// What a process that just started has to pick up. A guest's run is not one:
-	// the request that was following it is gone with the process that died, and
-	// the sweep for guests deletes what is left (guest.sql).
+	// What a process that just started has to pick up.
 	ListRunningRuns(ctx context.Context) ([]Run, error)
 	// The models this installation actually serves -- the whole of what the model
 	// marketplace lists.
@@ -463,6 +569,18 @@ type Querier interface {
 	// under, and sorting on an empty one would herd every uncatalogued model into a
 	// block at the top that looks like a fault.
 	ListServedModels(ctx context.Context, arg ListServedModelsParams) ([]ListServedModelsRow, error)
+	// The latest report of each of a conversation's sub-agents.
+	ListSubagentLatestReports(ctx context.Context, parentID uuid.UUID) ([]SubagentReport, error)
+	// The latest run of each of a conversation's sub-agents.
+	ListSubagentLatestRuns(ctx context.Context, parentID *uuid.UUID) ([]Run, error)
+	// The runs a conversation's sub-agents have going: what a deletion that takes
+	// them away must stop once it commits.
+	ListSubagentRunningRuns(ctx context.Context, parentID *uuid.UUID) ([]uuid.UUID, error)
+	ListSubagents(ctx context.Context, arg ListSubagentsParams) ([]Conversation, error)
+	// Scheduled tasks (api/tasks.go). Every statement but the scheduler's names the
+	// owner, so another person's task reads as missing.
+	// A person's tasks whose conversation they can still open, newest first.
+	ListTasks(ctx context.Context, userID uuid.UUID) ([]ScheduledTask, error)
 	// The conversation, oldest first and whole, for an export. Tool results are
 	// left out: they are the model's working, and some are whole web pages. Nor are
 	// the messages moderation refused: they were never sent, and are not a record
@@ -496,9 +614,8 @@ type Querier interface {
 	// holds - a message, an edit, a regeneration - queues here, and reads the
 	// conversation as the one before it left it.
 	LockConversation(ctx context.Context, id uuid.UUID) (Conversation, error)
-	// Held until the transaction ends, so that counting and then recording a
-	// request is one step: two requests at the limit cannot both be let through.
-	LockGuestRequests(ctx context.Context) error
+	// A document of the person's, locked for a change, with its conversation.
+	LockDocument(ctx context.Context, arg LockDocumentParams) (Document, error)
 	// Serialises writers of one person's list for the length of the transaction, so
 	// two adds at the cap cannot both pass the count.
 	LockMemoryList(ctx context.Context, userID string) error
@@ -521,9 +638,18 @@ type Querier interface {
 	LockRun(ctx context.Context, id uuid.UUID) (Run, error)
 	// Held until the transaction ends, so that counting the runs that are going
 	// and then starting one is a single step: two requests with one slot left
-	// cannot both be let through. The key is the account's id, or for a guest the
-	// address (`ip:...`); servers sharing the database share the lock.
+	// cannot both be let through. The key is the account's id; servers sharing
+	// the database share the lock.
 	LockRunSlots(ctx context.Context, key string) error
+	// Held until the transaction ends, like LockRunSlots: counting a person's
+	// sub-agent runs and starting one is one step, on one server or several.
+	LockSubagentSlots(ctx context.Context, userID string) error
+	// GetTask for an update: the row is read again under its lock, so a change
+	// the scheduler or another request made meanwhile is kept, not written over.
+	LockTask(ctx context.Context, arg LockTaskParams) (ScheduledTask, error)
+	// Held while a task is created or switched on, so two requests at once cannot
+	// both find room under the limit.
+	LockTaskOwner(ctx context.Context, userID uuid.UUID) error
 	// Every live conversation of the user, held until the transaction ends, in id
 	// order. Deleting them all takes the same per-conversation lock a send, an
 	// edit or a regeneration does (LockConversation), so none of those can be
@@ -539,6 +665,7 @@ type Querier interface {
 	MarkMemoriesModerated(ctx context.Context, arg MarkMemoriesModeratedParams) error
 	MarkMemoryEventUndone(ctx context.Context, arg MarkMemoryEventUndoneParams) (MemoryEvent, error)
 	MarkModerationSanction(ctx context.Context, arg MarkModerationSanctionParams) error
+	MarkReportsDelivered(ctx context.Context, arg MarkReportsDeliveredParams) error
 	// What a run needs to know about its model: how its thinking is controlled,
 	// how much it may read and write, and what it can do. The catalogue row is
 	// chosen the way ListServedModels chooses it — a provider one of the serving
@@ -576,27 +703,24 @@ type Querier interface {
 	// recoverable by an operator for the retention period, then goes with its
 	// messages, runs and attachments. Same shape as the temporary-chat statement.
 	PurgeDeletedConversations(ctx context.Context, arg PurgeDeletedConversationsParams) ([]PurgeDeletedConversationsRow, error)
-	PurgeExpiredGuestBans(ctx context.Context) (int64, error)
-	// Nothing counts a request for more than a day.
-	PurgeGuestRequests(ctx context.Context, before pgtype.Timestamptz) (int64, error)
 	PurgeModerationEvents(ctx context.Context, before pgtype.Timestamptz) (int64, error)
+	PurgeWebAuthnChallenges(ctx context.Context, createdAt pgtype.Timestamptz) (int64, error)
+	QueueSubagentMessage(ctx context.Context, arg QueueSubagentMessageParams) error
 	// The first account created becomes the admin: someone has to be able to reach
 	// the admin panel, and there is no other bootstrap path. It is never pending
 	// and never refused, whatever the switches say - a fresh install must not be
 	// able to lock itself out. Everyone after it gets no row back while
-	// registration is closed, and is pending while approval is required. A guest
-	// (a user row that exists for one run, see guest.sql) is not an account and
-	// does not count. The decision is made inside the INSERT, under the lock
+	// registration is closed, and is pending while approval is required. The
+	// decision is made inside the INSERT, under the lock
 	// LockRegistration takes.
 	RegisterUser(ctx context.Context, arg RegisterUserParams) (User, error)
-	// Stop pressed in the guest's page. A guest's run is named by its id alone,
-	// which only the page that started it was told, and only a guest's run can be
-	// reached this way.
-	RequestGuestRunCancel(ctx context.Context, id uuid.UUID) (Run, error)
+	RenamePasskey(ctx context.Context, arg RenamePasskeyParams) (RenamePasskeyRow, error)
 	RequestRunCancel(ctx context.Context, arg RequestRunCancelParams) (Run, error)
 	// Starts a total cap's count again from `since`. Makes the row if the model
 	// has none (every other column then at its default: no cap, nothing changed).
 	ResetModelCapacity(ctx context.Context, arg ResetModelCapacityParams) (ModelOverride, error)
+	// A search's outcome; a later search of the same words replaces it.
+	SaveImageSearch(ctx context.Context, arg SaveImageSearchParams) error
 	// Replaces the whole override: the settings panel always sends every field,
 	// and a field it sends as null goes back to following the catalogue. A cap's
 	// period and exemption left out (NULL) are their defaults, total and exempt.
@@ -632,16 +756,21 @@ type Querier interface {
 	// overwrite each other, and the loser reads the winner's.
 	SetConversationSnapshot(ctx context.Context, arg SetConversationSnapshotParams) ([]byte, error)
 	SetConversationWebSearch(ctx context.Context, arg SetConversationWebSearchParams) (Conversation, error)
+	SetDocumentVersionChecked(ctx context.Context, arg SetDocumentVersionCheckedParams) error
 	// A generated title, only over the default one: a conversation the user has
 	// renamed in the meantime keeps their name. Not a change of activity, so the
 	// conversation keeps its place in the list.
 	SetGeneratedTitle(ctx context.Context, arg SetGeneratedTitleParams) (Conversation, error)
 	// Upsert, so a setting added after this database was created still writes.
 	SetSetting(ctx context.Context, arg SetSettingParams) error
+	SetSubagentBackground(ctx context.Context, id uuid.UUID) error
+	SetSubagentStopped(ctx context.Context, arg SetSubagentStoppedParams) error
+	SetTaskPromptChecked(ctx context.Context, arg SetTaskPromptCheckedParams) error
 	// The account's picture, or NULL to go back to the initial. Narrower than
 	// UpdateOwnProfile on purpose: the picture is its own endpoint, with its own
 	// checks, and the profile form has no business with it.
 	SetUserAvatar(ctx context.Context, arg SetUserAvatarParams) (User, error)
+	SetUserTimeZone(ctx context.Context, arg SetUserTimeZoneParams) error
 	// Everything the user has, temporary chats included, in one statement. The
 	// owner is the only filter there is: nobody else's rows can be reached from here.
 	SoftDeleteAllConversations(ctx context.Context, userID *uuid.UUID) (int64, error)
@@ -658,12 +787,32 @@ type Querier interface {
 	// full input price, less what they did cost, over the requests priced with
 	// both -- 0 when none were.
 	SummarizeUsageLogs(ctx context.Context, arg SummarizeUsageLogsParams) (SummarizeUsageLogsRow, error)
+	// A foreground call takes its sub-agent's report as its result, unless it was
+	// delivered some other way first. Taking it again is the same call replayed
+	// (the claim is committed apart from the call's result, and a process can die
+	// in between): only the call waiting on this run takes it, so it gets it back.
+	TakeReportForTool(ctx context.Context, runID uuid.UUID) (SubagentReport, error)
+	// The messages waiting for a sub-agent, taken: the caller writes them into its
+	// transcript in the same transaction.
+	TakeSubagentInbox(ctx context.Context, conversationID uuid.UUID) ([]TakeSubagentInboxRow, error)
+	// A ceremony's challenge, once: taken whether or not the answer is good, so
+	// an answer cannot be tried twice. Only one younger than five minutes.
+	TakeWebAuthnChallenge(ctx context.Context, arg TakeWebAuthnChallengeParams) (TakeWebAuthnChallengeRow, error)
+	// Why a turn started nothing. `pause` stops the task: a prompt content
+	// moderation refuses would be refused every time.
+	TaskFailed(ctx context.Context, arg TaskFailedParams) error
+	TaskStarted(ctx context.Context, arg TaskStartedParams) error
+	// What decides whether a run is offered the task tool, and the times it reads:
+	// the conversation's owner, outside a temporary conversation.
+	TaskToolContext(ctx context.Context, arg TaskToolContextParams) (TaskToolContextRow, error)
 	// Whether any tool result in the conversation contains the text, for the
 	// image proxy: it serves only addresses a page or search put in front of the
 	// model. jsonb renders strings with only quotes and backslashes escaped, so
 	// an http(s) address matches as written.
 	ToolResultMentions(ctx context.Context, arg ToolResultMentionsParams) (bool, error)
 	TouchConversation(ctx context.Context, id uuid.UUID) error
+	// A sign-in with it: the credential's new sign count and flags, and when.
+	TouchPasskey(ctx context.Context, arg TouchPasskeyParams) error
 	TouchSession(ctx context.Context, id uuid.UUID) error
 	TouchUserSeen(ctx context.Context, id uuid.UUID) error
 	// Every editable field in one statement, so a partial edit cannot half-apply.
@@ -687,6 +836,8 @@ type Querier interface {
 	// it was not, or could not be, checked) and forgets the hash of what was
 	// refused; a field sent unchanged, or not sent, keeps both.
 	UpdatePersonalization(ctx context.Context, arg UpdatePersonalizationParams) (UpdatePersonalizationRow, error)
+	// Everything a person can change at once; the caller fills in what stays.
+	UpdateTask(ctx context.Context, arg UpdateTaskParams) (ScheduledTask, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	// Writes the conversation's summary, replacing the one it had. The foreign keys
 	// refuse a row that an edit deleted while the summary was being written.
@@ -707,9 +858,6 @@ type Querier interface {
 	// `unnest(ids, names)`, which says the same thing in one line but which sqlc's
 	// analyser cannot type.
 	UpsertFetchedChannelModels(ctx context.Context, arg UpsertFetchedChannelModelsParams) error
-	// A ban on an address already banned lengthens it, never shortens: the later
-	// expiry stands, and a permanent ban stays permanent.
-	UpsertGuestBan(ctx context.Context, arg UpsertGuestBanParams) (GuestBan, error)
 	// What a request needs to be priced and labelled: the channel's current name,
 	// and the catalogue's per-million-token prices for the model.
 	//
@@ -719,7 +867,12 @@ type Querier interface {
 	// actually carries a price beats one that does not. An operator's overrides
 	// (model_overrides) have no price columns, so the catalogue is the only source.
 	// Always one row: a request whose channel or model is unknown gets NULLs.
+	// Also the name of the account it is for, kept with the row in
+	// case the account is deleted before the request ends.
 	UsagePricing(ctx context.Context, arg UsagePricingParams) (UsagePricingRow, error)
+	UserIsAdmin(ctx context.Context, id uuid.UUID) (*bool, error)
+	// What a registration leaves out (the same authenticator twice).
+	UserPasskeyCredentials(ctx context.Context, userID uuid.UUID) ([][]byte, error)
 	WriteConversationSnapshot(ctx context.Context, arg WriteConversationSnapshotParams) error
 }
 

@@ -66,8 +66,8 @@ func (q *Queries) GetContextSummary(ctx context.Context, conversationID uuid.UUI
 }
 
 const listMessagesAfter = `-- name: ListMessagesAfter :many
-SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
-FROM (SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, origin
+FROM (SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, origin
       FROM messages
       WHERE messages.conversation_id = $1
         AND messages.status <> 'blocked'
@@ -120,6 +120,7 @@ func (q *Queries) ListMessagesAfter(ctx context.Context, arg ListMessagesAfterPa
 			&i.Usage,
 			&i.ErrorCode,
 			&i.RunID,
+			&i.Origin,
 		); err != nil {
 			return nil, err
 		}
@@ -132,7 +133,7 @@ func (q *Queries) ListMessagesAfter(ctx context.Context, arg ListMessagesAfterPa
 }
 
 const listMessagesFrom = `-- name: ListMessagesFrom :many
-SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, origin
 FROM messages
 WHERE messages.conversation_id = $1
   AND messages.status <> 'blocked'
@@ -183,6 +184,7 @@ func (q *Queries) ListMessagesFrom(ctx context.Context, arg ListMessagesFromPara
 			&i.Usage,
 			&i.ErrorCode,
 			&i.RunID,
+			&i.Origin,
 		); err != nil {
 			return nil, err
 		}

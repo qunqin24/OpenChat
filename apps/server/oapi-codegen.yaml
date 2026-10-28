@@ -6,7 +6,9 @@ output: internal/api/openapi.gen.go
 generate:
   chi-server: true
   models: true
-  embedded-spec: true
+  # No embedded spec: nothing reads it at run time, and it was the only thing
+  # that pulled in kin-openapi (a dependency with advisories of its own).
+  embedded-spec: false
 output-options:
   skip-prune: true
   nullable-type: true

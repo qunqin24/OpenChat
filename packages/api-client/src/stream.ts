@@ -1,5 +1,5 @@
 import { OpenChatError } from './errors'
-import type { ConversationEvent, GuestRunEvent, GuestRunRequest } from './types'
+import type { ConversationEvent } from './types'
 
 export interface ConversationEventsOptions {
   baseUrl: string
@@ -14,12 +14,6 @@ export interface ConversationEventsOptions {
    * `StreamIdleError`. The server sends a keep-alive every 5 seconds.
    */
   idleTimeout?: number
-  /**
-   * What makes the request. The page's own, when the events do not come from
-   * the network - a guest's conversations are kept in the browser, and their
-   * events are made there.
-   */
-  fetch?: typeof globalThis.fetch
 }
 
 /**
@@ -54,35 +48,7 @@ export async function* streamConversationEvents(
   yield* readFrames<ConversationEvent>(
     `${baseUrl.replace(/\/$/, '')}/conversations/${conversationId}/events`,
     { headers: { Accept: 'text/event-stream', ...headers }, credentials },
-    { signal, idleTimeout, fetch: options.fetch },
-  )
-}
-
-export interface GuestRunOptions {
-  baseUrl: string
-  request: GuestRunRequest
-  signal?: AbortSignal
-  idleTimeout?: number
-  fetch?: typeof globalThis.fetch
-}
-
-/**
- * A guest's run: posts the conversation as the guest's browser holds it and
- * yields the events of the run, then the closing frame (`guest_end`), as the
- * server commits them. A request the server refuses before it starts (a limit,
- * a model that is not offered) throws an `OpenChatError` with its body; the
- * generator does nothing until it is first read.
- */
-export async function* streamGuestRun(options: GuestRunOptions): AsyncGenerator<GuestRunEvent, void, undefined> {
-  const { baseUrl, request, signal, idleTimeout = 15_000 } = options
-  yield* readFrames<GuestRunEvent>(
-    `${baseUrl.replace(/\/$/, '')}/guest/runs`,
-    {
-      method: 'POST',
-      headers: { Accept: 'text/event-stream', 'Content-Type': 'application/json' },
-      body: JSON.stringify(request),
-    },
-    { signal, idleTimeout, fetch: options.fetch },
+    { signal, idleTimeout },
   )
 }
 
@@ -90,7 +56,7 @@ export async function* streamGuestRun(options: GuestRunOptions): AsyncGenerator<
 async function* readFrames<T>(
   url: string,
   init: RequestInit,
-  { signal, idleTimeout, fetch: send = globalThis.fetch }: { signal?: AbortSignal; idleTimeout: number; fetch?: typeof globalThis.fetch },
+  { signal, idleTimeout }: { signal?: AbortSignal; idleTimeout: number },
 ): AsyncGenerator<T, void, undefined> {
   // Our own controller, so the watchdog can end a connection the caller did
   // not; the caller's signal still ends it too.
@@ -112,7 +78,7 @@ async function* readFrames<T>(
   watch()
   let response: Response
   try {
-    response = await send(url, { ...init, signal: controller.signal })
+    response = await fetch(url, { ...init, signal: controller.signal })
   } catch (error) {
     clearTimeout(timer)
     signal?.removeEventListener('abort', abort)

@@ -4,19 +4,12 @@
 package api
 
 import (
-	"bytes"
-	"compress/flate"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
-	"path"
-	"strings"
 	"time"
 
-	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-chi/chi/v5"
 	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -382,6 +375,24 @@ func (e DashboardRange) Valid() bool {
 	}
 }
 
+// Defines values for DocumentVersionSource.
+const (
+	DocumentVersionSourceModel DocumentVersionSource = "model"
+	DocumentVersionSourceUser  DocumentVersionSource = "user"
+)
+
+// Valid indicates whether the value is a known member of the DocumentVersionSource enum.
+func (e DocumentVersionSource) Valid() bool {
+	switch e {
+	case DocumentVersionSourceModel:
+		return true
+	case DocumentVersionSourceUser:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ExportedMessageRole.
 const (
 	ExportedMessageRoleAssistant ExportedMessageRole = "assistant"
@@ -415,90 +426,6 @@ func (e GenerationStartedEventType) Valid() bool {
 	}
 }
 
-// Defines values for GuestEndEventType.
-const (
-	GuestEnd GuestEndEventType = "guest_end"
-)
-
-// Valid indicates whether the value is a known member of the GuestEndEventType enum.
-func (e GuestEndEventType) Valid() bool {
-	switch e {
-	case GuestEnd:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for GuestMessageStopReason.
-const (
-	GuestMessageStopReasonCancelled     GuestMessageStopReason = "cancelled"
-	GuestMessageStopReasonContentFilter GuestMessageStopReason = "content_filter"
-	GuestMessageStopReasonError         GuestMessageStopReason = "error"
-	GuestMessageStopReasonLength        GuestMessageStopReason = "length"
-	GuestMessageStopReasonStop          GuestMessageStopReason = "stop"
-	GuestMessageStopReasonToolCalls     GuestMessageStopReason = "tool_calls"
-)
-
-// Valid indicates whether the value is a known member of the GuestMessageStopReason enum.
-func (e GuestMessageStopReason) Valid() bool {
-	switch e {
-	case GuestMessageStopReasonCancelled:
-		return true
-	case GuestMessageStopReasonContentFilter:
-		return true
-	case GuestMessageStopReasonError:
-		return true
-	case GuestMessageStopReasonLength:
-		return true
-	case GuestMessageStopReasonStop:
-		return true
-	case GuestMessageStopReasonToolCalls:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for GuestRunRequestAction.
-const (
-	Answer     GuestRunRequestAction = "answer"
-	Regenerate GuestRunRequestAction = "regenerate"
-	Send       GuestRunRequestAction = "send"
-)
-
-// Valid indicates whether the value is a known member of the GuestRunRequestAction enum.
-func (e GuestRunRequestAction) Valid() bool {
-	switch e {
-	case Answer:
-		return true
-	case Regenerate:
-		return true
-	case Send:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for GuestTitleRequestMessagesRole.
-const (
-	GuestTitleRequestMessagesRoleAssistant GuestTitleRequestMessagesRole = "assistant"
-	GuestTitleRequestMessagesRoleUser      GuestTitleRequestMessagesRole = "user"
-)
-
-// Valid indicates whether the value is a known member of the GuestTitleRequestMessagesRole enum.
-func (e GuestTitleRequestMessagesRole) Valid() bool {
-	switch e {
-	case GuestTitleRequestMessagesRoleAssistant:
-		return true
-	case GuestTitleRequestMessagesRoleUser:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for HealthStatus.
 const (
 	HealthStatusDegraded HealthStatus = "degraded"
@@ -511,6 +438,27 @@ func (e HealthStatus) Valid() bool {
 	case HealthStatusDegraded:
 		return true
 	case HealthStatusOk:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImageSearchProvider.
+const (
+	Openverse ImageSearchProvider = "openverse"
+	Pixabay   ImageSearchProvider = "pixabay"
+	Wikimedia ImageSearchProvider = "wikimedia"
+)
+
+// Valid indicates whether the value is a known member of the ImageSearchProvider enum.
+func (e ImageSearchProvider) Valid() bool {
+	switch e {
+	case Openverse:
+		return true
+	case Pixabay:
+		return true
+	case Wikimedia:
 		return true
 	default:
 		return false
@@ -535,6 +483,27 @@ func (e InputModality) Valid() bool {
 	case InputModalityPdf:
 		return true
 	case InputModalityVideo:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for LibraryFileType.
+const (
+	LibraryFileTypeImage LibraryFileType = "image"
+	LibraryFileTypePdf   LibraryFileType = "pdf"
+	LibraryFileTypeText  LibraryFileType = "text"
+)
+
+// Valid indicates whether the value is a known member of the LibraryFileType enum.
+func (e LibraryFileType) Valid() bool {
+	switch e {
+	case LibraryFileTypeImage:
+		return true
+	case LibraryFileTypePdf:
+		return true
+	case LibraryFileTypeText:
 		return true
 	default:
 		return false
@@ -577,6 +546,24 @@ func (e MemorySource) Valid() bool {
 	case MemorySourceModel:
 		return true
 	case MemorySourceUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageOrigin.
+const (
+	MessageOriginAgent    MessageOrigin = "agent"
+	MessageOriginSubagent MessageOrigin = "subagent"
+)
+
+// Valid indicates whether the value is a known member of the MessageOrigin enum.
+func (e MessageOrigin) Valid() bool {
+	switch e {
+	case MessageOriginAgent:
+		return true
+	case MessageOriginSubagent:
 		return true
 	default:
 		return false
@@ -789,15 +776,12 @@ func (e ModerationOnError) Valid() bool {
 
 // Defines values for ModerationSanction.
 const (
-	ModerationSanctionBanned   ModerationSanction = "banned"
 	ModerationSanctionDisabled ModerationSanction = "disabled"
 )
 
 // Valid indicates whether the value is a known member of the ModerationSanction enum.
 func (e ModerationSanction) Valid() bool {
 	switch e {
-	case ModerationSanctionBanned:
-		return true
 	case ModerationSanctionDisabled:
 		return true
 	default:
@@ -808,12 +792,14 @@ func (e ModerationSanction) Valid() bool {
 // Defines values for ModerationSource.
 const (
 	ModerationSourceAnswer       ModerationSource = "answer"
+	ModerationSourceDocument     ModerationSource = "document"
 	ModerationSourceEdit         ModerationSource = "edit"
-	ModerationSourceGuest        ModerationSource = "guest"
 	ModerationSourceInstructions ModerationSource = "instructions"
 	ModerationSourceMemory       ModerationSource = "memory"
 	ModerationSourceSend         ModerationSource = "send"
 	ModerationSourceSnapshot     ModerationSource = "snapshot"
+	ModerationSourceTask         ModerationSource = "task"
+	ModerationSourceTaskRun      ModerationSource = "task_run"
 )
 
 // Valid indicates whether the value is a known member of the ModerationSource enum.
@@ -821,9 +807,9 @@ func (e ModerationSource) Valid() bool {
 	switch e {
 	case ModerationSourceAnswer:
 		return true
-	case ModerationSourceEdit:
+	case ModerationSourceDocument:
 		return true
-	case ModerationSourceGuest:
+	case ModerationSourceEdit:
 		return true
 	case ModerationSourceInstructions:
 		return true
@@ -832,6 +818,10 @@ func (e ModerationSource) Valid() bool {
 	case ModerationSourceSend:
 		return true
 	case ModerationSourceSnapshot:
+		return true
+	case ModerationSourceTask:
+		return true
+	case ModerationSourceTaskRun:
 		return true
 	default:
 		return false
@@ -877,6 +867,24 @@ const (
 func (e PartStartedEventType) Valid() bool {
 	switch e {
 	case PartStarted:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PasskeySettingsUserVerification.
+const (
+	PasskeySettingsUserVerificationPreferred PasskeySettingsUserVerification = "preferred"
+	PasskeySettingsUserVerificationRequired  PasskeySettingsUserVerification = "required"
+)
+
+// Valid indicates whether the value is a known member of the PasskeySettingsUserVerification enum.
+func (e PasskeySettingsUserVerification) Valid() bool {
+	switch e {
+	case PasskeySettingsUserVerificationPreferred:
+		return true
+	case PasskeySettingsUserVerificationRequired:
 		return true
 	default:
 		return false
@@ -1078,6 +1086,93 @@ func (e StorageDriver) Valid() bool {
 	}
 }
 
+// Defines values for SubagentState.
+const (
+	SubagentStateCancelled SubagentState = "cancelled"
+	SubagentStateCompleted SubagentState = "completed"
+	SubagentStateFailed    SubagentState = "failed"
+	SubagentStateQueued    SubagentState = "queued"
+	SubagentStateRunning   SubagentState = "running"
+)
+
+// Valid indicates whether the value is a known member of the SubagentState enum.
+func (e SubagentState) Valid() bool {
+	switch e {
+	case SubagentStateCancelled:
+		return true
+	case SubagentStateCompleted:
+		return true
+	case SubagentStateFailed:
+		return true
+	case SubagentStateQueued:
+		return true
+	case SubagentStateRunning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SubagentsChangedEventType.
+const (
+	SubagentsChanged SubagentsChangedEventType = "subagents_changed"
+)
+
+// Valid indicates whether the value is a known member of the SubagentsChangedEventType enum.
+func (e SubagentsChangedEventType) Valid() bool {
+	switch e {
+	case SubagentsChanged:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TaskScheduleKind.
+const (
+	TaskDaily   TaskScheduleKind = "daily"
+	TaskMonthly TaskScheduleKind = "monthly"
+	TaskOnce    TaskScheduleKind = "once"
+	TaskWeekly  TaskScheduleKind = "weekly"
+)
+
+// Valid indicates whether the value is a known member of the TaskScheduleKind enum.
+func (e TaskScheduleKind) Valid() bool {
+	switch e {
+	case TaskDaily:
+		return true
+	case TaskMonthly:
+		return true
+	case TaskOnce:
+		return true
+	case TaskWeekly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TaskStatus.
+const (
+	TaskActive    TaskStatus = "active"
+	TaskCompleted TaskStatus = "completed"
+	TaskPaused    TaskStatus = "paused"
+)
+
+// Valid indicates whether the value is a known member of the TaskStatus enum.
+func (e TaskStatus) Valid() bool {
+	switch e {
+	case TaskActive:
+		return true
+	case TaskCompleted:
+		return true
+	case TaskPaused:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TextPartType.
 const (
 	TextPartTypeText TextPartType = "text"
@@ -1216,6 +1311,24 @@ func (e ToolStartedEventType) Valid() bool {
 	}
 }
 
+// Defines values for TraceRequestStatus.
+const (
+	TraceRequestStatusError TraceRequestStatus = "error"
+	TraceRequestStatusOk    TraceRequestStatus = "ok"
+)
+
+// Valid indicates whether the value is a known member of the TraceRequestStatus enum.
+func (e TraceRequestStatus) Valid() bool {
+	switch e {
+	case TraceRequestStatusError:
+		return true
+	case TraceRequestStatusOk:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TranscriptChangedEventType.
 const (
 	TranscriptChanged TranscriptChangedEventType = "transcript_changed"
@@ -1231,24 +1344,45 @@ func (e TranscriptChangedEventType) Valid() bool {
 	}
 }
 
+// Defines values for UpdatePasskeySettingsRequestUserVerification.
+const (
+	UpdatePasskeySettingsRequestUserVerificationPreferred UpdatePasskeySettingsRequestUserVerification = "preferred"
+	UpdatePasskeySettingsRequestUserVerificationRequired  UpdatePasskeySettingsRequestUserVerification = "required"
+)
+
+// Valid indicates whether the value is a known member of the UpdatePasskeySettingsRequestUserVerification enum.
+func (e UpdatePasskeySettingsRequestUserVerification) Valid() bool {
+	switch e {
+	case UpdatePasskeySettingsRequestUserVerificationPreferred:
+		return true
+	case UpdatePasskeySettingsRequestUserVerificationRequired:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UsageKind.
 const (
-	UsageKindChat        UsageKind = "chat"
-	UsageKindCompression UsageKind = "compression"
-	UsageKindModeration  UsageKind = "moderation"
-	UsageKindTitle       UsageKind = "title"
+	UsageKindSubagent             UsageKind = "subagent"
+	UsageKindUsageKindChat        UsageKind = "chat"
+	UsageKindUsageKindCompression UsageKind = "compression"
+	UsageKindUsageKindModeration  UsageKind = "moderation"
+	UsageKindUsageKindTitle       UsageKind = "title"
 )
 
 // Valid indicates whether the value is a known member of the UsageKind enum.
 func (e UsageKind) Valid() bool {
 	switch e {
-	case UsageKindChat:
+	case UsageKindSubagent:
 		return true
-	case UsageKindCompression:
+	case UsageKindUsageKindChat:
 		return true
-	case UsageKindModeration:
+	case UsageKindUsageKindCompression:
 		return true
-	case UsageKindTitle:
+	case UsageKindUsageKindModeration:
+		return true
+	case UsageKindUsageKindTitle:
 		return true
 	default:
 		return false
@@ -1533,8 +1667,8 @@ type AuthOptions struct {
 	// while no account exists yet, since the first one is never pending.
 	Approval bool `json:"approval"`
 
-	// Guest The same as `GuestStatus.enabled`.
-	Guest bool `json:"guest"`
+	// Passkeys Whether accounts may sign in with a passkey (`beginPasskeySignIn`).
+	Passkeys bool `json:"passkeys"`
 
 	// Registration Whether `POST /auth/register` is open. True too while no account
 	// exists yet, whatever the administrator's switch says: the first
@@ -1883,7 +2017,18 @@ type ChannelTypeInfo struct {
 type ChatFeatures struct {
 	// AvatarUploads Whether the account settings offer uploading a picture.
 	AvatarUploads bool `json:"avatarUploads"`
-	WebSearch     bool `json:"webSearch"`
+
+	// RequestTraces Whether the caller may open the 轨迹 view of their conversations:
+	// true only for an administrator, while request traces are on
+	// (System settings).
+	RequestTraces bool `json:"requestTraces"`
+
+	// ScheduledTasks Whether scheduled tasks are on (System settings); off, `/tasks` is 404.
+	ScheduledTasks bool `json:"scheduledTasks"`
+
+	// Subagents Whether models may launch sub-agents (Sub-agent settings).
+	Subagents *bool `json:"subagents,omitempty"`
+	WebSearch bool  `json:"webSearch"`
 }
 
 // ChatModel defines model for ChatModel.
@@ -2008,13 +2153,7 @@ type ContextSummary struct {
 	Model string `json:"model"`
 
 	// OutputTokens Tokens it took to write
-	OutputTokens int `json:"outputTokens"`
-
-	// Receipt Guest only. The server's signature that it wrote `content`; a
-	// guest's summary without a valid one is refused, since it would be
-	// words the browser made up (`invalid_summary`). Opaque. Absent for
-	// an account's.
-	Receipt          *string            `json:"receipt,omitempty"`
+	OutputTokens     int                `json:"outputTokens"`
 	ThroughMessageId openapi_types.UUID `json:"throughMessageId"`
 }
 
@@ -2110,6 +2249,12 @@ type ConversationPage struct {
 	NextCursor *string        `json:"nextCursor,omitempty"`
 }
 
+// ConversationTrace defines model for ConversationTrace.
+type ConversationTrace struct {
+	Requests      []TraceRequest `json:"requests"`
+	RetentionDays int            `json:"retentionDays"`
+}
+
 // CreateChannelRequest defines model for CreateChannelRequest.
 type CreateChannelRequest struct {
 	// ApiFormat Which of OpenAI's request formats a channel on the OpenAI protocol
@@ -2182,6 +2327,20 @@ type CreateMessageResponse struct {
 
 	// Run The work from one input to its final answer.
 	Run Run `json:"run"`
+}
+
+// CreateTaskRequest defines model for CreateTaskRequest.
+type CreateTaskRequest struct {
+	// Model The model its conversation answers with; the default one when absent.
+	Model  *string `json:"model,omitempty"`
+	Prompt string  `json:"prompt"`
+
+	// Schedule When a task runs, in `timeZone` (an IANA name such as Asia/Shanghai).
+	// `once` runs at `at`; the others at `time` - every day, on `weekdays`
+	// (0 = Sunday), or on `monthDay` (a month too short for it, on its last
+	// day).
+	Schedule TaskSchedule `json:"schedule"`
+	Title    string       `json:"title"`
 }
 
 // CreateUploadRequest defines model for CreateUploadRequest.
@@ -2282,8 +2441,11 @@ type DashboardTrendPoint struct {
 
 // DashboardUser defines model for DashboardUser.
 type DashboardUser struct {
-	Cost     float64 `json:"cost"`
-	Requests int64   `json:"requests"`
+	Cost float64 `json:"cost"`
+
+	// DeletedUser The name of a deleted account whose requests these are.
+	DeletedUser *string `json:"deletedUser,omitempty"`
+	Requests    int64   `json:"requests"`
 
 	// UserAvatarUrl A signed read URL of the account's uploaded picture (`updateMyAvatar`),
 	// valid for an hour; the same URL is issued for as long as it has more
@@ -2303,6 +2465,35 @@ type DeletedConversations struct {
 	// Deleted How many conversations were deleted.
 	Deleted int64 `json:"deleted"`
 }
+
+// Document defines model for Document.
+type Document struct {
+	ConversationId openapi_types.UUID `json:"conversationId"`
+	CreatedAt      time.Time          `json:"createdAt"`
+	Id             openapi_types.UUID `json:"id"`
+	Versions       []DocumentVersion  `json:"versions"`
+}
+
+// DocumentSummary defines model for DocumentSummary.
+type DocumentSummary struct {
+	Id        openapi_types.UUID `json:"id"`
+	Title     string             `json:"title"`
+	UpdatedAt time.Time          `json:"updatedAt"`
+	Version   int                `json:"version"`
+}
+
+// DocumentVersion defines model for DocumentVersion.
+type DocumentVersion struct {
+	// Content Markdown.
+	Content   string                `json:"content"`
+	CreatedAt time.Time             `json:"createdAt"`
+	Source    DocumentVersionSource `json:"source"`
+	Title     string                `json:"title"`
+	Version   int                   `json:"version"`
+}
+
+// DocumentVersionSource defines model for DocumentVersion.Source.
+type DocumentVersionSource string
 
 // EditMessageRequest defines model for EditMessageRequest.
 type EditMessageRequest struct {
@@ -2368,6 +2559,36 @@ type ExportedMessage struct {
 // ExportedMessageRole defines model for ExportedMessage.Role.
 type ExportedMessageRole string
 
+// FileDownload defines model for FileDownload.
+type FileDownload struct {
+	ExpiresAt time.Time `json:"expiresAt"`
+	Url       string    `json:"url"`
+}
+
+// FoundImage A freely licensed picture found for an answer, with what its licence
+// asks to be shown: its title, who made it and under which licence, and
+// the page it is from.
+type FoundImage struct {
+	Creator    *string `json:"creator,omitempty"`
+	CreatorUrl *string `json:"creatorUrl,omitempty"`
+	Height     int     `json:"height"`
+
+	// Id The picture's id; `getPicture` serves it.
+	Id openapi_types.UUID `json:"id"`
+
+	// LandingUrl The page the picture is from.
+	LandingUrl *string `json:"landingUrl,omitempty"`
+
+	// License The licence's short name as Creative Commons writes it, such as "CC BY 2.0" or "CC0 1.0".
+	License    string  `json:"license"`
+	LicenseUrl *string `json:"licenseUrl,omitempty"`
+
+	// Source Where Openverse found it
+	Source string `json:"source"`
+	Title  string `json:"title"`
+	Width  int    `json:"width"`
+}
+
 // GenerationStartedEvent A request attempt began producing content; drop any partial from an earlier attempt.
 type GenerationStartedEvent struct {
 	Attempt int                        `json:"attempt"`
@@ -2376,279 +2597,6 @@ type GenerationStartedEvent struct {
 
 // GenerationStartedEventType defines model for GenerationStartedEvent.Type.
 type GenerationStartedEventType string
-
-// GuestAttachment defines model for GuestAttachment.
-type GuestAttachment struct {
-	ContentType string `json:"contentType"`
-
-	// Data The file, base64. Left out for the files that no longer fit what a
-	// request can carry (the newest are sent, as the model gets the newest);
-	// the model is told those were not included, as for an account.
-	Data *[]byte `json:"data,omitempty"`
-
-	// Filename 1 to 255 characters, no control characters (400 `invalid_filename`).
-	// The model is told it, so it is checked as words are: with the new
-	// message, or in history unless the file's `receipt` covers it.
-	Filename string             `json:"filename"`
-	Id       openapi_types.UUID `json:"id"`
-
-	// Receipt The server's signature that this file's name and (for a picture
-	// sent with its bytes) bytes have been checked, from
-	// `GuestEndEvent.receipts.files`. Opaque, and kept as received. It
-	// has two halves; a picture whose bytes are no longer sent still has
-	// its name vouched for. Without one the name, and a picture's bytes,
-	// are checked again.
-	Receipt *string `json:"receipt,omitempty"`
-	Size    int64   `json:"size"`
-}
-
-// GuestBan defines model for GuestBan.
-type GuestBan struct {
-	CreatedAt time.Time           `json:"createdAt"`
-	EventId   *openapi_types.UUID `json:"eventId,omitempty"`
-
-	// ExpiresAt Null for a permanent ban.
-	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
-	Ip        string     `json:"ip"`
-	Reason    string     `json:"reason"`
-}
-
-// GuestConfig defines model for GuestConfig.
-type GuestConfig struct {
-	Features        ChatFeatures `json:"features"`
-	Models          []ChatModel  `json:"models"`
-	Personalization struct {
-		InstructionLimit int `json:"instructionLimit"`
-
-		// MemoryAllowed The administrator's memory switch (`SystemSettings.memory`).
-		MemoryAllowed bool `json:"memoryAllowed"`
-		MemoryLength  int  `json:"memoryLength"`
-		MemoryLimit   int  `json:"memoryLimit"`
-	} `json:"personalization"`
-}
-
-// GuestEndEvent The last frame of a guest's run: what the browser has to keep, because
-// the server keeps nothing. Sent after `run_finished`.
-type GuestEndEvent struct {
-	// Memories The guest's memories now - the model's memory tool may have changed them.
-	Memories []Memory `json:"memories"`
-
-	// MemoryEvents What the model changed during this run, for the undo list.
-	MemoryEvents   []MemoryEvent          `json:"memoryEvents"`
-	MemorySnapshot map[string]interface{} `json:"memorySnapshot"`
-
-	// Receipts Signatures the server gives for content it has checked or written, so
-	// that the browser, which keeps the conversation and could write anything
-	// into it, is not believed about it. All opaque: a signature covers
-	// exactly the words (or, for a row of the model's, the blocks) it was
-	// made for, so a changed byte is a missing receipt. Kept next to the
-	// thing they sign and sent back with it. In a request only
-	// `aboutYou`, `responseStyle` and `memorySnapshot` are read; the rest
-	// ride on the rows, memories and files themselves.
-	Receipts *GuestReceipts `json:"receipts,omitempty"`
-
-	// Run The work from one input to its final answer.
-	Run Run `json:"run"`
-
-	// Summary The conversation's compressed context as the run left it; absent
-	// when it has none. The same summary was announced in the run's own
-	// events (`compaction_finished`) when the run made it.
-	Summary *ContextSummary `json:"summary,omitempty"`
-
-	// Title Set when the conversation was given a title after this run.
-	Title *string           `json:"title,omitempty"`
-	Type  GuestEndEventType `json:"type"`
-}
-
-// GuestEndEventType defines model for GuestEndEvent.Type.
-type GuestEndEventType string
-
-// GuestMemory defines model for GuestMemory.
-type GuestMemory struct {
-	Content string             `json:"content"`
-	Id      openapi_types.UUID `json:"id"`
-
-	// Receipt The `Memory.receipt` it came with. Without a valid one the note is checked again.
-	Receipt *string `json:"receipt,omitempty"`
-
-	// Source Who wrote it: `user` by hand, `model` with its memory tool, `auto` is
-	// reserved for learning from conversations (not offered yet).
-	Source *MemorySource `json:"source,omitempty"`
-}
-
-// GuestMessage A row of the conversation as the guest's browser holds it. Assistant
-// and tool rows are what the server sent back earlier (`Message`).
-// Nothing in a row is taken on the browser's word: a user row's words
-// are checked again unless it comes with its `receipt`, and an assistant
-// or tool row that does not (with the blocks it is sent with) is not
-// something the server wrote, so the request is refused
-// (`invalid_history`).
-type GuestMessage struct {
-	Attachments *[]GuestAttachment `json:"attachments,omitempty"`
-	Content     string             `json:"content"`
-	CreatedAt   time.Time          `json:"createdAt"`
-	ErrorCode   *string            `json:"errorCode,omitempty"`
-	Id          openapi_types.UUID `json:"id"`
-	Model       *string            `json:"model,omitempty"`
-	Parts       []MessagePart      `json:"parts"`
-
-	// ProviderState The `Message.providerState` the row came with; used in place of `parts` when sent.
-	ProviderState *string `json:"providerState,omitempty"`
-
-	// Receipt The `Message.receipt` the row came with, or `GuestReceipts.messages` for a user row.
-	Receipt    *string                 `json:"receipt,omitempty"`
-	Role       Role                    `json:"role"`
-	StopReason *GuestMessageStopReason `json:"stopReason,omitempty"`
-	Usage      *Usage                  `json:"usage,omitempty"`
-}
-
-// GuestMessageStopReason defines model for GuestMessage.StopReason.
-type GuestMessageStopReason string
-
-// GuestReceipts Signatures the server gives for content it has checked or written, so
-// that the browser, which keeps the conversation and could write anything
-// into it, is not believed about it. All opaque: a signature covers
-// exactly the words (or, for a row of the model's, the blocks) it was
-// made for, so a changed byte is a missing receipt. Kept next to the
-// thing they sign and sent back with it. In a request only
-// `aboutYou`, `responseStyle` and `memorySnapshot` are read; the rest
-// ride on the rows, memories and files themselves.
-type GuestReceipts struct {
-	// AboutYou For the custom instructions' `aboutYou`.
-	AboutYou *string `json:"aboutYou,omitempty"`
-
-	// Files Only in `GuestEndEvent`. The files whose name (and bytes, for a picture) were checked, by attachment id.
-	Files *map[string]string `json:"files,omitempty"`
-
-	// MemorySnapshot For the conversation's `memorySnapshot`.
-	MemorySnapshot *string `json:"memorySnapshot,omitempty"`
-
-	// Messages Only in `GuestEndEvent`. User rows the server checked in this
-	// request (the new question, and any row that was sent without a
-	// receipt), by message id.
-	Messages *map[string]string `json:"messages,omitempty"`
-
-	// ResponseStyle For `responseStyle`.
-	ResponseStyle *string `json:"responseStyle,omitempty"`
-}
-
-// GuestRunEvent One SSE frame of a guest run.
-type GuestRunEvent struct {
-	union json.RawMessage
-}
-
-// GuestRunRequest defines model for GuestRunRequest.
-type GuestRunRequest struct {
-	AboutYou *string `json:"aboutYou,omitempty"`
-
-	// Action `send`: `input` is a new message after `messages` (also an edit:
-	// `messages` ends before the question it rewords). `regenerate`:
-	// answer the last message of `messages` again. `answer`: `callId` and `answers` are the reply to
-	// the question the last row of `messages` asks.
-	Action  GuestRunRequestAction `json:"action"`
-	Answers *[]struct {
-		Other    *string  `json:"other,omitempty"`
-		Selected []string `json:"selected"`
-	} `json:"answers,omitempty"`
-	CallId *string `json:"callId,omitempty"`
-
-	// Continues For `answer`. The run that began the reply the question is part of.
-	Continues      *openapi_types.UUID `json:"continues,omitempty"`
-	ConversationId openapi_types.UUID  `json:"conversationId"`
-
-	// Input For `send`.
-	Input         *GuestMessage  `json:"input,omitempty"`
-	Memories      *[]GuestMemory `json:"memories,omitempty"`
-	MemoryEnabled *bool          `json:"memoryEnabled,omitempty"`
-
-	// MemorySnapshot The conversation's snapshot from `GuestEndEvent`, sent back so the
-	// system prompt is the same bytes at every turn. Absent on its first run.
-	// It has to be exactly what the server wrote (notes numbered `m1`,
-	// `m2`, … in order, saved notes numbered on from there, each note one
-	// line of at most 200 characters, ids set and unique): the prompt
-	// prints the numbers next to the notes, so any other is 400
-	// `invalid_snapshot`.
-	MemorySnapshot *map[string]interface{} `json:"memorySnapshot,omitempty"`
-
-	// Messages The conversation, in order. For `send` it stops before `input`; for
-	// `regenerate` it ends with the question and without the answer being
-	// redone.
-	Messages []GuestMessage `json:"messages"`
-	Model    *string        `json:"model,omitempty"`
-
-	// ReasoningEffort How hard a reasoning model thinks. `auto` sends nothing and leaves the
-	// model at its own default. The other values are the levels providers
-	// use; each model accepts its own subset, listed as
-	// `ChatModel.reasoningEfforts` (from models.dev). A level the model does
-	// not offer is dropped, which is the same as `auto`.
-	ReasoningEffort *ReasoningEffort `json:"reasoningEffort,omitempty"`
-
-	// Receipts Signatures the server gives for content it has checked or written, so
-	// that the browser, which keeps the conversation and could write anything
-	// into it, is not believed about it. All opaque: a signature covers
-	// exactly the words (or, for a row of the model's, the blocks) it was
-	// made for, so a changed byte is a missing receipt. Kept next to the
-	// thing they sign and sent back with it. In a request only
-	// `aboutYou`, `responseStyle` and `memorySnapshot` are read; the rest
-	// ride on the rows, memories and files themselves.
-	Receipts      *GuestReceipts `json:"receipts,omitempty"`
-	ResponseStyle *string        `json:"responseStyle,omitempty"`
-
-	// Summary The conversation's compressed context, if the browser holds one,
-	// sent back so the run builds its requests from it as an account's do.
-	// `messages` then begins at the summary's `keptMessageId` (when it has
-	// one) and its `throughMessageId` - the rows between them, which the
-	// summary replaces, are not sent - and goes on from there; the server
-	// writes them as they are and the summary over them.
-	// `throughMessageId` and `keptMessageId` have to be among `messages`.
-	Summary   *ContextSummary `json:"summary,omitempty"`
-	Temporary *bool           `json:"temporary,omitempty"`
-
-	// Titled The conversation has a title already; none is generated after the run.
-	Titled    *bool `json:"titled,omitempty"`
-	WebSearch *bool `json:"webSearch,omitempty"`
-}
-
-// GuestRunRequestAction `send`: `input` is a new message after `messages` (also an edit:
-// `messages` ends before the question it rewords). `regenerate`:
-// answer the last message of `messages` again. `answer`: `callId` and `answers` are the reply to
-// the question the last row of `messages` asks.
-type GuestRunRequestAction string
-
-// GuestStatus defines model for GuestStatus.
-type GuestStatus struct {
-	// Banned Whether the caller's network address is banned from guest mode
-	// (content moderation). Every other `/guest/*` endpoint answers 403
-	// `guest_banned` then.
-	Banned bool `json:"banned"`
-
-	// BannedUntil When the ban ends; null for a permanent one. Only with `banned`.
-	BannedUntil *time.Time `json:"bannedUntil,omitempty"`
-	Enabled     bool       `json:"enabled"`
-}
-
-// GuestTitle defines model for GuestTitle.
-type GuestTitle struct {
-	Title string `json:"title"`
-}
-
-// GuestTitleRequest defines model for GuestTitleRequest.
-type GuestTitleRequest struct {
-	Messages []struct {
-		Content string `json:"content"`
-
-		// Receipt The row's receipt. A user row without a valid one is checked
-		// first; an assistant row without one is left out of the title.
-		Receipt *string                       `json:"receipt,omitempty"`
-		Role    GuestTitleRequestMessagesRole `json:"role"`
-	} `json:"messages"`
-
-	// Model The conversation's model, used when no task model is set.
-	Model *string `json:"model,omitempty"`
-}
-
-// GuestTitleRequestMessagesRole defines model for GuestTitleRequest.Messages.Role.
-type GuestTitleRequestMessagesRole string
 
 // Health defines model for Health.
 type Health struct {
@@ -2659,8 +2607,95 @@ type Health struct {
 // HealthStatus defines model for Health.Status.
 type HealthStatus string
 
+// ImageSearchHit defines model for ImageSearchHit.
+type ImageSearchHit struct {
+	Creator    *string `json:"creator,omitempty"`
+	Height     int     `json:"height"`
+	LandingUrl *string `json:"landingUrl,omitempty"`
+	License    string  `json:"license"`
+	Source     string  `json:"source"`
+	Title      string  `json:"title"`
+
+	// Url The picture at the service
+	Url   string `json:"url"`
+	Width int    `json:"width"`
+}
+
+// ImageSearchProvider Where the pictures answers describe are found (`searchImage`).
+// `wikimedia` is Wikimedia Commons' own search: no key, quick, but with
+// no safe-search filter. `openverse` searches Creative Commons images
+// from many sites with mature content filtered out, no key, but allows
+// an anonymous server 200 searches a day and is often slow. `pixabay`
+// is Pixabay's stock photos with safe search, and needs a free key.
+type ImageSearchProvider string
+
+// ImageSearchSettings defines model for ImageSearchSettings.
+type ImageSearchSettings struct {
+	// Enabled Whether answers describe their pictures for the server to find
+	// (`searchImage`). Off, an answer can show only a picture whose
+	// address one of its own sources listed - a page it read or a
+	// search it ran - as before.
+	Enabled bool `json:"enabled"`
+
+	// PixabayKeyPreview The Pixabay key's last four characters.
+	PixabayKeyPreview *string `json:"pixabayKeyPreview,omitempty"`
+
+	// PixabayKeySet Whether a Pixabay API key is stored; `pixabay` needs one. Write-only, like a channel's.
+	PixabayKeySet bool `json:"pixabayKeySet"`
+
+	// Provider Where the pictures answers describe are found (`searchImage`).
+	// `wikimedia` is Wikimedia Commons' own search: no key, quick, but with
+	// no safe-search filter. `openverse` searches Creative Commons images
+	// from many sites with mature content filtered out, no key, but allows
+	// an anonymous server 200 searches a day and is often slow. `pixabay`
+	// is Pixabay's stock photos with safe search, and needs a free key.
+	Provider ImageSearchProvider `json:"provider"`
+}
+
+// ImageSearchTestRequest defines model for ImageSearchTestRequest.
+type ImageSearchTestRequest struct {
+	// PixabayKey A Pixabay key to try before saving it. The stored key when absent.
+	PixabayKey *string `json:"pixabayKey,omitempty"`
+
+	// Provider A service to try before choosing it. The configured one when absent.
+	Provider *ImageSearchProvider `json:"provider,omitempty"`
+	Query    string               `json:"query"`
+}
+
+// ImageSearchTestResult defines model for ImageSearchTestResult.
+type ImageSearchTestResult struct {
+	// Error Why the search failed
+	Error *string `json:"error,omitempty"`
+
+	// Image The first match; absent when nothing matched.
+	Image     *ImageSearchHit `json:"image,omitempty"`
+	LatencyMs int             `json:"latencyMs"`
+	Ok        bool            `json:"ok"`
+}
+
 // InputModality What a model takes besides text.
 type InputModality string
+
+// LibraryFile defines model for LibraryFile.
+type LibraryFile struct {
+	ContentType       string             `json:"contentType"`
+	ConversationId    openapi_types.UUID `json:"conversationId"`
+	ConversationTitle string             `json:"conversationTitle"`
+	CreatedAt         time.Time          `json:"createdAt"`
+	Filename          string             `json:"filename"`
+	Id                openapi_types.UUID `json:"id"`
+	Size              int64              `json:"size"`
+	Url               string             `json:"url"`
+}
+
+// LibraryFilePage defines model for LibraryFilePage.
+type LibraryFilePage struct {
+	Items      []LibraryFile `json:"items"`
+	NextCursor *string       `json:"nextCursor,omitempty"`
+}
+
+// LibraryFileType defines model for LibraryFileType.
+type LibraryFileType string
 
 // LiveState A run's work in flight, which is not a message yet.
 type LiveState struct {
@@ -2691,10 +2726,6 @@ type Memory struct {
 	ConversationId *openapi_types.UUID `json:"conversationId,omitempty"`
 	CreatedAt      time.Time           `json:"createdAt"`
 	Id             openapi_types.UUID  `json:"id"`
-
-	// Receipt Guest streams only. The server's signature that `content` has been
-	// checked (`GuestMemory.receipt`). Opaque. Absent elsewhere.
-	Receipt *string `json:"receipt,omitempty"`
 
 	// Source Who wrote it: `user` by hand, `model` with its memory tool, `auto` is
 	// reserved for learning from conversations (not offered yet).
@@ -2759,22 +2790,20 @@ type Message struct {
 	ErrorCode *string            `json:"errorCode,omitempty"`
 	Id        openapi_types.UUID `json:"id"`
 	Model     *string            `json:"model,omitempty"`
-	Parts     []MessagePart      `json:"parts"`
 
-	// ProviderState Guest streams only, on assistant rows. What a provider wants back
-	// with this response that is not for display - a reasoning
-	// signature, redacted reasoning - kept opaque. The server never gives
-	// it to a signed-in browser, which has no use for it; a guest's
-	// browser keeps the transcript, so it has to hold it for the next
-	// request (`GuestMessage.providerState`). Absent elsewhere.
-	ProviderState *string `json:"providerState,omitempty"`
+	// Origin User rows no person wrote. `subagent` is a sub-agent's report
+	// delivered to the main conversation (its content is one or more
+	// `<subagent-report>` blocks): shown as a line, never editable, not a
+	// question to regenerate. `agent` is the main agent's task or
+	// message to a sub-agent, seen only in a sub-agent's transcript.
+	Origin *MessageOrigin `json:"origin,omitempty"`
+	Parts  []MessagePart  `json:"parts"`
 
-	// Receipt Guest streams only. The server's signature that it wrote this row
-	// (assistant, tool) or checked its words (user), to be handed back
-	// as `GuestMessage.receipt`. Opaque. Absent elsewhere.
-	Receipt *string             `json:"receipt,omitempty"`
-	Role    Role                `json:"role"`
-	RunId   *openapi_types.UUID `json:"runId,omitempty"`
+	// RemovedAttachments User messages only: the files it was sent with that were deleted
+	// since (`deleteFile`), to show where they were.
+	RemovedAttachments *[]RemovedAttachment `json:"removedAttachments,omitempty"`
+	Role               Role                 `json:"role"`
+	RunId              *openapi_types.UUID  `json:"runId,omitempty"`
 
 	// Status `blocked` is a message content moderation refused: a user message that
 	// is shown and never sent to a model. It is not a question the
@@ -2790,6 +2819,13 @@ type Message struct {
 	StopReason *MessageStopReason `json:"stopReason,omitempty"`
 	Usage      *Usage             `json:"usage,omitempty"`
 }
+
+// MessageOrigin User rows no person wrote. `subagent` is a sub-agent's report
+// delivered to the main conversation (its content is one or more
+// `<subagent-report>` blocks): shown as a line, never editable, not a
+// question to regenerate. `agent` is the main agent's task or
+// message to a sub-agent, seen only in a sub-agent's transcript.
+type MessageOrigin string
 
 // MessageStopReason Assistant messages only. `error` and `cancelled` responses are shown
 // but never sent back to a model.
@@ -2933,26 +2969,23 @@ type ModerationEvent struct {
 	CreatedAt      time.Time           `json:"createdAt"`
 
 	// Excerpt The first 500 characters of the blocked text.
-	Excerpt string `json:"excerpt"`
-
-	// GuestIp A guest's network address (an IPv6 one as its /64); null for an account.
-	GuestIp *string            `json:"guestIp,omitempty"`
-	Id      openapi_types.UUID `json:"id"`
-
-	// IpBanned Whether the guest address is banned now; null for an account.
-	IpBanned *bool               `json:"ipBanned,omitempty"`
-	Mode     ModerationEventMode `json:"mode"`
+	Excerpt string              `json:"excerpt"`
+	Id      openapi_types.UUID  `json:"id"`
+	Mode    ModerationEventMode `json:"mode"`
 
 	// Sanction What a blocked message set off, when it reached the strike threshold.
 	Sanction *ModerationSanction `json:"sanction,omitempty"`
 
-	// Source Where the blocked text came from: a message sent, edited or answered, a
-	// guest's, the custom instructions or a memory as they were saved, or
+	// Source Where the blocked text came from: a message sent, edited or answered,
+	// the custom instructions or a memory as they were saved, or
 	// either of them as a conversation took its snapshot (`snapshot`, logged
-	// but not counted as a strike).
+	// but not counted as a strike); a scheduled task's prompt as its owner
+	// saved it (`task`), or as it was about to be sent or a model wrote it
+	// (`task_run`, logged but not counted as a strike); the person's text
+	// of a writing block as a model was about to read it (`document`).
 	Source ModerationSource `json:"source"`
 
-	// UserDisabled Whether the account is disabled now; null for a guest.
+	// UserDisabled Whether the account is disabled now; null once it is deleted.
 	UserDisabled *bool               `json:"userDisabled,omitempty"`
 	UserEmail    *string             `json:"userEmail,omitempty"`
 	UserId       *openapi_types.UUID `json:"userId,omitempty"`
@@ -2977,7 +3010,7 @@ type ModerationMode string
 
 // ModerationOnError What an account's message does when the moderation service fails (an
 // error, a timeout, no channel, the model's spending cap): `allow` sends
-// it anyway, `block` refuses it. A guest's is always refused.
+// it anyway, `block` refuses it.
 type ModerationOnError string
 
 // ModerationSanction What a blocked message set off, when it reached the strike threshold.
@@ -2990,9 +3023,6 @@ type ModerationSettings struct {
 
 	// ExemptAdmins Whether an administrator's messages go unchecked. Off, they reach the same upstream and are checked like anyone's.
 	ExemptAdmins bool `json:"exemptAdmins"`
-
-	// GuestBanHours How long a banned guest address stays banned; 0 is permanent.
-	GuestBanHours int `json:"guestBanHours"`
 
 	// MinScore 0 blocks a category the service flagged. Above 0 a category also
 	// blocks when its score reaches this, flagged or not.
@@ -3007,7 +3037,7 @@ type ModerationSettings struct {
 
 	// OnError What an account's message does when the moderation service fails (an
 	// error, a timeout, no channel, the model's spending cap): `allow` sends
-	// it anyway, `block` refuses it. A guest's is always refused.
+	// it anyway, `block` refuses it.
 	OnError ModerationOnError `json:"onError"`
 
 	// OpenaiBaseUrl Where `openai` mode sends its requests; empty is OpenAI's own
@@ -3022,15 +3052,18 @@ type ModerationSettings struct {
 	StrikeWindowHours int  `json:"strikeWindowHours"`
 
 	// Strikes How many blocked messages within `strikeWindowHours` disable the
-	// account (or ban the guest address). 0 never sanctions. An
+	// account. 0 never sanctions. An
 	// administrator is only logged.
 	Strikes int `json:"strikes"`
 }
 
-// ModerationSource Where the blocked text came from: a message sent, edited or answered, a
-// guest's, the custom instructions or a memory as they were saved, or
+// ModerationSource Where the blocked text came from: a message sent, edited or answered,
+// the custom instructions or a memory as they were saved, or
 // either of them as a conversation took its snapshot (`snapshot`, logged
-// but not counted as a strike).
+// but not counted as a strike); a scheduled task's prompt as its owner
+// saved it (`task`), or as it was about to be sent or a model wrote it
+// (`task_run`, logged but not counted as a strike); the person's text
+// of a writing block as a model was about to read it (`document`).
 type ModerationSource string
 
 // PartDeltaEvent Text for a text or reasoning part, raw argument JSON for a tool call.
@@ -3070,6 +3103,66 @@ type PartStartedEvent struct {
 
 // PartStartedEventType defines model for PartStartedEvent.Type.
 type PartStartedEventType string
+
+// Passkey defines model for Passkey.
+type Passkey struct {
+	CreatedAt  time.Time          `json:"createdAt"`
+	Id         openapi_types.UUID `json:"id"`
+	LastUsedAt *time.Time         `json:"lastUsedAt,omitempty"`
+	Name       string             `json:"name"`
+
+	// Synced Whether it is backed up and synced across devices (a password manager or platform account), rather than bound to one device.
+	Synced bool `json:"synced"`
+}
+
+// PasskeyAnswer defines model for PasskeyAnswer.
+type PasskeyAnswer struct {
+	ChallengeId openapi_types.UUID `json:"challengeId"`
+
+	// Credential The browser's credential as JSON (RegistrationResponseJSON or AuthenticationResponseJSON).
+	Credential map[string]interface{} `json:"credential"`
+
+	// Name What to call a passkey being added; the browser's name for its kind when absent.
+	Name *string `json:"name,omitempty"`
+}
+
+// PasskeyOptions defines model for PasskeyOptions.
+type PasskeyOptions struct {
+	// ChallengeId Sent back with the browser's answer.
+	ChallengeId openapi_types.UUID `json:"challengeId"`
+
+	// PublicKey The WebAuthn options as JSON (PublicKeyCredentialCreationOptionsJSON
+	// or PublicKeyCredentialRequestOptionsJSON), for the browser.
+	PublicKey map[string]interface{} `json:"publicKey"`
+}
+
+// PasskeySettings defines model for PasskeySettings.
+type PasskeySettings struct {
+	// EffectiveOrigins The origins in force for this request.
+	EffectiveOrigins []string `json:"effectiveOrigins"`
+
+	// EffectiveRpId The relying party ID in force for this request.
+	EffectiveRpId string `json:"effectiveRpId"`
+
+	// Enabled Whether accounts may add passkeys and sign in with them. Off, the passkeys stay but cannot be used.
+	Enabled bool `json:"enabled"`
+
+	// Origins Origins a passkey answer may come from, such as https://chat.example.com. Empty takes the page's own origin.
+	Origins []string `json:"origins"`
+
+	// Registered Passkeys registered across all accounts.
+	Registered int `json:"registered"`
+
+	// RpId The relying party ID: the domain passkeys are made for, such as
+	// chat.example.com. Empty takes the domain the page is served from.
+	RpId string `json:"rpId"`
+
+	// UserVerification Whether the authenticator must verify the person (fingerprint, face, PIN) or only should.
+	UserVerification PasskeySettingsUserVerification `json:"userVerification"`
+}
+
+// PasskeySettingsUserVerification Whether the authenticator must verify the person (fingerprint, face, PIN) or only should.
+type PasskeySettingsUserVerification string
 
 // Personalization defines model for Personalization.
 type Personalization struct {
@@ -3155,6 +3248,18 @@ type RegisterRequest struct {
 	// collide, one account's username would shadow another's address.
 	Name     Username `json:"name"`
 	Password string   `json:"password"`
+}
+
+// RemovedAttachment A file a message was sent with that has since been deleted (`deleteFile`).
+type RemovedAttachment struct {
+	ContentType string             `json:"contentType"`
+	Filename    string             `json:"filename"`
+	Id          openapi_types.UUID `json:"id"`
+}
+
+// RenamePasskeyRequest defines model for RenamePasskeyRequest.
+type RenamePasskeyRequest struct {
+	Name string `json:"name"`
 }
 
 // RetryInfo defines model for RetryInfo.
@@ -3258,6 +3363,9 @@ type SessionUser struct {
 	Id        openapi_types.UUID  `json:"id"`
 	Name      string              `json:"name"`
 	Role      UserRole            `json:"role"`
+
+	// TimeZone The time zone the browser last reported (`updateMe`), for times a model schedules.
+	TimeZone *string `json:"timeZone,omitempty"`
 }
 
 // SnapshotEvent Replaces everything a client holds about runs in flight.
@@ -3324,6 +3432,111 @@ type StorageTestResult struct {
 	Ok        bool    `json:"ok"`
 }
 
+// Subagent A sub-agent (子智能体): work the main agent handed over, done in a
+// hidden conversation of its own. `state` is its latest run's.
+type Subagent struct {
+	// Activity While running, the tool it is using now (`web_search`, `web_fetch`, `document`), if any.
+	Activity *string `json:"activity,omitempty"`
+
+	// Background Its reports are delivered to the conversation, rather than taken by a call waiting for it.
+	Background bool `json:"background"`
+
+	// CallId The tool call that launched it.
+	CallId    *string   `json:"callId,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// DurationMs How long its latest run took, once it ended.
+	DurationMs *int64             `json:"durationMs,omitempty"`
+	FinishedAt *time.Time         `json:"finishedAt,omitempty"`
+	Id         openapi_types.UUID `json:"id"`
+
+	// LaunchedBy The run that launched it.
+	LaunchedBy *openapi_types.UUID `json:"launchedBy,omitempty"`
+
+	// Model The model its latest run uses (the one it will use
+	Model string `json:"model"`
+
+	// Name The short name the main agent gave it.
+	Name string `json:"name"`
+
+	// ReportDelivered Its latest report has reached the main agent.
+	ReportDelivered *bool `json:"reportDelivered,omitempty"`
+
+	// StartedAt When its latest run started; while queued
+	StartedAt time.Time `json:"startedAt"`
+
+	// State `queued` is a foreground sub-agent waiting for a free slot (the
+	// limits of sub-agents working at once): launched, not started yet.
+	// It becomes `running` when it gets one.
+	State SubagentState `json:"state"`
+
+	// StoppedByUser The person stopped it; only `resumeSubagent` starts it again.
+	StoppedByUser bool `json:"stoppedByUser"`
+
+	// ToolCalls How many tool calls it has made.
+	ToolCalls int `json:"toolCalls"`
+}
+
+// SubagentState `queued` is a foreground sub-agent waiting for a free slot (the
+// limits of sub-agents working at once): launched, not started yet.
+// It becomes `running` when it gets one.
+type SubagentState string
+
+// SubagentDetail defines model for SubagentDetail.
+type SubagentDetail struct {
+	// Live A run's work in flight, which is not a message yet.
+	Live     *LiveState `json:"live,omitempty"`
+	Messages []Message  `json:"messages"`
+
+	// Run The work from one input to its final answer.
+	Run *Run `json:"run,omitempty"`
+
+	// Subagent A sub-agent (子智能体): work the main agent handed over, done in a
+	// hidden conversation of its own. `state` is its latest run's.
+	Subagent Subagent `json:"subagent"`
+}
+
+// SubagentList defines model for SubagentList.
+type SubagentList struct {
+	Items []Subagent `json:"items"`
+}
+
+// SubagentSettings defines model for SubagentSettings.
+type SubagentSettings struct {
+	// Background Whether the main agent may launch sub-agents in the background. On by default.
+	Background bool `json:"background"`
+
+	// Enabled Whether models are offered the sub-agent tools. Off by default.
+	Enabled bool `json:"enabled"`
+
+	// MaxPerConversation Sub-agents working at once for one conversation. 3 by default.
+	MaxPerConversation int `json:"maxPerConversation"`
+
+	// MaxPerRun Sub-agents one run may launch. 4 by default.
+	MaxPerRun int `json:"maxPerRun"`
+
+	// MaxPerUser Sub-agents working at once for one person
+	MaxPerUser int `json:"maxPerUser"`
+
+	// MaxReportChars The longest report delivered; a longer one is cut and says so. 30000 by default.
+	MaxReportChars int `json:"maxReportChars"`
+
+	// Model The model sub-agents use. Empty is the model of the run that launches one.
+	Model string `json:"model"`
+}
+
+// SubagentsChangedEvent One of the conversation's sub-agents started, took a step, or ended
+// (`listSubagents` says how it stands now). Sent in a batch of its own,
+// with the nil run id and version 0. A report it delivers arrives as a
+// transcript row - in the batch of the run that received it, or as the
+// input of a run started for it (`run_started`).
+type SubagentsChangedEvent struct {
+	Type SubagentsChangedEventType `json:"type"`
+}
+
+// SubagentsChangedEventType defines model for SubagentsChangedEvent.Type.
+type SubagentsChangedEventType string
+
 // SystemSettings defines model for SystemSettings.
 type SystemSettings struct {
 	// AllowRegistration Whether anyone may create an account by registering. Off, only
@@ -3368,21 +3581,6 @@ type SystemSettings struct {
 	// thousand tokens to every request's system prompt.
 	GenerativeUi bool `json:"generativeUi"`
 
-	// GuestDailyLimit Requests all guests together may make per day (the last 24 hours); 0 is unlimited.
-	GuestDailyLimit int `json:"guestDailyLimit"`
-
-	// GuestHourlyLimit Requests one address may make as a guest per hour; 0 is unlimited.
-	GuestHourlyLimit int `json:"guestHourlyLimit"`
-
-	// GuestMaxConcurrentRuns How many runs one address may have going at once as a guest (the
-	// address the hourly limit counts); 0 is unlimited. 2 unless changed.
-	GuestMaxConcurrentRuns int `json:"guestMaxConcurrentRuns"`
-
-	// GuestMode Whether anyone may use the chat without an account. A guest's
-	// conversations are kept in their own browser; the server holds none
-	// of them. Off by default.
-	GuestMode bool `json:"guestMode"`
-
 	// MaxConcurrentRuns How many runs one account may have going at once across all its
 	// conversations; 0 is unlimited. 3 unless changed. Administrators
 	// are exempt. Past it, starting a run is refused with 429
@@ -3405,6 +3603,20 @@ type SystemSettings struct {
 	// first account ever, are never pending.
 	RegistrationApproval bool `json:"registrationApproval"`
 
+	// RequestTraces Whether administrators' model requests are recorded as sent - the
+	// messages, tools and options, and what came back - for the 轨迹
+	// view of their own conversations (`getConversationTrace`). Off by
+	// default: a debugging aid. Off, nothing new is recorded and the
+	// view and its endpoint are gone (404); what was recorded is
+	// deleted after its week as usual.
+	RequestTraces bool `json:"requestTraces"`
+
+	// ScheduledTasks Whether people may schedule tasks (`/tasks`) and models are offered
+	// the tool that does. On by default. Off, nothing scheduled runs and
+	// `/tasks` is 404; the tasks are kept, and run again from their next
+	// time once it is switched back on.
+	ScheduledTasks bool `json:"scheduledTasks"`
+
 	// TaskModel The model background tasks use — for now, titling a conversation
 	// after its first answer. Empty: each conversation's own model.
 	TaskModel string `json:"taskModel"`
@@ -3413,6 +3625,66 @@ type SystemSettings struct {
 	// a message is kept. Default 24.
 	UnsentUploadHours int `json:"unsentUploadHours"`
 }
+
+// Task defines model for Task.
+type Task struct {
+	// ConversationId Where its runs go.
+	ConversationId openapi_types.UUID `json:"conversationId"`
+	CreatedAt      time.Time          `json:"createdAt"`
+	Id             openapi_types.UUID `json:"id"`
+
+	// LastError Why the last time it was due started nothing, as a code to
+	// localise: `conversation_busy`, `content_blocked`,
+	// `moderation_unavailable`, `model_unavailable`, `no_models`,
+	// `model_capacity_reached`, `too_many_runs`, `revise_refused`,
+	// `account_unavailable`, `missed` (the server could not run it
+	// within an hour of its time; it runs again at its next), `failed`.
+	LastError *string    `json:"lastError,omitempty"`
+	LastRunAt *time.Time `json:"lastRunAt,omitempty"`
+	NextRunAt *time.Time `json:"nextRunAt,omitempty"`
+	Prompt    string     `json:"prompt"`
+
+	// Schedule When a task runs, in `timeZone` (an IANA name such as Asia/Shanghai).
+	// `once` runs at `at`; the others at `time` - every day, on `weekdays`
+	// (0 = Sunday), or on `monthDay` (a month too short for it, on its last
+	// day).
+	Schedule TaskSchedule `json:"schedule"`
+
+	// Status `active` will run at `nextRunAt`; `paused` will not until resumed;
+	// `completed` is a one-off that has run.
+	Status TaskStatus `json:"status"`
+	Title  string     `json:"title"`
+}
+
+// TaskList defines model for TaskList.
+type TaskList struct {
+	Items []Task `json:"items"`
+
+	// Limit How many tasks still to run a person may have.
+	Limit int `json:"limit"`
+}
+
+// TaskSchedule When a task runs, in `timeZone` (an IANA name such as Asia/Shanghai).
+// `once` runs at `at`; the others at `time` - every day, on `weekdays`
+// (0 = Sunday), or on `monthDay` (a month too short for it, on its last
+// day).
+type TaskSchedule struct {
+	At       *time.Time       `json:"at,omitempty"`
+	Kind     TaskScheduleKind `json:"kind"`
+	MonthDay *int             `json:"monthDay,omitempty"`
+
+	// Time HH:MM, 24-hour, local to `timeZone`.
+	Time     *string `json:"time,omitempty"`
+	TimeZone string  `json:"timeZone"`
+	Weekdays *[]int  `json:"weekdays,omitempty"`
+}
+
+// TaskScheduleKind defines model for TaskScheduleKind.
+type TaskScheduleKind string
+
+// TaskStatus `active` will run at `nextRunAt`; `paused` will not until resumed;
+// `completed` is a one-off that has run.
+type TaskStatus string
 
 // TextPart defines model for TextPart.
 type TextPart struct {
@@ -3502,6 +3774,44 @@ type ToolStartedEvent struct {
 // ToolStartedEventType defines model for ToolStartedEvent.Type.
 type ToolStartedEventType string
 
+// TraceRequest One model request. `request` and `response` are the server's own
+// encoding (llm's codec), for reading, not for a client to depend on:
+// `request` has `messages` (role and parts), `tools` (name,
+// description, parameters) and `options`; `response` has `message`,
+// `finishReason` and `endedAt`. A file is its reference, never its bytes.
+type TraceRequest struct {
+	CacheReadTokens  int                `json:"cacheReadTokens"`
+	CacheWriteTokens int                `json:"cacheWriteTokens"`
+	ChannelName      string             `json:"channelName"`
+	Cost             *float64           `json:"cost,omitempty"`
+	DurationMs       int                `json:"durationMs"`
+	ErrorCode        *string            `json:"errorCode,omitempty"`
+	ErrorMessage     *string            `json:"errorMessage,omitempty"`
+	Estimated        bool               `json:"estimated"`
+	FirstTokenMs     *int               `json:"firstTokenMs,omitempty"`
+	Id               openapi_types.UUID `json:"id"`
+
+	// InputTokens Excludes the cached part.
+	InputTokens int `json:"inputTokens"`
+
+	// Kind `chat`, a run's request; `compression`, a summary of its context.
+	Kind    string `json:"kind"`
+	ModelId string `json:"modelId"`
+
+	// OutputTokens Includes reasoning.
+	OutputTokens    int                    `json:"outputTokens"`
+	ReasoningTokens int                    `json:"reasoningTokens"`
+	Request         map[string]interface{} `json:"request"`
+	Response        map[string]interface{} `json:"response"`
+	RunId           *openapi_types.UUID    `json:"runId,omitempty"`
+	ServedModel     string                 `json:"servedModel"`
+	StartedAt       time.Time              `json:"startedAt"`
+	Status          TraceRequestStatus     `json:"status"`
+}
+
+// TraceRequestStatus defines model for TraceRequest.Status.
+type TraceRequestStatus string
+
 // TranscriptChangedEvent Rows the conversation showed were deleted (`editMessage` removes a
 // question and what followed it, `regenerateAnswer` removes the answer),
 // so the transcript is no longer the old one with rows added to it. It is
@@ -3566,6 +3876,29 @@ type UpdateConversationRequest struct {
 	WebSearch       *bool            `json:"webSearch,omitempty"`
 }
 
+// UpdateDocumentRequest defines model for UpdateDocumentRequest.
+type UpdateDocumentRequest struct {
+	BaseVersion int    `json:"baseVersion"`
+	Content     string `json:"content"`
+	Title       string `json:"title"`
+}
+
+// UpdateImageSearchSettingsRequest Only the fields present are changed.
+type UpdateImageSearchSettingsRequest struct {
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// PixabayKey The Pixabay API key. Empty removes the stored one.
+	PixabayKey *string `json:"pixabayKey,omitempty"`
+
+	// Provider Where the pictures answers describe are found (`searchImage`).
+	// `wikimedia` is Wikimedia Commons' own search: no key, quick, but with
+	// no safe-search filter. `openverse` searches Creative Commons images
+	// from many sites with mature content filtered out, no key, but allows
+	// an anonymous server 200 searches a day and is often slow. `pixabay`
+	// is Pixabay's stock photos with safe search, and needs a free key.
+	Provider *ImageSearchProvider `json:"provider,omitempty"`
+}
+
 // UpdateMeRequest Only the fields present are changed.
 type UpdateMeRequest struct {
 	Email *openapi_types.Email `json:"email,omitempty"`
@@ -3574,14 +3907,16 @@ type UpdateMeRequest struct {
 	// like an email address: sign-in accepts either, and if the two could
 	// collide, one account's username would shadow another's address.
 	Name *Username `json:"name,omitempty"`
+
+	// TimeZone An IANA time zone name; the page sends the browser's when it differs.
+	TimeZone *string `json:"timeZone,omitempty"`
 }
 
 // UpdateModerationSettingsRequest Only the fields present are changed. An absent `openaiApiKey` keeps the stored one; an empty string clears it.
 type UpdateModerationSettingsRequest struct {
-	Categories    *[]ModerationCategory `json:"categories,omitempty"`
-	ExemptAdmins  *bool                 `json:"exemptAdmins,omitempty"`
-	GuestBanHours *int                  `json:"guestBanHours,omitempty"`
-	MinScore      *float64              `json:"minScore,omitempty"`
+	Categories   *[]ModerationCategory `json:"categories,omitempty"`
+	ExemptAdmins *bool                 `json:"exemptAdmins,omitempty"`
+	MinScore     *float64              `json:"minScore,omitempty"`
 
 	// Mode `off` checks nothing; `openai` sends each message to OpenAI's
 	// moderation endpoint; `model` has a model of the catalogue classify it.
@@ -3590,13 +3925,24 @@ type UpdateModerationSettingsRequest struct {
 
 	// OnError What an account's message does when the moderation service fails (an
 	// error, a timeout, no channel, the model's spending cap): `allow` sends
-	// it anyway, `block` refuses it. A guest's is always refused.
+	// it anyway, `block` refuses it.
 	OnError           *ModerationOnError `json:"onError,omitempty"`
 	OpenaiApiKey      *string            `json:"openaiApiKey,omitempty"`
 	OpenaiBaseUrl     *string            `json:"openaiBaseUrl,omitempty"`
 	StrikeWindowHours *int               `json:"strikeWindowHours,omitempty"`
 	Strikes           *int               `json:"strikes,omitempty"`
 }
+
+// UpdatePasskeySettingsRequest Only the fields present are changed.
+type UpdatePasskeySettingsRequest struct {
+	Enabled          *bool                                         `json:"enabled,omitempty"`
+	Origins          *[]string                                     `json:"origins,omitempty"`
+	RpId             *string                                       `json:"rpId,omitempty"`
+	UserVerification *UpdatePasskeySettingsRequestUserVerification `json:"userVerification,omitempty"`
+}
+
+// UpdatePasskeySettingsRequestUserVerification defines model for UpdatePasskeySettingsRequest.UserVerification.
+type UpdatePasskeySettingsRequestUserVerification string
 
 // UpdatePersonalizationRequest Only the fields present are changed.
 type UpdatePersonalizationRequest struct {
@@ -3630,6 +3976,27 @@ type UpdateStorageSettingsRequest struct {
 	S3 *UpdateStorageS3Settings `json:"s3,omitempty"`
 }
 
+// UpdateSubagentSettingsRequest Only the fields present are changed.
+type UpdateSubagentSettingsRequest struct {
+	Background *bool `json:"background,omitempty"`
+	Enabled    *bool `json:"enabled,omitempty"`
+
+	// MaxPerConversation 1 to 20 (400 `invalid_subagent_limit`).
+	MaxPerConversation *int `json:"maxPerConversation,omitempty"`
+
+	// MaxPerRun 1 to 20 (400 `invalid_subagent_limit`).
+	MaxPerRun *int `json:"maxPerRun,omitempty"`
+
+	// MaxPerUser 1 to 100 (400 `invalid_subagent_limit`).
+	MaxPerUser *int `json:"maxPerUser,omitempty"`
+
+	// MaxReportChars 1000 to 200000 (400 `invalid_subagent_limit`).
+	MaxReportChars *int `json:"maxReportChars,omitempty"`
+
+	// Model A model an enabled channel offers (400 `model_unavailable` otherwise), or empty.
+	Model *string `json:"model,omitempty"`
+}
+
 // UpdateSystemSettingsRequest Only the fields present are changed.
 type UpdateSystemSettingsRequest struct {
 	AllowRegistration *bool `json:"allowRegistration,omitempty"`
@@ -3642,16 +4009,6 @@ type UpdateSystemSettingsRequest struct {
 	DeletedRetentionDays *int  `json:"deletedRetentionDays,omitempty"`
 	GenerativeUi         *bool `json:"generativeUi,omitempty"`
 
-	// GuestDailyLimit 0 to 10000000 (400 `invalid_guest_limit` otherwise); 0 is unlimited.
-	GuestDailyLimit *int `json:"guestDailyLimit,omitempty"`
-
-	// GuestHourlyLimit 0 to 100000 (400 `invalid_guest_limit` otherwise); 0 is unlimited.
-	GuestHourlyLimit *int `json:"guestHourlyLimit,omitempty"`
-
-	// GuestMaxConcurrentRuns 0 to 1000 (400 `invalid_run_limit` otherwise); 0 is unlimited.
-	GuestMaxConcurrentRuns *int  `json:"guestMaxConcurrentRuns,omitempty"`
-	GuestMode              *bool `json:"guestMode,omitempty"`
-
 	// MaxConcurrentRuns 0 to 1000 (400 `invalid_run_limit` otherwise); 0 is unlimited.
 	MaxConcurrentRuns *int  `json:"maxConcurrentRuns,omitempty"`
 	Memory            *bool `json:"memory,omitempty"`
@@ -3659,6 +4016,8 @@ type UpdateSystemSettingsRequest struct {
 	// OrphanFileHours 1 to 8760 (400 `invalid_retention` otherwise).
 	OrphanFileHours      *int  `json:"orphanFileHours,omitempty"`
 	RegistrationApproval *bool `json:"registrationApproval,omitempty"`
+	RequestTraces        *bool `json:"requestTraces,omitempty"`
+	ScheduledTasks       *bool `json:"scheduledTasks,omitempty"`
 
 	// TaskModel A model an enabled channel offers (400 `model_unavailable`
 	// otherwise), or empty for each conversation's own.
@@ -3666,6 +4025,19 @@ type UpdateSystemSettingsRequest struct {
 
 	// UnsentUploadHours 1 to 8760 (400 `invalid_retention` otherwise).
 	UnsentUploadHours *int `json:"unsentUploadHours,omitempty"`
+}
+
+// UpdateTaskRequest Only the fields present change.
+type UpdateTaskRequest struct {
+	Enabled *bool   `json:"enabled,omitempty"`
+	Prompt  *string `json:"prompt,omitempty"`
+
+	// Schedule When a task runs, in `timeZone` (an IANA name such as Asia/Shanghai).
+	// `once` runs at `at`; the others at `time` - every day, on `weekdays`
+	// (0 = Sunday), or on `monthDay` (a month too short for it, on its last
+	// day).
+	Schedule *TaskSchedule `json:"schedule,omitempty"`
+	Title    *string       `json:"title,omitempty"`
 }
 
 // UpdateUserRequest Only the fields present are changed. Setting `password` signs the
@@ -3733,7 +4105,8 @@ type Usage struct {
 // that names a conversation; `compression` is a request that writes a
 // conversation's context summary, made with the conversation's own model;
 // `moderation` is a request that has a model classify a message
-// (`ModerationSettings.mode` `model`).
+// (`ModerationSettings.mode` `model`); `subagent` is a model request of a
+// sub-agent's run, logged on the conversation it works for.
 type UsageKind string
 
 // UsageLog defines model for UsageLog.
@@ -3755,6 +4128,10 @@ type UsageLog struct {
 
 	// CreatedAt When the request started.
 	CreatedAt time.Time `json:"createdAt"`
+
+	// DeletedUser The name of the account this request was made for, when an
+	// administrator has deleted it since.
+	DeletedUser *string `json:"deletedUser,omitempty"`
 
 	// DurationMs Request start to its end. 0 when the provider turned the request
 	// down before any time was spent on it.
@@ -3787,7 +4164,8 @@ type UsageLog struct {
 	// that names a conversation; `compression` is a request that writes a
 	// conversation's context summary, made with the conversation's own model;
 	// `moderation` is a request that has a model classify a message
-	// (`ModerationSettings.mode` `model`).
+	// (`ModerationSettings.mode` `model`); `subagent` is a model request of a
+	// sub-agent's run, logged on the conversation it works for.
 	Kind UsageKind `json:"kind"`
 
 	// Model The model id the request asked for.
@@ -4026,8 +4404,17 @@ type ConversationId = openapi_types.UUID
 // Cursor defines model for Cursor.
 type Cursor = string
 
+// FileId defines model for FileId.
+type FileId = openapi_types.UUID
+
 // Limit defines model for Limit.
 type Limit = int
+
+// SubagentId defines model for SubagentId.
+type SubagentId = openapi_types.UUID
+
+// TaskId defines model for TaskId.
+type TaskId = openapi_types.UUID
 
 // RateLimited defines model for RateLimited.
 type RateLimited = Error
@@ -4066,24 +4453,11 @@ type GetAdminDashboardParams struct {
 	Range *DashboardRange `form:"range,omitempty" json:"range,omitempty"`
 }
 
-// DeleteGuestBanParams defines parameters for DeleteGuestBan.
-type DeleteGuestBanParams struct {
-	Ip string `form:"ip" json:"ip"`
-}
-
-// CreateGuestBanJSONBody defines parameters for CreateGuestBan.
-type CreateGuestBanJSONBody struct {
-	EventId openapi_types.UUID `json:"eventId"`
-}
-
 // ListModerationEventsParams defines parameters for ListModerationEvents.
 type ListModerationEventsParams struct {
-	Limit  *Limit              `form:"limit,omitempty" json:"limit,omitempty"`
-	Cursor *Cursor             `form:"cursor,omitempty" json:"cursor,omitempty"`
-	UserId *openapi_types.UUID `form:"userId,omitempty" json:"userId,omitempty"`
-
-	// GuestIp A guest's network address, as the log shows it.
-	GuestIp  *string             `form:"guestIp,omitempty" json:"guestIp,omitempty"`
+	Limit    *Limit              `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor   *Cursor             `form:"cursor,omitempty" json:"cursor,omitempty"`
+	UserId   *openapi_types.UUID `form:"userId,omitempty" json:"userId,omitempty"`
 	Category *ModerationCategory `form:"category,omitempty" json:"category,omitempty"`
 }
 
@@ -4145,10 +4519,26 @@ type ListMessagesParams struct {
 	Before *string `form:"before,omitempty" json:"before,omitempty"`
 }
 
-// GetGuestImageParams defines parameters for GetGuestImage.
-type GetGuestImageParams struct {
-	Url string `form:"url" json:"url"`
+// ListFilesParams defines parameters for ListFiles.
+type ListFilesParams struct {
+	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Search Only files whose name contains this, ignoring case. Keep it (and
+	// `type`) the same while following `nextCursor`.
+	Search *string `form:"search,omitempty" json:"search,omitempty"`
+
+	// Type Only images, or only PDFs.
+	Type *LibraryFileType `form:"type,omitempty" json:"type,omitempty"`
 }
+
+// SearchImageParams defines parameters for SearchImage.
+type SearchImageParams struct {
+	Q string `form:"q" json:"q"`
+}
+
+// UpdatePasskeySettingsJSONRequestBody defines body for UpdatePasskeySettings for application/json ContentType.
+type UpdatePasskeySettingsJSONRequestBody = UpdatePasskeySettingsRequest
 
 // CreateChannelJSONRequestBody defines body for CreateChannel for application/json ContentType.
 type CreateChannelJSONRequestBody = CreateChannelRequest
@@ -4165,20 +4555,26 @@ type AddChannelModelJSONRequestBody AddChannelModelJSONBody
 // UpdateChannelModelJSONRequestBody defines body for UpdateChannelModel for application/json ContentType.
 type UpdateChannelModelJSONRequestBody UpdateChannelModelJSONBody
 
+// UpdateImageSearchSettingsJSONRequestBody defines body for UpdateImageSearchSettings for application/json ContentType.
+type UpdateImageSearchSettingsJSONRequestBody = UpdateImageSearchSettingsRequest
+
+// TestImageSearchJSONRequestBody defines body for TestImageSearch for application/json ContentType.
+type TestImageSearchJSONRequestBody = ImageSearchTestRequest
+
 // UpdateModelSettingsJSONRequestBody defines body for UpdateModelSettings for application/json ContentType.
 type UpdateModelSettingsJSONRequestBody = ModelOverride
 
 // UpdateModerationSettingsJSONRequestBody defines body for UpdateModerationSettings for application/json ContentType.
 type UpdateModerationSettingsJSONRequestBody = UpdateModerationSettingsRequest
 
-// CreateGuestBanJSONRequestBody defines body for CreateGuestBan for application/json ContentType.
-type CreateGuestBanJSONRequestBody CreateGuestBanJSONBody
-
 // UpdateStorageSettingsJSONRequestBody defines body for UpdateStorageSettings for application/json ContentType.
 type UpdateStorageSettingsJSONRequestBody = UpdateStorageSettingsRequest
 
 // TestStorageJSONRequestBody defines body for TestStorage for application/json ContentType.
 type TestStorageJSONRequestBody = UpdateStorageSettingsRequest
+
+// UpdateSubagentSettingsJSONRequestBody defines body for UpdateSubagentSettings for application/json ContentType.
+type UpdateSubagentSettingsJSONRequestBody = UpdateSubagentSettingsRequest
 
 // UpdateSystemSettingsJSONRequestBody defines body for UpdateSystemSettings for application/json ContentType.
 type UpdateSystemSettingsJSONRequestBody = UpdateSystemSettingsRequest
@@ -4204,6 +4600,15 @@ type LoginJSONRequestBody = LoginRequest
 // UpdateMeJSONRequestBody defines body for UpdateMe for application/json ContentType.
 type UpdateMeJSONRequestBody = UpdateMeRequest
 
+// PasskeySignInJSONRequestBody defines body for PasskeySignIn for application/json ContentType.
+type PasskeySignInJSONRequestBody = PasskeyAnswer
+
+// AddPasskeyJSONRequestBody defines body for AddPasskey for application/json ContentType.
+type AddPasskeyJSONRequestBody = PasskeyAnswer
+
+// RenamePasskeyJSONRequestBody defines body for RenamePasskey for application/json ContentType.
+type RenamePasskeyJSONRequestBody = RenamePasskeyRequest
+
 // ChangePasswordJSONRequestBody defines body for ChangePassword for application/json ContentType.
 type ChangePasswordJSONRequestBody = ChangePasswordRequest
 
@@ -4228,14 +4633,11 @@ type RegenerateAnswerJSONRequestBody = RegenerateRequest
 // AnswerQuestionJSONRequestBody defines body for AnswerQuestion for application/json ContentType.
 type AnswerQuestionJSONRequestBody = AnswerQuestionRequest
 
+// UpdateDocumentJSONRequestBody defines body for UpdateDocument for application/json ContentType.
+type UpdateDocumentJSONRequestBody = UpdateDocumentRequest
+
 // CreateUploadJSONRequestBody defines body for CreateUpload for application/json ContentType.
 type CreateUploadJSONRequestBody = CreateUploadRequest
-
-// GuestRunJSONRequestBody defines body for GuestRun for application/json ContentType.
-type GuestRunJSONRequestBody = GuestRunRequest
-
-// GuestTitleJSONRequestBody defines body for GuestTitle for application/json ContentType.
-type GuestTitleJSONRequestBody = GuestTitleRequest
 
 // CreateMemoryJSONRequestBody defines body for CreateMemory for application/json ContentType.
 type CreateMemoryJSONRequestBody = MemoryRequest
@@ -4245,6 +4647,12 @@ type UpdateMemoryJSONRequestBody = MemoryRequest
 
 // UpdatePersonalizationJSONRequestBody defines body for UpdatePersonalization for application/json ContentType.
 type UpdatePersonalizationJSONRequestBody = UpdatePersonalizationRequest
+
+// CreateTaskJSONRequestBody defines body for CreateTask for application/json ContentType.
+type CreateTaskJSONRequestBody = CreateTaskRequest
+
+// UpdateTaskJSONRequestBody defines body for UpdateTask for application/json ContentType.
+type UpdateTaskJSONRequestBody = UpdateTaskRequest
 
 // AsSnapshotEvent returns the union data inside the ConversationEvent as a SnapshotEvent
 func (t ConversationEvent) AsSnapshotEvent() (SnapshotEvent, error) {
@@ -4343,143 +4751,6 @@ func (t ConversationEvent) MarshalJSON() ([]byte, error) {
 }
 
 func (t *ConversationEvent) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
-
-// AsSnapshotEvent returns the union data inside the GuestRunEvent as a SnapshotEvent
-func (t GuestRunEvent) AsSnapshotEvent() (SnapshotEvent, error) {
-	var body SnapshotEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromSnapshotEvent overwrites any union data inside the GuestRunEvent as the provided SnapshotEvent
-func (t *GuestRunEvent) FromSnapshotEvent(v SnapshotEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"snapshot"}`))
-	t.union = b
-	return err
-}
-
-// MergeSnapshotEvent performs a merge with any union data inside the GuestRunEvent, using the provided SnapshotEvent
-func (t *GuestRunEvent) MergeSnapshotEvent(v SnapshotEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"snapshot"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsBatchEvent returns the union data inside the GuestRunEvent as a BatchEvent
-func (t GuestRunEvent) AsBatchEvent() (BatchEvent, error) {
-	var body BatchEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromBatchEvent overwrites any union data inside the GuestRunEvent as the provided BatchEvent
-func (t *GuestRunEvent) FromBatchEvent(v BatchEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"batch"}`))
-	t.union = b
-	return err
-}
-
-// MergeBatchEvent performs a merge with any union data inside the GuestRunEvent, using the provided BatchEvent
-func (t *GuestRunEvent) MergeBatchEvent(v BatchEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"batch"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsGuestEndEvent returns the union data inside the GuestRunEvent as a GuestEndEvent
-func (t GuestRunEvent) AsGuestEndEvent() (GuestEndEvent, error) {
-	var body GuestEndEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromGuestEndEvent overwrites any union data inside the GuestRunEvent as the provided GuestEndEvent
-func (t *GuestRunEvent) FromGuestEndEvent(v GuestEndEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"guest_end"}`))
-	t.union = b
-	return err
-}
-
-// MergeGuestEndEvent performs a merge with any union data inside the GuestRunEvent, using the provided GuestEndEvent
-func (t *GuestRunEvent) MergeGuestEndEvent(v GuestEndEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"guest_end"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t GuestRunEvent) Discriminator() (string, error) {
-	var discriminator struct {
-		Discriminator string `json:"type"`
-	}
-	err := json.Unmarshal(t.union, &discriminator)
-	return discriminator.Discriminator, err
-}
-
-func (t GuestRunEvent) ValueByDiscriminator() (interface{}, error) {
-	discriminator, err := t.Discriminator()
-	if err != nil {
-		return nil, err
-	}
-	switch discriminator {
-	case "batch":
-		return t.AsBatchEvent()
-	case "guest_end":
-		return t.AsGuestEndEvent()
-	case "snapshot":
-		return t.AsSnapshotEvent()
-	default:
-		return nil, errors.New("unknown discriminator value: " + discriminator)
-	}
-}
-
-func (t GuestRunEvent) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *GuestRunEvent) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
@@ -5201,6 +5472,40 @@ func (t *RunEvent) MergeConversationDeletedEvent(v ConversationDeletedEvent) err
 	return err
 }
 
+// AsSubagentsChangedEvent returns the union data inside the RunEvent as a SubagentsChangedEvent
+func (t RunEvent) AsSubagentsChangedEvent() (SubagentsChangedEvent, error) {
+	var body SubagentsChangedEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSubagentsChangedEvent overwrites any union data inside the RunEvent as the provided SubagentsChangedEvent
+func (t *RunEvent) FromSubagentsChangedEvent(v SubagentsChangedEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"subagents_changed"}`))
+	t.union = b
+	return err
+}
+
+// MergeSubagentsChangedEvent performs a merge with any union data inside the RunEvent, using the provided SubagentsChangedEvent
+func (t *RunEvent) MergeSubagentsChangedEvent(v SubagentsChangedEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"subagents_changed"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t RunEvent) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"type"`
@@ -5239,6 +5544,8 @@ func (t RunEvent) ValueByDiscriminator() (interface{}, error) {
 		return t.AsRunFinishedEvent()
 	case "run_started":
 		return t.AsRunStartedEvent()
+	case "subagents_changed":
+		return t.AsSubagentsChangedEvent()
 	case "title_changed":
 		return t.AsTitleChangedEvent()
 	case "tool_finished":
@@ -5264,6 +5571,12 @@ func (t *RunEvent) UnmarshalJSON(b []byte) error {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// GetPasskeySettings Passkey settings
+	// (GET /admin/authentication/passkeys)
+	GetPasskeySettings(w http.ResponseWriter, r *http.Request)
+	// UpdatePasskeySettings Change passkey settings
+	// (PATCH /admin/authentication/passkeys)
+	UpdatePasskeySettings(w http.ResponseWriter, r *http.Request)
 	// GetCatalogStatus Catalogue freshness
 	// (GET /admin/catalog)
 	GetCatalogStatus(w http.ResponseWriter, r *http.Request)
@@ -5312,6 +5625,15 @@ type ServerInterface interface {
 	// GetAdminDashboard Operating figures from the usage ledger
 	// (GET /admin/dashboard)
 	GetAdminDashboard(w http.ResponseWriter, r *http.Request, params GetAdminDashboardParams)
+	// GetImageSearchSettings Image search settings
+	// (GET /admin/image-search)
+	GetImageSearchSettings(w http.ResponseWriter, r *http.Request)
+	// UpdateImageSearchSettings Change image search settings
+	// (PATCH /admin/image-search)
+	UpdateImageSearchSettings(w http.ResponseWriter, r *http.Request)
+	// TestImageSearch Find one picture with the current settings
+	// (POST /admin/image-search/test)
+	TestImageSearch(w http.ResponseWriter, r *http.Request)
 	// ResetModelCapacity Count a model's total spending cap again from now
 	// (POST /admin/models/{modelId}/capacity/reset)
 	ResetModelCapacity(w http.ResponseWriter, r *http.Request, modelId string)
@@ -5327,15 +5649,6 @@ type ServerInterface interface {
 	// UpdateModerationSettings Change content moderation settings
 	// (PATCH /admin/moderation)
 	UpdateModerationSettings(w http.ResponseWriter, r *http.Request)
-	// DeleteGuestBan Lift the ban on a guest address
-	// (DELETE /admin/moderation/bans)
-	DeleteGuestBan(w http.ResponseWriter, r *http.Request, params DeleteGuestBanParams)
-	// ListGuestBans The guest addresses banned now
-	// (GET /admin/moderation/bans)
-	ListGuestBans(w http.ResponseWriter, r *http.Request)
-	// CreateGuestBan Ban the guest address of a logged message
-	// (POST /admin/moderation/bans)
-	CreateGuestBan(w http.ResponseWriter, r *http.Request)
 	// ListModerationEvents The messages content moderation turned away
 	// (GET /admin/moderation/events)
 	ListModerationEvents(w http.ResponseWriter, r *http.Request, params ListModerationEventsParams)
@@ -5348,6 +5661,12 @@ type ServerInterface interface {
 	// TestStorage Try a storage configuration without saving it
 	// (POST /admin/storage/test)
 	TestStorage(w http.ResponseWriter, r *http.Request)
+	// GetSubagentSettings Sub-agent settings
+	// (GET /admin/subagents)
+	GetSubagentSettings(w http.ResponseWriter, r *http.Request)
+	// UpdateSubagentSettings Change sub-agent settings
+	// (PATCH /admin/subagents)
+	UpdateSubagentSettings(w http.ResponseWriter, r *http.Request)
 	// GetSystemSettings Server-wide settings
 	// (GET /admin/system)
 	GetSystemSettings(w http.ResponseWriter, r *http.Request)
@@ -5366,6 +5685,9 @@ type ServerInterface interface {
 	// BulkUpdateUsers Apply one change to several accounts
 	// (POST /admin/users/bulk)
 	BulkUpdateUsers(w http.ResponseWriter, r *http.Request)
+	// DeleteUser Delete an account for good
+	// (DELETE /admin/users/{userId})
+	DeleteUser(w http.ResponseWriter, r *http.Request, userId openapi_types.UUID)
 	// UpdateUser Change an account's role or enabled state
 	// (PATCH /admin/users/{userId})
 	UpdateUser(w http.ResponseWriter, r *http.Request, userId openapi_types.UUID)
@@ -5396,6 +5718,27 @@ type ServerInterface interface {
 	// GetAuthOptions What the sign-in pages offer
 	// (GET /auth/options)
 	GetAuthOptions(w http.ResponseWriter, r *http.Request)
+	// PasskeySignIn Sign in with a passkey
+	// (POST /auth/passkey)
+	PasskeySignIn(w http.ResponseWriter, r *http.Request)
+	// BeginPasskeySignIn Begin signing in with a passkey
+	// (POST /auth/passkey/options)
+	BeginPasskeySignIn(w http.ResponseWriter, r *http.Request)
+	// ListPasskeys Your passkeys
+	// (GET /auth/passkeys)
+	ListPasskeys(w http.ResponseWriter, r *http.Request)
+	// AddPasskey Add a passkey
+	// (POST /auth/passkeys)
+	AddPasskey(w http.ResponseWriter, r *http.Request)
+	// BeginPasskeyRegistration Begin adding a passkey
+	// (POST /auth/passkeys/options)
+	BeginPasskeyRegistration(w http.ResponseWriter, r *http.Request)
+	// DeletePasskey Remove one of your passkeys
+	// (DELETE /auth/passkeys/{passkeyId})
+	DeletePasskey(w http.ResponseWriter, r *http.Request, passkeyId openapi_types.UUID)
+	// RenamePasskey Rename one of your passkeys
+	// (PATCH /auth/passkeys/{passkeyId})
+	RenamePasskey(w http.ResponseWriter, r *http.Request, passkeyId openapi_types.UUID)
 	// ChangePassword Change your own password
 	// (POST /auth/password)
 	ChangePassword(w http.ResponseWriter, r *http.Request)
@@ -5432,6 +5775,9 @@ type ServerInterface interface {
 	// GetConversationContext How much of the model's context window the conversation fills
 	// (GET /conversations/{conversationId}/context)
 	GetConversationContext(w http.ResponseWriter, r *http.Request, conversationId ConversationId)
+	// ListConversationDocuments The writing blocks of a conversation
+	// (GET /conversations/{conversationId}/documents)
+	ListConversationDocuments(w http.ResponseWriter, r *http.Request, conversationId openapi_types.UUID)
 	// StreamConversationEvents Follow a conversation's runs
 	// (GET /conversations/{conversationId}/events)
 	StreamConversationEvents(w http.ResponseWriter, r *http.Request, conversationId ConversationId)
@@ -5453,45 +5799,60 @@ type ServerInterface interface {
 	// CancelRun Stop a run
 	// (POST /conversations/{conversationId}/runs/{runId}/cancel)
 	CancelRun(w http.ResponseWriter, r *http.Request, conversationId ConversationId, runId openapi_types.UUID)
+	// ListSubagents The conversation's sub-agents
+	// (GET /conversations/{conversationId}/subagents)
+	ListSubagents(w http.ResponseWriter, r *http.Request, conversationId ConversationId)
+	// GetSubagent One sub-agent's work, read-only
+	// (GET /conversations/{conversationId}/subagents/{subagentId})
+	GetSubagent(w http.ResponseWriter, r *http.Request, conversationId ConversationId, subagentId SubagentId)
+	// BackgroundSubagent Move a foreground sub-agent to the background
+	// (POST /conversations/{conversationId}/subagents/{subagentId}/background)
+	BackgroundSubagent(w http.ResponseWriter, r *http.Request, conversationId ConversationId, subagentId SubagentId)
+	// ResumeSubagent Let a stopped sub-agent go on
+	// (POST /conversations/{conversationId}/subagents/{subagentId}/resume)
+	ResumeSubagent(w http.ResponseWriter, r *http.Request, conversationId ConversationId, subagentId SubagentId)
+	// StopSubagent Stop a sub-agent
+	// (POST /conversations/{conversationId}/subagents/{subagentId}/stop)
+	StopSubagent(w http.ResponseWriter, r *http.Request, conversationId ConversationId, subagentId SubagentId)
 	// GenerateConversationTitle Name a conversation from what it is about
 	// (POST /conversations/{conversationId}/title)
 	GenerateConversationTitle(w http.ResponseWriter, r *http.Request, conversationId ConversationId)
 	// AnswerQuestion Answer the model's question
 	// (POST /conversations/{conversationId}/tool-calls/{callId}/answer)
 	AnswerQuestion(w http.ResponseWriter, r *http.Request, conversationId ConversationId, callId string)
+	// GetConversationTrace The model requests of one of your conversations, as sent
+	// (GET /conversations/{conversationId}/trace)
+	GetConversationTrace(w http.ResponseWriter, r *http.Request, conversationId ConversationId)
+	// GetDocument A writing block, with every version of it
+	// (GET /documents/{documentId})
+	GetDocument(w http.ResponseWriter, r *http.Request, documentId openapi_types.UUID)
+	// UpdateDocument Save your edit of a writing block
+	// (PATCH /documents/{documentId})
+	UpdateDocument(w http.ResponseWriter, r *http.Request, documentId openapi_types.UUID)
 	// GetFavicon A site's icon, for the sources a reply cites
 	// (GET /favicons/{domain})
 	GetFavicon(w http.ResponseWriter, r *http.Request, domain string)
 	// GetChatFeatures What the chat can offer right now
 	// (GET /features)
 	GetChatFeatures(w http.ResponseWriter, r *http.Request)
+	// ListFiles List your files
+	// (GET /files)
+	ListFiles(w http.ResponseWriter, r *http.Request, params ListFilesParams)
 	// CreateUpload Issue a presigned upload URL for blob storage
 	// (POST /files)
 	CreateUpload(w http.ResponseWriter, r *http.Request)
-	// GetGuestConfig What the chat offers a guest
-	// (GET /guest/config)
-	GetGuestConfig(w http.ResponseWriter, r *http.Request)
-	// GetGuestFavicon A site's icon, for a guest
-	// (GET /guest/favicons/{domain})
-	GetGuestFavicon(w http.ResponseWriter, r *http.Request, domain string)
-	// GetGuestImage A picture an answer shows, fetched for a guest
-	// (GET /guest/images)
-	GetGuestImage(w http.ResponseWriter, r *http.Request, params GetGuestImageParams)
-	// GuestRun Answer a guest's message, stateless
-	// (POST /guest/runs)
-	GuestRun(w http.ResponseWriter, r *http.Request)
-	// CancelGuestRun Stop a guest's run
-	// (POST /guest/runs/{runId}/cancel)
-	CancelGuestRun(w http.ResponseWriter, r *http.Request, runId openapi_types.UUID)
-	// GetGuestStatus Whether guests are let in
-	// (GET /guest/status)
-	GetGuestStatus(w http.ResponseWriter, r *http.Request)
-	// GuestTitle Name a guest's conversation
-	// (POST /guest/title)
-	GuestTitle(w http.ResponseWriter, r *http.Request)
+	// DeleteFile Delete one of your files
+	// (DELETE /files/{fileId})
+	DeleteFile(w http.ResponseWriter, r *http.Request, fileId FileId)
+	// GetFileDownload A download link for one of your files
+	// (GET /files/{fileId}/download)
+	GetFileDownload(w http.ResponseWriter, r *http.Request, fileId FileId)
 	// GetHealth Liveness probe
 	// (GET /healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+	// SearchImage Find a picture for an answer by what it shows
+	// (GET /images/search)
+	SearchImage(w http.ResponseWriter, r *http.Request, params SearchImageParams)
 	// DeleteMyAvatar Go back to the initial
 	// (DELETE /me/avatar)
 	DeleteMyAvatar(w http.ResponseWriter, r *http.Request)
@@ -5534,11 +5895,41 @@ type ServerInterface interface {
 	// ListChatModels The models a conversation can use
 	// (GET /models)
 	ListChatModels(w http.ResponseWriter, r *http.Request)
+	// GetPicture A picture found for an answer, fetched for the reader
+	// (GET /pictures/{pictureId})
+	GetPicture(w http.ResponseWriter, r *http.Request, pictureId openapi_types.UUID)
+	// ListTasks List your scheduled tasks
+	// (GET /tasks)
+	ListTasks(w http.ResponseWriter, r *http.Request)
+	// CreateTask Schedule a task
+	// (POST /tasks)
+	CreateTask(w http.ResponseWriter, r *http.Request)
+	// DeleteTask Delete a task
+	// (DELETE /tasks/{taskId})
+	DeleteTask(w http.ResponseWriter, r *http.Request, taskId TaskId)
+	// UpdateTask Change, pause or resume a task
+	// (PATCH /tasks/{taskId})
+	UpdateTask(w http.ResponseWriter, r *http.Request, taskId TaskId)
+	// RunTask Run a task now
+	// (POST /tasks/{taskId}/run)
+	RunTask(w http.ResponseWriter, r *http.Request, taskId TaskId)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// GetPasskeySettings Passkey settings
+// (GET /admin/authentication/passkeys)
+func (_ Unimplemented) GetPasskeySettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdatePasskeySettings Change passkey settings
+// (PATCH /admin/authentication/passkeys)
+func (_ Unimplemented) UpdatePasskeySettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // GetCatalogStatus Catalogue freshness
 // (GET /admin/catalog)
@@ -5636,6 +6027,24 @@ func (_ Unimplemented) GetAdminDashboard(w http.ResponseWriter, r *http.Request,
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// GetImageSearchSettings Image search settings
+// (GET /admin/image-search)
+func (_ Unimplemented) GetImageSearchSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateImageSearchSettings Change image search settings
+// (PATCH /admin/image-search)
+func (_ Unimplemented) UpdateImageSearchSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// TestImageSearch Find one picture with the current settings
+// (POST /admin/image-search/test)
+func (_ Unimplemented) TestImageSearch(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ResetModelCapacity Count a model's total spending cap again from now
 // (POST /admin/models/{modelId}/capacity/reset)
 func (_ Unimplemented) ResetModelCapacity(w http.ResponseWriter, r *http.Request, modelId string) {
@@ -5666,24 +6075,6 @@ func (_ Unimplemented) UpdateModerationSettings(w http.ResponseWriter, r *http.R
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// DeleteGuestBan Lift the ban on a guest address
-// (DELETE /admin/moderation/bans)
-func (_ Unimplemented) DeleteGuestBan(w http.ResponseWriter, r *http.Request, params DeleteGuestBanParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// ListGuestBans The guest addresses banned now
-// (GET /admin/moderation/bans)
-func (_ Unimplemented) ListGuestBans(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// CreateGuestBan Ban the guest address of a logged message
-// (POST /admin/moderation/bans)
-func (_ Unimplemented) CreateGuestBan(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
 // ListModerationEvents The messages content moderation turned away
 // (GET /admin/moderation/events)
 func (_ Unimplemented) ListModerationEvents(w http.ResponseWriter, r *http.Request, params ListModerationEventsParams) {
@@ -5705,6 +6096,18 @@ func (_ Unimplemented) UpdateStorageSettings(w http.ResponseWriter, r *http.Requ
 // TestStorage Try a storage configuration without saving it
 // (POST /admin/storage/test)
 func (_ Unimplemented) TestStorage(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetSubagentSettings Sub-agent settings
+// (GET /admin/subagents)
+func (_ Unimplemented) GetSubagentSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateSubagentSettings Change sub-agent settings
+// (PATCH /admin/subagents)
+func (_ Unimplemented) UpdateSubagentSettings(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5741,6 +6144,12 @@ func (_ Unimplemented) CreateUser(w http.ResponseWriter, r *http.Request) {
 // BulkUpdateUsers Apply one change to several accounts
 // (POST /admin/users/bulk)
 func (_ Unimplemented) BulkUpdateUsers(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteUser Delete an account for good
+// (DELETE /admin/users/{userId})
+func (_ Unimplemented) DeleteUser(w http.ResponseWriter, r *http.Request, userId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5801,6 +6210,48 @@ func (_ Unimplemented) UpdateMe(w http.ResponseWriter, r *http.Request) {
 // GetAuthOptions What the sign-in pages offer
 // (GET /auth/options)
 func (_ Unimplemented) GetAuthOptions(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PasskeySignIn Sign in with a passkey
+// (POST /auth/passkey)
+func (_ Unimplemented) PasskeySignIn(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// BeginPasskeySignIn Begin signing in with a passkey
+// (POST /auth/passkey/options)
+func (_ Unimplemented) BeginPasskeySignIn(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListPasskeys Your passkeys
+// (GET /auth/passkeys)
+func (_ Unimplemented) ListPasskeys(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AddPasskey Add a passkey
+// (POST /auth/passkeys)
+func (_ Unimplemented) AddPasskey(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// BeginPasskeyRegistration Begin adding a passkey
+// (POST /auth/passkeys/options)
+func (_ Unimplemented) BeginPasskeyRegistration(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeletePasskey Remove one of your passkeys
+// (DELETE /auth/passkeys/{passkeyId})
+func (_ Unimplemented) DeletePasskey(w http.ResponseWriter, r *http.Request, passkeyId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RenamePasskey Rename one of your passkeys
+// (PATCH /auth/passkeys/{passkeyId})
+func (_ Unimplemented) RenamePasskey(w http.ResponseWriter, r *http.Request, passkeyId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5876,6 +6327,12 @@ func (_ Unimplemented) GetConversationContext(w http.ResponseWriter, r *http.Req
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ListConversationDocuments The writing blocks of a conversation
+// (GET /conversations/{conversationId}/documents)
+func (_ Unimplemented) ListConversationDocuments(w http.ResponseWriter, r *http.Request, conversationId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // StreamConversationEvents Follow a conversation's runs
 // (GET /conversations/{conversationId}/events)
 func (_ Unimplemented) StreamConversationEvents(w http.ResponseWriter, r *http.Request, conversationId ConversationId) {
@@ -5918,6 +6375,36 @@ func (_ Unimplemented) CancelRun(w http.ResponseWriter, r *http.Request, convers
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ListSubagents The conversation's sub-agents
+// (GET /conversations/{conversationId}/subagents)
+func (_ Unimplemented) ListSubagents(w http.ResponseWriter, r *http.Request, conversationId ConversationId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetSubagent One sub-agent's work, read-only
+// (GET /conversations/{conversationId}/subagents/{subagentId})
+func (_ Unimplemented) GetSubagent(w http.ResponseWriter, r *http.Request, conversationId ConversationId, subagentId SubagentId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// BackgroundSubagent Move a foreground sub-agent to the background
+// (POST /conversations/{conversationId}/subagents/{subagentId}/background)
+func (_ Unimplemented) BackgroundSubagent(w http.ResponseWriter, r *http.Request, conversationId ConversationId, subagentId SubagentId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ResumeSubagent Let a stopped sub-agent go on
+// (POST /conversations/{conversationId}/subagents/{subagentId}/resume)
+func (_ Unimplemented) ResumeSubagent(w http.ResponseWriter, r *http.Request, conversationId ConversationId, subagentId SubagentId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// StopSubagent Stop a sub-agent
+// (POST /conversations/{conversationId}/subagents/{subagentId}/stop)
+func (_ Unimplemented) StopSubagent(w http.ResponseWriter, r *http.Request, conversationId ConversationId, subagentId SubagentId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // GenerateConversationTitle Name a conversation from what it is about
 // (POST /conversations/{conversationId}/title)
 func (_ Unimplemented) GenerateConversationTitle(w http.ResponseWriter, r *http.Request, conversationId ConversationId) {
@@ -5927,6 +6414,24 @@ func (_ Unimplemented) GenerateConversationTitle(w http.ResponseWriter, r *http.
 // AnswerQuestion Answer the model's question
 // (POST /conversations/{conversationId}/tool-calls/{callId}/answer)
 func (_ Unimplemented) AnswerQuestion(w http.ResponseWriter, r *http.Request, conversationId ConversationId, callId string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetConversationTrace The model requests of one of your conversations, as sent
+// (GET /conversations/{conversationId}/trace)
+func (_ Unimplemented) GetConversationTrace(w http.ResponseWriter, r *http.Request, conversationId ConversationId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetDocument A writing block, with every version of it
+// (GET /documents/{documentId})
+func (_ Unimplemented) GetDocument(w http.ResponseWriter, r *http.Request, documentId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateDocument Save your edit of a writing block
+// (PATCH /documents/{documentId})
+func (_ Unimplemented) UpdateDocument(w http.ResponseWriter, r *http.Request, documentId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5942,57 +6447,39 @@ func (_ Unimplemented) GetChatFeatures(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ListFiles List your files
+// (GET /files)
+func (_ Unimplemented) ListFiles(w http.ResponseWriter, r *http.Request, params ListFilesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // CreateUpload Issue a presigned upload URL for blob storage
 // (POST /files)
 func (_ Unimplemented) CreateUpload(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// GetGuestConfig What the chat offers a guest
-// (GET /guest/config)
-func (_ Unimplemented) GetGuestConfig(w http.ResponseWriter, r *http.Request) {
+// DeleteFile Delete one of your files
+// (DELETE /files/{fileId})
+func (_ Unimplemented) DeleteFile(w http.ResponseWriter, r *http.Request, fileId FileId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// GetGuestFavicon A site's icon, for a guest
-// (GET /guest/favicons/{domain})
-func (_ Unimplemented) GetGuestFavicon(w http.ResponseWriter, r *http.Request, domain string) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// GetGuestImage A picture an answer shows, fetched for a guest
-// (GET /guest/images)
-func (_ Unimplemented) GetGuestImage(w http.ResponseWriter, r *http.Request, params GetGuestImageParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// GuestRun Answer a guest's message, stateless
-// (POST /guest/runs)
-func (_ Unimplemented) GuestRun(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// CancelGuestRun Stop a guest's run
-// (POST /guest/runs/{runId}/cancel)
-func (_ Unimplemented) CancelGuestRun(w http.ResponseWriter, r *http.Request, runId openapi_types.UUID) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// GetGuestStatus Whether guests are let in
-// (GET /guest/status)
-func (_ Unimplemented) GetGuestStatus(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// GuestTitle Name a guest's conversation
-// (POST /guest/title)
-func (_ Unimplemented) GuestTitle(w http.ResponseWriter, r *http.Request) {
+// GetFileDownload A download link for one of your files
+// (GET /files/{fileId}/download)
+func (_ Unimplemented) GetFileDownload(w http.ResponseWriter, r *http.Request, fileId FileId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // GetHealth Liveness probe
 // (GET /healthz)
 func (_ Unimplemented) GetHealth(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SearchImage Find a picture for an answer by what it shows
+// (GET /images/search)
+func (_ Unimplemented) SearchImage(w http.ResponseWriter, r *http.Request, params SearchImageParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -6080,6 +6567,42 @@ func (_ Unimplemented) ListChatModels(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// GetPicture A picture found for an answer, fetched for the reader
+// (GET /pictures/{pictureId})
+func (_ Unimplemented) GetPicture(w http.ResponseWriter, r *http.Request, pictureId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListTasks List your scheduled tasks
+// (GET /tasks)
+func (_ Unimplemented) ListTasks(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateTask Schedule a task
+// (POST /tasks)
+func (_ Unimplemented) CreateTask(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteTask Delete a task
+// (DELETE /tasks/{taskId})
+func (_ Unimplemented) DeleteTask(w http.ResponseWriter, r *http.Request, taskId TaskId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateTask Change, pause or resume a task
+// (PATCH /tasks/{taskId})
+func (_ Unimplemented) UpdateTask(w http.ResponseWriter, r *http.Request, taskId TaskId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RunTask Run a task now
+// (POST /tasks/{taskId}/run)
+func (_ Unimplemented) RunTask(w http.ResponseWriter, r *http.Request, taskId TaskId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ServerInterfaceWrapper converts contexts to parameters.
 type ServerInterfaceWrapper struct {
 	Handler            ServerInterface
@@ -6088,6 +6611,34 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetPasskeySettings operation middleware
+func (siw *ServerInterfaceWrapper) GetPasskeySettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPasskeySettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdatePasskeySettings operation middleware
+func (siw *ServerInterfaceWrapper) UpdatePasskeySettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdatePasskeySettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // GetCatalogStatus operation middleware
 func (siw *ServerInterfaceWrapper) GetCatalogStatus(w http.ResponseWriter, r *http.Request) {
@@ -6518,6 +7069,48 @@ func (siw *ServerInterfaceWrapper) GetAdminDashboard(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// GetImageSearchSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetImageSearchSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetImageSearchSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateImageSearchSettings operation middleware
+func (siw *ServerInterfaceWrapper) UpdateImageSearchSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateImageSearchSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestImageSearch operation middleware
+func (siw *ServerInterfaceWrapper) TestImageSearch(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestImageSearch(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ResetModelCapacity operation middleware
 func (siw *ServerInterfaceWrapper) ResetModelCapacity(w http.ResponseWriter, r *http.Request) {
 
@@ -6624,67 +7217,6 @@ func (siw *ServerInterfaceWrapper) UpdateModerationSettings(w http.ResponseWrite
 	handler.ServeHTTP(w, r)
 }
 
-// DeleteGuestBan operation middleware
-func (siw *ServerInterfaceWrapper) DeleteGuestBan(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params DeleteGuestBanParams
-
-	// ------------- Required query parameter "ip" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "ip", r.URL.Query(), &params.Ip, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "ip"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ip", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteGuestBan(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListGuestBans operation middleware
-func (siw *ServerInterfaceWrapper) ListGuestBans(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListGuestBans(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CreateGuestBan operation middleware
-func (siw *ServerInterfaceWrapper) CreateGuestBan(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateGuestBan(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // ListModerationEvents operation middleware
 func (siw *ServerInterfaceWrapper) ListModerationEvents(w http.ResponseWriter, r *http.Request) {
 
@@ -6729,19 +7261,6 @@ func (siw *ServerInterfaceWrapper) ListModerationEvents(w http.ResponseWriter, r
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "userId"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "guestIp" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "guestIp", r.URL.Query(), &params.GuestIp, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "guestIp"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "guestIp", Err: err})
 		}
 		return
 	}
@@ -6803,6 +7322,34 @@ func (siw *ServerInterfaceWrapper) TestStorage(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.TestStorage(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSubagentSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetSubagentSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSubagentSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateSubagentSettings operation middleware
+func (siw *ServerInterfaceWrapper) UpdateSubagentSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateSubagentSettings(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7077,6 +7624,32 @@ func (siw *ServerInterfaceWrapper) BulkUpdateUsers(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteUser operation middleware
+func (siw *ServerInterfaceWrapper) DeleteUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteUser(w, r, userId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // UpdateUser operation middleware
 func (siw *ServerInterfaceWrapper) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
@@ -7220,6 +7793,128 @@ func (siw *ServerInterfaceWrapper) GetAuthOptions(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetAuthOptions(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PasskeySignIn operation middleware
+func (siw *ServerInterfaceWrapper) PasskeySignIn(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PasskeySignIn(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BeginPasskeySignIn operation middleware
+func (siw *ServerInterfaceWrapper) BeginPasskeySignIn(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BeginPasskeySignIn(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPasskeys operation middleware
+func (siw *ServerInterfaceWrapper) ListPasskeys(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPasskeys(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddPasskey operation middleware
+func (siw *ServerInterfaceWrapper) AddPasskey(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddPasskey(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BeginPasskeyRegistration operation middleware
+func (siw *ServerInterfaceWrapper) BeginPasskeyRegistration(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BeginPasskeyRegistration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeletePasskey operation middleware
+func (siw *ServerInterfaceWrapper) DeletePasskey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "passkeyId" -------------
+	var passkeyId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "passkeyId", chi.URLParam(r, "passkeyId"), &passkeyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "passkeyId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeletePasskey(w, r, passkeyId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RenamePasskey operation middleware
+func (siw *ServerInterfaceWrapper) RenamePasskey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "passkeyId" -------------
+	var passkeyId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "passkeyId", chi.URLParam(r, "passkeyId"), &passkeyId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "passkeyId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RenamePasskey(w, r, passkeyId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7514,6 +8209,32 @@ func (siw *ServerInterfaceWrapper) GetConversationContext(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// ListConversationDocuments operation middleware
+func (siw *ServerInterfaceWrapper) ListConversationDocuments(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", chi.URLParam(r, "conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListConversationDocuments(w, r, conversationId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // StreamConversationEvents operation middleware
 func (siw *ServerInterfaceWrapper) StreamConversationEvents(w http.ResponseWriter, r *http.Request) {
 
@@ -7759,6 +8480,172 @@ func (siw *ServerInterfaceWrapper) CancelRun(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// ListSubagents operation middleware
+func (siw *ServerInterfaceWrapper) ListSubagents(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ConversationId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", chi.URLParam(r, "conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSubagents(w, r, conversationId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSubagent operation middleware
+func (siw *ServerInterfaceWrapper) GetSubagent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ConversationId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", chi.URLParam(r, "conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "subagentId" -------------
+	var subagentId SubagentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "subagentId", chi.URLParam(r, "subagentId"), &subagentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subagentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSubagent(w, r, conversationId, subagentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BackgroundSubagent operation middleware
+func (siw *ServerInterfaceWrapper) BackgroundSubagent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ConversationId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", chi.URLParam(r, "conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "subagentId" -------------
+	var subagentId SubagentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "subagentId", chi.URLParam(r, "subagentId"), &subagentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subagentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BackgroundSubagent(w, r, conversationId, subagentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResumeSubagent operation middleware
+func (siw *ServerInterfaceWrapper) ResumeSubagent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ConversationId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", chi.URLParam(r, "conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "subagentId" -------------
+	var subagentId SubagentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "subagentId", chi.URLParam(r, "subagentId"), &subagentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subagentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResumeSubagent(w, r, conversationId, subagentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StopSubagent operation middleware
+func (siw *ServerInterfaceWrapper) StopSubagent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ConversationId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", chi.URLParam(r, "conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "subagentId" -------------
+	var subagentId SubagentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "subagentId", chi.URLParam(r, "subagentId"), &subagentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subagentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StopSubagent(w, r, conversationId, subagentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GenerateConversationTitle operation middleware
 func (siw *ServerInterfaceWrapper) GenerateConversationTitle(w http.ResponseWriter, r *http.Request) {
 
@@ -7820,6 +8707,84 @@ func (siw *ServerInterfaceWrapper) AnswerQuestion(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// GetConversationTrace operation middleware
+func (siw *ServerInterfaceWrapper) GetConversationTrace(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ConversationId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", chi.URLParam(r, "conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetConversationTrace(w, r, conversationId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetDocument operation middleware
+func (siw *ServerInterfaceWrapper) GetDocument(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "documentId" -------------
+	var documentId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "documentId", chi.URLParam(r, "documentId"), &documentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "documentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetDocument(w, r, documentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateDocument operation middleware
+func (siw *ServerInterfaceWrapper) UpdateDocument(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "documentId" -------------
+	var documentId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "documentId", chi.URLParam(r, "documentId"), &documentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "documentId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateDocument(w, r, documentId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetFavicon operation middleware
 func (siw *ServerInterfaceWrapper) GetFavicon(w http.ResponseWriter, r *http.Request) {
 
@@ -7860,6 +8825,78 @@ func (siw *ServerInterfaceWrapper) GetChatFeatures(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// ListFiles operation middleware
+func (siw *ServerInterfaceWrapper) ListFiles(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListFilesParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "search" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "search", r.URL.Query(), &params.Search, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "search"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "search", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "type" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "type", r.URL.Query(), &params.Type, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "type"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "type", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListFiles(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateUpload operation middleware
 func (siw *ServerInterfaceWrapper) CreateUpload(w http.ResponseWriter, r *http.Request) {
 
@@ -7874,37 +8911,23 @@ func (siw *ServerInterfaceWrapper) CreateUpload(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
-// GetGuestConfig operation middleware
-func (siw *ServerInterfaceWrapper) GetGuestConfig(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetGuestConfig(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetGuestFavicon operation middleware
-func (siw *ServerInterfaceWrapper) GetGuestFavicon(w http.ResponseWriter, r *http.Request) {
+// DeleteFile operation middleware
+func (siw *ServerInterfaceWrapper) DeleteFile(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
 
-	// ------------- Path parameter "domain" -------------
-	var domain string
+	// ------------- Path parameter "fileId" -------------
+	var fileId FileId
 
-	err = runtime.BindStyledParameterWithOptions("simple", "domain", chi.URLParam(r, "domain"), &domain, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	err = runtime.BindStyledParameterWithOptions("simple", "fileId", chi.URLParam(r, "fileId"), &fileId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "domain", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fileId", Err: err})
 		return
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetGuestFavicon(w, r, domain)
+		siw.Handler.DeleteFile(w, r, fileId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7914,98 +8937,23 @@ func (siw *ServerInterfaceWrapper) GetGuestFavicon(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
-// GetGuestImage operation middleware
-func (siw *ServerInterfaceWrapper) GetGuestImage(w http.ResponseWriter, r *http.Request) {
+// GetFileDownload operation middleware
+func (siw *ServerInterfaceWrapper) GetFileDownload(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetGuestImageParams
+	// ------------- Path parameter "fileId" -------------
+	var fileId FileId
 
-	// ------------- Required query parameter "url" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "url", r.URL.Query(), &params.Url, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindStyledParameterWithOptions("simple", "fileId", chi.URLParam(r, "fileId"), &fileId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
 	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "url"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "url", Err: err})
-		}
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fileId", Err: err})
 		return
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetGuestImage(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GuestRun operation middleware
-func (siw *ServerInterfaceWrapper) GuestRun(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GuestRun(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CancelGuestRun operation middleware
-func (siw *ServerInterfaceWrapper) CancelGuestRun(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "runId" -------------
-	var runId openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "runId", chi.URLParam(r, "runId"), &runId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CancelGuestRun(w, r, runId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetGuestStatus operation middleware
-func (siw *ServerInterfaceWrapper) GetGuestStatus(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetGuestStatus(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GuestTitle operation middleware
-func (siw *ServerInterfaceWrapper) GuestTitle(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GuestTitle(w, r)
+		siw.Handler.GetFileDownload(w, r, fileId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8020,6 +8968,39 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SearchImage operation middleware
+func (siw *ServerInterfaceWrapper) SearchImage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchImageParams
+
+	// ------------- Required query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchImage(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8261,6 +9242,138 @@ func (siw *ServerInterfaceWrapper) ListChatModels(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// GetPicture operation middleware
+func (siw *ServerInterfaceWrapper) GetPicture(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "pictureId" -------------
+	var pictureId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "pictureId", chi.URLParam(r, "pictureId"), &pictureId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pictureId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPicture(w, r, pictureId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListTasks operation middleware
+func (siw *ServerInterfaceWrapper) ListTasks(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTasks(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateTask operation middleware
+func (siw *ServerInterfaceWrapper) CreateTask(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateTask(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteTask operation middleware
+func (siw *ServerInterfaceWrapper) DeleteTask(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "taskId" -------------
+	var taskId TaskId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "taskId", chi.URLParam(r, "taskId"), &taskId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "taskId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteTask(w, r, taskId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateTask operation middleware
+func (siw *ServerInterfaceWrapper) UpdateTask(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "taskId" -------------
+	var taskId TaskId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "taskId", chi.URLParam(r, "taskId"), &taskId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "taskId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateTask(w, r, taskId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RunTask operation middleware
+func (siw *ServerInterfaceWrapper) RunTask(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "taskId" -------------
+	var taskId TaskId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "taskId", chi.URLParam(r, "taskId"), &taskId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "taskId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RunTask(w, r, taskId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -8396,6 +9509,27 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Patch(options.BaseURL+"/auth/me", wrapper.UpdateMe)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/passkey/options", wrapper.BeginPasskeySignIn)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/passkey", wrapper.PasskeySignIn)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/auth/passkeys", wrapper.ListPasskeys)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/passkeys", wrapper.AddPasskey)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/passkeys/options", wrapper.BeginPasskeyRegistration)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/auth/passkeys/{passkeyId}", wrapper.DeletePasskey)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/auth/passkeys/{passkeyId}", wrapper.RenamePasskey)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/auth/password", wrapper.ChangePassword)
 	})
 	r.Group(func(r chi.Router) {
@@ -8474,13 +9608,16 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/admin/moderation/events", wrapper.ListModerationEvents)
 	})
 	r.Group(func(r chi.Router) {
-		r.Delete(options.BaseURL+"/admin/moderation/bans", wrapper.DeleteGuestBan)
+		r.Get(options.BaseURL+"/admin/subagents", wrapper.GetSubagentSettings)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/admin/moderation/bans", wrapper.ListGuestBans)
+		r.Patch(options.BaseURL+"/admin/subagents", wrapper.UpdateSubagentSettings)
 	})
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/admin/moderation/bans", wrapper.CreateGuestBan)
+		r.Get(options.BaseURL+"/admin/authentication/passkeys", wrapper.GetPasskeySettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/admin/authentication/passkeys", wrapper.UpdatePasskeySettings)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/web-search", wrapper.GetWebSearchSettings)
@@ -8490,6 +9627,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/admin/web-search/test", wrapper.TestWebSearch)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/image-search", wrapper.GetImageSearchSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/admin/image-search", wrapper.UpdateImageSearchSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/image-search/test", wrapper.TestImageSearch)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/storage", wrapper.GetStorageSettings)
@@ -8516,6 +9662,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/admin/users/bulk", wrapper.BulkUpdateUsers)
 	})
 	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/admin/users/{userId}", wrapper.DeleteUser)
+	})
+	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/admin/users/{userId}", wrapper.UpdateUser)
 	})
 	r.Group(func(r chi.Router) {
@@ -8534,6 +9683,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Patch(options.BaseURL+"/conversations/{conversationId}", wrapper.UpdateConversation)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/conversations/{conversationId}/trace", wrapper.GetConversationTrace)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/conversations/{conversationId}/title", wrapper.GenerateConversationTitle)
 	})
 	r.Group(func(r chi.Router) {
@@ -8547,6 +9699,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/conversations/{conversationId}/compaction", wrapper.GetCompaction)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/conversations/{conversationId}/subagents", wrapper.ListSubagents)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/conversations/{conversationId}/subagents/{subagentId}", wrapper.GetSubagent)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/conversations/{conversationId}/subagents/{subagentId}/stop", wrapper.StopSubagent)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/conversations/{conversationId}/subagents/{subagentId}/resume", wrapper.ResumeSubagent)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/conversations/{conversationId}/subagents/{subagentId}/background", wrapper.BackgroundSubagent)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/conversations/{conversationId}/messages", wrapper.ListMessages)
@@ -8588,6 +9755,30 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Patch(options.BaseURL+"/me/personalization", wrapper.UpdatePersonalization)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/conversations/{conversationId}/documents", wrapper.ListConversationDocuments)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/documents/{documentId}", wrapper.GetDocument)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/documents/{documentId}", wrapper.UpdateDocument)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/tasks", wrapper.ListTasks)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/tasks", wrapper.CreateTask)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/tasks/{taskId}", wrapper.DeleteTask)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/tasks/{taskId}", wrapper.UpdateTask)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/tasks/{taskId}/run", wrapper.RunTask)
+	})
+	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/me/memories", wrapper.ClearMemories)
 	})
 	r.Group(func(r chi.Router) {
@@ -8618,739 +9809,26 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/conversations/{conversationId}/images", wrapper.GetConversationImage)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/images/search", wrapper.SearchImage)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/pictures/{pictureId}", wrapper.GetPicture)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/models", wrapper.ListChatModels)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/guest/status", wrapper.GetGuestStatus)
-	})
-	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/guest/config", wrapper.GetGuestConfig)
-	})
-	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/guest/runs", wrapper.GuestRun)
-	})
-	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/guest/runs/{runId}/cancel", wrapper.CancelGuestRun)
-	})
-	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/guest/title", wrapper.GuestTitle)
-	})
-	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/guest/favicons/{domain}", wrapper.GetGuestFavicon)
-	})
-	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/guest/images", wrapper.GetGuestImage)
+		r.Get(options.BaseURL+"/files", wrapper.ListFiles)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/files", wrapper.CreateUpload)
 	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/files/{fileId}", wrapper.DeleteFile)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/files/{fileId}/download", wrapper.GetFileDownload)
+	})
 
 	return r
-}
-
-// Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
-// Stored as a slice of fixed-width chunks rather than one concatenated
-// const string: with thousands of chunks the chained `+` fold is several
-// times slower for the Go compiler than parsing a slice literal.
-var swaggerSpec = []string{
-	"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",
-	"AP//",
-}
-
-// decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,
-// after base64-decoding and flate-decompressing the embedded blob.
-func decodeSpec() ([]byte, error) {
-	encoded := strings.Join(swaggerSpec, "")
-	compressed, err := base64.StdEncoding.DecodeString(encoded)
-	if err != nil {
-		return nil, fmt.Errorf("error base64 decoding spec: %w", err)
-	}
-	zr := flate.NewReader(bytes.NewReader(compressed))
-	var buf bytes.Buffer
-	if _, err := buf.ReadFrom(zr); err != nil {
-		return nil, fmt.Errorf("read flate: %w", err)
-	}
-	if err := zr.Close(); err != nil {
-		return nil, fmt.Errorf("close flate reader: %w", err)
-	}
-
-	return buf.Bytes(), nil
-}
-
-var rawSpec = decodeSpecCached()
-
-// a naive cache of the decoded OpenAPI spec
-func decodeSpecCached() func() ([]byte, error) {
-	data, err := decodeSpec()
-	return func() ([]byte, error) {
-		return data, err
-	}
-}
-
-// Constructs a synthetic filesystem for resolving external references when loading openapi specifications.
-func PathToRawSpec(pathToFile string) map[string]func() ([]byte, error) {
-	res := make(map[string]func() ([]byte, error))
-	if len(pathToFile) > 0 {
-		res[pathToFile] = rawSpec
-	}
-
-	return res
-}
-
-// GetSpec returns the OpenAPI specification corresponding to the generated
-// code in this file. External references in the spec are resolved through
-// PathToRawSpec; externally-referenced files must be embedded in their
-// corresponding Go packages (via the import-mapping feature). URL-based
-// external refs are not supported.
-func GetSpec() (swagger *openapi3.T, err error) {
-	resolvePath := PathToRawSpec("")
-
-	loader := openapi3.NewLoader()
-	loader.IsExternalRefsAllowed = true
-	loader.ReadFromURIFunc = func(loader *openapi3.Loader, url *url.URL) ([]byte, error) {
-		pathToFile := url.String()
-		pathToFile = path.Clean(pathToFile)
-		getSpec, ok := resolvePath[pathToFile]
-		if !ok {
-			err1 := fmt.Errorf("path not found: %s", pathToFile)
-			return nil, err1
-		}
-		return getSpec()
-	}
-	var specData []byte
-	specData, err = rawSpec()
-	if err != nil {
-		return
-	}
-	swagger, err = loader.LoadFromData(specData)
-	if err != nil {
-		return
-	}
-	return
-}
-
-// GetSpecJSON returns the raw JSON bytes of the embedded OpenAPI
-// specification: decompressed but not unmarshaled. External references
-// are not resolved here; the bytes are the spec exactly as embedded by
-// codegen. The result is cached at package init time, so repeated calls
-// are cheap.
-func GetSpecJSON() ([]byte, error) {
-	return rawSpec()
-}
-
-// GetSwagger returns the OpenAPI specification corresponding to the
-// generated code in this file.
-//
-// Deprecated: GetSwagger predates kin-openapi renaming openapi3.Swagger
-// to openapi3.T. Use [GetSpec] instead. This wrapper is retained for
-// backwards compatibility.
-func GetSwagger() (*openapi3.T, error) {
-	return GetSpec()
 }

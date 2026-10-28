@@ -20,7 +20,8 @@ tags:
   - name: messages
   - name: files
   - name: memory
-  - name: guest
+  - name: tasks
+  - name: documents
 
 paths:
   /healthz:
@@ -44,7 +45,7 @@ paths:
       description: |
         Public and always there, so the login and register pages know what to
         show before anyone has typed anything: whether to link to registration,
-        and whether to offer "continue as guest".
+        and whether a new account waits for approval.
       operationId: getAuthOptions
       responses:
         "200":
@@ -180,6 +181,135 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SessionUser" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /auth/passkey/options:
+    post:
+      tags: [auth]
+      summary: Begin signing in with a passkey
+      description: |
+        A challenge for the browser's passkey prompt (`navigator.credentials.get`
+        with `publicKey`). No account is named: the passkey the person picks
+        says whose it is. The challenge is good for five minutes and one answer.
+        404 when passkeys are off (`AuthOptions.passkeys`).
+      operationId: beginPasskeySignIn
+      security: []
+      responses:
+        "200":
+          description: the challenge
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PasskeyOptions" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /auth/passkey:
+    post:
+      tags: [auth]
+      summary: Sign in with a passkey
+      description: |
+        The browser's answer to `beginPasskeySignIn`. A passkey that is not
+        known, or an answer that does not verify, is 401
+        `invalid_passkey`; failures are counted per client address like
+        password sign-ins (429 `login_rate_limited`). The account is then
+        treated as a password sign-in treats it: 403 `pending_approval` or
+        `account_disabled`, otherwise a session.
+      operationId: passkeySignIn
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PasskeyAnswer" }
+      responses:
+        "200":
+          description: signed in, session cookie set
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SessionUser" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /auth/passkeys:
+    get:
+      tags: [auth]
+      summary: Your passkeys
+      operationId: listPasskeys
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Passkey" } }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [auth]
+      summary: Add a passkey
+      description: |
+        The browser's answer to `beginPasskeyRegistration`. 400
+        `invalid_passkey` when it does not verify; 404 when passkeys are off.
+      operationId: addPasskey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PasskeyAnswer" }
+      responses:
+        "201":
+          description: added
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Passkey" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /auth/passkeys/options:
+    post:
+      tags: [auth]
+      summary: Begin adding a passkey
+      description: |
+        A challenge for the browser's passkey creation
+        (`navigator.credentials.create` with `publicKey`), leaving out the
+        authenticators already registered. Good for five minutes and one answer.
+      operationId: beginPasskeyRegistration
+      responses:
+        "200":
+          description: the challenge
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PasskeyOptions" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /auth/passkeys/{passkeyId}:
+    parameters:
+      - name: passkeyId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [auth]
+      summary: Rename one of your passkeys
+      operationId: renamePasskey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RenamePasskeyRequest" }
+      responses:
+        "200":
+          description: renamed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Passkey" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [auth]
+      summary: Remove one of your passkeys
+      description: It can no longer sign in. 404 for one that is not yours.
+      operationId: deletePasskey
+      responses:
+        "204": { description: removed }
         default: { $ref: "#/components/responses/Error" }
 
   /auth/password:
@@ -734,10 +864,6 @@ paths:
         - name: userId
           in: query
           schema: { type: string, format: uuid }
-        - name: guestIp
-          in: query
-          description: A guest's network address, as the log shows it.
-          schema: { type: string }
         - name: category
           in: query
           schema: { $ref: "#/components/schemas/ModerationCategory" }
@@ -749,58 +875,69 @@ paths:
               schema: { $ref: "#/components/schemas/ModerationEventPage" }
         default: { $ref: "#/components/responses/Error" }
 
-  /admin/moderation/bans:
+  /admin/subagents:
     get:
       tags: [admin]
-      summary: The guest addresses banned now
-      operationId: listGuestBans
+      summary: Sub-agent settings
+      operationId: getSubagentSettings
       responses:
         "200":
           description: ok
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/GuestBan" }
+              schema: { $ref: "#/components/schemas/SubagentSettings" }
         default: { $ref: "#/components/responses/Error" }
-    post:
+    patch:
       tags: [admin]
-      summary: Ban the guest address of a logged message
+      summary: Change sub-agent settings
       description: |
-        Bans the address the event was logged against, for the length set in
-        `ModerationSettings.guestBanHours`. 409 `not_a_guest` for the event of
-        an account: an account is disabled from the users page.
-      operationId: createGuestBan
+        Only the fields present are changed. Read whenever a sub-agent is
+        launched or a run is offered the tools, so a change applies from the
+        next request.
+      operationId: updateSubagentSettings
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              required: [eventId]
-              properties:
-                eventId: { type: string, format: uuid }
+            schema: { $ref: "#/components/schemas/UpdateSubagentSettingsRequest" }
       responses:
         "200":
           description: ok
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/GuestBan" }
+              schema: { $ref: "#/components/schemas/SubagentSettings" }
         default: { $ref: "#/components/responses/Error" }
-    delete:
+
+  /admin/authentication/passkeys:
+    get:
       tags: [admin]
-      summary: Lift the ban on a guest address
-      description: |
-        The address is a query parameter, not a path segment: an IPv6 network
-        reads `2001:db8:1:2::/64`.
-      operationId: deleteGuestBan
-      parameters:
-        - name: ip
-          in: query
-          required: true
-          schema: { type: string }
+      summary: Passkey settings
+      operationId: getPasskeySettings
       responses:
-        "204": { description: lifted }
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PasskeySettings" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [admin]
+      summary: Change passkey settings
+      description: |
+        Changing the relying party ID makes the passkeys registered under the
+        old one unusable: browsers bind a passkey to the domain it was made for.
+      operationId: updatePasskeySettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdatePasskeySettingsRequest" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PasskeySettings" }
         default: { $ref: "#/components/responses/Error" }
 
   /admin/web-search:
@@ -853,6 +990,61 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/WebSearchTestResult" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/image-search:
+    get:
+      tags: [admin]
+      summary: Image search settings
+      operationId: getImageSearchSettings
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImageSearchSettings" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [admin]
+      summary: Change image search settings
+      description: |
+        Runs started after the change are told about it: whether answers
+        describe their pictures or give addresses is part of a run's
+        instructions.
+      operationId: updateImageSearchSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateImageSearchSettingsRequest" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImageSearchSettings" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/image-search/test:
+    post:
+      tags: [admin]
+      summary: Find one picture with the current settings
+      description: |
+        Searches the configured service the way an answer's picture is
+        searched - without keeping what it finds - and reports the first
+        match. A failed search is a 200 with `ok: false`.
+      operationId: testImageSearch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImageSearchTestRequest" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImageSearchTestResult" }
         default: { $ref: "#/components/responses/Error" }
 
   /admin/storage:
@@ -1021,6 +1213,22 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/User" }
         default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [admin]
+      summary: Delete an account for good
+      description: |
+        Deletes the account and everything that is only its: sessions,
+        conversations and their messages and files, memories, custom
+        instructions, scheduled tasks, its picture. Runs it has going are
+        stopped. Its requests stay in the usage log - spend and caps are
+        counted from it - without an owner, labelled with the name the
+        account had (`UsageLog.deletedUser`). Cannot be undone. 409
+        `self_delete` for your own account, `last_admin` for the last
+        enabled administrator; 404 for an account that is not there.
+      operationId: deleteUser
+      responses:
+        "204": { description: deleted }
+        default: { $ref: "#/components/responses/Error" }
 
   /conversations:
     get:
@@ -1098,6 +1306,28 @@ paths:
       operationId: deleteConversation
       responses:
         "204": { description: deleted }
+        default: { $ref: "#/components/responses/Error" }
+
+  /conversations/{conversationId}/trace:
+    parameters:
+      - { $ref: "#/components/parameters/ConversationId" }
+    get:
+      tags: [admin]
+      summary: The model requests of one of your conversations, as sent
+      description: |
+        Administrators only (404 otherwise, and while request traces are off
+        in System settings), and only their own conversations: each model request the conversation's runs made -
+        the messages, tools and options it carried, what came back - with
+        its timing and tokens, oldest first. Recorded for administrators'
+        requests only and kept for `retentionDays`; a request older than
+        that, or made before recording began, is not listed.
+      operationId: getConversationTrace
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConversationTrace" }
         default: { $ref: "#/components/responses/Error" }
 
   /conversations/{conversationId}/title:
@@ -1195,6 +1425,97 @@ paths:
       operationId: undoCompaction
       responses:
         "204": { description: the conversation has no summary now }
+        default: { $ref: "#/components/responses/Error" }
+
+  /conversations/{conversationId}/subagents:
+    parameters:
+      - { $ref: "#/components/parameters/ConversationId" }
+    get:
+      tags: [conversations]
+      summary: The conversation's sub-agents
+      description: |
+        Every sub-agent (子智能体) the conversation's runs launched, oldest
+        first, with the state of its latest run. A sub-agent is a hidden
+        conversation of its own; none of the conversation endpoints reach it,
+        and nothing a person types reaches its model.
+      operationId: listSubagents
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubagentList" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /conversations/{conversationId}/subagents/{subagentId}:
+    parameters:
+      - { $ref: "#/components/parameters/ConversationId" }
+      - { $ref: "#/components/parameters/SubagentId" }
+    get:
+      tags: [conversations]
+      summary: One sub-agent's work, read-only
+      description: |
+        The sub-agent's transcript - the task, its thinking, its tool steps, its
+        reports - oldest first (its latest 500 rows), and the run it has going
+        with its live state. There is no way to write to it.
+      operationId: getSubagent
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubagentDetail" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /conversations/{conversationId}/subagents/{subagentId}/stop:
+    parameters:
+      - { $ref: "#/components/parameters/ConversationId" }
+      - { $ref: "#/components/parameters/SubagentId" }
+    post:
+      tags: [conversations]
+      summary: Stop a sub-agent
+      description: |
+        The person stops it. Its run ends cancelled and what it had found is
+        reported to the main agent as usual. Stopped by the person, the main
+        agent's messages no longer wake it; `resumeSubagent` does. A queued
+        one is cancelled: it never starts, and goes.
+      operationId: stopSubagent
+      responses:
+        "202": { description: asked to stop }
+        default: { $ref: "#/components/responses/Error" }
+
+  /conversations/{conversationId}/subagents/{subagentId}/resume:
+    parameters:
+      - { $ref: "#/components/parameters/ConversationId" }
+      - { $ref: "#/components/parameters/SubagentId" }
+    post:
+      tags: [conversations]
+      summary: Let a stopped sub-agent go on
+      description: |
+        Starts another run of the sub-agent, which carries on from where it
+        was, in the background, and reports again when it is done. Takes no
+        text: a person's words reach the sub-agent only through the main agent.
+        409 `subagent_busy` while it is working; 429 `too_many_subagents` at
+        the limit of sub-agents working at once.
+      operationId: resumeSubagent
+      responses:
+        "202": { description: started }
+        default: { $ref: "#/components/responses/Error" }
+
+  /conversations/{conversationId}/subagents/{subagentId}/background:
+    parameters:
+      - { $ref: "#/components/parameters/ConversationId" }
+      - { $ref: "#/components/parameters/SubagentId" }
+    post:
+      tags: [conversations]
+      summary: Move a foreground sub-agent to the background
+      description: |
+        The tool call waiting for it returns at once, telling the main agent
+        the work goes on in the background, so the turn ends and the person
+        can write again; the report is delivered when it is ready. Idempotent.
+      operationId: backgroundSubagent
+      responses:
+        "202": { description: moved }
         default: { $ref: "#/components/responses/Error" }
 
   /conversations/{conversationId}/messages:
@@ -1588,6 +1909,171 @@ paths:
               schema: { $ref: "#/components/schemas/Personalization" }
         default: { $ref: "#/components/responses/Error" }
 
+  /conversations/{conversationId}/documents:
+    parameters:
+      - name: conversationId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [documents]
+      summary: The writing blocks of a conversation
+      description: |
+        Every document a model wrote in this conversation, each at its latest
+        version, most recently changed first: for reopening one without
+        scrolling back to where it was written. 404 for a conversation that
+        is not yours.
+      operationId: listConversationDocuments
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/DocumentSummary" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /documents/{documentId}:
+    parameters:
+      - name: documentId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [documents]
+      summary: A writing block, with every version of it
+      description: |
+        A document a model wrote in one of your conversations (the
+        `document` tool), oldest version first; the last is what it says
+        now. 404 for one that is not yours, or whose conversation is deleted.
+      operationId: getDocument
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [documents]
+      summary: Save your edit of a writing block
+      description: |
+        Saves a new version with your title and text. `baseVersion` is the
+        version the edit was made on: 409 `version_conflict` when another
+        version came since (the model changed it meanwhile), so nothing is
+        overwritten unseen. Your text is checked by content moderation when
+        a model next reads it, not now.
+      operationId: updateDocument
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateDocumentRequest" }
+      responses:
+        "200":
+          description: the document, with the new version last
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /tasks:
+    get:
+      tags: [tasks]
+      summary: List your scheduled tasks
+      description: |
+        Your scheduled tasks, newest first; a task whose conversation you
+        deleted goes with it. 404 when an administrator has switched scheduled
+        tasks off (System settings).
+      operationId: listTasks
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskList" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [tasks]
+      summary: Schedule a task
+      description: |
+        Makes the task and its own conversation, named after it, where every
+        run goes: at each time the schedule names, `prompt` is sent there as
+        your message and answered as if you had sent it. The prompt is checked
+        by content moderation as a message is (422 `content_blocked`). 400
+        `invalid_schedule` for a schedule that is not one, or a one-off in the
+        past; 409 `too_many_tasks` past the limit of tasks still to run.
+      operationId: createTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateTaskRequest" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /tasks/{taskId}:
+    parameters:
+      - { $ref: "#/components/parameters/TaskId" }
+    patch:
+      tags: [tasks]
+      summary: Change, pause or resume a task
+      description: |
+        Only the fields present change. `enabled: false` pauses the task,
+        `true` resumes it from the next time its schedule names (a one-off
+        whose time has passed cannot be resumed: change its time). The errors
+        of `createTask`.
+      operationId: updateTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateTaskRequest" }
+      responses:
+        "200":
+          description: the task
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [tasks]
+      summary: Delete a task
+      description: Its conversation, and what it has written there, stays.
+      operationId: deleteTask
+      responses:
+        "204": { description: deleted }
+        default: { $ref: "#/components/responses/Error" }
+
+  /tasks/{taskId}/run:
+    parameters:
+      - { $ref: "#/components/parameters/TaskId" }
+    post:
+      tags: [tasks]
+      summary: Run a task now
+      description: |
+        Sends the prompt to the task's conversation now, as its schedule would,
+        without moving its schedule. The errors of `createMessage` (409
+        `conversation_busy` while that conversation is answering).
+      operationId: runTask
+      responses:
+        "202":
+          description: started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+        default: { $ref: "#/components/responses/Error" }
+
   /me/memories:
     get:
       tags: [memory]
@@ -1774,6 +2260,57 @@ paths:
               schema: { type: string, format: binary }
         default: { $ref: "#/components/responses/Error" }
 
+  /images/search:
+    get:
+      tags: [messages]
+      summary: Find a picture for an answer by what it shows
+      description: |
+        With image search on (`getImageSearchSettings`), a reply's interface
+        components describe the pictures they want - a few words such as
+        "laptop keyboard" - rather than give an address. This finds one: a
+        freely licensed photo from the configured service, the first that
+        matches, kept so the same words show the same picture on every reload
+        and for every reader. The image itself is served by
+        `getPicture`, so the reader's browser asks no third party. 404
+        `image_not_found` when nothing matches or image search is off; 503
+        `image_search_unavailable` when the service cannot be reached or is
+        limiting this server. The client then leaves the picture out.
+      operationId: searchImage
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 200 }
+      responses:
+        "200":
+          description: The picture found.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FoundImage" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /pictures/{pictureId}:
+    parameters:
+      - name: pictureId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [messages]
+      summary: A picture found for an answer, fetched for the reader
+      description: |
+        The bytes of an image `searchImage` found, fetched by the server from
+        public addresses only and cached. Only images a search here found are
+        served. 404 otherwise, or when the image cannot be had.
+      operationId: getPicture
+      responses:
+        "200":
+          description: The image.
+          content:
+            image/*:
+              schema: { type: string, format: binary }
+        default: { $ref: "#/components/responses/Error" }
+
   /models:
     get:
       tags: [messages]
@@ -1794,192 +2331,36 @@ paths:
                 items: { $ref: "#/components/schemas/ChatModel" }
         default: { $ref: "#/components/responses/Error" }
 
-  # ------------------------------------------------------------------ guest
-  # Guest mode: no account, no session. A guest's conversations live in their
-  # browser; the server only answers the requests that need a model, keeping
-  # nothing of them. Everything but /guest/status is a 404 while the
-  # administrator has guest mode off.
-  /guest/status:
-    get:
-      tags: [guest]
-      security: []
-      summary: Whether guests are let in
-      description: |
-        Public and always there, so the sign-in page knows whether to offer
-        "continue as guest".
-      operationId: getGuestStatus
-      responses:
-        "200":
-          description: ok
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/GuestStatus" }
-        default: { $ref: "#/components/responses/Error" }
-
-  /guest/config:
-    get:
-      tags: [guest]
-      security: []
-      summary: What the chat offers a guest
-      description: |
-        The models an ordinary user sees (those kept for administrators are
-        left out), the composer's features and the personalization limits - the
-        three things a signed-in chat reads from `/models`, `/features` and
-        `/me/personalization`, in one answer a guest can get without a session.
-        404 `not_found` while guest mode is off.
-      operationId: getGuestConfig
-      responses:
-        "200":
-          description: ok
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/GuestConfig" }
-        default: { $ref: "#/components/responses/Error" }
-
-  /guest/runs:
-    post:
-      tags: [guest]
-      security: []
-      summary: Answer a guest's message, stateless
-      description: |
-        The one request that needs a model. The body carries everything the
-        server would have read from a database: the conversation as the
-        browser holds it, the new message (or which answer to redo, or the
-        answers to a question), the guest's custom instructions and memories.
-        The server writes them as rows of a user that exists for this request
-        alone, runs the agent on them exactly as for an account, and deletes
-        them when the stream ends. The response is the conversation's events
-        (`BatchEvent`, as `GET /conversations/{id}/events` sends them, from
-        `run_started` on) with the rows under the ids the browser sent, then a
-        last `GuestEndEvent` with what the browser has to keep.
-
-        Refused before anything is written, as JSON: 429 `guest_ip_limit` and
-        `guest_daily_limit` (the administrator's limits), 429 `too_many_runs`
-        (this address already has `SystemSettings.guestMaxConcurrentRuns` runs
-        going), 409 `no_models`,
-        400 `model_unavailable`, 409 `model_capacity_reached` (a guest is never
-        exempt from a cap) and the attachment errors of `createMessage`,
-        400 `invalid_answers`, 409 `not_pending` for an answer to a question
-        that is not the last row. Closing the connection stops the run.
-
-        With content moderation on, a new message (and its images) or the words
-        typed in an answer are checked before anything is written: 422
-        `content_blocked` with the matched categories in `details.categories`
-        (and `details.strikesLeft` / `details.windowHours` before a ban; the
-        server keeps nothing of a guest, so there is no `details.messageId` -
-        the browser keeps the refused message itself, in the server's clock:
-        `details.at` is the time to keep it at, the server's now and never before
-        the newest row the request carried, RFC 3339; absent when the refusal is
-        about the conversation's history, `details.history` true, which is not
-        the message), or 503
-        `moderation_unavailable` when the check could not be made (a guest's
-        message is never sent unchecked), or 413 `message_too_large_for_moderation`
-        when the message, or what the request carries that nothing vouched for,
-        is too large to be checked whole (as for `createMessage`; the
-        `history_too_large` of the history is a separate 413). The message that earns the ban is
-        answered with it (403 `guest_banned`). A regeneration is not checked.
-        From a network address banned for it, this and every other guest
-        endpoint but cancelling a run answers 403 `guest_banned`, with
-        `details.until` (a time, or null for a permanent ban).
-      operationId: guestRun
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/GuestRunRequest" }
-      responses:
-        "200":
-          description: The events of the run, as server-sent events.
-          content:
-            text/event-stream:
-              schema: { $ref: "#/components/schemas/GuestRunEvent" }
-        default: { $ref: "#/components/responses/Error" }
-
-  /guest/runs/{runId}/cancel:
-    parameters:
-      - name: runId
-        in: path
-        required: true
-        schema: { type: string, format: uuid }
-    post:
-      tags: [guest]
-      security: []
-      summary: Stop a guest's run
-      description: |
-        Asks the run to stop; what it generated is kept and the stream ends as
-        for any run. The run's id was only told to the page that started it.
-      operationId: cancelGuestRun
-      responses:
-        "202": { description: asked }
-        default: { $ref: "#/components/responses/Error" }
-
-  /guest/title:
-    post:
-      tags: [guest]
-      security: []
-      summary: Name a guest's conversation
-      description: |
-        The task model reads the last exchanges the browser sends and answers
-        with a title. Counts against the guest limits like a run.
-      operationId: guestTitle
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/GuestTitleRequest" }
-      responses:
-        "200":
-          description: ok
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/GuestTitle" }
-        default: { $ref: "#/components/responses/Error" }
-
-  /guest/favicons/{domain}:
-    get:
-      tags: [guest]
-      security: []
-      summary: A site's icon, for a guest
-      description: The same as `getFavicon`, without a session.
-      operationId: getGuestFavicon
-      parameters:
-        - name: domain
-          in: path
-          required: true
-          schema: { type: string, maxLength: 253 }
-      responses:
-        "200":
-          description: The icon.
-          content:
-            image/*:
-              schema: { type: string, format: binary }
-        default: { $ref: "#/components/responses/Error" }
-
-  /guest/images:
-    get:
-      tags: [guest]
-      security: []
-      summary: A picture an answer shows, fetched for a guest
-      description: |
-        As `getConversationImage`, but a guest has no conversation on the
-        server to check the address against: any public image address is
-        served, from public addresses only, and each client is limited in how
-        often it can ask.
-      operationId: getGuestImage
-      parameters:
-        - name: url
-          in: query
-          required: true
-          schema: { type: string, maxLength: 2048 }
-      responses:
-        "200":
-          description: The image.
-          content:
-            image/*:
-              schema: { type: string, format: binary }
-        default: { $ref: "#/components/responses/Error" }
-
   /files:
+    get:
+      tags: [files]
+      summary: List your files
+      description: |
+        The library: the files you sent with your messages, newest first, each
+        with the conversation it was sent in. Only conversations you can still
+        open - not deleted or temporary ones. `url` is a signed read URL, as
+        `Attachment.url`.
+      operationId: listFiles
+      parameters:
+        - { $ref: "#/components/parameters/Limit" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - name: search
+          in: query
+          description: |
+            Only files whose name contains this, ignoring case. Keep it (and
+            `type`) the same while following `nextCursor`.
+          schema: { type: string, maxLength: 200 }
+        - name: type
+          in: query
+          description: Only images, or only PDFs.
+          schema: { $ref: "#/components/schemas/LibraryFileType" }
+      responses:
+        "200":
+          description: a page of files
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryFilePage" }
+        default: { $ref: "#/components/responses/Error" }
     post:
       tags: [files]
       summary: Issue a presigned upload URL for blob storage
@@ -1991,9 +2372,12 @@ paths:
         (`/api/v1/files/content/...`, a relative reference unless the server
         has a public URL configured), signed and valid for 15 minutes. The
         read URLs in `Attachment.url` follow the same rule. Only PNG, JPEG,
-        WebP and GIF images (5 MiB each) and PDFs (10 MiB) are accepted — 415
-        `unsupported_file_type` otherwise, and 413 `file_too_large` over the
-        size. The upload belongs to the caller; nobody else can attach it.
+        WebP and GIF images (5 MiB each), PDFs (10 MiB) and text files
+        (`text/plain`, 256 KiB: notes, Markdown, CSV, code - the client sends
+        `text/plain` for each, whatever the browser calls it; the model is sent
+        the text, so any model takes them, and bytes that are not UTF-8 text
+        are left out) are accepted — 415 `unsupported_file_type` otherwise,
+        and 413 `file_too_large` over the size. The upload belongs to the caller; nobody else can attach it.
       operationId: createUpload
       requestBody:
         required: true
@@ -2006,6 +2390,42 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Upload" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /files/{fileId}:
+    parameters:
+      - { $ref: "#/components/parameters/FileId" }
+    delete:
+      tags: [files]
+      summary: Delete one of your files
+      description: |
+        Deletes a file of the library (`listFiles`) for good, with its stored
+        bytes. The message it was sent with stays, and lists it in
+        `removedAttachments`; a model reading the conversation is told the
+        file is no longer available. 404 for a file that is not in your
+        library.
+      operationId: deleteFile
+      responses:
+        "204": { description: deleted }
+        default: { $ref: "#/components/responses/Error" }
+
+  /files/{fileId}/download:
+    parameters:
+      - { $ref: "#/components/parameters/FileId" }
+    get:
+      tags: [files]
+      summary: A download link for one of your files
+      description: |
+        A signed read URL, like `url` in `listFiles`, whose response asks the
+        browser to save the file under its name rather than show it. 404 for a
+        file that is not in your library.
+      operationId: getFileDownload
+      responses:
+        "200":
+          description: the link
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FileDownload" }
         default: { $ref: "#/components/responses/Error" }
 
 components:
@@ -2022,6 +2442,21 @@ components:
   parameters:
     ConversationId:
       name: conversationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    SubagentId:
+      name: subagentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TaskId:
+      name: taskId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    FileId:
+      name: fileId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -2132,13 +2567,6 @@ components:
         model: { type: string, description: The model that wrote it. }
         inputTokens: { type: integer, description: Tokens it took to write, in. }
         outputTokens: { type: integer, description: Tokens it took to write, out. }
-        receipt:
-          type: string
-          description: |
-            Guest only. The server's signature that it wrote `content`; a
-            guest's summary without a valid one is refused, since it would be
-            words the browser made up (`invalid_summary`). Opaque. Absent for
-            an account's.
         createdAt: { type: string, format: date-time }
 
     CompactionState:
@@ -2234,6 +2662,27 @@ components:
         reasoningEffort: { $ref: "#/components/schemas/ReasoningEffort" }
         webSearch: { type: boolean }
 
+    FoundImage:
+      type: object
+      description: |
+        A freely licensed picture found for an answer, with what its licence
+        asks to be shown: its title, who made it and under which licence, and
+        the page it is from.
+      required: [id, width, height, title, license, source]
+      properties:
+        id: { type: string, format: uuid, description: The picture's id; `getPicture` serves it. }
+        width: { type: integer }
+        height: { type: integer }
+        title: { type: string }
+        creator: { type: string }
+        creatorUrl: { type: string }
+        license:
+          type: string
+          description: The licence's short name as Creative Commons writes it, such as "CC BY 2.0" or "CC0 1.0".
+        licenseUrl: { type: string }
+        landingUrl: { type: string, description: The page the picture is from. }
+        source: { type: string, description: Where Openverse found it, such as flickr or wikimedia. }
+
     Attachment:
       type: object
       required: [id, filename, contentType, size, url]
@@ -2277,24 +2726,24 @@ components:
             text. `model_capacity_reached` is a run stopped before a request
             because its model's spending cap had been reached.
         usage: { $ref: "#/components/schemas/Usage" }
+        origin:
+          type: string
+          description: |
+            User rows no person wrote. `subagent` is a sub-agent's report
+            delivered to the main conversation (its content is one or more
+            `<subagent-report>` blocks): shown as a line, never editable, not a
+            question to regenerate. `agent` is the main agent's task or
+            message to a sub-agent, seen only in a sub-agent's transcript.
+          enum: [agent, subagent]
         attachments:
           type: array
           items: { $ref: "#/components/schemas/Attachment" }
-        providerState:
-          type: string
+        removedAttachments:
+          type: array
           description: |
-            Guest streams only, on assistant rows. What a provider wants back
-            with this response that is not for display - a reasoning
-            signature, redacted reasoning - kept opaque. The server never gives
-            it to a signed-in browser, which has no use for it; a guest's
-            browser keeps the transcript, so it has to hold it for the next
-            request (`GuestMessage.providerState`). Absent elsewhere.
-        receipt:
-          type: string
-          description: |
-            Guest streams only. The server's signature that it wrote this row
-            (assistant, tool) or checked its words (user), to be handed back
-            as `GuestMessage.receipt`. Opaque. Absent elsewhere.
+            User messages only: the files it was sent with that were deleted
+            since (`deleteFile`), to show where they were.
+          items: { $ref: "#/components/schemas/RemovedAttachment" }
         createdAt: { type: string, format: date-time }
 
     MessagePart:
@@ -2622,6 +3071,7 @@ components:
         - $ref: "#/components/schemas/CompactionFinishedEvent"
         - $ref: "#/components/schemas/CompactionChangedEvent"
         - $ref: "#/components/schemas/ConversationDeletedEvent"
+        - $ref: "#/components/schemas/SubagentsChangedEvent"
       discriminator:
         propertyName: type
         mapping:
@@ -2641,6 +3091,7 @@ components:
           title_changed: "#/components/schemas/TitleChangedEvent"
           transcript_changed: "#/components/schemas/TranscriptChangedEvent"
           conversation_deleted: "#/components/schemas/ConversationDeletedEvent"
+          subagents_changed: "#/components/schemas/SubagentsChangedEvent"
 
     RunStartedEvent:
       type: object
@@ -2798,6 +3249,18 @@ components:
       properties:
         type: { type: string, const: conversation_deleted }
 
+    SubagentsChangedEvent:
+      type: object
+      description: |
+        One of the conversation's sub-agents started, took a step, or ended
+        (`listSubagents` says how it stands now). Sent in a batch of its own,
+        with the nil run id and version 0. A report it delivers arrives as a
+        transcript row - in the batch of the run that received it, or as the
+        input of a run started for it (`run_started`).
+      required: [type]
+      properties:
+        type: { type: string, const: subagents_changed }
+
     CompactionChangedEvent:
       type: object
       description: |
@@ -2917,11 +3380,6 @@ components:
           format: uuid
           nullable: true
           description: The conversation it was learned in, while that still exists.
-        receipt:
-          type: string
-          description: |
-            Guest streams only. The server's signature that `content` has been
-            checked (`GuestMemory.receipt`). Opaque. Absent elsewhere.
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
 
@@ -2965,11 +3423,114 @@ components:
           type: array
           items: { $ref: "#/components/schemas/MemoryEvent" }
 
+    SubagentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Subagent" }
+
+    Subagent:
+      type: object
+      description: |
+        A sub-agent (子智能体): work the main agent handed over, done in a
+        hidden conversation of its own. `state` is its latest run's.
+      required: [id, name, model, state, background, stoppedByUser, toolCalls, createdAt, startedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, description: The short name the main agent gave it. }
+        model: { type: string, description: The model its latest run uses (the one it will use, while queued). }
+        state:
+          type: string
+          description: |
+            `queued` is a foreground sub-agent waiting for a free slot (the
+            limits of sub-agents working at once): launched, not started yet.
+            It becomes `running` when it gets one.
+          enum: [queued, running, completed, failed, cancelled]
+        background:
+          type: boolean
+          description: Its reports are delivered to the conversation, rather than taken by a call waiting for it.
+        stoppedByUser:
+          type: boolean
+          description: The person stopped it; only `resumeSubagent` starts it again.
+        toolCalls: { type: integer, description: How many tool calls it has made. }
+        activity:
+          type: string
+          description: While running, the tool it is using now (`web_search`, `web_fetch`, `document`), if any.
+        launchedBy: { type: string, format: uuid, description: The run that launched it. }
+        callId: { type: string, description: The tool call that launched it. }
+        reportDelivered:
+          type: boolean
+          description: Its latest report has reached the main agent.
+        durationMs:
+          type: integer
+          format: int64
+          description: How long its latest run took, once it ended.
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time, description: When its latest run started; while queued, when it was launched. }
+        finishedAt: { type: string, format: date-time }
+
+    SubagentDetail:
+      type: object
+      required: [subagent, messages]
+      properties:
+        subagent: { $ref: "#/components/schemas/Subagent" }
+        messages:
+          type: array
+          items: { $ref: "#/components/schemas/Message" }
+        run: { $ref: "#/components/schemas/Run" }
+        live: { $ref: "#/components/schemas/LiveState" }
+
+    SubagentSettings:
+      type: object
+      required: [enabled, model, background, maxPerRun, maxPerConversation, maxPerUser, maxReportChars]
+      properties:
+        enabled:
+          type: boolean
+          description: Whether models are offered the sub-agent tools. Off by default.
+        model:
+          type: string
+          description: The model sub-agents use. Empty is the model of the run that launches one.
+        background:
+          type: boolean
+          description: Whether the main agent may launch sub-agents in the background. On by default.
+        maxPerRun: { type: integer, description: Sub-agents one run may launch. 4 by default. }
+        maxPerConversation: { type: integer, description: Sub-agents working at once for one conversation. 3 by default. }
+        maxPerUser: { type: integer, description: Sub-agents working at once for one person, in all conversations. 5 by default. }
+        maxReportChars: { type: integer, description: The longest report delivered; a longer one is cut and says so. 30000 by default. }
+
+    UpdateSubagentSettingsRequest:
+      type: object
+      description: Only the fields present are changed.
+      properties:
+        enabled: { type: boolean }
+        model:
+          type: string
+          description: A model an enabled channel offers (400 `model_unavailable` otherwise), or empty.
+        background: { type: boolean }
+        maxPerRun: { type: integer, description: 1 to 20 (400 `invalid_subagent_limit`). }
+        maxPerConversation: { type: integer, description: 1 to 20 (400 `invalid_subagent_limit`). }
+        maxPerUser: { type: integer, description: 1 to 100 (400 `invalid_subagent_limit`). }
+        maxReportChars: { type: integer, description: 1000 to 200000 (400 `invalid_subagent_limit`). }
+
     ChatFeatures:
       type: object
-      required: [webSearch, avatarUploads]
+      required: [webSearch, avatarUploads, scheduledTasks, requestTraces]
       properties:
+        requestTraces:
+          type: boolean
+          description: |
+            Whether the caller may open the 轨迹 view of their conversations:
+            true only for an administrator, while request traces are on
+            (System settings).
         webSearch: { type: boolean }
+        subagents:
+          type: boolean
+          description: Whether models may launch sub-agents (Sub-agent settings).
+        scheduledTasks:
+          type: boolean
+          description: Whether scheduled tasks are on (System settings); off, `/tasks` is 404.
         avatarUploads:
           type: boolean
           description: Whether the account settings offer uploading a picture.
@@ -3033,6 +3594,228 @@ components:
         url: { type: string, format: uri }
         expiresAt: { type: string, format: date-time }
 
+    LibraryFileType:
+      type: string
+      enum: [image, pdf, text]
+
+    LibraryFile:
+      type: object
+      required: [id, filename, contentType, size, url, conversationId, conversationTitle, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        filename: { type: string }
+        contentType: { type: string }
+        size: { type: integer, format: int64 }
+        url: { type: string, format: uri }
+        conversationId: { type: string, format: uuid }
+        conversationTitle: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    LibraryFilePage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/LibraryFile" }
+        nextCursor: { type: string, nullable: true }
+
+    FileDownload:
+      type: object
+      required: [url, expiresAt]
+      properties:
+        url: { type: string, format: uri }
+        expiresAt: { type: string, format: date-time }
+
+    RemovedAttachment:
+      type: object
+      description: A file a message was sent with that has since been deleted (`deleteFile`).
+      required: [id, filename, contentType]
+      properties:
+        id: { type: string, format: uuid }
+        filename: { type: string }
+        contentType: { type: string }
+
+    ConversationTrace:
+      type: object
+      required: [requests, retentionDays]
+      properties:
+        requests:
+          type: array
+          items: { $ref: "#/components/schemas/TraceRequest" }
+        retentionDays: { type: integer }
+
+    TraceRequest:
+      type: object
+      description: |
+        One model request. `request` and `response` are the server's own
+        encoding (llm's codec), for reading, not for a client to depend on:
+        `request` has `messages` (role and parts), `tools` (name,
+        description, parameters) and `options`; `response` has `message`,
+        `finishReason` and `endedAt`. A file is its reference, never its bytes.
+      required: [id, kind, status, startedAt, durationMs, modelId, servedModel, channelName,
+                 inputTokens, outputTokens, reasoningTokens, cacheReadTokens, cacheWriteTokens,
+                 estimated, request, response]
+      properties:
+        id: { type: string, format: uuid }
+        runId: { type: string, format: uuid }
+        kind:
+          type: string
+          description: "`chat`, a run's request; `compression`, a summary of its context."
+        status: { type: string, enum: [ok, error] }
+        errorCode: { type: string }
+        errorMessage: { type: string }
+        startedAt: { type: string, format: date-time }
+        durationMs: { type: integer }
+        firstTokenMs: { type: integer }
+        modelId: { type: string }
+        servedModel: { type: string }
+        channelName: { type: string }
+        inputTokens: { type: integer, description: Excludes the cached part. }
+        outputTokens: { type: integer, description: Includes reasoning. }
+        reasoningTokens: { type: integer }
+        cacheReadTokens: { type: integer }
+        cacheWriteTokens: { type: integer }
+        estimated: { type: boolean }
+        cost: { type: number, format: double }
+        request:
+          type: object
+          additionalProperties: true
+        response:
+          type: object
+          additionalProperties: true
+
+    Document:
+      type: object
+      required: [id, conversationId, createdAt, versions]
+      properties:
+        id: { type: string, format: uuid }
+        conversationId: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        versions:
+          type: array
+          items: { $ref: "#/components/schemas/DocumentVersion" }
+
+    DocumentSummary:
+      type: object
+      required: [id, title, version, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        version: { type: integer }
+        updatedAt: { type: string, format: date-time }
+
+    DocumentVersion:
+      type: object
+      required: [version, title, content, source, createdAt]
+      properties:
+        version: { type: integer }
+        title: { type: string }
+        content:
+          type: string
+          description: Markdown.
+        source: { type: string, enum: [model, user] }
+        createdAt: { type: string, format: date-time }
+
+    UpdateDocumentRequest:
+      type: object
+      required: [title, content, baseVersion]
+      properties:
+        title: { type: string, maxLength: 200 }
+        content: { type: string, maxLength: 100000 }
+        baseVersion: { type: integer }
+
+    TaskScheduleKind:
+      type: string
+      enum: [once, daily, weekly, monthly]
+      x-enum-varnames: [TaskOnce, TaskDaily, TaskWeekly, TaskMonthly]
+
+    TaskSchedule:
+      type: object
+      description: |
+        When a task runs, in `timeZone` (an IANA name such as Asia/Shanghai).
+        `once` runs at `at`; the others at `time` - every day, on `weekdays`
+        (0 = Sunday), or on `monthDay` (a month too short for it, on its last
+        day).
+      required: [kind, timeZone]
+      properties:
+        kind: { $ref: "#/components/schemas/TaskScheduleKind" }
+        at: { type: string, format: date-time }
+        time:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+          description: HH:MM, 24-hour, local to `timeZone`.
+        weekdays:
+          type: array
+          items: { type: integer, minimum: 0, maximum: 6 }
+        monthDay: { type: integer, minimum: 1, maximum: 31 }
+        timeZone: { type: string }
+
+    TaskStatus:
+      type: string
+      description: |
+        `active` will run at `nextRunAt`; `paused` will not until resumed;
+        `completed` is a one-off that has run.
+      enum: [active, paused, completed]
+      x-enum-varnames: [TaskActive, TaskPaused, TaskCompleted]
+
+    Task:
+      type: object
+      required: [id, title, prompt, schedule, status, conversationId, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        prompt: { type: string }
+        schedule: { $ref: "#/components/schemas/TaskSchedule" }
+        status: { $ref: "#/components/schemas/TaskStatus" }
+        conversationId:
+          type: string
+          format: uuid
+          description: Where its runs go.
+        nextRunAt: { type: string, format: date-time }
+        lastRunAt: { type: string, format: date-time }
+        lastError:
+          type: string
+          description: |
+            Why the last time it was due started nothing, as a code to
+            localise: `conversation_busy`, `content_blocked`,
+            `moderation_unavailable`, `model_unavailable`, `no_models`,
+            `model_capacity_reached`, `too_many_runs`, `revise_refused`,
+            `account_unavailable`, `missed` (the server could not run it
+            within an hour of its time; it runs again at its next), `failed`.
+        createdAt: { type: string, format: date-time }
+
+    TaskList:
+      type: object
+      required: [items, limit]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Task" }
+        limit:
+          type: integer
+          description: How many tasks still to run a person may have.
+
+    CreateTaskRequest:
+      type: object
+      required: [title, prompt, schedule]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 100 }
+        prompt: { type: string, minLength: 1, maxLength: 4000 }
+        schedule: { $ref: "#/components/schemas/TaskSchedule" }
+        model:
+          type: string
+          description: The model its conversation answers with; the default one when absent.
+
+    UpdateTaskRequest:
+      type: object
+      description: Only the fields present change.
+      properties:
+        title: { type: string, minLength: 1, maxLength: 100 }
+        prompt: { type: string, minLength: 1, maxLength: 4000 }
+        schedule: { $ref: "#/components/schemas/TaskSchedule" }
+        enabled: { type: boolean }
+
     UserRole:
       type: string
       enum: [user, admin]
@@ -3046,6 +3829,9 @@ components:
         name: { type: string }
         role: { $ref: "#/components/schemas/UserRole" }
         avatarUrl: { $ref: "#/components/schemas/AvatarUrl" }
+        timeZone:
+          type: string
+          description: The time zone the browser last reported (`updateMe`), for times a model schedules.
 
     AvatarUrl:
       type: string
@@ -3059,10 +3845,105 @@ components:
         third-party avatar service is asked — that would tell it who is being
         looked at, from every page that shows a name.
 
+    PasskeyOptions:
+      type: object
+      required: [challengeId, publicKey]
+      properties:
+        challengeId:
+          type: string
+          format: uuid
+          description: Sent back with the browser's answer.
+        publicKey:
+          type: object
+          additionalProperties: true
+          description: |
+            The WebAuthn options as JSON (PublicKeyCredentialCreationOptionsJSON
+            or PublicKeyCredentialRequestOptionsJSON), for the browser.
+
+    PasskeyAnswer:
+      type: object
+      required: [challengeId, credential]
+      properties:
+        challengeId: { type: string, format: uuid }
+        credential:
+          type: object
+          additionalProperties: true
+          description: The browser's credential as JSON (RegistrationResponseJSON or AuthenticationResponseJSON).
+        name:
+          type: string
+          maxLength: 60
+          description: What to call a passkey being added; the browser's name for its kind when absent.
+
+    Passkey:
+      type: object
+      required: [id, name, createdAt, synced]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        createdAt: { type: string, format: date-time }
+        lastUsedAt: { type: string, format: date-time }
+        synced:
+          type: boolean
+          description: Whether it is backed up and synced across devices (a password manager or platform account), rather than bound to one device.
+
+    RenamePasskeyRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 60 }
+
+    PasskeySettings:
+      type: object
+      required: [enabled, rpId, origins, userVerification, effectiveRpId, effectiveOrigins, registered]
+      properties:
+        enabled:
+          type: boolean
+          description: Whether accounts may add passkeys and sign in with them. Off, the passkeys stay but cannot be used.
+        rpId:
+          type: string
+          description: |
+            The relying party ID: the domain passkeys are made for, such as
+            chat.example.com. Empty takes the domain the page is served from.
+        origins:
+          type: array
+          items: { type: string }
+          description: Origins a passkey answer may come from, such as https://chat.example.com. Empty takes the page's own origin.
+        userVerification:
+          type: string
+          enum: [required, preferred]
+          description: Whether the authenticator must verify the person (fingerprint, face, PIN) or only should.
+        effectiveRpId:
+          type: string
+          description: The relying party ID in force for this request.
+        effectiveOrigins:
+          type: array
+          items: { type: string }
+          description: The origins in force for this request.
+        registered:
+          type: integer
+          description: Passkeys registered across all accounts.
+
+    UpdatePasskeySettingsRequest:
+      type: object
+      description: Only the fields present are changed.
+      properties:
+        enabled: { type: boolean }
+        rpId: { type: string, maxLength: 253 }
+        origins:
+          type: array
+          maxItems: 10
+          items: { type: string, maxLength: 300 }
+        userVerification:
+          type: string
+          enum: [required, preferred]
+
     AuthOptions:
       type: object
-      required: [registration, approval, guest]
+      required: [registration, approval, passkeys]
       properties:
+        passkeys:
+          type: boolean
+          description: Whether accounts may sign in with a passkey (`beginPasskeySignIn`).
         registration:
           type: boolean
           description: |
@@ -3075,9 +3956,6 @@ components:
             Whether an account made by registering must be approved before it
             can sign in. Only meaningful while `registration` is true; false
             while no account exists yet, since the first one is never pending.
-        guest:
-          type: boolean
-          description: The same as `GuestStatus.enabled`.
 
     RegisterPending:
       type: object
@@ -3148,8 +4026,9 @@ components:
         that names a conversation; `compression` is a request that writes a
         conversation's context summary, made with the conversation's own model;
         `moderation` is a request that has a model classify a message
-        (`ModerationSettings.mode` `model`).
-      enum: [chat, title, compression, moderation]
+        (`ModerationSettings.mode` `model`); `subagent` is a model request of a
+        sub-agent's run, logged on the conversation it works for.
+      enum: [chat, title, compression, moderation, subagent]
       # Named explicitly: bare `Chat` would collide with ApiFormat's `chat` and
       # make the generator rename both enums' constants.
       x-enum-varnames: [UsageKindChat, UsageKindTitle, UsageKindCompression, UsageKindModeration]
@@ -3183,6 +4062,12 @@ components:
         userAvatarUrl:
           $ref: "#/components/schemas/AvatarUrl"
           nullable: true
+        deletedUser:
+          type: string
+          nullable: true
+          description: |
+            The name of the account this request was made for, when an
+            administrator has deleted it since.
         conversationId: { type: string, format: uuid, nullable: true }
         runId: { type: string, format: uuid, nullable: true }
         channelId: { type: string, format: uuid, nullable: true }
@@ -3307,6 +4192,10 @@ components:
       properties:
         name: { $ref: "#/components/schemas/Username" }
         email: { type: string, format: email }
+        timeZone:
+          type: string
+          maxLength: 64
+          description: An IANA time zone name; the page sends the browser's when it differs.
 
     ChangePasswordRequest:
       type: object
@@ -3569,297 +4458,11 @@ components:
         page: { type: integer }
         limit: { type: integer }
 
-    GuestStatus:
-      type: object
-      required: [enabled, banned]
-      properties:
-        enabled: { type: boolean }
-        banned:
-          type: boolean
-          description: |
-            Whether the caller's network address is banned from guest mode
-            (content moderation). Every other `/guest/*` endpoint answers 403
-            `guest_banned` then.
-        bannedUntil:
-          type: string
-          format: date-time
-          nullable: true
-          description: When the ban ends; null for a permanent one. Only with `banned`.
-
-    GuestConfig:
-      type: object
-      required: [models, features, personalization]
-      properties:
-        models:
-          type: array
-          items: { $ref: "#/components/schemas/ChatModel" }
-        features: { $ref: "#/components/schemas/ChatFeatures" }
-        personalization:
-          type: object
-          required: [memoryAllowed, instructionLimit, memoryLimit, memoryLength]
-          properties:
-            memoryAllowed:
-              type: boolean
-              description: The administrator's memory switch (`SystemSettings.memory`).
-            instructionLimit: { type: integer }
-            memoryLimit: { type: integer }
-            memoryLength: { type: integer }
-
-    GuestAttachment:
-      type: object
-      required: [id, filename, contentType, size]
-      properties:
-        id: { type: string, format: uuid }
-        filename:
-          type: string
-          description: |
-            1 to 255 characters, no control characters (400 `invalid_filename`).
-            The model is told it, so it is checked as words are: with the new
-            message, or in history unless the file's `receipt` covers it.
-        contentType: { type: string }
-        size: { type: integer, format: int64 }
-        data:
-          type: string
-          format: byte
-          description: |
-            The file, base64. Left out for the files that no longer fit what a
-            request can carry (the newest are sent, as the model gets the newest);
-            the model is told those were not included, as for an account.
-        receipt:
-          type: string
-          description: |
-            The server's signature that this file's name and (for a picture
-            sent with its bytes) bytes have been checked, from
-            `GuestEndEvent.receipts.files`. Opaque, and kept as received. It
-            has two halves; a picture whose bytes are no longer sent still has
-            its name vouched for. Without one the name, and a picture's bytes,
-            are checked again.
-
-    GuestReceipts:
-      type: object
-      description: |
-        Signatures the server gives for content it has checked or written, so
-        that the browser, which keeps the conversation and could write anything
-        into it, is not believed about it. All opaque: a signature covers
-        exactly the words (or, for a row of the model's, the blocks) it was
-        made for, so a changed byte is a missing receipt. Kept next to the
-        thing they sign and sent back with it. In a request only
-        `aboutYou`, `responseStyle` and `memorySnapshot` are read; the rest
-        ride on the rows, memories and files themselves.
-      properties:
-        aboutYou: { type: string, description: For the custom instructions' `aboutYou`. }
-        responseStyle: { type: string, description: For `responseStyle`. }
-        memorySnapshot: { type: string, description: For the conversation's `memorySnapshot`. }
-        messages:
-          type: object
-          additionalProperties: { type: string }
-          description: |
-            Only in `GuestEndEvent`. User rows the server checked in this
-            request (the new question, and any row that was sent without a
-            receipt), by message id.
-        files:
-          type: object
-          additionalProperties: { type: string }
-          description: Only in `GuestEndEvent`. The files whose name (and bytes, for a picture) were checked, by attachment id.
-
-    GuestMessage:
-      type: object
-      description: |
-        A row of the conversation as the guest's browser holds it. Assistant
-        and tool rows are what the server sent back earlier (`Message`).
-        Nothing in a row is taken on the browser's word: a user row's words
-        are checked again unless it comes with its `receipt`, and an assistant
-        or tool row that does not (with the blocks it is sent with) is not
-        something the server wrote, so the request is refused
-        (`invalid_history`).
-      required: [id, role, content, parts, createdAt]
-      properties:
-        id: { type: string, format: uuid }
-        role: { $ref: "#/components/schemas/Role" }
-        content: { type: string }
-        parts:
-          type: array
-          items: { $ref: "#/components/schemas/MessagePart" }
-        providerState:
-          type: string
-          description: The `Message.providerState` the row came with; used in place of `parts` when sent.
-        receipt:
-          type: string
-          description: The `Message.receipt` the row came with, or `GuestReceipts.messages` for a user row.
-        stopReason:
-          type: string
-          enum: [stop, length, tool_calls, content_filter, cancelled, error]
-        model: { type: string }
-        errorCode: { type: string }
-        usage: { $ref: "#/components/schemas/Usage" }
-        attachments:
-          type: array
-          items: { $ref: "#/components/schemas/GuestAttachment" }
-        createdAt: { type: string, format: date-time }
-
-    GuestMemory:
-      type: object
-      required: [id, content]
-      properties:
-        id: { type: string, format: uuid }
-        content: { type: string }
-        source: { $ref: "#/components/schemas/MemorySource" }
-        receipt:
-          type: string
-          description: The `Memory.receipt` it came with. Without a valid one the note is checked again.
-
-    GuestRunRequest:
-      type: object
-      required: [action, conversationId, messages]
-      properties:
-        action:
-          type: string
-          enum: [send, regenerate, answer]
-          description: |
-            `send`: `input` is a new message after `messages` (also an edit:
-            `messages` ends before the question it rewords). `regenerate`:
-            answer the last message of `messages` again. `answer`: `callId` and `answers` are the reply to
-            the question the last row of `messages` asks.
-        conversationId: { type: string, format: uuid }
-        temporary: { type: boolean }
-        titled:
-          type: boolean
-          description: The conversation has a title already; none is generated after the run.
-        messages:
-          type: array
-          description: |
-            The conversation, in order. For `send` it stops before `input`; for
-            `regenerate` it ends with the question and without the answer being
-            redone.
-          items: { $ref: "#/components/schemas/GuestMessage" }
-        input:
-          description: For `send`.
-          allOf: [{ $ref: "#/components/schemas/GuestMessage" }]
-        callId: { type: string }
-        answers:
-          type: array
-          items:
-            type: object
-            required: [selected]
-            properties:
-              selected: { type: array, items: { type: string } }
-              other: { type: string, maxLength: 2000 }
-        continues:
-          type: string
-          format: uuid
-          description: For `answer`. The run that began the reply the question is part of.
-        model: { type: string }
-        reasoningEffort: { $ref: "#/components/schemas/ReasoningEffort" }
-        webSearch: { type: boolean }
-        aboutYou: { type: string }
-        responseStyle: { type: string }
-        memoryEnabled: { type: boolean }
-        memories:
-          type: array
-          items: { $ref: "#/components/schemas/GuestMemory" }
-        receipts: { $ref: "#/components/schemas/GuestReceipts" }
-        memorySnapshot:
-          type: object
-          nullable: true
-          additionalProperties: true
-          description: |
-            The conversation's snapshot from `GuestEndEvent`, sent back so the
-            system prompt is the same bytes at every turn. Absent on its first run.
-            It has to be exactly what the server wrote (notes numbered `m1`,
-            `m2`, … in order, saved notes numbered on from there, each note one
-            line of at most 200 characters, ids set and unique): the prompt
-            prints the numbers next to the notes, so any other is 400
-            `invalid_snapshot`.
-        summary:
-          description: |
-            The conversation's compressed context, if the browser holds one,
-            sent back so the run builds its requests from it as an account's do.
-            `messages` then begins at the summary's `keptMessageId` (when it has
-            one) and its `throughMessageId` - the rows between them, which the
-            summary replaces, are not sent - and goes on from there; the server
-            writes them as they are and the summary over them.
-            `throughMessageId` and `keptMessageId` have to be among `messages`.
-          allOf: [{ $ref: "#/components/schemas/ContextSummary" }]
-
-    GuestEndEvent:
-      type: object
-      description: |
-        The last frame of a guest's run: what the browser has to keep, because
-        the server keeps nothing. Sent after `run_finished`.
-      required: [type, run, memorySnapshot, memories, memoryEvents]
-      properties:
-        type: { type: string, const: guest_end }
-        run: { $ref: "#/components/schemas/Run" }
-        memorySnapshot:
-          type: object
-          nullable: true
-          additionalProperties: true
-        memories:
-          type: array
-          description: The guest's memories now - the model's memory tool may have changed them.
-          items: { $ref: "#/components/schemas/Memory" }
-        memoryEvents:
-          type: array
-          description: What the model changed during this run, for the undo list.
-          items: { $ref: "#/components/schemas/MemoryEvent" }
-        receipts:
-          $ref: "#/components/schemas/GuestReceipts"
-        title:
-          type: string
-          description: Set when the conversation was given a title after this run.
-        summary:
-          description: |
-            The conversation's compressed context as the run left it; absent
-            when it has none. The same summary was announced in the run's own
-            events (`compaction_finished`) when the run made it.
-          allOf: [{ $ref: "#/components/schemas/ContextSummary" }]
-
-    GuestRunEvent:
-      description: One SSE frame of a guest run.
-      oneOf:
-        - $ref: "#/components/schemas/SnapshotEvent"
-        - $ref: "#/components/schemas/BatchEvent"
-        - $ref: "#/components/schemas/GuestEndEvent"
-      discriminator:
-        propertyName: type
-        mapping:
-          snapshot: "#/components/schemas/SnapshotEvent"
-          batch: "#/components/schemas/BatchEvent"
-          guest_end: "#/components/schemas/GuestEndEvent"
-
-    GuestTitleRequest:
-      type: object
-      required: [messages]
-      properties:
-        messages:
-          type: array
-          maxItems: 12
-          items:
-            type: object
-            required: [role, content]
-            properties:
-              role: { type: string, enum: [user, assistant] }
-              content: { type: string }
-              receipt:
-                type: string
-                description: |
-                  The row's receipt. A user row without a valid one is checked
-                  first; an assistant row without one is left out of the title.
-        model:
-          type: string
-          description: The conversation's model, used when no task model is set.
-
-    GuestTitle:
-      type: object
-      required: [title]
-      properties:
-        title: { type: string }
-
     SystemSettings:
       type: object
-      required: [debugLogging, generativeUi, askUser, compressContext, memory, taskModel, avatarUploads,
+      required: [debugLogging, generativeUi, askUser, compressContext, memory, taskModel, avatarUploads, scheduledTasks, requestTraces,
                  deletedRetentionDays, unsentUploadHours, orphanFileHours,
-                 guestMode, guestHourlyLimit, guestDailyLimit, guestMaxConcurrentRuns, maxConcurrentRuns,
+                 maxConcurrentRuns,
                  allowRegistration, registrationApproval]
       properties:
         allowRegistration:
@@ -3875,23 +4478,6 @@ components:
             administrator approves it. Only matters while `allowRegistration`
             is on. On by default; accounts made by an administrator, and the
             first account ever, are never pending.
-        guestMode:
-          type: boolean
-          description: |
-            Whether anyone may use the chat without an account. A guest's
-            conversations are kept in their own browser; the server holds none
-            of them. Off by default.
-        guestHourlyLimit:
-          type: integer
-          description: Requests one address may make as a guest per hour; 0 is unlimited.
-        guestDailyLimit:
-          type: integer
-          description: Requests all guests together may make per day (the last 24 hours); 0 is unlimited.
-        guestMaxConcurrentRuns:
-          type: integer
-          description: |
-            How many runs one address may have going at once as a guest (the
-            address the hourly limit counts); 0 is unlimited. 2 unless changed.
         maxConcurrentRuns:
           type: integer
           description: |
@@ -3951,6 +4537,22 @@ components:
             Whether people may upload a picture of their own (`PUT /me/avatar`,
             403 `avatar_uploads_off` otherwise). Off by default. Removing a
             picture already set is always allowed.
+        requestTraces:
+          type: boolean
+          description: |
+            Whether administrators' model requests are recorded as sent - the
+            messages, tools and options, and what came back - for the 轨迹
+            view of their own conversations (`getConversationTrace`). Off by
+            default: a debugging aid. Off, nothing new is recorded and the
+            view and its endpoint are gone (404); what was recorded is
+            deleted after its week as usual.
+        scheduledTasks:
+          type: boolean
+          description: |
+            Whether people may schedule tasks (`/tasks`) and models are offered
+            the tool that does. On by default. Off, nothing scheduled runs and
+            `/tasks` is 404; the tasks are kept, and run again from their next
+            time once it is switched back on.
         memory:
           type: boolean
           description: |
@@ -3975,18 +4577,10 @@ components:
         compressContext: { type: boolean }
         memory: { type: boolean }
         avatarUploads: { type: boolean }
+        scheduledTasks: { type: boolean }
+        requestTraces: { type: boolean }
         allowRegistration: { type: boolean }
         registrationApproval: { type: boolean }
-        guestMode: { type: boolean }
-        guestHourlyLimit:
-          type: integer
-          description: 0 to 100000 (400 `invalid_guest_limit` otherwise); 0 is unlimited.
-        guestDailyLimit:
-          type: integer
-          description: 0 to 10000000 (400 `invalid_guest_limit` otherwise); 0 is unlimited.
-        guestMaxConcurrentRuns:
-          type: integer
-          description: 0 to 1000 (400 `invalid_run_limit` otherwise); 0 is unlimited.
         maxConcurrentRuns:
           type: integer
           description: 0 to 1000 (400 `invalid_run_limit` otherwise); 0 is unlimited.
@@ -4043,7 +4637,7 @@ components:
       description: |
         What an account's message does when the moderation service fails (an
         error, a timeout, no channel, the model's spending cap): `allow` sends
-        it anyway, `block` refuses it. A guest's is always refused.
+        it anyway, `block` refuses it.
       enum: [allow, block]
       x-enum-varnames: [ModerationOnErrorAllow, ModerationOnErrorBlock]
 
@@ -4082,18 +4676,21 @@ components:
     ModerationSource:
       type: string
       description: |
-        Where the blocked text came from: a message sent, edited or answered, a
-        guest's, the custom instructions or a memory as they were saved, or
+        Where the blocked text came from: a message sent, edited or answered,
+        the custom instructions or a memory as they were saved, or
         either of them as a conversation took its snapshot (`snapshot`, logged
-        but not counted as a strike).
-      enum: [send, edit, answer, guest, instructions, memory, snapshot]
-      x-enum-varnames: [ModerationSourceSend, ModerationSourceEdit, ModerationSourceAnswer, ModerationSourceGuest, ModerationSourceInstructions, ModerationSourceMemory, ModerationSourceSnapshot]
+        but not counted as a strike); a scheduled task's prompt as its owner
+        saved it (`task`), or as it was about to be sent or a model wrote it
+        (`task_run`, logged but not counted as a strike); the person's text
+        of a writing block as a model was about to read it (`document`).
+      enum: [send, edit, answer, instructions, memory, snapshot, task, task_run, document]
+      x-enum-varnames: [ModerationSourceSend, ModerationSourceEdit, ModerationSourceAnswer, ModerationSourceInstructions, ModerationSourceMemory, ModerationSourceSnapshot, ModerationSourceTask, ModerationSourceTaskRun, ModerationSourceDocument]
 
     ModerationSanction:
       type: string
       description: What a blocked message set off, when it reached the strike threshold.
-      enum: [disabled, banned]
-      x-enum-varnames: [ModerationSanctionDisabled, ModerationSanctionBanned]
+      enum: [disabled]
+      x-enum-varnames: [ModerationSanctionDisabled]
 
     VersionInfo:
       type: object
@@ -4127,7 +4724,7 @@ components:
       type: object
       required:
         [mode, openaiKeySet, openaiBaseUrl, model, categories, minScore, exemptAdmins, onError,
-         strikes, strikeWindowHours, guestBanHours]
+         strikes, strikeWindowHours]
       properties:
         mode: { $ref: "#/components/schemas/ModerationMode" }
         openaiKeySet:
@@ -4165,13 +4762,9 @@ components:
           minimum: 0
           description: |
             How many blocked messages within `strikeWindowHours` disable the
-            account (or ban the guest address). 0 never sanctions. An
+            account. 0 never sanctions. An
             administrator is only logged.
         strikeWindowHours: { type: integer, minimum: 1 }
-        guestBanHours:
-          type: integer
-          minimum: 0
-          description: How long a banned guest address stays banned; 0 is permanent.
 
     UpdateModerationSettingsRequest:
       type: object
@@ -4189,7 +4782,6 @@ components:
         onError: { $ref: "#/components/schemas/ModerationOnError" }
         strikes: { type: integer, minimum: 0 }
         strikeWindowHours: { type: integer, minimum: 1 }
-        guestBanHours: { type: integer, minimum: 0 }
 
     ModerationEvent:
       type: object
@@ -4203,15 +4795,7 @@ components:
         userDisabled:
           type: boolean
           nullable: true
-          description: Whether the account is disabled now; null for a guest.
-        guestIp:
-          type: string
-          nullable: true
-          description: A guest's network address (an IPv6 one as its /64); null for an account.
-        ipBanned:
-          type: boolean
-          nullable: true
-          description: Whether the guest address is banned now; null for an account.
+          description: Whether the account is disabled now; null once it is deleted.
         conversationId: { type: string, format: uuid, nullable: true }
         source: { $ref: "#/components/schemas/ModerationSource" }
         mode:
@@ -4238,20 +4822,83 @@ components:
           description: Absent on the last page.
         limit: { type: integer }
 
-    GuestBan:
+    ImageSearchSettings:
       type: object
-      required: [ip, createdAt, reason]
+      required: [enabled, provider, pixabayKeySet]
       properties:
-        ip: { type: string }
-        createdAt: { type: string, format: date-time }
-        expiresAt:
+        enabled:
+          type: boolean
+          description: |
+            Whether answers describe their pictures for the server to find
+            (`searchImage`). Off, an answer can show only a picture whose
+            address one of its own sources listed - a page it read or a
+            search it ran - as before.
+        provider: { $ref: "#/components/schemas/ImageSearchProvider" }
+        pixabayKeySet:
+          type: boolean
+          description: Whether a Pixabay API key is stored; `pixabay` needs one. Write-only, like a channel's.
+        pixabayKeyPreview:
           type: string
-          format: date-time
-          nullable: true
-          description: Null for a permanent ban.
-        reason: { type: string }
-        eventId: { type: string, format: uuid, nullable: true }
+          description: The Pixabay key's last four characters.
 
+    UpdateImageSearchSettingsRequest:
+      type: object
+      description: Only the fields present are changed.
+      properties:
+        enabled: { type: boolean }
+        provider: { $ref: "#/components/schemas/ImageSearchProvider" }
+        pixabayKey:
+          type: string
+          maxLength: 200
+          description: The Pixabay API key. Empty removes the stored one.
+
+    ImageSearchTestRequest:
+      type: object
+      required: [query]
+      properties:
+        query: { type: string, minLength: 1, maxLength: 200 }
+        provider:
+          $ref: "#/components/schemas/ImageSearchProvider"
+          description: A service to try before choosing it. The configured one when absent.
+        pixabayKey:
+          type: string
+          maxLength: 200
+          description: A Pixabay key to try before saving it. The stored key when absent.
+
+    ImageSearchTestResult:
+      type: object
+      required: [ok, latencyMs]
+      properties:
+        ok: { type: boolean }
+        latencyMs: { type: integer }
+        error: { type: string, description: Why the search failed, when it did. }
+        image:
+          $ref: "#/components/schemas/ImageSearchHit"
+          description: The first match; absent when nothing matched.
+
+    ImageSearchHit:
+      type: object
+      required: [url, width, height, title, license, source]
+      properties:
+        url: { type: string, description: The picture at the service, to look at. }
+        width: { type: integer }
+        height: { type: integer }
+        title: { type: string }
+        creator: { type: string }
+        license: { type: string }
+        landingUrl: { type: string }
+        source: { type: string }
+
+    ImageSearchProvider:
+      type: string
+      enum: [wikimedia, openverse, pixabay]
+      description: |
+        Where the pictures answers describe are found (`searchImage`).
+        `wikimedia` is Wikimedia Commons' own search: no key, quick, but with
+        no safe-search filter. `openverse` searches Creative Commons images
+        from many sites with mature content filtered out, no key, but allows
+        an anonymous server 200 searches a day and is often slow. `pixabay`
+        is Pixabay's stock photos with safe search, and needs a free key.
     WebSearchSettings:
       type: object
       required:
@@ -4745,6 +5392,10 @@ components:
         userAvatarUrl:
           $ref: "#/components/schemas/AvatarUrl"
           nullable: true
+        deletedUser:
+          type: string
+          nullable: true
+          description: The name of a deleted account whose requests these are.
         requests: { type: integer, format: int64 }
         cost: { type: number, format: double }
 
