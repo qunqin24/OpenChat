@@ -12,11 +12,11 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/qunqin/openchat/apps/server/internal/auth"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
-	"github.com/qunqin/openchat/apps/server/internal/logging"
-	"github.com/qunqin/openchat/apps/server/internal/memory"
+	"github.com/qunqin24/openchat/apps/server/internal/auth"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/logging"
+	"github.com/qunqin24/openchat/apps/server/internal/memory"
 )
 
 // settingDebugLogging is the app_settings key holding the log-level switch.
@@ -93,16 +93,16 @@ func (s *Server) systemSettings(ctx context.Context) (SystemSettings, error) {
 	if settings.AvatarUploads, err = boolSettingOr(ctx, s.q, settingAvatarUploads, false); err != nil {
 		return settings, err
 	}
+	if settings.ScheduledTasks, err = boolSettingOr(ctx, s.q, settingScheduledTasks, true); err != nil {
+		return settings, err
+	}
+	if settings.RequestTraces, err = boolSettingOr(ctx, s.q, settingRequestTraces, false); err != nil {
+		return settings, err
+	}
 	if settings.TaskModel, err = stringSetting(ctx, s.q, settingTaskModel); err != nil {
 		return settings, err
 	}
-	if err := guestSettings(ctx, s.q, &settings); err != nil {
-		return settings, err
-	}
 	if settings.MaxConcurrentRuns, err = intSettingOr(ctx, s.q, settingMaxRuns, defaultMaxRuns); err != nil {
-		return settings, err
-	}
-	if settings.GuestMaxConcurrentRuns, err = intSettingOr(ctx, s.q, settingGuestMaxRuns, defaultGuestMaxRuns); err != nil {
 		return settings, err
 	}
 	switches, err := s.signupSwitches(ctx)
@@ -125,12 +125,8 @@ func (s *Server) UpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The guest limits likewise: nothing is saved if one of them is out of range.
-	if err := validGuestLimits(body.GuestHourlyLimit, body.GuestDailyLimit); err != nil {
-		httpx.Fail(w, r, err)
-		return
-	}
-	if err := validRunLimit(body.MaxConcurrentRuns, body.GuestMaxConcurrentRuns); err != nil {
+	// Nothing is saved if the run limit is out of range.
+	if err := validRunLimit(body.MaxConcurrentRuns); err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
@@ -226,6 +222,26 @@ func (s *Server) UpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 			"enabled", *body.AvatarUploads, "actor", auth.MustUser(r.Context()).Email)
 	}
 
+	if body.RequestTraces != nil {
+		value, _ := json.Marshal(*body.RequestTraces)
+		if err := s.q.SetSetting(r.Context(), sqlc.SetSettingParams{Key: settingRequestTraces, Value: value}); err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+		slog.InfoContext(r.Context(), "request traces changed",
+			"enabled", *body.RequestTraces, "actor", auth.MustUser(r.Context()).Email)
+	}
+
+	if body.ScheduledTasks != nil {
+		value, _ := json.Marshal(*body.ScheduledTasks)
+		if err := s.q.SetSetting(r.Context(), sqlc.SetSettingParams{Key: settingScheduledTasks, Value: value}); err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+		slog.InfoContext(r.Context(), "scheduled tasks changed",
+			"enabled", *body.ScheduledTasks, "actor", auth.MustUser(r.Context()).Email)
+	}
+
 	for _, g := range []struct {
 		key   string
 		value any
@@ -233,11 +249,7 @@ func (s *Server) UpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 	}{
 		{settingAllowRegistration, body.AllowRegistration, "allow registration changed"},
 		{settingRegistrationApproval, body.RegistrationApproval, "registration approval changed"},
-		{settingGuestMode, body.GuestMode, "guest mode changed"},
-		{settingGuestHourlyLimit, body.GuestHourlyLimit, "guest hourly limit changed"},
-		{settingGuestDailyLimit, body.GuestDailyLimit, "guest daily limit changed"},
 		{settingMaxRuns, body.MaxConcurrentRuns, "concurrent run limit changed"},
-		{settingGuestMaxRuns, body.GuestMaxConcurrentRuns, "guest concurrent run limit changed"},
 	} {
 		var (
 			value []byte

@@ -12,9 +12,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/qunqin/openchat/apps/server/internal/agent"
-	"github.com/qunqin/openchat/apps/server/internal/auth"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/agent"
+	"github.com/qunqin24/openchat/apps/server/internal/auth"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
 )
 
 // A conversation's compressed context over the HTTP handlers and a scripted
@@ -52,9 +52,13 @@ func (b *compacting) compressesOnItsOwn(limit int64) {
 	b.t.Cleanup(func() {
 		_, _ = b.pool.Exec(context.Background(), "DELETE FROM model_overrides WHERE model_id = $1", b.model)
 	})
+	// A short, fixed system prompt: the windows here are a few hundred tokens,
+	// and the product's prompt, which grows with every feature, would fill
+	// them on its own.
+	prompt := func(context.Context, time.Time, []agent.Tool) string { return "You are a test assistant." }
 	runner := agent.NewRunner(b.pool, agent.NewHub(), NewModelResolver(b.pool),
 		func(context.Context) []agent.Tool { return nil },
-		agent.Options{SystemPrompt: NewSystemPrompt(b.pool), PartialInterval: 5 * time.Millisecond, Compression: NewCompression(b.pool)})
+		agent.Options{SystemPrompt: prompt, PartialInterval: 5 * time.Millisecond, Compression: NewCompression(b.pool)})
 	b.t.Cleanup(func() { _ = runner.Shutdown(context.Background()) })
 	b.server.runner = runner
 }

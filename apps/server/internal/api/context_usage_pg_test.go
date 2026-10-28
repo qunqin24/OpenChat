@@ -12,8 +12,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/qunqin/openchat/apps/server/internal/auth"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/auth"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
 )
 
 func TestConversationContextIsTheLatestAnsweredRequest(t *testing.T) {
@@ -61,7 +61,7 @@ func TestConversationContextIsTheLatestAnsweredRequest(t *testing.T) {
 
 	base := time.Now().Add(-time.Minute)
 	log := func(at time.Duration, kind, status, model string, in, cacheRead, cacheWrite, out int32) {
-		if err := q.InsertUsageLog(ctx, sqlc.InsertUsageLogParams{
+		if _, err := q.InsertUsageLog(ctx, sqlc.InsertUsageLogParams{
 			CreatedAt: pgtype.Timestamptz{Time: base.Add(at), Valid: true}, Kind: kind, Status: status,
 			UserID: &owner.ID, ConversationID: &conv.ID, ChannelName: "c", ModelID: model, ServedModel: model,
 			InputTokens: in, CacheReadTokens: cacheRead, CacheWriteTokens: cacheWrite, OutputTokens: out,

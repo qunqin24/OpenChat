@@ -5,8 +5,8 @@ import (
 
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
 )
 
 func toConversation(row sqlc.Conversation) Conversation {
@@ -56,6 +56,7 @@ func (s *Server) sessionUser(ctx context.Context, row sqlc.User) SessionUser {
 		Name:      row.Name,
 		Role:      UserRole(row.Role),
 		AvatarUrl: s.avatarURL(ctx, row.AvatarKey),
+		TimeZone:  row.TimeZone,
 	}
 }
 

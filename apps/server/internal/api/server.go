@@ -15,13 +15,14 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/qunqin/openchat/apps/server/internal/agent"
-	"github.com/qunqin/openchat/apps/server/internal/auth"
-	"github.com/qunqin/openchat/apps/server/internal/config"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
-	"github.com/qunqin/openchat/apps/server/internal/storage"
-	"github.com/qunqin/openchat/apps/server/internal/usage"
+	"github.com/qunqin24/openchat/apps/server/internal/agent"
+	"github.com/qunqin24/openchat/apps/server/internal/auth"
+	"github.com/qunqin24/openchat/apps/server/internal/config"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/imagesearch"
+	"github.com/qunqin24/openchat/apps/server/internal/storage"
+	"github.com/qunqin24/openchat/apps/server/internal/usage"
 )
 
 // Server wires the handlers to their dependencies.
@@ -44,6 +45,9 @@ type Server struct {
 	// usage is the ledger of model requests, for the ones the server makes
 	// itself (titles). Runs write theirs through the runner.
 	usage *usage.Recorder
+	// imageSearch finds the pictures answers describe (pictures.go); nil is
+	// the configured service. Tests point it elsewhere.
+	imageSearch imagesearch.Searcher
 	// moderationClient makes the requests to OpenAI's moderation endpoint; nil
 	// is a client with the check's own timeout. Tests point it elsewhere.
 	moderationClient *http.Client
@@ -52,10 +56,6 @@ type Server struct {
 	// now is the clock the spending caps' periods are read from; time.Now
 	// unless a test has set another.
 	now func() time.Time
-	// receiptKey signs what a guest's browser is later believed about
-	// (guest_receipts.go), read once and kept.
-	receiptMu  sync.Mutex
-	receiptKey []byte
 	// updates is the last look at the project's releases (version.go).
 	updates updateChecker
 }

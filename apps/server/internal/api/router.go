@@ -8,10 +8,10 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
-	"github.com/qunqin/openchat/apps/server/internal/auth"
-	"github.com/qunqin/openchat/apps/server/internal/config"
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
-	"github.com/qunqin/openchat/apps/server/internal/webui"
+	"github.com/qunqin24/openchat/apps/server/internal/auth"
+	"github.com/qunqin24/openchat/apps/server/internal/config"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/webui"
 )
 
 // NewRouter mounts the generated handlers under /api/v1 behind the standard
@@ -55,32 +55,9 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 		r.Get("/auth/options", wrapper.GetAuthOptions)
 		r.Post("/auth/register", wrapper.Register)
 		r.Post("/auth/login", wrapper.Login)
-
-		// ---- guest ------------------------------------------------------
-		// No session: a guest has no account. The status is always there, for
-		// the sign-in page to read; the rest answers 404 while the
-		// administrator has guest mode off. Every endpoint that could cost
-		// something is counted against the guest limits (guest.go).
-		r.Get("/guest/status", wrapper.GetGuestStatus)
-		r.Group(func(r chi.Router) {
-			r.Use(s.requireGuestMode)
-
-			// Stopping a run is allowed to an address banned meanwhile: the run
-			// is already paid for, and ending it early spends less.
-			r.Post("/guest/runs/{runId}/cancel", wrapper.CancelGuestRun)
-
-			// An address banned by content moderation is refused everywhere
-			// else, with 403 guest_banned (moderation_admin.go).
-			r.Group(func(r chi.Router) {
-				r.Use(s.rejectBannedGuests)
-
-				r.Get("/guest/config", wrapper.GetGuestConfig)
-				r.Post("/guest/runs", wrapper.GuestRun)
-				r.Post("/guest/title", wrapper.GuestTitle)
-				r.Get("/guest/favicons/{domain}", wrapper.GetGuestFavicon)
-				r.Get("/guest/images", wrapper.GetGuestImage)
-			})
-		})
+		// A passkey sign-in: a challenge, then the answer (passkeys.go).
+		r.Post("/auth/passkey/options", wrapper.BeginPasskeySignIn)
+		r.Post("/auth/passkey", wrapper.PasskeySignIn)
 
 		// ---- signed URL -------------------------------------------------
 		// Where the local storage driver's upload and download URLs lead. Always
@@ -100,6 +77,11 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 			r.Get("/auth/session", wrapper.GetSession)
 			r.Patch("/auth/me", wrapper.UpdateMe)
 			r.Post("/auth/password", wrapper.ChangePassword)
+			r.Get("/auth/passkeys", wrapper.ListPasskeys)
+			r.Post("/auth/passkeys/options", wrapper.BeginPasskeyRegistration)
+			r.Post("/auth/passkeys", wrapper.AddPasskey)
+			r.Patch("/auth/passkeys/{passkeyId}", wrapper.RenamePasskey)
+			r.Delete("/auth/passkeys/{passkeyId}", wrapper.DeletePasskey)
 
 			// The caller's own picture, and their data as a whole.
 			r.Put("/me/avatar", wrapper.UpdateMyAvatar)
@@ -116,6 +98,18 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 			r.Patch("/me/memories/{memoryId}", wrapper.UpdateMemory)
 			r.Delete("/me/memories/{memoryId}", wrapper.DeleteMemory)
 			r.Get("/me/memory-events", wrapper.ListMemoryEvents)
+
+			// Writing blocks: the caller's own (the queries name the owner).
+			r.Get("/conversations/{conversationId}/documents", wrapper.ListConversationDocuments)
+			r.Get("/documents/{documentId}", wrapper.GetDocument)
+			r.Patch("/documents/{documentId}", wrapper.UpdateDocument)
+
+			// Scheduled tasks: always the caller's own; 404 while switched off.
+			r.Get("/tasks", wrapper.ListTasks)
+			r.Post("/tasks", wrapper.CreateTask)
+			r.Patch("/tasks/{taskId}", wrapper.UpdateTask)
+			r.Delete("/tasks/{taskId}", wrapper.DeleteTask)
+			r.Post("/tasks/{taskId}/run", wrapper.RunTask)
 			r.Post("/me/memory-events/{eventId}/undo", wrapper.UndoMemoryEvent)
 
 			r.Get("/conversations", wrapper.ListConversations)
@@ -135,6 +129,13 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 			r.Post("/conversations/{conversationId}/regenerate", wrapper.RegenerateAnswer)
 			r.Post("/conversations/{conversationId}/tool-calls/{callId}/answer", wrapper.AnswerQuestion)
 			r.Post("/conversations/{conversationId}/runs/{runId}/cancel", wrapper.CancelRun)
+			// A conversation's sub-agents: read, stopped, resumed, moved to the
+			// background - never written to (subagents_http.go).
+			r.Get("/conversations/{conversationId}/subagents", wrapper.ListSubagents)
+			r.Get("/conversations/{conversationId}/subagents/{subagentId}", wrapper.GetSubagent)
+			r.Post("/conversations/{conversationId}/subagents/{subagentId}/stop", wrapper.StopSubagent)
+			r.Post("/conversations/{conversationId}/subagents/{subagentId}/resume", wrapper.ResumeSubagent)
+			r.Post("/conversations/{conversationId}/subagents/{subagentId}/background", wrapper.BackgroundSubagent)
 			r.Get("/conversations/{conversationId}/images", wrapper.GetConversationImage)
 
 			// Any signed-in user: these are the models a conversation can use,
@@ -142,24 +143,41 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 			r.Get("/models", wrapper.ListChatModels)
 			r.Get("/features", wrapper.GetChatFeatures)
 			r.Get("/favicons/{domain}", wrapper.GetFavicon)
+			// Pictures answers describe, found and served here (pictures.go).
+			r.Get("/images/search", wrapper.SearchImage)
+			r.Get("/pictures/{pictureId}", wrapper.GetPicture)
 
 			r.Post("/files", wrapper.CreateUpload)
+			// The library: the caller's own sent files (ListLibraryFiles).
+			r.Get("/files", wrapper.ListFiles)
+			r.Delete("/files/{fileId}", wrapper.DeleteFile)
+			r.Get("/files/{fileId}/download", wrapper.GetFileDownload)
 
 			// ---- admin ---------------------------------------------------
 			r.Group(func(r chi.Router) {
 				r.Use(mw.RequireAdmin)
 
 				r.Get("/admin/dashboard", wrapper.GetAdminDashboard)
+				// The 轨迹 view: the administrator's own conversations only
+				// (the query names the owner), so it reads nobody else's.
+				r.Get("/conversations/{conversationId}/trace", wrapper.GetConversationTrace)
 				r.Get("/admin/system", wrapper.GetSystemSettings)
 				r.Get("/admin/version", wrapper.GetVersionInfo)
 				r.Post("/admin/version/check", wrapper.CheckForUpdate)
+				r.Get("/admin/authentication/passkeys", wrapper.GetPasskeySettings)
+				r.Patch("/admin/authentication/passkeys", wrapper.UpdatePasskeySettings)
 				r.Get("/admin/web-search", wrapper.GetWebSearchSettings)
 				r.Patch("/admin/web-search", wrapper.UpdateWebSearchSettings)
 				r.Post("/admin/web-search/test", wrapper.TestWebSearch)
+				r.Get("/admin/image-search", wrapper.GetImageSearchSettings)
+				r.Patch("/admin/image-search", wrapper.UpdateImageSearchSettings)
+				r.Post("/admin/image-search/test", wrapper.TestImageSearch)
 				r.Get("/admin/storage", wrapper.GetStorageSettings)
 				r.Patch("/admin/storage", wrapper.UpdateStorageSettings)
 				r.Post("/admin/storage/test", wrapper.TestStorage)
 				r.Patch("/admin/system", wrapper.UpdateSystemSettings)
+				r.Get("/admin/subagents", wrapper.GetSubagentSettings)
+				r.Patch("/admin/subagents", wrapper.UpdateSubagentSettings)
 
 				r.Get("/admin/catalog", wrapper.GetCatalogStatus)
 				r.Post("/admin/catalog", wrapper.RefreshCatalog)
@@ -189,15 +207,13 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 				r.Get("/admin/moderation", wrapper.GetModerationSettings)
 				r.Patch("/admin/moderation", wrapper.UpdateModerationSettings)
 				r.Get("/admin/moderation/events", wrapper.ListModerationEvents)
-				r.Get("/admin/moderation/bans", wrapper.ListGuestBans)
-				r.Post("/admin/moderation/bans", wrapper.CreateGuestBan)
-				r.Delete("/admin/moderation/bans", wrapper.DeleteGuestBan)
 
 				r.Get("/admin/usage-logs", wrapper.ListUsageLogs)
 				r.Get("/admin/users", wrapper.ListUsers)
 				r.Post("/admin/users", wrapper.CreateUser)
 				r.Post("/admin/users/bulk", wrapper.BulkUpdateUsers)
 				r.Patch("/admin/users/{userId}", wrapper.UpdateUser)
+				r.Delete("/admin/users/{userId}", wrapper.DeleteUser)
 			})
 		})
 	})

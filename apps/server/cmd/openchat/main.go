@@ -24,13 +24,13 @@ import (
 
 	"github.com/joho/godotenv"
 
-	"github.com/qunqin/openchat/apps/server/internal/agent"
-	"github.com/qunqin/openchat/apps/server/internal/api"
-	"github.com/qunqin/openchat/apps/server/internal/auth"
-	"github.com/qunqin/openchat/apps/server/internal/config"
-	"github.com/qunqin/openchat/apps/server/internal/db"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/logging"
+	"github.com/qunqin24/openchat/apps/server/internal/agent"
+	"github.com/qunqin24/openchat/apps/server/internal/api"
+	"github.com/qunqin24/openchat/apps/server/internal/auth"
+	"github.com/qunqin24/openchat/apps/server/internal/config"
+	"github.com/qunqin24/openchat/apps/server/internal/db"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/logging"
 )
 
 func main() {
@@ -99,15 +99,25 @@ func run() error {
 			Compression: api.NewCompression(pool),
 			Capacity:    api.NewCapacityCheck(pool),
 			EndUser:     api.NewEndUsers(pool).ForRun,
-			Reserver:    api.NewSpendReserver(pool)})
-	// Runs a previous process left unfinished pick up from their checkpoints.
+			Reserver:    api.NewSpendReserver(pool),
+			Tracer:      api.NewTracer(pool)})
+	server := api.NewServer(cfg, pool, store, runner)
+	// Tools that act through the server: scheduling tasks, writing blocks.
+	runner.AddTools(server.ServerTools)
+	// Each run's model is told of the writing blocks the person edited, and of
+	// its conversation's sub-agents.
+	runner.SetTurnNote(server.TurnNote)
+	// Sub-agents' reports and messages reach runs between their requests.
+	runner.SetSubagents(server.SubagentHooks())
+	// A conversation's first answer gets it a title, in the background; a
+	// run's end delivers the sub-agent reports that waited for it.
+	runner.AfterRun(server.AfterRun)
+	// Runs a previous process left unfinished pick up from their checkpoints -
+	// after every hook above is in place: a sub-agent's run resumed without
+	// them would end without leaving its report, which nothing recovers.
 	if err := runner.Resume(ctx); err != nil {
 		return err
 	}
-
-	server := api.NewServer(cfg, pool, store, runner)
-	// A conversation's first answer gets it a title, in the background.
-	runner.AfterRun(server.TitleAfterRun)
 	// Before the listener opens, so a server started with debug logging on logs
 	// its own startup in detail — which is when you want it most.
 	server.LoadSettings(ctx)
@@ -116,6 +126,10 @@ func run() error {
 	server.StartCatalogRefresh(ctx)
 	// Temporary chats are deleted a day after they were made.
 	server.StartCleanup(ctx)
+	// Scheduled tasks start at their times.
+	server.StartTaskScheduler(ctx)
+	// Sub-agent reports nothing else delivered (a process that died) go out.
+	server.StartSubagentSweep(ctx)
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
