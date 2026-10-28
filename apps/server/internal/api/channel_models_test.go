@@ -9,9 +9,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
-	"github.com/qunqin/openchat/apps/server/internal/providers/modellist"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/providers/modellist"
 )
 
 // channelModelQueriesPath is the source sqlc generates the refresh's statements

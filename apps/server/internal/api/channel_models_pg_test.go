@@ -10,9 +10,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/dbtest"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/providers/modellist"
+	"github.com/qunqin24/openchat/apps/server/internal/db/dbtest"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/providers/modellist"
 )
 
 // The test in this file needs a database, which CI does not have and a

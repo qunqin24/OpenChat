@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 // Compressing a conversation's context: when a run does it, what the request

@@ -12,8 +12,8 @@ import (
 	"testing"
 	"testing/iotest"
 
-	"github.com/qunqin/openchat/apps/server/internal/llm"
-	"github.com/qunqin/openchat/apps/server/internal/llm/llmtest"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/llm/llmtest"
 )
 
 // The fixtures under testdata are real frame shapes: whole response objects,

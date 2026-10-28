@@ -13,9 +13,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/llm"
-	"github.com/qunqin/openchat/apps/server/internal/storage"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/storage"
 )
 
 // The size of a message is the sender's to choose, so a message too big to be

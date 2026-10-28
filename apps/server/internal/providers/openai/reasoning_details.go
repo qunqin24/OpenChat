@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 // OpenRouter returns what a model reasoned as `reasoning_details`: an array of

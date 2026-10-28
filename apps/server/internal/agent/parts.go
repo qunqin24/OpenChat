@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 // EncodeParts is the `messages.parts` column value: llm's canonical encoding,

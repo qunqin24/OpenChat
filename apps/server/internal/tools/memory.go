@@ -8,9 +8,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/qunqin/openchat/apps/server/internal/agent"
-	"github.com/qunqin/openchat/apps/server/internal/llm"
-	"github.com/qunqin/openchat/apps/server/internal/memory"
+	"github.com/qunqin24/openchat/apps/server/internal/agent"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/memory"
 )
 
 // ToolMemory is the memory tool's name.

@@ -13,10 +13,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/qunqin/openchat/apps/server/internal/auth"
-	"github.com/qunqin/openchat/apps/server/internal/config"
-	"github.com/qunqin/openchat/apps/server/internal/db/dbtest"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/auth"
+	"github.com/qunqin24/openchat/apps/server/internal/config"
+	"github.com/qunqin24/openchat/apps/server/internal/db/dbtest"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
 )
 
 // The dashboard reads the usage ledger, so the rows here are written straight

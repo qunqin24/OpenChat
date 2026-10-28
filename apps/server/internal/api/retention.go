@@ -9,7 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
 )
 
 // How long the cleanup keeps what it removes (cleanup.go), as an administrator

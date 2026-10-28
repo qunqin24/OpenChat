@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pressly/goose/v3"
 
-	"github.com/qunqin/openchat/apps/server/internal/memory"
+	"github.com/qunqin24/openchat/apps/server/internal/memory"
 )
 
 // The migration after the moderated-memories one (20261025000006) against what

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/qunqin/openchat/apps/server/internal/agent"
+	"github.com/qunqin24/openchat/apps/server/internal/agent"
 )
 
 func TestAskUserChecksWhatIsAsked(t *testing.T) {

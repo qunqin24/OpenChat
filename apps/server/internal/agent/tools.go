@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 // Tool is something a model may call during a run.

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 // ResponsesClient speaks the OpenAI Responses wire protocol (POST /responses).

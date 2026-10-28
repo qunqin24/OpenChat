@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
-	"github.com/qunqin/openchat/apps/server/internal/providers/modellist"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/providers/modellist"
 )
 
 // PreviewChannelModels does not write anything. Cancelling channel creation

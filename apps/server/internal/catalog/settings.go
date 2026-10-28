@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 // Kind is what a model is for. Only text models are offered in chat; the

@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 func TestDefaultKind(t *testing.T) {

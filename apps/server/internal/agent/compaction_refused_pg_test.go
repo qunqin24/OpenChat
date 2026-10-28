@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 // What a run does when the model refuses a request for its length although the

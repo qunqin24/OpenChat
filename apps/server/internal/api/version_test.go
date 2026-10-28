@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/qunqin/openchat/apps/server/internal/config"
+	"github.com/qunqin24/openchat/apps/server/internal/config"
 )
 
 func TestNewerVersion(t *testing.T) {

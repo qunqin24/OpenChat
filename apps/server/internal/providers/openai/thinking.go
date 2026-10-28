@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 // thinkingFields turns a chosen thinking level into the request fields a

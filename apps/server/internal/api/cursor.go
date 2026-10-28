@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
 )
 
 // Cursors are opaque to clients: base64url("<RFC3339Nano timestamp>|<uuid>").

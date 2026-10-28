@@ -3,7 +3,7 @@ package anthropic
 import (
 	"strings"
 
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 // generation reads the version out of a Claude model id: "claude-opus-4-5-

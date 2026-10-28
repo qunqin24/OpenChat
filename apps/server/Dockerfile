@@ -33,7 +33,7 @@ COPY scripts/embed-web.mjs scripts/
 RUN pnpm --filter @openchat/web build && node scripts/embed-web.mjs
 
 # ---- server: embed the build into the binary ---------------------------------
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.26.10-alpine AS build
 ARG TARGETOS TARGETARCH
 # The version the server reports, written into the binary (config.buildVersion);
 # the release workflow passes the tag. Not an ENV of the image: a container
@@ -49,7 +49,7 @@ COPY apps/server/ .
 # build: this is what `go:embed all:dist` picks up.
 COPY --from=web /repo/apps/server/internal/webui/dist ./internal/webui/dist
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath \
-      -ldflags="-s -w -X github.com/qunqin/openchat/apps/server/internal/config.buildVersion=$APP_VERSION" \
+      -ldflags="-s -w -X github.com/qunqin24/openchat/apps/server/internal/config.buildVersion=$APP_VERSION" \
       -o /out/openchat ./cmd/openchat \
  && CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /out/adminctl ./cmd/adminctl \
  && mkdir -p /out/data

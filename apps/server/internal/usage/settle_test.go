@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 // settle is the whole rule for when a row is an estimate; the pg tests of the

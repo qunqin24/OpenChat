@@ -16,7 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/qunqin/openchat/apps/server/internal/agent"
+	"github.com/qunqin24/openchat/apps/server/internal/agent"
 )
 
 // FreeSearch searches through the public, keyless tiers of four search

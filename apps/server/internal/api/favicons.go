@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
 )
 
 // Site icons for the sources a reply cites, fetched here rather than by the

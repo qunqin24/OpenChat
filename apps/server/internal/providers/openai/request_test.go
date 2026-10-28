@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 func buildMessages(t *testing.T, cfg Config, messages ...llm.Message) []map[string]any {

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/qunqin/openchat/apps/server/internal/usage"
+	"github.com/qunqin24/openchat/apps/server/internal/usage"
 )
 
 // Money held back for requests in flight against a cap. At $3 per million input

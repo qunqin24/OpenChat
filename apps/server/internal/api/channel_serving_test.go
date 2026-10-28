@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
 )
 
 func TestServingOrderPutsHigherPriorityFirst(t *testing.T) {

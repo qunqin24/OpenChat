@@ -10,13 +10,13 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/qunqin/openchat/apps/server/internal/agent"
-	"github.com/qunqin/openchat/apps/server/internal/catalog"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/llm"
-	"github.com/qunqin/openchat/apps/server/internal/providers/anthropic"
-	"github.com/qunqin/openchat/apps/server/internal/providers/gemini"
-	"github.com/qunqin/openchat/apps/server/internal/providers/openai"
+	"github.com/qunqin24/openchat/apps/server/internal/agent"
+	"github.com/qunqin24/openchat/apps/server/internal/catalog"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/providers/anthropic"
+	"github.com/qunqin24/openchat/apps/server/internal/providers/gemini"
+	"github.com/qunqin24/openchat/apps/server/internal/providers/openai"
 )
 
 // ModelResolver turns a run's pinned channel and model into a client speaking

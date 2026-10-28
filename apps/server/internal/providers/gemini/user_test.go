@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 // Gemini has no field for an end user, so the identifier never reaches the wire.

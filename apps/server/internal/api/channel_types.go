@@ -5,8 +5,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
-	"github.com/qunqin/openchat/apps/server/internal/providers/openai"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/providers/openai"
 )
 
 // channelTypeDef is what an operator picks when adding a channel: a vendor,

@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/pressly/goose/v3"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
 )
 
 // The linear-conversations migration (20261020000001) against data in the

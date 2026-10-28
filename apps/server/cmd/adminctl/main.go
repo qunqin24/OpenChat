@@ -23,7 +23,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 
-	"github.com/qunqin/openchat/apps/server/internal/auth"
+	"github.com/qunqin24/openchat/apps/server/internal/auth"
 )
 
 func main() {

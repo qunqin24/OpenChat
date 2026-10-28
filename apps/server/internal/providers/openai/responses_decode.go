@@ -7,8 +7,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/qunqin/openchat/apps/server/internal/llm"
-	"github.com/qunqin/openchat/apps/server/internal/providers/sse"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/providers/sse"
 )
 
 // The wire structs below are decoded leniently, like their Chat Completions

@@ -3,7 +3,7 @@ package gemini
 import (
 	"testing"
 
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 // A compressed conversation begins with the summary as a user message and goes

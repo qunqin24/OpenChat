@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 // StepKind is what one scripted block produces.

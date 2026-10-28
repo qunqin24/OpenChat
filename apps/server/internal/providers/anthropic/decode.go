@@ -7,8 +7,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/qunqin/openchat/apps/server/internal/llm"
-	"github.com/qunqin/openchat/apps/server/internal/providers/sse"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/providers/sse"
 )
 
 // The event names this protocol dispatches on. They are the reason this decoder

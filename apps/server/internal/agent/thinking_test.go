@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 // A partial stream with a hand-moved clock and no throttle: emit and stampAll

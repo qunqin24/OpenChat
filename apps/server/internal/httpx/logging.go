@@ -8,7 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/qunqin/openchat/apps/server/internal/logging"
+	"github.com/qunqin24/openchat/apps/server/internal/logging"
 )
 
 // RequestLogger logs one structured line per request. Streaming responses are

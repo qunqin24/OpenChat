@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/qunqin/openchat/apps/server/internal/providers/openai"
+	"github.com/qunqin24/openchat/apps/server/internal/providers/openai"
 )
 
 func TestRequestsGoOutOnTheRightProtocol(t *testing.T) {

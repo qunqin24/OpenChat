@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/qunqin/openchat/apps/server/internal/catalog"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/catalog"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
 )
 
 // catalogSyncer builds the syncer for one call. It carries nothing but the pool

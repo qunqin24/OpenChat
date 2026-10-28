@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/qunqin/openchat/apps/server/internal/llm"
-	"github.com/qunqin/openchat/apps/server/internal/providers/sse"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/providers/sse"
 )
 
 // syntheticIDPrefix marks a tool call id this adapter minted because the

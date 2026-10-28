@@ -8,8 +8,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/qunqin/openchat/apps/server/internal/llm"
-	"github.com/qunqin/openchat/apps/server/internal/llm/llmtest"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/llm/llmtest"
 )
 
 func load(t *testing.T, name string) *Provider {

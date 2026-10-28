@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/qunqin/openchat/apps/server/internal/llm"
-	"github.com/qunqin/openchat/apps/server/internal/llm/llmtest"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/llm/llmtest"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)

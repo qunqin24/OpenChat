@@ -19,7 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/qunqin/openchat/apps/server/internal/db"
+	"github.com/qunqin24/openchat/apps/server/internal/db"
 )
 
 // URLVar names the server the database-backed tests run on. The older

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	ledger "github.com/qunqin/openchat/apps/server/internal/usage"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	ledger "github.com/qunqin24/openchat/apps/server/internal/usage"
 )
 
 type refusingReserver struct{ asked atomic.Int32 }

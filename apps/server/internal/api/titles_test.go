@@ -3,7 +3,7 @@ package api
 import (
 	"testing"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
 )
 
 func TestCleanTitle(t *testing.T) {

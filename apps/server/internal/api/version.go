@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
 )
 
 // The version an administrator runs, and whether a newer one has been released.

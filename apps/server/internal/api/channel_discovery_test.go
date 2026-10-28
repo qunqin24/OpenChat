@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
 )
 
 // The default endpoint belongs to the vendor, not to the protocol. The first

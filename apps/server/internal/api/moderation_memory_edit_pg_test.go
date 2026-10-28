@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/qunqin/openchat/apps/server/internal/memory"
+	"github.com/qunqin24/openchat/apps/server/internal/memory"
 )
 
 // A person rewriting a memory the model wrote makes it the person's words: its
