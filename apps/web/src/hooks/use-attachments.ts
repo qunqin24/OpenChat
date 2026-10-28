@@ -144,6 +144,27 @@ export function useAttachments(accepts: Accepts) {
     commit([])
   }, [commit, forget])
 
+  /**
+   * Takes the files out of the composer as a message is sent, so they are not
+   * shown twice - in the message and still in the box - while the server takes
+   * it, which with a large PDF is a while. They are given back (`restore`) if
+   * the send fails, and let go of (`release`) once it has gone through.
+   */
+  const take = useCallback(() => {
+    const taken = queued.current
+    commit([])
+    return taken
+  }, [commit])
+
+  /** Puts files taken for a send that failed back in the composer, before any added since. */
+  const restore = useCallback(
+    (taken: PendingAttachment[]) => commit([...taken, ...queued.current.filter((item) => !taken.includes(item))]),
+    [commit],
+  )
+
+  /** Lets go of files taken for a send that went through. */
+  const release = useCallback((taken: PendingAttachment[]) => taken.forEach(forget), [forget])
+
   // Leaving the screen abandons what was still going up and frees the previews.
   useEffect(() => {
     const pending = uploads.current
@@ -158,6 +179,9 @@ export function useAttachments(accepts: Accepts) {
     add,
     remove,
     clear,
+    take,
+    restore,
+    release,
     uploading: items.some((item) => item.status === 'uploading'),
     failed: items.some((item) => item.status === 'error'),
     ids: items.flatMap((item) => (item.id ? [item.id] : [])),

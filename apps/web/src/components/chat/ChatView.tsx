@@ -648,6 +648,9 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     if (await capacityRefused()) return
     const attachmentIds = attachments.ids
     setInput('')
+    // Out of the box at once, as the text is: the message shows them now. Back
+    // in the box if the send fails.
+    const taken = attachments.take()
     if (quoted) setQuote(null)
     // Shown at once, at the bottom, while the request is on its way.
     const item = {
@@ -679,9 +682,12 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
           webSearch: canSearch ? webSearch : undefined,
         },
         {
-          onSuccess: () => attachments.clear(),
-          // Refused again or not taken: the words stay in the box, as a send's do.
-          onError: () => setInput((current) => current || content),
+          onSuccess: () => attachments.release(taken),
+          // Refused again or not taken: the words and the files go back in the box.
+          onError: () => {
+            setInput((current) => current || content)
+            attachments.restore(taken)
+          },
         },
       )
       return
@@ -698,12 +704,12 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
           attachmentIds,
         },
         {
-          // The files stay in the composer until the server has taken them, and
-          // a refused message comes back as it was written.
-          onSuccess: () => attachments.clear(),
+          // A refused message comes back as it was written, files and all.
+          onSuccess: () => attachments.release(taken),
           onError: () => {
             unpost(conversationId)
             setInput((current) => current || content)
+            attachments.restore(taken)
           },
         },
       )
@@ -730,6 +736,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
       unpost('', item)
       if (!alive.current) return
       setInput((current) => current || content)
+      attachments.restore(taken)
       toast.error(t('chat.send-error.generic'))
       return
     }
@@ -767,15 +774,16 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
       if (wroteNothing) deleteConversation.mutate(madeId)
       if (!alive.current) return
       // Uploads the server says it cannot use would only be refused again.
-      const usable = returnableFiles(error, attachments.items)
-      for (const file of attachments.items) if (!usable.includes(file)) attachments.remove(file.key)
+      const usable = returnableFiles(error, taken)
+      attachments.release(taken.filter((file) => !usable.includes(file)))
+      attachments.restore(usable)
       setInput((current) => current || content)
       if (wroteNothing) onRemoved(madeId)
       else await navigate({ to: '/chat/$conversationId', params: { conversationId: madeId }, replace: true })
       return
     }
+    attachments.release(taken)
     if (!alive.current) return
-    attachments.clear()
     // `replace`: the new-chat screen was a draft, not a place to come back to.
     await navigate({ to: '/chat/$conversationId', params: { conversationId: madeId }, replace: true })
   }, [

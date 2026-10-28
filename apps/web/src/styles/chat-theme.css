@@ -259,9 +259,11 @@
   gap: 4px;
   margin: 26px 0;
 }
-/* When a message was sent, above it, after a pause (lib/time-gap.ts). */
+/* When a message was sent, after a pause (lib/time-gap.ts): centred in the
+   column above it, a divider in time between what came before and after. */
 .chat-ui .n-msg-time {
-  margin-bottom: 6px;
+  align-self: center;
+  margin-bottom: 14px;
   color: var(--n-text-3);
   font-size: 13px;
   line-height: 18px;
