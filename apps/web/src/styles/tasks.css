@@ -1,0 +1,393 @@
+/*
+ * Scheduled tasks (`/tasks`, TasksPage and TaskDialog) and the line a reply
+ * shows when the model schedules one (TaskChip). Chat-side tokens only.
+ */
+
+.chat-ui .n-tasks-column {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 8px 32px 48px;
+}
+
+.chat-ui .n-tasks-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.chat-ui .n-tasks-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--n-accent);
+  color: var(--n-accent-fg);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.chat-ui .n-tasks-new:hover:not(:disabled) {
+  background: var(--n-accent-hover);
+}
+
+.chat-ui .n-tasks-new:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.chat-ui .n-tasks-new > svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* --------------------------------------------------------------- empty */
+.chat-ui .n-tasks-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-top: 6vh;
+  text-align: center;
+}
+
+.chat-ui .n-tasks-empty-icon {
+  width: 40px;
+  height: 40px;
+  margin-bottom: 4px;
+  color: var(--n-text-2);
+  stroke-width: 1.5;
+}
+
+.chat-ui .n-tasks-empty-title {
+  margin: 0;
+  color: var(--n-text);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.chat-ui .n-tasks-empty-hint {
+  margin: 0;
+  color: var(--n-text-2);
+  font-size: 14px;
+}
+
+.chat-ui .n-tasks-ideas {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+  margin: 20px 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.chat-ui .n-tasks-idea {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  border: 1px dashed var(--n-line);
+  border-radius: 16px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 150ms cubic-bezier(0.22, 1, 0.36, 1), border-color 150ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.chat-ui .n-tasks-idea:hover {
+  border-style: solid;
+  background: var(--n-hover);
+}
+
+.chat-ui .n-tasks-idea-emoji {
+  font-size: 20px;
+  line-height: 24px;
+}
+
+.chat-ui .n-tasks-idea-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-ui .n-tasks-idea-title {
+  color: var(--n-text);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.chat-ui .n-tasks-idea-hint {
+  color: var(--n-text-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* ---------------------------------------------------------------- list */
+.chat-ui .n-tasks-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chat-ui .n-tasks-section {
+  margin-top: 28px;
+}
+
+.chat-ui .n-tasks-none,
+.chat-ui .n-tasks-foot {
+  color: var(--n-text-2);
+  font-size: 13px;
+}
+
+.chat-ui .n-tasks-foot {
+  margin-top: 20px;
+}
+
+.chat-ui .n-tasks-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid var(--n-line);
+}
+
+.chat-ui .n-tasks-row-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 8px;
+  border-radius: 12px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.chat-ui .n-tasks-row-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--n-hover-strong);
+  color: var(--n-text-2);
+}
+
+.chat-ui .n-tasks-row-icon > svg {
+  width: 16px;
+  height: 16px;
+}
+
+.chat-ui .n-tasks-row-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.4;
+}
+
+.chat-ui .n-tasks-row-title {
+  overflow: hidden;
+  color: var(--n-text);
+  font-size: 15px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-ui .n-tasks-row-sub {
+  color: var(--n-text-2);
+  font-size: 13px;
+}
+
+.chat-ui .n-tasks-row-error {
+  color: var(--n-err);
+  font-size: 12px;
+}
+
+.chat-ui .n-tasks-row.is-idle .n-tasks-row-title {
+  color: var(--n-text-2);
+}
+
+/* -------------------------------------------------------------- dialog */
+.chat-ui .n-task-dialog {
+  width: 34rem;
+}
+
+/* 24px all round, more than the other dialogs' 18: the 2rem corners would
+   otherwise crowd the fields and the buttons at the bottom. */
+.chat-ui .n-task-dialog .n-modal-head {
+  padding: 22px 24px 2px;
+}
+
+.chat-ui .n-task-form-body {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 24px 0;
+}
+
+.chat-ui .n-task-label {
+  margin: 14px 0 6px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.chat-ui .n-task-input {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--n-hover);
+  color: var(--n-text);
+  font: inherit;
+  outline: none;
+}
+
+.chat-ui .n-task-input:focus-visible {
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--n-text) 30%, transparent);
+}
+
+.chat-ui .n-task-select {
+  position: relative;
+  display: block;
+  flex: 1;
+}
+
+.chat-ui .n-task-select > select {
+  appearance: none;
+  padding-right: 32px;
+  cursor: pointer;
+}
+
+/* The chevron's drawn edge 12px in, as the field's text is: the icon has 4px
+   of empty box around its stroke at this size. */
+.chat-ui .n-task-select > svg {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  width: 16px;
+  height: 16px;
+  color: var(--n-text-2);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.chat-ui .n-task-area {
+  min-height: 112px;
+  resize: vertical;
+}
+
+.chat-ui .n-task-kinds,
+.chat-ui .n-task-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chat-ui .n-task-days {
+  margin-top: 10px;
+}
+
+.chat-ui .n-task-kind,
+.chat-ui .n-task-day {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--n-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--n-text-2);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chat-ui .n-task-day {
+  min-width: 44px;
+  padding: 0 10px;
+}
+
+.chat-ui .n-task-kind.active,
+.chat-ui .n-task-day.active {
+  border-color: transparent;
+  background: var(--n-accent);
+  color: var(--n-accent-fg);
+}
+
+.chat-ui .n-task-when {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.chat-ui .n-task-when > .n-task-input {
+  flex: 1;
+}
+
+.chat-ui .n-task-form .n-settings-help,
+.chat-ui .n-task-form .n-settings-error {
+  margin-top: 6px;
+}
+
+.chat-ui .n-task-form-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 24px 24px 24px;
+}
+
+/* ------------------------------------------------------- reply chip */
+.chat-ui .n-task-chip {
+  flex-wrap: nowrap;
+  width: fit-content;
+  max-width: 100%;
+  color: inherit;
+  text-decoration: none;
+}
+
+.chat-ui .n-task-chip:hover {
+  background: var(--n-hover-strong);
+}
+
+.chat-ui .n-task-chip-text {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--n-text-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-ui .n-task-chip-go {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--n-text-3);
+}
+
+@media (max-width: 720px) {
+  .chat-ui .n-tasks-column {
+    padding: 4px 16px 32px;
+  }
+
+  .chat-ui .n-tasks-ideas {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-ui .n-tasks-idea {
+    transition: none;
+  }
+}
