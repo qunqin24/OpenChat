@@ -593,8 +593,13 @@ func TestSubagentDeliveredWhileRunning(t *testing.T) {
 func TestSubagentReportAtTheEndOfATurn(t *testing.T) {
 	f := newSubFixture(t)
 	conv := f.newConversation()
+	var finalAsked atomic.Bool
 	f.play(func(ctx context.Context, r fakeReq) fakeTurn {
 		if r.kind() == "sub" {
+			// The sub-agent finishes only once the run's last request is out:
+			// finishing sooner, its report would go into that request and be
+			// answered in this run, which is not the race this is about.
+			waitUntil(ctx, finalAsked.Load)
 			return fakeTurn{Text: "REPORT-RACE"}
 		}
 		switch {
@@ -605,6 +610,7 @@ func TestSubagentReportAtTheEndOfATurn(t *testing.T) {
 		default:
 			// The final answer, held until the report is in: it was made
 			// before the report, and the run ends after it.
+			finalAsked.Store(true)
 			waitUntil(ctx, func() bool { return len(f.reports(conv)) == 1 })
 			time.Sleep(100 * time.Millisecond) // the sub-agent's ending looks while this run is going
 			return fakeTurn{Text: "Launched."}
