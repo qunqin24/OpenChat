@@ -55,7 +55,7 @@ func sizeLimit(bytes int64) string {
 
 // blobStore is the part of the blob store the handlers use.
 type blobStore interface {
-	PresignPut(ctx context.Context, key, contentType string, ttl time.Duration) (string, error)
+	PresignPut(ctx context.Context, key, contentType string, size int64, ttl time.Duration) (string, error)
 	PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error)
 	PresignDownload(ctx context.Context, key, filename string, ttl time.Duration) (string, error)
 	ObjectURL(key string) string
@@ -104,7 +104,7 @@ func (s *Server) CreateUpload(w http.ResponseWriter, r *http.Request) {
 	id := uuid.New()
 	key := fmt.Sprintf("uploads/%s/%s%s", time.Now().UTC().Format("2006/01/02"), id, keyExt(filename))
 
-	uploadURL, err := s.store.PresignPut(r.Context(), key, contentType, uploadTTL)
+	uploadURL, err := s.store.PresignPut(r.Context(), key, contentType, body.Size, uploadTTL)
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return

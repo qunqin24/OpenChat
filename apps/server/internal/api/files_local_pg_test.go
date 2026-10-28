@@ -166,6 +166,13 @@ func TestLocalStorageAttachments(t *testing.T) {
 		wantStatus(do(http.MethodPut, up.UploadUrl, "application/pdf", bytes.NewReader(testPNG)), http.StatusUnsupportedMediaType, "unsupported_file_type")
 		wantStatus(do(http.MethodPut, up.UploadUrl, "", bytes.NewReader(testPNG)), http.StatusUnsupportedMediaType, "unsupported_file_type")
 
+		// A body larger than the upload announced is refused, announced or
+		// not: the quota counted the announced size. (The PNG plus one byte
+		// stays far under the type's limit.)
+		longer := append(append([]byte{}, testPNG...), 0)
+		wantStatus(do(http.MethodPut, up.UploadUrl, "image/png", bytes.NewReader(longer)), http.StatusRequestEntityTooLarge, "file_too_large")
+		wantStatus(do(http.MethodPut, up.UploadUrl, "image/png", io.MultiReader(bytes.NewReader(longer))), http.StatusRequestEntityTooLarge, "file_too_large")
+
 		// A size over the limit is refused whether or not it is announced.
 		big := make([]byte, 5<<20+1)
 		wantStatus(do(http.MethodPut, up.UploadUrl, "image/png", bytes.NewReader(big)), http.StatusRequestEntityTooLarge, "file_too_large")
@@ -176,7 +183,7 @@ func TestLocalStorageAttachments(t *testing.T) {
 		if err := pool.QueryRow(ctx, `SELECT storage_key FROM attachments WHERE id = $1`, up.Id).Scan(&key); err != nil {
 			t.Fatal(err)
 		}
-		stale, err := local.PresignPut(ctx, key, "image/png", -time.Minute)
+		stale, err := local.PresignPut(ctx, key, "image/png", 1, -time.Minute)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -194,7 +201,7 @@ func TestLocalStorageAttachments(t *testing.T) {
 		wantStatus(do(http.MethodGet, read, "", nil), http.StatusNotFound, "not_found")
 
 		// The key of a file nobody issued an upload for is not a way in.
-		unknown, _ := local.PresignPut(ctx, "uploads/2026/01/01/"+uuid.NewString()+".png", "image/png", time.Hour)
+		unknown, _ := local.PresignPut(ctx, "uploads/2026/01/01/"+uuid.NewString()+".png", "image/png", 1, time.Hour)
 		wantStatus(do(http.MethodPut, unknown, "image/png", bytes.NewReader(testPNG)), http.StatusNotFound, "not_found")
 
 		// The right one works.

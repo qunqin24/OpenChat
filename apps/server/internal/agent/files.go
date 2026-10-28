@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"golang.org/x/text/unicode/norm"
 
@@ -44,7 +45,10 @@ const (
 	// in ranges this large takes a few calls, not dozens.
 	fileReadLines = 2000
 	fileReadBytes = 48 << 10
-	// fileLineChars cuts a line longer than this in what a tool returns.
+	// fileLineChars cuts a line longer than this where a tool shows lines
+	// around something (a card's beginning, a search's context); a search shows
+	// this much of a long line around a match, and file_read reads a long line
+	// in parts by offset.
 	fileLineChars = 2000
 
 	// fileSearchHits is how many matching lines a search shows; fileContext
@@ -133,15 +137,17 @@ func (t fileTool) Definition() llm.Tool {
 		Name: ToolFileRead,
 		Description: "Read a range of lines of a long text file the user attached, shown in the conversation as a " +
 			"<file ... partial=\"true\"> card with only its beginning. Lines come back numbered; at most 2,000 lines " +
-			"or about 48 KB per call, and the result says where to continue. Read what the question needs - " +
-			"found with file_search, or by the card's headings - or, to work with the whole file, read it through " +
-			"in consecutive ranges.",
+			"or about 48 KB per call, and the result says where to continue. A line longer than one call reads " +
+			"(minified JSON or HTML, say) comes back in parts: continue it with the same start_line and the offset " +
+			"the result gives. Read what the question needs - found with file_search, or by the card's headings - " +
+			"or, to work with the whole file, read it through in consecutive ranges.",
 		Parameters: json.RawMessage(`{
   "type": "object",
   "properties": {
     "file": {"type": "string", "description": "The card's id, or the file's name."},
     "start_line": {"type": "integer", "minimum": 1, "description": "The first line to read, from 1. 1 when absent."},
-    "end_line": {"type": "integer", "minimum": 1, "description": "The last line to read. As far as one call goes when absent."}
+    "end_line": {"type": "integer", "minimum": 1, "description": "The last line to read. As far as one call goes when absent."},
+    "offset": {"type": "integer", "minimum": 0, "description": "How many characters of start_line to skip, to read on in a line too long for one call. 0 when absent."}
   },
   "required": ["file"]
 }`),
@@ -156,6 +162,7 @@ type fileToolArgs struct {
 	Query     string `json:"query"`
 	StartLine int    `json:"start_line"`
 	EndLine   int    `json:"end_line"`
+	Offset    int    `json:"offset"`
 }
 
 func (t fileTool) Execute(ctx context.Context, raw json.RawMessage) (ToolResult, error) {
@@ -185,7 +192,7 @@ func (t fileTool) Execute(ctx context.Context, raw json.RawMessage) (ToolResult,
 	if err != nil {
 		return ToolResult{}, err
 	}
-	return readLines(file, lines, args.StartLine, args.EndLine)
+	return readLines(file, lines, args.StartLine, args.EndLine, args.Offset)
 }
 
 // conversationFiles is the files of the person's messages in a conversation
@@ -304,15 +311,24 @@ func splitLines(text string) []string {
 	return lines
 }
 
-// numbered writes a line as the tools show it: its number, a tab, its text.
+// numbered writes a line as the tools show it: its number, a tab, its text,
+// cut where it is very long.
 func numbered(b *strings.Builder, number int, line string) {
-	if runes := []rune(line); len(runes) > fileLineChars {
-		line = string(runes[:fileLineChars]) + " [line cut]"
-	}
-	fmt.Fprintf(b, "%6d\t%s\n", number, line)
+	fmt.Fprintf(b, "%6d\t%s\n", number, cutLine(line))
 }
 
-func readLines(file llm.AttachmentPart, lines []string, start, end int) (ToolResult, error) {
+// cutLine is a line as shown beside others: at most fileLineChars characters.
+func cutLine(line string) string {
+	if runes := []rune(line); len(runes) > fileLineChars {
+		return string(runes[:fileLineChars]) + " [line cut: file_read reads on with offset]"
+	}
+	return line
+}
+
+// readLines is file_read: lines start to end, as many as one call reads. A
+// line that does not fit in one call on its own comes back in parts, from
+// offset characters in: the part that fits, and where to go on from.
+func readLines(file llm.AttachmentPart, lines []string, start, end, offset int) (ToolResult, error) {
 	total := len(lines)
 	if start <= 0 {
 		start = 1
@@ -326,17 +342,41 @@ func readLines(file llm.AttachmentPart, lines []string, start, end int) (ToolRes
 	if end < start {
 		return ToolResult{}, Errorf("end_line %d comes before start_line %d", end, start)
 	}
+	first := lines[start-1]
+	firstChars := utf8.RuneCountInString(first)
+	if offset < 0 || (offset > 0 && offset >= firstChars) {
+		return ToolResult{}, Errorf("line %d has %d characters; offset %d is past its end", start, firstChars, offset)
+	}
 	var b strings.Builder
 	last := start - 1
+	cutAt := 0 // where the last line shown was cut, in characters; 0 when it was shown to its end
 	for n := start; n <= end && n-start < fileReadLines; n++ {
-		if b.Len() > 0 && b.Len()+len(lines[n-1]) > fileReadBytes {
+		line, from := lines[n-1], 0
+		if n == start {
+			line, from = string([]rune(first)[offset:]), offset
+		}
+		if b.Len()+len(line) > fileReadBytes {
+			if b.Len() > 0 {
+				break
+			}
+			part := fitBytes(line, fileReadBytes)
+			cutAt = from + utf8.RuneCountInString(part)
+			line = part
+		}
+		fmt.Fprintf(&b, "%6d\t%s\n", n, line)
+		last = n
+		if cutAt > 0 {
 			break
 		}
-		numbered(&b, n, lines[n-1])
-		last = n
 	}
 	fmt.Fprintf(&b, "[%s, lines %d-%d of %d.", file.Filename, start, last, total)
-	if last < end {
+	if offset > 0 {
+		fmt.Fprintf(&b, " Line %d from character %d.", start, offset)
+	}
+	if cutAt > 0 {
+		fmt.Fprintf(&b, " Line %d is longer than one call reads: shown up to character %d of %d; continue with "+
+			"start_line=%d, offset=%d.", last, cutAt, utf8.RuneCountInString(lines[last-1]), last, cutAt)
+	} else if last < end {
 		fmt.Fprintf(&b, " One call reads at most %d lines or %d KB: continue with start_line=%d.", fileReadLines, fileReadBytes>>10, last+1)
 	} else if last < total {
 		fmt.Fprintf(&b, " The file goes on to line %d.", total)
@@ -345,6 +385,18 @@ func readLines(file llm.AttachmentPart, lines []string, start, end int) (ToolRes
 	return ToolResult{Content: b.String(), Details: FileReadDetails{
 		File: file.Ref, Filename: file.Filename, StartLine: start, EndLine: last, TotalLines: total,
 	}}, nil
+}
+
+// fitBytes is the longest beginning of text, whole characters, of at most limit bytes.
+func fitBytes(text string, limit int) string {
+	if len(text) <= limit {
+		return text
+	}
+	cut := limit
+	for cut > 0 && !utf8.RuneStart(text[cut]) {
+		cut--
+	}
+	return text[:cut]
 }
 
 func (t fileTool) find(ctx context.Context, scope Scope, files []llm.AttachmentPart, args fileToolArgs) (ToolResult, error) {
@@ -379,7 +431,8 @@ func (t fileTool) find(ctx context.Context, scope Scope, files []llm.AttachmentP
 			fmt.Fprintf(&b, "%s (id %s): %v\n\n", file.Filename, file.Ref, err)
 			continue
 		}
-		hits := fileIndexOf(scope, file, lines).find(needle)
+		index := fileIndexOf(scope, file, lines)
+		hits := index.find(needle)
 		details.Files++
 		details.Matches += len(hits)
 		if len(hits) == 0 {
@@ -397,7 +450,7 @@ func (t fileTool) find(ctx context.Context, scope Scope, files []llm.AttachmentP
 		}
 		b.WriteString("\n")
 		shown += len(hits)
-		writeHits(&b, lines, hits)
+		writeHits(&b, lines, index, hits)
 		b.WriteString("\n")
 	}
 	if details.Matches == 0 {
@@ -457,8 +510,9 @@ func fold(text string) string {
 	}, text)
 }
 
-// lineSpan is the lines a match lies on: first to last, from 0.
-type lineSpan struct{ first, last int }
+// lineSpan is the lines a match lies on: first to last, from 0; at is where it
+// starts in the folded text.
+type lineSpan struct{ first, last, at int }
 
 // find is where needle (folded) occurs, each match once, in order.
 func (x *fileIndex) find(needle string) []lineSpan {
@@ -470,7 +524,7 @@ func (x *fileIndex) find(needle string) []lineSpan {
 		}
 		start := from + at
 		end := start + len(needle)
-		spans = append(spans, lineSpan{x.lineAt(start), x.lineAt(end - 1)})
+		spans = append(spans, lineSpan{x.lineAt(start), x.lineAt(end - 1), start})
 		from = end
 	}
 	return spans
@@ -484,12 +538,17 @@ func (x *fileIndex) lineAt(offset int) int {
 
 // writeHits writes the lines of each match with the lines around them, grep's
 // way: "12:" a line holding a match, "11-" a line beside one, "--" between
-// groups.
-func writeHits(b *strings.Builder, lines []string, hits []lineSpan) {
+// groups. A very long line a match starts on is shown around the match, not
+// from its beginning, with the offset file_read reads it from.
+func writeHits(b *strings.Builder, lines []string, index *fileIndex, hits []lineSpan) {
 	match := map[int]bool{}
+	startsAt := map[int]int{} // a line's first match, in its folded text
 	for _, hit := range hits {
 		for i := hit.first; i <= hit.last; i++ {
 			match[i] = true
+		}
+		if _, ok := startsAt[hit.first]; !ok {
+			startsAt[hit.first] = hit.at - index.starts[hit.first]
 		}
 	}
 	next := 0 // the first line not yet written
@@ -504,14 +563,45 @@ func writeHits(b *strings.Builder, lines []string, hits []lineSpan) {
 			if match[i] {
 				mark = ":"
 			}
-			line := lines[i]
-			if runes := []rune(line); len(runes) > fileLineChars {
-				line = string(runes[:fileLineChars]) + " [line cut]"
+			line := cutLine(lines[i])
+			if at, ok := startsAt[i]; ok {
+				line = around(lines[i], at)
 			}
 			b.WriteString(strconv.Itoa(i+1) + mark + line + "\n")
 		}
 		next = max(next, to+1)
 	}
+}
+
+// around is a matching line as a search shows it: whole when it is short;
+// otherwise fileLineChars characters about the match, which starts at folded
+// (bytes into the line's folded text), and where they start.
+func around(line string, folded int) string {
+	runes := []rune(line)
+	if len(runes) <= fileLineChars {
+		return line
+	}
+	// The character the match starts at: the first whose folded text reaches past folded.
+	pos, seen := 0, 0
+	for pos < len(runes) {
+		seen += len(fold(string(runes[pos])))
+		if seen > folded {
+			break
+		}
+		pos++
+	}
+	from := max(0, min(pos-fileLineChars/4, len(runes)-fileLineChars))
+	to := from + fileLineChars
+	var b strings.Builder
+	fmt.Fprintf(&b, "[characters %d-%d of %d; file_read offset=%d reads from here] ", from, to, len(runes), from)
+	if from > 0 {
+		b.WriteString("…")
+	}
+	b.WriteString(string(runes[from:to]))
+	if to < len(runes) {
+		b.WriteString("…")
+	}
+	return b.String()
 }
 
 // fileCard is what the model is shown of a long text file: how to read it,

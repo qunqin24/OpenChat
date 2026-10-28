@@ -25,7 +25,8 @@ import (
 // Backend is what the rest of the server needs of a blob store, whichever
 // driver is behind it.
 type Backend interface {
-	PresignPut(ctx context.Context, key, contentType string, ttl time.Duration) (string, error)
+	// PresignPut is a URL that takes one PUT of exactly size bytes.
+	PresignPut(ctx context.Context, key, contentType string, size int64, ttl time.Duration) (string, error)
 	PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error)
 	// PresignDownload is PresignGet for a link that saves the file, under
 	// filename, instead of showing it.
@@ -106,12 +107,15 @@ func New(ctx context.Context, cfg S3Settings) (*Store, error) {
 	}, nil
 }
 
-// PresignPut returns a URL the browser can PUT the file to directly.
-func (s *Store) PresignPut(ctx context.Context, key, contentType string, ttl time.Duration) (string, error) {
+// PresignPut returns a URL the browser can PUT the file to directly. The
+// length is signed into it, so the bucket refuses a body of any other size:
+// what the upload was counted at against the person's quota is what it holds.
+func (s *Store) PresignPut(ctx context.Context, key, contentType string, size int64, ttl time.Duration) (string, error) {
 	req, err := s.presign.PresignPutObject(ctx, &s3.PutObjectInput{
-		Bucket:      &s.bucket,
-		Key:         &key,
-		ContentType: &contentType,
+		Bucket:        &s.bucket,
+		Key:           &key,
+		ContentType:   &contentType,
+		ContentLength: &size,
 	}, s3.WithPresignExpires(ttl))
 	if err != nil {
 		return "", fmt.Errorf("storage: presign put %q: %w", key, err)

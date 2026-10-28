@@ -190,8 +190,8 @@ func (sw *Switch) holding(key string) Backend {
 	return s3
 }
 
-func (sw *Switch) PresignPut(ctx context.Context, key, contentType string, ttl time.Duration) (string, error) {
-	return sw.current().PresignPut(ctx, key, contentType, ttl)
+func (sw *Switch) PresignPut(ctx context.Context, key, contentType string, size int64, ttl time.Duration) (string, error) {
+	return sw.current().PresignPut(ctx, key, contentType, size, ttl)
 }
 
 func (sw *Switch) ObjectURL(key string) string { return sw.current().ObjectURL(key) }

@@ -24,7 +24,7 @@ type fakeS3 struct {
 
 func newFakeS3(name string) *fakeS3 { return &fakeS3{name: name, blobs: map[string][]byte{}} }
 
-func (f *fakeS3) PresignPut(_ context.Context, key, _ string, _ time.Duration) (string, error) {
+func (f *fakeS3) PresignPut(_ context.Context, key, _ string, _ int64, _ time.Duration) (string, error) {
 	return "https://" + f.name + ".test/put/" + key, nil
 }
 
@@ -114,7 +114,7 @@ func TestSwitchRoutesNewUploadsToTheCurrentDriver(t *testing.T) {
 	if sw.Driver() != DriverLocal {
 		t.Errorf("driver = %q", sw.Driver())
 	}
-	put, err := sw.PresignPut(ctx, "uploads/a.png", "image/png", time.Minute)
+	put, err := sw.PresignPut(ctx, "uploads/a.png", "image/png", 1, time.Minute)
 	if err != nil || !strings.HasPrefix(put, ContentPath+"uploads/a.png?") {
 		t.Errorf("local PresignPut = %q, %v", put, err)
 	}
@@ -129,7 +129,7 @@ func TestSwitchRoutesNewUploadsToTheCurrentDriver(t *testing.T) {
 	if sw.Driver() != DriverS3 {
 		t.Errorf("driver = %q", sw.Driver())
 	}
-	put, _ = sw.PresignPut(ctx, "uploads/a.png", "image/png", time.Minute)
+	put, _ = sw.PresignPut(ctx, "uploads/a.png", "image/png", 1, time.Minute)
 	if put != "https://bucket.test/put/uploads/a.png" {
 		t.Errorf("S3 PresignPut = %q", put)
 	}
@@ -142,7 +142,7 @@ func TestSwitchRoutesNewUploadsToTheCurrentDriver(t *testing.T) {
 	if err := sw.Apply(ctx, func() Settings { s := s3Settings(dir); s.Driver = DriverLocal; return s }()); err != nil {
 		t.Fatal(err)
 	}
-	if put, _ = sw.PresignPut(ctx, "uploads/a.png", "image/png", time.Minute); !strings.HasPrefix(put, ContentPath) {
+	if put, _ = sw.PresignPut(ctx, "uploads/a.png", "image/png", 1, time.Minute); !strings.HasPrefix(put, ContentPath) {
 		t.Errorf("PresignPut after switching back = %q", put)
 	}
 }

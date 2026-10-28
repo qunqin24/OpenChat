@@ -148,7 +148,9 @@ func (l *Local) presign(method, key string, ttl time.Duration) (string, error) {
 // PresignPut returns a URL the browser can PUT the file to. The content type is
 // not part of the signature: the handler holds the upload to the one recorded
 // when it was issued.
-func (l *Local) PresignPut(_ context.Context, key, _ string, ttl time.Duration) (string, error) {
+// The size is held by the handler that takes the PUT, which reads it from the
+// upload's row (PutFileContent), so it is not signed here.
+func (l *Local) PresignPut(_ context.Context, key, _ string, _ int64, ttl time.Duration) (string, error) {
 	return l.presign("PUT", key, ttl)
 }
 

@@ -174,7 +174,7 @@ func TestLocalSignatures(t *testing.T) {
 	l.now = func() time.Time { return now }
 	key := "uploads/2026/10/10/abc.png"
 
-	signed, err := l.PresignPut(ctx, key, "image/png", 15*time.Minute)
+	signed, err := l.PresignPut(ctx, key, "image/png", 1, 15*time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}

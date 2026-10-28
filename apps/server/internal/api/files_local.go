@@ -58,7 +58,8 @@ var errAlreadyUploaded = httpx.NewError(http.StatusConflict, "already_uploaded",
 
 // PutFileContent receives the bytes of an upload CreateUpload issued a URL for.
 // It holds the file to what the upload announced: the content type it was
-// issued for, and the largest size that type may be.
+// issued for, and the size it was counted at against the person's quota
+// (never more than that type may be).
 func (s *Server) PutFileContent(w http.ResponseWriter, r *http.Request) {
 	local := s.local()
 	if local == nil {
@@ -83,12 +84,6 @@ func (s *Server) PutFileContent(w http.ResponseWriter, r *http.Request) {
 			"the file must be uploaded with the content type it was announced with"))
 		return
 	}
-	tooLarge := httpx.NewError(http.StatusRequestEntityTooLarge, "file_too_large", "the file is larger than allowed")
-	if r.ContentLength > limit {
-		httpx.Fail(w, r, tooLarge)
-		return
-	}
-
 	// Written once. The bytes of an upload are looked at (content moderation
 	// reads the images of a message) between this PUT and the message that
 	// claims them, and the signed URL stays good for its whole lifetime; a
@@ -100,6 +95,15 @@ func (s *Server) PutFileContent(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, errAlreadyUploaded)
 		return
 	}
+	// The size the upload announced, which its quota was counted at: a
+	// larger body would store bytes nobody counted.
+	limit = min(limit, row.SizeBytes)
+	tooLarge := httpx.NewError(http.StatusRequestEntityTooLarge, "file_too_large", "the file is larger than it was announced")
+	if r.ContentLength > limit {
+		httpx.Fail(w, r, tooLarge)
+		return
+	}
+
 	// Without a declared length the limit still holds: the body is cut off.
 	_, err = local.PutNew(key, http.MaxBytesReader(w, r.Body, limit), limit)
 	var tooBig *http.MaxBytesError

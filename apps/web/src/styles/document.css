@@ -1011,15 +1011,18 @@
   background: var(--n-bubble);
 }
 
-.chat-ui .n-word-view .docx-wrapper {
-  padding: 0;
+/* The pages are drawn inside a sandboxed frame (WordView), with their own
+   styles; the frame is as tall as they are and shows once they are drawn. */
+.chat-ui .n-word-frame {
+  display: block;
+  width: 100%;
+  height: 0;
+  border: 0;
   background: transparent;
+  visibility: hidden;
 }
 
-.chat-ui .n-word-view .docx-wrapper > section.docx {
-  margin-bottom: 16px;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 10%);
-}
+.chat-ui .n-word-frame[data-ready] { visibility: visible; }
 
 .chat-ui .n-pdf-view {
   display: flex;

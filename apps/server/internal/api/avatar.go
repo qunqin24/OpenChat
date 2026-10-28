@@ -187,7 +187,7 @@ func squareAvatar(raw []byte) ([]byte, error) {
 // method on the store's interface.
 func (s *Server) putObject(ctx context.Context, key, contentType string, data []byte) error {
 	if s.storageSwitch != nil && s.storageSwitch.Driver() == storage.DriverS3 {
-		url, err := s.store.PresignPut(ctx, key, contentType, uploadTTL)
+		url, err := s.store.PresignPut(ctx, key, contentType, int64(len(data)), uploadTTL)
 		if err != nil {
 			return err
 		}

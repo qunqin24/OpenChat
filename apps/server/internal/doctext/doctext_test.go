@@ -85,6 +85,29 @@ func TestExcelBecomesCSVBySheet(t *testing.T) {
 	}
 }
 
+// A cell that reads like a sheet heading, or like "(empty)", is quoted, so a
+// line that starts with either is always the structure.
+func TestExcelCellsNeverReadAsHeadings(t *testing.T) {
+	book := excelize.NewFile()
+	_ = book.SetSheetName("Sheet1", "Sales, 2026")
+	_ = book.SetSheetRow("Sales, 2026", "A1", &[]any{"## Sheet: Important", "x"})
+	_ = book.SetSheetRow("Sales, 2026", "A2", &[]any{`## Sheet: say "hi"`})
+	_, _ = book.NewSheet("Odd")
+	_ = book.SetSheetRow("Odd", "A1", &[]any{"(empty)"})
+	var buf bytes.Buffer
+	if err := book.Write(&buf); err != nil {
+		t.Fatal(err)
+	}
+	text, err := Extract(context.Background(), XlsxMediaType, buf.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "## Sheet: Sales, 2026\n\n\"## Sheet: Important\",x\n\"## Sheet: say \"\"hi\"\"\"\n\n## Sheet: Odd\n\n\"(empty)\"\n"
+	if text.Content != want {
+		t.Errorf("got\n%q\nwant\n%q", text.Content, want)
+	}
+}
+
 // minimalPDF is a PDF of pages with one line of text each.
 func minimalPDF(lines ...string) []byte {
 	var objects []string

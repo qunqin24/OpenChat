@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
@@ -75,7 +76,7 @@ func TestReadingAndSearchingAFile(t *testing.T) {
 	file := llm.AttachmentPart{Ref: "f1", Filename: "report.md"}
 	lines := splitLines(longMarkdown())
 
-	result, err := readLines(file, lines, 770, 780)
+	result, err := readLines(file, lines, 770, 780, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,16 +88,18 @@ func TestReadingAndSearchingAFile(t *testing.T) {
 		t.Errorf("details %+v", d)
 	}
 	// A whole read stops at the call's share and says where to go on.
-	result, _ = readLines(file, lines, 0, 0)
+	result, _ = readLines(file, lines, 0, 0, 0)
 	if d := result.Details.(FileReadDetails); d.EndLine >= 1200 || !strings.Contains(result.Content, fmt.Sprintf("start_line=%d", d.EndLine+1)) {
 		t.Errorf("a long read: %+v\n%s", d, result.Content[len(result.Content)-200:])
 	}
-	if _, err := readLines(file, lines, 1300, 0); err == nil {
+	if _, err := readLines(file, lines, 1300, 0, 0); err == nil {
 		t.Error("a start past the end is read")
 	}
 
 	var b strings.Builder
-	writeHits(&b, lines, []lineSpan{{776, 776}, {778, 778}, {900, 900}})
+	index := indexLines(lines)
+	at := func(line int) lineSpan { return lineSpan{line, line, index.starts[line]} }
+	writeHits(&b, lines, index, []lineSpan{at(776), at(778), at(900)})
 	got := b.String()
 	for _, want := range []string{"775-Line 775", "777:The revenue grew", "779:Line 779", "781-Line 781", "--\n899-", "901:## Section 19"} {
 		if !strings.Contains(got, want) {
@@ -114,7 +117,8 @@ func TestSearchReadsAcrossLineBreaks(t *testing.T) {
 	lines := splitLines("二〇二五年，全年营收增长达到百\n分之三十八，其中企业订阅贡献了超过一半。\n" +
 		"Revenue growth was driven by large-\nscale deployments across financial\ninstitutions, with ＡＰＩ calls up １２％.\n\nThe end.")
 	index := indexLines(lines)
-	for query, want := range map[string]lineSpan{
+	type lines2 struct{ first, last int }
+	for query, want := range map[string]lines2{
 		"百分之三十八":                  {0, 1},
 		"largescale":              {2, 3},
 		"large-scale deployments": {2, 3},
@@ -124,7 +128,7 @@ func TestSearchReadsAcrossLineBreaks(t *testing.T) {
 		"the end":                 {6, 6},
 	} {
 		spans := index.find(fold(query))
-		if len(spans) != 1 || spans[0] != want {
+		if len(spans) != 1 || (lines2{spans[0].first, spans[0].last}) != want {
 			t.Errorf("%q: %v, want %v", query, spans, want)
 		}
 	}
@@ -132,9 +136,52 @@ func TestSearchReadsAcrossLineBreaks(t *testing.T) {
 		t.Errorf("found what is not there: %v", spans)
 	}
 	var b strings.Builder
-	writeHits(&b, lines, index.find(fold("百分之三十八")))
+	writeHits(&b, lines, index, index.find(fold("百分之三十八")))
 	if got := b.String(); !strings.HasPrefix(got, "1:二〇二五年") || !strings.Contains(got, "2:分之三十八") {
 		t.Errorf("a match over two lines:\n%s", got)
+	}
+}
+
+// A line too long for one call - a minified file - is read in parts by
+// offset, to its end, and a search shows a long line around the match.
+func TestALongLineIsReadInParts(t *testing.T) {
+	file := llm.AttachmentPart{Ref: "f1", Filename: "data.json"}
+	line := `{"items":[` + strings.Repeat(`{"name":"一个条目","n":1},`, 4000) + `{"marker":"THE-END-MARKER"}]}`
+	lines := []string{line}
+
+	var read strings.Builder
+	offset, calls := 0, 0
+	for {
+		calls++
+		result, err := readLines(file, lines, 1, 0, offset)
+		if err != nil {
+			t.Fatal(err)
+		}
+		content := result.Content
+		body := content[:strings.LastIndex(content, "\n[")]
+		read.WriteString(strings.TrimPrefix(body, "     1\t"))
+		_, next, ok := strings.Cut(content, "start_line=1, offset=")
+		if !ok {
+			break
+		}
+		next = strings.TrimSuffix(next, ".]")
+		if _, err := fmt.Sscan(next, &offset); err != nil || calls > 50 {
+			t.Fatalf("continue at %q: %v", next, err)
+		}
+	}
+	if read.String() != line || calls < 2 {
+		t.Errorf("read in %d calls, %d of %d bytes back", calls, read.Len(), len(line))
+	}
+	if _, err := readLines(file, lines, 1, 0, utf8.RuneCountInString(line)); err == nil {
+		t.Error("an offset past the line's end is read")
+	}
+
+	index := indexLines(lines)
+	var b strings.Builder
+	writeHits(&b, lines, index, index.find(fold("THE-END-MARKER")))
+	got := b.String()
+	if !strings.Contains(got, "THE-END-MARKER") || !strings.Contains(got, "file_read offset=") || len([]rune(got)) > fileLineChars+200 {
+		t.Errorf("a search in a long line shows (%d characters):\n%.300s", len([]rune(got)), got)
 	}
 }
 

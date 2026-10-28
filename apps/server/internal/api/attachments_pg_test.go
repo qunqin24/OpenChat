@@ -29,7 +29,7 @@ type memoryStore struct {
 	blobs map[string][]byte
 }
 
-func (m *memoryStore) PresignPut(_ context.Context, key, _ string, _ time.Duration) (string, error) {
+func (m *memoryStore) PresignPut(_ context.Context, key, _ string, _ int64, _ time.Duration) (string, error) {
 	return "http://blobs.test/put/" + key, nil
 }
 
