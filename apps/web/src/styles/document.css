@@ -1,0 +1,907 @@
+/*
+ * Writing blocks: the card in a reply (DocumentCard) and the panel beside the
+ * chat where the document is edited (DocumentPanel). Chat-side tokens only.
+ */
+
+/* ------------------------------------------------------------ the card */
+.chat-ui .n-doc-card {
+  margin: 12px 0;
+  overflow: hidden;
+  border: 1px solid var(--n-line);
+  border-radius: 20px;
+  background: var(--n-bg);
+  box-shadow: var(--n-shadow-card);
+}
+
+.chat-ui .n-doc-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 10px 0 20px;
+}
+
+.chat-ui .n-doc-card-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--n-text-2);
+  font-size: 13px;
+}
+
+.chat-ui .n-doc-card-actions {
+  display: flex;
+  gap: 2px;
+  color: var(--n-text-2);
+}
+
+/* The text, cut off with a fade after a screenful: the whole is in the panel. */
+.chat-ui .n-doc-card-body {
+  position: relative;
+  max-height: 300px;
+  padding: 4px 20px 20px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.chat-ui .n-doc-card-body.is-cut::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 64px;
+  background: linear-gradient(to bottom, transparent, var(--n-bg));
+  pointer-events: none;
+}
+
+.chat-ui .n-doc-card-title {
+  margin: 4px 0 10px;
+  color: var(--n-text);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+/* Where an update's card leaves out the text it did not change. */
+.chat-ui .n-doc-card-gap {
+  margin: 6px 0;
+  color: var(--n-text-3);
+  font-size: 16px;
+  letter-spacing: 0.2em;
+  line-height: 1;
+  user-select: none;
+}
+
+/* ------------------------------------------- the card while it is written */
+.chat-ui .n-doc-card.is-openable {
+  cursor: pointer;
+}
+
+.chat-ui .n-doc-card.is-writing .n-doc-card-head {
+  padding: 14px 20px 0;
+}
+
+.chat-ui .n-doc-card.is-writing .n-orb {
+  color: var(--n-text-2);
+}
+
+.chat-ui .n-doc-card-count {
+  color: var(--n-text-3);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The words as they come: the newest at the foot of a short window, the
+   older ones pushed out over its top, where they fade. */
+.chat-ui .n-doc-live {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  max-height: 196px;
+  overflow: hidden;
+}
+
+.chat-ui .n-doc-live.is-full {
+  height: 196px;
+}
+
+.chat-ui .n-doc-live.is-full::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 1;
+  height: 72px;
+  background: linear-gradient(var(--n-bg), transparent);
+  pointer-events: none;
+}
+
+.chat-ui .n-doc-live-flow {
+  flex: none;
+}
+
+.chat-ui .n-doc-live p {
+  margin: 0 0 10px;
+  color: var(--n-text);
+  font-size: 16px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+.chat-ui .n-doc-live p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-ui .n-doc-caret {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--n-text-2);
+  vertical-align: middle;
+  animation: n-doc-caret 1s ease-in-out infinite;
+}
+
+@keyframes n-doc-caret {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+
+/* Before the first word: lines of placeholder, the light sweeping across. */
+.chat-ui .n-doc-live-bars {
+  display: grid;
+  gap: 14px;
+  padding: 6px 0 4px;
+  --n-doc-skeleton: rgb(0 0 0 / 6%);
+  --n-doc-skeleton-hi: rgb(0 0 0 / 2%);
+}
+
+.dark .chat-ui .n-doc-live-bars {
+  --n-doc-skeleton: rgb(255 255 255 / 8%);
+  --n-doc-skeleton-hi: rgb(255 255 255 / 3%);
+}
+
+.chat-ui .n-doc-live-bars span {
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--n-doc-skeleton) 25%, var(--n-doc-skeleton-hi) 50%, var(--n-doc-skeleton) 75%);
+  background-size: 300% 100%;
+  animation: n-doc-shimmer 1.6s ease-in-out infinite;
+}
+
+.chat-ui .n-doc-live-bars span:nth-child(1) { width: 96%; }
+.chat-ui .n-doc-live-bars span:nth-child(2) { width: 100%; }
+.chat-ui .n-doc-live-bars span:nth-child(3) { width: 62%; }
+
+.chat-ui .n-doc-card-gone,
+.chat-ui .n-doc-gone {
+  color: var(--n-text-2);
+  font-size: 14px;
+}
+
+/* A document already open beside the chat, or one the model changed. */
+/* While the panel is open, an entry is a pill fitting its words: the text is
+   beside it. The one whose version the panel shows is tinted blue. */
+/* The card and the pill take each other's place as the panel opens and
+   closes: each comes in with a short fade rather than popping. */
+.chat-ui .n-doc-pill,
+.chat-ui .n-doc-card {
+  animation: n-doc-swap-in 200ms ease-out both;
+}
+
+@keyframes n-doc-swap-in {
+  from { opacity: 0; transform: scale(0.98); }
+}
+
+.chat-ui .n-doc-pill {
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 10px 0;
+  padding: 6px 12px 6px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--n-panel);
+  color: var(--n-text);
+  font-size: 14px;
+  line-height: 20px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.chat-ui .n-doc-pill:hover:not(:disabled) {
+  background: var(--n-hover-strong);
+}
+
+.chat-ui .n-doc-pill > svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--n-text-2);
+}
+
+.chat-ui .n-doc-pill-label {
+  flex: none;
+}
+
+.chat-ui .n-doc-pill-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--n-text-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-ui .n-doc-pill-version {
+  flex: none;
+  color: var(--n-text-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-ui .n-doc-pill.is-on {
+  background: rgb(59 130 246 / 11%);
+}
+
+.chat-ui .n-doc-pill.is-on:hover {
+  background: rgb(59 130 246 / 16%);
+}
+
+.chat-ui .n-doc-pill.is-on > svg,
+.chat-ui .n-doc-pill.is-on .n-doc-pill-version {
+  color: #3b82f6;
+}
+
+.dark .chat-ui .n-doc-pill.is-on {
+  background: rgb(96 165 250 / 16%);
+}
+
+.dark .chat-ui .n-doc-pill.is-on > svg,
+.dark .chat-ui .n-doc-pill.is-on .n-doc-pill-version {
+  color: #60a5fa;
+}
+
+/* ----------------------------------------------------------- the panel */
+.chat-ui .n-main {
+  /* The width the person dragged (PanelResizer), within what leaves the chat
+     room; half the page up to 760px until then. */
+  --n-doc-w: clamp(360px, var(--n-doc-user-w, min(50%, 760px)), calc(100% - 420px));
+}
+
+/* The divider between the chat and the panel: a wide grip, a thin line that
+   shows on hover, focus and while dragging. Nothing follows the drag but the
+   width itself, so the chat's width transition is off meanwhile. */
+.chat-ui .n-panel-resizer {
+  position: absolute;
+  top: 0;
+  right: var(--n-doc-w);
+  bottom: 0;
+  z-index: 30;
+  width: 12px;
+  margin-right: -6px;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+
+.chat-ui .n-panel-resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 5px;
+  width: 2px;
+  border-radius: 2px;
+  background: transparent;
+  transition: background-color 150ms ease;
+}
+
+.chat-ui .n-panel-resizer:hover::after,
+.chat-ui .n-panel-resizer:focus-visible::after,
+.chat-ui .n-main.is-resizing .n-panel-resizer::after {
+  background: rgb(59 130 246 / 55%);
+}
+
+.chat-ui .n-main.is-resizing,
+.chat-ui .n-main.is-resizing > .n-topbar {
+  transition: none;
+  cursor: col-resize;
+  user-select: none;
+}
+
+.chat-ui .n-main.has-doc {
+  padding-right: var(--n-doc-w);
+}
+
+/* Opening and closing: the panel slides in from the right edge as the chat
+   makes room for it, and back out as the chat takes the room again (the store
+   keeps it drawn while it goes, `closing`). Transform and opacity for the
+   panel; the chat's width is a layout change, so it is kept short. On a phone
+   the panel covers the chat, which does not move. */
+@media (min-width: 768px) {
+  .chat-ui .n-main {
+    transition: padding-right 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .chat-ui .n-main > .n-topbar {
+    transition: right 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+
+.chat-ui .n-doc-panel {
+  animation: n-doc-panel-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.chat-ui .n-doc-panel.is-closing {
+  animation: n-doc-panel-out 200ms cubic-bezier(0.4, 0, 1, 1) both;
+  pointer-events: none;
+}
+
+@keyframes n-doc-panel-in {
+  from { opacity: 0; transform: translateX(32px); }
+}
+
+@keyframes n-doc-panel-out {
+  to { opacity: 0; transform: translateX(32px); }
+}
+
+.chat-ui .n-main.has-doc > .n-topbar {
+  right: var(--n-doc-w);
+}
+
+.chat-ui .n-doc-panel {
+  position: absolute;
+  inset: 0 0 0 auto;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  width: var(--n-doc-w);
+  min-height: 0;
+  border-left: 1px solid var(--n-line);
+  background: var(--n-bg);
+}
+
+.chat-ui .n-doc-panel.is-full {
+  width: 100%;
+  border-left: 0;
+}
+
+.chat-ui .n-doc-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: var(--n-topbar-h, 52px);
+  padding: 0 10px 0 16px;
+}
+
+.chat-ui .n-doc-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--n-line);
+  border-radius: 999px;
+  color: var(--n-text);
+  font-size: 13px;
+}
+
+.chat-ui .n-doc-kind > svg {
+  width: 15px;
+  height: 15px;
+  color: #3b82f6;
+}
+
+.chat-ui .n-doc-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--n-text-2);
+}
+
+.chat-ui .n-doc-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--n-line);
+}
+
+.chat-ui .n-doc-banner {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 16px 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--n-hover);
+  color: var(--n-text-2);
+  font-size: 13px;
+}
+
+.chat-ui .n-doc-banner-btn {
+  margin-left: auto;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--n-accent);
+  color: var(--n-accent-fg);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chat-ui .n-doc-banner-btn.is-quiet {
+  margin-left: 0;
+  background: transparent;
+  color: var(--n-text);
+}
+
+.chat-ui .n-doc-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.chat-ui .n-doc-page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 16px 48px 96px;
+}
+
+.chat-ui .n-doc-panel.is-full .n-doc-page {
+  padding-top: 40px;
+}
+
+.chat-ui .n-doc-title {
+  display: block;
+  width: 100%;
+  margin: 0 0 12px;
+  padding: 0;
+  overflow: hidden;
+  resize: none;
+  border: 0;
+  background: transparent;
+  color: var(--n-text);
+  font: inherit;
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.35;
+  outline: none;
+}
+
+.chat-ui .n-doc-status {
+  flex: none;
+  padding: 6px 16px 10px;
+  color: var(--n-text-3);
+  font-size: 12px;
+  text-align: right;
+}
+
+/* -------------------------------------------- the text as it is edited */
+.chat-ui .n-doc-prose {
+  min-height: 50vh;
+  color: var(--n-chat-body, var(--n-text));
+  font-size: 16px;
+  line-height: 1.75;
+  outline: none;
+  overflow-wrap: anywhere;
+}
+
+.chat-ui .n-doc-prose > * + * { margin-top: 0.875em; }
+.chat-ui .n-doc-prose :is(h1, h2, h3, h4) {
+  margin: 1.4em 0 0.4em;
+  color: var(--n-text);
+  font-weight: 500;
+  line-height: 1.375;
+}
+.chat-ui .n-doc-prose h1 { font-size: 24px; }
+.chat-ui .n-doc-prose h2 { font-size: 20px; }
+.chat-ui .n-doc-prose h3 { font-size: 18px; }
+.chat-ui .n-doc-prose :is(strong, b) { color: var(--n-text); font-weight: 500; }
+.chat-ui .n-doc-prose :is(ul, ol) { padding-inline-start: 1.625em; }
+.chat-ui .n-doc-prose ul { list-style: disc; }
+.chat-ui .n-doc-prose ol { list-style: decimal; }
+.chat-ui .n-doc-prose li + li { margin-top: 4px; }
+.chat-ui .n-doc-prose li > p { margin: 0; }
+.chat-ui .n-doc-prose blockquote {
+  padding-inline-start: 1em;
+  border-inline-start: 2px solid var(--n-line);
+  color: var(--n-text-2);
+}
+.chat-ui .n-doc-prose code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--n-hover);
+  font-size: 0.9em;
+}
+.chat-ui .n-doc-prose pre {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--n-hover);
+  overflow-x: auto;
+}
+.chat-ui .n-doc-prose pre code { padding: 0; background: none; }
+.chat-ui .n-doc-prose a { color: inherit; text-decoration: underline; }
+.chat-ui .n-doc-prose hr { border: 0; border-top: 1px solid var(--n-line); }
+
+/* The placeholder of an empty document (Tiptap's Placeholder extension). */
+.chat-ui .n-doc-prose p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--n-text-3);
+  pointer-events: none;
+}
+
+.chat-ui .n-doc-prose[contenteditable='false'] {
+  color: var(--n-text-2);
+}
+
+@media (max-width: 767px) {
+  /* On a phone the panel is the page; the chat is a close away. */
+  .chat-ui .n-main { --n-doc-w: 100%; }
+  .chat-ui .n-panel-resizer { display: none; }
+  .chat-ui .n-doc-full-toggle { display: none; }
+  .chat-ui .n-doc-page { padding: 8px 20px 64px; }
+  .chat-ui .n-doc-title { font-size: 24px; }
+}
+
+/* --------------------------------------------- the bar over a selection */
+.chat-ui .n-doc-bubble {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--n-line);
+  border-radius: 16px;
+  background: var(--n-bg);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 12%), 0 0 0 0.5px rgb(0 0 0 / 4%);
+  font-size: 14px;
+}
+
+.dark .chat-ui .n-doc-bubble {
+  box-shadow: 0 6px 24px rgb(0 0 0 / 50%);
+}
+
+.chat-ui .n-doc-bubble-ask,
+.chat-ui .n-doc-bubble-style,
+.chat-ui .n-doc-bubble-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--n-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.chat-ui .n-doc-bubble-ask { padding: 0 10px; }
+.chat-ui .n-doc-bubble-style { padding: 0 8px 0 10px; }
+.chat-ui .n-doc-bubble-btn { justify-content: center; width: 32px; }
+
+.chat-ui :is(.n-doc-bubble-ask, .n-doc-bubble-style, .n-doc-bubble-btn):hover:not(:disabled) {
+  background: var(--n-hover);
+}
+
+.chat-ui .n-doc-bubble-btn.is-on {
+  background: var(--n-hover-strong);
+}
+
+.chat-ui .n-doc-bubble-ask:disabled {
+  color: var(--n-text-3);
+  cursor: default;
+}
+
+.chat-ui :is(.n-doc-bubble-ask, .n-doc-bubble-btn) > svg { width: 16px; height: 16px; }
+.chat-ui .n-doc-bubble-style > svg { width: 14px; height: 14px; color: var(--n-text-2); }
+
+.chat-ui .n-doc-bubble-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--n-line);
+}
+
+.chat-ui .n-doc-bubble-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chat-ui .n-doc-bubble-link input {
+  width: 260px;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--n-hover);
+  color: var(--n-text);
+  font: inherit;
+  outline: none;
+}
+
+.n-doc-block-option.is-h1 { font-size: 17px; font-weight: 500; }
+.n-doc-block-option.is-h2 { font-size: 15px; font-weight: 500; }
+.n-doc-block-option.is-h3 { font-weight: 500; }
+
+/* --------------------------- a quoted passage, in the composer and sent */
+.chat-ui .n-quote-tray {
+  padding: 12px 12px 0;
+}
+
+.chat-ui .n-quote-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(100%, 260px);
+  padding: 10px 12px;
+  border: 1px solid var(--n-line);
+  border-radius: 14px;
+  background: var(--n-panel);
+}
+
+.chat-ui .n-quote-card.is-sent {
+  align-self: flex-end;
+  width: min(78%, 320px);
+  margin-bottom: 6px;
+  background: transparent;
+}
+
+.chat-ui .n-quote-text {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--n-text-2);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-line;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+.chat-ui .n-quote-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--n-text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-ui .n-quote-label > svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: #3b82f6;
+}
+
+.chat-ui .n-quote-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+  cursor: pointer;
+}
+
+.chat-ui .n-quote-remove > svg { width: 12px; height: 12px; }
+
+/* ------------------------------- the model at work on a passage, and after */
+.chat-ui .n-doc-prose {
+  --n-doc-skeleton: rgb(0 0 0 / 7%);
+  --n-doc-skeleton-hi: rgb(0 0 0 / 2.5%);
+}
+
+.dark .chat-ui .n-doc-prose {
+  --n-doc-skeleton: rgb(255 255 255 / 9%);
+  --n-doc-skeleton-hi: rgb(255 255 255 / 3%);
+}
+
+/* The passage being rewritten keeps its place and its height, its text hidden
+   behind lines of placeholder with a light sweeping across them, as pages do
+   while they load. */
+.chat-ui .n-doc-prose .n-doc-rewriting {
+  position: relative;
+}
+
+.chat-ui .n-doc-prose .n-doc-rewriting,
+.chat-ui .n-doc-prose .n-doc-rewriting * {
+  color: transparent !important;
+  text-decoration-color: transparent !important;
+}
+
+.chat-ui .n-doc-prose .n-doc-rewriting li::marker {
+  color: transparent;
+}
+
+.chat-ui .n-doc-prose .n-doc-rewriting::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--n-doc-skeleton) 25%, var(--n-doc-skeleton-hi) 50%, var(--n-doc-skeleton) 75%);
+  background-size: 300% 100%;
+  /* One bar per line of text: 1em of bar in each 1.75em line, centred. */
+  -webkit-mask: repeating-linear-gradient(to bottom, transparent 0 0.375em, #000 0.375em 1.375em, transparent 1.375em 1.75em);
+  mask: repeating-linear-gradient(to bottom, transparent 0 0.375em, #000 0.375em 1.375em, transparent 1.375em 1.75em);
+  animation: n-doc-shimmer 1.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes n-doc-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+
+/* What the model just changed: a tint that fades as the eye finds it. */
+.chat-ui .n-doc-prose .n-doc-fresh {
+  border-radius: 6px;
+  animation: n-doc-fresh 2.4s ease-out;
+}
+
+@keyframes n-doc-fresh {
+  from { background: rgb(59 130 246 / 14%); box-shadow: 0 0 0 6px rgb(59 130 246 / 14%); }
+  to { background: transparent; box-shadow: 0 0 0 6px transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-ui .n-doc-prose .n-doc-fresh { animation: none; }
+}
+
+/* The paragraph style list, inside the bar so the bar keeps its anchor. */
+.chat-ui .n-doc-bubble-menu {
+  position: relative;
+}
+
+.chat-ui .n-doc-bubble-list {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  padding: 4px;
+  border: 1px solid var(--n-line);
+  border-radius: 14px;
+  background: var(--n-bg);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 12%);
+}
+
+.chat-ui .n-doc-bubble-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--n-text);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-ui .n-doc-bubble-option:hover {
+  background: var(--n-hover);
+}
+
+.chat-ui .n-doc-bubble-option > svg {
+  width: 15px;
+  height: 15px;
+  color: var(--n-text-2);
+}
+
+/* ------------------------------------- the conversation's writing, top bar */
+.chat-ui .n-docs-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--n-hover);
+  color: var(--n-text-2);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.n-docs-menu [role='menuitem'] {
+  gap: 10px;
+  min-width: 260px;
+  max-width: 360px;
+}
+
+.n-docs-menu [role='menuitem'] > svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: #3b82f6;
+}
+
+.n-docs-menu .n-docs-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.n-docs-menu .n-docs-age {
+  flex: none;
+  color: var(--n-text-3);
+  font-size: 12px;
+}
+
+/* -------------------------------------------- a text file, read (FilePanel) */
+.chat-ui .n-file-panel-name {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.chat-ui .n-file-panel-name > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-ui .n-file-panel-name > svg {
+  width: 17px;
+  height: 17px;
+}
+.chat-ui .n-file-panel-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.chat-ui .n-file-panel-text {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px 40px 64px;
+  color: var(--n-text);
+  font-family: var(--n-chat-font);
+  font-size: 15px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.chat-ui .n-file-panel-text.is-code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.chat-ui .n-file-panel-note {
+  padding: 24px 40px;
+  color: var(--n-text-3);
+  font-size: 14px;
+}
+@media (max-width: 767px) {
+  .chat-ui .n-file-panel-text { padding: 12px 20px 48px; }
+  .chat-ui .n-file-panel-note { padding: 16px 20px; }
+}
