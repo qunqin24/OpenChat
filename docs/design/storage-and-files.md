@@ -2,7 +2,7 @@
 
 附件与头像的存储驱动、上传写一次与审核收据、附件清理、版本检查、日志、服务端自带前端。规则摘要见 [AGENTS.md](../../AGENTS.md)；下文为完整设计说明（原 AGENTS.md「后端约定」中的相应条目，未删减）。
 
-> 文中「后端约定」「前端约定」「游客模式」「内容审核」等指原 AGENTS.md 的章节，现按主题分在本目录各文件，索引见 [README.md](README.md)。
+> 文中「后端约定」「前端约定」「内容审核」等指原 AGENTS.md 的章节，现按主题分在本目录各文件，索引见 [README.md](README.md)。
 
 ## 存储驱动与签名地址
 
@@ -12,9 +12,17 @@
 
 - **上传的文件写一次**：审核读的图片和模型读的图片必须是同一份字节，而上传是「PUT 到签名地址 → 消息按 id 认领」两步，审核读文件发生在中间。两个驱动各用一招，缺一不可：①本地驱动的 `PUT /files/content/{key}` 用 `Local.PutNew`（硬链接提交，名字被占就失败，竞争的写入者只有一个赢），对象一旦写成，再 PUT 一律 409 `already_uploaded`（认领之后仍是 409 `already_attached`）；要换文件就重新申请一个上传。②S3 的预签名 PUT 拒绝不了第二次写入，认领之后 15 分钟内仍然有效，所以**审核留下收据**：`CreateMessage` 里 `checkedImages` 把审核实际读到并交给审核服务的那几份字节算 SHA-256，写进用户消息的 `AttachmentPart.SHA256`（`messages.parts` 的 JSON，不用迁移；不是读两次，所以「审了」和「记了」之间没有缝）。`agent.attachmentResolver` 每次把文件读进请求前都比对，对不上就不发这个文件，换成一行「[Attachment … was not included: the file changed after it was checked.]」，运行照常。改写问题会把旧提问的附件引用连同摘要一起带到新问题上。没有读过图片的情况（审核关着、`model` 模式只审文字、管理员豁免、PDF）不记摘要，也就没有可比的东西——收据只担保「审过的就是发的」。访客不受影响：文件字节就在请求里，服务端自己 `PutObject`，审核看的和存的是同一个 `[]byte`，没有上传地址可以回头写。新增读用户上传文件的地方，如果会把它发给模型，必须走这条解析（`attachmentResolver`），别自己 `Read` 了就发。
 
+- **文本文件**：笔记、Markdown、CSV、代码等，单个不超过 256 KiB，一律以 `text/plain` 存（浏览器给文本文件的类型很乱，`.ts` 是 `video/mp2t`、`.md` 常常没有，所以前端按扩展名认，`TEXT_EXTENSIONS`/`TEXT_NAMES`，`lib/attachments.ts`）。它不是模型的「输入模态」：解析时（`attachmentResolver`）读出字节、确认是 UTF-8 文本（`llm.FileText`，去掉 BOM、不能有 NUL），换成一段文字 `<file name="…">…</file>`（`llm.FileBlock`）接在用户消息里，所以任何模型都能收（`modelTakes`）；不是文本就换成「…was not included: it is not UTF-8 text」。审核把它当用户的字：发送和改写时 `attachmentTexts` 读出文件、按发给模型的样子拼进待审文字（和消息一起审、一起记违规），读到的字节同样记 SHA-256 收据，之后被改写过的文件不发。估算按大小（`AttachmentPart.Size`，约 3 字节一个 token），不按图片的固定 1500。本地驱动直接展示时带 `charset=utf-8`。库里多一个「文本」筛选。
+
 ## 附件行消失时的清理
 
 - 附件行消失的地方都要先收集 `storage_key`、删行、再尽力删文件（`internal/api/cleanup.go`，查询在 `queries/cleanup.sql`，用 `DELETE ... RETURNING`，多实例安全）：临时对话 24 小时后、软删除的对话 30 天（`deletedRetention`）后连同消息和附件硬删，从未被消息认领的上传 24 小时后删；改写删掉的提问的附件在提交后立即删（见上）。本地磁盘另有孤儿清扫：`uploads/` 下没有附件行且超过 24 小时的文件会被删，所以数据目录必须和数据库配套，不要拿别的库去指同一个 `./data`。`storage.Backend` 有 `Delete`，`Switch` 会同时从磁盘和 S3 删。
+
+## 库（`/library`）
+
+- 库列出用户在对话里发过的所有文件（`GET /files`，`ListLibraryFiles`），按上传时间倒序，可按图片/PDF 筛选、按文件名搜索（ILIKE，`likeEscaper` 转义）。范围写在查询里：文件和对话都必须是本人的，对话没有软删除、不是临时对话；范围外的文件下载/删除都是 404。
+- 下载走 `GET /files/{id}/download` 拿一个 5 分钟的签名地址，响应是 `Content-Disposition: attachment`：S3 用预签名的 `ResponseContentDisposition`，本地驱动在签名地址后加 `download=1`（不在签名里：它只改变已能读取的文件以何种方式提供）。
+- 删除（`DELETE /files/{id}`）按「附件行消失」的规矩：`DELETE ... RETURNING storage_key` → 提交后 `removeFiles` → 给该对话发 `transcript_changed`。消息本身不改：`parts` 里仍有这个 `AttachmentPart`，`attachmentsFor` 找不到对应行时就作为 `removedAttachments` 返回，前端显示「文件已删除」；模型那边由 `attachmentResolver` 换成「文件已不可用」的说明。改写问题时文件随问题移动（`MoveAttachments`），所以「parts 里有、消息上没有行」就等于被删。
 
 ## 头像
 
@@ -26,7 +34,7 @@
 
 ## 日志与请求编号
 
-- 日志：`logging.WithFields`/`Annotate` 把请求编号、用户等放进上下文，所有带 ctx 的 `slog.*Context` 行都会自动带上（`auth.Require` 标 `user_id`，游客路由标 `guest`，请求日志补 `conversation_id`）；后台运行没有请求上下文，用 `ex.logger()`，它带 run、对话、用户、模型、渠道。响应头 `X-Request-Id` 是请求编号（`httpx.RequestID` 生成：12 位小写 base32 随机串，不含主机名，也不采用客户端送来的 `X-Request-Id`——chi 自带的两样都做，所以没用它），前端在发送失败的提示里显示它，回答失败的提示显示 run id 前 8 位（`ErrorId`），用户反馈时报这个编号。`LOG_FILE` 设了就把同样的 JSON 日志写一份到文件、按大小轮转（镜像默认 `/app/data/logs/openchat.log`，在数据卷上，换容器也不丢）。新写的日志行尽量带 ctx，别丢掉这些字段。
+- 日志：`logging.WithFields`/`Annotate` 把请求编号、用户等放进上下文，所有带 ctx 的 `slog.*Context` 行都会自动带上（`auth.Require` 标 `user_id`，请求日志补 `conversation_id`）；后台运行没有请求上下文，用 `ex.logger()`，它带 run、对话、用户、模型、渠道。响应头 `X-Request-Id` 是请求编号（`httpx.RequestID` 生成：12 位小写 base32 随机串，不含主机名，也不采用客户端送来的 `X-Request-Id`——chi 自带的两样都做，所以没用它），前端在发送失败的提示里显示它，回答失败的提示显示 run id 前 8 位（`ErrorId`），用户反馈时报这个编号。`LOG_FILE` 设了就把同样的 JSON 日志写一份到文件、按大小轮转（镜像默认 `/app/data/logs/openchat.log`，在数据卷上，换容器也不丢）。新写的日志行尽量带 ctx，别丢掉这些字段。
 
 ## 服务端自带前端
 
@@ -35,7 +43,7 @@
 
 ## 升级后提示刷新（`webui.BuildID`、`X-OpenChat-Build`、`lib/build-check.ts`）
 
-服务端在每个响应里带 `X-OpenChat-Build`：嵌进二进制的前端 `index.html` 的 SHA-256 前 12 位。`index.html` 列出了所有带哈希的资源名，所以只有前端真的变了它才变——重启、只改服务端都不变；没有嵌前端（开发时 Vite 提供页面）就不带。前端所有请求都经过 `appFetch`（账号）或游客的 `network`，两处都调 `noteBuild`：记住第一次看到的值，之后看到不同的值就通过 `onBuildChange` 弹一次不会自动消失的提示类通知（`toast.info`，和其他通知同一套带图标的彩色样式）「服务端已更新，请刷新页面」，带「刷新」按钮，按钮在 `toast.css` 里画成跟随通知颜色的描边小按钮（`main.tsx`）。镜像升级、服务重启后，事件流的自动重连通常是第一个发现的请求。和 Open WebUI 不同：它在 WebSocket 重连后比对版本号和部署 ID，不同就直接强制刷新页面；这里只提示，免得丢掉输入框里写了一半的消息。新增不经 `appFetch` 的网络请求时，也要调 `noteBuild`。
+服务端在每个响应里带 `X-OpenChat-Build`：嵌进二进制的前端 `index.html` 的 SHA-256 前 12 位。`index.html` 列出了所有带哈希的资源名，所以只有前端真的变了它才变——重启、只改服务端都不变；没有嵌前端（开发时 Vite 提供页面）就不带。前端所有请求都经过 `appFetch`，它调 `noteBuild`：记住第一次看到的值，之后看到不同的值就通过 `onBuildChange` 弹一次不会自动消失的提示类通知（`toast.info`，和其他通知同一套带图标的彩色样式）「服务端已更新，请刷新页面」，带「刷新」按钮，按钮在 `toast.css` 里画成跟随通知颜色的描边小按钮（`main.tsx`）。镜像升级、服务重启后，事件流的自动重连通常是第一个发现的请求。和 Open WebUI 不同：它在 WebSocket 重连后比对版本号和部署 ID，不同就直接强制刷新页面；这里只提示，免得丢掉输入框里写了一半的消息。新增不经 `appFetch` 的网络请求时，也要调 `noteBuild`。
 
 
 ## 模型目录（models.dev）的更新

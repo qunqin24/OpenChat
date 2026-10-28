@@ -51,10 +51,11 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 - 新增模型请求路径：先构造 `llm.Request`（带 `User`），`Begin(Call{InputEstimate: llm.EstimateInput(req)})` → `Reserve` → `Stream` → `End`；`partialStream` 在 `Reserve` 之后才创建；挑模型走 `pickChannel`（用户请求传 `isStaff(ctx)`，服务端任务传 `true`）并过容量检查，渠道按优先级、同级按权重选（`servingOrder`），run 在模型还没输出时失败会自动换渠道（`agent` 的 `failover`），别改回只取第一个；新 kind 要加 `usage_logs_kind` 约束。
 - 容量上限按请求的 `model_id`（不是 `served_model`）、金额全程 `numeric` 在 SQL 里比较，不经 float。
 - 读用户上传文件并发给模型必须走 `agent.attachmentResolver`（SHA-256 收据），别自己 `Read`；本地 `PUT` 用 `Local.PutNew`，写一次。
+- 文本文件一律以 `text/plain` 存（前端按扩展名认，`TEXT_EXTENSIONS`），发给模型时是文字（`llm.FileBlock`），任何模型都收（`modelTakes`），不是 UTF-8 文本就不发；它的字随消息一起审（`attachmentTexts`，同样记 SHA-256 收据）。
 - 附件行消失的地方先收集 `storage_key`、`DELETE ... RETURNING`、再尽力删文件（`cleanup.go`）。头像放 `avatars/`，不放 `uploads/`（孤儿清扫只看后者）。存储配置只在后台，没有环境变量。
 - 个人记忆快照在建 run 前取，同对话内字节不变；记忆工具里的用户取自 `agent.ScopeFrom(ctx)`，永不信参数；没有任何管理员接口读得到别人的记忆。
 - 日志行带 ctx（`slog.*Context`）；后台 run 用 `ex.logger()`；`X-Request-Id` 由 `httpx.RequestID` 生成，不采用客户端的。
-- 新增「查全体用户」的查询想想 `NOT guest`；新增能降级或停用账号的路径走 `LockAdminMembership`。
+- 新增能降级或停用账号的路径走 `LockAdminMembership`。
 
 细节：[对话与转录](docs/design/conversations.md)、[用量与上限](docs/design/usage-and-limits.md)、[存储与运维](docs/design/storage-and-files.md)。
 
@@ -76,25 +77,49 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 
 细节：[聊天页与前端约定](docs/design/frontend-chat.md)。
 
-## 游客模式
+## 定时任务
 
-游客没有账号、没有会话，服务端不保存任何东西，对话/记忆/指令都在浏览器 IndexedDB 里（`lib/guest/`）。
+到点以用户名义把 `prompt` 发进任务专属对话（`api/tasks.go`、`task_scheduler.go`、`task_tool.go`，周期在 `internal/schedule`）。
 
-- 唯一要模型的请求是 `POST /guest/runs`（`api/guest_run.go`），复用 `chooseRun`/`createRun`/`startRun`，跑完删临时用户；其余 `/guest/*` 在开关关着时 404（`requireGuestMode`）。
-- 新增聊天用的端点必须决定游客怎么答：本地服务（`lib/guest/router.ts`）还是服务端（`/guest/*`）；hooks 和组件不知道在跟谁说话（`appFetch`）。
-- 对话规则在两边各有一份，要一起改：`transcript.ts`/`summary.ts`/`memory.ts` ↔ Go 的 SQL；每个删行的地方过 `survivingSummary`。
-- 浏览器带来的一切都要有服务端收据：新增把浏览器内容送给模型的路径必须过 `verifyGuest`；带收据的东西先 `guestIDs` 翻译、后签名。
-- 浏览器指定、又落在全表主键上的 id 要换成请求自己的（`guestIDs`）；文件 key 里绝不放浏览器给的 id（`guestFileKey`）。
-- 本地消息行的时间只用服务端的或 `stampAfter`，绝不用浏览器的 `now()`；浏览器绝不能把本地 `blocked` 行发给服务端。
-- 模式由根路由 `beforeLoad` 的 `enterPath` 决定，不读 `window.location`；预加载绝不改模式。
+- 起 run 只走 `startTaskRun`（即 `CreateMessage` 的路径，带 `auth.WithUser(owner)`），别另写。
+- 指令按自定义指令的套路审：保存时 `task`（算违规）、运行前哈希不符或模型写的用 `task_run`（不算违规）；被拒的任务自动暂停。
+- 新建/恢复要过 `LockTaskOwner` + 数量上限；调度器用 `SKIP LOCKED` 认领并在同一事务推进 `next_run_at`。
+- 工具和入口都受后台开关 `scheduled_tasks` 管，临时对话没有。
 
-细节：[游客模式](docs/design/guest-mode.md)。
+细节：[定时任务](docs/design/scheduled-tasks.md)。
+
+## 写作块
+
+模型把要反复修改的文字写进文档（`api/documents.go`、`document_tool.go`，前端 `DocumentCard`/`DocumentPanel`）。
+
+- 文档和模型的版本挂在 run 上（`ON DELETE CASCADE`），回答被改写/重新生成时一起消失；用户的版本不挂 run。
+- 模型修改用定点替换，`find` 必须恰好出现一次；写入前锁文档并核对版本，用户保存也带 `baseVersion`（409 `version_conflict`）。
+- 用户写的版本在模型读取时才审（来源 `document`，算违规），模型写的直接记为已检查。
+- 选中文字「提出修改请求」发出的消息以 `<document-selection id title>` 包着原文开头（`lib/document-selection.ts`），显示、编辑、复制都要先拆开；格式改了要同步系统提示词。
+- 用户的改动经轮次说明（`DocumentNote`，`agent.TurnNote`，每个 run 算一次、挂在输入消息末尾、不入库）告诉模型；整篇重写（`content`）遇到这个 run 没看过的用户版本要拒绝并附改动，「看过」记在 `Scope.State`。新增让模型读到用户文档文本的路径照样先过 `documentText`。
+- 修改中的段落标记按卡片实例（`useId`）登记在 `document-activity-store`，不要改回按工具调用 id；面板里的弹出层画在浮条内，不用 portal。
+
+细节：[写作块](docs/design/writing-blocks.md)。
+
+## 子智能体
+
+主 Agent 用 `subagent` 把独立的活交给子 Agent：子 Agent 是一个隐藏的子对话（`conversations.kind = 'subagent'`），每段工作是那里的一次普通 run（`api/subagents.go`）。
+
+- 新增「列出/查全体对话」的查询要加 `kind = 'chat'`；`GetConversation` 已经带上，所以对话接口找不到子对话。不要给子对话开任何接受用户文字的接口：用户只能经主 Agent 转达，审核只在用户和主 Agent 之间。
+- 子 run 不走 `createRun`、不占 `max_concurrent_runs`，走 `admitSubagent`（同事务 advisory lock，按对话/用户计数）；`CountUserRunningRuns` 只数 `chat` 对话。前台子 Agent 没名额时是 `queued`（有子对话、没有 run，`startQueued` 按派出顺序放行）；等待没开始就结束要删掉它（`DeleteQueuedSubagent`）。
+- 报告一次 run 一份，在结束子 run 的事务里写（`agent.Subagents.Ended`），以子 run 为主键；送达只在两处：运行中的 run 在请求边界的自己的 commit 里（`Take`，持对话锁），空闲时 `deliverReports`（`lockLive` → `requireIdle` → `requireRevised` → `createRun`）。新增结束 run 的路径要让 `AfterRun` 照常触发，否则报告会晾到清扫。
+- 报告行（`messages.origin = 'subagent'`）不是用户的提问：重新生成的「最后一条提问」、改写、搜索、导出、标题素材都要跳过 `origin` 非空的行；`DeleteAnswerTo` 把它当回答删，送达行被删报告就回到待送达（`ON DELETE SET NULL`）。
+- 删除路径：子对话随 `launched_by` 的 run 级联删除；会删 run 的新路径在事务前 `runningSubagents`、提交后 `cancelGoneRuns`；新的软删除路径用 `CancelConversationRuns`（已包含子对话的 run）。
+- 子 run 的工具、提示词看 `agent.Scope.Parent`：新工具要决定子 Agent 能不能用（默认不给），不给嵌套、`ask_user`、记忆、定时任务、写作块写操作。
+
+细节：[子智能体](docs/design/sub-agents.md)。
 
 ## 认证
 
 - HttpOnly Cookie 会话，库里只存 token 的 SHA-256；任何「凭 token 认人」的路径都走 `GetSessionUser`，别另写（它还挡 `pending`）。
 - 最后一个启用的管理员不能被降级或停用：改角色/停用在一个事务里先 `LockAdminMembership`，再读、写、数（409 `last_admin`），测试在 `admin_last_admin_pg_test.go`。
-- 第一个账号永远是管理员（`RegisterUser` + `LockRegistration`）；批准单向（`approved: true`）；拒绝 = 停用，账号从不删除。
+- 第一个账号永远是管理员（`RegisterUser` + `LockRegistration`）；批准单向（`approved: true`）；拒绝 = 停用。删除账号只有管理员在后台显式操作（`DeleteUser`：不能删自己，过 `LockAdminMembership` 和最后一个管理员检查，先 `CancelUserRuns`、给用量行打 `deleted_user` 标签，`DeleteAccount` 级联删并交回文件 key，提交后删文件）。
+- 通行密钥登录（`api/passkeys.go`）验证通过后走和密码登录同一段：停用/待审批的拒绝、`issueSession`；失败用 `passkeyLimit` 计数；挑战存 `webauthn_challenges`，一次性取用。新的身份验证方式放进后台「身份验证」页的新 Tab。
 - 登录/注册限流用 `takeAttempt(ctx, attemptLimit{...}, ip, subject)`，先占位后验证，绝不按标识单独锁账号；IP 取 `clientIP`，必须部署在会正确设置转发头的代理后（见 `deploy/Caddyfile`）。
 
 细节：[认证、注册与限流](docs/design/auth.md)。
@@ -106,7 +131,7 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 - 位置：`chooseRun` 之后、事务之前。新增把用户输入送上游的路径要想清楚属于哪一类（审 / 不审 / 靠收据）。
 - 因大小而检查不了，必须包 `errTooLargeToCheck`（413 `message_too_large_for_moderation`），绝不当作服务出错（`on_error=allow` 会放行）；判定要完整（`verdictFrom`），缺字段算「回答不可用」，绝不当「没问题」。
 - 被拒绝的发送由 `keepRefused` 写成 `blocked` 行；新增往转录末尾写行、起 run 的路径都要过 `requireRevised`（409 `revise_refused`）。
-- 处罚在 `recordBlocked`：一个事务里先主体锁 `LockModerationSubject`、再 `LockAdminMembership`；管理员只记录不停用；不要给 `moderation_events` 加「user_id 或 guest_ip 必有一个」的约束。
+- 处罚在 `recordBlocked`：一个事务里先主体锁 `LockModerationSubject`、再 `LockAdminMembership`；管理员只记录不停用；`moderation_events.user_id` 可以为空（账号删除后 `ON DELETE SET NULL`），不要加非空约束。
 - 自定义指令和手写记忆保存时和取快照时都要审；「审核过」只看哈希，不看 `source`。
 - 上游请求都带用户标识 `llm.Request.User`（`end_user.go`）；新写会用模型的路径也要带。
 - 前端：被拒绝走 `useSendError`，输入框随即是被拒绝消息的编辑器（`composerMode`，`lib/revise.ts`）；新增起 run 的入口要处理末行被拒绝的情形。

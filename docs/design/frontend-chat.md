@@ -2,18 +2,18 @@
 
 聊天页（一个页面、一个实例）、首条消息流程、流式显现、转录分页与交接、发送与 outbox、已结束的 run、事件流、会话失效、压缩上下文的前端，以及通用的前端约定。规则摘要见 [AGENTS.md](../../AGENTS.md)；下文为完整设计说明（原 AGENTS.md「前端约定」，未删减）。通用的前端手册见 [../frontend.md](../frontend.md)。
 
-> 文中「后端约定」「前端约定」「游客模式」「内容审核」等指原 AGENTS.md 的章节，现按主题分在本目录各文件，索引见 [README.md](README.md)。
+> 文中「后端约定」「前端约定」「内容审核」等指原 AGENTS.md 的章节，现按主题分在本目录各文件，索引见 [README.md](README.md)。
 
 ## 数据、路由与会话
 
 - 服务端数据用 TanStack Query（键在 `lib/query-keys.ts`、`features/admin/use-admin.ts`）；流式中间态和 UI 状态用 Zustand。流结束后让查询失效，重新拉取。查询键含筛选条件时加 `placeholderData: (previous) => previous`。
 - 路由守卫挂在无路径布局的 `beforeLoad`：`_authed.tsx` 要求登录，`admin.tsx` 要求管理员。会话用 `currentSession(queryClient)`（`features/auth/use-auth.ts`）取：5 分钟内查过的直接用，更老的重新问服务端（别用 `ensureQueryData`，它不管多旧都返回缓存，被停用的账号会一直半死不活）；重新问失败（断网）时退回上次的答案。
-- 会话在页面开着时失效（被停用、改了密码）靠 401 发现：`lib/query.ts` 的 `QueryCache`/`MutationCache` 把每个失败交给 `setErrorListener` 登记的监听者（`main.tsx` 里是 `leaveIfSessionExpired`，`lib/session-expired.ts`），不走缓存的调用（事件流）自己调 `reportError`。账号模式下的 401（`invalid_credentials` 除外——那是登录表单自己的错，而且认证接口抛的是 `AuthFieldError`）且页面此前认为已登录，就清缓存、清 chat store、清本地存的缓存，`replace` 到 `/login?redirect=…`；已在 `/login`、`/register` 不动，游客模式不管。事件流收到 401 就停止重连（重连永远是 401）。新写的不经查询缓存的网络调用，遇到 401 也要 `reportError`。
+- 会话在页面开着时失效（被停用、改了密码）靠 401 发现：`lib/query.ts` 的 `QueryCache`/`MutationCache` 把每个失败交给 `setErrorListener` 登记的监听者（`main.tsx` 里是 `leaveIfSessionExpired`，`lib/session-expired.ts`），不走缓存的调用（事件流）自己调 `reportError`。401（`invalid_credentials` 除外——那是登录表单自己的错，而且认证接口抛的是 `AuthFieldError`）且页面此前认为已登录，就清缓存、清 chat store、清本地存的缓存，`replace` 到 `/login?redirect=…`；已在 `/login`、`/register` 不动。事件流收到 401 就停止重连（重连永远是 401）。新写的不经查询缓存的网络调用，遇到 401 也要 `reportError`。
 - 换人要清干净：登录、注册成功和退出都 `queryClient.clear()` + `resetChatStore()` + `forgetQueryCache()`；`adoptQueryCache` 发现缓存属于别人（本页内存里的或上次存的）时，除会话外的查询全部移除（记忆、个性化、后台的也算）并重置 chat store。
 
 ## 一个聊天页
 
-- **一个聊天页**（`components/chat/ChatPage.tsx`，规则在 `lib/chat-view.ts`，有测试）：空白新对话页（`/`、`/guest`）和每个对话（`/chat/$id`、`/guest/chat/$id`）是同一个 `ChatView` 实例，像 Open WebUI 的同一个 `Chat.svelte`。路由是无路径布局 `_authed._chat.tsx` / `guest._chat.tsx`，它渲染 `ChatPage` 而**不渲染 `<Outlet />`**；子路由（`index`、`chat.$conversationId`）没有组件，只是地址，`chat.$conversationId` 的 loader 照旧预取（悬停预加载 `defaultPreload: 'intent'`、`enterPath` 对游客模式的规则都没变）。`ChatPage` 持有 `ChatView`（`epoch`、`route`、`shown`），`key={epoch}`：地址变到**页面没在显示的**对话（侧栏、搜索、前进后退、深链、别处删除后回首页）就 `epoch+1`，页面整个重来，和以前的 `key={conversationId}` 一样；地址变到页面**已经显示的**对话（首条消息自己建的那个）不动页面——这是整个重构的目的。首条消息的流程在 `ChatView.handleSend`：先 `post('', item)` 立刻显示气泡，`createConversation`（`onSuccess` 把详情和一页空转录塞进缓存，所以新页面没有 loading 也没有 `temporary` 样式闪烁），`post(id, item)`，`onCreated(id)`（页面从此显示这个对话，地址还在 `/`），`sendMessage.mutateAsync`，**服务器答复之后**才 `navigate({ to: paths.chat, replace: true })`（`replace`：空白页只是草稿，不是回得去的地方，和 Open WebUI 的 `history.replaceState` 一样）。所以失败路径永远在 `/` 上：没写任何东西（`startWroteNothing`）就 `deleteConversation` + `onRemoved(id)`（页面回到空白页，文字和文件原样在输入框里）；被审核拒绝等则 navigate 到对话。`outbox['']` 只在建对话那一小段用，页面显示对话后由 effect 放掉（先放会让空白页多画一帧欢迎页）。页面卸载后（用户在等待中点了别的对话）这次发送在后台完成，`alive` ref 挡住一切对页面的操作，不会把用户拉回去；空对话照样删。新增在首条消息路径上写页面状态的代码要过 `alive`。**等待期间点「新对话」**：地址还是 `/`，而路由器对「去当前地址」什么都不做（同址只重新 load，不留痕），页面无从得知——所以每个「新对话」入口（侧栏的链接和 ⌘⇧O、标志、搜索面板）都带 `state: newChatState`，在 history state 里放一个每次不同的 `newChat` 标记；`ChatPage` 看到**新出现的**标记、且地址是 `/` 时 `startOver`（页面比地址超前就重来成空白页，本来就是空白页则不动，草稿保留），重来后旧页面卸载，`alive` 挡住它的后续跳转，那条消息在后台照常发完。只认「出现」不认「消失」：跳到 `/chat/<id>` 时标记没了，而路由器先更新 location 再更新 params，那一帧里路由还读作 `/`，当成请求会把刚建的对话页重来一遍。新增「新对话」入口要带 `newChatState`。没有 `pendingPrompt`/`returnedDraft`/`handOff`/`adopt`/`is-carried`——它们是「两个页面之间交接」的产物，现在没有交接。
+- **一个聊天页**（`components/chat/ChatPage.tsx`，规则在 `lib/chat-view.ts`，有测试）：空白新对话页（`/`）和每个对话（`/chat/$id`）是同一个 `ChatView` 实例，像 Open WebUI 的同一个 `Chat.svelte`。路由是无路径布局 `_authed._chat.tsx`，它渲染 `ChatPage` 而**不渲染 `<Outlet />`**；子路由（`index`、`chat.$conversationId`）没有组件，只是地址，`chat.$conversationId` 的 loader 照旧预取（悬停预加载 `defaultPreload: 'intent'` 没变）。`ChatPage` 持有 `ChatView`（`epoch`、`route`、`shown`），`key={epoch}`：地址变到**页面没在显示的**对话（侧栏、搜索、前进后退、深链、别处删除后回首页）就 `epoch+1`，页面整个重来，和以前的 `key={conversationId}` 一样；地址变到页面**已经显示的**对话（首条消息自己建的那个）不动页面——这是整个重构的目的。首条消息的流程在 `ChatView.handleSend`：先 `post('', item)` 立刻显示气泡，`createConversation`（`onSuccess` 把详情和一页空转录塞进缓存，所以新页面没有 loading 也没有 `temporary` 样式闪烁），`post(id, item)`，`onCreated(id)`（页面从此显示这个对话，地址还在 `/`），`sendMessage.mutateAsync`，**服务器答复之后**才 `navigate({ to: paths.chat, replace: true })`（`replace`：空白页只是草稿，不是回得去的地方，和 Open WebUI 的 `history.replaceState` 一样）。所以失败路径永远在 `/` 上：没写任何东西（`startWroteNothing`）就 `deleteConversation` + `onRemoved(id)`（页面回到空白页，文字和文件原样在输入框里）；被审核拒绝等则 navigate 到对话。`outbox['']` 只在建对话那一小段用，页面显示对话后由 effect 放掉（先放会让空白页多画一帧欢迎页）。页面卸载后（用户在等待中点了别的对话）这次发送在后台完成，`alive` ref 挡住一切对页面的操作，不会把用户拉回去；空对话照样删。新增在首条消息路径上写页面状态的代码要过 `alive`。**等待期间点「新对话」**：地址还是 `/`，而路由器对「去当前地址」什么都不做（同址只重新 load，不留痕），页面无从得知——所以每个「新对话」入口（侧栏的链接和 ⌘⇧O、标志、搜索面板）都带 `state: newChatState`，在 history state 里放一个每次不同的 `newChat` 标记；`ChatPage` 看到**新出现的**标记、且地址是 `/` 时 `startOver`（页面比地址超前就重来成空白页，本来就是空白页则不动，草稿保留），重来后旧页面卸载，`alive` 挡住它的后续跳转，那条消息在后台照常发完。只认「出现」不认「消失」：跳到 `/chat/<id>` 时标记没了，而路由器先更新 location 再更新 params，那一帧里路由还读作 `/`，当成请求会把刚建的对话页重来一遍。新增「新对话」入口要带 `newChatState`。没有 `pendingPrompt`/`returnedDraft`/`handOff`/`adopt`/`is-carried`——它们是「两个页面之间交接」的产物，现在没有交接。
 
 ## 改写与重新生成的显示、转录分页与交接
 
@@ -22,13 +22,14 @@
 
 ## 发送、outbox 与已结束的 run
 
-- 发送：`outbox` 里的气泡由 `useSendMessage` 的 hook 级 `onError` 撤掉（调用级的 `mutate(…, { onError })` 在组件卸载后不执行，发完立刻切对话就会留下永远等回复的气泡）；新对话的第一条消息也一样：它用 `sendMessage.mutateAsync({ conversationId: 刚建的 id, … })` 发出，id 由调用传入（`useSendMessage` 的 `variables.conversationId`），hook 级的 `onSuccess`/`onError` 照样用它。运行中（`working`、`outbox`、`live` 在跑）不能再发：输入框的回车、`handleSend` 都挡掉，游客的 `runner.start` 对同一对话已有未结束的 run 直接 409 `conversation_busy`，不排队。
-- 发送的响应可能晚于事件流：SSE 上 `run_started → run_finished → 重取消息 → settle` 全走完，那个 POST 的响应才回来，它（以及重连时拍得更早的 snapshot）仍写着 `running`。store 的 `finished`（有界，最近 `FINISHED_RUNS_KEPT` 个 run id，`rememberFinished`）记住已结束的 run：`run_finished` 批次、非 running 的 snapshot、`settle` 都会登记；`startRun`（发送、重新生成、改写、回答 ask_user 都走它，游客的响应也一样）、`applySnapshot`、`applyBatch` 里的 `run_started` 遇到登记过的 run 一律不写回 `live`（`startRun` 仍清掉 `outbox`/`replacing`）。run 只前进不后退；新增任何由响应或旧快照驱动、会写 `live` 的路径都要过这道检查。`resetChatStore` 一并清空。
+- 发送：`outbox` 里的气泡由 `useSendMessage` 的 hook 级 `onError` 撤掉（调用级的 `mutate(…, { onError })` 在组件卸载后不执行，发完立刻切对话就会留下永远等回复的气泡）；新对话的第一条消息也一样：它用 `sendMessage.mutateAsync({ conversationId: 刚建的 id, … })` 发出，id 由调用传入（`useSendMessage` 的 `variables.conversationId`），hook 级的 `onSuccess`/`onError` 照样用它。运行中（`working`、`outbox`、`live` 在跑）不能再发：输入框的回车、`handleSend` 都挡掉。
+- 发送的响应可能晚于事件流：SSE 上 `run_started → run_finished → 重取消息 → settle` 全走完，那个 POST 的响应才回来，它（以及重连时拍得更早的 snapshot）仍写着 `running`。store 的 `finished`（有界，最近 `FINISHED_RUNS_KEPT` 个 run id，`rememberFinished`）记住已结束的 run：`run_finished` 批次、非 running 的 snapshot、`settle` 都会登记；`startRun`（发送、重新生成、改写、回答 ask_user 都走它）、`applySnapshot`、`applyBatch` 里的 `run_started` 遇到登记过的 run 一律不写回 `live`（`startRun` 仍清掉 `outbox`/`replacing`）。run 只前进不后退；新增任何由响应或旧快照驱动、会写 `live` 的路径都要过这道检查。`resetChatStore` 一并清空。
 - 附件只在发送响应里有：`run_started` 事件里的那份提问不带附件（链接按读者签名，所有订阅者共用的事件给不了）。两种先后都要保住响应那份的附件：响应先到，`applyBatch` 处理 `run_started` 时保留已有的附件；事件先到，`startRun` 用 `withSentInput`（`lib/run-state.ts`）把响应的附件放到已有的提问上。少了后一种，图片在发出后消失、直到回答结束重取消息才出现（v1.1.6 及之前）。其他标签页只收到事件，回答期间看不到图，结束后重取即正常。
+- 文本附件（`text/plain`）点开在侧边面板里读（`FilePanel`、`stores/file-panel-store.ts`），和写作块、子智能体面板互斥；文件库里点开也一样（位置记作 `LIBRARY`，离开文件库就关）；内容直接 `fetch` 附件的签名链接（桶的 CORS 要放行 `GET`，见部署文档），不进查询持久化。文件图标按类型着色（`FileIcon`，分类在 `lib/file-look.ts`，文本文件按扩展名分）。
 
 ## 对话标题的显示
 
-- 对话标题：服务端和游客仓库都把没起名的对话叫 `New chat`（英文，不随语言），显示时一律经 `lib/titles.ts` 的 `displayTitle`/`useDisplayTitle`（侧栏、搜索、对话页顶、删除确认），它把空标题和 `New chat` 换成 `chat.untitled`；重命名框也以显示出来的名字起头。别直接渲染 `conversation.title`。
+- 对话标题：服务端把没起名的对话叫 `New chat`（英文，不随语言），显示时一律经 `lib/titles.ts` 的 `displayTitle`/`useDisplayTitle`（侧栏、搜索、对话页顶、删除确认），它把空标题和 `New chat` 换成 `chat.untitled`；重命名框也以显示出来的名字起头。别直接渲染 `conversation.title`。
 
 ## 流式文字的显现与滚动
 
@@ -44,7 +45,7 @@
 ## 侧边栏、删除对话与事件
 
 - 侧边栏标记正在回答的对话靠 `GET /conversations/running`（`useRunningConversations`）：有在跑的才每 3 秒轮询，`run_started` 时由事件流让它失效；某个 id 消失时刷新列表（标题、顺序可能变了）。当前打开的对话不标，它自己的页面已经在显示。
-- 删除对话：服务端在删除提交后往该对话的事件流发 `conversation_deleted`（nil run id、version 0；全部删除时每个对话各一条），正在看它的页面（任何标签页、任何设备）收到就停止跟随并回到首页；游客由 `hub.announceDeleted` 在本页和其他标签页发同样的事件。同一浏览器的其他标签页靠 `lib/conversation-sync.ts` 的 BroadcastChannel（`announceDeleted` / `followDeletions`）立刻从侧栏和搜索里去掉它。新增删除对话的路径要两样都做。
+- 删除对话：服务端在删除提交后往该对话的事件流发 `conversation_deleted`（nil run id、version 0；全部删除时每个对话各一条），正在看它的页面（任何标签页、任何设备）收到就停止跟随并回到首页。同一浏览器的其他标签页靠 `lib/conversation-sync.ts` 的 BroadcastChannel（`announceDeleted` / `followDeletions`）立刻从侧栏和搜索里去掉它。新增删除对话的路径要两样都做。
 - 收到 `transcript_changed` 时（`use-conversation-events.ts`）先按事件的 `from`（或本页自己的 `replacing`）截缓存，赶在 `run_started` 结束 `replacing` 之前，再用 `refreshNewestMessages` 重取最新一页，不要 `invalidateQueries` 消息键。`spliceNewest`（`lib/transcript-pages.ts`，有测试）在新一页的第一行不在已持有的行里时整页替换，所以行被删光也对。重新生成时其他标签页没有 `from`，靠 `buildTurns` 里「run 的输入已在列表」那条藏旧回答。
 
 ## 压缩上下文
@@ -73,9 +74,18 @@ WebKit（Safari，以及 iPhone 上的所有浏览器）照 Open WebUI 整个跳
 
 模型偶尔开了一个 `openchat-ui` 块又马上关上（多半是要写表格，而表格规定写在块外），以前显示成「这个界面无法显示」加一个空灰框；`splitSegments` 现在丢掉已结束的空块，还在输出的保留占位。
 
+## 智能 UI 的图片（`api/pictures.go`、`images.go`，前端 `genui/found-image.ts`）
+
+组件里的图片（Image、Gallery、Media、Card/Step/Article 的 `image`）只有一个字段，值是网址或描述，前端按是否 `http(s)://` 开头分流：
+
+- **网址**：走对话的图片代理（`/conversations/{id}/images?url=`），只放行本对话工具结果里出现过的地址（`ToolResultMentions`；`web_fetch` 把页面图片列在 "Images on this page" 下）。
+- **描述**（图片搜索开着时）：`GET /images/search?q=` 由后台选的服务（Wikimedia Commons 默认、Openverse、Pixabay，`internal/imagesearch`）找第一张合适的图，下载进文件存储 `pictures/`（Pixabay 条款要求不直接外链），`pictures` 表按 (provider, provider_id) 存一份，`image_searches` 记「描述 → 图」，同一描述永远同一张；没找到的记一天，服务不可用（503）不记。字节由 `/pictures/{id}` 从存储读出，只给搜到过的 id。署名（来源 · 许可）悬停时浮在图上，点开大图带来源页。
+
+模式写在提示词里：`genui.Catalog.Prompt(imageSearch)` 在组件列表后接目录里的 `pictures.search` 或 `pictures.sources` 一段，由 `imageSearchOn`（开关开着且服务能用）决定；关着时模型只能用来源里的网址，和以前一样。后台「图片搜索」页（`/admin/image-search`）管开关、服务、Pixabay Key 和试搜。每用户搜索有每分钟上限，各服务自己的速率份额在 `imagesearch.limiter`，被服务拒绝时按它给的时间停搜。
+
 ## 智能 UI 的「选项」（`components/chat/genui/choices.tsx`）
 
-`Choices`/`Choice` 组件：一个问题加 2~4 个选项，每个选项有给读者看的短标签（`label`）和选中后替读者发出的完整消息（`message`）。点按钮走 `ChatView` 的 `handlePick`，和输入框发送同一条路（同样的忙碌检查、满额检查、`post` + `useSendMessage`，服务端照常审核，游客模式同样适用），不带输入框里的文件；没被接受时消息放回输入框。只有最后一条回答的选项能发（`ChoicesContext` 只给它 `pick`），有回答在输出、有消息在路上、或末尾是要改写的被拒消息时没有 `pick`，按钮禁用。每条回答都会拿到它后面发出的那条消息（`next`，发送途中就是 outbox 里的那条）：等于某个选项的 `message` 就标出它，卡片只读；不等于则只读、不标。状态规则在 `lib/genui/choices.ts`（有测试）。组件说明里只说它能做什么、用不用由模型判断，不写「什么时候必须用」。
+`Choices`/`Choice` 组件：一个问题加 2~4 个选项，每个选项有给读者看的短标签（`label`）和选中后替读者发出的完整消息（`message`）。点按钮走 `ChatView` 的 `handlePick`，和输入框发送同一条路（同样的忙碌检查、满额检查、`post` + `useSendMessage`，服务端照常审核），不带输入框里的文件；没被接受时消息放回输入框。只有最后一条回答的选项能发（`ChoicesContext` 只给它 `pick`），有回答在输出、有消息在路上、或末尾是要改写的被拒消息时没有 `pick`，按钮禁用。每条回答都会拿到它后面发出的那条消息（`next`，发送途中就是 outbox 里的那条）：等于某个选项的 `message` 就标出它，卡片只读；不等于则只读、不标。状态规则在 `lib/genui/choices.ts`（有测试）。组件说明里只说它能做什么、用不用由模型判断，不写「什么时候必须用」。
 
 ## 手机：禁止缩放与安全区
 

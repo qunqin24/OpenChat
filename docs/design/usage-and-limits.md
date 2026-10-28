@@ -2,7 +2,7 @@
 
 用量账本（含估算）、模型容量上限与在飞预留、并发回答上限、模型对普通用户的开放开关、使用日志分页，以及容量上限的前端。规则摘要见 [AGENTS.md](../../AGENTS.md)；下文为完整设计说明（原 AGENTS.md 相应条目，未删减）。
 
-> 文中「后端约定」「前端约定」「游客模式」「内容审核」等指原 AGENTS.md 的章节，现按主题分在本目录各文件，索引见 [README.md](README.md)。
+> 文中「后端约定」「前端约定」「内容审核」等指原 AGENTS.md 的章节，现按主题分在本目录各文件，索引见 [README.md](README.md)。
 
 ## 向普通用户开放（`admin_only`）
 
@@ -14,7 +14,7 @@
 
 ## 同时进行的回答数上限
 
-- 同时进行的回答数有上限（`internal/api/run_limits.go`）：一个账号跨所有对话最多同时有 N 个 `running` 的 run（`app_settings.max_concurrent_runs`，默认 3，0 为不限，上限 1000；后台 → 系统 → 对话）；管理员不受限。游客按网络地址算（`guest_max_concurrent_runs`，默认 2，后台 → 系统 → 访问，和每小时限额同一个地址，`runs.client_ip`）。检查在 `createRun` 里，发送、重新生成、改写、回答 `ask_user`、游客运行都经过它，没有别的路：在建 run 的**同一个事务里**先取 `pg_advisory_xact_lock`（键是账号 id 或 `ip:<地址>`）再数再插，锁持有到提交，所以两个请求抢最后一个名额只有一个过，多实例也成立；超了返回 429 `too_many_runs`，事务回滚，什么都没写（重新生成/改写删的行也回来了）。`awaiting_input` 的 run 不占名额。游客的 `GuestRun` 另在存文件之前无锁预检一次（`guestRunSlotFree`），只为尽早拒绝；游客的 run 只在请求连接期间存在、重启后不会恢复，所以超过 20 分钟没有任何提交的游客 `running` 行不占名额（进程崩溃留下的残余，`sweepGuests` 之后才会删）。新增会起 run 的路径必须走 `createRun`。
+- 同时进行的回答数有上限（`internal/api/run_limits.go`）：一个账号跨所有对话最多同时有 N 个 `running` 的 run（`app_settings.max_concurrent_runs`，默认 3，0 为不限，上限 1000；后台 → 系统 → 对话）；管理员不受限。检查在 `createRun` 里，发送、重新生成、改写、回答 `ask_user` 都经过它，没有别的路：在建 run 的**同一个事务里**先取 `pg_advisory_xact_lock`（键是账号 id）再数再插，锁持有到提交，所以两个请求抢最后一个名额只有一个过，多实例也成立；超了返回 429 `too_many_runs`，事务回滚，什么都没写（重新生成/改写删的行也回来了）。`awaiting_input` 的 run 不占名额。新增会起 run 的路径必须走 `createRun`。子智能体的 run 是例外：它们不占这个名额，另按 `admitSubagent` 的每对话/每用户上限计数（见 [sub-agents.md](sub-agents.md)），`CountUserRunningRuns` 只数 `kind = 'chat'` 对话里的 run。
 
 ## 模型容量上限
 
@@ -22,7 +22,7 @@
   - 周期按服务器本地时区的零点算（日从当天零点、月从 1 日零点，`time.Date` 构造，所以夏令时的 23/25 小时日也对）。时区来自环境变量 `TZ`（部署默认 `Asia/Shanghai`），`cmd/openchat` 引入 `time/tzdata`，因为生产镜像是 distroless、没有系统时区库，缺了它 Go 会悄悄把 `TZ=Asia/Shanghai` 当成 UTC。`total` 从 `capacity_since` 起算，NULL 表示整个历史；「重新计算」（`POST /admin/models/{id}/capacity/reset`）把它设为现在，使用日志不动。保存设置不会改 `capacity_since`（`SaveModelOverride` 的 `ON CONFLICT` 不更新它）；清掉上限时周期和管理员豁免会被写回默认值（`total`、开），不留看不见的状态。
   - 「恢复默认」（`DELETE .../settings`）删掉整行，所以上限、周期、豁免和起点一并消失；保存时如果什么都没决定（含没有上限）也删行，起点随之丢失。花费记录仍在使用日志里。
   - 上限对所有人生效，除非该模型的 `capacity_admin_exempt` 开着且请求者是管理员（`asker.admin`；管理员的花费照样计入）。访客不是管理员。后台为某人做的事（标题）按那个人算：管理员的对话在豁免下照常起标题。
-  - 执行点：①起一次运行之前，`chooseRun` → `pickChannel(ctx, modelID, asker)` 返回 `errModelCapacity`（409 `model_capacity_reached`），此时什么都还没写，发送、重新生成、改写、回答 ask_user 和访客运行都走这条；"随便哪个模型"（空 id）会跳过已满的模型，全满才拒绝。②运行当中，`agent.Options.Capacity`（`api.NewCapacityCheck`）在 `generate` 里**每次模型请求之前**问一次，满了就以 `failWithRow(CodeModelCapacity)` 结束，留下一条带该错误码的空失败助手消息；账本在请求结束时才写，所以光看账本，超出量是检查通过时已在飞的请求，不是整个工具循环；再加上下面的「在飞请求先预留」，同时发起的请求会互相看见。查询出错按失败处理（运行以 `internal` 结束），不放行。③任务模型：配置的任务模型满了就退回对话自己的模型，也满了就跳过标题（`taskModel` 返回 `errModelCapacity`；按需起标题的接口把它原样返回）。④`GET /models`、`/guest/config` 的 `atCapacity` 按请求者算，满的模型仍然列出来。新增任何会用模型的新路径（比如上下文压缩、内容审核）都要在它的请求前过这几个点之一，用量记一个新 kind 就会自动计入花费。
+  - 执行点：①起一次运行之前，`chooseRun` → `pickChannel(ctx, modelID, asker)` 返回 `errModelCapacity`（409 `model_capacity_reached`），此时什么都还没写，发送、重新生成、改写、回答 ask_user 都走这条；"随便哪个模型"（空 id）会跳过已满的模型，全满才拒绝。②运行当中，`agent.Options.Capacity`（`api.NewCapacityCheck`）在 `generate` 里**每次模型请求之前**问一次，满了就以 `failWithRow(CodeModelCapacity)` 结束，留下一条带该错误码的空失败助手消息；账本在请求结束时才写，所以光看账本，超出量是检查通过时已在飞的请求，不是整个工具循环；再加上下面的「在飞请求先预留」，同时发起的请求会互相看见。查询出错按失败处理（运行以 `internal` 结束），不放行。③任务模型：配置的任务模型满了就退回对话自己的模型，也满了就跳过标题（`taskModel` 返回 `errModelCapacity`；按需起标题的接口把它原样返回）。④`GET /models` 的 `atCapacity` 按请求者算，满的模型仍然列出来。新增任何会用模型的新路径（比如上下文压缩、内容审核）都要在它的请求前过这几个点之一，用量记一个新 kind 就会自动计入花费。
   - 保存任务模型（`UpdateSystemSettings`）不检查容量（`asker.ignoreCap`），只看它能不能被回答。
   - 索引：`usage_logs_model_idx` 是 `(model_id, created_at DESC) INCLUDE (cost)`，上限的求和是 index-only scan；只有设了上限的模型才查花费，没设的只多一次主键查询。`total` 且从不重新计算的上限要扫该模型全部历史，历史很长就用「重新计算」收窄。
   - 在飞请求先预留（`internal/api/spend_reserve.go`，`usage.Reserver`）：对**设了上限的模型**，每次模型请求（对话请求、运行里的压缩、标题，凡是过 `usage.Meter` 的）在发出前调 `meter.Reserve`，先预留「估算输入 token × 目录输入价」这一笔，要求「已花 + 其他在飞请求的预留 + 本次预留 < 上限」，否则拒绝（对话请求以 `failWithRow(CodeModelCapacity)` 结束，标题跳过，压缩算失败、请求照原样发出）；请求的账本行写完后 `Meter.End` 才释放，调用方另外 `defer meter.Release()` 兜底。预留只含输入（输出事先不知道，同时有多少个回答在写由下面的并发上限管），缓存命中也按全价输入预留，所以偏保守；没有价格的模型不预留。**只在进程内存里、尽力而为**：不建表、不会留下脏行，单实例下是准的，多实例各看各的预留，超出量最多是其他实例上在飞的请求。预留带 1 小时 TTL 防泄漏。比较在 SQL 里按 numeric 做（`ModelWouldReach`），持有互斥锁跨过这次查询，这样「读到的花费」一定包含了已释放预留对应的行。管理员被豁免时不被拒绝，但预留照记（他们的花费对别人算数）。
@@ -44,3 +44,11 @@
 **渠道名唯一**：忽略大小写和首尾空格（`channels_name_lower_idx`），迁移把已有的重名改成「名称 (2)」「名称 (3)」，保留最早的那个。重名时创建/修改返回 400 `channel_name_taken`，表单显示在名称字段上。
 
 **接口地址补全**（`endpointFor`）：留空用类型默认地址；只有域名、没有路径（包括只带一个结尾 `/`）时补上类型默认地址的路径（`/v1`、`/compatible-mode/v1`、`/api/v3`……），没有默认地址的中转类型按协议补（OpenAI/Anthropic `/v1`，Gemini `/v1beta`）；带任何路径的原样使用。以前只填域名会请求 `https://域名/chat/completions` 得到 404。
+
+## 请求轨迹（管理员调试用的「轨迹」视图）
+
+- 管理员在自己的对话顶栏可以在「对话 / 轨迹」之间切换（`ChatView` → `TraceView`）。轨迹逐次列出该对话每个模型请求：实际发出的系统提示词、消息、工具、选项，以及返回的内容；时间线上紫色是模型请求（首 token 之前那段画浅色），橙色是请求调完工具到下一次请求之间的时间（工具本身不单独计时，用这段空隙近似）。
+- 数据：`usage_logs` 一行一请求（耗时、首 token、token、缓存、费用不变），另有 `request_traces`（以 `usage_log_id` 为主键，`ON DELETE CASCADE`）存请求和响应的 JSON（llm 自己的编码，附件只存引用、不存字节）。写入在 `usage.Meter.End` 里，紧跟账本行之后，失败只记日志。
+- 后台 → 系统「请求轨迹（调试）」开关（`request_traces`，**默认关**）。关着时不记录、`GET /conversations/{id}/trace` 404、`ChatFeatures.requestTraces` 为 false（顶栏不出现切换）；已记录的照常 7 天后删。`ChatFeatures.requestTraces` 只对管理员为 true。
+- 只记录管理员本人的请求（`agent.Options.Tracer` = `api.NewTracer`，按 `users.role` 判断），调用方在 `ledger.Call.Request` 里给出请求才会记（run 的对话请求和压缩请求给了，标题请求没给）。保留 7 天（`traceRetention`，清理循环删）。
+- 读取接口 `GET /conversations/{id}/trace` 挂在管理员分组里（非管理员 404），查询同时要求对话属于调用者本人：**管理员也读不到别人的对话**，和「没有任何管理员接口读得到别人的记忆」一致。

@@ -135,12 +135,6 @@ Turn it on in Admin → Web search. There are two kinds of search service:
 
 Page reading does not depend on the search service and is always available.
 
-### Turn on guest mode
-
-Guest mode is off by default. Turn it on in Admin → System and the sign-in page gains "Use as guest". Guests need no account; their conversations, memories and instructions stay in their own browser and the server keeps none of it.
-
-A guest's requests belong to no account, so they are limited: a maximum per IP per hour and a maximum for all guests per day; 0 means unlimited. **The limits are counted per visitor IP**, so read [Behind another reverse proxy or a CDN](#behind-another-reverse-proxy-or-a-cdn) first.
-
 ### Other system switches
 
 Admin → System also holds: automatic context compression, memory, generative UI, questions to the user, avatar uploads and debug mode. Its "Data retention" section sets how long deleted conversations, unsent uploads and orphaned files are kept.
@@ -270,10 +264,10 @@ The proxy must:
 
 ### Per-IP limits depend on correct forwarded headers
 
-Guest limits and the sign-in and sign-up attempt limits are all **counted per visitor IP**. The app takes the IP from request headers: `True-Client-IP` first, then `X-Real-IP`, and only then `X-Forwarded-For` (its leftmost value); with none of them it uses the connection's peer address. So:
+The sign-in and sign-up attempt limits are **counted per visitor IP**. The app takes the IP from request headers: `True-Client-IP` first, then `X-Real-IP`, and only then `X-Forwarded-For` (its leftmost value); with none of them it uses the connection's peer address. So:
 
 - Your outermost proxy must **overwrite** these headers with the real visitor address and drop any value the visitor sent. Otherwise anyone can claim any address and slip past the limits.
-- If another proxy or a CDN sits further out, make sure the address is passed correctly through every hop. If it is not, the app sees the proxy's address for everyone and all visitors share one allowance: the guest limit runs out quickly, and failed sign-ins are counted site-wide, so a few mistyped passwords can lock everyone out.
+- If another proxy or a CDN sits further out, make sure the address is passed correctly through every hop. If it is not, the app sees the proxy's address for everyone and all visitors share one allowance: failed sign-ins are counted site-wide, so a few mistyped passwords can lock everyone out.
 - With Caddy behind a CDN (Cloudflare, for example), Caddy sees the CDN's address as the peer. Make Caddy trust the CDN's address ranges (Caddy's `trusted_proxies` option) so it takes the visitor address from the CDN's header; see Caddy's documentation for the exact syntax.
 
 The `deploy/Caddyfile` in the repository is right when there is no CDN: it overwrites the forwarding headers with the connection address. Understand the points above before you change it.
@@ -398,7 +392,7 @@ Every log line is JSON and carries ids that tie lines together:
 |---|---|
 | `request_id` | One request. A failed action (sending, for example) shows it as the "Error ID" |
 | `run_id` | One answer. A failed answer shows the first 8 characters as its "Error ID" |
-| `user_id` / `conversation_id` | Who, and in which conversation; guest requests carry `guest: true` |
+| `user_id` / `conversation_id` | Who, and in which conversation |
 | `model` / `channel_id` | The model and channel an answer used (on answer lines) |
 
 ```bash

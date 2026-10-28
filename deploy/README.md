@@ -15,7 +15,7 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
 - 域名的 A/AAAA 记录要先指到这台服务器，80 和 443 端口要开着，Caddy 第一次启动时会自动申请证书。
 - 打开 `https://<域名>`，**第一个注册的账号就是管理员**（不受下面的注册开关限制，也不需要审批），所以上线后立刻自己先注册。
 - 注册默认是**审批模式**：之后自己注册的账号要等管理员在 后台 → 用户 批准才能登录。想完全开放，或者关闭注册、只由管理员新建账号，在 后台 → 系统 里改「允许注册」「新用户需审批」。
-- 进 后台 → 渠道 添加模型渠道；需要的话在 后台 → 系统 打开游客模式。
+- 进 后台 → 渠道 添加模型渠道。
 
 ## 更新
 
@@ -61,5 +61,5 @@ docker compose -f deploy/docker-compose.yml exec postgres pg_dump -U openchat op
 
 - `APP_ENV=production` 时登录 Cookie 只走 HTTPS。没有域名、只想用 `http://IP:8080` 先试一下：`docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.trial.yml --env-file deploy/.env up -d postgres openchat`。
 - 想用这份代码自己构建镜像，而不是拉取：再叠加 `-f deploy/docker-compose.build.yml`，并在 `up` 后加 `--build`。
-- 游客模式的限额和登录/注册的失败次数限制（登录每 IP 每 15 分钟 10 次失败、同一标识 5 次，注册每 IP 每小时 5 次）都按访客 IP 算，读的是 `X-Forwarded-For`，也认 `X-Real-IP` 和 `True-Client-IP`。Caddyfile 已经用访客的真实地址覆盖前两者并丢掉后者；如果前面还有别的代理或 CDN，要让它们也正确传递，并且不要让访客自己带的这几个头原样到达应用，否则限流按代理的地址算，或者可以被伪造。
+- 登录/注册的失败次数限制（登录每 IP 每 15 分钟 10 次失败、同一标识 5 次，注册每 IP 每小时 5 次）都按访客 IP 算，读的是 `X-Forwarded-For`，也认 `X-Real-IP` 和 `True-Client-IP`。Caddyfile 已经用访客的真实地址覆盖前两者并丢掉后者；如果前面还有别的代理或 CDN，要让它们也正确传递，并且不要让访客自己带的这几个头原样到达应用，否则限流按代理的地址算，或者可以被伪造。
 - 看日志：`docker compose -f deploy/docker-compose.yml logs -f openchat`。容器日志按大小轮转；应用还把日志写一份到数据卷的 `logs/openchat.log`，更新镜像后也还在。用户报来的「错误编号」可以直接在日志里搜，详见 [部署指南的排错一节](../docs/deployment.md#排错)。

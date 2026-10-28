@@ -6,7 +6,7 @@ OpenChat 的二进制已经自带前端，所以前面只需要一层反向代�
 
 ## 必须做对的一件事：来访地址
 
-登录、注册和游客模式都按来访 IP 限流。服务端读来访地址的顺序是 `True-Client-IP`、`X-Real-IP`、`X-Forwarded-For` 第一项——这些都是请求头，**访客自己也能发**。所以代理必须：
+登录和注册都按来访 IP 限流。服务端读来访地址的顺序是 `True-Client-IP`、`X-Real-IP`、`X-Forwarded-For` 第一项——这些都是请求头，**访客自己也能发**。所以代理必须：
 
 - 删掉访客发来的 `True-Client-IP`；
 - 用它自己看到的连接地址**覆盖** `X-Real-IP`（不是追加）；
@@ -47,8 +47,8 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # 发消息、事件流、游客的回答：不能缓冲，也不能让读超时掐掉长连接
-    location ~ ^/api/v1/(conversations/[^/]+/(events|messages|regenerate)|guest/runs)$ {
+    # 发消息、事件流：不能缓冲，也不能让读超时掐掉长连接
+    location ~ ^/api/v1/(conversations/[^/]+/(events|messages|regenerate))$ {
         proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
         proxy_set_header True-Client-IP "";

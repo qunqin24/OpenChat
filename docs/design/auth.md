@@ -14,19 +14,34 @@ HttpOnly Cookie 会话，库里只存 token 的 SHA-256；前端从不接触 tok
 
 几条不变量：
 
-- **第一个账号**（不算 guest）永远是管理员、永远不 pending、永远不被开关拒绝，否则全新安装会把自己锁在外面。这个判断在 `RegisterUser` 的 INSERT 里做，注册先拿 `LockRegistration` 的 advisory lock，所以两个人同时抢第一个也不会都成为管理员。公开的 `/auth/options` 在还没有账号时报告 `registration: true, approval: false`。
+- **第一个账号**永远是管理员、永远不 pending、永远不被开关拒绝，否则全新安装会把自己锁在外面。这个判断在 `RegisterUser` 的 INSERT 里做，注册先拿 `LockRegistration` 的 advisory lock，所以两个人同时抢第一个也不会都成为管理员。公开的 `/auth/options` 在还没有账号时报告 `registration: true, approval: false`。
 - 管理员新建的账号（`POST /admin/users`）永远不 pending，关闭注册时它就是唯一的加人方式。
 - `pending` 默认 false，迁移后所有已有账号都算已批准（`migration_signup_pg_test.go` 测）。
 - **pending 的账号什么都碰不到**：登录不发会话，`GetSessionUser` 还多一道 `NOT users.pending` 作为第二把锁，所以 `auth.Middleware.Require`（唯一的登录闸）也会拒绝它——就算有人哪天写出一条给它发会话的路径。新增任何「凭 token 认人」的路径都要走 `GetSessionUser`，别另写。
 - 批准只有一个方向：`PATCH /admin/users/{id}` 带 `approved: true`，或 `POST /admin/users/bulk` 带 `approved: true`（和 `role`、`disabled` 三选一）；`approved: false` 是 400 `invalid_approval`，没有「退回待审批」。批准和启用/停用互相独立。非管理员调这些接口得到 404。
-- **拒绝 = 停用**（账号从不删除）：待审批的行上「拒绝」就是 `disabled: true`，之后它是个普通的已停用账号（登录说 `account_disabled`），再「启用」会让它回到待审批名单。用户列表的 `status` 过滤（`pending`/`enabled`/`disabled`，可重复）里 disabled 优先于 pending，所以「待审批」名单只含还在等决定的人。
-- 登录页和注册页靠公开的 `GET /auth/options`（`registration`、`approval`、`guest`）决定显示什么：注册关闭时隐藏「注册」链接、`/register` 显示「注册已关闭」；审批模式下注册成功后注册页盖上同一个「账号等待审批」覆盖层（「再次检查」用注册时的邮箱和密码登录）而不是跳进聊天。读不到选项时按开放处理（服务端才是裁判）。改了开关要让 `queryKeys.auth.options` 失效。
+- **拒绝 = 停用**（不是删除）：待审批的行上「拒绝」就是 `disabled: true`，之后它是个普通的已停用账号（登录说 `account_disabled`），再「启用」会让它回到待审批名单。用户列表的 `status` 过滤（`pending`/`enabled`/`disabled`，可重复）里 disabled 优先于 pending，所以「待审批」名单只含还在等决定的人。
+- 登录页和注册页靠公开的 `GET /auth/options`（`registration`、`approval`）决定显示什么：注册关闭时隐藏「注册」链接、`/register` 显示「注册已关闭」；审批模式下注册成功后注册页盖上同一个「账号等待审批」覆盖层（「再次检查」用注册时的邮箱和密码登录）而不是跳进聊天。读不到选项时按开放处理（服务端才是裁判）。改了开关要让 `queryKeys.auth.options` 失效。
 
 ## 登录与注册的限流
 
-失败次数存在 `auth_attempts(kind, ip, subject, created_at)`，Postgres 里，所以多实例共享；`CleanupNow` 里 `purgeAuthAttempts` 删一小时前的行。IP 用和游客限额同一个 `clientIP`（`RealIP` 处理过的 `RemoteAddr`，IPv6 按 /64），所以同样**必须**部署在会正确设置转发头的代理后面——注意 `RealIP` 优先读 `True-Client-IP`、`X-Real-IP`，再读 `X-Forwarded-For`，`deploy/Caddyfile` 因此会丢掉前者、用连接地址覆盖后者；换别的代理要做同样的事。
+失败次数存在 `auth_attempts(kind, ip, subject, created_at)`，Postgres 里，所以多实例共享；`CleanupNow` 里 `purgeAuthAttempts` 删一小时前的行。IP 用 `clientIP`（`internal/api/auth_limits.go`，`RealIP` 处理过的 `RemoteAddr`，IPv6 按 /64），所以同样**必须**部署在会正确设置转发头的代理后面——注意 `RealIP` 优先读 `True-Client-IP`、`X-Real-IP`，再读 `X-Forwarded-For`，`deploy/Caddyfile` 因此会丢掉前者、用连接地址覆盖后者；换别的代理要做同样的事。
 
 - 登录：每个 IP 每 15 分钟 10 次失败，每个（IP，标识）5 次；超过就 429 `login_rate_limited`，带 `Retry-After`（秒，同时在 `details.retryAfter`），且**在检查密码之前**就拒绝，所以限流期间密码对了也进不去。**绝不按标识单独锁账号**，否则任何人都能从别处把管理员锁在外面；也因此换一个 IP 或另一个标识不受影响。标识存的是小写去空格后的 SHA-256，不存原文。
 - 先占位后验证：登录先在 advisory lock 下「数 + 记」一行，密码对了再把这行删掉（所以只有失败才占额度，成功的登录不会耗尽它，也不会清掉别人的失败）。这样一批并发的猜测在 argon2 慢慢算的时候就已经被数进去，而不是算完才记。被拒的请求不记录，免得延长等待。密码对但账号待审批/已停用不算失败。
 - 注册：每个 IP 每小时 5 次，**每次尝试都算**（包括邮箱已被占用的——那是探测邮箱的办法），在 argon2 之前计数；超过是 429 `register_rate_limited`。关闭注册时的拒绝发生在计数之前，不记录。
 - 新增一类需要限流的公开端点，用 `takeAttempt(ctx, attemptLimit{...}, ip, subject)`，别另造一张表。
+
+## 删除账号
+
+- 后台 → 用户，行菜单「删除账号」，要输入账号名确认（`DELETE /admin/users/{id}`，`api/admin_delete.go`）。不能删自己（409 `self_delete`），不存在的账号 404。
+- 一个事务里：`LockAdminMembership` → 读目标 → `CancelUserRuns`（标记停止）→ `LabelDeletedUserUsage`（用量行写上 `deleted_user` = 当时的名字）→ `DeleteAccount`（删用户，会话、对话、消息、run、附件、记忆、定时任务、轨迹都级联删，同一语句交回附件和头像的 storage key）→ 若删的是启用的管理员就数一遍剩下的（0 个则 409 `last_admin` 回滚）。提交后 `runner.Cancel` 停掉那些 run、尽力删文件。
+- 用量行保留（金额和容量上限从账本算），`user_id` 由外键置 NULL；使用日志和仪表盘里显示「已删除的账号：名字」；没有账号也没有删除标记的行（旧版本留下的请求）显示「无账号」。审核日志的 `user_id` 同样置 NULL。
+
+## 通行密钥（`api/passkeys.go`，go-webauthn；前端 `@simplewebauthn/browser`）
+
+- **登录不先问账号**：`POST /auth/passkey/options` 发一个可发现凭据（discoverable）的挑战，浏览器让人挑一个本站的通行密钥，`POST /auth/passkey` 带回答案。凭据 id 查到 `passkeys` 行，验证器返回的 user handle 必须是这把密钥所属账号的 id（`users.id` 的 16 字节）。验证通过之后和密码登录从「密码对了」那一步起完全一样：停用 403 `account_disabled`、待审批 403 `pending_approval`、否则 `issueSession`。
+- **限流**：答案验证前在 `takeAttempt(passkeyLimit, ip, "")` 占位（每 IP 15 分钟 10 次失败，429 `login_rate_limited`），验证通过才交还；发挑战的 options 端点只建一行挑战，按 IP 每分钟限次（内存）。签名计数倒退（`CloneWarning`）当作克隆的验证器拒绝。
+- **挑战一次性**：`webauthn_challenges` 存 go-webauthn 的会话，五分钟有效，`TakeWebAuthnChallenge` 用 `DELETE … RETURNING` 取，好坏都只能用一次；注册的挑战记着发给谁，别的账号拿去答是 400。清理循环删过期的。
+- **管理自己的通行密钥**：`/auth/passkeys`（列表、`options` + `POST` 添加、`PATCH` 改名、`DELETE` 删除），归属写进查询（`user_id`），别人的读出来就是不存在。注册时排除这个账号已有的验证器，要求可发现凭据（resident key required）。名字默认取浏览器和系统（`lib/passkey-name.ts`，「Chrome · macOS」）。`synced` 是 `BackupEligible`（存在密码管理器或平台账号里、可跨设备）。凭据整个存 `passkeys.credential`（jsonb），`credential_id` 单独一列唯一索引供登录查找；账号删除级联删除。
+- **设置**（后台 → 身份验证 → 通行密钥，`/admin/authentication/passkeys`，`app_settings.passkeys`）：开关默认开；依赖方 ID 和允许的来源留空时取请求的 `Origin`（没有就 `X-Forwarded-Proto` + `Host`），浏览器本身不会把别的域名的通行密钥交给页面，所以这样取是安全的，正式部署建议固定；用户验证 `preferred`（默认）或 `required`。关掉后已有通行密钥保留但不能用，`AuthOptions.passkeys` 为假，登录页不显示按钮。改依赖方 ID 会让按旧域名建的通行密钥失效。
+- 身份验证页按「一种方式一个 Tab」组织，以后的 SSO、二次验证等加成新 Tab。

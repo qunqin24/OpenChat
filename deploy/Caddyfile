@@ -2,8 +2,8 @@
 # own; the domain's DNS must point at this server, with ports 80 and 443 open.
 {$DOMAIN} {
 	encode zstd gzip
-	# The server reads the visitor's address for its per-IP limits (guests,
-	# sign-in and sign-up attempts). Caddy sets X-Forwarded-For to the visitor's
+	# The server reads the visitor's address for its per-IP limits (sign-in
+	# and sign-up attempts). Caddy sets X-Forwarded-For to the visitor's
 	# address and replaces what a client sent there; but the server prefers
 	# True-Client-IP and X-Real-IP when they are present, and Caddy would pass a
 	# visitor's own copies through - letting anyone pick the address they are

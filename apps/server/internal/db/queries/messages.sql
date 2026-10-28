@@ -187,4 +187,3 @@ SELECT EXISTS (
       AND role = 'tool'
       AND position(sqlc.arg('needle')::text IN parts::text) > 0
 ) AS found;
-

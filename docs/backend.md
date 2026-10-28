@@ -42,7 +42,7 @@ apps/server/
       logging.go              RequestLogger
     storage/s3.go             PresignPut / PresignGet / ObjectURL
   sqlc.yaml                   sqlc 配置（uuid → google/uuid 等 override）
-  oapi-codegen.yaml           chi-server + models + embedded-spec
+  oapi-codegen.yaml           chi-server + models (no embedded spec)
 ```
 
 ## 请求生命周期

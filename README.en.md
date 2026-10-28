@@ -60,7 +60,6 @@ The server is a Go program with the web app embedded in the binary, and PostgreS
 ### Personalisation and privacy
 
 - **Custom instructions and personal memory.** Users write down things about themselves and how they like answers, and the model can remember long-term facts for later conversations. Users can view, edit and delete memories at any time, and undo the model's recent changes. Administrators get a single master switch and **cannot see anyone's memories or instructions**.
-- **Guest mode.** When an admin turns it on, the sign-in page offers "Use as guest". Guests need no account; their conversations, memories and instructions live only in their own browser and the server keeps none of it. Requests are limited per IP and in total. Off by default.
 - **My data.** Export all your conversations as JSON, or delete them all in one step.
 - The interface is available in **Simplified Chinese and English**, with system, light and dark appearance.
 
@@ -74,8 +73,8 @@ The server is a Go program with the web app embedded in the binary, and PostgreS
 ### Spend and safety
 
 - **Per-model spending caps.** A dollar cap per model over a total, monthly or daily period; once reached the model is closed to users (administrators can be exempt). Spend comes from the usage log; a request stopped midway, or one whose provider reported no usage, is charged an estimate and marked as such.
-- **Answers at once.** Each account (3 by default) and each guest address (2 by default) can have only so many answers being written at the same time; administrators are exempt.
-- **Content moderation.** User input and images are checked before they reach the upstream (OpenAI Moderation or a model of your choice), blocking only high-risk categories. A blocked request writes nothing and goes into the moderation log; repeat offenders are disabled automatically, and guests are banned by address for a while. Off by default.
+- **Answers at once.** Each account (3 by default) can have only so many answers being written at the same time; administrators are exempt.
+- **Content moderation.** User input and images are checked before they reach the upstream (OpenAI Moderation or a model of your choice), blocking only high-risk categories. A blocked request writes nothing and goes into the moderation log; repeat offenders are disabled automatically. Off by default.
 - **End-user identifiers.** Requests to the official APIs carry a non-reversible identifier of the user, so a provider that finds abuse can tell which user it was rather than blaming the whole account.
 
 ### Admin panel
@@ -85,7 +84,7 @@ The server is a Go program with the web app embedded in the binary, and PostgreS
 - **Channels, models, users.** Add and remove channels, manage models, enable or disable accounts in bulk and approve new users.
 - **File storage.** Attachments go to local disk or any S3-compatible store (AWS S3, MinIO, Cloudflare R2 and others). You switch in the panel, it takes effect immediately without a restart, and existing files stay readable.
 - **Retention.** Set how long deleted conversations, unsent uploads and orphaned files are kept.
-- **System switches.** Guest mode and its limits, memory, generative UI, questions to the user, avatar uploads, the model used for background tasks such as titles, debug logging and more.
+- **System switches.** Memory, generative UI, questions to the user, avatar uploads, the model used for background tasks such as titles, debug logging and more.
 
 ### Deployment
 
@@ -129,7 +128,7 @@ Open `http://your-server:8080`. **This is for trying only.** Use the HTTPS setup
 The full guide is **[docs/deployment.en.md](docs/deployment.en.md)**. It covers:
 
 - requirements, configuration variables and pinning an image version;
-- first start, becoming the admin, adding channels, turning on guest mode;
+- first start, becoming the admin, adding channels;
 - updating, backup and restore;
 - moving attachments to S3;
 - running behind another reverse proxy or a CDN, and why per-IP limits depend on forwarded headers;
