@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net"
 	"net/url"
 	"strings"
@@ -26,12 +27,15 @@ import (
 type Backend interface {
 	PresignPut(ctx context.Context, key, contentType string, ttl time.Duration) (string, error)
 	PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error)
+	// PresignDownload is PresignGet for a link that saves the file, under
+	// filename, instead of showing it.
+	PresignDownload(ctx context.Context, key, filename string, ttl time.Duration) (string, error)
 	ObjectURL(key string) string
 	Size(ctx context.Context, key string) (int64, error)
 	Read(ctx context.Context, key string, limit int64) ([]byte, error)
 	// PutObject stores bytes the server holds itself, as opposed to the ones a
-	// browser uploads to a presigned URL: a guest's attachments, which come
-	// inside the request that uses them. An existing object is replaced.
+	// browser uploads to a presigned URL: a picture an image search found. An
+	// existing object is replaced.
 	PutObject(ctx context.Context, key, contentType string, data []byte) error
 	// Delete removes an object. One that is not there is not an error.
 	Delete(ctx context.Context, key string) error
@@ -123,6 +127,21 @@ func (s *Store) PresignGet(ctx context.Context, key string, ttl time.Duration) (
 	}, s3.WithPresignExpires(ttl))
 	if err != nil {
 		return "", fmt.Errorf("storage: presign get %q: %w", key, err)
+	}
+	return req.URL, nil
+}
+
+// PresignDownload returns a read URL whose response is an attachment named
+// filename: the bucket answers with the Content-Disposition the URL asks for.
+func (s *Store) PresignDownload(ctx context.Context, key, filename string, ttl time.Duration) (string, error) {
+	disposition := mime.FormatMediaType("attachment", map[string]string{"filename": filename})
+	req, err := s.presign.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket:                     &s.bucket,
+		Key:                        &key,
+		ResponseContentDisposition: &disposition,
+	}, s3.WithPresignExpires(ttl))
+	if err != nil {
+		return "", fmt.Errorf("storage: presign download %q: %w", key, err)
 	}
 	return req.URL, nil
 }

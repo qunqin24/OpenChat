@@ -6,6 +6,7 @@ import {
   MAX_FILES,
   MAX_TOTAL_BYTES,
   kindOf,
+  type FileKind,
   mediaTypeOf,
   rejectionOf,
   type Accepts,
@@ -18,7 +19,7 @@ export interface PendingAttachment {
   key: string
   name: string
   size: number
-  kind: 'image' | 'pdf'
+  kind: FileKind
   /** An object URL of the file itself, for the thumbnail of an image. */
   preview?: string
   status: 'uploading' | 'ready' | 'error'

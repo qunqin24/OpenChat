@@ -1,0 +1,353 @@
+/*
+ * The library (`/library`, LibraryPage): the files sent in every conversation,
+ * as a grid of thumbnails or a list. Chat-side tokens only (`--n-*`).
+ */
+
+.chat-ui .n-library-column {
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 8px 32px 48px;
+}
+
+.chat-ui .n-library-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-bottom: 20px;
+}
+
+.chat-ui .n-library-title {
+  margin: 0;
+  color: var(--n-text);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.chat-ui .n-library-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(100%, 300px);
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--n-line);
+  border-radius: 999px;
+  background: var(--n-bg);
+  color: var(--n-text-2);
+}
+
+.chat-ui .n-library-search:focus-within {
+  border-color: var(--n-text-3);
+}
+
+.chat-ui .n-library-search > svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.chat-ui .n-library-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--n-text);
+  font-size: 14px;
+  outline: none;
+}
+
+.chat-ui .n-library-search input::placeholder {
+  color: var(--n-text-3);
+}
+
+.chat-ui .n-library-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.chat-ui .n-library-filters,
+.chat-ui .n-library-views {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chat-ui .n-library-filter {
+  height: 34px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--n-text-2);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 150ms cubic-bezier(0.22, 1, 0.36, 1), color 150ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.chat-ui .n-library-filter:hover {
+  background: var(--n-hover);
+  color: var(--n-text);
+}
+
+.chat-ui .n-library-filter.active {
+  background: var(--n-hover-strong);
+  color: var(--n-text);
+  font-weight: 500;
+}
+
+/* --------------------------------------------------------------- states */
+.chat-ui .n-library-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40vh;
+  text-align: center;
+}
+
+.chat-ui .n-library-empty-title {
+  margin: 0;
+  color: var(--n-text);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.chat-ui .n-library-empty-hint {
+  margin: 0;
+  color: var(--n-text-2);
+  font-size: 14px;
+}
+
+.chat-ui .n-library-retry,
+.chat-ui .n-library-more {
+  border: 0;
+  background: transparent;
+  color: var(--n-text-2);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.chat-ui .n-library-retry:hover,
+.chat-ui .n-library-more:not(:disabled):hover {
+  color: var(--n-text);
+}
+
+.chat-ui .n-library-more {
+  display: block;
+  margin: 20px auto 0;
+  padding: 8px 12px;
+}
+
+/* ---------------------------------------------------------------- grid */
+.chat-ui .n-library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chat-ui .n-library-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-ui .n-library-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: 1px solid var(--n-line);
+  border-radius: 14px;
+  background: var(--n-panel);
+  transition: box-shadow 150ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.chat-ui .n-library-thumb:hover {
+  box-shadow: var(--n-shadow-card-hover);
+}
+
+.chat-ui .n-library-thumb img,
+.chat-ui .n-library-row-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.chat-ui .n-library-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--n-text-2);
+}
+
+.chat-ui .n-library-thumb .n-library-icon > svg {
+  width: 36px;
+  height: 36px;
+  stroke-width: 1.5;
+}
+
+.chat-ui .n-library-card-foot {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 0 2px;
+}
+
+.chat-ui .n-library-card-meta {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  line-height: 1.35;
+}
+
+.chat-ui .n-library-name {
+  overflow: hidden;
+  color: var(--n-text);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-ui .n-library-sub {
+  color: var(--n-text-2);
+  font-size: 12px;
+}
+
+.chat-ui .n-library-menu {
+  width: 28px;
+  height: 28px;
+  color: var(--n-text-2);
+}
+
+.chat-ui .n-library-menu[data-state='open']::before {
+  background: var(--n-hover-strong);
+}
+
+/* The menu names the conversation; a long title stops at the menu's edge. */
+.n-library-menu-label {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- list */
+.chat-ui .n-library-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.4fr) 88px 128px 36px;
+  align-items: center;
+  gap: 16px;
+  min-height: 56px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--n-line);
+  color: var(--n-text);
+  font-size: 14px;
+}
+
+.chat-ui .n-library-row:not(.is-head):hover {
+  background: var(--n-hover);
+}
+
+.chat-ui .n-library-row.is-head {
+  min-height: 40px;
+  color: var(--n-text-2);
+  font-size: 13px;
+}
+
+.chat-ui .n-library-row-name {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.chat-ui .n-library-row-thumb {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  border: 1px solid var(--n-line);
+  border-radius: 8px;
+  background: var(--n-panel);
+}
+
+.chat-ui .n-library-row-thumb .n-library-icon > svg {
+  width: 18px;
+  height: 18px;
+}
+
+.chat-ui .n-library-row-source {
+  min-width: 0;
+}
+
+.chat-ui .n-library-source {
+  display: block;
+  overflow: hidden;
+  color: var(--n-text-2);
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-ui .n-library-source:hover {
+  color: var(--n-text);
+  text-decoration: underline;
+}
+
+.chat-ui .n-library-size,
+.chat-ui .n-library-date {
+  color: var(--n-text-2);
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .chat-ui .n-library-column {
+    padding: 4px 16px 32px;
+  }
+
+  .chat-ui .n-library-search {
+    width: 100%;
+  }
+
+  .chat-ui .n-library-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+  }
+
+  /* Name and menu only; the rest is a tap away (the menu, the file). */
+  .chat-ui .n-library-row {
+    grid-template-columns: minmax(0, 1fr) 36px;
+  }
+
+  .chat-ui .n-library-row > :nth-child(2),
+  .chat-ui .n-library-row > :nth-child(3),
+  .chat-ui .n-library-row > :nth-child(4) {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-ui .n-library-filter,
+  .chat-ui .n-library-thumb {
+    transition: none;
+  }
+}

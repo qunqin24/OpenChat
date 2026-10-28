@@ -4,12 +4,16 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/storage"
 )
 
 // What was checked is what is sent.
@@ -63,13 +67,24 @@ func (d *fileDigests) of(id uuid.UUID) string {
 	return d.sum[id]
 }
 
-// checkedImages is attachmentImages that remembers what it read: the loader
-// the check calls, and the digests it fills in as it does. Nil when the message
-// has no image.
-func (s *Server) checkedImages(files []sqlc.Attachment) (func(ctx context.Context) ([]moderationImage, error), *fileDigests) {
+// checkedFiles is what a check of a message reads - its words, its pictures
+// (attachmentImages) and the words of its text files (attachmentTexts) - and
+// the digests of the files it read, filled in as it reads them.
+func (s *Server) checkedFiles(content string, files []sqlc.Attachment) (moderationInput, *fileDigests) {
+	digests := &fileDigests{}
+	in := moderationInput{text: content, images: s.checkedImages(files, digests)}
+	if texts := s.attachmentTexts(files, digests); texts != nil {
+		in.files = texts
+	}
+	return in, digests
+}
+
+// checkedImages is attachmentImages that notes what it read in digests. Nil
+// when the message has no image.
+func (s *Server) checkedImages(files []sqlc.Attachment, digests *fileDigests) func(ctx context.Context) ([]moderationImage, error) {
 	inner := s.attachmentImages(files)
 	if inner == nil {
-		return nil, nil
+		return nil
 	}
 	var images []sqlc.Attachment
 	for _, file := range files {
@@ -77,7 +92,6 @@ func (s *Server) checkedImages(files []sqlc.Attachment) (func(ctx context.Contex
 			images = append(images, file)
 		}
 	}
-	digests := &fileDigests{}
 	return func(ctx context.Context) ([]moderationImage, error) {
 		read, err := inner(ctx)
 		if err != nil {
@@ -90,7 +104,43 @@ func (s *Server) checkedImages(files []sqlc.Attachment) (func(ctx context.Contex
 			}
 		}
 		return read, nil
-	}, digests
+	}
+}
+
+// attachmentTexts loads the text files among a message's attachments for a
+// check, as the words the model will be shown (llm.FileBlock), and notes what
+// it read in digests. Nil when the message has none.
+func (s *Server) attachmentTexts(files []sqlc.Attachment, digests *fileDigests) func(ctx context.Context) (string, error) {
+	var texts []sqlc.Attachment
+	for _, file := range files {
+		if llm.ModalityOf(file.ContentType) == llm.ModalityText {
+			texts = append(texts, file)
+		}
+	}
+	if len(texts) == 0 {
+		return nil
+	}
+	return func(ctx context.Context) (string, error) {
+		var b strings.Builder
+		for _, file := range texts {
+			data, err := s.store.Read(ctx, file.StorageKey, maxTextFileBytes+1)
+			if errors.Is(err, storage.ErrTooLarge) {
+				return "", fmt.Errorf("a text file is larger than a check reads: %w", errTooLargeToCheck)
+			}
+			if err != nil {
+				return "", fmt.Errorf("read an attachment: %w", err)
+			}
+			digests.note(file.ID, data)
+			// Bytes that are not text are not sent (the model is told the file
+			// was left out), and are checked as what they would read as.
+			text, ok := llm.FileText(data)
+			if !ok {
+				text = strings.ToValidUTF8(string(data), "")
+			}
+			b.WriteString(llm.FileBlock(file.Filename, text))
+		}
+		return b.String(), nil
+	}
 }
 
 // inputPartsChecked is inputParts with the digests of the files a check read.

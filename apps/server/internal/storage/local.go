@@ -25,6 +25,10 @@ import (
 // object key follows it, S3 path-style.
 const ContentPath = "/api/v1/files/content/"
 
+// DownloadParam, set to 1 on a read URL, has the file served as an attachment
+// (PresignDownload).
+const DownloadParam = "download"
+
 var (
 	// ErrInvalidKey is a key that is not a plain relative path inside the
 	// storage directory.
@@ -151,6 +155,18 @@ func (l *Local) PresignPut(_ context.Context, key, _ string, ttl time.Duration) 
 // PresignGet returns a time-limited read URL for a stored object.
 func (l *Local) PresignGet(_ context.Context, key string, ttl time.Duration) (string, error) {
 	return l.presign("GET", key, ttl)
+}
+
+// PresignDownload is PresignGet with DownloadParam set, which has the handler
+// serve the file as an attachment. The handler names it from the attachment
+// row, so filename is not needed here; the parameter is outside the signature
+// because all it changes is how a file the holder may read anyway is offered.
+func (l *Local) PresignDownload(ctx context.Context, key, _ string, ttl time.Duration) (string, error) {
+	u, err := l.PresignGet(ctx, key, ttl)
+	if err != nil {
+		return "", err
+	}
+	return u + "&" + DownloadParam + "=1", nil
 }
 
 // ObjectURL is the canonical (unsigned) location of a key.

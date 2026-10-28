@@ -217,6 +217,9 @@ type AttachmentPart struct {
 	// second PUT), so what the model is sent is the bytes that were checked
 	// or nothing: the context builder compares what it reads against this.
 	SHA256 string
+	// Size is the stored file's length in bytes, when known: what a text file
+	// costs a request is estimated from it (EstimatePart).
+	Size int64
 
 	// Data is the resolved content when the builder chose to inline it.
 	Data []byte

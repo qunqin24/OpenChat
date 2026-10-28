@@ -9,10 +9,10 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
-	"github.com/qunqin/openchat/apps/server/internal/llm"
-	"github.com/qunqin/openchat/apps/server/internal/storage"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/storage"
 )
 
 // The two handlers below are the local storage driver's stand-in for the S3
@@ -150,8 +150,15 @@ func (s *Server) GetFileContent(w http.ResponseWriter, r *http.Request) {
 
 	h := w.Header()
 	h.Set("Content-Type", row.ContentType)
+	if row.ContentType == llm.TextMediaType {
+		h.Set("Content-Type", row.ContentType+"; charset=utf-8") // what a text file the model is sent must be
+	}
 	h.Set("X-Content-Type-Options", "nosniff")
-	h.Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": safeFilename(row.Filename, row.ContentType)}))
+	disposition := "inline"
+	if r.URL.Query().Get(storage.DownloadParam) == "1" {
+		disposition = "attachment"
+	}
+	h.Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{"filename": safeFilename(row.Filename, row.ContentType)}))
 	// The link is private to whoever was given it, and a new one is issued
 	// each time the transcript is read, so only the browser's own copy is kept.
 	h.Set("Cache-Control", "private, max-age=300")

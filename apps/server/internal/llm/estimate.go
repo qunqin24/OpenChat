@@ -80,6 +80,11 @@ func EstimatePart(part Part) int {
 	case ToolResultPart:
 		return EstimateText(p.Content)
 	case AttachmentPart:
+		// A text file goes as its words: about a token for every three bytes
+		// (Chinese is three bytes a character, English four a token).
+		if p.MediaType == TextMediaType && p.Size > 0 {
+			return int(p.Size/3) + MessageOverhead
+		}
 		return AttachmentTokens
 	}
 	return 0

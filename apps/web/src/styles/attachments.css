@@ -32,7 +32,8 @@
   width: var(--n-attach-size);
 }
 
-.chat-ui .n-attach.is-pdf {
+.chat-ui .n-attach.is-pdf,
+.chat-ui .n-attach.is-text {
   gap: 8px;
   max-width: 220px;
   padding: 0 28px 0 10px;
@@ -78,9 +79,14 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 8px;
-  background: var(--n-hover-strong);
+  border-radius: 9px;
+  background: var(--n-bg);
+  box-shadow: inset 0 0 0 1px var(--n-line);
   color: var(--n-text-2);
+}
+.chat-ui .n-attach-icon > svg {
+  width: 17px;
+  height: 17px;
 }
 
 .chat-ui .n-attach.is-error .n-attach-icon {
@@ -172,7 +178,9 @@
 
 .chat-ui .n-msg-image {
   display: block;
+  padding: 0;
   overflow: hidden;
+  cursor: zoom-in;
   border: 1px solid var(--n-line);
   border-radius: 14px;
   background: var(--n-panel);
@@ -201,3 +209,41 @@
 .chat-ui .n-msg-chip:hover {
   background: var(--n-hover);
 }
+
+/* A text file's chip opens it in the side panel, so it is a button. */
+.chat-ui button.n-msg-chip {
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+/* A file deleted from the library: where it was, not a way to it. */
+.chat-ui .n-msg-chip.is-removed {
+  border-style: dashed;
+  background: transparent;
+  color: var(--n-text-3);
+  cursor: default;
+}
+
+.chat-ui .n-msg-chip.is-removed:hover {
+  background: transparent;
+}
+
+.chat-ui .n-msg-chip.is-removed .n-attach-name {
+  text-decoration: line-through;
+}
+
+/* A file's icon (FileIcon) in the colour of its kind, wherever it is drawn:
+   the composer, a sent message, the library, the file panel. Text files are
+   told apart by their extension (lib/file-look.ts). */
+.chat-ui .n-file-icon { flex: none; }
+.chat-ui .n-file-icon.is-note { color: #2f7cf6; }
+.chat-ui .n-file-icon.is-data { color: #16a34a; }
+.chat-ui .n-file-icon.is-config { color: #d97706; }
+.chat-ui .n-file-icon.is-web { color: var(--n-text); }
+.chat-ui .n-file-icon.is-code { color: #7c3aed; }
+.chat-ui .n-file-icon.is-pdf { color: #e5484d; }
+.chat-ui .n-file-icon.is-image { color: #0d9488; }
+.chat-ui .n-file-icon.is-file { color: var(--n-text-2); }
+.dark .chat-ui .n-file-icon.is-note { color: #5b9bff; }
+.dark .chat-ui .n-file-icon.is-code { color: #a78bfa; }

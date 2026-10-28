@@ -17,11 +17,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/qunqin/openchat/apps/server/internal/agent"
-	"github.com/qunqin/openchat/apps/server/internal/auth"
-	"github.com/qunqin/openchat/apps/server/internal/config"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/storage"
+	"github.com/qunqin24/openchat/apps/server/internal/agent"
+	"github.com/qunqin24/openchat/apps/server/internal/auth"
+	"github.com/qunqin24/openchat/apps/server/internal/config"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/storage"
 )
 
 // The local-disk driver, over the real router: the browser's flow of asking for
@@ -277,6 +277,19 @@ func TestLocalStorageAttachments(t *testing.T) {
 			if got := res.Header.Get(header); got != want {
 				t.Errorf("%s = %q, want %q", header, got, want)
 			}
+		}
+
+		// The library's download link is the same file, offered for saving.
+		dl := httptest.NewRecorder()
+		dlReq := httptest.NewRequest(http.MethodGet, "/", nil)
+		server.GetFileDownload(dl, dlReq.WithContext(auth.WithUser(dlReq.Context(), alice)), up.Id)
+		var link FileDownload
+		if err := json.Unmarshal(dl.Body.Bytes(), &link); dl.Code != http.StatusOK || err != nil {
+			t.Fatalf("download link: %d %s", dl.Code, dl.Body)
+		}
+		saved := do(http.MethodGet, link.Url, "", nil)
+		if got := saved.Header.Get("Content-Disposition"); saved.StatusCode != http.StatusOK || got != "attachment; filename=square.png" {
+			t.Errorf("download: %d, Content-Disposition = %q", saved.StatusCode, got)
 		}
 
 		// Ranges work, which is what a PDF viewer asks for.

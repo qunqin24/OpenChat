@@ -2,7 +2,6 @@ import { isOpenChatError } from '@openchat/api-client'
 
 import { api, unwrap } from '@/lib/api'
 import { mediaTypeOf } from '@/lib/attachments'
-import { isGuestMode } from '@/lib/guest/mode'
 
 /** Why an upload failed, as the `chat.file.error.*` key that explains it. */
 export type UploadError = 'type' | 'size' | 'failed'
@@ -39,18 +38,6 @@ export async function uploadFile(
     if (code === 'unsupported_file_type') throw new UploadFailed('type')
     if (code === 'file_too_large') throw new UploadFailed('size')
     throw new UploadFailed('failed')
-  }
-
-  // A guest's files stay in the page, with the rest of their conversations,
-  // until a message carries them to the server in its run.
-  if (isGuestMode()) {
-    try {
-      await (await import('@/lib/guest')).putPendingFile(issued.id, file, contentType)
-    } catch {
-      throw new UploadFailed('failed')
-    }
-    onProgress(1)
-    return issued.id
   }
 
   await new Promise<void>((resolve, reject) => {

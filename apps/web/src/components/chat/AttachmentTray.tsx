@@ -1,10 +1,14 @@
-import { FileText, TriangleAlert, X } from 'lucide-react'
+import { TriangleAlert, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import type { PendingAttachment } from '@/hooks/use-attachments'
-import { formatSize } from '@/lib/attachments'
+import { formatSize, TEXT_TYPE, type FileKind } from '@/lib/attachments'
 import { cn } from '@/lib/utils'
+import { FileIcon } from './FileIcon'
 import Tooltip from './Tooltip'
+
+/** A type of the kind, for the icon: the tray knows a file by its kind. */
+const TYPE_OF_KIND: Record<FileKind, string> = { image: 'image/png', pdf: 'application/pdf', text: TEXT_TYPE }
 
 /**
  * The files waiting to go with the message, above the text box: a thumbnail
@@ -44,7 +48,7 @@ function AttachmentCard({ item, onRemove }: { item: PendingAttachment; onRemove:
 
   const card = (
     <li
-      className={cn('n-attach', item.kind === 'image' ? 'is-image' : 'is-pdf', item.status === 'error' && 'is-error')}
+      className={cn('n-attach', item.kind === 'image' ? 'is-image' : `is-${item.kind}`, item.status === 'error' && 'is-error')}
       aria-busy={item.status === 'uploading'}
     >
       {item.kind === 'image' ? (
@@ -64,7 +68,7 @@ function AttachmentCard({ item, onRemove }: { item: PendingAttachment; onRemove:
       ) : (
         <>
           <span className="n-attach-icon" aria-hidden>
-            {item.status === 'error' ? <TriangleAlert className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+            {item.status === 'error' ? <TriangleAlert className="h-4 w-4" /> : <FileIcon filename={item.name} contentType={TYPE_OF_KIND[item.kind]} />}
           </span>
           <span className="n-attach-meta">
             <span className="n-attach-name">{item.name}</span>

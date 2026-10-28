@@ -32,6 +32,10 @@ func (f *fakeS3) PresignGet(_ context.Context, key string, _ time.Duration) (str
 	return "https://" + f.name + ".test/get/" + key, nil
 }
 
+func (f *fakeS3) PresignDownload(_ context.Context, key, _ string, _ time.Duration) (string, error) {
+	return "https://" + f.name + ".test/download/" + key, nil
+}
+
 func (f *fakeS3) ObjectURL(key string) string { return "https://" + f.name + ".test/" + key }
 
 func (f *fakeS3) Size(_ context.Context, key string) (int64, error) {
@@ -143,7 +147,7 @@ func TestSwitchRoutesNewUploadsToTheCurrentDriver(t *testing.T) {
 	}
 }
 
-// PutObject (a guest's files) goes where an upload would: to the current driver.
+// PutObject (a picture a search found) goes where an upload would: to the current driver.
 func TestSwitchPutObjectGoesToTheCurrentDriver(t *testing.T) {
 	sw, fake := newTestSwitch(t)
 	ctx := context.Background()

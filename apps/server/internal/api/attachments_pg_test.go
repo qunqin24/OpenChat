@@ -15,9 +15,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/qunqin/openchat/apps/server/internal/agent"
-	"github.com/qunqin/openchat/apps/server/internal/auth"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/agent"
+	"github.com/qunqin24/openchat/apps/server/internal/auth"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
 )
 
 // memoryStore is a blob store that keeps bytes in a map. It stands in for S3 in
@@ -34,6 +34,10 @@ func (m *memoryStore) PresignPut(_ context.Context, key, _ string, _ time.Durati
 
 func (m *memoryStore) PresignGet(_ context.Context, key string, _ time.Duration) (string, error) {
 	return "http://blobs.test/get/" + key, nil
+}
+
+func (m *memoryStore) PresignDownload(_ context.Context, key, _ string, _ time.Duration) (string, error) {
+	return "http://blobs.test/download/" + key, nil
 }
 
 func (m *memoryStore) ObjectURL(key string) string { return "http://blobs.test/" + key }

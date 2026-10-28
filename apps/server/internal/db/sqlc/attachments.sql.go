@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const attachToMessage = `-- name: AttachToMessage :execrows
@@ -71,6 +72,45 @@ func (q *Queries) CreateAttachment(ctx context.Context, arg CreateAttachmentPara
 	return i, err
 }
 
+const deleteLibraryFile = `-- name: DeleteLibraryFile :one
+WITH target AS (SELECT a.id, m.conversation_id
+                FROM attachments a
+                         JOIN messages m ON m.id = a.message_id
+                         JOIN conversations c ON c.id = m.conversation_id
+                WHERE a.id = $1
+                  AND a.user_id = $2
+                  AND c.user_id = $2
+                  AND c.deleted_at IS NULL
+                  AND NOT c.temporary),
+     gone AS (DELETE FROM attachments
+         WHERE id = (SELECT id FROM target)
+         RETURNING storage_key)
+SELECT gone.storage_key, target.conversation_id
+FROM gone, target
+`
+
+type DeleteLibraryFileParams struct {
+	ID     uuid.UUID  `json:"id"`
+	UserID *uuid.UUID `json:"user_id"`
+}
+
+type DeleteLibraryFileRow struct {
+	StorageKey     string    `json:"storage_key"`
+	ConversationID uuid.UUID `json:"conversation_id"`
+}
+
+// Removes a file of the library, in its scope. The message keeps naming the
+// file in its parts, which is how it is shown as deleted and how the model is
+// told it is gone (agent.attachmentResolver). The storage key comes back for
+// the caller to delete the file once the row is gone, and the conversation for
+// it to tell the pages showing it.
+func (q *Queries) DeleteLibraryFile(ctx context.Context, arg DeleteLibraryFileParams) (DeleteLibraryFileRow, error) {
+	row := q.db.QueryRow(ctx, deleteLibraryFile, arg.ID, arg.UserID)
+	var i DeleteLibraryFileRow
+	err := row.Scan(&i.StorageKey, &i.ConversationID)
+	return i, err
+}
+
 const getAttachmentByStorageKey = `-- name: GetAttachmentByStorageKey :one
 SELECT id, message_id, storage_key, filename, content_type, size_bytes, created_at, user_id
 FROM attachments
@@ -81,6 +121,40 @@ WHERE storage_key = $1
 // the URL is what authorises the request, so there is no owner to check.
 func (q *Queries) GetAttachmentByStorageKey(ctx context.Context, storageKey string) (Attachment, error) {
 	row := q.db.QueryRow(ctx, getAttachmentByStorageKey, storageKey)
+	var i Attachment
+	err := row.Scan(
+		&i.ID,
+		&i.MessageID,
+		&i.StorageKey,
+		&i.Filename,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.CreatedAt,
+		&i.UserID,
+	)
+	return i, err
+}
+
+const getLibraryFile = `-- name: GetLibraryFile :one
+SELECT a.id, a.message_id, a.storage_key, a.filename, a.content_type, a.size_bytes, a.created_at, a.user_id
+FROM attachments a
+         JOIN messages m ON m.id = a.message_id
+         JOIN conversations c ON c.id = m.conversation_id
+WHERE a.id = $1
+  AND a.user_id = $2
+  AND c.user_id = $2
+  AND c.deleted_at IS NULL
+  AND NOT c.temporary
+`
+
+type GetLibraryFileParams struct {
+	ID     uuid.UUID  `json:"id"`
+	UserID *uuid.UUID `json:"user_id"`
+}
+
+// One file of the library, in the same scope as ListLibraryFiles.
+func (q *Queries) GetLibraryFile(ctx context.Context, arg GetLibraryFileParams) (Attachment, error) {
+	row := q.db.QueryRow(ctx, getLibraryFile, arg.ID, arg.UserID)
 	var i Attachment
 	err := row.Scan(
 		&i.ID,
@@ -163,6 +237,89 @@ func (q *Queries) ListAttachmentsForUser(ctx context.Context, arg ListAttachment
 			&i.SizeBytes,
 			&i.CreatedAt,
 			&i.UserID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLibraryFiles = `-- name: ListLibraryFiles :many
+SELECT a.id, a.message_id, a.storage_key, a.filename, a.content_type, a.size_bytes, a.created_at, a.user_id,
+       c.id    AS conversation_id,
+       c.title AS conversation_title
+FROM attachments a
+         JOIN messages m ON m.id = a.message_id
+         JOIN conversations c ON c.id = m.conversation_id
+WHERE a.user_id = $1
+  AND c.user_id = $1
+  AND c.deleted_at IS NULL
+  AND NOT c.temporary
+  AND ($2::text IS NULL OR a.content_type LIKE $2::text)
+  AND ($3::text IS NULL OR a.filename ILIKE $3::text)
+  AND ($4::timestamptz IS NULL
+    OR (a.created_at, a.id) < ($4::timestamptz, $5::uuid))
+ORDER BY a.created_at DESC, a.id DESC
+LIMIT $6
+`
+
+type ListLibraryFilesParams struct {
+	UserID          *uuid.UUID         `json:"user_id"`
+	ContentTypeLike *string            `json:"content_type_like"`
+	Pattern         *string            `json:"pattern"`
+	CursorCreatedAt pgtype.Timestamptz `json:"cursor_created_at"`
+	CursorID        *uuid.UUID         `json:"cursor_id"`
+	RowLimit        int32              `json:"row_limit"`
+}
+
+type ListLibraryFilesRow struct {
+	ID                uuid.UUID          `json:"id"`
+	MessageID         *uuid.UUID         `json:"message_id"`
+	StorageKey        string             `json:"storage_key"`
+	Filename          string             `json:"filename"`
+	ContentType       string             `json:"content_type"`
+	SizeBytes         int64              `json:"size_bytes"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UserID            *uuid.UUID         `json:"user_id"`
+	ConversationID    uuid.UUID          `json:"conversation_id"`
+	ConversationTitle string             `json:"conversation_title"`
+}
+
+// The library: the files a user sent, newest first, each with the conversation
+// it was sent in. Only conversations the user can still open - not deleted
+// ones, not temporary ones, which are not history - and only the user's own,
+// on both the file and the conversation.
+func (q *Queries) ListLibraryFiles(ctx context.Context, arg ListLibraryFilesParams) ([]ListLibraryFilesRow, error) {
+	rows, err := q.db.Query(ctx, listLibraryFiles,
+		arg.UserID,
+		arg.ContentTypeLike,
+		arg.Pattern,
+		arg.CursorCreatedAt,
+		arg.CursorID,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLibraryFilesRow{}
+	for rows.Next() {
+		var i ListLibraryFilesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.MessageID,
+			&i.StorageKey,
+			&i.Filename,
+			&i.ContentType,
+			&i.SizeBytes,
+			&i.CreatedAt,
+			&i.UserID,
+			&i.ConversationID,
+			&i.ConversationTitle,
 		); err != nil {
 			return nil, err
 		}

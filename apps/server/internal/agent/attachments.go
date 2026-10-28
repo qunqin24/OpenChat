@@ -11,8 +11,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 const (
@@ -100,6 +100,13 @@ func (a *attachmentResolver) resolve(ctx context.Context, messages []llm.Message
 				parts[j] = llm.TextPart{Text: fmt.Sprintf("\n\n[Attachment %q was not included: %s.]", ref.Filename, note)}
 				continue
 			}
+			if resolved.MediaType == llm.TextMediaType {
+				// A text file goes as words, which every model takes. sniff
+				// has found them to be text.
+				text, _ := llm.FileText(resolved.Data)
+				parts[j] = llm.TextPart{Text: llm.FileBlock(ref.Filename, text)}
+				continue
+			}
 			parts[j] = resolved
 		}
 		out[i].Parts = parts
@@ -116,7 +123,7 @@ func (a *attachmentResolver) one(ctx context.Context, ref llm.AttachmentPart, ro
 	}
 
 	modality := llm.ModalityOf(row.ContentType)
-	if modality == "" || !a.accepts(modality) {
+	if modality == "" || (modality != llm.ModalityText && !a.accepts(modality)) {
 		return ref, "the selected model does not accept this kind of file"
 	}
 	if a.read == nil {
@@ -144,6 +151,9 @@ func (a *attachmentResolver) one(ctx context.Context, ref llm.AttachmentPart, ro
 		}
 	}
 	mediaType, ok := sniff(modality, data)
+	if !ok && modality == llm.ModalityText {
+		return ref, "it is not UTF-8 text"
+	}
 	if !ok {
 		return ref, "the file is not what it claims to be"
 	}
@@ -168,6 +178,9 @@ func sniff(modality string, data []byte) (mediaType string, ok bool) {
 	switch modality {
 	case llm.ModalityPDF:
 		return "application/pdf", bytes.HasPrefix(data, []byte("%PDF-"))
+	case llm.ModalityText:
+		_, ok := llm.FileText(data)
+		return llm.TextMediaType, ok
 	case llm.ModalityImage:
 		detected := http.DetectContentType(data)
 		switch detected {

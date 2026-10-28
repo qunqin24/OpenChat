@@ -1,0 +1,153 @@
+/*
+ * The image viewer (ImageViewer): a picture full size over the page, dark
+ * around it in both themes, as photo viewers are. Chat-side tokens only.
+ */
+
+.chat-ui .n-viewer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgb(0 0 0 / 88%);
+}
+
+.chat-ui .n-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 81;
+  display: flex;
+  flex-direction: column;
+  color: #fff;
+  outline: none;
+}
+
+.chat-ui .n-viewer-overlay[data-state='open'] { animation: n-viewer-fade 160ms ease-out; }
+.chat-ui .n-viewer-overlay[data-state='closed'] { animation: n-viewer-fade 120ms ease-in reverse forwards; }
+.chat-ui .n-viewer[data-state='open'] .n-viewer-image { animation: n-viewer-in 200ms cubic-bezier(0.22, 1, 0.36, 1); }
+.chat-ui .n-viewer[data-state='closed'] { animation: n-viewer-fade 120ms ease-in reverse forwards; }
+
+@keyframes n-viewer-fade { from { opacity: 0; } }
+@keyframes n-viewer-in { from { opacity: 0; transform: scale(0.96); } }
+
+.chat-ui .n-viewer-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  height: 56px;
+  padding: 0 12px 0 20px;
+  padding-top: env(safe-area-inset-top);
+}
+
+.chat-ui .n-viewer-title {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-ui .n-viewer-count {
+  flex: none;
+  color: rgb(255 255 255 / 65%);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-ui .n-viewer-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.chat-ui .n-viewer-btn,
+.chat-ui .n-viewer-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  transition: background 150ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.chat-ui .n-viewer-btn {
+  width: 36px;
+  height: 36px;
+}
+
+.chat-ui :is(.n-viewer-btn, .n-viewer-nav) > svg {
+  width: 20px;
+  height: 20px;
+}
+
+.chat-ui .n-viewer-btn:hover,
+.chat-ui .n-viewer-nav:hover {
+  background: rgb(255 255 255 / 14%);
+}
+
+.chat-ui .n-viewer-stage {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 72px 32px;
+  padding-bottom: max(32px, env(safe-area-inset-bottom));
+}
+
+.chat-ui .n-viewer-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+  cursor: zoom-in;
+  user-select: none;
+}
+
+/* At its own size: the picture as large as it is, the stage scrolling round it. */
+.chat-ui .n-viewer-stage.is-actual {
+  display: block;
+  overflow: auto;
+  text-align: center;
+}
+
+.chat-ui .n-viewer-stage.is-actual .n-viewer-image {
+  max-width: none;
+  max-height: none;
+  cursor: zoom-out;
+}
+
+.chat-ui .n-viewer-failed {
+  color: rgb(255 255 255 / 70%);
+  font-size: 14px;
+}
+
+.chat-ui .n-viewer-nav {
+  position: absolute;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  margin-top: -22px;
+  background: rgb(255 255 255 / 8%);
+}
+
+.chat-ui .n-viewer-nav.is-prev { left: 16px; }
+.chat-ui .n-viewer-nav.is-next { right: 16px; }
+
+@media (max-width: 720px) {
+  .chat-ui .n-viewer-stage { padding: 8px 8px 24px; }
+  /* On a phone the picture takes the width; a swipe steps through. */
+  .chat-ui .n-viewer-nav { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-ui .n-viewer-overlay[data-state],
+  .chat-ui .n-viewer[data-state],
+  .chat-ui .n-viewer[data-state='open'] .n-viewer-image {
+    animation: none;
+  }
+}

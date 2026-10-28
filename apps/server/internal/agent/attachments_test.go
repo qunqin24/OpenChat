@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 // A 1x1 PNG and the smallest thing that starts like a PDF.
@@ -145,6 +145,29 @@ func TestResolveSendsWhatTheBytesAre(t *testing.T) {
 	}
 	if len(attachments(got[0])) != 0 || !strings.Contains(noteText(got[0]), "evil.png") {
 		t.Fatalf("parts = %+v, want a note instead of the file", got[0].Parts)
+	}
+}
+
+// A text file goes as its words, to a model that takes no files at all, marked
+// off with its name; one that is not UTF-8 text is left out and said to be.
+func TestResolveSendsTextFilesAsWords(t *testing.T) {
+	s := newStore()
+	notes := s.add("notes.md", llm.TextMediaType, []byte("\xef\xbb\xbf# 会议记录\n\n下周一 10 点。\n"))
+	binary := s.add("data.csv", llm.TextMediaType, []byte("a,b\x00\xff"))
+	got, err := s.resolver(1<<20).resolve(context.Background(), []llm.Message{userWith("总结一下", notes, binary)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(attachments(got[0])) != 0 {
+		t.Fatalf("parts = %+v, want words only", got[0].Parts)
+	}
+	text := noteText(got[0])
+	want := "总结一下\n\n<file name=\"notes.md\">\n# 会议记录\n\n下周一 10 点。\n</file>"
+	if !strings.HasPrefix(text, want) {
+		t.Errorf("text = %q, want it to start %q", text, want)
+	}
+	if !strings.Contains(text, `"data.csv" was not included: it is not UTF-8 text`) {
+		t.Errorf("text = %q, want the binary file said to be left out", text)
 	}
 }
 

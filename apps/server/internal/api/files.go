@@ -11,35 +11,54 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/qunqin/openchat/apps/server/internal/auth"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/auth"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 const uploadTTL = 15 * time.Minute
 
 // uploadable is what may be uploaded: the files a model can be sent, with the
 // largest of each. The images stop at the 5 MB the strictest provider takes; a
-// larger one would be accepted here and refused by the model.
+// larger one would be accepted here and refused by the model. A text file is
+// sent as words, so its bound is a share of a model's window, not a provider's.
 var uploadable = map[string]int64{
 	"image/png":       5 << 20,
 	"image/jpeg":      5 << 20,
 	"image/webp":      5 << 20,
 	"image/gif":       5 << 20,
 	"application/pdf": 10 << 20,
+	llm.TextMediaType: maxTextFileBytes,
+}
+
+// maxTextFileBytes bounds a text file: some 85,000 Chinese characters, or
+// 60,000 tokens of English.
+const maxTextFileBytes = 256 << 10
+
+// errUnsupportedFileType is the answer for a file of a kind that cannot be attached.
+var errUnsupportedFileType = httpx.NewError(http.StatusUnsupportedMediaType, "unsupported_file_type",
+	"only images (PNG, JPEG, WebP, GIF), PDFs and text files can be attached")
+
+// sizeLimit says a file's bound in the unit that reads best.
+func sizeLimit(bytes int64) string {
+	if bytes < 1<<20 {
+		return fmt.Sprintf("%d KiB", bytes>>10)
+	}
+	return fmt.Sprintf("%d MiB", bytes>>20)
 }
 
 // blobStore is the part of the blob store the handlers use.
 type blobStore interface {
 	PresignPut(ctx context.Context, key, contentType string, ttl time.Duration) (string, error)
 	PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error)
+	PresignDownload(ctx context.Context, key, filename string, ttl time.Duration) (string, error)
 	ObjectURL(key string) string
 	Size(ctx context.Context, key string) (int64, error)
 	// Read returns a stored file, refusing one larger than limit (content
 	// moderation reads the images of a message it checks).
 	Read(ctx context.Context, key string, limit int64) ([]byte, error)
-	// PutObject stores bytes the server received itself (a guest's files).
+	// PutObject stores bytes the server holds itself (a picture a search found).
 	PutObject(ctx context.Context, key, contentType string, data []byte) error
 	// Delete removes a stored file; the cleanup passes use it once the row that
 	// wanted the file is gone.
@@ -66,15 +85,14 @@ func (s *Server) CreateUpload(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "invalid_filename", "filename must not be empty"))
 		return
 	case !allowed:
-		httpx.Fail(w, r, httpx.NewError(http.StatusUnsupportedMediaType, "unsupported_file_type",
-			"only images (PNG, JPEG, WebP, GIF) and PDFs can be attached"))
+		httpx.Fail(w, r, errUnsupportedFileType)
 		return
 	case body.Size <= 0:
 		httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "invalid_size", "size must be positive"))
 		return
 	case body.Size > limit:
 		httpx.Fail(w, r, httpx.NewError(http.StatusRequestEntityTooLarge, "file_too_large",
-			fmt.Sprintf("a %s file can be at most %d MiB", llm.ModalityOf(contentType), limit>>20)))
+			fmt.Sprintf("a %s file can be at most %s", llm.ModalityOf(contentType), sizeLimit(limit))))
 		return
 	}
 
