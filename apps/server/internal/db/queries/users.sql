@@ -9,9 +9,8 @@ SELECT pg_advisory_xact_lock(hashtextextended('registration', 13));
 -- the admin panel, and there is no other bootstrap path. It is never pending
 -- and never refused, whatever the switches say - a fresh install must not be
 -- able to lock itself out. Everyone after it gets no row back while
--- registration is closed, and is pending while approval is required. A guest
--- (a user row that exists for one run, see guest.sql) is not an account and
--- does not count. The decision is made inside the INSERT, under the lock
+-- registration is closed, and is pending while approval is required. The
+-- decision is made inside the INSERT, under the lock
 -- LockRegistration takes.
 INSERT INTO users (email, name, password_hash, role, pending)
 SELECT sqlc.arg('email')::text,
@@ -19,7 +18,7 @@ SELECT sqlc.arg('email')::text,
        sqlc.arg('password_hash')::text,
        CASE WHEN c.n = 0 THEN 'admin'::user_role ELSE 'user'::user_role END,
        c.n > 0 AND sqlc.arg('needs_approval')::boolean
-FROM (SELECT count(*) AS n FROM users WHERE NOT guest) c
+FROM (SELECT count(*) AS n FROM users) c
 WHERE c.n = 0
    OR sqlc.arg('registration_open')::boolean
 RETURNING *;
@@ -27,7 +26,7 @@ RETURNING *;
 -- name: HasAccounts :one
 -- Whether anyone has registered yet. While nobody has, registration is open to
 -- the one account that becomes the administrator, however the switch is set.
-SELECT EXISTS (SELECT 1 FROM users WHERE NOT guest) AS has_accounts;
+SELECT EXISTS (SELECT 1 FROM users) AS has_accounts;
 
 -- name: GetUser :one
 SELECT *
@@ -45,16 +44,14 @@ WHERE id = $1;
 -- error. Addresses win, so nobody's username can shadow somebody's email.
 SELECT *
 FROM users
-WHERE NOT guest
-  AND (lower(email) = lower(sqlc.arg('identifier')::text)
+WHERE (lower(email) = lower(sqlc.arg('identifier')::text)
     OR lower(name) = lower(sqlc.arg('identifier')::text))
 ORDER BY (lower(email) = lower(sqlc.arg('identifier')::text)) DESC
 LIMIT 1;
 
 -- name: CountUsers :one
 SELECT count(*)
-FROM users
-WHERE NOT guest;
+FROM users;
 
 -- name: TouchUserSeen :exec
 UPDATE users
@@ -66,8 +63,7 @@ WHERE id = $1;
 -- total, and the row count here stays small enough that the scan is cheap.
 SELECT *
 FROM users
-WHERE NOT guest
-  AND (sqlc.narg('search')::text IS NULL
+WHERE (sqlc.narg('search')::text IS NULL
     OR email ILIKE '%' || sqlc.narg('search')::text || '%'
     OR name ILIKE '%' || sqlc.narg('search')::text || '%')
   AND (sqlc.narg('statuses')::text[] IS NULL
@@ -82,8 +78,7 @@ LIMIT sqlc.arg('row_limit') OFFSET sqlc.arg('row_offset');
 -- name: CountUsersFiltered :one
 SELECT count(*)
 FROM users
-WHERE NOT guest
-  AND (sqlc.narg('search')::text IS NULL
+WHERE (sqlc.narg('search')::text IS NULL
     OR email ILIKE '%' || sqlc.narg('search')::text || '%'
     OR name ILIKE '%' || sqlc.narg('search')::text || '%')
   AND (sqlc.narg('statuses')::text[] IS NULL
@@ -135,7 +130,6 @@ FROM users
 WHERE role = 'admin'
   AND disabled_at IS NULL
   AND NOT pending
-  AND NOT guest
 ORDER BY created_at, id
 LIMIT 1;
 
@@ -212,3 +206,37 @@ RETURNING *;
 SELECT *
 FROM users
 WHERE avatar_key = $1;
+
+-- name: LabelDeletedUserUsage :exec
+-- Before an account is deleted: its requests keep the name it had, as the
+-- foreign key is about to set their owner to NULL.
+UPDATE usage_logs
+SET deleted_user = sqlc.arg('name')
+WHERE user_id = sqlc.arg('user_id');
+
+-- name: CancelUserRuns :many
+-- Stop pressed for every run the account has going, before it is deleted:
+-- the runner is told after the commit.
+UPDATE runs
+SET cancel_requested = true,
+    updated_at       = now()
+WHERE user_id = sqlc.arg('user_id')
+  AND status = 'running'
+RETURNING id;
+
+-- name: DeleteAccount :one
+-- Deletes an account and, by
+-- cascade, its sessions, conversations, messages, runs, attachments, memories
+-- and scheduled tasks. The storage keys of its files and its picture come back
+-- in the same statement, for the files to be removed after the commit.
+WITH files AS (SELECT a.storage_key
+               FROM attachments a
+               WHERE a.user_id = sqlc.arg('id')
+                  OR a.message_id IN (SELECT m.id
+                                      FROM messages m
+                                               JOIN conversations c ON c.id = m.conversation_id
+                                      WHERE c.user_id = sqlc.arg('id'))),
+     gone AS (DELETE FROM users u WHERE u.id = sqlc.arg('id') RETURNING u.avatar_key)
+SELECT gone.avatar_key,
+       COALESCE((SELECT array_agg(DISTINCT files.storage_key) FROM files), '{}')::text[] AS storage_keys
+FROM gone;

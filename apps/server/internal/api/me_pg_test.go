@@ -22,11 +22,11 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/qunqin/openchat/apps/server/internal/agent"
-	"github.com/qunqin/openchat/apps/server/internal/auth"
-	"github.com/qunqin/openchat/apps/server/internal/config"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/storage"
+	"github.com/qunqin24/openchat/apps/server/internal/agent"
+	"github.com/qunqin24/openchat/apps/server/internal/auth"
+	"github.com/qunqin24/openchat/apps/server/internal/config"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/storage"
 )
 
 type mePG struct {
@@ -115,7 +115,7 @@ func (m *mePG) conversation(user sqlc.User, title, question string, temporary bo
 	if err != nil {
 		m.t.Fatal(err)
 	}
-	if _, err := appendInput(ctx, m.q, conv.ID, nil, question, nil); err != nil {
+	if _, err := appendInput(ctx, m.q, conv.ID, question, nil); err != nil {
 		m.t.Fatal(err)
 	}
 	return conv
@@ -432,7 +432,7 @@ func TestAvatarUploadAndRemoval(t *testing.T) {
 	// Where the picture is shown: the admin's list of accounts and the usage
 	// ledger's user column.
 	ctx := context.Background()
-	if err := m.q.InsertUsageLog(ctx, sqlc.InsertUsageLogParams{
+	if _, err := m.q.InsertUsageLog(ctx, sqlc.InsertUsageLogParams{
 		CreatedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}, Kind: "chat", Status: "ok",
 		UserID: &alice.ID, ChannelName: "c", ModelID: "avatar-model-" + alice.ID.String(), ServedModel: "",
 	}); err != nil {

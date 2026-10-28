@@ -16,10 +16,10 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/qunqin/openchat/apps/server/internal/auth"
-	"github.com/qunqin/openchat/apps/server/internal/config"
-	"github.com/qunqin/openchat/apps/server/internal/db/dbtest"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/auth"
+	"github.com/qunqin24/openchat/apps/server/internal/config"
+	"github.com/qunqin24/openchat/apps/server/internal/db/dbtest"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
 )
 
 // Sign-up control and the limits on signing in, over HTTP through the real
@@ -48,7 +48,7 @@ func newSignupHarness(t *testing.T) *signupHarness {
 	for _, stmt := range []string{
 		`DELETE FROM auth_attempts`,
 		`DELETE FROM users`,
-		`DELETE FROM app_settings WHERE key IN ('allow_registration', 'registration_approval', 'guest_mode')`,
+		`DELETE FROM app_settings WHERE key IN ('allow_registration', 'registration_approval')`,
 	} {
 		if _, err := pool.Exec(ctx, stmt); err != nil {
 			t.Fatal(err)
@@ -205,21 +205,6 @@ func TestFirstAccountIsAlwaysAnAdmin(t *testing.T) {
 				t.Errorf("the second account with allow=%v: %d %s", mode.allow, second.Code, second.Body)
 			}
 		})
-	}
-}
-
-// The first account ever: a guest row is not an account and does not take its place.
-func TestGuestsDoNotCountAsTheFirstAccount(t *testing.T) {
-	h := newSignupHarness(t)
-	h.modes(false, true)
-	if _, err := h.q.CreateGuestUser(context.Background(), sqlc.CreateGuestUserParams{
-		Email: "guest-" + uuid.NewString() + "@guest.invalid", Name: "guest-" + uuid.NewString(),
-	}); err != nil {
-		t.Fatal(err)
-	}
-	rec := h.register("10.0.0.1", "first")
-	if rec.Code != http.StatusCreated || h.userRow("first@test.invalid").Role != sqlc.UserRoleAdmin {
-		t.Fatalf("with only a guest row present: %d %s", rec.Code, rec.Body)
 	}
 }
 
@@ -517,24 +502,15 @@ func TestAuthOptions(t *testing.T) {
 		allow, approval bool
 		want            AuthOptions
 	}{
-		{false, true, AuthOptions{Registration: false, Approval: false}},
-		{false, false, AuthOptions{Registration: false, Approval: false}},
-		{true, true, AuthOptions{Registration: true, Approval: true}},
-		{true, false, AuthOptions{Registration: true, Approval: false}},
+		{false, true, AuthOptions{Registration: false, Approval: false, Passkeys: true}},
+		{false, false, AuthOptions{Registration: false, Approval: false, Passkeys: true}},
+		{true, true, AuthOptions{Registration: true, Approval: true, Passkeys: true}},
+		{true, false, AuthOptions{Registration: true, Approval: false, Passkeys: true}},
 	} {
 		h.modes(c.allow, c.approval)
 		if got := options(); got != c.want {
 			t.Errorf("allow=%v approval=%v: %+v, want %+v", c.allow, c.approval, got, c.want)
 		}
-	}
-
-	h.set(settingGuestMode, true)
-	if !options().Guest {
-		t.Error("guest mode on, options say off")
-	}
-	h.set(settingGuestMode, false)
-	if options().Guest {
-		t.Error("guest mode off, options say on")
 	}
 }
 

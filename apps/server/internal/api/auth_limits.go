@@ -6,7 +6,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -14,14 +16,14 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
 )
 
 // Brute-force protection for signing in and signing up.
 //
-// Attempts are rows in auth_attempts, counted per client address (clientIP in
-// guest.go: the address the RealIP middleware leaves in RemoteAddr, an IPv6
+// Attempts are rows in auth_attempts, counted per client address (clientIP:
+// the address the RealIP middleware leaves in RemoteAddr, an IPv6
 // address as its /64 - which is only as good as the proxy in front that sets
 // X-Forwarded-For; see deploy/Caddyfile). The limits are deliberately about the
 // address and never about the account alone: locking an account by its
@@ -147,4 +149,27 @@ func (s *Server) purgeAuthAttempts(ctx context.Context, now time.Time) {
 	if _, err := s.q.PurgeAuthAttempts(ctx, before); err != nil {
 		slog.WarnContext(ctx, "purge sign-in attempts", "error", err)
 	}
+}
+
+// clientIP is the address a request came from, as the RealIP middleware in the
+// router leaves it in RemoteAddr (it reads X-Forwarded-For and X-Real-IP, so
+// the server has to sit behind a proxy that sets them, or the header can be
+// forged to take a fresh allowance). An IPv6 address counts as its /64: one
+// subscriber is given billions of addresses there.
+func clientIP(r *http.Request) string {
+	host := r.RemoteAddr
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	addr, err := netip.ParseAddr(strings.TrimSpace(host))
+	if err != nil {
+		return host
+	}
+	addr = addr.Unmap()
+	if addr.Is6() {
+		if prefix, err := addr.Prefix(64); err == nil {
+			return prefix.String()
+		}
+	}
+	return addr.String()
 }

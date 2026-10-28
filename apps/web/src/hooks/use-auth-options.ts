@@ -5,8 +5,8 @@ import { queryKeys } from '@/lib/query-keys'
 
 /**
  * What the sign-in pages offer, as the administrator has set it: whether to
- * link to registration (and whether it will wait for approval), and whether to
- * offer "continue as guest". Public, so it can be read without a session.
+ * link to registration (and whether it will wait for approval). Public, so it
+ * can be read without a session.
  */
 export const authOptionsQueryOptions = queryOptions({
   queryKey: queryKeys.auth.options,
@@ -25,7 +25,7 @@ export function useAuthOptions() {
   const query = useQuery(authOptionsQueryOptions)
   return {
     registration: query.data?.registration ?? true,
-    guest: query.data?.guest ?? false,
+    passkeys: query.data?.passkeys ?? false,
     isPending: query.isPending,
   }
 }

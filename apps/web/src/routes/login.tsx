@@ -28,7 +28,7 @@ export const Route = createFileRoute('/login')({
     // Use the same chat-only destination as the successful form submission.
     const [session] = await Promise.all([
       context.queryClient.ensureQueryData(sessionQueryOptions),
-      // For the page to read (the registration link, the guest button); not
+      // For the page to read (the registration link); not
       // worth holding it back for if it cannot be had.
       context.queryClient.ensureQueryData(authOptionsQueryOptions).catch(() => undefined),
     ])

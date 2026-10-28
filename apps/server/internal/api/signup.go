@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
 )
 
 // Who may register, and what happens to them.
@@ -104,9 +104,14 @@ func (s *Server) GetAuthOptions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	registration := switches.open || !has
+	passkeys, err := loadPasskeys(ctx, s.q)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
 	httpx.JSON(w, http.StatusOK, AuthOptions{
+		Passkeys:     passkeys.Enabled && has,
 		Registration: registration,
 		Approval:     registration && has && switches.approval,
-		Guest:        s.guestEnabled(ctx),
 	})
 }

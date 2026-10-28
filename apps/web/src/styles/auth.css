@@ -1,178 +1,434 @@
 /**
- * Sign-in and sign-up screens.
+ * Sign-in and sign-up screens, and the full-window account page (waiting for
+ * approval, disabled).
  *
- * A visual port of OpenWebUI's auth route — `src/routes/auth/+page.svelte`
- * (with `src/lib/components/common/SensitiveInput.svelte` and
- * `Spinner.svelte`) at commit 0a7c15832fb30b1903753e83f81dc7d27e5b0944,
- * rebuilt as plain CSS on this app's class hooks. The upstream Tailwind
- * classes each rule mirrors are noted inline; OpenWebUI's grey ramp
- * (`--color-gray-*` in src/tailwind.css) is zero-chroma oklch, quoted
- * verbatim below.
+ * On the chat's tokens (`--n-*`): neutral greys, the black/white inversion as
+ * the one filled action, hue only for errors. The page splits in two — a dark
+ * panel carrying the brand (the mark's rings drawn across it, one line about
+ * what OpenChat is for) and the form on the page's own ground. On a phone the
+ * panel becomes a band across the top and the form slides up over its edge.
+ *
+ * `.n-auth`, `.n-auth-column`, `.n-auth-title`, `.n-auth-submit` and
+ * `.n-auth-link` also dress the 404 page and the dev loading preview, so they
+ * stay usable on their own; the split layout has classes of its own.
  *
  * Kept out of chat-theme.css, which is the chat surface's base layer.
- *
- * The look is deliberately bare: a plain white/black page, a centred column
- * no wider than 448px, borderless transparent inputs whose placeholders carry
- * the field's shape, and a single low-contrast pill button. There is no card,
- * no input ring, and no bold type anywhere on the page.
  */
 
-/* #auth-page + #auth-container: fixed, bg-white dark:bg-black,
-   text-black dark:text-white. `overflow-y: auto` plus `margin: auto` on the
-   column (rather than `justify-content: center`) keeps the top reachable on
-   windows shorter than the form — plain centring would clip it. */
+.n-auth,
+.n-account-overlay {
+  /* Page-local tokens. Fields are filled rather than outlined; the fill is a
+     step off the page, and focus swaps it for the page colour plus a ring. */
+  --auth-field: #f3f3f3;
+  --auth-field-hover: #ececec;
+  --auth-panel: #0d0d0d;
+  --auth-panel-ink: #ffffff;
+  --auth-panel-ink-2: rgb(255 255 255 / 0.55);
+  /* `--n-err` is a fill red; as small text on white it is under 4.5:1, so
+     messages use a deeper ink and the fill red only tints. */
+  --auth-err-ink: #c0262d;
+  --auth-err-fill: rgb(239 68 68 / 0.08);
+  --auth-wait: #e0a100;
+  --auth-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.dark .n-auth,
+.dark .n-account-overlay {
+  --auth-field: #222222;
+  --auth-field-hover: #282828;
+  --auth-panel: #1f1f1f;
+  --auth-err-ink: #ff8a80;
+  --auth-err-fill: rgb(239 68 68 / 0.12);
+}
+
+/* The page: fixed, scrolling on its own. `margin: auto` on the column
+   (rather than `justify-content: center`) keeps the top reachable on windows
+   shorter than the content — plain centring would clip it. */
 .n-auth {
   position: fixed;
   inset: 0;
   display: flex;
   flex-direction: column;
+  overflow-x: hidden;
   overflow-y: auto;
-  background: #ffffff;
-  color: #000000;
-  /* The OpenWebUI system-font-first stack the chat UI already aligned to
-     (--n-chat-font in chat-typography.css): -apple-system, then the bundled
-     Inter Variable, then system fallbacks. Everything on the page is
-     font-normal with no tracking. */
+  background: var(--n-bg);
+  color: var(--n-text);
   font-family: var(--n-chat-font, var(--font-sans));
   font-size: 16px;
   font-weight: 400;
   line-height: 1.5;
-  letter-spacing: 0;
+  -webkit-font-smoothing: antialiased;
 }
 
-.dark .n-auth {
-  background: #000000;
-  color: #ffffff;
-}
-
-/* The inner column: `w-full px-10` gutters, with the content capped at
-   `sm:max-w-md` (448px) — expressed as a 528px cap including the gutters,
-   active only from the sm breakpoint (640px) up, exactly like upstream;
-   below it the column stays full width. `margin: auto` plus the page's
-   overflow keeps the top reachable on short windows, and the extra bottom
-   padding reproduces the upstream `my-auto pb-10` lift above true centre.
-   Card text is dark:text-gray-100. */
+/* A plain centred column, for pages that use the auth look without the split
+   (the dev loading preview). */
 .n-auth-column {
   width: 100%;
+  max-width: 448px;
   margin: auto;
-  padding: 24px 40px 64px;
+  padding: 24px 24px 64px;
   text-align: center;
 }
 
-@media (min-width: 640px) {
-  .n-auth-column {
-    max-width: 528px; /* 448 + 2×40 gutters */
+/* ---- split layout ------------------------------------------------------- */
+
+.n-auth-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+}
+
+/* The brand panel: inset from the window edge with rounded corners, so it
+   reads as a picture on the page rather than half the page painted black. */
+.n-auth-panel {
+  position: relative;
+  min-height: 560px;
+  margin: 12px 0 12px 12px;
+  overflow: hidden;
+  border-radius: 24px;
+  background: var(--auth-panel);
+  color: var(--auth-panel-ink);
+  animation: n-auth-grow 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* The page arrives in four beats, each once the last has mostly landed:
+   the panel grows in from a smaller block (0–0.7s), the rings unfold inside
+   it (from 0.45s), the brand and the claim fade in (1.7s, 1.9s), and only
+   then the form side (2.3s). Reduced motion skips all of it. */
+@keyframes n-auth-grow {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
   }
 }
 
-.dark .n-auth-column {
-  color: oklch(0.94 0 0); /* --color-gray-100 */
+/* The lower half fades back to the panel so the claim reads over the rings. */
+.n-auth-panel::after {
+  content: '';
+  position: absolute;
+  inset: 45% 0 0;
+  background: linear-gradient(to bottom, transparent, var(--auth-panel) 78%);
+  pointer-events: none;
 }
 
-/* Header block: `mb-1`, holding only the title outside onboarding. */
+.n-auth-ripples {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.n-auth-ripples circle,
+.n-account-overlay-ripples circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-opacity: var(--ring-opacity);
+}
+
+/* The rings unfold once from their shared point (1000, 560 in the viewBox) —
+   smallest first, each slowing as it spreads, like a ripple on still water —
+   and then stay still. Strokes keep their 1px width while they scale. */
+.n-auth-ripples circle {
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  transform-box: view-box;
+  transform-origin: 1000px 560px;
+  animation: n-auth-unfold 1800ms cubic-bezier(0.12, 0.75, 0.2, 1) both;
+  animation-delay: calc(450ms + var(--ring-index) * 40ms);
+}
+
+@keyframes n-auth-unfold {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Once the rings have settled, the brand and then the claim fade in, then
+   the form side — plain fades, no travel. */
+.n-auth-panel .n-auth-brand,
+.n-auth-panel .n-auth-claim,
+.n-auth-split > .n-auth-side {
+  animation: n-auth-appear 700ms ease-out both;
+}
+
+.n-auth-panel .n-auth-brand {
+  animation-delay: 1.7s;
+}
+
+.n-auth-panel .n-auth-claim {
+  animation-delay: 1.9s;
+}
+
+.n-auth-split > .n-auth-side {
+  animation-delay: 2.3s;
+}
+
+@keyframes n-auth-appear {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Already played this visit (AuthShell's data-instant): no entrance. */
+.n-auth-split[data-instant] .n-auth-panel,
+.n-auth-split[data-instant] .n-auth-ripples circle,
+.n-auth-split[data-instant] .n-auth-brand,
+.n-auth-split[data-instant] .n-auth-claim,
+.n-auth-split[data-instant] > .n-auth-side {
+  animation: none;
+}
+
+/* Under reduced motion everything is simply there. (The global rule would
+   only shorten the animations, leaving their delays.) */
+@media (prefers-reduced-motion: reduce) {
+  .n-auth-panel,
+  .n-auth-ripples circle,
+  .n-auth-panel .n-auth-brand,
+  .n-auth-panel .n-auth-claim,
+  .n-auth-split > .n-auth-side {
+    animation: none;
+  }
+}
+
+/* The waiting page's rings breathe: a slow wave of brightness travelling
+   outward, already under way on the first frame (negative delays). */
+.n-account-overlay-ripples circle {
+  animation: n-auth-wave 6s ease-in-out infinite;
+  animation-delay: calc(var(--ring-index) * 0.22s - 6s);
+}
+
+@keyframes n-auth-wave {
+  50% {
+    stroke-opacity: calc(var(--ring-opacity) * 0.5);
+  }
+}
+
+.n-auth-brand {
+  position: absolute;
+  z-index: 1;
+  top: 28px;
+  left: 32px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 500;
+}
+
+.n-auth-brand-mark {
+  width: 22px;
+  height: 22px;
+}
+
+.n-auth-claim {
+  position: absolute;
+  z-index: 1;
+  left: 32px;
+  right: 32px;
+  bottom: 34px;
+}
+
+.n-auth-claim-line {
+  margin: 0;
+  font-size: clamp(30px, 3.4vw, 46px);
+  line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  white-space: pre-line;
+}
+
+.n-auth-claim-tagline {
+  margin: 14px 0 0;
+  color: var(--auth-panel-ink-2);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+/* The form side. */
+.n-auth-side {
+  display: flex;
+  min-width: 0;
+  padding: 48px 32px;
+}
+
+.n-auth-body {
+  width: 100%;
+  max-width: 360px;
+  margin: auto;
+  padding-bottom: 24px;
+}
+
+/* ---- head --------------------------------------------------------------- */
+
 .n-auth-head {
-  margin-bottom: 4px;
+  margin-bottom: 28px;
 }
 
-/* `text-2xl font-normal` — the title is deliberately *not* bold. */
+/* An icon in a soft disc above the title (registration closed). */
+.n-auth-head-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 22px;
+  border-radius: 999px;
+  background: var(--n-hover);
+}
+
+.n-auth-head-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* The headline reads like the chat's welcome: a medium first line and a
+   faint second line at the same size (chat-typography.css). */
 .n-auth-title {
   margin: 0;
-  font-size: 24px;
-  line-height: 32px;
+  font-size: 30px;
+  line-height: 36px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.n-auth-subtitle {
+  margin: 0;
+  color: var(--n-text-3);
+  font-size: 30px;
+  line-height: 36px;
   font-weight: 400;
 }
 
-/* The upstream form is `flex flex-col justify-center`. The flex context is
-   load-bearing for spacing: block siblings would collapse the header's
-   margin-bottom (4px) and the fields' margin-top (16px) into one 16px gap,
-   while flex items keep both — 20px from title to first label. */
+/* ---- fields ------------------------------------------------------------- */
+
 .n-auth-form {
   display: flex;
   flex-direction: column;
 }
 
-/* The form's field stack: `flex flex-col mt-4`. */
 .n-auth-fields {
   display: flex;
   flex-direction: column;
-  margin-top: 16px;
+  gap: 14px;
 }
 
-/* Upstream gives every field wrapper `mb-2` except the password's, so the
-   gap exists *between* fields only — none after the last one. */
-.n-auth-field + .n-auth-field {
-  margin-top: 8px;
+.n-auth-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 7px;
+  /* In from the pill's curve, so the text lines up with the input's. */
+  padding: 0 4px;
 }
 
-/* `text-sm font-normal text-left mb-1 block`, colour inherited. */
 .n-auth-label {
-  display: block;
-  margin-bottom: 4px;
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 400;
-  text-align: left;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
 }
 
-/* `my-0.5 w-full text-sm outline-hidden bg-transparent`: the input is bare
-   text on the page — no fill, border, or radius, and no focus ring; the
-   caret is the focus indicator (focus.css restates the outline removal). */
+.n-auth-hint {
+  color: var(--n-text-3);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* The filled box around the input (and the password's eye button): it carries
+   hover, focus and error, so the input itself stays bare. */
+.n-auth-control {
+  display: flex;
+  align-items: center;
+  height: 48px;
+  border-radius: 999px;
+  background: var(--auth-field);
+  transition:
+    background-color 200ms var(--auth-ease),
+    box-shadow 200ms var(--auth-ease);
+}
+
+.n-auth-control:hover {
+  background: var(--auth-field-hover);
+}
+
+/* Focus lights the field up rather than boxing it in: the page colour, a
+   faint hairline, and a soft halo around it. */
+.n-auth-control:focus-within {
+  background: var(--n-bg);
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--n-text) 22%, transparent),
+    0 0 0 5px color-mix(in oklab, var(--n-text) 6%, transparent);
+}
+
+.n-auth-control[data-invalid] {
+  background: var(--n-bg);
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--auth-err-ink) 55%, transparent),
+    0 0 0 5px color-mix(in oklab, var(--auth-err-ink) 10%, transparent);
+}
+
+.n-auth-control:has(.n-auth-input:disabled) {
+  opacity: 0.6;
+}
+
+/* No ring of its own: the control's `:focus-within` is the focus indicator
+   (focus.css restates the outline removal). */
 .n-auth-input {
-  display: block;
-  width: 100%;
-  margin: 2px 0;
-  padding: 0;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0 20px;
   border: 0;
+  border-radius: inherit;
   outline: none;
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 20px;
 }
 
 .n-auth-input::placeholder {
-  color: oklch(0.85 0 0); /* placeholder:text-gray-300 */
+  color: var(--n-text-3);
 }
 
-/* Inputs disable while a submission is in flight (upstream keeps them
-   editable; we block edits so the in-flight values stay the submitted ones).
-   With no box to grey out, the text itself dims. */
 .n-auth-input:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
 }
 
-.dark .n-auth-input::placeholder {
-  color: oklch(0.51 0 0); /* dark:placeholder:text-gray-600 */
-}
-
-/* Password row: SensitiveInput's `flex flex-1` wrapper, input plus the
-   show/hide button. */
-.n-auth-secret {
-  display: flex;
-  align-items: center;
-}
-
-/* SensitiveInput adds `py-0.5` to the input itself. */
-.n-auth-secret .n-auth-input {
-  flex: 1;
-  min-width: 0;
-  padding: 2px 0;
-}
-
-/* SensitiveInput's toggle: `pl-1.5 bg-transparent transition`, a bare 16px
-   icon (Lucide Eye/EyeOff per project convention) in the text colour. */
+/* SensitiveInput's show/hide toggle, inside the control at its right end. */
 .n-auth-reveal {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: none;
-  padding: 0 0 0 6px;
+  width: 34px;
+  height: 34px;
+  margin-right: 7px;
+  padding: 0;
   border: 0;
+  border-radius: 999px;
   background: transparent;
-  color: inherit;
+  color: var(--n-text-3);
   cursor: pointer;
+  transition:
+    color 150ms var(--auth-ease),
+    background-color 150ms var(--auth-ease);
+}
+
+.n-auth-reveal:hover {
+  background: var(--n-hover);
+  color: var(--n-text);
 }
 
 /**
@@ -189,28 +445,24 @@
  * The absurd transition delay is the standard trick for the split second
  * before the shadow lands, during which the blue would otherwise flash.
  *
- * The repaint matches the page ground — plain white, or plain black in dark
- * mode — because the inputs themselves are transparent.
+ * The repaint matches the control's fill; the control's rounding clips it.
  */
 .n-auth-input:-webkit-autofill,
 .n-auth-input:-webkit-autofill:hover,
 .n-auth-input:-webkit-autofill:focus,
 .n-auth-input:-webkit-autofill:active {
-  -webkit-text-fill-color: #000000;
-  -webkit-box-shadow: inset 0 0 0 1000px #ffffff;
-  box-shadow: inset 0 0 0 1000px #ffffff;
-  caret-color: #000000;
+  -webkit-text-fill-color: var(--n-text);
+  -webkit-box-shadow: inset 0 0 0 1000px var(--auth-field);
+  box-shadow: inset 0 0 0 1000px var(--auth-field);
+  caret-color: var(--n-text);
   transition: background-color 100000s ease-in-out 0s;
 }
 
-.dark .n-auth-input:-webkit-autofill,
-.dark .n-auth-input:-webkit-autofill:hover,
-.dark .n-auth-input:-webkit-autofill:focus,
-.dark .n-auth-input:-webkit-autofill:active {
-  -webkit-text-fill-color: oklch(0.94 0 0);
-  -webkit-box-shadow: inset 0 0 0 1000px #000000;
-  box-shadow: inset 0 0 0 1000px #000000;
-  caret-color: oklch(0.94 0 0);
+/* A focused or invalid control turns to the page colour; the repaint follows. */
+.n-auth-control:focus-within .n-auth-input:-webkit-autofill,
+.n-auth-control[data-invalid] .n-auth-input:-webkit-autofill {
+  -webkit-box-shadow: inset 0 0 0 1000px var(--n-bg);
+  box-shadow: inset 0 0 0 1000px var(--n-bg);
 }
 
 /* Firefox uses its own selector and does respect `background`. */
@@ -219,97 +471,168 @@
   color: inherit;
 }
 
-/* Field-level failure, under the input. OpenWebUI reports through toasts and
-   has no inline error style; ours keeps the translated message, set small and
-   left-aligned so it reads as belonging to the field above it. */
+/* Field-level failure, under its control. */
 .n-auth-error {
-  display: block;
-  margin-top: 4px;
-  color: var(--n-err);
-  font-size: 12px;
-  line-height: 16px;
-  text-align: left;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 7px;
+  padding: 0 4px;
+  color: var(--auth-err-ink);
+  font-size: 13px;
+  line-height: 19px;
 }
 
-/* The actions block: `mt-5`. */
+.n-auth-error-icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 2.5px;
+}
+
+/* ---- actions ------------------------------------------------------------ */
+
 .n-auth-actions {
-  margin-top: 20px;
+  margin-top: 24px;
 }
 
-/* Form-level failure (bad credentials), above the submit button — the inline
-   counterpart of OpenWebUI's error toast: text only, no box. */
+/* Failure of the whole attempt (bad credentials, rate limit, …) above the
+   button: one tinted note rather than bare red text. */
 .n-auth-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
   margin-bottom: 12px;
-  color: var(--n-err);
-  font-size: 14px;
+  padding: 11px 14px;
+  border-radius: 16px;
+  background: var(--auth-err-fill);
+  color: var(--auth-err-ink);
+  font-size: 13.5px;
   line-height: 20px;
+  animation: n-auth-fade 200ms var(--auth-ease) both;
 }
 
-/* What the page says in place of the form: registration done but waiting for an
-   administrator, or registration closed. Plain text in the page's own colour,
-   centred like the title - not an error. */
-.n-auth-notice {
-  margin-top: 4px;
-  font-size: 14px;
-  line-height: 20px;
-  text-align: center;
+.n-auth-alert-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
 }
 
-/* `bg-gray-700/5 hover:bg-gray-700/10 dark:bg-gray-100/5
-   dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white
-   transition w-full rounded-full font-normal text-sm py-2.5
-   disabled:opacity-50 flex justify-center` — a low-contrast pill, not a
-   filled button; in light mode the label keeps the page's black. */
+@keyframes n-auth-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+
+/* The one filled action: the chat's black/white inversion, as a pill like
+   the chat's own buttons. */
 .n-auth-submit {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: 10px 0;
+  height: 48px;
+  padding: 0 16px;
   border: 0;
-  border-radius: 9999px;
-  background: oklch(0.42 0 0 / 0.05); /* bg-gray-700/5 */
-  color: inherit;
+  border-radius: 999px;
+  background: var(--n-accent);
+  color: var(--n-accent-fg);
   font: inherit;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 20px;
-  font-weight: 400;
+  font-weight: 500;
   cursor: pointer;
   transition:
-    background-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
-    color 150ms cubic-bezier(0.4, 0, 0.2, 1),
-    opacity 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    background-color 150ms var(--auth-ease),
+    opacity 150ms var(--auth-ease),
+    transform 150ms var(--auth-ease);
 }
 
 .n-auth-submit:hover {
-  background: oklch(0.42 0 0 / 0.1); /* hover:bg-gray-700/10 */
+  background: var(--n-accent-hover);
 }
 
-.dark .n-auth-submit {
-  background: oklch(0.94 0 0 / 0.05); /* dark:bg-gray-100/5 */
-  color: oklch(0.85 0 0); /* dark:text-gray-300 */
-}
-
-.dark .n-auth-submit:hover {
-  background: oklch(0.94 0 0 / 0.1); /* dark:hover:bg-gray-100/10 */
-  color: #ffffff; /* dark:hover:text-white */
+.n-auth-submit:active:not(:disabled) {
+  transform: scale(0.985);
 }
 
 .n-auth-submit:disabled {
-  opacity: 0.5; /* disabled:opacity-50 */
+  cursor: default;
+  opacity: 0.7;
 }
 
-/* OpenWebUI's Spinner: 16px (size-4), a 25%-opacity ring with one rotating
-   arc, 0.75s per turn, `ml-1.5` after the label. Drawn here as a border
-   spinner, which is the same silhouette. Marked data-motion="essential" in
-   the markup: a frozen spinner reads as a hung request, so under
-   reduced-motion it keeps moving — see the pulse below. */
+/* Signing in with a passkey: the quiet button under the main one, apart from it. */
+.n-auth-passkey {
+  display: flex;
+  margin-top: 12px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 48px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--auth-field);
+  color: var(--n-text);
+  font: inherit;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 150ms var(--auth-ease), transform 150ms var(--auth-ease);
+}
+.n-auth-passkey:hover {
+  background: color-mix(in oklab, var(--auth-field), var(--n-text) 6%);
+}
+.n-auth-passkey:active:not(:disabled) {
+  transform: scale(0.985);
+}
+.n-auth-passkey:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.n-auth-passkey svg {
+  width: 18px;
+  height: 18px;
+}
+.n-auth-passkey .n-auth-spinner {
+  margin-left: 0;
+}
+
+/* The quiet alternative ("back to sign in" when registration is closed). */
+.n-auth-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 48px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--auth-field);
+  color: var(--n-text);
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 150ms var(--auth-ease);
+}
+
+.n-auth-secondary:hover {
+  background: var(--auth-field-hover);
+}
+
+/* A border spinner, 16px, 0.75s per turn, after the label. Marked
+   data-motion="essential" in the markup: a frozen spinner reads as a hung
+   request, so under reduced-motion it keeps moving — see the pulse below. */
 .n-auth-spinner {
   flex: none;
   align-self: center;
   width: 16px;
   height: 16px;
-  margin-left: 6px;
+  margin-left: 10px;
   border: 2px solid color-mix(in oklab, currentColor 25%, transparent);
   border-top-color: currentColor;
   border-radius: 999px;
@@ -342,153 +665,354 @@
   }
 }
 
-/* Sign-in ↔ sign-up switch: `mt-4 text-sm text-center`, colour inherited. */
+/* Sign-in ↔ sign-up switch. */
 .n-auth-switch {
-  margin-top: 16px;
+  margin-top: 18px;
+  color: var(--n-text-2);
   font-size: 14px;
   line-height: 20px;
   text-align: center;
 }
 
-/* Upstream is a plain `font-normal underline` button — always underlined,
-   same colour as the text around it, no hover change. */
 .n-auth-link {
-  color: inherit;
-  font-weight: 400;
+  color: var(--n-text);
+  font-weight: 500;
   text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 150ms var(--auth-ease);
 }
 
-/* The account overlay (AccountOverlay.tsx: waiting for approval, or banned),
-   after OpenWebUI's AccountPending overlay. `fixed w-full h-full flex z-999` with an inner `backdrop-blur-lg
-   bg-white/10 dark:bg-gray-900/50`: the login page stays visible behind,
-   frosted. `m-auto pb-10` centres the column a little above the middle. */
+.n-auth-link:hover {
+  text-decoration-color: currentColor;
+}
+
+/* What the page says in place of the form (registration closed). */
+.n-auth-notice {
+  margin: -16px 0 28px;
+  color: var(--n-text-2);
+  font-size: 15px;
+  line-height: 22px;
+}
+
+/* ---- phones ------------------------------------------------------------- */
+
+@media (max-width: 767.98px) {
+  .n-auth-split {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+  }
+
+  .n-auth-panel {
+    height: calc(30vh + env(safe-area-inset-top));
+    min-height: 210px;
+    margin: calc(-1 * env(safe-area-inset-top)) calc(-1 * env(safe-area-inset-right)) 0
+      calc(-1 * env(safe-area-inset-left));
+    border-radius: 0;
+  }
+
+  .n-auth-brand {
+    top: calc(20px + env(safe-area-inset-top));
+    left: calc(20px + env(safe-area-inset-left));
+  }
+
+  .n-auth-claim {
+    left: calc(20px + env(safe-area-inset-left));
+    bottom: 42px;
+  }
+
+  .n-auth-claim-line {
+    font-size: 25px;
+  }
+
+  .n-auth-claim-tagline {
+    display: none;
+  }
+
+  /* The form slides up over the band's lower edge. */
+  .n-auth-side {
+    position: relative;
+    z-index: 1;
+    margin-top: -22px;
+    padding: 30px 20px 40px;
+    border-radius: 22px 22px 0 0;
+    background: var(--n-bg);
+  }
+
+  .n-auth-body {
+    margin: 0 auto;
+  }
+
+  .n-auth-title,
+  .n-auth-subtitle {
+    font-size: 26px;
+    line-height: 32px;
+  }
+
+  .n-auth-head {
+    margin-bottom: 24px;
+  }
+
+  /* 16px keeps iOS from zooming the page into a focused field. */
+  .n-auth-input {
+    font-size: 16px;
+  }
+}
+
+/* ---- account page: waiting for approval, or disabled -------------------- */
+
+/* AccountOverlay.tsx. The whole window, on the page's own ground. */
 .n-account-overlay {
   position: fixed;
   inset: 0;
   z-index: 999;
   display: flex;
-  overflow-y: auto;
-  background: rgb(255 255 255 / 0.1); /* bg-white/10 */
-  -webkit-backdrop-filter: blur(16px); /* backdrop-blur-lg */
-  backdrop-filter: blur(16px);
-  animation: n-account-overlay-in 200ms ease-out both;
-}
-
-.dark .n-account-overlay {
-  background: oklch(0.2 0 0 / 0.5); /* dark:bg-gray-900/50 */
-}
-
-.n-account-overlay-column {
-  width: 100%;
-  max-width: 448px; /* max-w-md */
-  margin: auto;
-  padding: 24px 24px 64px; /* pb-10 plus the column's own gutter */
-  text-align: center;
-}
-
-/* `text-center text-2xl font-normal`, pre-wrap; white in dark mode. */
-.n-account-overlay-title {
-  margin: 0;
-  font-size: 24px;
-  line-height: 32px;
-  font-weight: 400;
-  white-space: pre-wrap;
-}
-
-.dark .n-account-overlay-title {
-  color: #ffffff;
-}
-
-/* `mt-4 text-center text-sm dark:text-gray-200`, pre-wrap so the locale's
-   line break shows. */
-.n-account-overlay-text {
-  margin: 16px 0 0;
-  font-size: 14px;
-  line-height: 20px;
-  white-space: pre-wrap;
-}
-
-.dark .n-account-overlay-text {
-  color: oklch(0.92 0 0); /* --color-gray-200 */
-}
-
-/* `mt-4 text-sm font-normal text-center`: "Admin: name (email)". */
-.n-account-overlay-admin {
-  margin: 16px 0 0;
-  font-size: 14px;
-  line-height: 20px;
-}
-
-.n-account-overlay-mail {
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-/* What checking again found. */
-.n-account-overlay-status {
-  margin: 12px 0 0;
-  font-size: 14px;
-  line-height: 20px;
-  opacity: 0.6;
-}
-
-/* `mt-6 mx-auto w-fit`: the button with the small link centred under it. */
-.n-account-overlay-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: fit-content;
-  margin: 24px auto 0;
-}
-
-/* `px-5 py-2 rounded-full bg-white border border-gray-100
-   dark:border-none hover:bg-gray-100 text-gray-700 font-normal text-sm`. */
-.n-account-overlay-button {
-  display: flex;
-  align-items: center;
-  padding: 8px 20px;
-  border: 1px solid oklch(0.94 0 0); /* border-gray-100 */
-  border-radius: 9999px;
-  background: #ffffff;
-  color: oklch(0.42 0 0); /* text-gray-700 */
-  font: inherit;
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 400;
-  cursor: pointer;
-  transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.dark .n-account-overlay-button {
-  border: none;
-}
-
-.n-account-overlay-button:hover {
-  background: oklch(0.94 0 0); /* hover:bg-gray-100 */
-}
-
-.n-account-overlay-button:disabled {
-  cursor: default;
-}
-
-/* `text-xs text-center w-full mt-2 text-gray-400 underline`. */
-.n-account-overlay-link {
-  width: 100%;
-  margin-top: 8px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: oklch(0.77 0 0); /* text-gray-400 */
-  font: inherit;
-  font-size: 12px;
-  line-height: 16px;
-  text-decoration: underline;
-  cursor: pointer;
+  overflow: hidden auto;
+  padding: max(32px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right))
+    max(32px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  background: var(--n-bg);
+  color: var(--n-text);
+  font-family: var(--n-chat-font, var(--font-sans));
+  -webkit-font-smoothing: antialiased;
+  animation: n-account-overlay-in 240ms ease-out both;
 }
 
 @keyframes n-account-overlay-in {
   from {
     opacity: 0;
+  }
+}
+
+.n-account-overlay-brand {
+  top: max(28px, env(safe-area-inset-top));
+  left: max(32px, env(safe-area-inset-left));
+}
+
+.n-account-overlay-column {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  max-width: 420px;
+  margin: auto;
+  padding-bottom: 6vh;
+  text-align: center;
+}
+
+.n-account-overlay-badge {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 28px;
+}
+
+.n-account-overlay-mark {
+  position: relative;
+  width: 72px;
+  height: 72px;
+}
+
+.n-account-overlay-mark circle {
+  animation: n-account-overlay-wait 2.4s ease-in-out infinite;
+}
+
+.n-account-overlay-mark circle:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.n-account-overlay-mark circle:nth-child(3) {
+  animation-delay: 0.3s;
+}
+.n-account-overlay-mark circle:nth-child(4) {
+  animation-delay: 0.45s;
+}
+.n-account-overlay-mark circle:nth-child(5) {
+  animation-delay: 0.6s;
+}
+.n-account-overlay-mark circle:nth-child(6) {
+  animation-delay: 0.75s;
+}
+
+@keyframes n-account-overlay-wait {
+  50% {
+    stroke-opacity: 0.15;
+  }
+}
+
+/* The rings spread from the badge across the window, cleared behind the
+   words so they never cross the text. */
+.n-account-overlay-ripples {
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  top: 50%;
+  width: 2400px;
+  height: 2400px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  -webkit-mask: radial-gradient(circle, transparent 0 360px, #000 560px);
+  mask: radial-gradient(circle, transparent 0 360px, #000 560px);
+}
+
+.n-account-overlay-ripples circle {
+  stroke-width: 0.8;
+}
+
+.n-account-overlay[data-tone='refused'] .n-account-overlay-badge {
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
+  background: var(--auth-err-fill);
+  color: var(--auth-err-ink);
+}
+
+.n-account-overlay-ban {
+  width: 28px;
+  height: 28px;
+}
+
+/* Same headline as the sign-in pages: medium, then faint at the same size. */
+.n-account-overlay-title {
+  margin: 0;
+  font-size: 30px;
+  line-height: 36px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.n-account-overlay-subtitle {
+  display: block;
+  color: var(--n-text-3);
+  font-weight: 400;
+}
+
+/* pre-line so the locale's line break shows. */
+.n-account-overlay-text {
+  margin: 20px 0 0;
+  color: var(--n-text-2);
+  font-size: 15px;
+  line-height: 24px;
+  white-space: pre-line;
+}
+
+/* Whom to ask: initial, name, address. */
+.n-account-overlay-admin {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 360px;
+  margin: 28px auto 0;
+  padding: 8px 20px 8px 8px;
+  border-radius: 999px;
+  background: var(--n-bg);
+  box-shadow: inset 0 0 0 1px var(--n-line);
+  text-align: left;
+}
+
+.n-account-overlay-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--n-accent);
+  color: var(--n-accent-fg);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.n-account-overlay-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.n-account-overlay-name {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+.n-account-overlay-mail {
+  overflow: hidden;
+  color: var(--n-text-2);
+  font-size: 13px;
+  line-height: 18px;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.n-account-overlay-mail:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* What checking again found; waiting gets an amber dot. */
+.n-account-overlay-status {
+  margin: 16px 0 0;
+  color: var(--n-text-2);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.n-account-overlay[data-tone='wait'] .n-account-overlay-status::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 7px;
+  border-radius: 999px;
+  background: var(--auth-wait);
+  vertical-align: 1px;
+}
+
+.n-account-overlay-actions {
+  display: grid;
+  gap: 6px;
+  max-width: 360px;
+  margin: 28px auto 0;
+}
+
+.n-account-overlay-link {
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--n-text-2);
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  cursor: pointer;
+  transition:
+    color 150ms var(--auth-ease),
+    background-color 150ms var(--auth-ease);
+}
+
+.n-account-overlay-link:hover {
+  background: var(--n-hover);
+  color: var(--n-text);
+}
+
+@media (max-width: 767.98px) {
+  .n-account-overlay {
+    padding-top: max(72px, calc(env(safe-area-inset-top) + 56px));
+  }
+
+  .n-account-overlay-brand {
+    top: max(20px, env(safe-area-inset-top));
+    left: max(20px, env(safe-area-inset-left));
+  }
+
+  .n-account-overlay-title {
+    font-size: 26px;
+    line-height: 32px;
+  }
+
+  .n-account-overlay-ripples {
+    -webkit-mask: radial-gradient(circle, transparent 0 340px, #000 480px);
+    mask: radial-gradient(circle, transparent 0 340px, #000 480px);
   }
 }

@@ -4,12 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 type Expired = typeof import('./session-expired')
 type Query = typeof import('./query')
 type Chat = typeof import('@/stores/chat-store')
-type Mode = typeof import('./guest/mode')
 
 let expired: Expired
 let query: Query
 let chat: Chat
-let mode: Mode
 // Built from the same copy of the module the code under test sees: after a
 // reset, an error of the earlier copy's class would not be an `instanceof` it.
 let unauthorized: OpenChatError
@@ -22,12 +20,10 @@ beforeEach(async () => {
   expired = await import('./session-expired')
   query = await import('./query')
   chat = await import('@/stores/chat-store')
-  mode = await import('./guest/mode')
   const client = await import('@openchat/api-client')
   failure = (status, code) => new client.OpenChatError(status, { code, message: code })
   unauthorized = failure(401, 'unauthorized')
   wrongPassword = failure(401, 'invalid_credentials')
-  mode.syncMode('/chat/1')
 })
 
 function fakeRouter(pathname = '/chat/1') {
@@ -94,15 +90,6 @@ describe('leaveIfSessionExpired', () => {
       await expired.leaveIfSessionExpired(unauthorized, router)
       expect(router.navigate).not.toHaveBeenCalled()
     }
-  })
-
-  it('leaves a guest alone', async () => {
-    signedIn()
-    mode.syncMode('/guest')
-    query.queryClient.setQueryData(['auth', 'session'], { id: 'u1' })
-    const router = fakeRouter('/guest')
-    await expired.leaveIfSessionExpired(unauthorized, router)
-    expect(router.navigate).not.toHaveBeenCalled()
   })
 
   it('leaves the verdict to the route guard when no session was ever believed in', async () => {

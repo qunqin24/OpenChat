@@ -10,9 +10,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/qunqin/openchat/apps/server/internal/auth"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/auth"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
 )
 
 const minPasswordLength = 8
@@ -262,9 +262,33 @@ func (s *Server) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, err)
 		return
 	}
-	if body.Name == nil && body.Email == nil {
+	if body.Name == nil && body.Email == nil && body.TimeZone == nil {
 		httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "nothing_to_update", "no changes were given"))
 		return
+	}
+	user := auth.MustUser(r.Context())
+
+	// Where the person is: what a model scheduling a task for them reads
+	// times in (task_tool.go). The page sends the browser's.
+	if body.TimeZone != nil {
+		zone := strings.TrimSpace(*body.TimeZone)
+		if _, err := time.LoadLocation(zone); err != nil || zone == "" || zone == "Local" {
+			httpx.Fail(w, r, httpx.NewFieldError("timeZone", "invalid_time_zone", "timeZone must be an IANA time zone name"))
+			return
+		}
+		if err := s.q.SetUserTimeZone(r.Context(), sqlc.SetUserTimeZoneParams{ID: user.ID, TimeZone: &zone}); err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+		if body.Name == nil && body.Email == nil {
+			updated, err := s.q.GetUser(r.Context(), user.ID)
+			if err != nil {
+				httpx.Fail(w, r, dbErr(err))
+				return
+			}
+			httpx.JSON(w, http.StatusOK, s.sessionUser(r.Context(), updated))
+			return
+		}
 	}
 
 	var name, email *string
@@ -287,7 +311,6 @@ func (s *Server) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		email = &trimmed
 	}
 
-	user := auth.MustUser(r.Context())
 	updated, err := s.q.UpdateOwnProfile(r.Context(), sqlc.UpdateOwnProfileParams{
 		ID:    user.ID,
 		Name:  name,

@@ -15,7 +15,7 @@ const adminCreateUser = `-- name: AdminCreateUser :one
 INSERT INTO users (email, name, password_hash, role, disabled_at)
 VALUES ($1, $2, $3, $4,
         CASE WHEN $5::boolean THEN now() ELSE NULL END)
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone
 `
 
 type AdminCreateUserParams struct {
@@ -52,12 +52,12 @@ func (q *Queries) AdminCreateUser(ctx context.Context, arg AdminCreateUserParams
 		&i.MemoryEnabled,
 		&i.MemoryLearn,
 		&i.AvatarKey,
-		&i.Guest,
 		&i.Pending,
 		&i.InstructionsAboutCheckedHash,
 		&i.InstructionsAboutBlockedHash,
 		&i.InstructionsStyleCheckedHash,
 		&i.InstructionsStyleBlockedHash,
+		&i.TimeZone,
 	)
 	return i, err
 }
@@ -76,7 +76,7 @@ SET name          = COALESCE($1::text, name),
     pending       = CASE WHEN $6::boolean IS TRUE THEN false ELSE pending END,
     updated_at    = now()
 WHERE id = $7
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone
 `
 
 type AdminUpdateUserParams struct {
@@ -124,12 +124,12 @@ func (q *Queries) AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams
 		&i.MemoryEnabled,
 		&i.MemoryLearn,
 		&i.AvatarKey,
-		&i.Guest,
 		&i.Pending,
 		&i.InstructionsAboutCheckedHash,
 		&i.InstructionsAboutBlockedHash,
 		&i.InstructionsStyleCheckedHash,
 		&i.InstructionsStyleBlockedHash,
+		&i.TimeZone,
 	)
 	return i, err
 }
@@ -192,6 +192,37 @@ func (q *Queries) BulkUpdateUserRole(ctx context.Context, arg BulkUpdateUserRole
 	return result.RowsAffected(), nil
 }
 
+const cancelUserRuns = `-- name: CancelUserRuns :many
+UPDATE runs
+SET cancel_requested = true,
+    updated_at       = now()
+WHERE user_id = $1
+  AND status = 'running'
+RETURNING id
+`
+
+// Stop pressed for every run the account has going, before it is deleted:
+// the runner is told after the commit.
+func (q *Queries) CancelUserRuns(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, cancelUserRuns, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countAdmins = `-- name: CountAdmins :one
 SELECT count(*)
 FROM users
@@ -209,7 +240,6 @@ func (q *Queries) CountAdmins(ctx context.Context) (int64, error) {
 const countUsers = `-- name: CountUsers :one
 SELECT count(*)
 FROM users
-WHERE NOT guest
 `
 
 func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
@@ -222,8 +252,7 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 const countUsersFiltered = `-- name: CountUsersFiltered :one
 SELECT count(*)
 FROM users
-WHERE NOT guest
-  AND ($1::text IS NULL
+WHERE ($1::text IS NULL
     OR email ILIKE '%' || $1::text || '%'
     OR name ILIKE '%' || $1::text || '%')
   AND ($2::text[] IS NULL
@@ -246,13 +275,42 @@ func (q *Queries) CountUsersFiltered(ctx context.Context, arg CountUsersFiltered
 	return count, err
 }
 
+const deleteAccount = `-- name: DeleteAccount :one
+WITH files AS (SELECT a.storage_key
+               FROM attachments a
+               WHERE a.user_id = $1
+                  OR a.message_id IN (SELECT m.id
+                                      FROM messages m
+                                               JOIN conversations c ON c.id = m.conversation_id
+                                      WHERE c.user_id = $1)),
+     gone AS (DELETE FROM users u WHERE u.id = $1 RETURNING u.avatar_key)
+SELECT gone.avatar_key,
+       COALESCE((SELECT array_agg(DISTINCT files.storage_key) FROM files), '{}')::text[] AS storage_keys
+FROM gone
+`
+
+type DeleteAccountRow struct {
+	AvatarKey   *string  `json:"avatar_key"`
+	StorageKeys []string `json:"storage_keys"`
+}
+
+// Deletes an account and, by
+// cascade, its sessions, conversations, messages, runs, attachments, memories
+// and scheduled tasks. The storage keys of its files and its picture come back
+// in the same statement, for the files to be removed after the commit.
+func (q *Queries) DeleteAccount(ctx context.Context, id *uuid.UUID) (DeleteAccountRow, error) {
+	row := q.db.QueryRow(ctx, deleteAccount, id)
+	var i DeleteAccountRow
+	err := row.Scan(&i.AvatarKey, &i.StorageKeys)
+	return i, err
+}
+
 const getContactAdmin = `-- name: GetContactAdmin :one
 SELECT name, email
 FROM users
 WHERE role = 'admin'
   AND disabled_at IS NULL
   AND NOT pending
-  AND NOT guest
 ORDER BY created_at, id
 LIMIT 1
 `
@@ -273,7 +331,7 @@ func (q *Queries) GetContactAdmin(ctx context.Context) (GetContactAdminRow, erro
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone
 FROM users
 WHERE id = $1
 `
@@ -296,18 +354,18 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.MemoryEnabled,
 		&i.MemoryLearn,
 		&i.AvatarKey,
-		&i.Guest,
 		&i.Pending,
 		&i.InstructionsAboutCheckedHash,
 		&i.InstructionsAboutBlockedHash,
 		&i.InstructionsStyleCheckedHash,
 		&i.InstructionsStyleBlockedHash,
+		&i.TimeZone,
 	)
 	return i, err
 }
 
 const getUserByAvatarKey = `-- name: GetUserByAvatarKey :one
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone
 FROM users
 WHERE avatar_key = $1
 `
@@ -332,21 +390,20 @@ func (q *Queries) GetUserByAvatarKey(ctx context.Context, avatarKey *string) (Us
 		&i.MemoryEnabled,
 		&i.MemoryLearn,
 		&i.AvatarKey,
-		&i.Guest,
 		&i.Pending,
 		&i.InstructionsAboutCheckedHash,
 		&i.InstructionsAboutBlockedHash,
 		&i.InstructionsStyleCheckedHash,
 		&i.InstructionsStyleBlockedHash,
+		&i.TimeZone,
 	)
 	return i, err
 }
 
 const getUserByLogin = `-- name: GetUserByLogin :one
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone
 FROM users
-WHERE NOT guest
-  AND (lower(email) = lower($1::text)
+WHERE (lower(email) = lower($1::text)
     OR lower(name) = lower($1::text))
 ORDER BY (lower(email) = lower($1::text)) DESC
 LIMIT 1
@@ -378,18 +435,18 @@ func (q *Queries) GetUserByLogin(ctx context.Context, identifier string) (User, 
 		&i.MemoryEnabled,
 		&i.MemoryLearn,
 		&i.AvatarKey,
-		&i.Guest,
 		&i.Pending,
 		&i.InstructionsAboutCheckedHash,
 		&i.InstructionsAboutBlockedHash,
 		&i.InstructionsStyleCheckedHash,
 		&i.InstructionsStyleBlockedHash,
+		&i.TimeZone,
 	)
 	return i, err
 }
 
 const hasAccounts = `-- name: HasAccounts :one
-SELECT EXISTS (SELECT 1 FROM users WHERE NOT guest) AS has_accounts
+SELECT EXISTS (SELECT 1 FROM users) AS has_accounts
 `
 
 // Whether anyone has registered yet. While nobody has, registration is open to
@@ -401,11 +458,28 @@ func (q *Queries) HasAccounts(ctx context.Context) (bool, error) {
 	return has_accounts, err
 }
 
+const labelDeletedUserUsage = `-- name: LabelDeletedUserUsage :exec
+UPDATE usage_logs
+SET deleted_user = $1
+WHERE user_id = $2
+`
+
+type LabelDeletedUserUsageParams struct {
+	Name   *string    `json:"name"`
+	UserID *uuid.UUID `json:"user_id"`
+}
+
+// Before an account is deleted: its requests keep the name it had, as the
+// foreign key is about to set their owner to NULL.
+func (q *Queries) LabelDeletedUserUsage(ctx context.Context, arg LabelDeletedUserUsageParams) error {
+	_, err := q.db.Exec(ctx, labelDeletedUserUsage, arg.Name, arg.UserID)
+	return err
+}
+
 const listUsers = `-- name: ListUsers :many
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone
 FROM users
-WHERE NOT guest
-  AND ($1::text IS NULL
+WHERE ($1::text IS NULL
     OR email ILIKE '%' || $1::text || '%'
     OR name ILIKE '%' || $1::text || '%')
   AND ($2::text[] IS NULL
@@ -456,12 +530,12 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.MemoryEnabled,
 			&i.MemoryLearn,
 			&i.AvatarKey,
-			&i.Guest,
 			&i.Pending,
 			&i.InstructionsAboutCheckedHash,
 			&i.InstructionsAboutBlockedHash,
 			&i.InstructionsStyleCheckedHash,
 			&i.InstructionsStyleBlockedHash,
+			&i.TimeZone,
 		); err != nil {
 			return nil, err
 		}
@@ -474,7 +548,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 }
 
 const listUsersByIDs = `-- name: ListUsersByIDs :many
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone
 FROM users
 WHERE id = ANY ($1::uuid[])
 `
@@ -503,12 +577,12 @@ func (q *Queries) ListUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]User, 
 			&i.MemoryEnabled,
 			&i.MemoryLearn,
 			&i.AvatarKey,
-			&i.Guest,
 			&i.Pending,
 			&i.InstructionsAboutCheckedHash,
 			&i.InstructionsAboutBlockedHash,
 			&i.InstructionsStyleCheckedHash,
 			&i.InstructionsStyleBlockedHash,
+			&i.TimeZone,
 		); err != nil {
 			return nil, err
 		}
@@ -553,10 +627,10 @@ SELECT $1::text,
        $3::text,
        CASE WHEN c.n = 0 THEN 'admin'::user_role ELSE 'user'::user_role END,
        c.n > 0 AND $4::boolean
-FROM (SELECT count(*) AS n FROM users WHERE NOT guest) c
+FROM (SELECT count(*) AS n FROM users) c
 WHERE c.n = 0
    OR $5::boolean
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone
 `
 
 type RegisterUserParams struct {
@@ -571,9 +645,8 @@ type RegisterUserParams struct {
 // the admin panel, and there is no other bootstrap path. It is never pending
 // and never refused, whatever the switches say - a fresh install must not be
 // able to lock itself out. Everyone after it gets no row back while
-// registration is closed, and is pending while approval is required. A guest
-// (a user row that exists for one run, see guest.sql) is not an account and
-// does not count. The decision is made inside the INSERT, under the lock
+// registration is closed, and is pending while approval is required. The
+// decision is made inside the INSERT, under the lock
 // LockRegistration takes.
 func (q *Queries) RegisterUser(ctx context.Context, arg RegisterUserParams) (User, error) {
 	row := q.db.QueryRow(ctx, registerUser,
@@ -599,12 +672,12 @@ func (q *Queries) RegisterUser(ctx context.Context, arg RegisterUserParams) (Use
 		&i.MemoryEnabled,
 		&i.MemoryLearn,
 		&i.AvatarKey,
-		&i.Guest,
 		&i.Pending,
 		&i.InstructionsAboutCheckedHash,
 		&i.InstructionsAboutBlockedHash,
 		&i.InstructionsStyleCheckedHash,
 		&i.InstructionsStyleBlockedHash,
+		&i.TimeZone,
 	)
 	return i, err
 }
@@ -614,7 +687,7 @@ UPDATE users
 SET avatar_key = $1::text,
     updated_at = now()
 WHERE id = $2
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone
 `
 
 type SetUserAvatarParams struct {
@@ -643,12 +716,12 @@ func (q *Queries) SetUserAvatar(ctx context.Context, arg SetUserAvatarParams) (U
 		&i.MemoryEnabled,
 		&i.MemoryLearn,
 		&i.AvatarKey,
-		&i.Guest,
 		&i.Pending,
 		&i.InstructionsAboutCheckedHash,
 		&i.InstructionsAboutBlockedHash,
 		&i.InstructionsStyleCheckedHash,
 		&i.InstructionsStyleBlockedHash,
+		&i.TimeZone,
 	)
 	return i, err
 }
@@ -670,7 +743,7 @@ SET name       = COALESCE($1::text, name),
     email      = COALESCE($2::text, email),
     updated_at = now()
 WHERE id = $3
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, guest, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone
 `
 
 type UpdateOwnProfileParams struct {
@@ -700,12 +773,12 @@ func (q *Queries) UpdateOwnProfile(ctx context.Context, arg UpdateOwnProfilePara
 		&i.MemoryEnabled,
 		&i.MemoryLearn,
 		&i.AvatarKey,
-		&i.Guest,
 		&i.Pending,
 		&i.InstructionsAboutCheckedHash,
 		&i.InstructionsAboutBlockedHash,
 		&i.InstructionsStyleCheckedHash,
 		&i.InstructionsStyleBlockedHash,
+		&i.TimeZone,
 	)
 	return i, err
 }

@@ -1,11 +1,13 @@
-import type { User } from '@openchat/api-client'
-import { MoreHorizontal, UserCheck, UserPen, UserRoundCheck, UserX } from 'lucide-react'
+import { isOpenChatError, type User } from '@openchat/api-client'
+import { MoreHorizontal, Trash2, UserCheck, UserPen, UserRoundCheck, UserX } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/shadcn/confirm-dialog'
 import { Button } from '@/components/shadcn/ui/button'
+import { Input } from '@/components/shadcn/ui/input'
+import { Label } from '@/components/shadcn/ui/label'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,7 +16,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/shadcn/ui/dropdown-menu'
-import { useUpdateUser } from '@/features/admin/use-admin'
+import { useDeleteUser, useUpdateUser } from '@/features/admin/use-admin'
 import { UsersActionDialog } from './users-action-dialog'
 
 type UsersRowActionsProps = {
@@ -24,10 +26,10 @@ type UsersRowActionsProps = {
 }
 
 /**
- * Upstream's destructive item deletes the account. There is no such endpoint
- * here on purpose — removing a user would cascade away every conversation they
- * own — so the second item disables instead, which cuts off access now and is
- * reversible from the same menu.
+ * Disabling cuts off access now and is reversible from the same menu; deleting
+ * removes the account with every conversation, file and memory it has, for
+ * good, so it asks for the account's name to be typed, as upstream's delete
+ * dialog does. Neither is offered for the signed-in admin's own account.
  *
  * An account that signed itself up and is waiting for a decision also gets
  * "approve", and its disable item reads "reject": rejecting is disabling, so a
@@ -37,8 +39,11 @@ type UsersRowActionsProps = {
 export function UsersRowActions({ user, isSelf }: UsersRowActionsProps) {
   const { t } = useTranslation()
   const updateUser = useUpdateUser()
+  const deleteUser = useDeleteUser()
   const [editing, setEditing] = useState(false)
   const [confirming, setConfirming] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [typed, setTyped] = useState('')
 
   // Waiting for a decision: not yet disabled (a rejected sign-up is disabled,
   // and from then on is an ordinary disabled account, which can be enabled).
@@ -53,6 +58,16 @@ export function UsersRowActions({ user, isSelf }: UsersRowActionsProps) {
       setConfirming(false)
     } catch {
       toast.error(t('admin.users.update-failed'))
+    }
+  }
+
+  const remove = async () => {
+    try {
+      await deleteUser.mutateAsync(user.id)
+      toast.success(t('admin.users.delete-done', { name: user.name }))
+      setDeleting(false)
+    } catch (error) {
+      toast.error(isOpenChatError(error) && error.code === 'last_admin' ? t('admin.users.last-admin') : t('admin.users.delete-failed'))
     }
   }
 
@@ -116,6 +131,20 @@ export function UsersRowActions({ user, isSelf }: UsersRowActionsProps) {
               </DropdownMenuShortcut>
             </DropdownMenuItem>
           )}
+
+          <DropdownMenuItem
+            variant="destructive"
+            disabled={isSelf}
+            onClick={() => {
+              setTyped('')
+              setDeleting(true)
+            }}
+          >
+            {t('admin.users.delete')}
+            <DropdownMenuShortcut>
+              <Trash2 size={16} />
+            </DropdownMenuShortcut>
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -138,6 +167,31 @@ export function UsersRowActions({ user, isSelf }: UsersRowActionsProps) {
         handleConfirm={() => void setDisabled(true)}
         className="sm:max-w-sm"
       />
+
+      <ConfirmDialog
+        open={deleting}
+        onOpenChange={setDeleting}
+        title={t('admin.users.delete-title')}
+        desc={t('admin.users.delete-confirm', { name: user.name })}
+        cancelBtnText={t('admin.ui.cancel')}
+        confirmText={t('admin.users.delete')}
+        destructive
+        disabled={typed.trim() !== user.name}
+        isLoading={deleteUser.isPending}
+        handleConfirm={() => void remove()}
+        className="sm:max-w-md"
+      >
+        <div className="grid gap-2">
+          <Label htmlFor={`delete-${user.id}`}>{t('admin.users.delete-type', { name: user.name })}</Label>
+          <Input
+            id={`delete-${user.id}`}
+            value={typed}
+            autoComplete="off"
+            placeholder={user.name}
+            onChange={(event) => setTyped(event.target.value)}
+          />
+        </div>
+      </ConfirmDialog>
     </>
   )
 }

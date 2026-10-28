@@ -72,6 +72,20 @@ export function useLogin() {
   })
 }
 
+/** A passkey sign-in; resolves to null when the person closed the browser's prompt. */
+export function usePasskeyLogin() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () => authApi.passkeyLogin(),
+    onSuccess: (user) => {
+      if (!user) return
+      dropEverything(queryClient)
+      queryClient.setQueryData(sessionQueryOptions.queryKey, user)
+    },
+  })
+}
+
 export function useRegister() {
   const queryClient = useQueryClient()
 

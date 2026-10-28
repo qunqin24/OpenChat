@@ -57,6 +57,12 @@ export interface AuthApi {
   updateProfile(input: UpdateProfileInput): Promise<SessionUser>
   /** Requires the current password; other sessions are revoked, this one is not. */
   changePassword(input: ChangePasswordInput): Promise<void>
+  /**
+   * Signs in with a passkey the browser offers: the server's challenge, the
+   * browser's prompt, the answer. Resolves to null when the person closed the
+   * prompt, which is no failure.
+   */
+  passkeyLogin(): Promise<SessionUser | null>
 }
 
 /**
@@ -82,6 +88,8 @@ export type AuthErrorKey =
   | 'auth.error.register-rate-limited'
   | 'auth.error.password-wrong'
   | 'auth.error.nothing-to-update'
+  | 'auth.error.invalid-passkey'
+  | 'auth.error.passkey-unsupported'
   | 'auth.error.unknown'
 
 /** Field-level failures the forms surface next to the offending input. */

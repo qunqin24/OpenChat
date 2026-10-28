@@ -1,20 +1,24 @@
+import { Ban } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { IconMark } from '@/assets/custom/icon-mark'
 import type { AdminContact } from '@/features/auth'
+import { WaitRipples } from './Ripples'
 
 /**
- * A frosted cover over the whole window for an account that exists but cannot
- * sign in: waiting for approval, or disabled. A port of OpenWebUI's
- * pending-account overlay (src/lib/components/layout/Overlay/AccountPending.svelte):
- * the page blurred behind, a centred `max-w-md` column, a two-line
- * `text-2xl font-normal` title, `text-sm` body, the administrator to contact,
- * one white pill button and a small underlined link under it.
+ * The whole window, for an account that exists but cannot sign in: waiting
+ * for approval, or disabled. Its own page rather than a dialog over the form
+ * (the flow is after OpenWebUI's AccountPending overlay): the brand in the
+ * corner, one centred column with a badge, a title with its subtitle, the
+ * body, the administrator to contact, and the way on. Waiting shows the mark
+ * with its rings spreading across the window; a refusal is a still red badge.
  *
  * The server says `pending_approval` or `account_disabled` only after the
  * password checks out, so neither tells anything to someone guessing.
  */
 function AccountOverlay({
+  tone,
   title,
   subtitle,
   text,
@@ -24,6 +28,7 @@ function AccountOverlay({
   secondary,
   onEscape,
 }: {
+  tone: 'wait' | 'refused'
   title: string
   subtitle: string
   text: string
@@ -34,6 +39,7 @@ function AccountOverlay({
   secondary?: { label: string; onClick: () => void }
   onEscape: () => void
 }) {
+  const { t } = useTranslation()
   const button = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
@@ -51,21 +57,35 @@ function AccountOverlay({
   return (
     <div
       className="n-account-overlay"
+      data-tone={tone}
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="n-account-overlay-title"
       aria-describedby="n-account-overlay-text"
     >
+      <div className="n-auth-brand n-account-overlay-brand" aria-hidden="true">
+        <IconMark className="n-auth-brand-mark" />
+        {t('app.name')}
+      </div>
       <div className="n-account-overlay-column">
+        <div className="n-account-overlay-badge" aria-hidden="true">
+          {tone === 'wait' ? (
+            <>
+              <WaitRipples />
+              <IconMark className="n-account-overlay-mark" />
+            </>
+          ) : (
+            <Ban className="n-account-overlay-ban" />
+          )}
+        </div>
         <h1 id="n-account-overlay-title" className="n-account-overlay-title">
           {title}
-          <br />
-          {subtitle}
+          <span className="n-account-overlay-subtitle">{subtitle}</span>
         </h1>
         <p id="n-account-overlay-text" className="n-account-overlay-text">
           {text}
         </p>
-        {admin && <AdminLine admin={admin} />}
+        {admin && <AdminCard admin={admin} />}
         {status && (
           <p className="n-account-overlay-status" role="status">
             {status}
@@ -75,11 +95,11 @@ function AccountOverlay({
           <button
             ref={button}
             type="button"
-            className="n-account-overlay-button"
+            className="n-auth-submit"
             disabled={action.busy}
             onClick={action.onClick}
           >
-            {action.label}
+            <span>{action.label}</span>
             {action.busy && <span className="n-auth-spinner" data-motion="essential" aria-hidden="true" />}
           </button>
           {secondary && (
@@ -94,20 +114,25 @@ function AccountOverlay({
 }
 
 /**
- * `mt-4 text-sm font-normal text-center`: "Admin: name (email)", the email a
- * mailto link. The server sends it only to someone who proved the password of
- * the account (or just registered it).
+ * Whom to ask: the administrator's initial, name and address (a mailto link).
+ * The server sends it only to someone who proved the password of the account
+ * (or just registered it).
  */
-function AdminLine({ admin }: { admin: AdminContact }) {
+function AdminCard({ admin }: { admin: AdminContact }) {
   const { t } = useTranslation()
+  const initial = Array.from(admin.name.trim())[0]?.toUpperCase() ?? '?'
   return (
-    <p className="n-account-overlay-admin">
-      {t('auth.overlay.admin', { name: admin.name })} (
-      <a className="n-account-overlay-mail" href={`mailto:${admin.email}`}>
-        {admin.email}
-      </a>
-      )
-    </p>
+    <div className="n-account-overlay-admin">
+      <span className="n-account-overlay-avatar" aria-hidden="true">
+        {initial}
+      </span>
+      <span className="n-account-overlay-who">
+        <span className="n-account-overlay-name">{t('auth.overlay.admin', { name: admin.name })}</span>
+        <a className="n-account-overlay-mail" href={`mailto:${admin.email}`}>
+          {admin.email}
+        </a>
+      </span>
+    </div>
   )
 }
 
@@ -116,37 +141,13 @@ export function BannedScreen({ admin, onBack }: { admin?: AdminContact; onBack: 
   const { t } = useTranslation()
   return (
     <AccountOverlay
+      tone="refused"
       title={t('auth.banned.title')}
       subtitle={t('auth.banned.subtitle')}
       text={t('auth.banned.text')}
       admin={admin}
       action={{ label: t('auth.banned.back'), onClick: onBack }}
       onEscape={onBack}
-    />
-  )
-}
-
-/**
- * A guest whose network address is banned from guest mode (content moderation):
- * the same frosted cover as a disabled account's, over the whole window. The
- * one way on is to sign in, if they have an account; the page behind asks the
- * server for nothing more.
- */
-export function GuestBannedScreen({ until, onSignIn }: { until: string | null; onSignIn: () => void }) {
-  const { t, i18n } = useTranslation()
-  const when = until ? new Date(until) : null
-  return (
-    <AccountOverlay
-      title={t('guest.banned.title')}
-      subtitle={t('guest.banned.subtitle')}
-      text={t('guest.banned.text')}
-      status={
-        when && !Number.isNaN(when.getTime())
-          ? t('guest.banned.until', { time: when.toLocaleString(i18n.language) })
-          : t('guest.banned.permanent')
-      }
-      action={{ label: t('guest.banned.sign-in'), onClick: onSignIn }}
-      onEscape={() => undefined}
     />
   )
 }
@@ -183,6 +184,7 @@ export function PendingScreen({
 
   return (
     <AccountOverlay
+      tone="wait"
       title={t('auth.pending.title')}
       subtitle={t('auth.pending.subtitle')}
       text={t('auth.pending.text')}

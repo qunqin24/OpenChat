@@ -3,8 +3,8 @@ package api
 import (
 	"net/http"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
 )
 
 // dashboardTop is how many rows each ranked list of the dashboard keeps.
@@ -127,7 +127,8 @@ func (s *Server) GetAdminDashboard(w http.ResponseWriter, r *http.Request, param
 	for _, u := range users {
 		out.Users = append(out.Users, DashboardUser{
 			UserId: u.UserID, UserName: u.UserName, UserEmail: u.UserEmail, UserAvatarUrl: s.avatarURL(ctx, u.UserAvatarKey),
-			Requests: u.Requests, Cost: u.Cost,
+			DeletedUser: nonEmpty(u.DeletedUser),
+			Requests:    u.Requests, Cost: u.Cost,
 		})
 	}
 	for _, e := range errs {
@@ -176,4 +177,12 @@ func latency(ms float64) *float64 {
 		return nil
 	}
 	return &ms
+}
+
+// nonEmpty is s, or nil when there is none.
+func nonEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }

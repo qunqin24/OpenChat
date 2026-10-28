@@ -651,3 +651,16 @@
   .chat-ui .n-temp-toggle span { display: none; }
   .chat-ui .n-temp-toggle { padding: 0 8px; }
 }
+
+/* The account's passkeys (Passkeys.tsx): a line each, its name renamed in place. */
+.chat-ui .n-settings-passkeys { margin-top: 20px; }
+.chat-ui .n-settings-passkey-list { display: flex; flex-direction: column; gap: 2px; margin: 10px 0 0; padding: 0; list-style: none; }
+.chat-ui .n-settings-passkey { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+.chat-ui .n-settings-passkey + .n-settings-passkey { border-top: 1px solid var(--n-line); }
+.chat-ui .n-settings-passkey-icon { flex: none; width: 18px; height: 18px; color: var(--n-text-2); }
+.chat-ui .n-settings-passkey-text { flex: 1; min-width: 0; }
+.chat-ui .n-settings-passkey-text .n-settings-help { margin: 0; }
+.chat-ui .n-settings-passkey-name { max-width: 100%; overflow: hidden; padding: 0; border: 0; background: none; color: var(--n-text); font: inherit; font-size: 14px; font-weight: 500; text-align: start; text-overflow: ellipsis; white-space: nowrap; cursor: text; }
+.chat-ui .n-settings-passkey-input { font-size: 14px; font-weight: 500; }
+.chat-ui .n-settings-passkey-actions { display: inline-flex; gap: 12px; }
+.chat-ui .n-settings-toggle.is-danger { color: var(--n-err); }

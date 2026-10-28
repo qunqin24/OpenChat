@@ -1,9 +1,10 @@
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
+import { CircleAlert, KeyRound } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { isAuthFieldError, type AuthErrorKey } from '@/features/auth'
-import { useLogin } from '@/features/auth/use-auth'
+import { useLogin, usePasskeyLogin } from '@/features/auth/use-auth'
 import { useAuthOptions } from '@/hooks/use-auth-options'
 import AuthField from './AuthField'
 import AuthShell from './AuthShell'
@@ -17,7 +18,8 @@ export function LoginPage() {
   const navigate = useNavigate()
   const { redirect } = useSearch({ from: '/login' })
   const login = useLogin()
-  // The registration link and the guest button are the administrator's to offer.
+  const passkey = usePasskeyLogin()
+  // The registration link is the administrator's to offer.
   const options = useAuthOptions()
 
   const [identifier, setIdentifier] = useState('')
@@ -58,6 +60,25 @@ export function LoginPage() {
 
   const failure = login.error && login.error !== dismissedFailure ? login.error : null
   const formError = isAuthFieldError(failure) ? failure.key : failure ? 'auth.error.unknown' : null
+  // A passkey's failure is a line on the form; a pending or disabled account
+  // says so there too (the overlays' "check again" re-sends a password).
+  const passkeyFailure = passkey.error && passkey.error !== dismissedFailure ? passkey.error : null
+  const passkeyError = isAuthFieldError(passkeyFailure) ? passkeyFailure.key : passkeyFailure ? 'auth.error.unknown' : null
+  const busy = login.isPending || passkey.isPending
+
+  const signInWithPasskey = async () => {
+    if (submittingRef.current) return
+    submittingRef.current = true
+    if (login.error) setDismissedFailure(login.error)
+    try {
+      const user = await passkey.mutateAsync()
+      if (user) await navigate({ to: redirect ?? '/' })
+    } catch {
+      // Rendered from `passkey.error` below.
+    } finally {
+      submittingRef.current = false
+    }
+  }
 
   const dismissFailure = () => {
     if (login.error) setDismissedFailure(login.error)
@@ -91,7 +112,17 @@ export function LoginPage() {
   }
 
   return (
-    <AuthShell title={t('auth.login.title', { name: t('app.name') })}>
+    <AuthShell
+      title={t('auth.login.title', { name: t('app.name') })}
+      subtitle={t('auth.login.subtitle')}
+      overlay={
+        banned ? (
+          <BannedScreen admin={contact} onBack={leaveOverlay} />
+        ) : pending ? (
+          <PendingScreen admin={contact} check={checkAgain} onBack={leaveOverlay} />
+        ) : null
+      }
+    >
       <form className="n-auth-form" onSubmit={(event) => void handleSubmit(event)} noValidate>
         <div className="n-auth-fields">
           <AuthField
@@ -103,7 +134,7 @@ export function LoginPage() {
             autoFocus
             placeholder={t('auth.field.identifier-placeholder')}
             value={identifier}
-            disabled={login.isPending}
+            disabled={busy}
             error={errors.identifier && t(errors.identifier)}
             onChange={(event) => {
               setIdentifier(event.target.value)
@@ -118,7 +149,7 @@ export function LoginPage() {
             autoComplete="current-password"
             placeholder={t('auth.field.password-placeholder')}
             value={password}
-            disabled={login.isPending}
+            disabled={busy}
             error={errors.password && t(errors.password)}
             onChange={(event) => {
               setPassword(event.target.value)
@@ -129,18 +160,30 @@ export function LoginPage() {
         </div>
 
         <div className="n-auth-actions">
-          {formError && !banned && !pending && (
+          {(passkeyError ?? (formError && !banned && !pending ? formError : null)) && (
             <div className="n-auth-alert" role="alert">
-              {t(formError)}
+              <CircleAlert className="n-auth-alert-icon" aria-hidden="true" />
+              <span>{t(passkeyError ?? formError!)}</span>
             </div>
           )}
 
-          <button type="submit" className="n-auth-submit" disabled={login.isPending}>
+          <button type="submit" className="n-auth-submit" disabled={busy}>
             <span>{t('auth.login.action')}</span>
             {login.isPending && (
               <span className="n-auth-spinner" data-motion="essential" aria-hidden="true" />
             )}
           </button>
+
+          {options.passkeys && (
+            <button type="button" className="n-auth-passkey" disabled={busy} onClick={() => void signInWithPasskey()}>
+              {passkey.isPending ? (
+                <span className="n-auth-spinner" data-motion="essential" aria-hidden="true" />
+              ) : (
+                <KeyRound aria-hidden="true" />
+              )}
+              <span>{t('auth.login.passkey')}</span>
+            </button>
+          )}
 
           {options.registration && (
             <div className="n-auth-switch">
@@ -150,19 +193,8 @@ export function LoginPage() {
               </Link>
             </div>
           )}
-
-          {options.guest && (
-            <div className="n-auth-guest">
-              <Link className="n-auth-guest-button" to="/guest">
-                {t('auth.login.guest')}
-              </Link>
-              <p className="n-auth-guest-hint">{t('auth.login.guest-hint')}</p>
-            </div>
-          )}
         </div>
       </form>
-      {banned && <BannedScreen admin={contact} onBack={leaveOverlay} />}
-      {pending && <PendingScreen admin={contact} check={checkAgain} onBack={leaveOverlay} />}
     </AuthShell>
   )
 }

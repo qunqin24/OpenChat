@@ -11,8 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/dbtest"
-	"github.com/qunqin/openchat/apps/server/internal/db/migrations"
+	"github.com/qunqin24/openchat/apps/server/internal/db/dbtest"
+	"github.com/qunqin24/openchat/apps/server/internal/db/migrations"
 )
 
 // The sign-up control migration (20261022000001) against accounts as the
@@ -25,43 +25,8 @@ const (
 )
 
 func TestSignupControlMigrationLeavesAccountsApproved(t *testing.T) {
-	dsn := dbtest.URL()
-	if dsn == "" {
-		t.Skip("set TEST_DATABASE_URL to run the migration tests")
-	}
 	ctx := context.Background()
-	cfg, err := pgxpool.ParseConfig(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	admin, err := dbtest.ConnectServer(ctx, cfg.ConnConfig)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	name := "openchat_mig_" + strings.ReplaceAll(uuid.NewString()[:8], "-", "")
-	if _, err := admin.Exec(ctx, "CREATE DATABASE "+name); err != nil {
-		_ = admin.Close(ctx)
-		t.Skipf("cannot create a scratch database: %v", err)
-	}
-	t.Cleanup(func() {
-		_, _ = admin.Exec(context.Background(), "DROP DATABASE IF EXISTS "+name+" WITH (FORCE)")
-		_ = admin.Close(context.Background())
-	})
-	own := cfg.Copy()
-	own.ConnConfig.Database = name
-	pool, err := pgxpool.NewWithConfig(ctx, own)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(pool.Close)
-	conn := stdlib.OpenDBFromPool(pool)
-	t.Cleanup(func() { _ = conn.Close() })
-
-	goose.SetBaseFS(migrations.FS)
-	if err := goose.SetDialect("postgres"); err != nil {
-		t.Fatal(err)
-	}
-	goose.SetLogger(goose.NopLogger())
+	pool, conn := migrationDatabase(t)
 	if err := goose.UpToContext(ctx, conn, ".", beforeSignupControl); err != nil {
 		t.Fatalf("migrate to the version before: %v", err)
 	}
@@ -128,6 +93,50 @@ func TestSignupControlMigrationLeavesAccountsApproved(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM users WHERE id = ANY($1)`, ids).Scan(&kept); err != nil || kept != len(ids) {
 		t.Errorf("accounts after rolling back: %d (%v), want %d", kept, err, len(ids))
 	}
+}
+
+// migrationDatabase is an empty scratch database for running migrations on,
+// dropped when the test ends, with goose set up to read the embedded files.
+func migrationDatabase(t *testing.T) (*pgxpool.Pool, *sql.DB) {
+	t.Helper()
+	dsn := dbtest.URL()
+	if dsn == "" {
+		t.Skip("set TEST_DATABASE_URL to run the migration tests")
+	}
+	ctx := context.Background()
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin, err := dbtest.ConnectServer(ctx, cfg.ConnConfig)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	name := "openchat_mig_" + strings.ReplaceAll(uuid.NewString()[:8], "-", "")
+	if _, err := admin.Exec(ctx, "CREATE DATABASE "+name); err != nil {
+		_ = admin.Close(ctx)
+		t.Skipf("cannot create a scratch database: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = admin.Exec(context.Background(), "DROP DATABASE IF EXISTS "+name+" WITH (FORCE)")
+		_ = admin.Close(context.Background())
+	})
+	own := cfg.Copy()
+	own.ConnConfig.Database = name
+	pool, err := pgxpool.NewWithConfig(ctx, own)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	conn := stdlib.OpenDBFromPool(pool)
+	t.Cleanup(func() { _ = conn.Close() })
+
+	goose.SetBaseFS(migrations.FS)
+	if err := goose.SetDialect("postgres"); err != nil {
+		t.Fatal(err)
+	}
+	goose.SetLogger(goose.NopLogger())
+	return pool, conn
 }
 
 func assertNoColumn(t *testing.T, conn *sql.DB, table, column string) {

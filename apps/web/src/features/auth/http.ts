@@ -1,3 +1,5 @@
+import { startAuthentication, WebAuthnError } from '@simplewebauthn/browser'
+
 import { api } from '@/lib/api'
 import {
   AuthFieldError,
@@ -32,6 +34,7 @@ const SERVER_ERRORS: Record<string, AuthErrorKey> = {
   login_rate_limited: 'auth.error.login-rate-limited',
   register_rate_limited: 'auth.error.register-rate-limited',
   nothing_to_update: 'auth.error.nothing-to-update',
+  invalid_passkey: 'auth.error.invalid-passkey',
 }
 
 interface ServerError {
@@ -49,6 +52,7 @@ function adminOf(value: unknown): AdminContact | undefined {
 
 /** Failures of the whole attempt rather than of one input: shown as the form's banner. */
 const FORM_LEVEL = new Set([
+  'invalid_passkey',
   'pending_approval',
   'registration_closed',
   'login_rate_limited',
@@ -111,5 +115,33 @@ export function createHttpAuthApi(): AuthApi {
       const { error } = await api.POST('/auth/password', { body: input })
       if (error) throw toAuthError(error)
     },
+
+    async passkeyLogin() {
+      const begun = await api.POST('/auth/passkey/options')
+      if (begun.error || !begun.data) throw toAuthError(begun.error)
+      let credential
+      try {
+        credential = await startAuthentication({ optionsJSON: begun.data.publicKey as never })
+      } catch (error) {
+        if (passkeyDeclined(error)) return null
+        throw new AuthFieldError('form', unsupported(error) ? 'auth.error.passkey-unsupported' : 'auth.error.invalid-passkey')
+      }
+      const { data, error } = await api.POST('/auth/passkey', {
+        body: { challengeId: begun.data.challengeId, credential: credential as unknown as Record<string, unknown> },
+      })
+      if (error) throw toAuthError(error)
+      return data as SessionUser
+    },
   }
+}
+
+/** The person closed the browser's passkey prompt, or let it time out: nothing to report. */
+export function passkeyDeclined(error: unknown): boolean {
+  const name = error instanceof WebAuthnError ? (error.cause as Error | undefined)?.name : (error as Error | undefined)?.name
+  return name === 'NotAllowedError' || name === 'AbortError'
+}
+
+/** The browser cannot do passkeys at all. */
+function unsupported(error: unknown): boolean {
+  return error instanceof Error && /not supported|does not support/i.test(error.message)
 }

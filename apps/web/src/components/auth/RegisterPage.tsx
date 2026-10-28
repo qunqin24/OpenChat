@@ -1,4 +1,5 @@
 import { Link, useNavigate } from '@tanstack/react-router'
+import { CircleAlert, Lock } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -8,7 +9,7 @@ import { useAuthOptions } from '@/hooks/use-auth-options'
 import AuthField from './AuthField'
 import { BannedScreen, PendingScreen } from './AccountOverlay'
 import AuthShell from './AuthShell'
-import { validateEmail, validateName, validatePassword } from './validation'
+import { MIN_PASSWORD_LENGTH, validateEmail, validateName, validatePassword } from './validation'
 
 type Errors = Partial<Record<'email' | 'name' | 'password', AuthErrorKey>>
 type FormField = 'email' | 'name' | 'password'
@@ -108,21 +109,19 @@ export function RegisterPage() {
 
   if (!options.registration && !waiting) {
     return (
-      <AuthShell title={t('auth.register.closed-title')}>
+      <AuthShell title={t('auth.register.closed-title')} icon={<Lock aria-hidden="true" />}>
         <p className="n-auth-notice" role="status">
           {t('auth.register.closed')}
         </p>
-        <div className="n-auth-switch">
-          <Link className="n-auth-link" to="/login">
-            {t('auth.register.to-login')}
-          </Link>
-        </div>
+        <Link className="n-auth-secondary" to="/login">
+          {t('auth.register.to-login')}
+        </Link>
       </AuthShell>
     )
   }
 
-  // Registered in approval mode: the form stays behind a frosted cover saying
-  // so, as the login page does for an account that is not approved yet.
+  // Registered in approval mode: a full-window page says so over the form, as
+  // the login page does for an account that is not approved yet.
   const refused = isAuthFieldError(login.error) ? login.error.key : null
   const contact = (isAuthFieldError(login.error) ? login.error.admin : undefined) ?? registeredContact
   const toLogin = () => void navigate({ to: '/login' })
@@ -136,7 +135,18 @@ export function RegisterPage() {
   }
 
   return (
-    <AuthShell title={t('auth.register.title', { name: t('app.name') })}>
+    <AuthShell
+      title={t('auth.register.title', { name: t('app.name') })}
+      subtitle={t('auth.register.subtitle')}
+      overlay={
+        waiting &&
+        (refused === 'auth.error.account-disabled' ? (
+          <BannedScreen admin={contact} onBack={toLogin} />
+        ) : (
+          <PendingScreen admin={contact} check={checkAgain} onBack={toLogin} />
+        ))
+      }
+    >
       <form className="n-auth-form" onSubmit={(event) => void handleSubmit(event)} noValidate>
         <div className="n-auth-fields">
           <AuthField
@@ -171,6 +181,7 @@ export function RegisterPage() {
 
           <AuthField
             label={t('auth.field.password')}
+            hint={t('auth.register.password-hint', { min: MIN_PASSWORD_LENGTH })}
             secret
             autoComplete="new-password"
             placeholder={t('auth.field.password-placeholder')}
@@ -188,7 +199,8 @@ export function RegisterPage() {
         <div className="n-auth-actions">
           {formError && (
             <div className="n-auth-alert" role="alert">
-              {t(formError)}
+              <CircleAlert className="n-auth-alert-icon" aria-hidden="true" />
+              <span>{t(formError)}</span>
             </div>
           )}
 
@@ -207,12 +219,6 @@ export function RegisterPage() {
           </div>
         </div>
       </form>
-      {waiting &&
-        (refused === 'auth.error.account-disabled' ? (
-          <BannedScreen admin={contact} onBack={toLogin} />
-        ) : (
-          <PendingScreen admin={contact} check={checkAgain} onBack={toLogin} />
-        ))}
     </AuthShell>
   )
 }

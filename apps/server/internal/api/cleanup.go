@@ -7,8 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/storage"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/storage"
 )
 
 const (
@@ -108,17 +108,18 @@ func (s *Server) CleanupNow(ctx context.Context) {
 		return len(keys), keys, err
 	})
 
-	// Guests left behind by a process that died mid-run, and the request counts
-	// no limit looks at any more.
-	s.sweepGuests(ctx, now.Add(-guestStaleAfter))
-
 	// The sign-in and sign-up attempts no limit looks at any more.
 	s.purgeAuthAttempts(ctx, now)
+	// Passkey ceremonies nobody finished.
+	s.purgeChallenges(ctx, now)
 
-	// The moderation log past its 90 days, and the guest bans that ran out.
+	// The moderation log past its 90 days.
 	s.purgeModeration(ctx, now)
 
 	s.sweepOrphanFiles(ctx, now.Add(-keep.orphanFiles))
+
+	// Request traces are a week's debugging aid, not a record.
+	s.purgeTraces(ctx, at(traceRetention))
 
 	if _, err := s.notes().PurgeEvents(ctx); err != nil {
 		slog.WarnContext(ctx, "purge old memory events", "error", err)

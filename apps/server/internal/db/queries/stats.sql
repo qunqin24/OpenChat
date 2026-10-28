@@ -21,7 +21,7 @@ SELECT (date_trunc(sqlc.arg('bucket')::text, now())
        (date_trunc(sqlc.arg('bucket')::text, now())
         - (2 * sqlc.arg('buckets')::int - 1) * CASE sqlc.arg('bucket')::text WHEN 'hour' THEN interval '1 hour' ELSE interval '1 day' END
        )::timestamptz AS prev_since,
-       (SELECT count(*) FROM users WHERE disabled_at IS NULL AND NOT guest)::bigint AS total_users;
+       (SELECT count(*) FROM users WHERE disabled_at IS NULL)::bigint AS total_users;
 
 -- name: GetDashboardKpis :one
 -- The headline figures for [from_time, to_time); an open `to_time` runs up to now.
@@ -35,7 +35,7 @@ SELECT count(*)::bigint                                          AS requests,
        (coalesce(sum(cache_read_tokens * (input_price - cache_read_price)) FILTER (WHERE status = 'ok'), 0)
            / 1000000)::double precision                          AS cache_savings,
        coalesce(sum(cost), 0)::double precision                  AS cost,
-       count(DISTINCT user_id) FILTER (WHERE user_id IN (SELECT id FROM users WHERE NOT guest))::bigint AS active_users,
+       count(DISTINCT user_id)::bigint AS active_users,
        coalesce(percentile_cont(0.5) WITHIN GROUP (ORDER BY first_token_ms)
            FILTER (WHERE status = 'ok' AND first_token_ms IS NOT NULL), -1)::double precision  AS first_token_p50_ms,
        coalesce(percentile_cont(0.95) WITHIN GROUP (ORDER BY first_token_ms)
@@ -107,18 +107,21 @@ ORDER BY count(*) DESC, channel_name
 LIMIT sqlc.arg('row_limit');
 
 -- name: GetDashboardUsers :many
--- Who spends the most. Requests with no owner group as one: they are guests'
--- (an account is never deleted, and a guest is deleted when its run ends).
+-- Who spends the most. Requests with no owner group by the name of the
+-- account an administrator deleted (DeleteUser), and those with neither as
+-- one.
 SELECT u.id                                                      AS user_id,
        u.name                                                    AS user_name,
        u.email                                                   AS user_email,
        u.avatar_key                                              AS user_avatar_key,
+       -- '' for an account that is still there, and for a request with no name.
+       coalesce(CASE WHEN u.id IS NULL THEN l.deleted_user END, '')::text AS deleted_user,
        count(*)::bigint                                          AS requests,
        coalesce(sum(l.cost), 0)::double precision                AS cost
 FROM usage_logs l
-         LEFT JOIN users u ON u.id = l.user_id AND NOT u.guest
+         LEFT JOIN users u ON u.id = l.user_id
 WHERE l.created_at >= sqlc.arg('since')::timestamptz
-GROUP BY u.id, u.name, u.email, u.avatar_key
+GROUP BY u.id, u.name, u.email, u.avatar_key, CASE WHEN u.id IS NULL THEN l.deleted_user END
 ORDER BY coalesce(sum(l.cost), 0) DESC, count(*) DESC, u.id
 LIMIT sqlc.arg('row_limit');
 

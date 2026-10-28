@@ -1,6 +1,5 @@
 import { isOpenChatError } from '@openchat/api-client'
 
-import { isGuestMode } from '@/lib/guest/mode'
 import { queryClient } from '@/lib/query'
 import { queryKeys } from '@/lib/query-keys'
 import { forgetQueryCache } from '@/lib/query-persist'
@@ -12,9 +11,8 @@ import { resetChatStore } from '@/stores/chat-store'
  * out. Left alone, the open tab goes on half working - conversations read as
  * empty, sends fail with a generic message, nothing says why.
  *
- * Only an *account's* call can mean this. The sign-in form's own wrong password
- * is also a 401 (`invalid_credentials`) and is the form's to show; a guest has
- * no session to lose.
+ * The sign-in form's own wrong password is also a 401 (`invalid_credentials`)
+ * and is the form's to show.
  */
 export function isSessionExpired(error: unknown): boolean {
   return isOpenChatError(error) && error.status === 401 && error.code !== 'invalid_credentials'
@@ -34,7 +32,7 @@ let leaving = false
  * goes to the sign-in form, which returns to where the person was.
  */
 export async function leaveIfSessionExpired(error: unknown, router: SessionRouter): Promise<void> {
-  if (!isSessionExpired(error) || isGuestMode() || leaving) return
+  if (!isSessionExpired(error) || leaving) return
   // Only a session this page believed in can end. Signed out already, a 401 is
   // the ordinary answer (the guards redirect on their own), and a page that has
   // yet to learn who it is - the guards' prefetches run beside that check -
