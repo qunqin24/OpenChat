@@ -22,6 +22,7 @@ import { describeSchedule, emptyForm, formatWhen, formOf, taskIdeas, type TaskFo
 import { cn } from '@/lib/utils'
 import { SidebarToggle } from './ChatShell'
 import TaskDialog from './TaskDialog'
+import { TaskIdeaIcon } from './TaskIdeaIcon'
 
 /**
  * Scheduled tasks: what will run, what is paused or done, and a way to make
@@ -97,9 +98,10 @@ export default function TasksPage() {
                     <button
                       type="button"
                       className="n-tasks-idea"
+                      data-idea={idea.key}
                       onClick={() => openNew({ ...idea.form, title: t(`tasks.ideas.${idea.key}.title`), prompt: t(`tasks.ideas.${idea.key}.prompt`) })}
                     >
-                      <span className="n-tasks-idea-emoji" aria-hidden="true">{idea.emoji}</span>
+                      <TaskIdeaIcon idea={idea.key} />
                       <span className="n-tasks-idea-text">
                         <span className="n-tasks-idea-title">{t(`tasks.ideas.${idea.key}.title`)}</span>
                         <span className="n-tasks-idea-hint">{t(`tasks.ideas.${idea.key}.hint`)}</span>

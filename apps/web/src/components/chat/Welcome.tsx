@@ -1,21 +1,22 @@
 import { Ghost } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useSession } from '@/features/auth/use-auth'
-import { dayPeriod } from '@/lib/greeting'
+import { greetingLines, loadLastGreeting, pickGreeting, saveLastGreeting } from '@/lib/greeting'
 import { useChatStore } from '@/stores/chat-store'
+import { StarterIcon, type Starter } from './StarterIcon'
 import { TemporaryNote } from './TemporaryChat'
 
 /**
  * Suggestion ids. Kept as explicit keys rather than an i18n array so every
  * string stays statically referenced and type-safe across locales.
  */
-const SUGGESTIONS = ['explain', 'code', 'polish', 'plan', 'compare', 'ideas'] as const
+const SUGGESTIONS: Starter[] = ['explain', 'code', 'polish', 'plan', 'compare', 'ideas']
 
 /**
  * A new chat's greeting, as Claude's: our mark beside a line for the time of
- * day with the person's name, in a serif face. On a wide screen the page puts
+ * day, often with the person's name, in a serif face (lib/greeting.ts). On a wide screen the page puts
  * it and the composer together in the middle (`.n-main.is-welcome`), the
  * starters under the composer (WelcomeStarters). A temporary chat says what
  * it is instead.
@@ -24,9 +25,10 @@ export function Welcome() {
   const { t } = useTranslation()
   const temporary = useChatStore((s) => s.temporaryChat)
   const name = useSession().data?.name ?? ''
-  // The hour the page was opened at: a greeting that changed under the
+  // Drawn once, when the page opens: a greeting that changed under the
   // person's eyes would be odd.
-  const [period] = useState(() => dayPeriod(new Date().getHours()))
+  const [line] = useState(() => pickGreeting(greetingLines(new Date(), Boolean(name)), loadLastGreeting()))
+  useEffect(() => saveLastGreeting(line.key), [line.key])
 
   return (
     <div className="n-welcome n-chat-fade">
@@ -41,7 +43,7 @@ export function Welcome() {
       ) : (
         <h1 className="n-welcome-greeting">
           <span className="n-welcome-logo" aria-hidden="true" />
-          <span>{name ? t(`chat.welcome.hello.${period}`, { name }) : t(`chat.welcome.hello-bare.${period}`)}</span>
+          <span>{t(line.key, { name })}</span>
         </h1>
       )}
     </div>
@@ -49,8 +51,9 @@ export function Welcome() {
 }
 
 /**
- * Starters under the composer of a new chat: a row of quiet pills that fill the
- * composer, to be edited, rather than send.
+ * Starters under the composer of a new chat: a row of quiet pills, each with
+ * its own drawing (StarterIcon), that fill the composer, to be edited, rather
+ * than send.
  */
 export function WelcomeStarters({ onPick }: { onPick: (prompt: string) => void }) {
   const { t } = useTranslation()
@@ -61,6 +64,7 @@ export function WelcomeStarters({ onPick }: { onPick: (prompt: string) => void }
           key={id}
           type="button"
           className="n-starter"
+          data-starter={id}
           style={{ animationDelay: `${index * 40}ms` }}
           title={t(`chat.welcome.items.${id}.detail`)}
           onClick={() => {
@@ -68,6 +72,7 @@ export function WelcomeStarters({ onPick }: { onPick: (prompt: string) => void }
             document.getElementById('input')?.focus()
           }}
         >
+          <StarterIcon starter={id} />
           {t(`chat.welcome.items.${id}.title`)}
         </button>
       ))}

@@ -319,8 +319,29 @@
       "month": "过去 30 天"
     },
     "welcome": {
-      "hello": {"morning": "早上好，{{name}}", "noon": "中午好，{{name}}", "afternoon": "下午好，{{name}}", "evening": "晚上好，{{name}}", "night": "夜深了，{{name}}"},
-      "hello-bare": {"morning": "早上好", "noon": "中午好", "afternoon": "下午好", "evening": "晚上好", "night": "夜深了"},
+      "lines": {
+        "morning": {"hello": "早上好，{{name}}", "start": "新的一天，从哪儿开始？", "today": "早，{{name}}，今天想做点什么？", "smooth": "早安，愿今天顺顺利利", "caffeine": "咖啡因加载中……", "blanket": "被窝的封印解除了吗？", "bird": "早起的鸟儿有问题问"},
+        "noon": {"hello": "中午好，{{name}}", "lunch": "吃过午饭了吗？", "pause": "午间片刻，聊点什么", "menu": "中午吃什么？这题我也能帮", "full": "吃饱了，脑子先别睡"},
+        "afternoon": {"hello": "下午好，{{name}}", "coffee": "来杯咖啡，慢慢聊", "mind": "{{name}}，下午想聊点什么？", "fine": "午后正好，想点什么", "slump": "三点钟的困意，交给我", "tea": "下午茶时间，顺便聊两句", "todo": "{{name}}，今天的待办划掉几项了？"},
+        "evening": {"hello": "晚上好，{{name}}", "rest": "忙完了吗？歇一歇", "day": "{{name}}，今天过得怎么样？", "breeze": "晚风正好，聊点什么", "overtime": "还在加班？我陪你", "fed": "吃饱了才有力气想问题"},
+        "night": {"hello": "夜深了，{{name}}", "awake": "还没睡呀？", "here": "夜里也在，慢慢说", "sleep": "{{name}}，早点休息哦", "owl": "夜猫子模式已开启", "ideas": "深夜的想法，往往最有意思", "moon": "{{name}}，月亮都上班了"},
+        "monday": {"ease": "周一了，慢慢进入状态", "double": "周一，需要双倍咖啡"},
+        "friday": {"almost": "周五了，再坚持一下", "weekend": "周五好！心已经飞去周末了吧"},
+        "friday-night": {"unwind": "周五晚上，好好放松"},
+        "weekend": {"hello": "周末好，{{name}}", "slow": "周末愉快，今天不赶时间", "plans": "周末也想搞点事情？"}
+      },
+      "holidays": {
+        "01-01": {"hello": "新年快乐，{{name}}", "first": "新的一年，第一个问题是？"},
+        "02-14": {"love": "情人节快乐，今天也爱自己一点"},
+        "04-01": {"fools": "今天说的话，记得打个问号"},
+        "05-01": {"labour": "劳动节快乐，今天让我多干点"},
+        "06-01": {"kids": "儿童节快乐，今天允许幼稚"},
+        "10-01": {"national": "国庆快乐，假期愉快"},
+        "10-24": {"code": "1024 程序员节，今天不写 bug"},
+        "12-24": {"eve": "平安夜，平平安安"},
+        "12-25": {"hello": "圣诞快乐，{{name}}", "gift": "圣诞快乐，愿你收到想要的礼物"},
+        "12-31": {"last": "今年最后一天，辛苦了"}
+      },
       "greeting": "有什么我能帮您的吗？",
       "suggestions": "建议",
       "items": {

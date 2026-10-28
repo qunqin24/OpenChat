@@ -447,7 +447,10 @@
 }
 
 .chat-ui .n-starter {
-  padding: 7px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px 7px 11px;
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -467,6 +470,35 @@
   background: var(--n-hover);
   color: var(--n-text);
 }
+
+/* Our own drawings (StarterIcon, TaskIdeaIcon): line art on a 24 grid in the
+   text colour, its one finishing touch (`is-accent`, `is-accent-fill`) in the
+   hue the user of the drawing sets as `--n-drawing-accent` — a shade lighter
+   on the dark theme. */
+.chat-ui .n-drawing {
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.chat-ui .n-drawing .is-accent { stroke: var(--n-drawing-accent, currentColor); }
+.chat-ui .n-drawing .is-accent-fill { fill: var(--n-drawing-accent, currentColor); stroke: var(--n-drawing-accent, currentColor); stroke-width: 0.6; }
+
+.chat-ui .n-starter-icon { width: 16px; height: 16px; }
+.chat-ui .n-starter[data-starter='explain'] { --n-drawing-accent: #d97706; }
+.chat-ui .n-starter[data-starter='code'] { --n-drawing-accent: #2563eb; }
+.chat-ui .n-starter[data-starter='polish'] { --n-drawing-accent: #db2777; }
+.chat-ui .n-starter[data-starter='plan'] { --n-drawing-accent: #059669; }
+.chat-ui .n-starter[data-starter='compare'] { --n-drawing-accent: #7c3aed; }
+.chat-ui .n-starter[data-starter='ideas'] { --n-drawing-accent: #ca8a04; }
+.dark .chat-ui .n-starter[data-starter='explain'] { --n-drawing-accent: #fbbf24; }
+.dark .chat-ui .n-starter[data-starter='code'] { --n-drawing-accent: #60a5fa; }
+.dark .chat-ui .n-starter[data-starter='polish'] { --n-drawing-accent: #f472b6; }
+.dark .chat-ui .n-starter[data-starter='plan'] { --n-drawing-accent: #34d399; }
+.dark .chat-ui .n-starter[data-starter='compare'] { --n-drawing-accent: #a78bfa; }
+.dark .chat-ui .n-starter[data-starter='ideas'] { --n-drawing-accent: #facc15; }
 
 @media (prefers-reduced-motion: reduce) {
   .chat-ui .n-starter { animation: none; }

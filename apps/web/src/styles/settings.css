@@ -5,8 +5,9 @@
  * The dialogs copy Open WebUI's classic settings modal (before its 2026
  * redesign): a wide, very round, slightly translucent card with a hairline
  * border and a big soft shadow; the title and a plain close mark across the
- * top; a column of tabs whose selected one is only darker text, not a fill; and
- * tab content made of small bold labels, text-only controls and faint rules.
+ * top; a column of tabs whose selected one is only darker, bolder text, not a
+ * fill; and tab content made of small bold labels, text-only controls and faint
+ * rules.
  *
  * Chat side only: chat tokens (`--n-*`), `n-` class names, drawn inside
  * `.chat-ui` (the dialogs are portalled into it, like the search palette).
@@ -125,12 +126,13 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 10px;
+  padding: 6px 10px;
   border: 0;
   border-radius: 12px;
   background: transparent;
-  /* The selected tab is the one in full colour; the rest are nearly gone. */
-  color: color-mix(in oklab, var(--n-text) 22%, transparent);
+  /* The others stay readable; the open one is darker and bolder. Faded to a
+     fifth they looked switched off. */
+  color: var(--n-text-2);
   font: inherit;
   font-size: 14px;
   text-align: left;
@@ -138,8 +140,8 @@
   transition: color 120ms;
 }
 .chat-ui .n-settings-tab svg { width: 16px; height: 16px; flex: none; }
-.chat-ui .n-settings-tab:hover,
-.chat-ui .n-settings-tab[data-state='active'] { color: var(--n-text); }
+.chat-ui .n-settings-tab:hover { color: var(--n-text); }
+.chat-ui .n-settings-tab[data-state='active'] { color: var(--n-text); font-weight: 500; }
 .chat-ui .n-settings-tab:focus-visible { outline-offset: -2px; }
 .chat-ui .n-settings-none { padding: 16px 8px; color: var(--n-text-2); font-size: 13px; text-align: center; }
 
@@ -198,6 +200,118 @@
   white-space: nowrap;
 }
 .chat-ui .n-memory-recent-row > .n-settings-badge { margin-left: 0; }
+
+/* The theme picker (GeneralTab): a row like the others, its three cards on the
+   right. Each card is a drawing of the app in that theme floating on a backdrop
+   of that theme's light, with a fine grain; the name is under it. The drawings
+   keep their own colours whatever the dialog's theme is, so they are written
+   out here rather than taken from the tokens, which flip. The chosen card has a
+   ring; the radio inputs are kept for the keyboard and screen readers. */
+.chat-ui .n-theme-line { align-items: flex-start; margin-bottom: 14px; }
+.chat-ui .n-theme-line > .n-settings-small-label { padding-top: 2px; white-space: nowrap; }
+/* Room around the cards for the chosen ring and the focus outline, which sit
+   outside them: the scroll box clips at its edge and would cut them off. */
+.chat-ui .n-theme-options { display: flex; gap: 10px; margin: -7px 0; padding: 7px 7px 7px 0; }
+.chat-ui .n-theme-option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--n-text-2);
+  font-size: 12px;
+  line-height: 16px;
+  cursor: pointer;
+  transition: color 120ms;
+}
+.chat-ui .n-theme-input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
+.chat-ui .n-theme-card {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 120px;
+  height: 80px;
+  overflow: hidden;
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px var(--n-line);
+  transition: box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.chat-ui .n-theme-card.is-light { background: radial-gradient(120% 90% at 85% 0%, #ffffff 0%, #eeeeee 35%, #d8d8d8 100%); }
+.chat-ui .n-theme-card.is-dark { background: radial-gradient(120% 90% at 85% 0%, #5a5a5a 0%, #222222 35%, #0a0a0a 100%); }
+.chat-ui .n-theme-card.is-system { background: linear-gradient(90deg, #0a0a0a 0%, #2a2a2a 50%, #e8e8e8 50%, #ffffff 100%); }
+.chat-ui .n-theme-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 3px 3px;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+.chat-ui .n-theme-option:hover { color: var(--n-text); }
+.chat-ui .n-theme-option:hover .n-theme-card { box-shadow: 0 0 0 1px color-mix(in oklab, var(--n-text) 30%, transparent); }
+.chat-ui .n-theme-input:checked + .n-theme-card { box-shadow: 0 0 0 2px var(--n-bg), 0 0 0 3.5px var(--n-text); }
+.chat-ui .n-theme-input:focus-visible + .n-theme-card { outline: 2px solid color-mix(in oklab, var(--n-text) 40%, transparent); outline-offset: 4px; }
+.chat-ui .n-theme-option:has(.n-theme-input:checked) { color: var(--n-text); font-weight: 500; }
+.chat-ui .n-theme-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-ui .n-theme-option,
+  .chat-ui .n-theme-card { transition: none; }
+}
+
+/* The window floats in the middle of the card. */
+.chat-ui .n-theme-window,
+.chat-ui .n-theme-window-pair {
+  position: relative;
+  z-index: 1;
+  width: 78%;
+  height: 68%;
+}
+.chat-ui .n-theme-window {
+  --w-bg: #ffffff;
+  --w-side: #f7f7f7;
+  --w-line: #e6e6e6;
+  --w-field: #efefef;
+  --w-ink: #000000;
+  display: flex;
+  overflow: hidden;
+  border-radius: 7px;
+  background: var(--w-bg);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 3px 8px -3px rgba(0, 0, 0, 0.25);
+}
+.chat-ui .n-theme-window.is-dark {
+  --w-bg: #161616;
+  --w-side: #0e0e0e;
+  --w-line: #333333;
+  --w-field: #262626;
+  --w-ink: #f5f5f5;
+  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.14), 0 3px 8px -3px rgba(0, 0, 0, 0.5);
+}
+/* Following the system: a light window laid over a dark one, showing its right half. */
+.chat-ui .n-theme-window-pair > .n-theme-window { position: absolute; inset: 0; width: auto; height: auto; margin: 0; }
+.chat-ui .n-theme-window.is-right-half { clip-path: inset(0 0 0 50%); box-shadow: none; }
+.chat-ui .n-theme-window i { display: block; height: 3px; border-radius: 2px; background: var(--w-line); }
+.chat-ui .n-theme-window-side { display: flex; flex-direction: column; gap: 4px; width: 24%; padding: 7% 5%; background: var(--w-side); }
+.chat-ui .n-theme-window-side i:first-child { width: 40%; height: 4px; margin-bottom: 3px; background: var(--w-ink); opacity: 0.7; }
+.chat-ui .n-theme-window-side i:last-child { width: 70%; }
+.chat-ui .n-theme-window-main { position: relative; flex: 1; padding: 8% 9% 0; }
+.chat-ui .n-theme-window-question { display: block; width: 38%; height: 8px; margin-left: auto; border-radius: 5px; background: var(--w-field); }
+.chat-ui .n-theme-window-answer { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.chat-ui .n-theme-window-answer i:nth-child(2) { width: 85%; }
+.chat-ui .n-theme-window-answer i:nth-child(3) { width: 60%; }
+.chat-ui .n-theme-window-composer {
+  position: absolute;
+  right: 9%;
+  bottom: 9%;
+  left: 9%;
+  height: 11px;
+  border-radius: 6px;
+  background: var(--w-field);
+  box-shadow: 0 0 0 0.5px var(--w-line);
+}
+.chat-ui .n-theme-window-composer b { position: absolute; top: 2px; right: 2px; width: 7px; height: 7px; border-radius: 50%; background: var(--w-ink); }
 
 /* Selects that are only text, and fields that are only text. */
 .chat-ui .n-settings-select {
@@ -676,9 +790,13 @@
     overflow-x: auto;
   }
   .chat-ui .n-settings-search { display: none; }
-  .chat-ui .n-settings-tabs { flex-direction: row; gap: 10px; }
-  .chat-ui .n-settings-tab { flex: 1 0 auto; padding: 4px 2px; }
+  .chat-ui .n-settings-tabs { flex-direction: row; gap: 4px; }
+  .chat-ui .n-settings-tab { flex: 1 0 auto; justify-content: center; padding: 6px 10px; }
   .chat-ui .n-settings-panel { padding: 0 14px; }
+  /* Three cards do not fit beside the label: it goes above, they share the width. */
+  .chat-ui .n-theme-line { flex-direction: column; gap: 10px; }
+  .chat-ui .n-theme-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; padding: 7px; }
+  .chat-ui .n-theme-card { width: 100%; height: auto; aspect-ratio: 3 / 2; }
   .chat-ui .n-settings-head { padding: 18px 16px 2px; }
   .chat-ui .n-memory-time { display: none; }
   .chat-ui .n-memory-cols .is-end { display: none; }

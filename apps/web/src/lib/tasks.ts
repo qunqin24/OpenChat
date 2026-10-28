@@ -137,14 +137,14 @@ export function formatWhen(at: Date, locale?: string, now = new Date()): string 
   }).format(at)
 }
 
-/** Ideas for an empty page, each filling the form in (the strings are under `tasks.ideas`). */
+/** Ideas for an empty page, each filling the form in (the strings are under `tasks.ideas`, the drawings in TaskIdeaIcon). */
 export type TaskIdeaKey = 'news' | 'weekly-review' | 'learn' | 'meals' | 'deals' | 'monthly'
 
-export const taskIdeas: { key: TaskIdeaKey; emoji: string; form: Partial<TaskForm> }[] = [
-  { key: 'news', emoji: '📰', form: { kind: 'daily', time: '08:00' } },
-  { key: 'weekly-review', emoji: '🗓️', form: { kind: 'weekly', time: '18:00', weekdays: [5] } },
-  { key: 'learn', emoji: '📚', form: { kind: 'daily', time: '21:00' } },
-  { key: 'meals', emoji: '🥗', form: { kind: 'weekly', time: '10:00', weekdays: [0] } },
-  { key: 'deals', emoji: '✈️', form: { kind: 'weekly', time: '09:00', weekdays: [1] } },
-  { key: 'monthly', emoji: '💰', form: { kind: 'monthly', time: '09:00', monthDay: 1 } },
+export const taskIdeas: { key: TaskIdeaKey; form: Partial<TaskForm> }[] = [
+  { key: 'news', form: { kind: 'daily', time: '08:00' } },
+  { key: 'weekly-review', form: { kind: 'weekly', time: '18:00', weekdays: [5] } },
+  { key: 'learn', form: { kind: 'daily', time: '21:00' } },
+  { key: 'meals', form: { kind: 'weekly', time: '10:00', weekdays: [0] } },
+  { key: 'deals', form: { kind: 'weekly', time: '09:00', weekdays: [1] } },
+  { key: 'monthly', form: { kind: 'monthly', time: '09:00', monthDay: 1 } },
 ]

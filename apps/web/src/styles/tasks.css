@@ -109,10 +109,25 @@
   background: var(--n-hover);
 }
 
-.chat-ui .n-tasks-idea-emoji {
-  font-size: 20px;
-  line-height: 24px;
+/* The idea's drawing (TaskIdeaIcon), its finishing touch in the idea's hue. */
+.chat-ui .n-tasks-idea-icon {
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  color: var(--n-text);
 }
+.chat-ui .n-tasks-idea[data-idea='news'] { --n-drawing-accent: #2563eb; }
+.chat-ui .n-tasks-idea[data-idea='weekly-review'] { --n-drawing-accent: #7c3aed; }
+.chat-ui .n-tasks-idea[data-idea='learn'] { --n-drawing-accent: #d97706; }
+.chat-ui .n-tasks-idea[data-idea='meals'] { --n-drawing-accent: #059669; }
+.chat-ui .n-tasks-idea[data-idea='deals'] { --n-drawing-accent: #0891b2; }
+.chat-ui .n-tasks-idea[data-idea='monthly'] { --n-drawing-accent: #ca8a04; }
+.dark .chat-ui .n-tasks-idea[data-idea='news'] { --n-drawing-accent: #60a5fa; }
+.dark .chat-ui .n-tasks-idea[data-idea='weekly-review'] { --n-drawing-accent: #a78bfa; }
+.dark .chat-ui .n-tasks-idea[data-idea='learn'] { --n-drawing-accent: #fbbf24; }
+.dark .chat-ui .n-tasks-idea[data-idea='meals'] { --n-drawing-accent: #34d399; }
+.dark .chat-ui .n-tasks-idea[data-idea='deals'] { --n-drawing-accent: #22d3ee; }
+.dark .chat-ui .n-tasks-idea[data-idea='monthly'] { --n-drawing-accent: #facc15; }
 
 .chat-ui .n-tasks-idea-text {
   display: flex;

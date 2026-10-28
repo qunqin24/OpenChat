@@ -319,8 +319,29 @@
       "month": "Previous 30 days"
     },
     "welcome": {
-      "hello": {"morning": "Good morning, {{name}}", "noon": "Good afternoon, {{name}}", "afternoon": "Good afternoon, {{name}}", "evening": "Good evening, {{name}}", "night": "Up late, {{name}}"},
-      "hello-bare": {"morning": "Good morning", "noon": "Good afternoon", "afternoon": "Good afternoon", "evening": "Good evening", "night": "Up late"},
+      "lines": {
+        "morning": {"hello": "Good morning, {{name}}", "start": "Where shall we start today?", "today": "Morning, {{name}}. What's on today?", "smooth": "Here's to a smooth day", "caffeine": "Caffeine loading…", "blanket": "Escaped the blanket yet?", "bird": "The early bird gets the answers"},
+        "noon": {"hello": "Good afternoon, {{name}}", "lunch": "Had lunch yet?", "pause": "A midday pause — what's up?", "menu": "What's for lunch? I can help with that too", "full": "Full of lunch, brain still awake?"},
+        "afternoon": {"hello": "Good afternoon, {{name}}", "coffee": "Coffee and a chat?", "mind": "What's on your mind, {{name}}?", "fine": "A fine afternoon to think", "slump": "The 3 p.m. slump? Hand it over", "tea": "Tea time, with a chat on the side", "todo": "{{name}}, how many to-dos down?"},
+        "evening": {"hello": "Good evening, {{name}}", "rest": "Done for the day? Take a breather", "day": "How was your day, {{name}}?", "breeze": "A quiet evening — what's up?", "overtime": "Working late? I'm here", "fed": "Fed and ready to think?"},
+        "night": {"hello": "Up late, {{name}}", "awake": "Still awake?", "here": "Here through the night", "sleep": "Don't stay up too late, {{name}}", "owl": "Night owl mode: on", "ideas": "Late-night ideas are the best ones", "moon": "The moon's on shift too, {{name}}"},
+        "monday": {"ease": "Monday again — ease into it", "double": "Monday calls for double coffee"},
+        "friday": {"almost": "It's Friday — almost there", "weekend": "Happy Friday! Mind already on the weekend?"},
+        "friday-night": {"unwind": "Friday night — time to unwind"},
+        "weekend": {"hello": "Happy weekend, {{name}}", "slow": "It's the weekend — no rush today", "plans": "Up to something this weekend?"}
+      },
+      "holidays": {
+        "01-01": {"hello": "Happy New Year, {{name}}", "first": "A new year — what's the first question?"},
+        "02-14": {"love": "Happy Valentine's Day — love yourself a little today"},
+        "04-01": {"fools": "Today, take everything with a pinch of salt"},
+        "05-01": {"labour": "Happy Labour Day — let me do the work today"},
+        "06-01": {"kids": "Happy Children's Day — silliness allowed"},
+        "10-01": {"national": "Happy National Day — enjoy the holiday"},
+        "10-24": {"code": "Happy 1024 — no bugs today"},
+        "12-24": {"eve": "Christmas Eve — peace and quiet"},
+        "12-25": {"hello": "Merry Christmas, {{name}}", "gift": "Merry Christmas — may you get the gift you wanted"},
+        "12-31": {"last": "Last day of the year — well done"}
+      },
       "greeting": "How can I help you today?",
       "suggestions": "Suggested",
       "items": {
