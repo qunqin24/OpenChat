@@ -4,7 +4,7 @@
   "components": [
     {
       "name": "Card",
-      "description": "A raised container for a few closely related things, such as a price with its breakdown, or a small panel: an icon, a title and subtitle and a status Badge in its header, its content, a footer line. Most blocks need no Card; never wrap a whole answer in one. A Grid of Cards with an icon, a title and a subtitle and no children introduces a set of topics, options or features at a glance. With an image, the picture is the card's cover and the title and subtitle sit beneath it; several such Cards in a Carousel scroll sideways. The image follows the Image rule: src must be an image address listed in a web_fetch or web_search result in this conversation (a page lists its images under \"Images on this page\"); never invent or guess one. With none listed, leave pictures out. Cards side by side in a Grid are peers: give them the same tone (plain), and use accent only to mark the one you recommend; muted is for a quieter card on its own.",
+      "description": "A raised container grouping a few things about one subject: a price with its breakdown, a plan's summary with its status. Use it for a small panel (icon, title, subtitle and a status Badge in its header, its content, a footer line); for three to six Cards with an icon, a title and a subtitle and no children in a Grid, introducing topics or options at a glance; and for Cards with an image in a Carousel, the picture as the cover and the titles beneath. Not for wrapping a whole answer or several unrelated things, nor for framing a paragraph that reads fine as prose. Peers in a Grid share the plain tone; accent marks only the one you recommend; muted is for a quieter card on its own. The image is a picture as the Pictures rules below say.",
       "params": [
         {
           "name": "children",
@@ -112,7 +112,7 @@
     },
     {
       "name": "Stack",
-      "description": "Lays its children out vertically.",
+      "description": "Lays its children out vertically. Layout only; most blocks need none.",
       "params": [
         {
           "name": "children",
@@ -133,7 +133,7 @@
     },
     {
       "name": "Row",
-      "description": "Lays its children out side by side; wraps on narrow screens.",
+      "description": "Lays its children out side by side, wrapping on narrow screens: a few Badges, a few short items. Not for paragraphs side by side.",
       "params": [
         {
           "name": "children",
@@ -154,7 +154,7 @@
     },
     {
       "name": "Grid",
-      "description": "Lays its children out in equal columns; collapses to one column on narrow screens.",
+      "description": "Lays its children out in equal columns, one column on narrow screens: peers of one kind, such as Stats or topic Cards. Not for prose, nor for things of different kinds.",
       "params": [
         {
           "name": "children",
@@ -172,7 +172,7 @@
     },
     {
       "name": "Heading",
-      "description": "A section heading.",
+      "description": "A heading inside a block that has several parts. Not for the answer's own sections: those are Markdown headings outside any block.",
       "params": [
         {
           "name": "text",
@@ -190,7 +190,7 @@
     },
     {
       "name": "Text",
-      "description": "A paragraph of Markdown: bold, italics, links, inline code and lists are allowed.",
+      "description": "A paragraph of Markdown inside a Card, Tab or Details. Outside them, write ordinary Markdown in the answer instead.",
       "params": [
         {
           "name": "text",
@@ -201,7 +201,7 @@
     },
     {
       "name": "Callout",
-      "description": "A highlighted note: a tip, a warning, a key takeaway.",
+      "description": "The one thing the reader must not miss: a warning before something irreversible or risky, a safety caveat, a hard deadline. Not for a summary, a conclusion, a tip the prose already gives, or to make an ordinary sentence look important. Most answers need none, few more than one; warning and danger are for real risk.",
       "params": [
         {
           "name": "text",
@@ -227,7 +227,7 @@
     },
     {
       "name": "Stat",
-      "description": "One key figure with its label, for dashboards and summaries. trend is the direction of the change; tone says whether that change is good or bad news (more bugs is up but bad).",
+      "description": "A key figure that is the point of the answer, with its label: two to four in a Grid for a summary of results or a dashboard. Not for a number a sentence states as well, nor for figures with nothing to compare them with. trend is the direction of the change; tone says whether that change is good or bad news (more bugs is up but bad).",
       "params": [
         {
           "name": "label",
@@ -291,7 +291,7 @@
     },
     {
       "name": "Chart",
-      "description": "A chart of numbers: line or area for a trend over time, bar to compare amounts, donut or pie for shares of a whole. labels are the x-axis categories (or the slices); each Series is one line or one set of bars with a value per label. A donut or pie uses the first Series only. Use real figures from the conversation or your sources; say in caption when they are illustrative.",
+      "description": "A chart, when the shape of the numbers matters: line or area for a trend over time, bar to compare amounts across categories, donut or pie for shares of a whole (six slices at most). Needs at least three values; two or three numbers are compared better in a sentence. Use real figures from the conversation or your sources and never invent data; if illustrative figures are asked for, say so in caption. labels are the x-axis categories (or the slices); each Series is one line or one set of bars with a value per label. A donut or pie uses the first Series only.",
       "params": [
         {
           "name": "kind",
@@ -350,7 +350,7 @@
     },
     {
       "name": "KeyValues",
-      "description": "A list of label–value pairs, for specifications and details.",
+      "description": "The specification or details of one thing: a product's specs, a flight's times and terminal, a recipe's yield and timings. Not for comparing several things (a Markdown table), nor for sentences.",
       "params": [
         {
           "name": "pairs",
@@ -361,7 +361,7 @@
     },
     {
       "name": "Steps",
-      "description": "An ordered procedure or plan, drawn numbered. Its items are Step components.",
+      "description": "A procedure the reader follows in order, or a plan whose progress is tracked: three or more steps where order matters. Not for unordered tips (a Markdown list), nor for two trivial steps. Its items are Step components. For a hands-on procedure where seeing a step helps - cleaning a keyboard, tying a knot - give every Step an image: each step's picture then sits beside its title and detail and the numbers are left out, so begin each title with its step (\"Step 1: ...\", \"第一步：...\"). Give every Step an image or none.",
       "params": [
         {
           "name": "items",
@@ -375,7 +375,7 @@
     },
     {
       "name": "Step",
-      "description": "One step of a Steps list. Give status only for a plan whose progress is being tracked; leave it out for an ordinary procedure.",
+      "description": "One step of a Steps list. Give status only for a plan whose progress is being tracked; leave it out for an ordinary procedure. image is a picture of the step, as the Pictures rules below say.",
       "params": [
         {
           "name": "title",
@@ -394,12 +394,16 @@
             "current",
             "todo"
           ]
+        },
+        {
+          "name": "image",
+          "type": "string"
         }
       ]
     },
     {
       "name": "Timeline",
-      "description": "Events in time order. Its items are Event components.",
+      "description": "Dated events where when they happen matters: a history, a release schedule, an itinerary across days. Not for a procedure (Steps) or for undated items. Its items are Event components.",
       "params": [
         {
           "name": "items",
@@ -433,7 +437,7 @@
     },
     {
       "name": "Tags",
-      "description": "A row of short labels.",
+      "description": "A few short labels that classify something: keywords, categories, supported platforms. Not for sentences, and never as decoration.",
       "params": [
         {
           "name": "items",
@@ -444,7 +448,7 @@
     },
     {
       "name": "Tabs",
-      "description": "Alternative views of one subject the reader switches between, such as an overview, performance and security of a product. Its items are Tab components.",
+      "description": "Two to five parallel views of one subject, each substantial, of which the reader wants one at a time: instructions per platform (macOS, Windows, Linux), code per language, a product's overview, performance and security. Not for hiding what the reader needs to see together, nor for short content. Its items are Tab components.",
       "params": [
         {
           "name": "items",
@@ -474,7 +478,7 @@
     },
     {
       "name": "Details",
-      "description": "Supporting detail folded away behind its title until the reader opens it: a long derivation, the full list, the fine print.",
+      "description": "Supporting material most readers can skip, folded behind its title until opened: a long derivation, the full list, the fine print. Not for the answer itself or anything the reader needs.",
       "params": [
         {
           "name": "title",
@@ -490,7 +494,7 @@
     },
     {
       "name": "Badge",
-      "description": "A short coloured status label, such as Done, In progress, Failed or Beta. Several sit in a Row.",
+      "description": "A short coloured status label - Done, In progress, Failed, Beta, Recommended - where the status is information. Several sit in a Row. Not for decoration or emphasis, and a status word in a sentence needs none.",
       "params": [
         {
           "name": "text",
@@ -513,7 +517,7 @@
     },
     {
       "name": "Checklist",
-      "description": "A to-do list with its progress. Its items are Check components.",
+      "description": "Items the reader will tick off themselves: a packing list, a pre-launch checklist, with its progress. Not for a plan you are reporting on (Steps with status) or ordinary bullet points. Its items are Check components.",
       "params": [
         {
           "name": "items",
@@ -547,7 +551,7 @@
     },
     {
       "name": "Choices",
-      "description": "A few directions the conversation could take next, offered at the end of an answer for the reader to pick one, such as which of several stories to go into or which of several approaches to work out. Picking one sends that Choice's message as the reader's next message. Whether an answer is better for offering one is yours to judge. Its items are two to four Choice components. action is the button's label, a short verb phrase in the reader's language; left out, it says Send.",
+      "description": "A few directions the conversation could take next, offered at the end of an answer for the reader to pick one - which of several stories to go into, which of several approaches to work out - when each leads to a different answer worth having. Not for yes or no, not after an answer that is complete, not out of habit at the end of every answer, and never alongside the same question asked in prose. Picking one sends that Choice's message as the reader's next message. Its items are two to four Choice components. action is the button's label, a short verb phrase in the reader's language; left out, it says Send.",
       "params": [
         {
           "name": "question",
@@ -586,20 +590,54 @@
     },
     {
       "name": "Image",
-      "description": "One picture from a source, with an optional caption. link is the page it came from; its site is shown on the picture. src must be an image address listed in a web_fetch or web_search result in this conversation (a page lists its images under \"Images on this page\"); never invent or guess one. With none listed, leave pictures out.",
+      "description": "One picture, with an optional caption: what something looks like, where seeing it helps. image is a picture as the Pictures rules below say.",
       "params": [
         {
-          "name": "src",
+          "name": "image",
           "type": "string",
           "required": true
+        },
+        {
+          "name": "caption",
+          "type": "string"
         },
         {
           "name": "alt",
           "type": "string"
         },
         {
-          "name": "caption",
+          "name": "aspect",
+          "type": "enum",
+          "values": [
+            "landscape",
+            "square",
+            "portrait"
+          ],
+          "default": "landscape"
+        },
+        {
+          "name": "link",
           "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "Media",
+      "description": "Things introduced beside their pictures: the picture on the left, a title and a sentence or two on the right, as products, places or dishes are presented. Several in a Stack, one per row. Not when the pictures add nothing (write a list). image is a picture as the Pictures rules below say.",
+      "params": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "image",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "detail",
+          "type": "markdown"
         },
         {
           "name": "link",
@@ -609,7 +647,7 @@
     },
     {
       "name": "Gallery",
-      "description": "Several pictures in a grid, such as views of a place or examples of a style. Its items are Image components.",
+      "description": "Two to six pictures of the same kind in a grid: views of a place, examples of a style, screenshots to compare. Not when one picture says it. Its items are Image components.",
       "params": [
         {
           "name": "items",
@@ -630,7 +668,7 @@
     },
     {
       "name": "Carousel",
-      "description": "A row of Cards the reader scrolls sideways, for options to browse: products, places, articles. Give each Card an image, a title and a subtitle.",
+      "description": "Three to eight options to browse where a picture helps choose: products, hotels, destinations, articles. Give each Card an image, a title and a subtitle. Not for options without pictures (a Grid of Cards or a list). Its items are Card components.",
       "params": [
         {
           "name": "items",
@@ -644,7 +682,7 @@
     },
     {
       "name": "Article",
-      "description": "One news story or article you read: its headline, a two- or three-sentence summary in your words, the page it is from, and its lead image when the page listed one. Several in a Stack make a news digest. src must be an image address listed in a web_fetch or web_search result in this conversation (a page lists its images under \"Images on this page\"); never invent or guess one. With none listed, leave pictures out.",
+      "description": "One news story or article you read: its headline, a two- or three-sentence summary in your words, the page it is from. Several in a Stack make a news digest. Not for citing a source within ordinary prose (a link does that). image, when given, is a picture as the Pictures rules below say.",
       "params": [
         {
           "name": "title",
@@ -676,8 +714,13 @@
     },
     {
       "name": "Divider",
-      "description": "A horizontal rule between sections.",
+      "description": "A horizontal rule between unrelated parts of a block. Rarely needed.",
       "params": []
     }
-  ]
+  ],
+  "pictures": {
+    "$comment": "The Pictures section of the model's instructions, after the components: `search` when image search is on (the server finds a picture for a description), `sources` when it is off.",
+    "search": "Show a picture where seeing helps the reader more than words: what something looks like - an animal, a plant, a dish, a place, a device, a desktop or app screen, a style - a visual comparison, a hands-on step. Leave pictures out for concepts, code, maths, prices, plain facts and anything abstract, and never add one only to decorate. One picture per idea: an Image for one thing, a Gallery for a few views of the same kind, Steps with images for a hands-on procedure, Media rows for things introduced beside their pictures, Cards with images in a Carousel for options to browse. Give a picture by describing it, never by an address you made up: two or three English keywords naming its subject, the subject first, such as \"compressed air can\", \"laptop on desk\", \"alcohol wipes\", \"Hami melon\" or \"KDE Plasma desktop\". The libraries searched - freely licensed photos - match every word, so each extra word narrows the search: leave out \"with\", \"on an angle\", counts and details, and say those in the caption or the text instead. Keep proper names as they are written. The first match is shown; a picture that cannot be found is simply left out, so a plain, common subject is the surest. An address works too, but only one a web_fetch or web_search result in this conversation listed (a page lists its images under \"Images on this page\"): use it for a picture of that page's own subject, such as a news story's photo.",
+    "sources": "Show a picture where seeing helps the reader more than words: what something looks like - an animal, a plant, a dish, a place, a device, a desktop or app screen, a style - a visual comparison, a hands-on step. Leave pictures out for concepts, code, maths, prices, plain facts and anything abstract, and never add one only to decorate. One picture per idea: an Image for one thing, a Gallery for a few views of the same kind, Steps with images for a hands-on procedure, Media rows for things introduced beside their pictures, Cards with images in a Carousel for options to browse. A picture is an image address listed in a web_fetch or web_search result in this conversation (a page lists its images under \"Images on this page\"); never invent or guess one. With none listed, leave pictures out."
+  }
 }

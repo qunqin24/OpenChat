@@ -44,7 +44,7 @@ func TestCatalogueLoadsAndIsWellFormed(t *testing.T) {
 
 func TestPromptListsEveryComponent(t *testing.T) {
 	catalog := Load()
-	prompt := catalog.Prompt()
+	prompt := catalog.Prompt(false)
 	for _, c := range catalog.Components {
 		if c.Retired {
 			continue
@@ -59,11 +59,24 @@ func TestPromptListsEveryComponent(t *testing.T) {
 }
 
 func TestRetiredComponentsAreNotTaught(t *testing.T) {
-	prompt := Load().Prompt()
+	prompt := Load().Prompt(false)
 	if strings.Contains(prompt, "\nTable(") {
 		t.Error("the retired Table component is still in the model's instructions")
 	}
 	if !strings.Contains(prompt, "Markdown tables") {
 		t.Error("the instructions no longer say tables are Markdown")
+	}
+}
+
+// Pictures are described for the server to find with image search on, and
+// are addresses a source listed with it off; never both rules at once.
+func TestPromptPicturesFollowImageSearch(t *testing.T) {
+	catalog := Load()
+	on, off := catalog.Prompt(true), catalog.Prompt(false)
+	if !strings.Contains(on, catalog.Pictures.Search) || strings.Contains(on, catalog.Pictures.Sources) {
+		t.Error("image search on: the prompt does not teach described pictures alone")
+	}
+	if !strings.Contains(off, catalog.Pictures.Sources) || strings.Contains(off, catalog.Pictures.Search) {
+		t.Error("image search off: the prompt does not teach source addresses alone")
 	}
 }

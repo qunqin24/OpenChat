@@ -1,4 +1,4 @@
-import { ArrowDownRight, ArrowRight, ArrowUpRight, Check, ChevronDown, CircleAlert, CircleCheck, Info, TriangleAlert } from 'lucide-react'
+import { ArrowDownRight, ArrowRight, ArrowUpRight, Check, ChevronDown, CircleAlert, CircleCheck, ImageIcon, Info, TriangleAlert } from 'lucide-react'
 import { Collapsible, Tabs as RadixTabs } from 'radix-ui'
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -6,12 +6,15 @@ import { Streamdown } from 'streamdown'
 
 import { parseBlock } from '@/lib/genui/parse'
 import { resolveBlock, type Cell, type UINode } from '@/lib/genui/resolve'
+import { siteName } from '@/lib/urls'
 import { cn } from '@/lib/utils'
 import { markdownComponents, markdownLinkSafety, prepareMarkdown, useMarkdownPlugins } from '../markdown-components'
 import { Chart, type ChartSeries } from './Chart'
 import { ChoicesBlock } from './choices'
 import { CARD_ICONS } from './icons'
-import { MaybeLink, Picture, Scroller, SourceChip } from './media'
+import { useImageViewer } from '@/stores/image-viewer-store'
+import { credit, usePicture, type ShownPicture } from './found-image'
+import { MaybeLink, Picture, PictureCredit, Scroller, SourceChip } from './media'
 
 interface GenUIBlockProps {
   source: string
@@ -94,7 +97,7 @@ const renderers: Record<string, (props: Props) => ReactNode> = {
     const panel = Boolean(body && body.length > 0)
     return (
       <section className={cn('n-ui-card', `is-${str(p.tone)}`, panel && 'is-panel', str(p.image) && 'has-image')}>
-        {str(p.image) && <CardCover src={str(p.image)} alt={str(p.title)} />}
+        {str(p.image) && <CardCover image={str(p.image)} alt={str(p.title)} />}
         {Icon && !panel && !str(p.image) && <Icon className="n-ui-card-icon" aria-hidden="true" />}
         {(head || badge || (Icon && panel)) && (
           <header className="n-ui-card-head">
@@ -203,7 +206,13 @@ const renderers: Record<string, (props: Props) => ReactNode> = {
       ))}
     </dl>
   ),
-  Steps: (p) => <ol className="n-ui-steps">{children(p.items)}</ol>,
+  // Steps with pictures are a hands-on procedure: each step's picture beside
+  // its title and detail, numbers left out (the titles carry them).
+  Steps: (p) => (
+    <ol className={cn('n-ui-steps', ((p.items as UINode[] | undefined) ?? []).some((n) => str(n.props.image)) && 'has-images')}>
+      {children(p.items)}
+    </ol>
+  ),
   Step: (p) => (
     // No status is an ordinary procedure, drawn numbered; the done / current /
     // to-do look is for a plan whose progress is being tracked.
@@ -211,6 +220,7 @@ const renderers: Record<string, (props: Props) => ReactNode> = {
       <span className="n-ui-step-marker" aria-hidden="true">
         {str(p.status) === 'done' && <CircleCheck />}
       </span>
+      {str(p.image) && <StepPicture image={str(p.image)} alt={str(p.title)} />}
       <div className="n-ui-step-body">
         <div className="n-ui-step-title">{str(p.title)}</div>
         {str(p.detail) && <Markdown text={str(p.detail)} />}
@@ -257,7 +267,26 @@ const renderers: Record<string, (props: Props) => ReactNode> = {
   Badge: (p) => <span className={cn('n-ui-badge', `is-${str(p.tone) || 'neutral'}`)}>{str(p.text)}</span>,
   Checklist: (p) => <ChecklistBlock title={str(p.title)} items={(p.items as UINode[] | undefined) ?? []} />,
   Check: (p) => <ChecklistBlock title="" items={[{ key: 'check', component: 'Check', props: p }]} />,
-  Image: (p) => <ImageBlock src={str(p.src)} alt={str(p.alt)} caption={str(p.caption)} link={str(p.link)} />,
+  Image: (p) => (
+    <ImageBlock image={str(p.image)} alt={str(p.alt)} caption={str(p.caption)} aspect={str(p.aspect) || 'landscape'} link={str(p.link)} />
+  ),
+  Media: (p) => (
+    <div className="n-ui-media">
+      <StepPicture image={str(p.image)} alt={str(p.title)} />
+      <div className="n-ui-media-body">
+        <h3 className="n-ui-media-title">
+          {/^https?:\/\//.test(str(p.link)) ? (
+            <a href={str(p.link)} target="_blank" rel="noreferrer">
+              {str(p.title)}
+            </a>
+          ) : (
+            str(p.title)
+          )}
+        </h3>
+        {str(p.detail) && <Markdown text={str(p.detail)} />}
+      </div>
+    </div>
+  ),
   Gallery: (p) => (
     <div className="n-ui-gallery" style={{ '--n-ui-cols': Number(p.columns) || 2 } as React.CSSProperties}>
       {children(p.items)}
@@ -284,31 +313,96 @@ function Choices(props: { question: string; items: UINode[]; action: string }) {
   return <ChoicesBlock {...props} complete={useContext(BlockCompleteContext)} />
 }
 
-/** A picture from a source, with its site and caption; gone if it will not load. */
-function ImageBlock({ src, alt, caption, link }: { src: string; alt: string; caption: string; link: string }) {
+/** The frame each aspect gives a picture, which it fills. */
+const ASPECTS: Record<string, string> = { landscape: '4 / 3', square: '1 / 1', portrait: '3 / 4' }
+
+/**
+ * A picture with its caption (usePicture): a frame of its shape while a
+ * described one is found, gone if nothing is. A click shows it full size
+ * (ImageViewer), with its credit and its source page a click away.
+ */
+function ImageBlock({ image, alt, caption, aspect, link }: { image: string; alt: string; caption: string; aspect: string; link: string }) {
+  const { t } = useTranslation()
+  const { picture, settled } = usePicture(image)
+  const open = useImageViewer((s) => s.open)
   const [missing, setMissing] = useState(false)
   const lose = useCallback(() => setMissing(true), [])
-  if (missing) return null
+  if (missing || (settled && !picture)) return null
+  const page = picture?.found?.landingUrl ?? (/^https?:\/\//.test(link) ? link : undefined)
+  const title = caption || alt || picture?.found?.title || (link ? siteName(link) : '') || t('viewer.image')
   return (
     <figure className="n-ui-image">
-      <MaybeLink link={link} className="n-ui-image-frame">
-        <Picture src={src} alt={alt || caption} onMissing={lose} />
-        <SourceChip link={link} />
-      </MaybeLink>
+      <button
+        type="button"
+        className="n-ui-image-frame"
+        style={{ aspectRatio: ASPECTS[aspect] ?? ASPECTS.landscape }}
+        aria-label={t('viewer.open', { name: title })}
+        disabled={!picture}
+        onClick={() =>
+          picture && open([{ src: picture.src, title: [title, credit(picture.found)].filter(Boolean).join(' · '), ...(page ? { link: page } : {}) }], 0)
+        }
+      >
+        {picture && <Picture picture={picture} alt={alt || caption} onMissing={lose} />}
+        {picture?.found ? <PictureCredit found={picture.found} /> : <SourceChip link={link} />}
+      </button>
       {caption && <figcaption className="n-ui-image-caption">{caption}</figcaption>}
     </figure>
   )
 }
 
-/** A card's cover picture; the card simply has none if it will not load. */
-function CardCover({ src, alt }: { src: string; alt: string }) {
+/**
+ * A step's or a Media row's picture, beside its text. One that is not found
+ * keeps its place as a pale tile, so the rows stay aligned with their
+ * neighbours that have pictures.
+ */
+function StepPicture({ image, alt }: { image: string; alt: string }) {
+  const { picture, settled } = usePicture(image)
   const [missing, setMissing] = useState(false)
   const lose = useCallback(() => setMissing(true), [])
-  if (missing) return null
+  const zoom = useZoom()
+  const empty = missing || (settled && !picture)
+  if (empty || !picture) {
+    return <div className={cn('n-ui-step-picture', empty && 'is-empty')}>{empty && <ImageIcon aria-hidden="true" />}</div>
+  }
   return (
-    <div className="n-ui-card-cover">
-      <Picture src={src} alt={alt} onMissing={lose} />
-    </div>
+    <button type="button" className="n-ui-step-picture" aria-label={zoom.label(alt)} onClick={() => zoom.open(picture, alt)}>
+      <Picture picture={picture} alt={alt} onMissing={lose} />
+    </button>
+  )
+}
+
+/** Opens a picture full size in the image viewer, with its credit and its source page. */
+function useZoom() {
+  const { t } = useTranslation()
+  const open = useImageViewer((s) => s.open)
+  return {
+    label: (title: string) => t('viewer.open', { name: title || t('viewer.image') }),
+    open: (picture: ShownPicture, title: string, link?: string) => {
+      const page = picture.found?.landingUrl ?? (link && /^https?:\/\//.test(link) ? link : undefined)
+      const name = title || picture.found?.title || t('viewer.image')
+      open([{ src: picture.src, title: [name, credit(picture.found)].filter(Boolean).join(' · '), ...(page ? { link: page } : {}) }], 0)
+    },
+  }
+}
+
+/**
+ * A card's cover picture. One that is not found keeps its place as a pale
+ * tile, so cards side by side in a Grid or Carousel keep one height.
+ */
+function CardCover({ image, alt }: { image: string; alt: string }) {
+  const { picture, settled } = usePicture(image)
+  const [missing, setMissing] = useState(false)
+  const lose = useCallback(() => setMissing(true), [])
+  const zoom = useZoom()
+  const empty = missing || (settled && !picture)
+  if (empty || !picture) {
+    return <div className={cn('n-ui-card-cover', empty && 'is-empty')}>{empty && <ImageIcon aria-hidden="true" />}</div>
+  }
+  return (
+    <button type="button" className="n-ui-card-cover" aria-label={zoom.label(alt)} onClick={() => zoom.open(picture, alt)}>
+      <Picture picture={picture} alt={alt} onMissing={lose} />
+      {picture.found && <PictureCredit found={picture.found} />}
+    </button>
   )
 }
 
@@ -328,13 +422,15 @@ function ArticleBlock({
   category: string
   date: string
 }) {
-  const [missing, setMissing] = useState(!image)
-  const lose = useCallback(() => setMissing(true), [])
+  const { picture, settled } = usePicture(image)
+  const [failed, setFailed] = useState(false)
+  const lose = useCallback(() => setFailed(true), [])
+  const missing = !image || failed || (settled && !picture)
   return (
     <article className="n-ui-article">
       {!missing && (
         <MaybeLink link={link} className="n-ui-article-media">
-          <Picture src={image} alt={title} onMissing={lose} />
+          {picture && <Picture picture={picture} alt={title} onMissing={lose} />}
           <SourceChip link={link} />
         </MaybeLink>
       )}

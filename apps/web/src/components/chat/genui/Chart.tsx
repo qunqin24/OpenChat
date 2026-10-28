@@ -23,6 +23,23 @@ const color = (i: number) => `var(--n-chart-${(i % COLORS) + 1})`
 
 const PLOT_HEIGHT = 240
 const PAD = { top: 12, right: 12, bottom: 28, left: 44 }
+// Bar labels that do not fit side by side are slanted this far, and cut to
+// this many characters.
+const SLANT_DEGREES = 35
+const SLANT_SIN = Math.sin((SLANT_DEGREES * Math.PI) / 180)
+const SLANT_COS = Math.cos((SLANT_DEGREES * Math.PI) / 180)
+const SLANT_CHARS = 14
+
+/** A label's width at the tick size: a CJK character about 12px, anything else about 7px. */
+function textWidth(label: string): number {
+  return [...label].reduce((w, c) => w + (c.charCodeAt(0) > 0x2e80 ? 12 : 7), 0)
+}
+
+/** The label cut to at most `chars` characters, an ellipsis marking the cut. */
+function clip(label: string, chars: number): string {
+  const all = [...label]
+  return all.length > chars ? `${all.slice(0, chars - 1).join('')}…` : label
+}
 
 /**
  * A chart drawn as plain SVG at the width it is given — no charting library:
@@ -131,19 +148,29 @@ function Cartesian({ kind, width, labels, series, hover, onHover, tick, format }
     bars || kind === 'area' ? Math.min(0, ...values) : Math.min(...values),
     Math.max(...values, bars ? 0 : -Infinity),
   )
-  const plotW = Math.max(width - PAD.left - PAD.right, 1)
-  const height = PLOT_HEIGHT + PAD.top + PAD.bottom
+  // Labels slanted under bars reach left of their bar: the first one is
+  // given room by widening the left margin.
+  const fit = (left: number) => Math.max(width - left - PAD.right, 1) / Math.max(n, 1)
+  const labelWidth = Math.max(...labels.map(textWidth), 0) + 14
+  const slant = bars && labelWidth > fit(PAD.left)
+  const shownLabels = slant ? labels.map((l) => clip(l, SLANT_CHARS)) : labels
+  const firstReach = slant ? textWidth(shownLabels[0] ?? '') * SLANT_COS : 0
+  const left = Math.max(PAD.left, Math.ceil(firstReach - fit(PAD.left) / 2 + 4))
+  const plotW = Math.max(width - left - PAD.right, 1)
   const band = plotW / Math.max(n, 1)
+
+  // Skip x labels that would collide, judging by the longest. A bar is a
+  // category, though, and a bar without its name cannot be read: bars keep
+  // every label, slanted when they do not fit side by side, a long one cut
+  // short (the tooltip has it whole).
+  const every = bars ? 1 : Math.max(1, Math.ceil(n / Math.max(1, Math.floor(plotW / labelWidth))))
+  const slantDepth = slant ? Math.max(...shownLabels.map(textWidth), 0) * SLANT_SIN + 12 : 0
+  const height = PLOT_HEIGHT + PAD.top + (slant ? Math.ceil(slantDepth) + 14 : PAD.bottom)
   // Lines put a point at each label's centre for bars, at the edges otherwise.
-  const x = (i: number) => (bars ? PAD.left + band * (i + 0.5) : PAD.left + (n > 1 ? (plotW * i) / (n - 1) : plotW / 2))
+  const x = (i: number) => (bars ? left + band * (i + 0.5) : left + (n > 1 ? (plotW * i) / (n - 1) : plotW / 2))
   const y = (v: number) => PAD.top + PLOT_HEIGHT - ((v - min) / (max - min || 1)) * PLOT_HEIGHT
   const ticks: number[] = []
   for (let v = min; v <= max + step / 2; v += step) ticks.push(Number(v.toPrecision(12)))
-
-  // Skip x labels that would collide, judging by the longest: a CJK
-  // character is about 12px at this size, anything else about 7px.
-  const labelWidth = Math.max(...labels.map((l) => [...l].reduce((w, c) => w + (c.charCodeAt(0) > 0x2e80 ? 12 : 7), 0)), 0) + 14
-  const every = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(plotW / labelWidth))))
 
   // Where the pointer is over the plot, for the tooltip to follow it.
   const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null)
@@ -152,7 +179,7 @@ function Cartesian({ kind, width, labels, series, hover, onHover, tick, format }
     const px = event.clientX - box.left
     const i = bars ? Math.floor(px / band) : Math.round(n > 1 ? (px / plotW) * (n - 1) : 0)
     onHover(Math.min(n - 1, Math.max(0, i)))
-    setPointer({ x: PAD.left + px, y: PAD.top + event.clientY - box.top })
+    setPointer({ x: left + px, y: PAD.top + event.clientY - box.top })
   }
   // Beside the pointer, below and to the right; on the other side of it where
   // that would run off the plot's right edge or bottom.
@@ -173,14 +200,25 @@ function Cartesian({ kind, width, labels, series, hover, onHover, tick, format }
       <svg width={width} height={height} aria-hidden="true">
         {ticks.map((t) => (
           <g key={t}>
-            <line className="n-ui-chart-grid" x1={PAD.left} x2={width - PAD.right} y1={y(t)} y2={y(t)} />
-            <text className="n-ui-chart-tick" x={PAD.left - 10} y={y(t)} textAnchor="end" dominantBaseline="middle">
+            <line className="n-ui-chart-grid" x1={left} x2={width - PAD.right} y1={y(t)} y2={y(t)} />
+            <text className="n-ui-chart-tick" x={left - 10} y={y(t)} textAnchor="end" dominantBaseline="middle">
               {tick(t)}
             </text>
           </g>
         ))}
-        {labels.map((label, i) =>
-          i % every === 0 ? (
+        {shownLabels.map((label, i) =>
+          slant ? (
+            <text
+              key={i}
+              className="n-ui-chart-tick"
+              x={x(i)}
+              y={PAD.top + PLOT_HEIGHT + 14}
+              textAnchor="end"
+              transform={`rotate(${-SLANT_DEGREES} ${x(i)} ${PAD.top + PLOT_HEIGHT + 14})`}
+            >
+              {label}
+            </text>
+          ) : i % every === 0 ? (
             <text key={i} className="n-ui-chart-tick" x={x(i)} y={height - 8} textAnchor={bars || (i > 0 && i < n - 1) ? 'middle' : i === 0 ? 'start' : 'end'}>
               {label}
             </text>
@@ -194,7 +232,7 @@ function Cartesian({ kind, width, labels, series, hover, onHover, tick, format }
                 if (!Number.isFinite(v)) return null
                 const top = y(Math.max(v, 0))
                 const h = Math.max(Math.abs(y(v) - y(0)), 1)
-                const bx = PAD.left + band * i + (band - groupW) / 2 + barW * si
+                const bx = left + band * i + (band - groupW) / 2 + barW * si
                 return (
                   <path
                     key={`${si}-${i}`}
@@ -224,7 +262,7 @@ function Cartesian({ kind, width, labels, series, hover, onHover, tick, format }
             })}
         <rect
           className="n-ui-chart-hit"
-          x={PAD.left}
+          x={left}
           y={PAD.top}
           width={plotW}
           height={PLOT_HEIGHT}

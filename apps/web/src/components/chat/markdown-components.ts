@@ -2,12 +2,14 @@ import { cjk } from '@streamdown/cjk'
 import { useEffect, useSyncExternalStore } from 'react'
 import type { Components, LinkSafetyConfig, PluginConfig } from 'streamdown'
 
+import { promoteInlineMath } from '@/lib/inline-math'
 import { HtmlPreview } from './HtmlPreview'
+import { MarkdownLink } from './MarkdownLink'
 import { MarkdownTable } from './MarkdownTable'
 import { MermaidDiagram } from './MermaidDiagram'
 
 /** Streamdown overrides shared by every Markdown surface in the chat. */
-export const markdownComponents: Components = { table: MarkdownTable }
+export const markdownComponents: Components = { table: MarkdownTable, a: MarkdownLink }
 
 /**
  * Streamdown plugins shared by every Markdown surface in the chat.
@@ -21,7 +23,9 @@ export const markdownComponents: Components = { table: MarkdownTable }
  * `code` highlights code blocks (Shiki) and `math` renders `$$…$$` with KaTeX,
  * its stylesheet and fonts bundled rather than fetched from a CDN. Single-dollar
  * inline math stays off: answers quote prices in dollars all the time, and
- * "$999 or $1,099" would turn the words between them into a formula.
+ * "$999 or $1,099" would turn the words between them into a formula. A pair
+ * that is plainly TeX - `$\alpha$` - is rewritten to double dollars instead
+ * (prepareMarkdown, lib/inline-math.ts).
  *
  * Those two are most of the Markdown code by weight — KaTeX alone is more than
  * the rest of the chat page — and most answers need neither, so they are
@@ -52,7 +56,7 @@ function ensure(text: string) {
     loading.code = true
     void import('@streamdown/code').then(({ code }) => add({ code }))
   }
-  if (!loading.math && text.includes('$$')) {
+  if (!loading.math && (text.includes('$$') || promoteInlineMath(text) !== text)) {
     loading.math = true
     void Promise.all([import('@streamdown/math'), import('katex/dist/katex.min.css')]).then(([{ createMathPlugin }]) =>
       add({ math: createMathPlugin() }),
@@ -86,9 +90,10 @@ export const markdownLinkSafety: LinkSafetyConfig = { enabled: false }
  * `$$x = \frac{-b}{2a}$$` on one line, and to Markdown that is inline math —
  * set small, its fractions shrunk to fit the line — because display math needs
  * the dollars on lines of their own. This moves them there. Lines inside code
- * fences are left alone.
+ * fences are left alone. Single-dollar TeX is made double first.
  */
 export function prepareMarkdown(text: string): string {
+  text = promoteInlineMath(text)
   if (!text.includes('$$')) return text
   let fenced = false
   return text

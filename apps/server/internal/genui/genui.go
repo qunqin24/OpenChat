@@ -25,6 +25,13 @@ var catalogJSON []byte
 type Catalog struct {
 	Version    int         `json:"version"`
 	Components []Component `json:"components"`
+	// Pictures is the rule for every picture a component shows: described
+	// for the server to find when image search is on, an address a source
+	// listed when it is off.
+	Pictures struct {
+		Search  string `json:"search"`
+		Sources string `json:"sources"`
+	} `json:"pictures"`
 }
 
 type Component struct {
@@ -73,27 +80,63 @@ var typeNames = map[string]string{
 }
 
 // Prompt is the system prompt section that teaches the language and the
-// catalogue. It is stable — it changes only with the catalogue — so it does not
-// disturb a provider's prompt cache.
-func (c Catalog) Prompt() string {
+// catalogue, with the pictures rule for image search on or off. It is stable —
+// it changes only with the catalogue and that switch — so it does not disturb a
+// provider's prompt cache.
+func (c Catalog) Prompt(imageSearch bool) string {
 	var b strings.Builder
 	b.WriteString(`## Interface components
 
-When structure would make part of an answer clearer — a few key figures, a
-chart, a plan, a specification — you may render that part as interface
-components instead of Markdown. A table is not one of them: write tables as
-ordinary Markdown tables, outside any block. Put them in a fenced code block whose
-language is openchat-ui.
+You may render parts of an answer as interface components, in a fenced code
+block whose language is openchat-ui. Prose is the default. A component earns
+its place only when the reader takes the content in, or acts on it, faster
+than they would the same thing as prose: figures to compare, a trend, a
+procedure to follow, options to choose between, what something looks like.
+Whether to use one, and which, is your judgement from the question, the
+conversation and the content; that a component exists is never a reason to
+use it.
 
-Write the answer as prose and drop a block in exactly where its content belongs,
-the way a figure sits in an article: a sentence or a heading, then the block,
-then the prose carries on. Several small blocks spread through an answer are
-better than one large block. Keep each block to one idea — a row of figures, one
-chart, one plan — and do not wrap the whole answer, or several unrelated things,
-in one Card. Use Card only to group a few things that belong together, such as a
-price with its breakdown. Do not repeat in prose what a block already shows, and
-never mention the block, its syntax or "openchat-ui" to the reader. Use none for
-a short or conversational reply.
+Which kind of content calls for what:
+- What something looks like - an animal, a dish, a place, a device, an app's
+  screen: a picture (Image; Gallery for a few views to compare).
+- Numbers to compare or a trend to see: a few Stats for the key figures, a
+  Chart when the shape of three or more values matters.
+- Something the reader does in order: Steps, with a picture per step when
+  seeing the step helps.
+- Options to browse and choose between: Cards in a Grid, with pictures in a
+  Carousel; several items compared on the same attributes: a Markdown table.
+- Dated events, a schedule, an itinerary: a Timeline.
+- One thing's specification or details: KeyValues.
+- Concepts, explanations, code, maths, simple facts and opinions: prose and
+  code, no components.
+
+For example:
+- "What does this fruit look like?" - an Image.
+- "How do I clean this device?" - Steps, pictures on each step.
+- "How did our numbers change this year?" - Stats, then a Chart.
+- "How does this protocol work?" - prose, perhaps a code block; no components.
+- A greeting, a quick follow-up, a personal or emotional message - no
+  components.
+
+Always:
+- Never invent data, pictures or links to fill a component; with nothing
+  real to show, write prose.
+- Colour carries meaning: tones, Badges and Callouts mark a status or a risk,
+  never decoration. A conclusion or a summary is prose, not a Callout.
+- Offer Choices only when the reader really has a direction to pick; never
+  for yes or no, never out of habit.
+- Do not turn a simple question into a dashboard, and do not wrap the whole
+  answer, or several unrelated things, in one Card.
+- Tables are ordinary Markdown tables, outside any block.
+
+How to place them:
+- Write the answer as prose and drop a block in exactly where its content
+  belongs, the way a figure sits in an article: a sentence or a heading, then
+  the block, then the prose carries on. Several small blocks spread through an
+  answer are better than one large block; keep each to one idea.
+- Write the text inside components in the reader's language. Do not repeat in
+  prose what a block already shows, and never mention the block, its syntax or
+  "openchat-ui" to the reader.
 
 Inside the block, write one declaration per line:
 
@@ -124,6 +167,16 @@ Components:
 				fmt.Fprintf(&b, "    %s: %s\n", param.Name, detail)
 			}
 		}
+	}
+
+	pictures := c.Pictures.Sources
+	if imageSearch {
+		pictures = c.Pictures.Search
+	}
+	if pictures != "" {
+		b.WriteString("\nPictures (Image, Gallery, Media, and a Card's, Step's or Article's image):\n")
+		b.WriteString(pictures)
+		b.WriteString("\n")
 	}
 
 	b.WriteString(`

@@ -436,6 +436,50 @@
   color: var(--n-text-2);
 }
 
+/* A hands-on procedure with pictures (Steps.has-images): each step's picture
+   beside its title and detail, steps parted by a hairline, no numbers or rail
+   - the titles carry the numbers. As ChatGPT draws a how-to with pictures. */
+.chat-ui .n-ui-steps.has-images .n-ui-step {
+  gap: 20px;
+  padding: 18px 0;
+}
+.chat-ui .n-ui-steps.has-images .n-ui-step:first-child {
+  padding-top: 0;
+}
+.chat-ui .n-ui-steps.has-images .n-ui-step:last-child {
+  padding-bottom: 0;
+}
+.chat-ui .n-ui-steps.has-images .n-ui-step + .n-ui-step {
+  border-top: 1px solid var(--n-line);
+}
+.chat-ui .n-ui-steps.has-images .n-ui-step::before,
+.chat-ui .n-ui-steps.has-images .n-ui-step-marker {
+  display: none;
+}
+.chat-ui .n-ui-steps.has-images .n-ui-step-title {
+  margin: 4px 0 6px;
+  font-weight: 600;
+}
+.chat-ui .n-ui-step-picture {
+  flex: none;
+  width: 132px;
+  aspect-ratio: 5 / 4;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--n-ui-tint);
+  box-shadow: inset 0 0 0 1px var(--n-table-rule);
+}
+.chat-ui .n-ui-step-picture img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+@media (max-width: 520px) {
+  .chat-ui .n-ui-steps.has-images .n-ui-step { gap: 14px; }
+  .chat-ui .n-ui-step-picture { width: 96px; }
+}
+
 .chat-ui .n-ui-event {
   display: grid;
   grid-template-columns: minmax(72px, 22%) 1fr;
@@ -980,15 +1024,26 @@
 .chat-ui .n-ui-image-frame {
   position: relative;
   display: block;
+  width: 100%;
+  padding: 0;
   overflow: hidden;
+  border: 0;
+  cursor: zoom-in;
   border-radius: 16px;
   background: var(--n-ui-tint);
   box-shadow: inset 0 0 0 1px var(--n-table-rule);
 }
+.chat-ui .n-ui-image-frame {
+  max-height: 460px;
+}
+/* The frame has the picture's shape (its aspect, ImageBlock); the picture
+   fills it whatever its own shape, cropped rather than letterboxed. */
 .chat-ui .n-ui-image-frame img {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
-  max-height: 460px;
+  height: 100%;
   object-fit: cover;
 }
 .chat-ui .n-ui-image-caption {
@@ -1013,7 +1068,7 @@
   white-space: nowrap;
   backdrop-filter: blur(6px);
 }
-.chat-ui a.n-ui-image-frame:hover img,
+.chat-ui .n-ui-image-frame:hover img,
 .chat-ui a.n-ui-article-media:hover img {
   filter: brightness(0.96);
 }
@@ -1027,11 +1082,6 @@
   grid-template-columns: repeat(var(--n-ui-cols, 2), minmax(0, 1fr));
   gap: 10px;
 }
-.chat-ui .n-ui-gallery .n-ui-image-frame img {
-  aspect-ratio: 4 / 3;
-  height: auto;
-  max-height: none;
-}
 @media (max-width: 640px) {
   .chat-ui .n-ui-gallery {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1044,6 +1094,7 @@
   padding-top: 0;
 }
 .chat-ui .n-ui-card-cover {
+  position: relative;
   margin: 0 -18px 14px;
   overflow: hidden;
   background: var(--n-ui-tint);
@@ -1167,4 +1218,78 @@
 .chat-ui .n-ui-article-title a:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+/* A found picture's source and licence (PictureCredit): what its licence asks
+   to be shown, but quiet - it comes up when the picture is pointed at. */
+.chat-ui .n-ui-source-chip.is-credit {
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+.chat-ui :is(.n-ui-image-frame, .n-ui-card-cover):is(:hover, :focus-visible) .n-ui-source-chip.is-credit {
+  opacity: 1;
+}
+@media (hover: none) {
+  .chat-ui .n-ui-source-chip.is-credit { opacity: 1; }
+}
+
+/* One thing beside its picture (Media): the picture left, its title and a
+   sentence or two right, as a step with a picture is drawn. Several in a
+   Stack are parted by a hairline. */
+.chat-ui .n-ui-media {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+.chat-ui .n-ui-media + .n-ui-media {
+  padding-top: 18px;
+  border-top: 1px solid var(--n-line);
+}
+.chat-ui .n-ui-media-body {
+  min-width: 0;
+}
+.chat-ui .n-ui-media-title {
+  margin: 4px 0 6px;
+  font-size: inherit;
+  font-weight: 600;
+}
+.chat-ui .n-ui-media-title a {
+  color: inherit;
+}
+@media (max-width: 520px) {
+  .chat-ui .n-ui-media { gap: 14px; }
+}
+
+/* A picture that was not found keeps its place beside its text or atop its
+   card as a pale tile with a faint mark, so rows and cards stay aligned. */
+.chat-ui :is(.n-ui-step-picture, .n-ui-card-cover).is-empty {
+  display: grid;
+  place-items: center;
+  color: var(--n-text-3);
+}
+.chat-ui .n-ui-card-cover.is-empty {
+  aspect-ratio: 16 / 10;
+}
+.chat-ui :is(.n-ui-step-picture, .n-ui-card-cover).is-empty svg {
+  width: 22px;
+  height: 22px;
+  opacity: 0.45;
+}
+
+/* A step's, a row's and a card's picture open full size at a click. */
+.chat-ui button:is(.n-ui-step-picture, .n-ui-card-cover) {
+  display: block;
+  padding: 0;
+  border: 0;
+  cursor: zoom-in;
+  font: inherit;
+}
+.chat-ui button.n-ui-card-cover {
+  width: calc(100% + 36px);
+}
+.chat-ui button:is(.n-ui-step-picture, .n-ui-card-cover) img {
+  transition: filter 150ms ease;
+}
+.chat-ui button:is(.n-ui-step-picture, .n-ui-card-cover):hover img {
+  filter: brightness(0.96);
 }

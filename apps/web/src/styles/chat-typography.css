@@ -171,6 +171,21 @@
   letter-spacing: 0;
 }
 
+/* An answer is read, often at length: a size up from the chat's 15px and more
+   leading, as ChatGPT sets its replies. At 15px / 1.625 a long answer read as
+   one dense block. */
+.chat-ui .n-markdown {
+  font-size: 16px;
+  line-height: 1.75;
+}
+
+/* Text inside a component (cards, callouts) and the compressed summary keep
+   the chat's size: they are parts of a layout, not the answer's running text. */
+.chat-ui :is(.n-ui, .n-compaction) .n-markdown {
+  font-size: 15px;
+  line-height: 1.625;
+}
+
 /* Own the renderer's typography explicitly instead of relying on utilities
  * inside node_modules. The imported Streamdown stylesheet only supplies motion.
  */
@@ -185,11 +200,13 @@
   margin-block: 0;
 }
 
+/* Paragraphs set apart by most of a line, and leading from the container, so
+   the reasoning's own (agent.css) holds inside it too. */
 .chat-ui .n-markdown .n-prose p {
-  margin: 0 0 8px;
+  margin: 0 0 0.875em;
   color: inherit;
   font-weight: 400;
-  line-height: 1.625;
+  line-height: inherit;
 }
 
 .chat-ui .n-markdown :is(h1, h2, h3, h4, h5, h6) {
@@ -204,12 +221,12 @@
 
 /* A section heading opens a new part of the answer, so it gets clear space
    above it — more than a paragraph's, and enough to read past a block. */
-.chat-ui .n-markdown :is(h1, h2, h3) { margin: 20px 0 6px; }
-.chat-ui .n-markdown h1 { font-size: 20px; }
-.chat-ui .n-markdown h2 { font-size: 18px; }
-.chat-ui .n-markdown h3 { font-size: 16px; }
-.chat-ui .n-markdown h4 { font-size: 15px; }
-.chat-ui .n-markdown :is(h5, h6) { font-size: 14px; }
+.chat-ui .n-markdown :is(h1, h2, h3) { margin: 28px 0 8px; }
+.chat-ui .n-markdown h1 { font-size: 22px; }
+.chat-ui .n-markdown h2 { font-size: 20px; }
+.chat-ui .n-markdown h3 { font-size: 18px; }
+.chat-ui .n-markdown h4 { font-size: 16px; }
+.chat-ui .n-markdown :is(h5, h6) { font-size: 15px; }
 
 .chat-ui .n-markdown :is(strong, b, [data-streamdown='strong']) {
   color: var(--n-chat-strong);
@@ -217,7 +234,7 @@
 }
 
 .chat-ui .n-markdown :is(ul, ol) {
-  margin-block: 8px;
+  margin-block: 0.75em;
   padding-inline-start: 1.625em;
   list-style-position: outside;
 }
@@ -227,7 +244,7 @@
 .chat-ui .n-markdown ol { list-style-type: decimal; }
 
 .chat-ui .n-markdown li {
-  margin-block: 2px;
+  margin-block: 4px;
   padding-block: 0;
   padding-inline-start: 0.375em;
   font-weight: 400;
@@ -246,11 +263,28 @@
 .chat-ui .n-markdown blockquote p::before,
 .chat-ui .n-markdown blockquote p::after { content: none; }
 
+/* A link reads as one without shouting in running text: the words at the
+   text's own weight, a dotted underline in a grey of them, and a small arrow
+   after them that says it leaves the page (MarkdownLink). */
 .chat-ui .n-markdown :is(a, [data-streamdown='link']) {
   color: var(--n-chat-strong);
-  font-weight: 500;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  font-weight: inherit;
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 4px;
+  transition: text-decoration-color 120ms ease;
+}
+.chat-ui .n-markdown :is(a, [data-streamdown='link']):hover {
+  text-decoration-color: currentColor;
+}
+.chat-ui .n-markdown .n-link-arrow {
+  display: inline;
+  width: 0.85em;
+  height: 0.85em;
+  margin-inline-start: 0.2em;
+  vertical-align: -0.05em;
+  stroke-width: 2.25;
 }
 
 .chat-ui .n-markdown [data-streamdown='inline-code'] {

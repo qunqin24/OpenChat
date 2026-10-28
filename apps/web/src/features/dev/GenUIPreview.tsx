@@ -1,14 +1,8 @@
 import { useEffect, useState } from 'react'
 
-import { ImageSource } from '@/components/chat/genui/image-source'
 import { AnswerText } from '@/components/chat/MessageItem'
 
 /** A stand-in picture: a gradient, drawn in place, since this page has no sources. */
-const art = (from: string, to: string) =>
-  `data:image/svg+xml,${encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient></defs><rect width="800" height="500" fill="url(#g)"/></svg>`,
-  )}`
-
 const SAMPLE = `**东京三日游（Tokyo）**的节奏**轻松**，以步行和地铁为主，适合第一次去。先看几个关键数字：
 
 \`\`\`openchat-ui
@@ -134,22 +128,37 @@ $$
 
 \`\`\`openchat-ui
 root = Gallery([g1, g2, g3, g4], columns: 2)
-g1 = Image("${art('#cbd5e1', '#64748b')}", caption: "清水混凝土住宅", link: "https://www.archdaily.com/")
-g2 = Image("${art('#a855f7', '#0ea5e9')}", caption: "赛博朋克街景", link: "https://www.artstation.com/")
-g3 = Image("${art('#38bdf8', '#16a34a')}", caption: "阿尔卑斯湖", link: "https://unsplash.com/")
-g4 = Image("${art('#fbcfe8', '#a5f3fc')}", caption: "3D 几何", link: "https://dribbble.com/")
+g1 = Image("concrete house", caption: "清水混凝土住宅")
+g2 = Image("neon street night", caption: "霓虹街景")
+g3 = Image("alpine lake", caption: "阿尔卑斯湖")
+g4 = Image("geometric sculpture", caption: "几何雕塑")
 \`\`\`
 
 \`\`\`openchat-ui
 root = Carousel([k1, k2, k3, k4])
-k1 = Card(title: "工作设备", subtitle: "简洁高效的工作空间", image: "${art('#e5e7eb', '#a78bfa')}")
-k2 = Card(title: "外设装备", subtitle: "个性化桌面配置", image: "${art('#f97316', '#22d3ee')}")
-k3 = Card(title: "未来桌面", subtitle: "沉浸式多任务工作站", image: "${art('#6d28d9', '#ec4899')}")
-k4 = Card(title: "极简收纳", subtitle: "线缆与桌面整理", image: "${art('#fde68a', '#f59e0b')}")
+k1 = Card(title: "工作设备", subtitle: "简洁高效的工作空间", image: "laptop desk")
+k2 = Card(title: "外设装备", subtitle: "个性化桌面配置", image: "mechanical keyboard")
+k3 = Card(title: "未来桌面", subtitle: "沉浸式多任务工作站", image: "computer monitors")
+k4 = Card(title: "极简收纳", subtitle: "线缆与桌面整理", image: "desk organizer")
 \`\`\`
 
 \`\`\`openchat-ui
-root = Article("谷歌推出面向工作的 Gemini 智能体", "谷歌云发布面向企业的 Gemini 智能体，可处理任务管理、内容生成和编程。它的目标已经从聊天助手延伸到**能执行实际任务的数字同事**。", link: "https://cloud.google.com/blog", image: "${art('#0f766e', '#22c55e')}", category: "今日头条 · 人工智能", date: "10 月 8 日")
+root = Article("谷歌推出面向工作的 Gemini 智能体", "谷歌云发布面向企业的 Gemini 智能体，可处理任务管理、内容生成和编程。它的目标已经从聊天助手延伸到**能执行实际任务的数字同事**。", link: "https://cloud.google.com/blog", image: "server room", category: "今日头条 · 人工智能", date: "10 月 8 日")
+\`\`\`
+
+### 类别多的柱状图
+
+\`\`\`openchat-ui
+root = Chart("bar", ["DeepSeek", "Qwen", "LLaMA", "Mistral", "GPT-OSS", "Gemma", "Z-AI", "MiniMax", "Moonshot", "NVIDIA Nemotron Ultra"], [t], title: "开源模型按作者的 token 总量", unit: "万亿 token")
+t = Series("token", [14.3, 5.59, 3.9, 2.8, 1.6, 1.2, 1.1, 1.05, 0.85, 0.75])
+\`\`\`
+
+### 清理键盘
+
+\`\`\`openchat-ui
+root = Steps([t1, t2])
+t1 = Step("第一步：用软毛刷清理缝隙", detail: "先关机，用柔软、干燥的刷子沿键帽四周轻轻刷动，把灰尘带到表面。", image: "keyboard cleaning brush")
+t2 = Step("第二步：用压缩空气吹出灰尘", detail: "把电脑倾斜约 75°，用带细喷管的压缩空气左右移动着吹。", image: "compressed air can")
 \`\`\`
 
 需要的话，我可以按你的预算再调整。`
@@ -188,10 +197,7 @@ export function GenUIPreview() {
             Show all
           </button>
         </div>
-        {/* No conversation here: the sample's pictures are drawn in place. */}
-        <ImageSource.Provider value={(src) => (src.startsWith('data:image/') ? src : null)}>
-          <AnswerText text={SAMPLE.slice(0, length)} streaming={streaming} />
-        </ImageSource.Provider>
+        <AnswerText text={SAMPLE.slice(0, length)} streaming={streaming} />
       </div>
     </div>
   )

@@ -1,37 +1,37 @@
+import type { FoundImage } from '@openchat/api-client'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { useContext, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { smoothScrollBehavior } from '@/lib/motion'
 import { siteName } from '@/lib/urls'
 import { cn } from '@/lib/utils'
-import { ImageSource } from './image-source'
+import { credit, type ShownPicture } from './found-image'
 
 
-/** A source picture that removes itself, and lets its frame know, when it cannot load. */
+/**
+ * A picture (usePicture) that removes itself, and lets its frame know, when
+ * its bytes will not load. A found photo's creator and licence are its tooltip.
+ */
 export function Picture({
-  src,
+  picture,
   alt,
   className,
   onMissing,
 }: {
-  src: string
+  picture: ShownPicture
   alt: string
   className?: string
   onMissing?: () => void
 }) {
-  const resolve = useContext(ImageSource)
   const [failed, setFailed] = useState(false)
-  const url = src ? resolve(src) : null
-  useLayoutEffect(() => {
-    if (!url) onMissing?.()
-  }, [url, onMissing])
-  if (!url || failed) return null
+  if (failed) return null
   return (
     <img
       className={className}
-      src={url}
-      alt={alt}
+      src={picture.src}
+      alt={alt || picture.found?.title || ''}
+      title={credit(picture.found) || undefined}
       loading="lazy"
       decoding="async"
       onError={() => {
@@ -40,6 +40,15 @@ export function Picture({
       }}
     />
   )
+}
+
+/**
+ * Where a found photo is from and under which licence, as a chip laid over it
+ * - what a Creative Commons licence asks to be shown with the picture.
+ */
+export function PictureCredit({ found }: { found: FoundImage }) {
+  const text = [found.source, found.license].filter(Boolean).join(' · ')
+  return text ? <span className="n-ui-source-chip is-credit">{text}</span> : null
 }
 
 /** The site a picture or story came from, as a chip laid over the picture. */
