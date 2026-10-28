@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 // Event is one change a subscriber applies on top of its snapshot.
@@ -115,6 +115,14 @@ type CompactionChanged struct{ Summary *Summary }
 type ConversationDeleted struct{}
 
 func (ConversationDeleted) isEvent() {}
+
+// SubagentsChanged: one of the conversation's sub-agents started, took a
+// step or ended. Published outside any run (nil run id, version 0), on the
+// conversation it works for; a page following that conversation reads its
+// sub-agents again.
+type SubagentsChanged struct{}
+
+func (SubagentsChanged) isEvent() {}
 
 func (CompactionStarted) isEvent()  {}
 func (CompactionFinished) isEvent() {}

@@ -1,8 +1,6 @@
 package api
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,15 +10,14 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 
-	"github.com/qunqin/openchat/apps/server/internal/auth"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/auth"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
 )
 
-// How many runs one account (or one guest address) may have going at once.
+// How many runs one account may have going at once.
 // The runs are held open by an endpoint that waits (capFixture.hold), so a run
 // stays `running` for as long as a test wants.
 
@@ -282,13 +279,12 @@ func TestRunLimitAlsoRefusesRegenerateAndEdit(t *testing.T) {
 // The limit is in settings: read with a default, validated, and saved.
 func TestRunLimitSettings(t *testing.T) {
 	f := newCapFixture(t, true)
-	for _, key := range []string{settingMaxRuns, settingGuestMaxRuns} {
-		if _, err := f.pool.Exec(context.Background(), `DELETE FROM app_settings WHERE key = $1`, key); err != nil {
-			t.Fatal(err)
-		}
-		key := key
-		t.Cleanup(func() { _, _ = f.pool.Exec(context.Background(), `DELETE FROM app_settings WHERE key = $1`, key) })
+	if _, err := f.pool.Exec(context.Background(), `DELETE FROM app_settings WHERE key = $1`, settingMaxRuns); err != nil {
+		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		_, _ = f.pool.Exec(context.Background(), `DELETE FROM app_settings WHERE key = $1`, settingMaxRuns)
+	})
 	patch := func(body string) (int, SystemSettings) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(body))
@@ -298,188 +294,19 @@ func TestRunLimitSettings(t *testing.T) {
 		return rec.Code, out
 	}
 	code, out := patch(`{}`)
-	if code != 200 || out.MaxConcurrentRuns != 3 || out.GuestMaxConcurrentRuns != 2 {
+	if code != 200 || out.MaxConcurrentRuns != 3 {
 		t.Fatalf("defaults: %d %+v", code, out)
 	}
-	code, out = patch(`{"maxConcurrentRuns":5,"guestMaxConcurrentRuns":0}`)
-	if code != 200 || out.MaxConcurrentRuns != 5 || out.GuestMaxConcurrentRuns != 0 {
+	code, out = patch(`{"maxConcurrentRuns":5}`)
+	if code != 200 || out.MaxConcurrentRuns != 5 {
 		t.Fatalf("update: %d %+v", code, out)
 	}
-	for _, body := range []string{`{"maxConcurrentRuns":-1}`, `{"guestMaxConcurrentRuns":1001}`, `{"maxConcurrentRuns":7,"guestMaxConcurrentRuns":99999}`} {
+	for _, body := range []string{`{"maxConcurrentRuns":-1}`, `{"maxConcurrentRuns":1001}`} {
 		if code, _ := patch(body); code != http.StatusBadRequest {
 			t.Errorf("%s: %d, want 400", body, code)
 		}
 	}
 	if _, out = patch(`{}`); out.MaxConcurrentRuns != 5 {
 		t.Errorf("a refused update changed the limit to %d", out.MaxConcurrentRuns)
-	}
-}
-
-// ----------------------------------------------------------------- guests
-
-// guestStream starts a guest run from an address and returns once the server has
-// answered (200 and the stream is open, or the refusal). The caller stops the
-// run by cancelling the returned function.
-func guestStream(t *testing.T, h *guestHarness, ip string) (status int, code string, stop func()) {
-	t.Helper()
-	raw, _ := json.Marshal(map[string]any{
-		"action": "send", "conversationId": uuid.New(), "model": h.model,
-		"messages": []any{}, "input": userRow(uuid.New(), "hi", time.Now()),
-	})
-	ctx, cancel := context.WithCancel(context.Background())
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, h.http.URL+"/api/v1/guest/runs", bytes.NewReader(raw))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Forwarded-For", ip)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		cancel()
-		t.Fatal(err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		var body struct {
-			Code string `json:"code"`
-		}
-		_ = json.NewDecoder(resp.Body).Decode(&body)
-		resp.Body.Close()
-		cancel()
-		return resp.StatusCode, body.Code, func() {}
-	}
-	// Drain in the background so the server is never blocked on a full pipe.
-	go func() {
-		defer resp.Body.Close()
-		scanner := bufio.NewScanner(resp.Body)
-		scanner.Buffer(make([]byte, 1<<20), 64<<20)
-		for scanner.Scan() {
-		}
-	}()
-	return resp.StatusCode, "", cancel
-}
-
-func guestRunning(t *testing.T, h *guestHarness, ip string) (n int) {
-	t.Helper()
-	_ = h.pool.QueryRow(context.Background(), `SELECT count(*) FROM runs WHERE client_ip = $1 AND status = 'running'`, ip).Scan(&n)
-	return
-}
-
-func uniqueIP() string {
-	b := uuid.New()
-	return fmt.Sprintf("10.%d.%d.%d", b[0], b[1], b[2])
-}
-
-// A guest address is held to its own limit: the run beyond it is refused before
-// a user, a conversation or a file is written, other addresses are not
-// affected, and the slot comes back when the run is stopped.
-func TestGuestRunLimitPerAddress(t *testing.T) {
-	h := newGuestHarness(t)
-	h.pace = 30 * time.Second
-	h.set(settingGuestMaxRuns, 2)
-	t.Cleanup(func() {
-		_, _ = h.pool.Exec(context.Background(), `DELETE FROM app_settings WHERE key = $1`, settingGuestMaxRuns)
-	})
-	ip, other := uniqueIP(), uniqueIP()
-
-	var stops []func()
-	for i := range 2 {
-		status, code, stop := guestStream(t, h, ip)
-		if status != http.StatusOK {
-			t.Fatalf("guest run %d: %d %s", i, status, code)
-		}
-		stops = append(stops, stop)
-	}
-	usersBefore := countGuests(t, h)
-	status, code, _ := guestStream(t, h, ip)
-	if status != http.StatusTooManyRequests || code != "too_many_runs" {
-		t.Fatalf("beyond the limit: %d %s", status, code)
-	}
-	if got := countGuests(t, h); got != usersBefore {
-		t.Errorf("a refused guest request left users behind: %d, was %d", got, usersBefore)
-	}
-
-	// Another address has slots of its own.
-	status, code, stopOther := guestStream(t, h, other)
-	if status != http.StatusOK {
-		t.Fatalf("another address: %d %s", status, code)
-	}
-	stopOther()
-
-	// Stopping one (the page closes) frees a slot.
-	stops[0]()
-	deadline := time.Now().Add(10 * time.Second)
-	for guestRunning(t, h, ip) > 1 && time.Now().Before(deadline) {
-		time.Sleep(20 * time.Millisecond)
-	}
-	status, code, stop := guestStream(t, h, ip)
-	if status != http.StatusOK {
-		t.Fatalf("after one ended: %d %s", status, code)
-	}
-	stop()
-	stops[1]()
-}
-
-func countGuests(t *testing.T, h *guestHarness) (n int) {
-	t.Helper()
-	_ = h.pool.QueryRow(context.Background(), `SELECT count(*) FROM users WHERE guest`).Scan(&n)
-	return
-}
-
-// Guests racing for the last slot of an address: one gets it.
-func TestGuestRunLimitHoldsUnderParallelRequests(t *testing.T) {
-	h := newGuestHarness(t)
-	h.pace = 30 * time.Second
-	h.set(settingGuestMaxRuns, 2)
-	t.Cleanup(func() {
-		_, _ = h.pool.Exec(context.Background(), `DELETE FROM app_settings WHERE key = $1`, settingGuestMaxRuns)
-	})
-	ip := uniqueIP()
-
-	var accepted, refused atomic.Int32
-	var mu sync.Mutex
-	var stops []func()
-	var wg sync.WaitGroup
-	start := make(chan struct{})
-	for range 12 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			<-start
-			status, code, stop := guestStream(t, h, ip)
-			switch {
-			case status == http.StatusOK:
-				accepted.Add(1)
-			case status == http.StatusTooManyRequests && code == "too_many_runs":
-				refused.Add(1)
-			default:
-				t.Errorf("guest run: %d %s", status, code)
-			}
-			mu.Lock()
-			stops = append(stops, stop)
-			mu.Unlock()
-		}()
-	}
-	close(start)
-	wg.Wait()
-	if accepted.Load() != 2 || refused.Load() != 10 {
-		t.Fatalf("%d accepted and %d refused with a limit of 2", accepted.Load(), refused.Load())
-	}
-	for _, stop := range stops {
-		stop()
-	}
-}
-
-// 0 turns the guest limit off.
-func TestGuestRunLimitZeroIsUnlimited(t *testing.T) {
-	h := newGuestHarness(t)
-	h.pace = 30 * time.Second
-	h.set(settingGuestMaxRuns, 0)
-	t.Cleanup(func() {
-		_, _ = h.pool.Exec(context.Background(), `DELETE FROM app_settings WHERE key = $1`, settingGuestMaxRuns)
-	})
-	ip := uniqueIP()
-	for i := range 4 {
-		status, code, stop := guestStream(t, h, ip)
-		if status != http.StatusOK {
-			t.Fatalf("guest run %d: %d %s", i, status, code)
-		}
-		defer stop()
 	}
 }

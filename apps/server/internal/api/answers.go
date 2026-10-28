@@ -10,11 +10,11 @@ import (
 	"github.com/jackc/pgx/v5"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
-	"github.com/qunqin/openchat/apps/server/internal/agent"
-	"github.com/qunqin/openchat/apps/server/internal/auth"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/agent"
+	"github.com/qunqin24/openchat/apps/server/internal/auth"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 // Answering a message again, as it was asked or reworded.
@@ -48,12 +48,9 @@ var (
 		"only a message that moderation refused takes files when it is edited; any other keeps its own")
 )
 
-// appendInput writes a user message at the end of a conversation, under the
-// id of the caller's choosing if it has one (which is how a guest's message
-// gets the id its browser already gave it).
-func appendInput(ctx context.Context, q *sqlc.Queries, conversationID uuid.UUID, id *uuid.UUID, content string, parts []llm.Part) (sqlc.Message, error) {
+// appendInput writes a user message at the end of a conversation.
+func appendInput(ctx context.Context, q *sqlc.Queries, conversationID uuid.UUID, content string, parts []llm.Part) (sqlc.Message, error) {
 	return q.AppendEntry(ctx, sqlc.AppendEntryParams{
-		ID:             id,
 		ConversationID: conversationID,
 		Role:           sqlc.MessageRoleUser,
 		Content:        content,
@@ -123,6 +120,9 @@ func (s *Server) RegenerateAnswer(w http.ResponseWriter, r *http.Request, conver
 		return
 	}
 
+	// The answer's sub-agents go with it (conversations.launched_by cascades);
+	// their runs going now are stopped once it is gone.
+	subagents := s.runningSubagents(ctx, conversationId)
 	var run sqlc.Run
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
@@ -154,8 +154,10 @@ func (s *Server) RegenerateAnswer(w http.ResponseWriter, r *http.Request, conver
 		s.failRun(w, r, conversationId, requestID, err)
 		return
 	}
+	s.cancelGoneRuns(context.WithoutCancel(ctx), subagents)
 	// Other tabs hold the answer that was just deleted.
 	s.startRun(conversationId, run, input, agent.TranscriptChanged{})
+	s.subagentsChanged(conversationId)
 
 	page, err := s.messagePage(ctx, []sqlc.Message{input})
 	if err != nil {
@@ -222,9 +224,8 @@ func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversatio
 	// The new wording, and any files this edit brings: those of a question that
 	// was sent were checked when it was first sent. As a send is, with the
 	// pictures read once and what was read recorded (attachment_digest.go).
-	images, digests := s.checkedImages(files)
-	if refused, err := s.moderated(ctx, s.accountSubject(ctx, user, conversationId, ModerationSourceEdit),
-		moderationInput{text: content, images: images}); err != nil {
+	in, digests := s.checkedFiles(content, files)
+	if refused, err := s.moderated(ctx, s.accountSubject(ctx, user, conversationId, ModerationSourceEdit), in); err != nil {
 		// The words that were refused replace the refused message they were to
 		// reword, so the transcript shows what was tried last.
 		if refused && refusedTarget {
@@ -240,6 +241,9 @@ func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversatio
 		return
 	}
 
+	// Sub-agents launched by the answers deleted go with them; their runs
+	// going now are stopped once they are gone.
+	subagents := s.runningSubagents(ctx, conversationId)
 	var (
 		input sqlc.Message
 		run   sqlc.Run
@@ -270,7 +274,7 @@ func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversatio
 				}
 			}
 		}
-		input, err = appendInput(ctx, q, conversationId, nil, content, parts)
+		input, err = appendInput(ctx, q, conversationId, content, parts)
 		if err != nil {
 			return err
 		}
@@ -306,6 +310,8 @@ func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversatio
 	}
 	// Rows are gone, so the files they named are wanted by nobody.
 	s.removeFiles(context.WithoutCancel(ctx), keys)
+	s.cancelGoneRuns(context.WithoutCancel(ctx), subagents)
+	s.subagentsChanged(conversationId)
 	// Other tabs showing this conversation hold what was deleted; they are told
 	// in the batch that starts the run.
 	s.startRun(conversationId, run, input, agent.TranscriptChanged{From: messageId})
@@ -334,7 +340,7 @@ func (s *Server) messagePage(ctx context.Context, rows []sqlc.Message) (MessageP
 		return page, err
 	}
 	for _, row := range rows {
-		page.Items = append(page.Items, toMessage(row, attached[row.ID]))
+		page.Items = append(page.Items, messageWithFiles(row, attached))
 	}
 	return page, nil
 }

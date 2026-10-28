@@ -6,9 +6,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/qunqin/openchat/apps/server/internal/agent"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/agent"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 // The agent layer speaks llm's internal protocol; these map it onto the
@@ -28,6 +28,10 @@ func toMessage(row sqlc.Message, attachments []Attachment) Message {
 		Model:          row.Model,
 		ErrorCode:      row.ErrorCode,
 		CreatedAt:      row.CreatedAt.Time,
+	}
+	if row.Origin != nil {
+		origin := MessageOrigin(*row.Origin)
+		m.Origin = &origin
 	}
 	if parts, err := agent.DecodeParts(row.Parts); err != nil {
 		// One unreadable row must not take the whole conversation down with it;
@@ -220,6 +224,8 @@ func toRunEvent(event agent.Event) (RunEvent, bool) {
 		err = out.FromCompactionChangedEvent(CompactionChangedEvent{Type: CompactionChanged, Summary: toContextSummary(e.Summary)})
 	case agent.ConversationDeleted:
 		err = out.FromConversationDeletedEvent(ConversationDeletedEvent{Type: ConversationDeleted})
+	case agent.SubagentsChanged:
+		err = out.FromSubagentsChangedEvent(SubagentsChangedEvent{Type: SubagentsChanged})
 	default:
 		return out, false
 	}

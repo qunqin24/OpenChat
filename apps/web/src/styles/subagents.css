@@ -1,0 +1,432 @@
+/* Sub-agents (子智能体, docs/design/sub-agents.md §7): a line in the reply, a
+   line where a report is delivered, a summary in the corner, and the side
+   panel where a writing block would be. No boxes in the transcript: the lines
+   are quiet text with the sub-agents' marks. */
+
+/* ------------------------------------------------------------ the marks */
+/* Four petals round an open centre, one colour per sub-agent (colorOf). The
+   colour is never greyed: a failed or stopped one is only paler. */
+.chat-ui {
+  --n-agent-1: #3d6df2;
+  --n-agent-2: #e5484d;
+  --n-agent-3: #12a58a;
+  --n-agent-4: #8e4ef0;
+  --n-agent-5: #e08a1e;
+  --n-agent-6: #d6409f;
+  --n-agent-7: #0b93c4;
+  --n-agent-8: #6a9a1f;
+}
+
+.dark .chat-ui {
+  --n-agent-1: #6b8ff7;
+  --n-agent-2: #f06a6e;
+  --n-agent-3: #2cc4a5;
+  --n-agent-4: #a77bf5;
+  --n-agent-5: #f0a443;
+  --n-agent-6: #e56bb7;
+  --n-agent-7: #39b2e0;
+  --n-agent-8: #8fbf3f;
+}
+
+.chat-ui .n-subagent-avatar {
+  flex: none;
+  overflow: visible;
+}
+
+/* Origin on the path, in the drawing's own box: on the rotated group the
+   turn would be applied twice. */
+.chat-ui .n-subagent-petal {
+  fill: var(--n-subagent-color);
+  transform-box: view-box;
+  transform-origin: 12px 12px;
+}
+
+.chat-ui .n-subagent-avatar.is-faded .n-subagent-petal {
+  opacity: 0.35;
+}
+
+/* Waiting for a slot: a closed bud, still. */
+.chat-ui .n-subagent-avatar.is-queued .n-subagent-petal {
+  transform: scale(0.82);
+}
+
+.chat-ui .n-subagent-avatar.is-running .n-subagent-bloom {
+  transform-box: view-box;
+  transform-origin: 12px 12px;
+  animation: n-subagent-turn 3.2s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+
+.chat-ui .n-subagent-avatar.is-running .n-subagent-petal {
+  animation: n-subagent-breathe 1.6s ease-in-out infinite;
+}
+
+.chat-ui .n-subagent-avatar.is-running .n-subagent-bloom > g:nth-child(2) .n-subagent-petal { animation-delay: -0.4s; }
+.chat-ui .n-subagent-avatar.is-running .n-subagent-bloom > g:nth-child(3) .n-subagent-petal { animation-delay: -0.8s; }
+.chat-ui .n-subagent-avatar.is-running .n-subagent-bloom > g:nth-child(4) .n-subagent-petal { animation-delay: -1.2s; }
+
+@keyframes n-subagent-turn {
+  to { transform: rotate(90deg); }
+}
+
+@keyframes n-subagent-breathe {
+  0%, 100% { transform: scale(0.82); opacity: 0.55; }
+  50% { transform: scale(1); opacity: 1; }
+}
+
+/* Not a loading indicator - its state is also said in words - so it stands
+   still, petals full, where motion is reduced (the global rule would leave
+   them at the end of a breath, half faded). */
+@media (prefers-reduced-motion: reduce) {
+  .chat-ui .n-subagent-avatar.is-running .n-subagent-bloom,
+  .chat-ui .n-subagent-avatar.is-running .n-subagent-petal {
+    animation: none !important;
+  }
+}
+
+.chat-ui .n-subagent-avatars {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
+.chat-ui .n-subagent-avatars > * + * {
+  margin-left: -3px;
+}
+
+/* ------------------------------------------------------------ the lines */
+.chat-ui .n-subagent-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0;
+}
+
+.chat-ui .n-subagent-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.chat-ui .n-subagent-line-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-left: -6px;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--n-text-2);
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-ui .n-subagent-line-main:hover {
+  background: var(--n-hover);
+  color: var(--n-text);
+}
+
+.chat-ui .n-subagent-line-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-ui .n-subagent-line-meta {
+  color: var(--n-text-3);
+}
+
+.chat-ui .n-subagent-line-go {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--n-text-3);
+}
+
+.chat-ui .n-subagent-line-action,
+.chat-ui .n-subagent-row-action {
+  flex: none;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--n-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--n-text-2);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.chat-ui .n-subagent-line-action:hover,
+.chat-ui .n-subagent-row-action:hover {
+  background: var(--n-hover);
+  color: var(--n-text);
+}
+
+.chat-ui .n-subagent-line-action:disabled,
+.chat-ui .n-subagent-row-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Reports delivered while idle divide the turns: the line centred between
+   two dashed rules across the column, the reply they started below. */
+.chat-ui .n-msg-notice {
+  margin: 22px 0 -6px;
+}
+
+.chat-ui .n-subagent-lines.is-divider {
+  gap: 6px;
+}
+
+.chat-ui .n-subagent-lines.is-divider .n-subagent-line {
+  gap: 12px;
+}
+
+.chat-ui .n-subagent-lines.is-divider .n-subagent-line::before,
+.chat-ui .n-subagent-lines.is-divider .n-subagent-line::after {
+  content: '';
+  flex: 1;
+  min-width: 24px;
+  border-top: 1.5px dashed var(--n-hover-strong);
+}
+
+.chat-ui .n-subagent-lines.is-divider .n-subagent-line-main {
+  flex: none;
+  max-width: 70%;
+  margin-left: 0;
+  font-size: 13px;
+}
+
+/* ------------------------------------------------------- the summary */
+.chat-ui .n-subagent-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--n-card);
+  box-shadow: var(--n-shadow-card);
+  color: var(--n-text-2);
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.chat-ui .n-subagent-summary:hover {
+  box-shadow: var(--n-shadow-card-hover);
+  color: var(--n-text);
+}
+
+.chat-ui .n-subagent-summary-label {
+  color: var(--n-text);
+  font-weight: 500;
+}
+
+.chat-ui .n-subagent-summary-dot {
+  color: var(--n-text-3);
+}
+
+/* Just above the composer, at its left edge, on every screen. */
+.chat-ui .n-subagent-summary {
+  margin: 0 0 8px 4px;
+}
+
+/* --------------------------------------------------------- the panel */
+/* The file panel (FilePanel) stands where the sub-agents' does, the same way. */
+.chat-ui .n-subagent-panel,
+.chat-ui .n-file-panel {
+  position: absolute;
+  inset: 0 0 0 auto;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  width: var(--n-doc-w);
+  min-height: 0;
+  border-left: 1px solid var(--n-line);
+  background: var(--n-bg);
+  animation: n-doc-panel-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.chat-ui .n-subagent-bar-who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-left: -8px;
+}
+
+.chat-ui .n-subagent-bar-name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-ui .n-subagent-model {
+  max-width: 14em;
+  overflow: hidden;
+  margin-right: 4px;
+  color: var(--n-text-3);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-ui .n-subagent-empty {
+  padding: 24px 20px;
+  color: var(--n-text-3);
+  font-size: 14px;
+}
+
+.chat-ui .n-subagent-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 10px 24px;
+}
+
+.chat-ui .n-subagent-group {
+  margin: 14px 8px 6px;
+  color: var(--n-text-3);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.chat-ui .n-subagent-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 10px;
+}
+
+.chat-ui .n-subagent-row:hover {
+  background: var(--n-hover);
+}
+
+.chat-ui .n-subagent-row-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-ui .n-subagent-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.chat-ui .n-subagent-row-name {
+  overflow: hidden;
+  color: var(--n-text);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-ui .n-subagent-row-sub {
+  overflow: hidden;
+  color: var(--n-text-3);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-ui .n-subagent-row-age {
+  flex: none;
+  color: var(--n-text-3);
+  font-size: 12px;
+}
+
+.chat-ui .n-subagent-row-action {
+  margin-right: 8px;
+}
+
+.chat-ui .n-subagent-view {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.chat-ui .n-subagent-transcript {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* A pinned header's background reaches far out to the sides (agent.css);
+     it must not make the panel scroll sideways. */
+  overflow-x: hidden;
+  padding: 8px 20px max(24px, env(safe-area-inset-bottom));
+}
+
+.chat-ui .n-subagent-input {
+  margin: 12px 0 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--n-panel);
+}
+
+.chat-ui .n-subagent-input-label {
+  margin-bottom: 2px;
+  color: var(--n-text-3);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.chat-ui .n-subagent-input-text {
+  /* Six lines; a task longer than that is clamped (InputText). */
+  --n-input-clamp: 134px;
+  color: var(--n-text);
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.chat-ui .n-subagent-input-text.is-clamped {
+  max-height: var(--n-input-clamp);
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 3.2em), transparent);
+}
+.chat-ui .n-subagent-input-more {
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--n-text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.chat-ui .n-subagent-input-more:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+
+/* The sub-agents' flower (SubagentsIcon), wherever it stands for them - the
+   top bar button, the panel's title, a step of the reply: full ink, whatever
+   grey or colour the icons beside it are given. */
+.chat-ui .n-subagents-icon,
+.chat-ui .n-doc-kind > .n-subagents-icon { color: var(--n-text); }

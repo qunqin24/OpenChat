@@ -5,8 +5,7 @@ import { useEffect, useEffectEvent } from 'react'
 
 import { setCompaction } from '@/hooks/use-compaction'
 import { refreshNewestMessages } from '@/hooks/use-messages'
-import { API_BASE_URL, appFetch } from '@/lib/api'
-import { useChatPaths } from '@/lib/chat-paths'
+import { API_BASE_URL } from '@/lib/api'
 import { refreshConfirmed, refreshThenSettle } from '@/lib/hand-over'
 import { CAPACITY_CODE } from '@/lib/model-capacity'
 import { reportError } from '@/lib/query'
@@ -47,12 +46,11 @@ const RECONNECT_DELAYS = [500, 1000, 2000, 5000, 10000, 15000]
 export function useConversationEvents(conversationId: string | undefined) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const paths = useChatPaths()
 
   // Read at the time it runs, so a new `navigate` does not restart the stream.
   const leave = useEffectEvent(() => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all })
-    void navigate({ to: paths.home, replace: true })
+    void navigate({ to: '/', replace: true })
   })
 
   useEffect(() => {
@@ -104,8 +102,6 @@ export function useConversationEvents(conversationId: string | undefined) {
             conversationId,
             credentials: 'include',
             signal: controller.signal,
-            // A guest's events are made in the page; an account's come from the server.
-            fetch: appFetch,
           })) {
             attempt = 0
             if (event.type === 'snapshot') {
@@ -182,6 +178,15 @@ export function useConversationEvents(conversationId: string | undefined) {
               // compression (no summary) changes nothing but the status line.
               if (runEvent.type === 'compaction_finished' && runEvent.summary) {
                 setCompaction(queryClient, conversationId, runEvent.summary)
+              }
+              // A sub-agent started, took a step or ended; or a report of one was
+              // delivered, which changes how it stands.
+              if (
+                runEvent.type === 'subagents_changed' ||
+                (runEvent.type === 'message_appended' && runEvent.message.origin === 'subagent') ||
+                (runEvent.type === 'run_started' && runEvent.message.origin === 'subagent')
+              ) {
+                void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.subagents(conversationId) })
               }
               // Taken back by a person, here or in another tab.
               if (runEvent.type === 'compaction_changed') {

@@ -1,36 +1,28 @@
 -- name: CreateRun :one
 INSERT INTO runs (conversation_id, user_id, input_message_id, request_id, model_id, channel_id, reasoning_effort,
-                  web_search, continues, client_ip)
+                  web_search, continues)
 VALUES (sqlc.arg('conversation_id'), sqlc.arg('user_id'), sqlc.arg('input_message_id'),
         sqlc.narg('request_id'), sqlc.arg('model_id'), sqlc.narg('channel_id'), sqlc.narg('reasoning_effort'),
-        sqlc.arg('web_search'), sqlc.narg('continues'), sqlc.narg('client_ip'))
+        sqlc.arg('web_search'), sqlc.narg('continues'))
 RETURNING *;
 
 -- name: LockRunSlots :exec
 -- Held until the transaction ends, so that counting the runs that are going
 -- and then starting one is a single step: two requests with one slot left
--- cannot both be let through. The key is the account's id, or for a guest the
--- address (`ip:...`); servers sharing the database share the lock.
+-- cannot both be let through. The key is the account's id; servers sharing
+-- the database share the lock.
 SELECT pg_advisory_xact_lock(hashtextextended('run_slots:' || sqlc.arg('key')::text, 23));
 
 -- name: CountUserRunningRuns :one
--- How many runs of this account are going, in all its conversations.
+-- How many runs of this account are going, in all its conversations. A
+-- sub-agent's runs are counted apart (CountUserSubagentRuns): two of them
+-- working in the background must not keep the person from sending.
 SELECT count(*)::bigint
 FROM runs
-WHERE user_id = $1
-  AND status = 'running';
-
--- name: CountIPRunningRuns :one
--- How many guest runs from this address are going. A guest's run lives inside
--- the request that follows it and is never resumed after a restart, so one that
--- has committed nothing for a long while is a leftover of a process that died
--- (the sweep deletes its user within hours), not a run that is going: it does
--- not hold a slot.
-SELECT count(*)::bigint
-FROM runs
-WHERE client_ip = sqlc.arg('ip')::text
-  AND status = 'running'
-  AND updated_at > now() - interval '20 minutes';
+         JOIN conversations c ON c.id = runs.conversation_id
+WHERE runs.user_id = $1
+  AND runs.status = 'running'
+  AND c.kind = 'chat';
 
 -- name: LockRun :one
 -- Held until the transaction ends, so two answers to one question queue up and
@@ -58,15 +50,11 @@ WHERE conversation_id = $1
   AND status = 'running';
 
 -- name: ListRunningRuns :many
--- What a process that just started has to pick up. A guest's run is not one:
--- the request that was following it is gone with the process that died, and
--- the sweep for guests deletes what is left (guest.sql).
-SELECT runs.*
+-- What a process that just started has to pick up.
+SELECT *
 FROM runs
-         JOIN users ON users.id = runs.user_id
-WHERE runs.status = 'running'
-  AND NOT users.guest
-ORDER BY runs.created_at;
+WHERE status = 'running'
+ORDER BY created_at;
 
 -- name: SaveRunState :one
 -- One step of a run: a new checkpoint, new live state, or both. Guarded on

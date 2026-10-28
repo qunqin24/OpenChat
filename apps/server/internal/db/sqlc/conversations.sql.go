@@ -16,7 +16,8 @@ const cancelConversationRuns = `-- name: CancelConversationRuns :many
 UPDATE runs
 SET cancel_requested = true,
     updated_at       = now()
-WHERE conversation_id = ANY ($1::uuid[])
+WHERE (conversation_id = ANY ($1::uuid[])
+    OR conversation_id IN (SELECT c.id FROM conversations c WHERE c.parent_id = ANY ($1::uuid[])))
   AND status = 'running'
 RETURNING id
 `
@@ -25,7 +26,8 @@ RETURNING id
 // endpoint does for one: recorded here, and the runner told after the commit.
 // Deleting a conversation does this, because nothing can stop a run in a
 // deleted conversation afterwards (the stop endpoint no longer finds it) and
-// it would go on calling the model and holding its owner's run slot.
+// it would go on calling the model and holding its owner's run slot. The
+// runs of their sub-agents go too.
 func (q *Queries) CancelConversationRuns(ctx context.Context, ids []uuid.UUID) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, cancelConversationRuns, ids)
 	if err != nil {
@@ -49,7 +51,7 @@ func (q *Queries) CancelConversationRuns(ctx context.Context, ids []uuid.UUID) (
 const createConversation = `-- name: CreateConversation :one
 INSERT INTO conversations (user_id, title, model, temporary)
 VALUES ($1, $2, $3, $4)
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user
 `
 
 type CreateConversationParams struct {
@@ -79,15 +81,22 @@ func (q *Queries) CreateConversation(ctx context.Context, arg CreateConversation
 		&i.WebSearch,
 		&i.MemorySnapshot,
 		&i.Temporary,
+		&i.Kind,
+		&i.ParentID,
+		&i.LaunchedBy,
+		&i.LaunchCallID,
+		&i.Background,
+		&i.StoppedByUser,
 	)
 	return i, err
 }
 
 const getConversation = `-- name: GetConversation :one
-SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary
+SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user
 FROM conversations
 WHERE id = $1
   AND user_id = $2
+  AND kind = 'chat'
   AND deleted_at IS NULL
 `
 
@@ -99,6 +108,8 @@ type GetConversationParams struct {
 // Ownership is part of the lookup, not a separate check: a conversation
 // belonging to someone else must read as "not found", never as "forbidden",
 // or the response tells a stranger the id exists.
+// A sub-agent's conversation (kind 'subagent') is not one either: nothing a
+// person sends reaches it, so no endpoint that takes their words finds it.
 func (q *Queries) GetConversation(ctx context.Context, arg GetConversationParams) (Conversation, error) {
 	row := q.db.QueryRow(ctx, getConversation, arg.ID, arg.UserID)
 	var i Conversation
@@ -114,15 +125,22 @@ func (q *Queries) GetConversation(ctx context.Context, arg GetConversationParams
 		&i.WebSearch,
 		&i.MemorySnapshot,
 		&i.Temporary,
+		&i.Kind,
+		&i.ParentID,
+		&i.LaunchedBy,
+		&i.LaunchCallID,
+		&i.Background,
+		&i.StoppedByUser,
 	)
 	return i, err
 }
 
 const listConversations = `-- name: ListConversations :many
-SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary
+SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user
 FROM conversations
 WHERE user_id = $1
   AND deleted_at IS NULL
+  AND kind = 'chat'
   -- A temporary conversation is not history: it is reached by its link, once.
   AND NOT temporary
   AND ($2::timestamptz IS NULL
@@ -164,6 +182,12 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 			&i.WebSearch,
 			&i.MemorySnapshot,
 			&i.Temporary,
+			&i.Kind,
+			&i.ParentID,
+			&i.LaunchedBy,
+			&i.LaunchCallID,
+			&i.Background,
+			&i.StoppedByUser,
 		); err != nil {
 			return nil, err
 		}
@@ -182,6 +206,7 @@ FROM runs r
 WHERE r.status = 'running'
   AND c.user_id = $1
   AND c.deleted_at IS NULL
+  AND c.kind = 'chat'
   AND NOT c.temporary
 `
 
@@ -208,7 +233,7 @@ func (q *Queries) ListRunningConversations(ctx context.Context, userID *uuid.UUI
 }
 
 const lockConversation = `-- name: LockConversation :one
-SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary
+SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user
 FROM conversations
 WHERE id = $1
 FOR UPDATE
@@ -232,6 +257,12 @@ func (q *Queries) LockConversation(ctx context.Context, id uuid.UUID) (Conversat
 		&i.WebSearch,
 		&i.MemorySnapshot,
 		&i.Temporary,
+		&i.Kind,
+		&i.ParentID,
+		&i.LaunchedBy,
+		&i.LaunchCallID,
+		&i.Background,
+		&i.StoppedByUser,
 	)
 	return i, err
 }
@@ -270,7 +301,7 @@ func (q *Queries) LockUserConversations(ctx context.Context, userID *uuid.UUID) 
 }
 
 const searchConversations = `-- name: SearchConversations :many
-SELECT c.id, c.user_id, c.title, c.model, c.created_at, c.updated_at, c.deleted_at, c.reasoning_effort, c.web_search, c.memory_snapshot, c.temporary,
+SELECT c.id, c.user_id, c.title, c.model, c.created_at, c.updated_at, c.deleted_at, c.reasoning_effort, c.web_search, c.memory_snapshot, c.temporary, c.kind, c.parent_id, c.launched_by, c.launch_call_id, c.background, c.stopped_by_user,
        COALESCE(hit.id::text, '')::text  AS hit_id,
        COALESCE(hit.role::text, '')::text AS hit_role,
        COALESCE(hit.content, '')::text    AS hit_content
@@ -281,12 +312,14 @@ FROM conversations c
     WHERE m.conversation_id = c.id
       AND m.role IN ('user', 'assistant')
       AND m.status <> 'blocked'
+      AND m.origin IS NULL
       AND m.content ILIKE $1::text
     ORDER BY m.created_at DESC, m.id DESC
     LIMIT 1
     ) hit ON true
 WHERE c.user_id = $2
   AND c.deleted_at IS NULL
+  AND c.kind = 'chat'
   AND NOT c.temporary
   AND (c.title ILIKE $1::text OR hit.id IS NOT NULL)
   AND ($3::timestamptz IS NULL
@@ -315,6 +348,12 @@ type SearchConversationsRow struct {
 	WebSearch       bool               `json:"web_search"`
 	MemorySnapshot  []byte             `json:"memory_snapshot"`
 	Temporary       bool               `json:"temporary"`
+	Kind            string             `json:"kind"`
+	ParentID        *uuid.UUID         `json:"parent_id"`
+	LaunchedBy      *uuid.UUID         `json:"launched_by"`
+	LaunchCallID    *string            `json:"launch_call_id"`
+	Background      bool               `json:"background"`
+	StoppedByUser   bool               `json:"stopped_by_user"`
 	HitID           string             `json:"hit_id"`
 	HitRole         string             `json:"hit_role"`
 	HitContent      string             `json:"hit_content"`
@@ -353,6 +392,12 @@ func (q *Queries) SearchConversations(ctx context.Context, arg SearchConversatio
 			&i.WebSearch,
 			&i.MemorySnapshot,
 			&i.Temporary,
+			&i.Kind,
+			&i.ParentID,
+			&i.LaunchedBy,
+			&i.LaunchCallID,
+			&i.Background,
+			&i.StoppedByUser,
 			&i.HitID,
 			&i.HitRole,
 			&i.HitContent,
@@ -373,7 +418,7 @@ SET model = $1
 WHERE id = $2
   AND user_id = $3
   AND deleted_at IS NULL
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user
 `
 
 type SetConversationModelParams struct {
@@ -399,6 +444,12 @@ func (q *Queries) SetConversationModel(ctx context.Context, arg SetConversationM
 		&i.WebSearch,
 		&i.MemorySnapshot,
 		&i.Temporary,
+		&i.Kind,
+		&i.ParentID,
+		&i.LaunchedBy,
+		&i.LaunchCallID,
+		&i.Background,
+		&i.StoppedByUser,
 	)
 	return i, err
 }
@@ -409,7 +460,7 @@ SET reasoning_effort = $1
 WHERE id = $2
   AND user_id = $3
   AND deleted_at IS NULL
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user
 `
 
 type SetConversationReasoningParams struct {
@@ -434,6 +485,12 @@ func (q *Queries) SetConversationReasoning(ctx context.Context, arg SetConversat
 		&i.WebSearch,
 		&i.MemorySnapshot,
 		&i.Temporary,
+		&i.Kind,
+		&i.ParentID,
+		&i.LaunchedBy,
+		&i.LaunchCallID,
+		&i.Background,
+		&i.StoppedByUser,
 	)
 	return i, err
 }
@@ -444,7 +501,7 @@ SET web_search = $1
 WHERE id = $2
   AND user_id = $3
   AND deleted_at IS NULL
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user
 `
 
 type SetConversationWebSearchParams struct {
@@ -468,6 +525,12 @@ func (q *Queries) SetConversationWebSearch(ctx context.Context, arg SetConversat
 		&i.WebSearch,
 		&i.MemorySnapshot,
 		&i.Temporary,
+		&i.Kind,
+		&i.ParentID,
+		&i.LaunchedBy,
+		&i.LaunchCallID,
+		&i.Background,
+		&i.StoppedByUser,
 	)
 	return i, err
 }
@@ -478,7 +541,7 @@ SET title = $1
 WHERE id = $2
   AND title = $3
   AND deleted_at IS NULL
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user
 `
 
 type SetGeneratedTitleParams struct {
@@ -505,6 +568,12 @@ func (q *Queries) SetGeneratedTitle(ctx context.Context, arg SetGeneratedTitlePa
 		&i.WebSearch,
 		&i.MemorySnapshot,
 		&i.Temporary,
+		&i.Kind,
+		&i.ParentID,
+		&i.LaunchedBy,
+		&i.LaunchCallID,
+		&i.Background,
+		&i.StoppedByUser,
 	)
 	return i, err
 }
@@ -565,7 +634,7 @@ SET title      = $1,
 WHERE id = $2
   AND user_id = $3
   AND deleted_at IS NULL
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user
 `
 
 type UpdateConversationTitleParams struct {
@@ -589,6 +658,12 @@ func (q *Queries) UpdateConversationTitle(ctx context.Context, arg UpdateConvers
 		&i.WebSearch,
 		&i.MemorySnapshot,
 		&i.Temporary,
+		&i.Kind,
+		&i.ParentID,
+		&i.LaunchedBy,
+		&i.LaunchCallID,
+		&i.Background,
+		&i.StoppedByUser,
 	)
 	return i, err
 }

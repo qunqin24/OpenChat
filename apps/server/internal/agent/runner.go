@@ -30,9 +30,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/llm"
-	ledger "github.com/qunqin/openchat/apps/server/internal/usage"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
+	ledger "github.com/qunqin24/openchat/apps/server/internal/usage"
 )
 
 // ErrNoModel is a run whose pinned model can no longer be answered: the channel
@@ -112,6 +112,10 @@ type Options struct {
 	// titles the server makes (api.NewServer takes the
 	// runner's Recorder).
 	Reserver ledger.Reserver
+	// Tracer says whose requests are traced - what each carried and what came
+	// back - for the 轨迹 view (api.NewTracer: administrators). Without it
+	// nothing is.
+	Tracer ledger.Tracer
 }
 
 func (o Options) withDefaults() Options {
@@ -171,12 +175,72 @@ type Runner struct {
 	// committed and published. Atomic because runs resumed at boot can finish
 	// before the caller has set it.
 	afterRun atomic.Pointer[func(sqlc.Run)]
+	// moreTools are offered after the ToolSource's (AddTools).
+	moreTools atomic.Pointer[ToolSource]
+	// turnNote is told to each run's model with its input (SetTurnNote).
+	turnNote atomic.Pointer[TurnNote]
+	// subagents delivers what arrives for a run between its requests, and
+	// records a sub-agent's report as its run ends (SetSubagents).
+	subagents atomic.Pointer[Subagents]
 }
+
+// Subagents is the runner's side of sub-agents (api/subagents.go): what is
+// written into a run's transcript between its requests, and what a sub-agent's
+// run leaves behind when it ends. Both are called inside one of the run's own
+// commits, with its queries, so what they write is the run's step and is
+// published with it.
+type Subagents interface {
+	// Waiting says, cheaply and outside any transaction, whether anything
+	// waits for the run: a report for the conversation it answers, a message
+	// for the sub-agent it is.
+	Waiting(ctx context.Context, run sqlc.Run, parent *uuid.UUID) (bool, error)
+	// Take writes what waits for the run into its transcript and returns the
+	// rows written. parent is set on a sub-agent's run.
+	Take(ctx context.Context, q *sqlc.Queries, run sqlc.Run, parent *uuid.UUID) ([]sqlc.Message, error)
+	// Ended records the report of a sub-agent's run that has just ended
+	// (run is its terminal row), in the transaction that ends it.
+	Ended(ctx context.Context, q *sqlc.Queries, run sqlc.Run, parent uuid.UUID) error
+}
+
+// SetSubagents hands the runner its side of sub-agents; like AddTools, it acts
+// through the API server, which is made after the runner.
+func (r *Runner) SetSubagents(s Subagents) {
+	r.subagents.Store(&s)
+}
+
+// TurnNote is what a run's model should know that its transcript does not
+// say - a document the person edited since the model last wrote it. It is
+// asked once per run, at its first request, and added to the run's input
+// message on every request of the run; it is never stored. Empty says nothing.
+type TurnNote func(ctx context.Context) (string, error)
 
 // AfterRun registers what to do once a run has finished — titling its
 // conversation, say. It is called on the run's goroutine and must not block.
 func (r *Runner) AfterRun(fn func(sqlc.Run)) {
 	r.afterRun.Store(&fn)
+}
+
+// AddTools offers every run more tools, after the ToolSource's: the ones that
+// act through the API server - scheduling a task - which is made after the
+// runner. A run resumed before they are added goes without them that request.
+func (r *Runner) AddTools(more ToolSource) {
+	r.moreTools.Store(&more)
+}
+
+// SetTurnNote has every run's model told what note says, from the next run
+// on: like AddTools, it acts through the API server, which is made after the
+// runner.
+func (r *Runner) SetTurnNote(note TurnNote) {
+	r.turnNote.Store(&note)
+}
+
+// offered is every tool a request may use.
+func (r *Runner) offered(ctx context.Context) []Tool {
+	tools := r.tools(ctx)
+	if more := r.moreTools.Load(); more != nil {
+		tools = append(tools, (*more)(ctx)...)
+	}
+	return tools
 }
 
 func NewRunner(pool *pgxpool.Pool, hub *Hub, models ModelResolver, tools ToolSource, opts Options) *Runner {
@@ -186,6 +250,7 @@ func NewRunner(pool *pgxpool.Pool, hub *Hub, models ModelResolver, tools ToolSou
 	}
 	recorder := ledger.NewRecorder(sqlc.New(pool))
 	recorder.SetReserver(opts.Reserver)
+	recorder.SetTracer(opts.Tracer)
 	return &Runner{
 		pool:      pool,
 		q:         sqlc.New(pool),
@@ -296,7 +361,7 @@ func (r *Runner) execute(ctx context.Context, runID uuid.UUID) {
 	if ex == nil {
 		return // already terminal
 	}
-	ctx = WithScope(ctx, Scope{RunID: runID, UserID: ex.run.UserID, ConversationID: ex.run.ConversationID})
+	ctx = WithScope(ctx, Scope{RunID: runID, UserID: ex.run.UserID, ConversationID: ex.run.ConversationID, Parent: ex.parent, State: &RunState{}})
 	// A panic in a provider adapter, the summariser or anything else on this
 	// goroutine would otherwise take the whole process down — and, the run
 	// still `running`, take it down again on every restart that resumes it.
@@ -362,5 +427,21 @@ func (r *Runner) load(runID uuid.UUID) (*execution, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &execution{r: r, run: run, cp: cp, live: live}, nil
+	conv, err := r.q.GetConversationKind(ctx, run.ConversationID)
+	if err != nil {
+		return nil, err
+	}
+	ex := &execution{r: r, run: run, cp: cp, live: live}
+	if conv.Kind == "subagent" {
+		ex.parent = conv.ParentID
+	}
+	return ex, nil
+}
+
+// ShuttingDown reports whether ctx, a run's or one of its tool calls', ended
+// because the process is going away rather than because the run was stopped:
+// a tool that waits on something should then leave it be, since the run and
+// what it waits on both resume in the next process.
+func ShuttingDown(ctx context.Context) bool {
+	return errors.Is(context.Cause(ctx), errShutdown)
 }

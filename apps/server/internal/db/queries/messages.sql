@@ -39,19 +39,13 @@ LIMIT sqlc.arg('row_limit');
 -- created_at is the wall clock, not now(): now() is the transaction's start, so
 -- two rows written by one commit would tie and fall back to ordering by a
 -- random uuid.
---
--- `id` and `created_at` are for guest mode, which writes a transcript the
--- browser kept, under the ids and in the order the browser has it; every other
--- caller leaves both out.
-INSERT INTO messages (id, conversation_id, role, content, parts, status, run_id,
-                      stop_reason, model, provider, usage, error_code,
+INSERT INTO messages (conversation_id, role, content, parts, status, run_id,
+                      stop_reason, model, provider, usage, error_code, origin,
                       created_at, updated_at)
-VALUES (COALESCE(sqlc.narg('id')::uuid, gen_random_uuid()),
-        sqlc.arg('conversation_id'), sqlc.arg('role'), sqlc.arg('content'), sqlc.arg('parts'),
+VALUES (sqlc.arg('conversation_id'), sqlc.arg('role'), sqlc.arg('content'), sqlc.arg('parts'),
         sqlc.arg('status'), sqlc.narg('run_id'), sqlc.narg('stop_reason'), sqlc.narg('model'),
-        sqlc.narg('provider'), sqlc.narg('usage'), sqlc.narg('error_code'),
-        COALESCE(sqlc.narg('created_at')::timestamptz, clock_timestamp()),
-        COALESCE(sqlc.narg('created_at')::timestamptz, clock_timestamp()))
+        sqlc.narg('provider'), sqlc.narg('usage'), sqlc.narg('error_code'), sqlc.narg('origin'),
+        clock_timestamp(), clock_timestamp())
 RETURNING *;
 
 -- name: ListRunMessages :many
@@ -90,17 +84,20 @@ FROM messages
 WHERE messages.conversation_id = sqlc.arg('conversation_id')
   AND messages.role <> 'tool'
   AND messages.status <> 'blocked'
+  AND messages.origin IS NULL
 ORDER BY created_at, id;
 
 -- name: GetLastInput :one
 -- The conversation's last user message: the one a regenerated answer answers.
 -- A message moderation refused is not a question that was asked, so the last
--- question is the one before it.
+-- question is the one before it; nor is a sub-agent's report, which no person
+-- wrote.
 SELECT *
 FROM messages
 WHERE conversation_id = $1
   AND role = 'user'
   AND status <> 'blocked'
+  AND origin IS NULL
 ORDER BY created_at DESC, id DESC
 LIMIT 1;
 
@@ -117,12 +114,14 @@ LIMIT 1;
 
 -- name: GetInput :one
 -- A user message of the conversation - a refused one too: it can be edited like
--- any other, and the new wording is checked again.
+-- any other, and the new wording is checked again. A sub-agent's report is not
+-- the person's to edit.
 SELECT *
 FROM messages
 WHERE id = sqlc.arg('id')
   AND conversation_id = sqlc.arg('conversation_id')
-  AND role = 'user';
+  AND role = 'user'
+  AND origin IS NULL;
 
 -- name: DeleteTranscriptFrom :many
 -- Deletes the row given and every row after it in the conversation, except
@@ -147,15 +146,17 @@ WHERE a.message_id IN (SELECT id FROM gone);
 -- Deletes the answer to a question: every run on it - the ones that carry on
 -- after a question the model asked included - and every row that follows it.
 -- A question is only regenerated while it is the last one, so what follows it
--- is its answer - and the messages moderation refused since, which are user
--- rows but not questions. Files hang on user messages that were sent, so a
--- refused one has none to hand back.
+-- is its answer - and the messages moderation refused since, and the
+-- sub-agents' reports delivered since, which are user rows but not questions.
+-- Files hang on user messages that were sent, so neither has any to hand back.
+-- A report whose row goes is pending again (subagent_reports, ON DELETE SET
+-- NULL), and the new answer receives it.
 WITH rows AS (
     DELETE FROM messages
         USING messages question
         WHERE question.id = sqlc.arg('input_id')
             AND messages.conversation_id = sqlc.arg('conversation_id')
-            AND (messages.role <> 'user' OR messages.status = 'blocked')
+            AND (messages.role <> 'user' OR messages.status = 'blocked' OR messages.origin IS NOT NULL)
             AND (messages.created_at, messages.id) > (question.created_at, question.id)
         RETURNING messages.id)
 DELETE
@@ -186,3 +187,4 @@ SELECT EXISTS (
       AND role = 'tool'
       AND position(sqlc.arg('needle')::text IN parts::text) > 0
 ) AS found;
+

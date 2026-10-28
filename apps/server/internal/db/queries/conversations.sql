@@ -7,10 +7,13 @@ RETURNING *;
 -- Ownership is part of the lookup, not a separate check: a conversation
 -- belonging to someone else must read as "not found", never as "forbidden",
 -- or the response tells a stranger the id exists.
+-- A sub-agent's conversation (kind 'subagent') is not one either: nothing a
+-- person sends reaches it, so no endpoint that takes their words finds it.
 SELECT *
 FROM conversations
 WHERE id = sqlc.arg('id')
   AND user_id = sqlc.arg('user_id')
+  AND kind = 'chat'
   AND deleted_at IS NULL;
 
 -- name: ListConversations :many
@@ -18,6 +21,7 @@ SELECT *
 FROM conversations
 WHERE user_id = sqlc.arg('user_id')
   AND deleted_at IS NULL
+  AND kind = 'chat'
   -- A temporary conversation is not history: it is reached by its link, once.
   AND NOT temporary
   AND (sqlc.narg('cursor_updated_at')::timestamptz IS NULL
@@ -43,12 +47,14 @@ FROM conversations c
     WHERE m.conversation_id = c.id
       AND m.role IN ('user', 'assistant')
       AND m.status <> 'blocked'
+      AND m.origin IS NULL
       AND m.content ILIKE sqlc.arg('pattern')::text
     ORDER BY m.created_at DESC, m.id DESC
     LIMIT 1
     ) hit ON true
 WHERE c.user_id = sqlc.arg('user_id')
   AND c.deleted_at IS NULL
+  AND c.kind = 'chat'
   AND NOT c.temporary
   AND (c.title ILIKE sqlc.arg('pattern')::text OR hit.id IS NOT NULL)
   AND (sqlc.narg('cursor_updated_at')::timestamptz IS NULL
@@ -65,6 +71,7 @@ FROM runs r
 WHERE r.status = 'running'
   AND c.user_id = sqlc.arg('user_id')
   AND c.deleted_at IS NULL
+  AND c.kind = 'chat'
   AND NOT c.temporary;
 
 -- name: UpdateConversationTitle :one
@@ -113,11 +120,13 @@ FOR UPDATE;
 -- endpoint does for one: recorded here, and the runner told after the commit.
 -- Deleting a conversation does this, because nothing can stop a run in a
 -- deleted conversation afterwards (the stop endpoint no longer finds it) and
--- it would go on calling the model and holding its owner's run slot.
+-- it would go on calling the model and holding its owner's run slot. The
+-- runs of their sub-agents go too.
 UPDATE runs
 SET cancel_requested = true,
     updated_at       = now()
-WHERE conversation_id = ANY (sqlc.arg('ids')::uuid[])
+WHERE (conversation_id = ANY (sqlc.arg('ids')::uuid[])
+    OR conversation_id IN (SELECT c.id FROM conversations c WHERE c.parent_id = ANY (sqlc.arg('ids')::uuid[])))
   AND status = 'running'
 RETURNING id;
 

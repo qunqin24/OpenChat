@@ -16,11 +16,11 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
-	"github.com/qunqin/openchat/apps/server/internal/agent"
-	"github.com/qunqin/openchat/apps/server/internal/auth"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/agent"
+	"github.com/qunqin24/openchat/apps/server/internal/auth"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 // attachmentTTL is how long the read URLs handed to the client stay valid.
@@ -153,11 +153,10 @@ func (s *Server) CreateMessage(w http.ResponseWriter, r *http.Request, conversat
 	// message that fails is kept as what it is - a refused message - and
 	// nothing else of it is (moderation_kept.go).
 	//
-	// The check's reading of the pictures is also what is recorded of them
+	// The check's reading of the pictures and text files is also what is recorded of them
 	// (attachment_digest.go): the model is sent those bytes or none.
-	images, digests := s.checkedImages(files)
-	if refused, err := s.moderated(ctx, s.accountSubject(ctx, user, conversationId, ModerationSourceSend),
-		moderationInput{text: content, images: images}); err != nil {
+	in, digests := s.checkedFiles(content, files)
+	if refused, err := s.moderated(ctx, s.accountSubject(ctx, user, conversationId, ModerationSourceSend), in); err != nil {
 		if refused {
 			err = s.keepRefused(ctx, conversationId, content, err)
 		}
@@ -193,7 +192,7 @@ func (s *Server) CreateMessage(w http.ResponseWriter, r *http.Request, conversat
 			return err
 		}
 		var err error
-		input, err = appendInput(ctx, q, conversationId, nil, content, inputPartsChecked(content, files, digests))
+		input, err = appendInput(ctx, q, conversationId, content, inputPartsChecked(content, files, digests))
 		if err != nil {
 			return err
 		}
@@ -234,9 +233,6 @@ type runChoice struct {
 	// continues is set when the run answers a question the model asked: the
 	// first run of the answer it carries on (see ask_user.go).
 	continues *uuid.UUID
-	// clientIP is set for a guest's run only: the address whose runs are
-	// counted against the guests' concurrency limit (see run_limits.go).
-	clientIP string
 }
 
 // chooseRun settles a run's model, effort and web access from what the request
@@ -295,13 +291,13 @@ func (s *Server) chooseRun(ctx context.Context, conv sqlc.Conversation, model *s
 // createRun starts a run on an input inside the caller's transaction, and has
 // the conversation remember the choices it was started with.
 //
-// It first checks the account (or, for a guest, the address) has a slot: how
+// It first checks the account has a slot: how
 // many runs may go at once is bounded, and the count and this insert are one
 // step under a lock held until the transaction ends (run_limits.go). Every way
 // of starting a run comes through here, so none of them can go around it; a
 // refusal is returned for the caller to roll back, with nothing written.
 func createRun(ctx context.Context, q *sqlc.Queries, conv sqlc.Conversation, userID, inputID uuid.UUID, requestID string, c runChoice) (sqlc.Run, error) {
-	if err := admitRun(ctx, q, userID, c.clientIP); err != nil {
+	if err := admitRun(ctx, q, userID); err != nil {
 		return sqlc.Run{}, err
 	}
 	params := sqlc.CreateRunParams{
@@ -316,9 +312,6 @@ func createRun(ctx context.Context, q *sqlc.Queries, conv sqlc.Conversation, use
 	}
 	if requestID != "" {
 		params.RequestID = &requestID
-	}
-	if c.clientIP != "" {
-		params.ClientIp = &c.clientIP
 	}
 	run, err := q.CreateRun(ctx, params)
 	if err != nil {
@@ -384,9 +377,22 @@ func (s *Server) startRun(conversationID uuid.UUID, run sqlc.Run, input sqlc.Mes
 func inputParts(content string, files []sqlc.Attachment) []llm.Part {
 	parts := []llm.Part{llm.TextPart{Text: content}}
 	for _, file := range files {
-		parts = append(parts, llm.AttachmentPart{Ref: file.ID.String(), Filename: file.Filename, MediaType: file.ContentType})
+		parts = append(parts, llm.AttachmentPart{Ref: file.ID.String(), Filename: file.Filename, MediaType: file.ContentType, Size: file.SizeBytes})
 	}
 	return parts
+}
+
+// modelTakes is whether a model with these input modalities can be sent a file
+// of this type. A text file goes as words, which every model takes.
+func modelTakes(modalities []string, contentType string) bool {
+	switch modality := llm.ModalityOf(contentType); modality {
+	case "":
+		return false
+	case llm.ModalityText:
+		return true
+	default:
+		return slices.Contains(modalities, modality)
+	}
 }
 
 func attachmentIDs(files []sqlc.Attachment) []uuid.UUID {
@@ -433,8 +439,7 @@ func (s *Server) admitAttachments(ctx context.Context, userID uuid.UUID, modelID
 		return nil, err
 	}
 	for _, file := range files {
-		modality := llm.ModalityOf(file.ContentType)
-		if modality == "" || !slices.Contains(settings.InputModalities, modality) {
+		if !modelTakes(settings.InputModalities, file.ContentType) {
 			return nil, errAttachmentUnsupported
 		}
 	}
@@ -482,7 +487,7 @@ func (s *Server) existingRun(ctx context.Context, conversationID uuid.UUID, requ
 	if err != nil {
 		return CreateMessageResponse{}, false
 	}
-	return CreateMessageResponse{Message: toMessage(input, attached[input.ID]), Run: toRun(run)}, true
+	return CreateMessageResponse{Message: messageWithFiles(input, attached), Run: toRun(run)}, true
 }
 
 // heartbeatInterval keeps idle event streams from being closed by proxies
@@ -581,7 +586,7 @@ func (s *Server) snapshot(ctx context.Context, conversationID uuid.UUID) (Snapsh
 		return snapshot, err
 	}
 	for _, row := range rows {
-		snapshot.Messages = append(snapshot.Messages, toMessage(row, attached[row.ID]))
+		snapshot.Messages = append(snapshot.Messages, messageWithFiles(row, attached))
 	}
 	return snapshot, nil
 }
@@ -643,9 +648,27 @@ func (s *Server) GetChatFeatures(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, err)
 		return
 	}
+	tasks, err := s.tasksOn(r.Context())
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	traces, err := s.tracesOn(r.Context())
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	subagents, err := s.subagentsOn(r.Context())
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
 	httpx.JSON(w, http.StatusOK, ChatFeatures{
-		WebSearch:     config.Enabled && config.searcher(key) != nil,
-		AvatarUploads: avatars,
+		Subagents:      &subagents,
+		WebSearch:      config.Enabled && config.searcher(key) != nil,
+		AvatarUploads:  avatars,
+		ScheduledTasks: tasks,
+		RequestTraces:  traces && isStaff(r.Context()),
 	})
 }
 

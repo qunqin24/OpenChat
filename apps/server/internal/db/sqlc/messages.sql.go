@@ -13,32 +13,29 @@ import (
 )
 
 const appendEntry = `-- name: AppendEntry :one
-INSERT INTO messages (id, conversation_id, role, content, parts, status, run_id,
-                      stop_reason, model, provider, usage, error_code,
+INSERT INTO messages (conversation_id, role, content, parts, status, run_id,
+                      stop_reason, model, provider, usage, error_code, origin,
                       created_at, updated_at)
-VALUES (COALESCE($1::uuid, gen_random_uuid()),
-        $2, $3, $4, $5,
-        $6, $7, $8, $9,
-        $10, $11, $12,
-        COALESCE($13::timestamptz, clock_timestamp()),
-        COALESCE($13::timestamptz, clock_timestamp()))
-RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
+VALUES ($1, $2, $3, $4,
+        $5, $6, $7, $8,
+        $9, $10, $11, $12,
+        clock_timestamp(), clock_timestamp())
+RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, origin
 `
 
 type AppendEntryParams struct {
-	ID             *uuid.UUID         `json:"id"`
-	ConversationID uuid.UUID          `json:"conversation_id"`
-	Role           MessageRole        `json:"role"`
-	Content        string             `json:"content"`
-	Parts          []byte             `json:"parts"`
-	Status         MessageStatus      `json:"status"`
-	RunID          *uuid.UUID         `json:"run_id"`
-	StopReason     *string            `json:"stop_reason"`
-	Model          *string            `json:"model"`
-	Provider       *string            `json:"provider"`
-	Usage          []byte             `json:"usage"`
-	ErrorCode      *string            `json:"error_code"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	ConversationID uuid.UUID     `json:"conversation_id"`
+	Role           MessageRole   `json:"role"`
+	Content        string        `json:"content"`
+	Parts          []byte        `json:"parts"`
+	Status         MessageStatus `json:"status"`
+	RunID          *uuid.UUID    `json:"run_id"`
+	StopReason     *string       `json:"stop_reason"`
+	Model          *string       `json:"model"`
+	Provider       *string       `json:"provider"`
+	Usage          []byte        `json:"usage"`
+	ErrorCode      *string       `json:"error_code"`
+	Origin         *string       `json:"origin"`
 }
 
 // The only way a transcript row is written by the agent layer. Rows are never
@@ -48,13 +45,8 @@ type AppendEntryParams struct {
 // created_at is the wall clock, not now(): now() is the transaction's start, so
 // two rows written by one commit would tie and fall back to ordering by a
 // random uuid.
-//
-// `id` and `created_at` are for guest mode, which writes a transcript the
-// browser kept, under the ids and in the order the browser has it; every other
-// caller leaves both out.
 func (q *Queries) AppendEntry(ctx context.Context, arg AppendEntryParams) (Message, error) {
 	row := q.db.QueryRow(ctx, appendEntry,
-		arg.ID,
 		arg.ConversationID,
 		arg.Role,
 		arg.Content,
@@ -66,7 +58,7 @@ func (q *Queries) AppendEntry(ctx context.Context, arg AppendEntryParams) (Messa
 		arg.Provider,
 		arg.Usage,
 		arg.ErrorCode,
-		arg.CreatedAt,
+		arg.Origin,
 	)
 	var i Message
 	err := row.Scan(
@@ -85,6 +77,7 @@ func (q *Queries) AppendEntry(ctx context.Context, arg AppendEntryParams) (Messa
 		&i.Usage,
 		&i.ErrorCode,
 		&i.RunID,
+		&i.Origin,
 	)
 	return i, err
 }
@@ -94,7 +87,7 @@ UPDATE messages
 SET content    = content || $1::text,
     updated_at = now()
 WHERE id = $2
-RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
+RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, origin
 `
 
 type AppendMessageContentParams struct {
@@ -121,6 +114,7 @@ func (q *Queries) AppendMessageContent(ctx context.Context, arg AppendMessageCon
 		&i.Usage,
 		&i.ErrorCode,
 		&i.RunID,
+		&i.Origin,
 	)
 	return i, err
 }
@@ -128,7 +122,7 @@ func (q *Queries) AppendMessageContent(ctx context.Context, arg AppendMessageCon
 const createMessage = `-- name: CreateMessage :one
 INSERT INTO messages (conversation_id, role, content, status)
 VALUES ($1, $2, $3, $4)
-RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
+RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, origin
 `
 
 type CreateMessageParams struct {
@@ -162,6 +156,7 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (M
 		&i.Usage,
 		&i.ErrorCode,
 		&i.RunID,
+		&i.Origin,
 	)
 	return i, err
 }
@@ -172,7 +167,7 @@ WITH rows AS (
         USING messages question
         WHERE question.id = $1
             AND messages.conversation_id = $2
-            AND (messages.role <> 'user' OR messages.status = 'blocked')
+            AND (messages.role <> 'user' OR messages.status = 'blocked' OR messages.origin IS NOT NULL)
             AND (messages.created_at, messages.id) > (question.created_at, question.id)
         RETURNING messages.id)
 DELETE
@@ -188,9 +183,11 @@ type DeleteAnswerToParams struct {
 // Deletes the answer to a question: every run on it - the ones that carry on
 // after a question the model asked included - and every row that follows it.
 // A question is only regenerated while it is the last one, so what follows it
-// is its answer - and the messages moderation refused since, which are user
-// rows but not questions. Files hang on user messages that were sent, so a
-// refused one has none to hand back.
+// is its answer - and the messages moderation refused since, and the
+// sub-agents' reports delivered since, which are user rows but not questions.
+// Files hang on user messages that were sent, so neither has any to hand back.
+// A report whose row goes is pending again (subagent_reports, ON DELETE SET
+// NULL), and the new answer receives it.
 func (q *Queries) DeleteAnswerTo(ctx context.Context, arg DeleteAnswerToParams) error {
 	_, err := q.db.Exec(ctx, deleteAnswerTo, arg.InputID, arg.ConversationID)
 	return err
@@ -254,7 +251,7 @@ SET content    = $1,
     status     = $2,
     updated_at = now()
 WHERE id = $3
-RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
+RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, origin
 `
 
 type FinishMessageParams struct {
@@ -282,16 +279,18 @@ func (q *Queries) FinishMessage(ctx context.Context, arg FinishMessageParams) (M
 		&i.Usage,
 		&i.ErrorCode,
 		&i.RunID,
+		&i.Origin,
 	)
 	return i, err
 }
 
 const getInput = `-- name: GetInput :one
-SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, origin
 FROM messages
 WHERE id = $1
   AND conversation_id = $2
   AND role = 'user'
+  AND origin IS NULL
 `
 
 type GetInputParams struct {
@@ -300,7 +299,8 @@ type GetInputParams struct {
 }
 
 // A user message of the conversation - a refused one too: it can be edited like
-// any other, and the new wording is checked again.
+// any other, and the new wording is checked again. A sub-agent's report is not
+// the person's to edit.
 func (q *Queries) GetInput(ctx context.Context, arg GetInputParams) (Message, error) {
 	row := q.db.QueryRow(ctx, getInput, arg.ID, arg.ConversationID)
 	var i Message
@@ -320,23 +320,26 @@ func (q *Queries) GetInput(ctx context.Context, arg GetInputParams) (Message, er
 		&i.Usage,
 		&i.ErrorCode,
 		&i.RunID,
+		&i.Origin,
 	)
 	return i, err
 }
 
 const getLastInput = `-- name: GetLastInput :one
-SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, origin
 FROM messages
 WHERE conversation_id = $1
   AND role = 'user'
   AND status <> 'blocked'
+  AND origin IS NULL
 ORDER BY created_at DESC, id DESC
 LIMIT 1
 `
 
 // The conversation's last user message: the one a regenerated answer answers.
 // A message moderation refused is not a question that was asked, so the last
-// question is the one before it.
+// question is the one before it; nor is a sub-agent's report, which no person
+// wrote.
 func (q *Queries) GetLastInput(ctx context.Context, conversationID uuid.UUID) (Message, error) {
 	row := q.db.QueryRow(ctx, getLastInput, conversationID)
 	var i Message
@@ -356,12 +359,13 @@ func (q *Queries) GetLastInput(ctx context.Context, conversationID uuid.UUID) (M
 		&i.Usage,
 		&i.ErrorCode,
 		&i.RunID,
+		&i.Origin,
 	)
 	return i, err
 }
 
 const getLastMessage = `-- name: GetLastMessage :one
-SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, origin
 FROM messages
 WHERE conversation_id = $1
 ORDER BY created_at DESC, id DESC
@@ -391,12 +395,13 @@ func (q *Queries) GetLastMessage(ctx context.Context, conversationID uuid.UUID) 
 		&i.Usage,
 		&i.ErrorCode,
 		&i.RunID,
+		&i.Origin,
 	)
 	return i, err
 }
 
 const getMessage = `-- name: GetMessage :one
-SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, origin
 FROM messages
 WHERE id = $1
 `
@@ -420,12 +425,13 @@ func (q *Queries) GetMessage(ctx context.Context, id uuid.UUID) (Message, error)
 		&i.Usage,
 		&i.ErrorCode,
 		&i.RunID,
+		&i.Origin,
 	)
 	return i, err
 }
 
 const listMessages = `-- name: ListMessages :many
-SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, origin
 FROM messages
 WHERE messages.conversation_id = $1
   AND ($2::timestamptz IS NULL
@@ -475,6 +481,7 @@ func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]M
 			&i.Usage,
 			&i.ErrorCode,
 			&i.RunID,
+			&i.Origin,
 		); err != nil {
 			return nil, err
 		}
@@ -487,8 +494,8 @@ func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]M
 }
 
 const listRecentMessages = `-- name: ListRecentMessages :many
-SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
-FROM (SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, origin
+FROM (SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, origin
       FROM messages
       WHERE messages.conversation_id = $1
         AND messages.status <> 'blocked'
@@ -532,6 +539,7 @@ func (q *Queries) ListRecentMessages(ctx context.Context, arg ListRecentMessages
 			&i.Usage,
 			&i.ErrorCode,
 			&i.RunID,
+			&i.Origin,
 		); err != nil {
 			return nil, err
 		}
@@ -544,7 +552,7 @@ func (q *Queries) ListRecentMessages(ctx context.Context, arg ListRecentMessages
 }
 
 const listRunMessages = `-- name: ListRunMessages :many
-SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, origin
 FROM messages
 WHERE messages.run_id = $1
    OR messages.run_id IN (SELECT r.id FROM runs r WHERE r.continues = $1)
@@ -585,6 +593,7 @@ func (q *Queries) ListRunMessages(ctx context.Context, arg ListRunMessagesParams
 			&i.Usage,
 			&i.ErrorCode,
 			&i.RunID,
+			&i.Origin,
 		); err != nil {
 			return nil, err
 		}
@@ -597,11 +606,12 @@ func (q *Queries) ListRunMessages(ctx context.Context, arg ListRunMessagesParams
 }
 
 const listTranscript = `-- name: ListTranscript :many
-SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, origin
 FROM messages
 WHERE messages.conversation_id = $1
   AND messages.role <> 'tool'
   AND messages.status <> 'blocked'
+  AND messages.origin IS NULL
 ORDER BY created_at, id
 `
 
@@ -634,6 +644,7 @@ func (q *Queries) ListTranscript(ctx context.Context, conversationID uuid.UUID) 
 			&i.Usage,
 			&i.ErrorCode,
 			&i.RunID,
+			&i.Origin,
 		); err != nil {
 			return nil, err
 		}

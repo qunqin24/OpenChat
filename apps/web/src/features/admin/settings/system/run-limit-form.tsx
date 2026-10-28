@@ -12,7 +12,7 @@ import { Input } from '@/components/shadcn/ui/input'
 import { adminKeys } from '@/features/admin/use-admin'
 import { api, unwrap } from '@/lib/api'
 
-import { limitField, MAX_RUNS } from './guest-limits-schema'
+import { limitField, MAX_RUNS } from './run-limit-schema'
 
 /**
  * How many answers one account may have being written at once, across all its

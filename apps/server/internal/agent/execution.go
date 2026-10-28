@@ -15,9 +15,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/llm"
-	ledger "github.com/qunqin/openchat/apps/server/internal/usage"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
+	ledger "github.com/qunqin24/openchat/apps/server/internal/usage"
 )
 
 // Error codes a run or a failed response can end with. They are machine codes
@@ -103,6 +103,14 @@ type execution struct {
 	// tried holds the channels this run has failed over from since its last
 	// successful request (failover); used by the run loop only.
 	tried []uuid.UUID
+
+	// parent is set on a sub-agent's run: the conversation it works for.
+	parent *uuid.UUID
+
+	// note is the run's turn note (Runner.SetTurnNote), asked once: noted
+	// says it has been. Used by the run loop only.
+	note  string
+	noted bool
 }
 
 // change is the body of one commit. It runs inside the transaction, may append
@@ -146,7 +154,15 @@ func (ex *execution) commit(fn change) error {
 				code = &fin.code
 			}
 			run, err = q.FinishRun(ctx, sqlc.FinishRunParams{ID: ex.run.ID, Status: fin.status, ErrorCode: code})
+			if err != nil {
+				return err
+			}
 			done = true
+			// A sub-agent's run leaves its report in the transaction that ends
+			// it, so a report is never lost between the end and its record.
+			if hook := ex.r.subagents.Load(); hook != nil && ex.parent != nil {
+				err = (*hook).Ended(ctx, q, run, *ex.parent)
+			}
 		} else {
 			run, err = q.SaveRunState(ctx, sqlc.SaveRunStateParams{
 				ID:         ex.run.ID,
@@ -181,6 +197,12 @@ func (ex *execution) commit(fn change) error {
 // resumes it, which is the better outcome anyway.
 func (ex *execution) fail(err error) {
 	if err == nil {
+		return
+	}
+	// A run deleted under it - a sub-agent whose launching answer was edited
+	// away, say - has nothing left to record anything on.
+	if _, getErr := ex.r.q.GetRun(context.Background(), ex.run.ID); errors.Is(getErr, pgx.ErrNoRows) {
+		ex.logger().Info("run ended: it was deleted")
 		return
 	}
 	ex.logger().Error("run failed", "error", err)
@@ -381,7 +403,7 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 
 	// What the request offers, and its system prompt, are settled before its
 	// messages: whether the messages fit the window depends on both.
-	offered := r.tools(ctx)
+	offered := r.offered(ctx)
 	if capable, ok := client.(ToolCapable); ok && !capable.CallsTools() {
 		offered = nil
 	}
@@ -392,6 +414,12 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 
 	// A process that died while compressing left the flag up.
 	if err := ex.settleCompaction(); err != nil {
+		return false, err
+	}
+	// What arrived for the run since its last request - a sub-agent's report,
+	// the main agent's message to a sub-agent - goes into the transcript now,
+	// between the last tool round and this request, and the request reads it.
+	if err := ex.takeInbox(ctx); err != nil {
 		return false, err
 	}
 	summary, rows, err := LoadContextRows(ctx, r.q, ex.run.ConversationID, r.opts.HistoryLimit)
@@ -414,7 +442,7 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 		}
 		ex.noteCompressed(system, offered, summary, rows)
 	}
-	messages, err := BuildRequestContext(summary, rows)
+	messages, err := BuildRequestContext(summary, ex.withNote(ctx, rows))
 	if err != nil {
 		return false, err
 	}
@@ -453,16 +481,24 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 		Session:  ex.run.ConversationID.String(),
 	}
 	request.User = ex.endUser(ctx)
+	// A sub-agent's requests are its own kind, on the conversation it works
+	// for: spend on sub-agents is seen apart, where the person's chat is.
+	kind, conversationID := ledger.KindChat, ex.run.ConversationID
+	if ex.parent != nil {
+		kind, conversationID = ledger.KindSubagent, *ex.parent
+	}
 	meter := r.usage.Begin(ledger.Call{
-		Kind:           ledger.KindChat,
+		Kind:           kind,
 		UserID:         ex.run.UserID,
-		ConversationID: &ex.run.ConversationID,
+		ConversationID: &conversationID,
 		RunID:          &ex.run.ID,
 		ChannelID:      ex.run.ChannelID,
 		ModelID:        ex.run.ModelID,
 		// What the request is expected to cost if the provider never says: the
 		// money held back for it while it is out, and its price if it is stopped.
 		InputEstimate: llm.EstimateInput(request),
+		// Kept for the 轨迹 view when the run's user is traced (Options.Tracer).
+		Request: &request,
 	}, r.now)
 	// The ledger row is written when the request ends, so the money it will
 	// cost is held back until then: without it every request that starts before
@@ -532,6 +568,42 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 // a key that stopped working, a relay that is down or rate-limited, a provider
 // error - except a context too long for the model, which every channel of it
 // would refuse alike.
+// withNote is rows with the run's turn note added to its input message, the
+// note asked for at the run's first request and the same on every request
+// after it, so the run's requests share their prefix. A note that cannot be
+// had is left out: it is help, not part of the conversation.
+func (ex *execution) withNote(ctx context.Context, rows []sqlc.Message) []sqlc.Message {
+	if !ex.noted {
+		if hook := ex.r.turnNote.Load(); hook != nil {
+			ex.noted = true
+			note, err := (*hook)(ctx)
+			if err != nil && ctx.Err() == nil {
+				ex.logger().Warn("turn note", "error", err)
+			}
+			ex.note = note
+		}
+	}
+	if ex.note == "" {
+		return rows
+	}
+	for i, row := range rows {
+		if row.ID != ex.run.InputMessageID || row.Role != sqlc.MessageRoleUser {
+			continue
+		}
+		parts, err := DecodeParts(row.Parts)
+		if err != nil {
+			return rows // BuildContext reports it
+		}
+		if len(parts) == 0 && row.Content != "" {
+			parts = llm.Parts{llm.TextPart{Text: row.Content}}
+		}
+		out := slices.Clone(rows)
+		out[i].Parts = EncodeParts(append(slices.Clone([]llm.Part(parts)), llm.TextPart{Text: "\n\n" + ex.note})) // apart from what they wrote
+		return out
+	}
+	return rows
+}
+
 func failsOver(err error) bool {
 	var llmErr *llm.Error
 	if errors.As(err, &llmErr) && llmErr.Kind == llm.ErrorContextLength {
@@ -747,7 +819,7 @@ func (ex *execution) responded(resp llm.ModelResponse, offered []Tool, final boo
 // generation.
 func (ex *execution) runTools(ctx context.Context) (bool, error) {
 	r := ex.r
-	available := r.tools(ctx)
+	available := r.offered(ctx)
 	if !ex.run.WebSearch {
 		available = withoutWeb(available)
 	}
@@ -841,7 +913,7 @@ func (ex *execution) runCall(ctx context.Context, slot ToolSlot, tool Tool) erro
 	}
 
 	started := time.Now()
-	out, execErr := executeTool(ctx, tool, slot.Arguments)
+	out, execErr := executeTool(withCall(ctx, slot.CallID), tool, slot.Arguments)
 	elapsed := time.Since(started).Milliseconds()
 
 	if errors.Is(context.Cause(ctx), errShutdown) {
@@ -1247,4 +1319,38 @@ func appendDelta(part llm.Part, kind llm.PartKind, delta string) llm.Part {
 		return p
 	}
 	return part
+}
+
+// ---------------------------------------------------------------- inbox
+
+// takeInbox writes what arrived for the run since its last request into its
+// transcript (Runner.SetSubagents): the reports of the conversation's
+// background sub-agents, or, on a sub-agent's run, the main agent's messages
+// to it. Asked before every request; a commit only when something is there.
+func (ex *execution) takeInbox(ctx context.Context) error {
+	hook := ex.r.subagents.Load()
+	if hook == nil {
+		return nil
+	}
+	waiting, err := (*hook).Waiting(ctx, ex.run, ex.parent)
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil // the loop decides between cancel and shutdown
+		}
+		return err
+	}
+	if !waiting {
+		return nil
+	}
+	return ex.commit(func(ctx context.Context, q *sqlc.Queries) ([]Event, *finish, error) {
+		rows, err := (*hook).Take(ctx, q, ex.run, ex.parent)
+		if err != nil {
+			return nil, nil, err
+		}
+		events := make([]Event, 0, len(rows))
+		for _, row := range rows {
+			events = append(events, MessageAppended{Message: row})
+		}
+		return events, nil, nil
+	})
 }

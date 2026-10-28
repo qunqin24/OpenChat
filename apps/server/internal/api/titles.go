@@ -15,12 +15,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/qunqin/openchat/apps/server/internal/agent"
-	"github.com/qunqin/openchat/apps/server/internal/auth"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
-	"github.com/qunqin/openchat/apps/server/internal/llm"
-	ledger "github.com/qunqin/openchat/apps/server/internal/usage"
+	"github.com/qunqin24/openchat/apps/server/internal/agent"
+	"github.com/qunqin24/openchat/apps/server/internal/auth"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
+	ledger "github.com/qunqin24/openchat/apps/server/internal/usage"
 )
 
 // Titling a conversation from its first exchange.
@@ -91,11 +91,6 @@ func (s *Server) titleConversation(run sqlc.Run) {
 		}
 	}()
 
-	// A guest's conversation is named by the request that ran it (guest_run.go),
-	// which hands the title to the browser that keeps the conversation.
-	if guest, err := s.q.IsGuestUser(ctx, run.UserID); err != nil || guest {
-		return
-	}
 	conv, err := s.q.GetConversation(ctx, sqlc.GetConversationParams{ID: run.ConversationID, UserID: &run.UserID})
 	// A temporary chat is never named: it is gone in a day and not in the list.
 	if err != nil || conv.Title != defaultTitle || conv.Temporary {
@@ -150,6 +145,9 @@ func (s *Server) exchangeOf(ctx context.Context, run sqlc.Run) (exchange, asked 
 	for _, row := range rows {
 		switch row.Role {
 		case sqlc.MessageRoleUser:
+			if row.Origin != nil {
+				continue // a sub-agent's report: no words the person asked with
+			}
 			question.WriteString(row.Content)
 		case sqlc.MessageRoleAssistant:
 			answer.WriteString(row.Content)
@@ -201,13 +199,6 @@ func (s *Server) generateTitle(ctx context.Context, userID uuid.UUID, endUser st
 		return "", err
 	}
 	maxTokens := 4096 // room for a reasoning model's thinking before the title; a Claude 5 model thinks even at its least effort
-	// Without a conversation (a guest's title on request) the request has
-	// neither an owner nor one to be listed under in the ledger.
-	var ledgerConversation *uuid.UUID
-	session := ""
-	if conversationID != uuid.Nil {
-		ledgerConversation, session = &conversationID, conversationID.String()
-	}
 	request := llm.Request{
 		Model: modelID,
 		Messages: []llm.Message{
@@ -215,13 +206,13 @@ func (s *Server) generateTitle(ctx context.Context, userID uuid.UUID, endUser st
 			llm.TextMessage(llm.RoleUser, transcript),
 		},
 		Options: llm.Options{MaxTokens: &maxTokens, Reasoning: leastThinking(ctx, s.q, modelID)},
-		Session: session,
+		Session: conversationID.String(),
 		User:    endUser,
 	}
 	meter := s.usage.Begin(ledger.Call{
 		Kind:           ledger.KindTitle,
 		UserID:         userID,
-		ConversationID: ledgerConversation,
+		ConversationID: &conversationID,
 		ChannelID:      &channelID,
 		ModelID:        modelID,
 		InputEstimate:  llm.EstimateInput(request),

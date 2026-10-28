@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -13,10 +14,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/dbtest"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/llm"
-	"github.com/qunqin/openchat/apps/server/internal/providers/fake"
+	"github.com/qunqin24/openchat/apps/server/internal/db/dbtest"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/providers/fake"
 )
 
 // These tests need a Postgres server and skip without one:
@@ -632,6 +633,45 @@ func TestRunLastRoundKeepsTheToolsAndForbidsCalling(t *testing.T) {
 			t.Error("the note was sent before the last round")
 		}
 	}
+}
+
+// The turn note is asked once per run and rides on the run's own input, the
+// same on every request of the run; it is never stored.
+func TestRunTurnNoteRidesOnItsInput(t *testing.T) {
+	echo := &echoTool{name: "echo", replay: true}
+	f := newFixture(t, []Tool{echo},
+		toolCall(t, "c1", "echo", `{}`),
+		answer(t, "done"))
+	var asked atomic.Int32
+	f.runner.SetTurnNote(func(ctx context.Context) (string, error) {
+		if _, ok := ScopeFrom(ctx); !ok {
+			t.Error("the note was asked outside the run's scope")
+		}
+		return fmt.Sprintf("<note %d>", asked.Add(1)), nil
+	})
+
+	run := f.admit("go")
+	f.runner.Start(run.ID)
+	f.waitFor(run.ID, sqlc.RunStatusCompleted)
+
+	if asked.Load() != 1 {
+		t.Errorf("the note was asked %d times, want once", asked.Load())
+	}
+	if len(f.models.reqs) != 2 {
+		t.Fatalf("%d requests, want 2", len(f.models.reqs))
+	}
+	for i, req := range f.models.reqs {
+		var input llm.Message
+		for _, m := range req.Messages {
+			if m.Role == llm.RoleUser {
+				input = m
+			}
+		}
+		if !strings.HasSuffix(input.Text(), "<note 1>") || !strings.Contains(input.Text(), "go") {
+			t.Errorf("request %d: the input reads %q", i, input.Text())
+		}
+	}
+	f.assertTranscript("user go", "assistant:tool_calls call:echo", "tool result:succeeded", "assistant:stop done")
 }
 
 // A model that calls a tool on the last round regardless of the choice it was
