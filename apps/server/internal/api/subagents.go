@@ -391,6 +391,11 @@ func (s *Server) waitForSlot(ctx context.Context, child sqlc.Conversation) (sqlc
 				"or tell the user what is left undone.", child.Title)
 		}
 		run, input, err := s.startWaiting(ctx, current)
+		if errors.Is(err, errStoppedByUser) {
+			gone()
+			return sqlc.Run{}, agent.Errorf("The user cancelled sub-agent %q before it started. Do the work yourself, "+
+				"or tell the user what is left undone.", child.Title)
+		}
 		if errors.Is(err, errAlreadyStarted) {
 			// Not ours to start again: waited on, or left to go on in the background.
 			if current.Background {
@@ -457,6 +462,11 @@ func (s *Server) startWaiting(ctx context.Context, child sqlc.Conversation) (sql
 		held, err := holdSubagent(ctx, q, child.ID)
 		if err != nil {
 			return err
+		}
+		// Cancelled while it waited - after the caller read the queue, before
+		// it took the hold: the stop stands, whoever comes to start it.
+		if held.StoppedByUser {
+			return errStoppedByUser
 		}
 		if input, err = q.GetSubagentInput(ctx, child.ID); err != nil {
 			return err
@@ -955,7 +965,7 @@ func (s *Server) startBackgroundQueue(ctx context.Context, userID *uuid.UUID) {
 	}
 	for _, child := range queued {
 		run, input, err := s.startWaiting(ctx, child)
-		if errors.Is(err, errTooManySubagents) || errors.Is(err, errAlreadyStarted) {
+		if errors.Is(err, errTooManySubagents) || errors.Is(err, errAlreadyStarted) || errors.Is(err, errStoppedByUser) {
 			continue
 		}
 		if err != nil {

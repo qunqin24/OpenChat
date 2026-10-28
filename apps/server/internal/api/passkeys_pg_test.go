@@ -176,3 +176,84 @@ func TestPasskeys(t *testing.T) {
 		t.Fatalf("delete: %d", rec.Code)
 	}
 }
+
+// With the RP ID pinned to a parent domain and no origins listed, a sibling
+// subdomain - which the browser lets use that RP ID - cannot relay a real
+// answer: only the server's own origins count.
+func TestPasskeySiblingSubdomainIsRefused(t *testing.T) {
+	pool := dbtest.Pool(t, "api_passkeys_sibling")
+	ctx := context.Background()
+	q := sqlc.New(pool)
+	const app, evil = "https://chat.example.test", "https://evil.example.test"
+	server := &Server{pool: pool, q: q, cfg: &config.Config{CORSOrigins: []string{app}}}
+	settings, _ := json.Marshal(passkeyConfig{Enabled: true, RPID: "example.test", UserVerification: "preferred"})
+	if err := q.SetSetting(ctx, sqlc.SetSettingParams{Key: settingPasskeys, Value: settings}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = pool.Exec(context.Background(), `DELETE FROM app_settings WHERE key = $1`, settingPasskeys) })
+
+	tag := uuid.NewString()
+	var alice sqlc.User
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email, name) VALUES ($1, $2) RETURNING id, email, name, role`,
+		"sib"+tag+"@test.invalid", "sib"+tag).Scan(&alice.ID, &alice.Email, &alice.Name, &alice.Role); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = pool.Exec(context.Background(), "DELETE FROM users WHERE id = $1", alice.ID) })
+
+	call := func(origin string, user *sqlc.User, body any, handler func(http.ResponseWriter, *http.Request)) *httptest.ResponseRecorder {
+		raw, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(raw))
+		req.Header.Set("Origin", origin)
+		req.RemoteAddr = "198.51.100." + uuid.NewString()[:2] + ":1234"
+		if user != nil {
+			req = req.WithContext(auth.WithUser(req.Context(), *user))
+		}
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+		return rec
+	}
+	publicKeyOf := func(rec *httptest.ResponseRecorder) (PasskeyOptions, string) {
+		t.Helper()
+		var out PasskeyOptions
+		if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil || rec.Code != http.StatusOK {
+			t.Fatalf("options: %d %s", rec.Code, rec.Body)
+		}
+		raw, _ := json.Marshal(out.PublicKey)
+		return out, string(raw)
+	}
+	answerOf := func(challenge uuid.UUID, response string) PasskeyAnswer {
+		var credential map[string]any
+		_ = json.Unmarshal([]byte(response), &credential)
+		return PasskeyAnswer{ChallengeId: challenge, Credential: credential}
+	}
+
+	device := virtualwebauthn.NewAuthenticatorWithOptions(virtualwebauthn.AuthenticatorOptions{UserHandle: alice.ID[:]})
+	key := virtualwebauthn.NewCredential(virtualwebauthn.KeyTypeEC2)
+	begun, publicKey := publicKeyOf(call(app, &alice, nil, server.BeginPasskeyRegistration))
+	attestation, err := virtualwebauthn.ParseAttestationOptions(publicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rp := virtualwebauthn.RelyingParty{ID: "example.test", Name: "OpenChat", Origin: app}
+	if rec := call(app, &alice, answerOf(begun.ChallengeId, virtualwebauthn.CreateAttestationResponse(rp, device, key, *attestation)), server.AddPasskey); rec.Code != http.StatusCreated {
+		t.Fatalf("add from the app: %d %s", rec.Code, rec.Body)
+	}
+	device.AddCredential(key)
+
+	signIn := func(origin string) int {
+		begun, publicKey := publicKeyOf(call(origin, nil, nil, server.BeginPasskeySignIn))
+		assertion, err := virtualwebauthn.ParseAssertionOptions(publicKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		site := rp
+		site.Origin = origin
+		return call(origin, nil, answerOf(begun.ChallengeId, virtualwebauthn.CreateAssertionResponse(site, device, key, *assertion)), server.PasskeySignIn).Code
+	}
+	if code := signIn(evil); code != http.StatusUnauthorized {
+		t.Errorf("relayed from a sibling subdomain: %d, want 401", code)
+	}
+	if code := signIn(app); code != http.StatusOK {
+		t.Errorf("from the app itself: %d, want 200", code)
+	}
+}

@@ -31,6 +31,8 @@ export interface GenUIParam {
   min?: number
   max?: number
   default?: string | number | boolean
+  /** No longer offered to the model; still read where a transcript gave it. */
+  retired?: boolean
 }
 
 export interface GenUIComponent {

@@ -594,15 +594,18 @@
       "params": [
         {
           "name": "image",
-          "type": "string",
-          "required": true
+          "type": "string"
+        },
+        {
+          "name": "alt",
+          "type": "string"
         },
         {
           "name": "caption",
           "type": "string"
         },
         {
-          "name": "alt",
+          "name": "link",
           "type": "string"
         },
         {
@@ -616,8 +619,9 @@
           "default": "landscape"
         },
         {
-          "name": "link",
-          "type": "string"
+          "name": "src",
+          "type": "string",
+          "retired": true
         }
       ]
     },

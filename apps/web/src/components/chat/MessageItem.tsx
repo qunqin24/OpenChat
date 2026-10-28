@@ -17,7 +17,9 @@ import { TASK_TOOL, taskChangeOf } from '@/lib/task-tool'
 import { DOCUMENT_TOOL, documentChangeOf } from '@/lib/document-tool'
 import { launchesOf, SUBAGENT_TOOL } from '@/lib/subagents'
 import { SubagentLaunchLine } from './SubagentLines'
-import { parseQuote, quoteMessage } from '@/lib/document-selection'
+import { parseQuotes, quoteMessage } from '@/lib/document-selection'
+import { highlightPassage } from '@/lib/highlight-passage'
+import { cn } from '@/lib/utils'
 import GenUIBlock from './genui/GenUIBlock'
 import MemoryChip from './MemoryChip'
 import TaskChip from './TaskChip'
@@ -65,9 +67,15 @@ export function UserMessage({
   onEdit,
   restoredDraft,
   onDraftDone,
+  time,
 }: {
   message: Message
   onEdit?: (content: string) => void
+  /**
+   * When it was sent, shown above it because it came after a pause
+   * (lib/time-gap.ts): "今天 10:44".
+   */
+  time?: string
   /**
    * The wording of an edit the server refused (content moderation, a limit):
    * the field opens with it again, so what was typed is not lost. The turn
@@ -82,7 +90,7 @@ export function UserMessage({
   const [typed, setTyped] = useState<string | null>(null)
   // A request about a quoted passage of a writing block: the passage is a card
   // above the words, and editing changes the words only.
-  const quoted = parseQuote(message.content)
+  const quoted = parseQuotes(message.content)
   const words = quoted ? quoted.request : message.content
   const draft = typed ?? restoredDraft ?? null
   const files = (message.attachments?.length || message.removedAttachments?.length) ? (
@@ -105,7 +113,7 @@ export function UserMessage({
             onEdit &&
             ((content) => {
               closeField()
-              onEdit(quoted ? quoteMessage(quoted.quote, content) : content)
+              onEdit(quoted ? quoteMessage(quoted.quotes, content) : content)
             })
           }
         />
@@ -115,8 +123,21 @@ export function UserMessage({
 
   return (
     <div className="n-msg-user">
+      {time && <div className="n-msg-time">{time}</div>}
       {files}
-      {quoted && <QuoteCard title={quoted.quote.title} passage={quoted.quote.passage} fromAnswer={!quoted.quote.documentId} />}
+      {quoted && (
+        <div className="n-quote-cards">
+          {quoted.quotes.map((quote, i) => (
+            <QuoteCard
+              key={i}
+              title={quote.title}
+              passage={quote.passage}
+              fromAnswer={!quote.documentId}
+              n={quoted.quotes.length > 1 ? i + 1 : undefined}
+            />
+          ))}
+        </div>
+      )}
       <div className="n-bubble">{words}</div>
       <div className="n-actions">
         <CopyButton content={words} />
@@ -131,14 +152,37 @@ export function UserMessage({
 }
 
 /** The passage a request is about - of a writing block or an answer - above its words. */
-function QuoteCard({ title, passage, fromAnswer }: { title: string; passage: string; fromAnswer: boolean }) {
+function QuoteCard({ title, passage, fromAnswer, n }: { title: string; passage: string; fromAnswer: boolean; n?: number }) {
   const { t } = useTranslation()
+  // A passage of an answer is shown where it is at a click (highlightPassage).
+  const [shown, setShown] = useState(false)
+  if (fromAnswer) {
+    return (
+      <button
+        type="button"
+        className={cn('n-quote-card is-sent is-showable', shown && 'is-shown')}
+        aria-pressed={shown}
+        aria-label={t('chat.quote-show')}
+        onClick={() => {
+          const next = !shown && highlightPassage(passage)
+          if (!next) highlightPassage(null)
+          setShown(next)
+        }}
+      >
+        <p className="n-quote-text" dir="auto">{passage}</p>
+        <span className="n-quote-label">
+          <MessageSquareQuote aria-hidden="true" />
+          {n ? t('chat.quote-label-n', { n }) : t('chat.quote-label')}
+        </span>
+      </button>
+    )
+  }
   return (
     <div className="n-quote-card is-sent">
       <p className="n-quote-text" dir="auto">{passage}</p>
       <span className="n-quote-label">
         {fromAnswer ? <MessageSquareQuote aria-hidden="true" /> : <NotebookPen aria-hidden="true" />}
-        {fromAnswer ? t('chat.quote-label') : title || t('document.quote-label')}
+        {fromAnswer ? (n ? t('chat.quote-label-n', { n }) : t('chat.quote-label')) : title || t('document.quote-label')}
       </span>
     </div>
   )

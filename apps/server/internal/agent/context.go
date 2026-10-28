@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
@@ -48,11 +49,28 @@ const skippedResult = "The user did not answer this question and sent a new mess
 //     protocol error, and the window starting mid-round is the normal way to
 //     get one.
 //   - A user message that begins a new day is dated (see dateStamp), which is
-//     how the model knows the date without the system prompt saying it.
+//     how the model knows the date without the system prompt saying it; one
+//     sent after a pause of an hour or more gets the time and how long it has
+//     been instead (timeStamp), so the model knows the conversation was taken
+//     up again later. Both are in the person's time zone.
 func BuildContext(rows []sqlc.Message) ([]llm.Message, error) {
+	return BuildContextIn(rows, time.UTC)
+}
+
+// TimeGap is the pause after which a user message is told the time: the page
+// shows a time above it too (lib/time-gap.ts).
+const TimeGap = time.Hour
+
+// BuildContextIn is BuildContext with the dates and times in loc, the
+// person's time zone.
+func BuildContextIn(rows []sqlc.Message, loc *time.Location) ([]llm.Message, error) {
+	if loc == nil {
+		loc = time.UTC
+	}
 	var out []llm.Message
 	var round *toolRound
 	var stamped string // the day of the last dated user message
+	var last time.Time // when the last row sent was written
 
 	// flush closes the open tool round: the results go directly after the
 	// assistant message that asked for them, before anything that came later.
@@ -81,6 +99,12 @@ func BuildContext(rows []sqlc.Message) ([]llm.Message, error) {
 		parts, err := DecodeParts(row.Parts)
 		if err != nil {
 			return nil, err
+		}
+		// The pause before a user message is from the row before it, whatever
+		// it was: an answer, a tool's result, an earlier question.
+		previous := last
+		if row.CreatedAt.Valid {
+			last = row.CreatedAt.Time
 		}
 
 		switch row.Role {
@@ -121,7 +145,13 @@ func BuildContext(rows []sqlc.Message) ([]llm.Message, error) {
 				msg = llm.TextMessage(llm.Role(row.Role), row.Content)
 			}
 			if row.Role == sqlc.MessageRoleUser && row.CreatedAt.Valid {
-				if day := row.CreatedAt.Time.UTC().Format(time.DateOnly); day != stamped {
+				at := row.CreatedAt.Time.In(loc)
+				day := at.Format(time.DateOnly)
+				switch {
+				case !previous.IsZero() && at.Sub(previous) >= TimeGap:
+					stamped = day
+					msg.Parts = append([]llm.Part{llm.TextPart{Text: timeStamp(at, at.Sub(previous))}}, msg.Parts...)
+				case day != stamped:
 					stamped = day
 					msg.Parts = append([]llm.Part{llm.TextPart{Text: dateStamp(day)}}, msg.Parts...)
 				}
@@ -178,4 +208,37 @@ func toLLMMessage(role llm.Role, parts llm.Parts) llm.Message {
 // of each day carries one, so the history stays a stable prefix.
 func dateStamp(day string) string {
 	return "[Date: " + day + "]"
+}
+
+// timeStamp is the line on a message sent after a pause (TimeGap): the date
+// and time it was sent, in the person's time zone, and how long after the row
+// before it - so the model knows the conversation was taken up again, and
+// does not carry on as though no time had passed. Fixed once written, like
+// dateStamp, so the history stays a stable prefix.
+func timeStamp(at time.Time, pause time.Duration) string {
+	zone := at.Location().String()
+	if zone == "Local" || zone == "" {
+		zone = at.Format("-07:00")
+	}
+	return fmt.Sprintf("[Time: %s %s, %s after the previous message]", at.Format("2006-01-02 15:04"), zone, pauseText(pause))
+}
+
+// pauseText is a pause as a person would say it: "2 hours", "3 days".
+func pauseText(pause time.Duration) string {
+	plural := func(n int, unit string) string {
+		if n == 1 {
+			return "1 " + unit
+		}
+		return fmt.Sprintf("%d %ss", n, unit)
+	}
+	switch {
+	case pause < 2*time.Hour:
+		return plural(int(pause.Minutes()), "minute")
+	case pause < 48*time.Hour:
+		return plural(int(pause.Hours()), "hour")
+	case pause < 60*24*time.Hour:
+		return plural(int(pause.Hours()/24), "day")
+	default:
+		return plural(int(pause.Hours()/24/30), "month")
+	}
 }

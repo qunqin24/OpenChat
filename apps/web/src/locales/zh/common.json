@@ -14,8 +14,14 @@
     "settings": "设置"
   },
   "chat": {
+    "time-gap": {
+      "today": "今天",
+      "yesterday": "昨天"
+    },
     "ask-selection": "引用提问",
     "quote-label": "回答选段",
+    "quote-show": "在回答中显示这段",
+    "quote-label-n": "回答选段 {{n}}",
     "quote-remove": "移除引用",
     "quote-placeholder": "就选中的内容提问",
     "link-open": "打开链接",
@@ -455,7 +461,7 @@
         "rp-id-hint": "例如 chat.example.com。现在生效的是 {{current}}。改了之后，按旧域名创建的通行密钥将无法使用。",
         "rp-id-invalid": "请填写一个域名，例如 chat.example.com",
         "origins": "允许的来源",
-        "origins-hint": "每行一个，例如 https://chat.example.com。留空时使用页面自己的来源，现在是 {{current}}。",
+        "origins-hint": "每行一个，例如 https://chat.example.com。留空时：没有固定域名就用页面自己的来源；固定了域名则只认服务器配置的来源（CORS_ORIGINS）里属于该域名的，以及该域名本身。现在生效的是 {{current}}。",
         "origins-invalid": "每行一个来源，只写协议和域名，例如 https://chat.example.com",
         "verification": "用户验证",
         "verification-preferred": "尽量验证（推荐）",

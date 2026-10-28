@@ -13,6 +13,9 @@ coverage/
 
 # what the local storage driver keeps under its default directory (set in the admin panel)
 **/data/uploads/
+**/data/avatars/
+**/data/pictures/
+**/data/probes/
 
 # The web build the server embeds (scripts/embed-web.mjs copies it here). Only the
 # placeholder is tracked, so `go build` works before any web build has run.

@@ -259,6 +259,14 @@
   gap: 4px;
   margin: 26px 0;
 }
+/* When a message was sent, above it, after a pause (lib/time-gap.ts). */
+.chat-ui .n-msg-time {
+  margin-bottom: 6px;
+  color: var(--n-text-3);
+  font-size: 13px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
 .chat-ui .n-bubble {
   max-width: 78%;
   padding: 10px 16px;

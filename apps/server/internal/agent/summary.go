@@ -110,9 +110,10 @@ func LoadContextRows(ctx context.Context, q *sqlc.Queries, conversationID uuid.U
 }
 
 // BuildRequestContext is BuildContext with the summary in front: the messages of
-// a request after the system prompt.
-func BuildRequestContext(summary *Summary, rows []sqlc.Message) ([]llm.Message, error) {
-	messages, err := BuildContext(rows)
+// a request after the system prompt, with dates and times in loc (the person's
+// time zone; UTC when nil).
+func BuildRequestContext(summary *Summary, rows []sqlc.Message, loc *time.Location) ([]llm.Message, error) {
+	messages, err := BuildContextIn(rows, loc)
 	if err != nil {
 		return nil, err
 	}

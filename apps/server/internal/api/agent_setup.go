@@ -149,14 +149,16 @@ func personalPrompt(ctx context.Context, notes *memory.Store, offered []agent.To
 func basePrompt(offered []agent.Tool) string {
 	var b strings.Builder
 	b.WriteString("You are OpenChat, a helpful assistant. " +
-		"A user message may begin with a line like [Date: 2026-01-31], the day it was sent; " +
-		"the latest such line is today's date. Never mention the line itself.\n")
+		"A user message may begin with a line like [Date: 2026-01-31], the day it was sent, or, when it comes an " +
+		"hour or more after the message before it, [Time: 2026-01-31 14:05 Asia/Shanghai, 3 hours after the previous " +
+		"message]: the user's local time and how long the conversation paused. The latest such line is the current " +
+		"date or time; after a pause, do not carry on as though no time had passed. Never mention the line itself.\n")
 	b.WriteString("Answer in the language the user writes in.")
 	// The page's "引用提问" (AskSelection) puts a passage of an earlier answer
 	// in front of the question about it (lib/document-selection.ts).
-	b.WriteString(" A user message may begin with a <quote> passage they selected from one of your earlier answers; " +
-		"what follows it is their question or request about that passage. Answer about the passage, without " +
-		"repeating it back or mentioning the tag.")
+	b.WriteString(" A user message may begin with one or more <quote> passages they selected from your earlier answers; " +
+		"what follows them is their question or request about those passages. Answer about the passages, without " +
+		"repeating them back or mentioning the tag.")
 	// Without this, a model asked for resources names them and links none.
 	b.WriteString(" When you recommend websites, tools, documentation or other resources, link to them.")
 	// The page draws ```mermaid blocks as diagrams (markdown-components.ts).

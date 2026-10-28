@@ -92,25 +92,69 @@ func requestOrigin(r *http.Request) string {
 	return scheme + "://" + r.Host
 }
 
-// relyingParty is the relying party in force for a request: the pinned one,
-// or the page's own.
-func (c passkeyConfig) relyingParty(r *http.Request) (string, []string) {
-	origins := c.Origins
-	if len(origins) == 0 {
-		origins = []string{requestOrigin(r)}
+// relyingParty is the relying party in force for a request, and the origins
+// an answer may come from.
+//
+// Listed origins are the administrator's and are taken as they are. With
+// nothing pinned, the page's own origin is used and the RP ID follows it:
+// a page can only ever be given passkeys of its own domain, so another page
+// that says it is the origin gets nothing of anyone else's. With the RP ID
+// pinned and no origins listed, the origin is never the request's word alone:
+// a sibling subdomain (evil.example.com beside chat.example.com, both allowed
+// by the browser to use the RP ID example.com) could otherwise relay a real
+// answer. Then only trusted origins count - the server's own configured
+// origins (CORS_ORIGINS) within the RP ID's domain, and the RP ID's own host.
+func (c passkeyConfig) relyingParty(r *http.Request, trusted []string) (string, []string) {
+	if len(c.Origins) > 0 {
+		rpID := c.RPID
+		if rpID == "" {
+			rpID = hostOf(c.Origins[0])
+		}
+		return rpID, c.Origins
 	}
-	rpID := c.RPID
-	if rpID == "" {
-		if parsed, err := url.Parse(origins[0]); err == nil {
-			rpID = parsed.Hostname()
+	origin := requestOrigin(r)
+	if c.RPID == "" {
+		return hostOf(origin), []string{origin}
+	}
+	var origins []string
+	add := func(o string) {
+		for _, have := range origins {
+			if have == o {
+				return
+			}
+		}
+		origins = append(origins, o)
+	}
+	for _, o := range trusted {
+		if host := hostOf(o); host == c.RPID || strings.HasSuffix(host, "."+c.RPID) {
+			add(strings.TrimRight(o, "/"))
 		}
 	}
-	return rpID, origins
+	if hostOf(origin) == c.RPID {
+		add(origin)
+	}
+	return c.RPID, origins
 }
 
+func hostOf(origin string) string {
+	parsed, err := url.Parse(origin)
+	if err != nil {
+		return ""
+	}
+	return parsed.Hostname()
+}
+
+// errPasskeyOrigins is a pinned RP ID with no origin that may use it: the
+// administrator has to list them.
+var errPasskeyOrigins = httpx.NewError(http.StatusServiceUnavailable, "passkey_origins_needed",
+	"list the origins passkeys may be used from in the passkey settings")
+
 // webAuthn is go-webauthn set up for the request.
-func (c passkeyConfig) webAuthn(r *http.Request) (*webauthn.WebAuthn, error) {
-	rpID, origins := c.relyingParty(r)
+func (c passkeyConfig) webAuthn(r *http.Request, trusted []string) (*webauthn.WebAuthn, error) {
+	rpID, origins := c.relyingParty(r, trusted)
+	if rpID == "" || len(origins) == 0 {
+		return nil, errPasskeyOrigins
+	}
 	return webauthn.New(&webauthn.Config{
 		RPID:          rpID,
 		RPDisplayName: "OpenChat",
@@ -140,6 +184,15 @@ func (u passkeyUser) WebAuthnID() []byte                         { return u.user
 func (u passkeyUser) WebAuthnName() string                       { return u.user.Email }
 func (u passkeyUser) WebAuthnDisplayName() string                { return u.user.Name }
 func (u passkeyUser) WebAuthnCredentials() []webauthn.Credential { return u.credentials }
+
+// trustedOrigins are the origins this server is configured to serve pages
+// from (CORS_ORIGINS).
+func (s *Server) trustedOrigins() []string {
+	if s.cfg == nil {
+		return nil
+	}
+	return s.cfg.CORSOrigins
+}
 
 // passkeysOn is the settings, or 404 when passkeys are off.
 func (s *Server) passkeysOn(ctx context.Context) (passkeyConfig, error) {
@@ -206,7 +259,7 @@ func (s *Server) BeginPasskeySignIn(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, httpx.NewError(http.StatusTooManyRequests, "login_rate_limited", "too many sign-in attempts; try again later"))
 		return
 	}
-	wa, err := config.webAuthn(r)
+	wa, err := config.webAuthn(r, s.trustedOrigins())
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
@@ -281,7 +334,7 @@ func (s *Server) PasskeySignIn(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, invalid)
 		return
 	}
-	wa, err := config.webAuthn(r)
+	wa, err := config.webAuthn(r, s.trustedOrigins())
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
@@ -377,7 +430,7 @@ func (s *Server) BeginPasskeyRegistration(w http.ResponseWriter, r *http.Request
 		httpx.Fail(w, r, err)
 		return
 	}
-	wa, err := config.webAuthn(r)
+	wa, err := config.webAuthn(r, s.trustedOrigins())
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
@@ -432,7 +485,7 @@ func (s *Server) AddPasskey(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, invalid)
 		return
 	}
-	wa, err := config.webAuthn(r)
+	wa, err := config.webAuthn(r, s.trustedOrigins())
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
@@ -536,7 +589,7 @@ func (s *Server) passkeySettings(r *http.Request, config passkeyConfig) (Passkey
 	if err != nil {
 		return PasskeySettings{}, err
 	}
-	rpID, origins := config.relyingParty(r)
+	rpID, origins := config.relyingParty(r, s.trustedOrigins())
 	out := PasskeySettings{
 		Enabled: config.Enabled, RpId: config.RPID, Origins: config.Origins,
 		UserVerification: PasskeySettingsUserVerification(config.UserVerification),
@@ -544,6 +597,9 @@ func (s *Server) passkeySettings(r *http.Request, config passkeyConfig) (Passkey
 	}
 	if out.Origins == nil {
 		out.Origins = []string{}
+	}
+	if out.EffectiveOrigins == nil {
+		out.EffectiveOrigins = []string{}
 	}
 	return out, nil
 }

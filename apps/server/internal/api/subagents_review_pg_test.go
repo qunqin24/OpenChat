@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -132,5 +133,39 @@ func TestSubagentQueuedStartsOnce(t *testing.T) {
 	_, _, _ = f.server.startWaiting(ctx, child)
 	if runs := f.runs(child); len(runs) != 1 {
 		t.Fatalf("a queued sub-agent was started %d times", len(runs))
+	}
+}
+
+// A queued sub-agent the person cancelled is not started by a starter that
+// read the queue before the cancel.
+func TestSubagentQueuedCancelledIsNotStarted(t *testing.T) {
+	f := newSubFixture(t)
+	f.play(func(ctx context.Context, r fakeReq) fakeTurn { return fakeTurn{Text: "ok"} })
+	conv := f.newConversation()
+	f.send(conv, "go")
+	f.settled(conv)
+	ctx := context.Background()
+	launching := f.runs(conv)[0]
+	callID := "call-cancelled"
+	child, err := f.q.CreateSubagentConversation(ctx, sqlc.CreateSubagentConversationParams{
+		UserID: &f.user.ID, Title: "取消了", Model: &f.model, ParentID: &conv.ID,
+		LaunchedBy: &launching.ID, LaunchCallID: &callID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := appendAgentInput(ctx, f.q, child.ID, nil, "work"); err != nil {
+		t.Fatal(err)
+	}
+	// The starter's snapshot, then the person's stop.
+	snapshot := child
+	if _, err := f.pool.Exec(ctx, `UPDATE conversations SET stopped_by_user = true WHERE id = $1`, child.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := f.server.startWaiting(ctx, snapshot); !errors.Is(err, errStoppedByUser) {
+		t.Fatalf("start after the stop: %v", err)
+	}
+	if runs := f.runs(child); len(runs) != 0 {
+		t.Fatalf("a cancelled sub-agent was started (%d runs)", len(runs))
 	}
 }

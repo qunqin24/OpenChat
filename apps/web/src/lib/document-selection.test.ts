@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { answerQuote, parseQuote, passageFor, quoteMessage } from './document-selection'
+import { answerQuote, parseQuote, parseQuotes, passageFor, quoteMessage } from './document-selection'
 
 const doc = '# Pulse\n\n**Pulse** 是一款原生工具。\n\n它的核心特点：\n\n- 统一监控\n- 原生体验\n\nPulse 是一款原生工具。'
 
@@ -33,8 +33,15 @@ describe('quoteMessage / parseQuote', () => {
     expect(parseQuote(message)).toEqual({ quote: answerQuote('先用高德就行。\n个人开发阶段够用。'), request: '为什么不用百度？' })
   })
 
+  it('round-trips several passages of answers, in order', () => {
+    const quotes = [answerQuote('第一段'), answerQuote('第二段\n两行')]
+    const message = quoteMessage(quotes, '这两段矛盾吗？')
+    expect(parseQuotes(message)).toEqual({ quotes, request: '这两段矛盾吗？' })
+  })
+
   it('leaves ordinary messages alone', () => {
     expect(parseQuote('hello <document-selection>')).toBeNull()
     expect(parseQuote('hello <quote>\nx\n</quote>')).toBeNull()
+    expect(parseQuotes('hello')).toBeNull()
   })
 })

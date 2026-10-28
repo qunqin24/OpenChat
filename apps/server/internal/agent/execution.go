@@ -442,7 +442,7 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 		}
 		ex.noteCompressed(system, offered, summary, rows)
 	}
-	messages, err := BuildRequestContext(summary, ex.withNote(ctx, rows))
+	messages, err := BuildRequestContext(summary, ex.withNote(ctx, rows), ex.location(ctx))
 	if err != nil {
 		return false, err
 	}
@@ -1353,4 +1353,19 @@ func (ex *execution) takeInbox(ctx context.Context) error {
 		}
 		return events, nil, nil
 	})
+}
+
+// location is the time zone the person's browser last reported, for the dates
+// and times their messages are stamped with (BuildContextIn); UTC when none is
+// known or it is not one Go knows.
+func (ex *execution) location(ctx context.Context) *time.Location {
+	user, err := ex.r.q.GetUser(ctx, ex.run.UserID)
+	if err != nil || user.TimeZone == nil || *user.TimeZone == "" {
+		return time.UTC
+	}
+	loc, err := time.LoadLocation(*user.TimeZone)
+	if err != nil {
+		return time.UTC
+	}
+	return loc
 }

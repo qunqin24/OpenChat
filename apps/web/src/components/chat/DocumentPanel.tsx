@@ -79,16 +79,22 @@ export function DocumentPanel({ documentId }: { documentId: string }) {
   useEffect(() => {
     titleRef.current = title
   }, [title])
-  const flush = useCallback(async () => {
+  //
+  // `text` is the editor's text taken when the person stepped away from the
+  // latest version: the editor is read-only and shows the old version by the
+  // time the save before this one returns, so what was typed is saved from
+  // that snapshot rather than lost.
+  const flush = useCallback(async (text?: string) => {
     window.clearTimeout(timer.current)
     while (saving.current) await saving.current
-    if (!editor || !dirty.current || !latest || !editor.isEditable) return
+    if (!editor || !dirty.current || !latest || (text === undefined && !editor.isEditable)) return
     dirty.current = false
+    const content = text ?? editor.getMarkdown()
     const run = (async () => {
       try {
         const saved = await save.mutateAsync({
           title: titleRef.current.trim() || latest.title,
-          content: editor.getMarkdown(),
+          content,
           baseVersion: base.current,
         })
         base.current = saved.versions.at(-1)?.version ?? base.current
@@ -171,8 +177,9 @@ export function DocumentPanel({ documentId }: { documentId: string }) {
     wasViewing.current = viewing
     if (viewing === from) return
     // Stepping away from the latest - an entry in a reply can do that - saves
-    // what was typed first, while the text is still editable.
-    if (from === null) void flushRef.current()
+    // what was typed: taken now, while the editor still holds it, since a save
+    // still out makes this one wait past the switch below.
+    if (from === null) void flushRef.current(dirty.current ? editor.getMarkdown() : undefined)
     // Without emitting an update: Tiptap's default would read as an edit, and
     // save the old version's text as a new one.
     editor.setEditable(viewing === null, false)
@@ -189,7 +196,8 @@ export function DocumentPanel({ documentId }: { documentId: string }) {
   const step = (by: -1 | 1) => {
     const next = versions[index + by]
     if (!next) return
-    void flush()
+    // Leaving the latest saves what was typed (the switch's effect, which
+    // takes the text before the editor shows the old version).
     setViewing(next.version === latest?.version ? null : next.version)
   }
 
@@ -277,7 +285,9 @@ export function DocumentPanel({ documentId }: { documentId: string }) {
             aria-label={t('document.close')}
             title={t('document.close')}
             onClick={() => {
-              void flush()
+              // The text as it is, in case a save still out makes this one wait
+              // past the panel's closing.
+              void flush(dirty.current && editor ? editor.getMarkdown() : undefined)
               close()
             }}
           >

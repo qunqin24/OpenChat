@@ -197,7 +197,7 @@ export function resetChatStore() {
   // theirs on a signed URL, a passage of their document, which panel is open.
   useImageViewer.setState({ images: [], index: 0 })
   useDocumentPanel.setState({ documentId: null, conversationId: null, viewing: null, full: false, closing: false })
-  useDocumentQuote.setState({ quote: null })
+  useDocumentQuote.setState({ quotes: [] })
   useDocumentActivity.setState({ edits: {} })
   useSubagentPanel.getState().close()
   useFilePanel.getState().close()

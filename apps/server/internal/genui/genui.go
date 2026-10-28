@@ -52,6 +52,9 @@ type Param struct {
 	Min      *int     `json:"min"`
 	Max      *int     `json:"max"`
 	Default  any      `json:"default"`
+	// Retired parameters are no longer taught to the model, but the page still
+	// reads them, so a transcript that gave one keeps rendering.
+	Retired bool `json:"retired"`
 }
 
 // Load reads the embedded catalogue. It is generated, so a failure is a
@@ -163,6 +166,9 @@ Components:
 		b.WriteString(component.Description)
 		b.WriteString("\n")
 		for _, param := range component.Params {
+			if param.Retired {
+				continue
+			}
 			if detail := paramDetail(param); detail != "" {
 				fmt.Fprintf(&b, "    %s: %s\n", param.Name, detail)
 			}
@@ -206,6 +212,9 @@ p3 = Step("Ship to production")
 func signature(component Component) string {
 	args := make([]string, 0, len(component.Params))
 	for _, param := range component.Params {
+		if param.Retired {
+			continue
+		}
 		arg := param.Name
 		if !param.Required {
 			arg += "?"

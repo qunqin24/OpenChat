@@ -268,7 +268,7 @@ const renderers: Record<string, (props: Props) => ReactNode> = {
   Checklist: (p) => <ChecklistBlock title={str(p.title)} items={(p.items as UINode[] | undefined) ?? []} />,
   Check: (p) => <ChecklistBlock title="" items={[{ key: 'check', component: 'Check', props: p }]} />,
   Image: (p) => (
-    <ImageBlock image={str(p.image)} alt={str(p.alt)} caption={str(p.caption)} aspect={str(p.aspect) || 'landscape'} link={str(p.link)} />
+    <ImageBlock image={str(p.image) || str(p.src)} alt={str(p.alt)} caption={str(p.caption)} aspect={str(p.aspect) || 'landscape'} link={str(p.link)} />
   ),
   Media: (p) => (
     <div className="n-ui-media">

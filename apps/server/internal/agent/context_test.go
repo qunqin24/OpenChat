@@ -280,3 +280,56 @@ func TestContextDropsLeakedToolMarkup(t *testing.T) {
 		t.Fatalf("context: %+v", got)
 	}
 }
+
+// A message sent an hour or more after the row before it is told the time,
+// in the person's zone, and how long it has been; within the hour, only a new
+// day is dated.
+func TestBuildContextTellsTheTimeAfterAPause(t *testing.T) {
+	at := func(when string) pgtype.Timestamptz {
+		ts, err := time.Parse(time.RFC3339, when)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return pgtype.Timestamptz{Time: ts, Valid: true}
+	}
+	stamp := func(m sqlc.Message, when string) sqlc.Message {
+		m.CreatedAt = at(when)
+		return m
+	}
+	rows := []sqlc.Message{
+		stamp(row(sqlc.MessageRoleUser, "", llm.TextPart{Text: "one"}), "2026-10-28T01:00:00Z"),
+		stamp(row(sqlc.MessageRoleAssistant, StopStop, llm.TextPart{Text: "a"}), "2026-10-28T01:00:30Z"),
+		stamp(row(sqlc.MessageRoleUser, "", llm.TextPart{Text: "two"}), "2026-10-28T01:40:00Z"),
+		stamp(row(sqlc.MessageRoleAssistant, StopStop, llm.TextPart{Text: "b"}), "2026-10-28T01:41:00Z"),
+		stamp(row(sqlc.MessageRoleUser, "", llm.TextPart{Text: "three"}), "2026-10-28T04:44:00Z"),
+		stamp(row(sqlc.MessageRoleAssistant, StopStop, llm.TextPart{Text: "c"}), "2026-10-28T04:45:00Z"),
+		stamp(row(sqlc.MessageRoleUser, "", llm.TextPart{Text: "four"}), "2026-10-31T02:00:00Z"),
+	}
+	shanghai, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		t.Skip("no time zone data")
+	}
+	got, err := BuildContextIn(rows, shanghai)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertShape(t, got,
+		"user [Date: 2026-10-28] one", "assistant a",
+		"user two", "assistant b",
+		"user [Time: 2026-10-28 12:44 Asia/Shanghai, 3 hours after the previous message] three", "assistant c",
+		"user [Time: 2026-10-31 10:00 Asia/Shanghai, 2 days after the previous message] four")
+}
+
+func TestPauseText(t *testing.T) {
+	for pause, want := range map[time.Duration]string{
+		61 * time.Minute:    "61 minutes",
+		3 * time.Hour:       "3 hours",
+		47 * time.Hour:      "47 hours",
+		72 * time.Hour:      "3 days",
+		24 * time.Hour * 90: "3 months",
+	} {
+		if got := pauseText(pause); got != want {
+			t.Errorf("%v: %q, want %q", pause, got, want)
+		}
+	}
+}

@@ -169,6 +169,29 @@ describe('unpost', () => {
   })
 })
 
+describe('useDocumentQuote', () => {
+  it('gathers passages of answers, up to five, and lets a writing block\'s request stand alone', async () => {
+    const { useDocumentQuote } = await import('./document-quote-store')
+    const store = useDocumentQuote.getState()
+    store.set(null)
+    store.add({ conversationId: 'c1', documentId: '', title: '', passage: 'a' })
+    store.add({ conversationId: 'c1', documentId: '', title: '', passage: 'b' })
+    store.add({ conversationId: 'c1', documentId: '', title: '', passage: 'a' })
+    expect(useDocumentQuote.getState().quotes.map((q) => q.passage)).toEqual(['b', 'a'])
+    for (const p of ['c', 'd', 'e', 'f']) store.add({ conversationId: 'c1', documentId: '', title: '', passage: p })
+    expect(useDocumentQuote.getState().quotes.map((q) => q.passage)).toEqual(['a', 'c', 'd', 'e', 'f'])
+    // Another conversation's passage starts over.
+    store.add({ conversationId: 'c2', documentId: '', title: '', passage: 'g' })
+    expect(useDocumentQuote.getState().quotes.map((q) => q.passage)).toEqual(['g'])
+    store.set({ conversationId: 'c2', documentId: 'd1', title: 'T', passage: 'doc' })
+    expect(useDocumentQuote.getState().quotes.map((q) => q.passage)).toEqual(['doc'])
+    store.add({ conversationId: 'c2', documentId: '', title: '', passage: 'h' })
+    expect(useDocumentQuote.getState().quotes.map((q) => q.passage)).toEqual(['h'])
+    store.remove(0)
+    expect(useDocumentQuote.getState().quotes).toEqual([])
+  })
+})
+
 describe('resetChatStore', () => {
   it('leaves nothing of the last person behind: their images, quotes, open panels', async () => {
     const { resetChatStore } = await import('./chat-store')
@@ -181,6 +204,6 @@ describe('resetChatStore', () => {
     resetChatStore()
     expect(useImageViewer.getState().images).toEqual([])
     expect(useDocumentPanel.getState().documentId).toBeNull()
-    expect(useDocumentQuote.getState().quote).toBeNull()
+    expect(useDocumentQuote.getState().quotes).toEqual([])
   })
 })

@@ -1,8 +1,9 @@
 import { ArrowUp, Maximize2, MessageSquareQuote, Minimize2, NotebookPen, Plus, Square, X } from 'lucide-react'
-import { useEffect, useRef, useState, type ClipboardEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { PendingAttachment } from '@/hooks/use-attachments'
+import { highlightPassage } from '@/lib/highlight-passage'
 import { isEnter, withCtrl, withShift } from '@/lib/keys'
 import { cn } from '@/lib/utils'
 import AttachmentTray from './AttachmentTray'
@@ -31,10 +32,11 @@ interface ComposerProps {
    * button does, or why it does not.
    */
   /**
-   * A passage of a writing block quoted for the request being written ("提出
-   * 修改请求"): shown above the box, which then asks for the change.
+   * Passages quoted for the request being written: one of a writing block
+   * ("提出修改请求"), or several of answers ("引用提问"). Shown above the box
+   * as cards in a row, each with its own remove.
    */
-  quote?: { title: string; passage: string; fromAnswer?: boolean; onRemove: () => void }
+  quotes?: { title: string; passage: string; fromAnswer?: boolean; onRemove: () => void }[]
   attach?: {
     accept: string
     hint: string
@@ -56,10 +58,32 @@ export function Composer({
   modelSlot,
   toolsSlot,
   note,
-  quote,
+  quotes,
   attach,
 }: ComposerProps) {
   const { t } = useTranslation()
+  // A passage of an answer shown where it is (a click on its card): its
+  // highlight goes when it is clicked again, removed or sent.
+  const [picked, setPicked] = useState<string | null>(null)
+  const quoteKey = (quotes ?? []).map((q) => q.passage).join('\u0000')
+  // Shown only while its card is still there.
+  const shownQuote = picked && quoteKey.split('\u0000').includes(picked) ? picked : null
+  const showQuote = (passage: string) => {
+    const next = shownQuote === passage ? null : passage
+    setPicked(next && highlightPassage(next) ? next : null)
+    if (!next) highlightPassage(null)
+  }
+  // Its card removed, or the message sent: the highlight goes with it.
+  useEffect(() => {
+    if (picked && !shownQuote) highlightPassage(null)
+  }, [picked, shownQuote])
+  useEffect(() => () => void highlightPassage(null), [])
+  // What the box asks for: a change to a writing block's passage, a question
+  // about passages of answers, or a message.
+  const first = quotes?.[0]
+  const placeholder = first
+    ? t(first.fromAnswer ? 'chat.quote-placeholder' : 'document.quote-placeholder')
+    : t('chat.placeholder')
   const ref = useRef<HTMLTextAreaElement>(null)
   const picker = useRef<HTMLInputElement>(null)
 
@@ -125,18 +149,50 @@ export function Composer({
           </Tooltip>
         )}
 
-        {quote && (
+        {quotes && quotes.length > 0 && (
           <div className="n-quote-tray">
-            <div className="n-quote-card">
-              <p className="n-quote-text" dir="auto">{quote.passage}</p>
-              <span className="n-quote-label">
-                {quote.fromAnswer ? <MessageSquareQuote aria-hidden="true" /> : <NotebookPen aria-hidden="true" />}
-                {quote.fromAnswer ? t('chat.quote-label') : quote.title || t('document.quote-label')}
-              </span>
-              <button type="button" className="n-quote-remove" aria-label={t(quote.fromAnswer ? 'chat.quote-remove' : 'document.quote-remove')} onClick={quote.onRemove}>
-                <X aria-hidden="true" />
-              </button>
-            </div>
+            {quotes.map((quote, i) => (
+              <div
+                key={`${i}-${quote.passage.slice(0, 24)}`}
+                className={cn('n-quote-card', quote.fromAnswer && 'is-showable', shownQuote === quote.passage && 'is-shown')}
+                {...(quote.fromAnswer
+                  ? {
+                      role: 'button',
+                      tabIndex: 0,
+                      'aria-pressed': shownQuote === quote.passage,
+                      'aria-label': t('chat.quote-show'),
+                      onClick: () => showQuote(quote.passage),
+                      onKeyDown: (event: ReactKeyboardEvent) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          showQuote(quote.passage)
+                        }
+                      },
+                    }
+                  : {})}
+              >
+                <p className="n-quote-text" dir="auto">{quote.passage}</p>
+                <span className="n-quote-label">
+                  {quote.fromAnswer ? <MessageSquareQuote aria-hidden="true" /> : <NotebookPen aria-hidden="true" />}
+                  {quote.fromAnswer
+                    ? quotes.length > 1
+                      ? t('chat.quote-label-n', { n: i + 1 })
+                      : t('chat.quote-label')
+                    : quote.title || t('document.quote-label')}
+                </span>
+                <button
+                  type="button"
+                  className="n-quote-remove"
+                  aria-label={t(quote.fromAnswer ? 'chat.quote-remove' : 'document.quote-remove')}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    quote.onRemove()
+                  }}
+                >
+                  <X aria-hidden="true" />
+                </button>
+              </div>
+            ))}
           </div>
         )}
         {attach && <AttachmentTray items={attach.items} onRemove={attach.onRemove} />}
@@ -149,8 +205,8 @@ export function Composer({
             rows={1}
             value={value}
             disabled={disabled}
-            aria-label={quote ? t(quote.fromAnswer ? 'chat.quote-placeholder' : 'document.quote-placeholder') : t('chat.placeholder')}
-            placeholder={quote ? t(quote.fromAnswer ? 'chat.quote-placeholder' : 'document.quote-placeholder') : t('chat.placeholder')}
+            aria-label={placeholder}
+            placeholder={placeholder}
             onChange={(event) => onValueChange(event.target.value)}
             onPaste={handlePaste}
             onKeyDown={(event) => {

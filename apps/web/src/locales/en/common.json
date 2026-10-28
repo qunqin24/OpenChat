@@ -14,8 +14,14 @@
     "settings": "Settings"
   },
   "chat": {
+    "time-gap": {
+      "today": "Today",
+      "yesterday": "Yesterday"
+    },
     "ask-selection": "Ask about this",
     "quote-label": "From the answer",
+    "quote-show": "Show this passage in the answer",
+    "quote-label-n": "From the answer · {{n}}",
     "quote-remove": "Remove the quote",
     "quote-placeholder": "Ask about the selected text",
     "link-open": "Open link",
@@ -455,7 +461,7 @@
         "rp-id-hint": "Such as chat.example.com. In force now: {{current}}. Changing it makes passkeys made for the old domain unusable.",
         "rp-id-invalid": "Enter a domain, such as chat.example.com",
         "origins": "Allowed origins",
-        "origins-hint": "One per line, such as https://chat.example.com. Empty uses the page's own origin, now {{current}}.",
+        "origins-hint": "One per line, such as https://chat.example.com. Empty: with no domain pinned, the page's own origin; with one pinned, only the server's configured origins (CORS_ORIGINS) within that domain, and the domain itself. In force now: {{current}}.",
         "origins-invalid": "One origin per line, scheme and host only, such as https://chat.example.com",
         "verification": "User verification",
         "verification-preferred": "Preferred (recommended)",

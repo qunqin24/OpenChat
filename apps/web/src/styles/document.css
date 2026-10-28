@@ -635,7 +635,65 @@
 
 /* --------------------------- a quoted passage, in the composer and sent */
 .chat-ui .n-quote-tray {
+  /* Several passages sit in a row, scrolled sideways past the width. */
+  display: flex;
+  gap: 8px;
   padding: 12px 12px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+/* In the composer a quote is a small card, as ChatGPT's: three lines of the
+   passage and its label, its remove only on hover (always on touch). */
+.chat-ui .n-quote-tray .n-quote-card {
+  flex: none;
+  gap: 6px;
+  width: 172px;
+  padding: 8px 10px;
+  border-radius: 12px;
+}
+.chat-ui .n-quote-tray .n-quote-text {
+  font-size: 12px;
+  line-height: 1.5;
+  -webkit-line-clamp: 3;
+}
+.chat-ui .n-quote-tray .n-quote-label {
+  gap: 5px;
+  font-size: 12px;
+}
+.chat-ui .n-quote-tray .n-quote-label > svg {
+  width: 13px;
+  height: 13px;
+}
+.chat-ui .n-quote-tray .n-quote-remove {
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.chat-ui .n-quote-tray .n-quote-card:is(:hover, :focus-within) .n-quote-remove {
+  opacity: 1;
+}
+@media (hover: none) {
+  .chat-ui .n-quote-tray .n-quote-remove { opacity: 1; }
+}
+/* A sent message's passages, in a row on the right above its words. */
+.chat-ui .n-quote-cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  align-self: flex-end;
+  max-width: min(100%, 680px);
+  margin-bottom: 6px;
+}
+.chat-ui .n-quote-cards .n-quote-card.is-sent {
+  width: 200px;
+  margin-bottom: 0;
+}
+.chat-ui .n-quote-cards .n-quote-card.is-sent:only-child {
+  width: min(78vw, 320px);
 }
 
 .chat-ui .n-quote-card {
@@ -904,4 +962,23 @@
 @media (max-width: 767px) {
   .chat-ui .n-file-panel-text { padding: 12px 20px 48px; }
   .chat-ui .n-file-panel-note { padding: 16px 20px; }
+}
+
+/* A passage of an answer, shown where it is at a click on its card. */
+.chat-ui .n-quote-card.is-showable {
+  cursor: pointer;
+  font: inherit;
+  text-align: start;
+  transition: background-color 120ms ease;
+}
+.chat-ui button.n-quote-card.is-showable { color: inherit; }
+.chat-ui .n-quote-card.is-showable:hover,
+.chat-ui .n-quote-card.is-shown {
+  background: var(--n-hover-strong);
+}
+::highlight(n-quote) {
+  background-color: rgb(253 224 71 / 45%);
+}
+.dark ::highlight(n-quote) {
+  background-color: rgb(250 204 21 / 30%);
 }

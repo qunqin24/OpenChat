@@ -1,5 +1,5 @@
 {
-  "$comment": "The components a model may use in an `openchat-ui` block. The single source of truth: the server builds the system prompt from it and the web app validates and renders against it. `make generate-genui` copies it to both; edit this file, never the copies. A component marked retired is left out of the model's instructions but still drawn, so transcripts that used it keep rendering.",
+  "$comment": "The components a model may use in an `openchat-ui` block. The single source of truth: the server builds the system prompt from it and the web app validates and renders against it. `make generate-genui` copies it to both; edit this file, never the copies. A component marked retired is left out of the model's instructions but still drawn, so transcripts that used it keep rendering. A parameter marked retired is likewise left out of the instructions but still read, so a transcript that gave it keeps rendering (Image's src, the name of its picture before image).",
   "version": 1,
   "components": [
     {
@@ -594,15 +594,18 @@
       "params": [
         {
           "name": "image",
-          "type": "string",
-          "required": true
+          "type": "string"
+        },
+        {
+          "name": "alt",
+          "type": "string"
         },
         {
           "name": "caption",
           "type": "string"
         },
         {
-          "name": "alt",
+          "name": "link",
           "type": "string"
         },
         {
@@ -616,8 +619,9 @@
           "default": "landscape"
         },
         {
-          "name": "link",
-          "type": "string"
+          "name": "src",
+          "type": "string",
+          "retired": true
         }
       ]
     },

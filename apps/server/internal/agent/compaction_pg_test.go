@@ -137,7 +137,7 @@ func TestContextRowsAfterASummary(t *testing.T) {
 	if len(rows) != 2 || rows[0].ID != q2.ID || rows[1].Content != "q3" {
 		t.Fatalf("rows = %d: the kept question then the rows after the range", len(rows))
 	}
-	messages, err := BuildRequestContext(summary, rows)
+	messages, err := BuildRequestContext(summary, rows, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestContextRowsAfterASummary(t *testing.T) {
 	// Without a kept question: the summary then what follows.
 	f.setSummary(a2, nil, "all of it")
 	summary, rows, _ = LoadContextRows(context.Background(), f.q, f.conv, 100)
-	messages, _ = BuildRequestContext(summary, rows)
+	messages, _ = BuildRequestContext(summary, rows, nil)
 	equalStrings(t, "no kept question", roles(messages), []string{"user:<compressed_history_summ", "user:q3"})
 
 	// The history cap keeps the newest rows after the range.

@@ -10,6 +10,10 @@
 - 发消息返回 SSE；助手消息在第一个 token 前就写库，取消算 `complete`，provider 报错才算 `failed`。
 - 改写和重新生成发出的 `run_started` 批次里同时带 `transcript_changed`（改写时带 `from`，即被改的提问的 id）：行被删了，开着同一对话的其他标签页据此立刻丢掉这些行并重取最新一页。凡是会删「当前显示的对话记录」的行的新操作，都要发这个事件，否则别的标签页会一直显示已经不存在的记录。存下被拒绝的发送（`blocked` 行）也发它（单独成批、没有 `from`、没有 run）：那是新增了一行而没有 run，别的标签页收到后照旧 `refreshNewestMessages`。
 
+## 日期与隔了一段时间的提示（`agent.BuildContextIn`，前端 `lib/time-gap.ts`）
+
+日期不写进系统提示词（每天变会让提示词缓存和回放的思考块失效），而是写在用户消息开头：一天里第一条带 `[Date: 2026-10-28]`；距离上一行（回答、工具结果或上一条提问）**一小时以上**的用户消息改带 `[Time: 2026-10-28 10:44 Asia/Shanghai, 3 hours after the previous message]`，模型因此知道对话隔了多久、现在几点，系统提示词说明这两种行。时区取账号里浏览器上报的 `users.time_zone`，没有就用 UTC；行一旦写出就不变，历史仍是稳定前缀。页面在同样的位置（隔一小时以上的提问上方）显示「今天 10:44」「昨天 21:05」「10月28日 10:44」，门槛两边一致（`agent.TimeGap` ↔ `TIME_GAP_MS`）。
+
 ## 被审核拒绝的行（`blocked`）
 
 - **被审核拒绝的发送是转录里的一行**（`messages.status = 'blocked'`，role `user`，内容是被拒的原文，迁移 `20261025000004_blocked_messages`；写入见下「内容审核」）。它只是被显示、从不发给模型，所以凡是**构造模型看到的东西**的查询都要跳过它：`ListRecentMessages`、`ListMessagesAfter`、`ListMessagesFrom`（因此 `LoadContextRows`、压缩的读取范围、摘要的 `through_message_id` / `kept_message_id`、标题的素材、`ask_user` 的 `pendingQuestion` 都看不见它），`ListTranscript`（导出）和搜索的命中也不含它；`agent.BuildContext` 和 `EstimateRow` 再各跳过一次，免得哪条新路径把它漏进请求。**只有 `ListMessages`（显示用）和 `GetInput`（改写用）看得见它**。它不是提问：重新生成的「最后一条提问」（`GetLastInput`、`not_latest`）是最后一条**没被拒绝的** user 行，`DeleteAnswerTo` 删掉那条提问之后的所有行——被拒绝的 user 行也在内（`role <> 'user' OR status = 'blocked'`）。改写可以改它，和改任何提问一样：新措辞写在末尾、重新审核，`DeleteTranscriptFrom` 把它和之后的行删掉；再次被拒绝的处理见「内容审核」的「被拒绝的消息要先改写」。它是对话的终点：**末行是被拒绝的消息时，对话不能往下走**，直到它被改写（同上一节）。新增读转录的查询时想清楚：给模型看的要 `status <> 'blocked'`，给人看的不要。

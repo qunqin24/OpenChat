@@ -80,3 +80,11 @@ func TestPromptPicturesFollowImageSearch(t *testing.T) {
 		t.Error("image search off: the prompt does not teach source addresses alone")
 	}
 }
+
+// A retired parameter is read but never taught: Image's old src.
+func TestRetiredParametersAreNotTaught(t *testing.T) {
+	prompt := Load().Prompt(true)
+	if !strings.Contains(prompt, "\nImage(image?, alt?, caption?, link?, aspect?)\n") || strings.Contains(prompt, "src:") {
+		t.Error("Image's retired src is in the model's instructions")
+	}
+}

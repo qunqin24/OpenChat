@@ -66,6 +66,7 @@ import { useFilePanel } from '@/stores/file-panel-store'
 import FilePanel from './FilePanel'
 import { useDocumentQuote } from '@/stores/document-quote-store'
 import { answerQuote, quoteMessage } from '@/lib/document-selection'
+import { gapLabel, timeGaps } from '@/lib/time-gap'
 import AskSelection from './AskSelection'
 import { TemporaryBar, TemporaryToggle } from './TemporaryChat'
 import Welcome from './Welcome'
@@ -95,7 +96,7 @@ interface ChatViewProps {
 }
 
 export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
@@ -246,6 +247,11 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     () => buildTurns(messages.data?.items ?? [], live?.run ?? null, replacing, summary),
     [messages.data, live, replacing, summary],
   )
+  // Where the person picked the conversation up again after a pause: a time
+  // above their message, as the model is told it (lib/time-gap.ts).
+  const gaps = useMemo(() => timeGaps(turns), [turns])
+  // "Today" and "yesterday" are from when the page opened.
+  const [openedAt] = useState(() => Date.now())
 
   // Only the end of a long transcript is drawn: the last turns, then 20 more
   // each time the reader scrolls near the top, then — once the drawn turns
@@ -268,7 +274,10 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
   const revising = mode.kind === 'revise' ? mode.message : null
   // A writing block's passage waiting in this conversation's composer.
   const quoteState = useDocumentQuote()
-  const quote = quoteState.quote && quoteState.quote.conversationId === conversationId ? quoteState.quote : null
+  const quotes = useMemo(
+    () => quoteState.quotes.filter((q) => q.conversationId === conversationId),
+    [quoteState.quotes, conversationId],
+  )
   const setQuote = quoteState.set
 
   // The last answer can be asked for again (not while a refused message ends the
@@ -620,7 +629,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     // A passage of a writing block quoted for this request goes with it, in
     // front (lib/document-selection), unless this is the rewording of a
     // refused message, which keeps its own words.
-    const quoted = quote && !revising ? quote : null
+    const quoted = quotes.length > 0 && !revising ? quotes : null
     const content = quoted ? quoteMessage(quoted, typed) : typed
     // An answer is being made, or a message is on its way: one at a time, as the
     // server says (`conversation_busy`). Read from the store, not from this
@@ -785,7 +794,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     onCreated,
     onRemoved,
     post,
-    quote,
+    quotes,
     revising,
     sendMessage,
     setQuote,
@@ -874,7 +883,11 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
       onSend={() => void handleSend()}
       onStop={handleStop}
       note={revising ? t('chat.revise.label') : undefined}
-      quote={quote && !revising ? { title: quote.title, passage: quote.passage, fromAnswer: !quote.documentId, onRemove: () => setQuote(null) } : undefined}
+      quotes={
+        revising
+          ? undefined
+          : quotes.map((q, i) => ({ title: q.title, passage: q.passage, fromAnswer: !q.documentId, onRemove: () => quoteState.remove(i) }))
+      }
       working={working}
       disabled={createConversation.isPending}
       modelSlot={
@@ -959,7 +972,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
         <AskSelection
           scope={columnRef}
           onAsk={(passage) => {
-            setQuote({ ...answerQuote(passage), conversationId })
+            quoteState.add({ ...answerQuote(passage), conversationId })
             dock.current?.querySelector<HTMLTextAreaElement>('textarea')?.focus()
           }}
         />
@@ -990,6 +1003,14 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
                   {turn.kind === 'user' ? (
                     <UserMessage
                       message={turn.message}
+                      time={
+                        gaps.has(turn.key)
+                          ? gapLabel(gaps.get(turn.key)!, Math.max(openedAt, gaps.get(turn.key)!), i18n.resolvedLanguage ?? 'zh', {
+                              today: t('chat.time-gap.today'),
+                              yesterday: t('chat.time-gap.yesterday'),
+                            })
+                          : undefined
+                      }
                       // The refused message that ends the conversation is edited in the composer.
                       onEdit={!working && !outgoing && turn.message.id !== revising?.id ? (content) => editQuestion(turn.message, content) : undefined}
                       restoredDraft={refusedEdit?.id === turn.message.id ? refusedEdit.content : undefined}
