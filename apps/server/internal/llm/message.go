@@ -220,6 +220,12 @@ type AttachmentPart struct {
 	// Size is the stored file's length in bytes, when known: what a text file
 	// costs a request is estimated from it (EstimatePart).
 	Size int64
+	// TextSize is, for a document read as words (doctext: Word, Excel, PDF),
+	// the length of its words in bytes, and Pages a PDF's page count: taken
+	// when the message was sent, they say what the file costs a request and
+	// whether a PDF goes whole or as words.
+	TextSize int64
+	Pages    int
 
 	// Data is the resolved content when the builder chose to inline it.
 	Data []byte

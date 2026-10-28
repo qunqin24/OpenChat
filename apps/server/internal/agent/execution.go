@@ -404,11 +404,23 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 	// What the request offers, and its system prompt, are settled before its
 	// messages: whether the messages fit the window depends on both.
 	offered := r.offered(ctx)
+	callsTools := true
 	if capable, ok := client.(ToolCapable); ok && !capable.CallsTools() {
-		offered = nil
+		offered, callsTools = nil, false
 	}
 	if !ex.run.WebSearch {
 		offered = withoutWeb(offered)
+	}
+	// A long text file is shown as a card and read with the file tools, by a
+	// model that can call them; to one that cannot, it goes whole (files.go).
+	cards := false
+	if callsTools {
+		if cards, err = r.hasLongFiles(ctx, ex.run.ConversationID); err != nil {
+			return false, err
+		}
+		if cards {
+			offered = append(offered, r.fileTools()...)
+		}
 	}
 	system := r.opts.SystemPrompt(ctx, r.now(), offered)
 
@@ -446,7 +458,7 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 	if err != nil {
 		return false, err
 	}
-	if messages, err = ex.withAttachments(ctx, messages); err != nil {
+	if messages, err = ex.withAttachments(ctx, messages, cards); err != nil {
 		return false, err
 	}
 	if system != "" {
@@ -823,6 +835,10 @@ func (ex *execution) runTools(ctx context.Context) (bool, error) {
 	if !ex.run.WebSearch {
 		available = withoutWeb(available)
 	}
+	// The file tools are offered only with a long file in the conversation
+	// (callModel); a call to one is answered whenever it comes, and finds no
+	// file when there is none.
+	available = append(available, r.fileTools()...)
 	byName := toolsByName(available)
 
 	ex.mu.Lock()

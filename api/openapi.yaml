@@ -1030,7 +1030,7 @@ paths:
       tags: [admin]
       summary: Find one picture with the current settings
       description: |
-        Searches the configured service the way an answer's picture is
+        Searches the configured services the way an answer's picture is
         searched - without keeping what it finds - and reports the first
         match. A failed search is a 200 with `ok: false`.
       operationId: testImageSearch
@@ -2352,7 +2352,7 @@ paths:
           schema: { type: string, maxLength: 200 }
         - name: type
           in: query
-          description: Only images, or only PDFs.
+          description: Only images, PDFs, text files, or Word and Excel files (`document`).
           schema: { $ref: "#/components/schemas/LibraryFileType" }
       responses:
         "200":
@@ -2426,6 +2426,34 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/FileDownload" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /files/{fileId}/text:
+    parameters:
+      - { $ref: "#/components/parameters/FileId" }
+    get:
+      tags: [files]
+      summary: The words of one of your documents
+      description: |
+        What a Word, Excel or PDF file says, read out of it as a model is sent
+        it: Markdown for Word, CSV under a heading per sheet for Excel, and a
+        PDF's pages each after a "[Page n]" line. The file itself is
+        unchanged (`url`, `getFileDownload`). 404 for a file that is not
+        yours, 415 `not_a_document` for one of another kind, and 422
+        `document_unreadable` for one whose words cannot be read.
+      operationId: getFileText
+      parameters:
+        - name: preview
+          in: query
+          required: false
+          schema: { type: boolean }
+          description: Only the beginning, at most 2 KB, for a card's preview in the library.
+      responses:
+        "200":
+          description: the words
+          content:
+            text/plain:
+              schema: { type: string }
         default: { $ref: "#/components/responses/Error" }
 
 components:
@@ -3539,7 +3567,7 @@ components:
       type: object
       required:
         [id, name, providerId, family, reasoning, toolCall, attachment, contextLimit, outputLimit,
-         inputModalities, reasoningEfforts, atCapacity]
+         inputModalities, reasoningEfforts, atCapacity, pdfAsText]
       properties:
         id:
           type: string
@@ -3569,6 +3597,12 @@ components:
         inputModalities:
           type: array
           items: { $ref: "#/components/schemas/InputModality" }
+        pdfAsText:
+          type: boolean
+          description: |
+            A PDF can be attached for this model although `inputModalities`
+            does not list `pdf`: the server reads its words and sends those.
+            False on a server that cannot read PDFs (no pdftotext).
         reasoningEfforts:
           type: array
           description: |
@@ -3596,7 +3630,7 @@ components:
 
     LibraryFileType:
       type: string
-      enum: [image, pdf, text]
+      enum: [image, pdf, document, text]
 
     LibraryFile:
       type: object
@@ -4824,7 +4858,7 @@ components:
 
     ImageSearchSettings:
       type: object
-      required: [enabled, provider, pixabayKeySet]
+      required: [enabled, providers, pixabayKeySet]
       properties:
         enabled:
           type: boolean
@@ -4833,7 +4867,14 @@ components:
             (`searchImage`). Off, an answer can show only a picture whose
             address one of its own sources listed - a page it read or a
             search it ran - as before.
-        provider: { $ref: "#/components/schemas/ImageSearchProvider" }
+        providers:
+          type: array
+          items: { $ref: "#/components/schemas/ImageSearchProvider" }
+          description: |
+            The services asked, in order: when one cannot search (down, slow,
+            limiting this server, or Pixabay without a key) or finds nothing,
+            the next is asked. A service that failed lately is asked after the
+            others for a minute. Never empty.
         pixabayKeySet:
           type: boolean
           description: Whether a Pixabay API key is stored; `pixabay` needs one. Write-only, like a channel's.
@@ -4846,7 +4887,13 @@ components:
       description: Only the fields present are changed.
       properties:
         enabled: { type: boolean }
-        provider: { $ref: "#/components/schemas/ImageSearchProvider" }
+        providers:
+          type: array
+          minItems: 1
+          maxItems: 4
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/ImageSearchProvider" }
+          description: The services to ask, in order.
         pixabayKey:
           type: string
           maxLength: 200
@@ -4859,7 +4906,7 @@ components:
         query: { type: string, minLength: 1, maxLength: 200 }
         provider:
           $ref: "#/components/schemas/ImageSearchProvider"
-          description: A service to try before choosing it. The configured one when absent.
+          description: One service to try. The configured services, in their order, when absent.
         pixabayKey:
           type: string
           maxLength: 200
@@ -4878,7 +4925,7 @@ components:
 
     ImageSearchHit:
       type: object
-      required: [url, width, height, title, license, source]
+      required: [url, width, height, title, license, source, provider]
       properties:
         url: { type: string, description: The picture at the service, to look at. }
         width: { type: integer }
@@ -4888,10 +4935,11 @@ components:
         license: { type: string }
         landingUrl: { type: string }
         source: { type: string }
+        provider: { $ref: "#/components/schemas/ImageSearchProvider" }
 
     ImageSearchProvider:
       type: string
-      enum: [wikimedia, openverse, pixabay]
+      enum: [wikimedia, openverse, pixabay, bing]
       description: |
         Where the pictures answers describe are found (`searchImage`).
         `wikimedia` is Wikimedia Commons' own search: no key, quick, but with
@@ -4899,6 +4947,10 @@ components:
         from many sites with mature content filtered out, no key, but allows
         an anonymous server 200 searches a day and is often slow. `pixabay`
         is Pixabay's stock photos with safe search, and needs a free key.
+        `bing` is Bing Images through the endpoint its results page uses: no
+        key, quick, finds nearly anything, with strict safe search - but it is
+        not an API and may stop working or ask for a check at any time, and
+        its pictures are other sites', with their rights, not freely licensed.
     WebSearchSettings:
       type: object
       required:

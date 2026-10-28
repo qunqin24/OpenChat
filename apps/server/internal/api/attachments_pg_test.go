@@ -18,6 +18,7 @@ import (
 	"github.com/qunqin24/openchat/apps/server/internal/agent"
 	"github.com/qunqin24/openchat/apps/server/internal/auth"
 	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/doctext"
 )
 
 // memoryStore is a blob store that keeps bytes in a map. It stands in for S3 in
@@ -226,8 +227,14 @@ func TestAttachments(t *testing.T) {
 		}
 	})
 
-	t.Run("a model that takes no PDFs refuses one", func(t *testing.T) {
-		assertRefused(send(alice, upload(alice, "r.pdf", "application/pdf", testPDF)), "attachment_unsupported")
+	t.Run("a model that takes no PDFs refuses one it cannot be sent the words of", func(t *testing.T) {
+		// Its words would go instead, where this server reads PDFs; these
+		// bytes have none to read.
+		want := "attachment_unsupported"
+		if doctext.PDFReadable() {
+			want = "attachment_unreadable"
+		}
+		assertRefused(send(alice, upload(alice, "r.pdf", "application/pdf", testPDF)), want)
 	})
 
 	t.Run("nobody can attach another person's upload", func(t *testing.T) {

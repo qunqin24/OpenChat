@@ -862,7 +862,7 @@ export interface paths {
         put?: never;
         /**
          * Find one picture with the current settings
-         * @description Searches the configured service the way an answer's picture is
+         * @description Searches the configured services the way an answer's picture is
          *     searched - without keeping what it finds - and reports the first
          *     match. A failed search is a 200 with `ok: false`.
          */
@@ -2168,6 +2168,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/files/{fileId}/text": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fileId: components["parameters"]["FileId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The words of one of your documents
+         * @description What a Word, Excel or PDF file says, read out of it as a model is sent
+         *     it: Markdown for Word, CSV under a heading per sheet for Excel, and a
+         *     PDF's pages each after a "[Page n]" line. The file itself is
+         *     unchanged (`url`, `getFileDownload`). 404 for a file that is not
+         *     yours, 415 `not_a_document` for one of another kind, and 422
+         *     `document_unreadable` for one whose words cannot be read.
+         */
+        get: operations["getFileText"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3099,6 +3126,12 @@ export interface components {
             outputLimit: number;
             inputModalities: components["schemas"]["InputModality"][];
             /**
+             * @description A PDF can be attached for this model although `inputModalities`
+             *     does not list `pdf`: the server reads its words and sends those.
+             *     False on a server that cannot read PDFs (no pdftotext).
+             */
+            pdfAsText: boolean;
+            /**
              * @description The thinking levels this model offers, lowest first, besides
              *     `auto`. Empty for a model with no control over its thinking. What
              *     the operator allows, within what the model has.
@@ -3122,7 +3155,7 @@ export interface components {
             expiresAt: string;
         };
         /** @enum {string} */
-        LibraryFileType: "image" | "pdf" | "text";
+        LibraryFileType: "image" | "pdf" | "document" | "text";
         LibraryFile: {
             /** Format: uuid */
             id: string;
@@ -4164,7 +4197,13 @@ export interface components {
              *     search it ran - as before.
              */
             enabled: boolean;
-            provider: components["schemas"]["ImageSearchProvider"];
+            /**
+             * @description The services asked, in order: when one cannot search (down, slow,
+             *     limiting this server, or Pixabay without a key) or finds nothing,
+             *     the next is asked. A service that failed lately is asked after the
+             *     others for a minute. Never empty.
+             */
+            providers: components["schemas"]["ImageSearchProvider"][];
             /** @description Whether a Pixabay API key is stored; `pixabay` needs one. Write-only, like a channel's. */
             pixabayKeySet: boolean;
             /** @description The Pixabay key's last four characters. */
@@ -4173,13 +4212,14 @@ export interface components {
         /** @description Only the fields present are changed. */
         UpdateImageSearchSettingsRequest: {
             enabled?: boolean;
-            provider?: components["schemas"]["ImageSearchProvider"];
+            /** @description The services to ask, in order. */
+            providers?: components["schemas"]["ImageSearchProvider"][];
             /** @description The Pixabay API key. Empty removes the stored one. */
             pixabayKey?: string;
         };
         ImageSearchTestRequest: {
             query: string;
-            /** @description A service to try before choosing it. The configured one when absent. */
+            /** @description One service to try. The configured services, in their order, when absent. */
             provider?: components["schemas"]["ImageSearchProvider"];
             /** @description A Pixabay key to try before saving it. The stored key when absent. */
             pixabayKey?: string;
@@ -4202,6 +4242,7 @@ export interface components {
             license: string;
             landingUrl?: string;
             source: string;
+            provider: components["schemas"]["ImageSearchProvider"];
         };
         /**
          * @description Where the pictures answers describe are found (`searchImage`).
@@ -4210,9 +4251,13 @@ export interface components {
          *     from many sites with mature content filtered out, no key, but allows
          *     an anonymous server 200 searches a day and is often slow. `pixabay`
          *     is Pixabay's stock photos with safe search, and needs a free key.
+         *     `bing` is Bing Images through the endpoint its results page uses: no
+         *     key, quick, finds nearly anything, with strict safe search - but it is
+         *     not an API and may stop working or ask for a check at any time, and
+         *     its pictures are other sites', with their rights, not freely licensed.
          * @enum {string}
          */
-        ImageSearchProvider: "wikimedia" | "openverse" | "pixabay";
+        ImageSearchProvider: "wikimedia" | "openverse" | "pixabay" | "bing";
         WebSearchSettings: {
             /**
              * @description Whether runs are offered the web_search tool. Tavily also needs a
@@ -7385,7 +7430,7 @@ export interface operations {
                  *     `type`) the same while following `nextCursor`.
                  */
                 search?: string;
-                /** @description Only images, or only PDFs. */
+                /** @description Only images, PDFs, text files, or Word and Excel files (`document`). */
                 type?: components["schemas"]["LibraryFileType"];
             };
             header?: never;
@@ -7470,6 +7515,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FileDownload"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getFileText: {
+        parameters: {
+            query?: {
+                /** @description Only the beginning, at most 2 KB, for a card's preview in the library. */
+                preview?: boolean;
+            };
+            header?: never;
+            path: {
+                fileId: components["parameters"]["FileId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the words */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
                 };
             };
             default: components["responses"]["Error"];

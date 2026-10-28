@@ -25,7 +25,7 @@
 - 发送：`outbox` 里的气泡由 `useSendMessage` 的 hook 级 `onError` 撤掉（调用级的 `mutate(…, { onError })` 在组件卸载后不执行，发完立刻切对话就会留下永远等回复的气泡）；新对话的第一条消息也一样：它用 `sendMessage.mutateAsync({ conversationId: 刚建的 id, … })` 发出，id 由调用传入（`useSendMessage` 的 `variables.conversationId`），hook 级的 `onSuccess`/`onError` 照样用它。运行中（`working`、`outbox`、`live` 在跑）不能再发：输入框的回车、`handleSend` 都挡掉。
 - 发送的响应可能晚于事件流：SSE 上 `run_started → run_finished → 重取消息 → settle` 全走完，那个 POST 的响应才回来，它（以及重连时拍得更早的 snapshot）仍写着 `running`。store 的 `finished`（有界，最近 `FINISHED_RUNS_KEPT` 个 run id，`rememberFinished`）记住已结束的 run：`run_finished` 批次、非 running 的 snapshot、`settle` 都会登记；`startRun`（发送、重新生成、改写、回答 ask_user 都走它）、`applySnapshot`、`applyBatch` 里的 `run_started` 遇到登记过的 run 一律不写回 `live`（`startRun` 仍清掉 `outbox`/`replacing`）。run 只前进不后退；新增任何由响应或旧快照驱动、会写 `live` 的路径都要过这道检查。`resetChatStore` 一并清空。
 - 附件只在发送响应里有：`run_started` 事件里的那份提问不带附件（链接按读者签名，所有订阅者共用的事件给不了）。两种先后都要保住响应那份的附件：响应先到，`applyBatch` 处理 `run_started` 时保留已有的附件；事件先到，`startRun` 用 `withSentInput`（`lib/run-state.ts`）把响应的附件放到已有的提问上。少了后一种，图片在发出后消失、直到回答结束重取消息才出现（v1.1.6 及之前）。其他标签页只收到事件，回答期间看不到图，结束后重取即正常。
-- 文本附件（`text/plain`）点开在侧边面板里读（`FilePanel`、`stores/file-panel-store.ts`），和写作块、子智能体面板互斥；文件库里点开也一样（位置记作 `LIBRARY`，离开文件库就关）；内容直接 `fetch` 附件的签名链接（桶的 CORS 要放行 `GET`，见部署文档），不进查询持久化。文件图标按类型着色（`FileIcon`，分类在 `lib/file-look.ts`，文本文件按扩展名分）。
+- 文本、Word、Excel、PDF 附件点开在侧边面板里读（`FilePanel`、`stores/file-panel-store.ts`），和写作块、子智能体面板互斥；文件库里点开则铺满整个窗口（`full`，位置记作 `LIBRARY`，离开文件库就关）。Word 用 `docx-preview` 按原件排版（文件没写页面设置时按 A4、Word 默认页边距），整页缩放到面板宽；PDF 用 `pdf.js` 逐页画（接近视口才画，`cmaps`/`wasm` 由 `vite.config.ts` 的 `pdfjsAssets` 拷进构建、放在 `/pdfjs/`）；这两个库只在打开对应文件时按需加载。Excel 和 CSV/TSV 画成带工作表标签、列字母、行号的表格（`SheetView`，`lib/workbook.ts`，Excel 用服务器读出的文字），只画看得见的行（固定行高、列宽按前 500 行一次算好），拖动面板宽度时 PDF 和 Word 先按比例缩放、停下后再重画；Markdown 文件按聊天回答的样子渲染（`Markdown`）；复制按钮复制文字（文档是发给模型的那份），下载是原件。消息和输入框里的文件卡片是浅灰底加彩色折角角标（`FileBadge`，写扩展名），库的网格卡片显示文件开头的内容预览（`FilePagePreview`，`GET /files/{id}/text?preview=true`）。其余：内容直接 `fetch` 附件的签名链接（桶的 CORS 要放行 `GET`，见部署文档），不进查询持久化。文件图标按类型着色（`FileIcon`，分类在 `lib/file-look.ts`，文本文件按扩展名分）。
 
 ## 对话标题的显示
 
@@ -79,9 +79,9 @@ WebKit（Safari，以及 iPhone 上的所有浏览器）照 Open WebUI 整个跳
 组件里的图片（Image、Gallery、Media、Card/Step/Article 的 `image`）只有一个字段，值是网址或描述，前端按是否 `http(s)://` 开头分流：
 
 - **网址**：走对话的图片代理（`/conversations/{id}/images?url=`），只放行本对话工具结果里出现过的地址（`ToolResultMentions`；`web_fetch` 把页面图片列在 "Images on this page" 下）。
-- **描述**（图片搜索开着时）：`GET /images/search?q=` 由后台选的服务（Wikimedia Commons 默认、Openverse、Pixabay，`internal/imagesearch`）找第一张合适的图，下载进文件存储 `pictures/`（Pixabay 条款要求不直接外链），`pictures` 表按 (provider, provider_id) 存一份，`image_searches` 记「描述 → 图」，同一描述永远同一张；没找到的记一天，服务不可用（503）不记。字节由 `/pictures/{id}` 从存储读出，只给搜到过的 id。署名（来源 · 许可）悬停时浮在图上，点开大图带来源页。
+- **描述**（图片搜索开着时）：`GET /images/search?q=` 按后台排的顺序问各服务（Wikimedia Commons 默认、Openverse、Pixabay、Bing 图片，`internal/imagesearch`；Bing 是网页自己用的非公开接口 `/images/async`，没有 Key、图片版权归原站，结果页里一条结果都读不出来时算不可用而不是没找到，跳过带水印的图库站）找第一张合适的图：前一个搜不了（出错、超时、被限流、缺 Key）或没找到就问下一个，最近一分钟出过错的排到最后（`imagesearch.Fallback`）；502–504 先在同一个服务上隔一会儿重试两次。下载进文件存储 `pictures/`（Pixabay 条款要求不直接外链），`pictures` 表按 (provider, provider_id) 存一份，`image_searches` 记「描述 → 图」，同一描述永远同一张；没找到的记一天，服务不可用（503）不记，前端隔 4、12、30 秒再取，期间保留图框。字节由 `/pictures/{id}` 从存储读出，只给搜到过的 id。署名（来源 · 许可）悬停时浮在图上，点开大图带来源页。
 
-模式写在提示词里：`genui.Catalog.Prompt(imageSearch)` 在组件列表后接目录里的 `pictures.search` 或 `pictures.sources` 一段，由 `imageSearchOn`（开关开着且服务能用）决定；关着时模型只能用来源里的网址，和以前一样。后台「图片搜索」页（`/admin/image-search`）管开关、服务、Pixabay Key 和试搜。每用户搜索有每分钟上限，各服务自己的速率份额在 `imagesearch.limiter`，被服务拒绝时按它给的时间停搜。
+模式写在提示词里：`genui.Catalog.Prompt(imageSearch)` 在组件列表后接目录里的 `pictures.search` 或 `pictures.sources` 一段，由 `imageSearchOn`（开关开着且服务能用）决定；关着时模型只能用来源里的网址，和以前一样。后台「图片搜索」页（`/admin/image-search`）管开关、服务及其顺序、Pixabay Key 和试搜（全部按顺序，或只试一个）。每用户搜索有每分钟上限，各服务自己的速率份额在 `imagesearch.limiter`，被服务拒绝时按它给的时间停搜。
 
 ## 智能 UI 的「选项」（`components/chat/genui/choices.tsx`）
 

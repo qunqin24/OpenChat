@@ -216,7 +216,7 @@ func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversatio
 		httpx.Fail(w, r, err)
 		return
 	}
-	files, err := s.admitAttachments(ctx, user.ID, choice.modelID, ids)
+	files, digests, err := s.admitAttachments(ctx, user.ID, choice.modelID, ids)
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
@@ -224,7 +224,7 @@ func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversatio
 	// The new wording, and any files this edit brings: those of a question that
 	// was sent were checked when it was first sent. As a send is, with the
 	// pictures read once and what was read recorded (attachment_digest.go).
-	in, digests := s.checkedFiles(content, files)
+	in := s.checkedFiles(content, files, digests)
 	if refused, err := s.moderated(ctx, s.accountSubject(ctx, user, conversationId, ModerationSourceEdit), in); err != nil {
 		// The words that were refused replace the refused message they were to
 		// reword, so the transcript shows what was tried last.

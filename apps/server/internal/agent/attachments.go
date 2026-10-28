@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/doctext"
 	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
@@ -48,6 +49,12 @@ type attachmentResolver struct {
 	read    func(ctx context.Context, key string, limit int64) ([]byte, error)
 	accepts func(modality string) bool
 	budget  int64
+	// cards is whether a long text file goes as a card (fileCard): the
+	// request offers the file tools that read the rest.
+	cards bool
+	// asText resolves every document, a PDF too, to its words: what the file
+	// tools read.
+	asText bool
 
 	// cache keeps what a run has read, so each round of a tool loop does not
 	// fetch the same files again.
@@ -104,6 +111,11 @@ func (a *attachmentResolver) resolve(ctx context.Context, messages []llm.Message
 				// A text file goes as words, which every model takes. sniff
 				// has found them to be text.
 				text, _ := llm.FileText(resolved.Data)
+				if a.cards && len(resolved.Data) > llm.InlineTextBytes {
+					parts[j] = llm.TextPart{Text: fileCard(ref, text)}
+					budget += int64(len(resolved.Data)) // a card does not carry the file
+					continue
+				}
 				parts[j] = llm.TextPart{Text: llm.FileBlock(ref.Filename, text)}
 				continue
 			}
@@ -114,7 +126,11 @@ func (a *attachmentResolver) resolve(ctx context.Context, messages []llm.Message
 	return out, nil
 }
 
-// one resolves a reference, or says in note why it cannot be.
+// one resolves a reference, or says in note why it cannot be. A Word or Excel
+// file resolves to its words (doctext), as a text file does; a PDF to itself
+// for a model that reads PDFs, unless it is longer than one reads whole
+// (llm.NativePDFPages), and to its words otherwise - or when asText, for the
+// file tools - except a scanned one, whose words are next to none.
 func (a *attachmentResolver) one(ctx context.Context, ref llm.AttachmentPart, rows map[uuid.UUID]sqlc.Attachment, budget *int64) (resolved llm.AttachmentPart, note string) {
 	id, err := uuid.Parse(ref.Ref)
 	row, found := rows[id]
@@ -123,19 +139,30 @@ func (a *attachmentResolver) one(ctx context.Context, ref llm.AttachmentPart, ro
 	}
 
 	modality := llm.ModalityOf(row.ContentType)
-	if modality == "" || (modality != llm.ModalityText && !a.accepts(modality)) {
+	readsPDF := modality == llm.ModalityPDF && a.accepts(modality)
+	asWords := modality == llm.ModalityDocument ||
+		(modality == llm.ModalityPDF && (a.asText || !readsPDF || ref.Pages > llm.NativePDFPages))
+	switch {
+	case modality == "":
+		return ref, "the selected model does not accept this kind of file"
+	case modality != llm.ModalityText && !asWords && !a.accepts(modality):
 		return ref, "the selected model does not accept this kind of file"
 	}
 	if a.read == nil {
 		return ref, "files cannot be read here"
 	}
-	if row.SizeBytes > *budget {
+	// A document is read whole whatever the request has room for: what it
+	// costs is its words.
+	limit := *budget
+	if asWords {
+		limit = documentReadBytes
+	} else if row.SizeBytes > *budget {
 		return ref, "too many files to send in one request"
 	}
 
 	data, cached := a.cache[id]
 	if !cached {
-		data, err = a.read(ctx, row.StorageKey, *budget)
+		data, err = a.read(ctx, row.StorageKey, limit)
 		if err != nil {
 			slog.WarnContext(ctx, "read attachment", "attachment_id", id, "error", err)
 			return ref, "the file could not be read"
@@ -150,6 +177,37 @@ func (a *attachmentResolver) one(ctx context.Context, ref llm.AttachmentPart, ro
 			return ref, "the file changed after it was checked"
 		}
 	}
+	if a.cache == nil {
+		a.cache = map[uuid.UUID][]byte{}
+	}
+	a.cache[id] = data
+
+	if asWords {
+		text, err := doctext.Extract(ctx, row.ContentType, data)
+		scanned := err == nil && text.Scanned
+		switch {
+		case (err != nil || scanned) && readsPDF && !a.asText:
+			// Words it cannot have, or next to none: the pages themselves.
+			asWords = false
+		case scanned:
+			return ref, "it is a scanned PDF: its pages are pictures, which only a model that reads PDFs can read"
+		case err != nil:
+			slog.WarnContext(ctx, "read a document's words", "attachment_id", id, "error", err)
+			return ref, "its text could not be read"
+		default:
+			if int64(len(text.Content)) > *budget {
+				return ref, "too many files to send in one request"
+			}
+			*budget -= int64(len(text.Content))
+			ref.Data = []byte(text.Content)
+			ref.MediaType = llm.TextMediaType
+			return ref, ""
+		}
+		if row.SizeBytes > *budget {
+			return ref, "too many files to send in one request"
+		}
+	}
+
 	mediaType, ok := sniff(modality, data)
 	if !ok && modality == llm.ModalityText {
 		return ref, "it is not UTF-8 text"
@@ -160,16 +218,16 @@ func (a *attachmentResolver) one(ctx context.Context, ref llm.AttachmentPart, ro
 	if int64(len(data)) > *budget {
 		return ref, "too many files to send in one request"
 	}
-	if a.cache == nil {
-		a.cache = map[uuid.UUID][]byte{}
-	}
-	a.cache[id] = data
 	*budget -= int64(len(data))
 
 	ref.Data = data
 	ref.MediaType = mediaType
 	return ref, ""
 }
+
+// documentReadBytes bounds a document read for its words: the largest that
+// can be uploaded (api/files.go).
+const documentReadBytes = 20 << 20
 
 // sniff checks that content is the kind of file its modality says, and gives
 // the media type to send it as. The declared type came from the browser; the
@@ -191,8 +249,10 @@ func sniff(modality string, data []byte) (mediaType string, ok bool) {
 	return "", false
 }
 
-// withAttachments resolves the attachments in a request's messages for this run.
-func (ex *execution) withAttachments(ctx context.Context, messages []llm.Message) ([]llm.Message, error) {
+// withAttachments resolves the attachments in a request's messages for this
+// run; cards is whether a long text file goes as a card (the request offers
+// the file tools).
+func (ex *execution) withAttachments(ctx context.Context, messages []llm.Message, cards bool) ([]llm.Message, error) {
 	r := ex.r
 	if ex.files == nil {
 		ex.files = &attachmentResolver{
@@ -229,5 +289,6 @@ func (ex *execution) withAttachments(ctx context.Context, messages []llm.Message
 			}
 		}
 	}
+	ex.files.cards = cards
 	return ex.files.resolve(ctx, messages)
 }

@@ -30,6 +30,10 @@ var uploadable = map[string]int64{
 	"image/gif":       5 << 20,
 	"application/pdf": 10 << 20,
 	llm.TextMediaType: maxTextFileBytes,
+	// Word and Excel files are sent as their words (doctext), bounded on their
+	// own; the file itself may be large with the pictures in it.
+	llm.DocxMediaType: 20 << 20,
+	llm.XlsxMediaType: 20 << 20,
 }
 
 // maxTextFileBytes bounds a text file: some 85,000 Chinese characters, or
@@ -38,7 +42,7 @@ const maxTextFileBytes = 256 << 10
 
 // errUnsupportedFileType is the answer for a file of a kind that cannot be attached.
 var errUnsupportedFileType = httpx.NewError(http.StatusUnsupportedMediaType, "unsupported_file_type",
-	"only images (PNG, JPEG, WebP, GIF), PDFs and text files can be attached")
+	"only images (PNG, JPEG, WebP, GIF), PDFs, Word (.docx) and Excel (.xlsx) files and text files can be attached")
 
 // sizeLimit says a file's bound in the unit that reads best.
 func sizeLimit(bytes int64) string {

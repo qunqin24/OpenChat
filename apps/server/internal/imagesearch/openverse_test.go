@@ -126,3 +126,30 @@ func TestWikimediaReadsCommonsMetadata(t *testing.T) {
 		t.Errorf("image = %+v", *image)
 	}
 }
+
+func TestASearchDownForAMomentIsAskedAgain(t *testing.T) {
+	defer func(waits []time.Duration) { retryWaits = waits }(retryWaits)
+	retryWaits = []time.Duration{0, time.Millisecond, time.Millisecond}
+	var asked int
+	failures := 2
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked++
+		if asked <= failures {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = fmt.Fprint(w, `{"query":{"pages":[]}}`)
+	}))
+	defer srv.Close()
+	w := NewWikimedia(nil)
+	w.Endpoint = srv.URL
+	// Down twice, then answering: the third try finds the answer.
+	if image, err := w.Search(context.Background(), "pear"); image != nil || err != nil || asked != 3 {
+		t.Fatalf("image = %+v, %v after %d", image, err, asked)
+	}
+	// Down every time: three tries, then unavailable.
+	asked, failures = 0, 10
+	if _, err := w.Search(context.Background(), "pear"); !errors.Is(err, ErrUnavailable) || asked != 3 {
+		t.Fatalf("err = %v after %d", err, asked)
+	}
+}

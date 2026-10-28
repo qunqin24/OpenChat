@@ -9,12 +9,32 @@ export const MAX_FILES = 10
 export const MAX_IMAGE_BYTES = 5 << 20
 export const MAX_PDF_BYTES = 10 << 20
 export const MAX_TEXT_BYTES = 256 << 10
+/** A Word or Excel file goes as its words (internal/doctext); the file itself may be large. */
+export const MAX_DOCUMENT_BYTES = 20 << 20
 export const MAX_TOTAL_BYTES = 20 << 20
 
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
-const PDF_TYPE = 'application/pdf'
+export const PDF_TYPE = 'application/pdf'
 /** The one type a text file is sent as, whatever it holds (llm.TextMediaType). */
 export const TEXT_TYPE = 'text/plain'
+export const DOCX_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+export const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+const DOCUMENT_TYPES = [DOCX_TYPE, XLSX_TYPE]
+
+/** Whether a file is a Word or Excel file, which the server reads as words. */
+export function isDocument(mediaType: string): boolean {
+  return DOCUMENT_TYPES.includes(mediaType)
+}
+
+/** Whether a sent file opens in the side panel (FilePanel): a text file, Word, Excel or PDF. */
+export function opensInPanel(mediaType: string): boolean {
+  return mediaType === TEXT_TYPE || isDocument(mediaType) || mediaType === PDF_TYPE
+}
+
+/** A Word or Excel file's type by its name. */
+export function documentTypeOf(name: string): string {
+  return name.toLowerCase().endsWith('.xlsx') ? XLSX_TYPE : DOCX_TYPE
+}
 
 /**
  * The extensions of the text files that can be attached: notes, data and
@@ -35,19 +55,24 @@ export const TEXT_EXTENSIONS = [
 /** Files known by their whole name rather than an extension. */
 const TEXT_NAMES = ['dockerfile', 'makefile', 'license', 'readme', '.gitignore', '.editorconfig', '.env']
 
-export type FileKind = 'image' | 'pdf' | 'text'
+export type FileKind = 'image' | 'pdf' | 'text' | 'document'
 
 /** The kinds of file a model takes, from its input modalities. */
 export interface Accepts {
   image: boolean
+  /** A model that reads PDFs, or any where the server sends a PDF's words (`pdfAsText`). */
   pdf: boolean
-  /** Text files go as words, which every model takes. */
+  /** Text, Word and Excel files go as words, which every model takes. */
   text: boolean
 }
 
-export function acceptsOf(model: Pick<ChatModel, 'inputModalities'> | undefined): Accepts {
+export function acceptsOf(model: (Pick<ChatModel, 'inputModalities'> & Partial<Pick<ChatModel, 'pdfAsText'>>) | undefined): Accepts {
   const modalities = model?.inputModalities ?? []
-  return { image: modalities.includes('image'), pdf: modalities.includes('pdf'), text: model !== undefined }
+  return {
+    image: modalities.includes('image'),
+    pdf: modalities.includes('pdf') || model?.pdfAsText === true,
+    text: model !== undefined,
+  }
 }
 
 /** The `accept` attribute of the file picker: only what the model takes. */
@@ -55,7 +80,7 @@ export function acceptAttribute(accepts: Accepts): string {
   return [
     ...(accepts.image ? IMAGE_TYPES : []),
     ...(accepts.pdf ? [PDF_TYPE] : []),
-    ...(accepts.text ? [TEXT_TYPE, ...TEXT_EXTENSIONS.map((extension) => `.${extension}`)] : []),
+    ...(accepts.text ? [TEXT_TYPE, ...TEXT_EXTENSIONS.map((extension) => `.${extension}`), ...DOCUMENT_TYPES, '.docx', '.xlsx'] : []),
   ].join(',')
 }
 
@@ -72,9 +97,14 @@ function isTextFile(file: File): boolean {
 /** The media type of a file, from the browser or else its extension. */
 export function mediaTypeOf(file: File): string {
   if (isTextFile(file)) return TEXT_TYPE
+  const lower = file.name.toLowerCase()
+  if (lower.endsWith('.docx')) return DOCX_TYPE
+  if (lower.endsWith('.xlsx')) return XLSX_TYPE
   if (file.type) return file.type.toLowerCase()
   const extension = file.name.split('.').pop()?.toLowerCase()
   if (extension === 'pdf') return PDF_TYPE
+  if (extension === 'docx') return DOCX_TYPE
+  if (extension === 'xlsx') return XLSX_TYPE
   if (extension === 'png') return 'image/png'
   if (extension === 'jpg' || extension === 'jpeg') return 'image/jpeg'
   if (extension === 'webp') return 'image/webp'
@@ -85,17 +115,18 @@ export function mediaTypeOf(file: File): string {
 export function kindOf(mediaType: string): FileKind | null {
   if (IMAGE_TYPES.includes(mediaType)) return 'image'
   if (mediaType === TEXT_TYPE) return 'text'
+  if (isDocument(mediaType)) return 'document'
   return mediaType === PDF_TYPE ? 'pdf' : null
 }
 
 /** Why a file cannot be attached; each is a `chat.file.reject.*` key. */
-export type RejectReason = 'type' | 'model-image' | 'model-pdf' | 'size-image' | 'size-pdf' | 'size-text' | 'empty'
+export type RejectReason = 'type' | 'model-image' | 'model-pdf' | 'size-image' | 'size-pdf' | 'size-text' | 'size-document' | 'empty'
 
-const MAX_BYTES: Record<FileKind, number> = { image: MAX_IMAGE_BYTES, pdf: MAX_PDF_BYTES, text: MAX_TEXT_BYTES }
+const MAX_BYTES: Record<FileKind, number> = { image: MAX_IMAGE_BYTES, pdf: MAX_PDF_BYTES, text: MAX_TEXT_BYTES, document: MAX_DOCUMENT_BYTES }
 
 export function rejectionOf(file: File, accepts: Accepts): RejectReason | null {
   const kind = kindOf(mediaTypeOf(file))
-  if (!kind || (kind === 'text' && !accepts.text)) return 'type'
+  if (!kind || ((kind === 'text' || kind === 'document') && !accepts.text)) return 'type'
   if (kind === 'image' && !accepts.image) return 'model-image'
   if (kind === 'pdf' && !accepts.pdf) return 'model-pdf'
   if (file.size === 0) return 'empty'

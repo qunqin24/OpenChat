@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next'
 import type { ToolCallPart, ToolResultPart } from '@openchat/api-client'
-import { AlarmClock, Brain, ChevronRight, Globe, NotebookPen, Search, TriangleAlert, Wrench } from 'lucide-react'
+import { AlarmClock, Brain, ChevronRight, FileSearch, FileText, Globe, NotebookPen, Search, TriangleAlert, Wrench } from 'lucide-react'
 import { Collapsible } from 'radix-ui'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -50,7 +50,13 @@ const STEP_SOURCES = 6
  * light timeline rather than a stack of boxes, so the answer below stays the
  * thing the eye lands on.
  */
-export function ToolActivity({ items, thinking = false }: { items: ActivityItem[]; thinking?: boolean }) {
+/**
+ * `thinking` is the model at work with no call in flight: streaming its
+ * thoughts (`reasoning`), or quiet between a round and its next response
+ * (`waiting`), when the line keeps naming the step just done - it is still
+ * reading, as far as the reader can tell - rather than claiming thought.
+ */
+export function ToolActivity({ items, thinking = false }: { items: ActivityItem[]; thinking?: 'reasoning' | 'waiting' | false }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [head, stuck] = useStuck<HTMLButtonElement>(open)
@@ -59,7 +65,8 @@ export function ToolActivity({ items, thinking = false }: { items: ActivityItem[
   const active = steps.find((step) => step.status === 'pending' || step.status === 'running')
   const searches = steps.filter((step) => step.call.name === 'web_search').length
   const fetches = steps.filter((step) => step.call.name === 'web_fetch').length
-  const others = steps.length - searches - fetches
+  const fileLooks = steps.filter((step) => isFileTool(step.call.name)).length
+  const others = steps.length - searches - fetches - fileLooks
   const failed = steps.filter((step) => isFailure(step.status)).length
 
   // Every source the searches turned up, once each, in the order found.
@@ -75,14 +82,18 @@ export function ToolActivity({ items, thinking = false }: { items: ActivityItem[
   }
 
   let title: string
+  const lastItem = items[items.length - 1]
   if (active) {
     title = stepLabel(t, active, true)
+  } else if (thinking === 'waiting' && lastItem?.kind === 'tool') {
+    title = stepLabel(t, lastItem, false)
   } else if (thinking) {
     title = t('chat.reasoning.live')
   } else {
     const parts = [
       searches > 0 && t('chat.tool.searched', { count: searches }),
       fetches > 0 && t('chat.tool.read', { count: fetches }),
+      fileLooks > 0 && t('chat.tool.files', { count: fileLooks }),
       others > 0 && t('chat.tool.used', { count: others }),
     ].filter(Boolean)
     const joined = parts.join(t('chat.tool.and'))
@@ -227,6 +238,8 @@ export function SourceMark({ url }: { url: string }) {
 function stepIcon(name: string) {
   if (name === 'web_search') return <Search aria-hidden="true" />
   if (name === 'web_fetch') return <Globe aria-hidden="true" />
+  if (name === 'file_read') return <FileText aria-hidden="true" />
+  if (name === 'file_search') return <FileSearch aria-hidden="true" />
   if (name === 'memory') return <Brain aria-hidden="true" />
   if (name === 'scheduled_tasks') return <AlarmClock aria-hidden="true" />
   if (name === 'document') return <NotebookPen aria-hidden="true" />
@@ -248,11 +261,39 @@ function stepLabel(t: T, step: ToolActivityStep, running: boolean): string {
     if (!url) return t('chat.tool.fetch-pending')
     return running ? t('chat.tool.reading', { host: siteName(url) }) : t('chat.tool.fetch', { host: siteName(url) })
   }
+  if (isFileTool(step.call.name)) return fileStepLabel(t, step, args, running)
   if (step.call.name === 'memory') return t('chat.memory.step')
   if (step.call.name === 'scheduled_tasks') return running ? t('tasks.step-running') : t('tasks.step')
   if (step.call.name === 'document') return documentStepLabel(t, step, args, running)
   if (step.call.name.startsWith('subagent')) return subagentStepLabel(t, step, args, running)
   return t('chat.tool.generic', { name: step.call.name })
+}
+
+/** file_read and file_search: the tools that read a long text file the user attached (agent/files.go). */
+function isFileTool(name: string) {
+  return name === 'file_read' || name === 'file_search'
+}
+
+/**
+ * A read names the file and the lines its result says it read; a search, its
+ * phrase, the file when it named one, and how many lines matched.
+ */
+function fileStepLabel(t: T, step: ToolActivityStep, args: Record<string, unknown>, running: boolean): string {
+  const details = (step.result?.status === 'succeeded' ? step.result.details : undefined) as
+    | { filename?: unknown; startLine?: unknown; endLine?: unknown; matches?: unknown }
+    | undefined
+  const named = typeof details?.filename === 'string' ? details.filename : ''
+  if (step.call.name === 'file_read') {
+    const from = typeof details?.startLine === 'number' ? details.startLine : null
+    const to = typeof details?.endLine === 'number' ? details.endLine : null
+    if (running || !step.result) return t('chat.tool.file-reading')
+    if (!named || from === null || to === null) return t('chat.tool.file-read-generic')
+    return t('chat.tool.file-read', { name: named, from, to })
+  }
+  const query = typeof args.query === 'string' ? args.query : ''
+  if (running || !step.result || !query) return query ? t('chat.tool.file-searching', { query }) : t('chat.tool.file-searching-generic')
+  const count = typeof details?.matches === 'number' ? details.matches : 0
+  return named ? t('chat.tool.file-search-in', { name: named, query, count }) : t('chat.tool.file-search', { query, count })
 }
 
 /**

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -132,5 +134,48 @@ func TestPicturesFoundByDescription(t *testing.T) {
 	var kept int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM image_searches WHERE query = $1`, "later "+tag).Scan(&kept); err != nil || kept != 0 {
 		t.Errorf("unavailable search kept: %d %v", kept, err)
+	}
+}
+
+// The services are kept in their order; settings saved with one service read
+// as a list of it, and a list naming a service twice is refused.
+func TestImageSearchServicesInOrder(t *testing.T) {
+	pool := dbtest.Pool(t, "api_images")
+	ctx := context.Background()
+	q := sqlc.New(pool)
+	server := &Server{pool: pool, q: q}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), `DELETE FROM app_settings WHERE key = $1`, settingImageSearch)
+	})
+	admin := sqlc.User{ID: uuid.New(), Email: "admin@example.com"}
+	if err := q.SetSetting(ctx, sqlc.SetSettingParams{Key: settingImageSearch, Value: []byte(`{"enabled":true,"provider":"pixabay"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if config, _, err := loadImageSearch(ctx, q); err != nil || !slices.Equal(config.Providers, []string{"pixabay"}) {
+		t.Fatalf("one service saved before: %+v, %v", config, err)
+	}
+
+	update := func(body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		server.UpdateImageSearchSettings(rec, req.WithContext(auth.WithUser(req.Context(), admin)))
+		return rec
+	}
+	rec := update(`{"providers":["pixabay","wikimedia","openverse"]}`)
+	var settings ImageSearchSettings
+	if err := json.Unmarshal(rec.Body.Bytes(), &settings); err != nil || rec.Code != http.StatusOK ||
+		!slices.Equal(settings.Providers, []ImageSearchProvider{Pixabay, Wikimedia, Openverse}) || !settings.Enabled {
+		t.Fatalf("saved: %d %s", rec.Code, rec.Body)
+	}
+	// Without a Pixabay key the others still search, in their order.
+	config, key, _ := loadImageSearch(ctx, q)
+	if configuredSearcher(config, key) == nil || !imageSearchOn(ctx, q) {
+		t.Error("no search without a Pixabay key")
+	}
+	for _, body := range []string{`{"providers":["wikimedia","wikimedia"]}`, `{"providers":[]}`, `{"providers":["flickr"]}`} {
+		if rec := update(body); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: %d", body, rec.Code)
+		}
 	}
 }

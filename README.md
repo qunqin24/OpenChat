@@ -167,7 +167,7 @@ make check   # lint + test + build，也就是 CI 跑的那一套
 | UI | 聊天界面自成一套设计系统；管理后台使用 shadcn/ui |
 | 国际化 | i18next（简体中文、英文） |
 | 文件存储 | 本地磁盘，或 S3 兼容存储 |
-| 部署 | 单个二进制（前端内嵌），Docker 镜像基于 distroless，Caddy 提供 HTTPS |
+| 部署 | 单个二进制（前端内嵌），Docker 镜像基于 Alpine（附带 poppler 读 PDF 文字），Caddy 提供 HTTPS |
 
 ## 📄 许可证
 

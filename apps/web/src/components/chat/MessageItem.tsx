@@ -593,16 +593,16 @@ export function AssistantTurn({
   // rather than reading as a search that is over with a stray caret below it.
   const tail = first >= 0 ? entries[last] : null
   const compacting = running && Boolean(live?.compacting)
-  const thinking =
-    !compacting &&
-    first >= 0 &&
-    ((running &&
-      isFoldBlock(tail) &&
-      tail.fold.kind === 'reasoning' &&
-      tail.key.startsWith(`${partialKey}:`) &&
-      // Still the newest thing written: once the answer starts, it is over.
-      entries.slice(last + 1).every((entry) => entry === null)) ||
-      waiting)
+  const reasoning =
+    running &&
+    isFoldBlock(tail) &&
+    tail.fold.kind === 'reasoning' &&
+    tail.key.startsWith(`${partialKey}:`) &&
+    // Still the newest thing written: once the answer starts, it is over.
+    entries.slice(last + 1).every((entry) => entry === null)
+  // Streaming thoughts is thinking; quiet between a round and its next
+  // response is only waiting, and the line keeps saying what was done last.
+  const thinking = compacting || first < 0 ? false : reasoning ? 'reasoning' : waiting ? 'waiting' : false
   const blocks: ReactNode[] = []
   const after: ReactNode[] = []
   const items: ActivityItem[] = []

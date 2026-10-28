@@ -5,11 +5,12 @@ import { useTranslation } from 'react-i18next'
 
 import { toast } from 'sonner'
 
+import { useFileSummary } from '@/hooks/use-file-summary'
 import { downloadFile } from '@/hooks/use-library'
-import { formatSize, TEXT_TYPE } from '@/lib/attachments'
+import { opensInPanel } from '@/lib/attachments'
 import { useFilePanel } from '@/stores/file-panel-store'
 import { useImageViewer, type ViewerImage } from '@/stores/image-viewer-store'
-import { FileIcon } from './FileIcon'
+import { FileBadge } from './FileBadge'
 
 /**
  * The files a user sent with a message: images as thumbnails that open in the
@@ -71,19 +72,18 @@ function ImageFile({ item, gallery, index }: { item: Attachment; gallery: Viewer
 
 function FileChip({ item, conversationId }: { item: Attachment; conversationId: string | null }) {
   const { t } = useTranslation()
+  const summary = useFileSummary()
   const openFile = useFilePanel((s) => s.open)
   const body = (
     <>
-      <span className="n-attach-icon" aria-hidden>
-        <FileIcon filename={item.filename} contentType={item.contentType} />
-      </span>
+      <FileBadge filename={item.filename} contentType={item.contentType} />
       <span className="n-attach-meta">
         <span className="n-attach-name">{item.filename}</span>
-        <span className="n-attach-status">{formatSize(item.size)}</span>
+        <span className="n-attach-status">{summary(item.filename, item.contentType, item.size)}</span>
       </span>
     </>
   )
-  if (conversationId && item.contentType === TEXT_TYPE) {
+  if (conversationId && opensInPanel(item.contentType)) {
     return (
       <button type="button" className="n-msg-chip" aria-label={t('chat.file.open', { name: item.filename })} onClick={() => openFile(conversationId, item)}>
         {body}

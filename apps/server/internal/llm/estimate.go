@@ -81,9 +81,29 @@ func EstimatePart(part Part) int {
 		return EstimateText(p.Content)
 	case AttachmentPart:
 		// A text file goes as its words: about a token for every three bytes
-		// (Chinese is three bytes a character, English four a token).
-		if p.MediaType == TextMediaType && p.Size > 0 {
-			return int(p.Size/3) + MessageOverhead
+		// (Chinese is three bytes a character, English four a token). A long
+		// one goes as a card - unless the model cannot call tools, which is
+		// rare enough to leave to the recovery from a context too long.
+		// A document goes as the words read out of it, a PDF too when it is
+		// longer than a model reads whole.
+		size := int64(0)
+		switch ModalityOf(p.MediaType) {
+		case ModalityText:
+			size = p.Size
+		case ModalityDocument:
+			size = p.TextSize
+		case ModalityPDF:
+			if p.Pages > NativePDFPages {
+				size = p.TextSize
+			} else if p.Pages > 0 {
+				return p.Pages*AttachmentTokens + MessageOverhead
+			}
+		}
+		if size > InlineTextBytes {
+			return FileCardBytes/3 + MessageOverhead
+		}
+		if size > 0 {
+			return int(size/3) + MessageOverhead
 		}
 		return AttachmentTokens
 	}

@@ -949,6 +949,14 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.chat-ui .n-file-panel-markdown {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px 40px 64px;
+}
+@media (max-width: 767px) {
+  .chat-ui .n-file-panel-markdown { padding: 12px 20px 48px; }
+}
 .chat-ui .n-file-panel-text.is-code {
   font-family: var(--font-mono);
   font-size: 13px;
@@ -963,6 +971,159 @@
   .chat-ui .n-file-panel-text { padding: 12px 20px 48px; }
   .chat-ui .n-file-panel-note { padding: 16px 20px; }
 }
+
+/* Opened from the library: over the whole window, sidebar too, the file
+   in a column of reading width (a sheet keeps the full width). */
+.chat-ui .n-file-panel.is-full {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  width: auto;
+  border-left: 0;
+  animation: n-file-full-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes n-file-full-in {
+  from { opacity: 0; transform: scale(0.985); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-ui .n-file-panel.is-full { animation: none; }
+}
+
+.chat-ui .n-file-panel.is-full .n-file-panel-scroll:has(.n-word-view, .n-pdf-view) {
+  background: var(--n-bubble);
+}
+
+.chat-ui .n-file-panel.is-full .n-word-view,
+.chat-ui .n-file-panel.is-full .n-pdf-view {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+/* A Word file (WordView) and a PDF (PdfView): pages on the panel's grey,
+   white as on paper in either theme, a soft shadow and no frame. */
+.chat-ui .n-word-view,
+.chat-ui .n-pdf-view {
+  min-height: 100%;
+  padding: 16px;
+  background: var(--n-bubble);
+}
+
+.chat-ui .n-word-view .docx-wrapper {
+  padding: 0;
+  background: transparent;
+}
+
+.chat-ui .n-word-view .docx-wrapper > section.docx {
+  margin-bottom: 16px;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 10%);
+}
+
+.chat-ui .n-pdf-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.chat-ui .n-pdf-page {
+  width: 100%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 10%);
+}
+
+/* Drawn at the panel's width; while the panel is dragged the drawing is
+   scaled, and drawn again sharp once it settles (PdfView). */
+.chat-ui .n-pdf-page canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* An Excel file (SheetView): its sheets as tabs over a grid, the column
+   letters and row numbers held in place while it scrolls. */
+.chat-ui .n-sheet-view {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+}
+
+.chat-ui .n-sheet-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--n-line);
+}
+
+.chat-ui .n-sheet-tab {
+  flex: none;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--n-text-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chat-ui .n-sheet-tab:hover { background: var(--n-hover); }
+.chat-ui .n-sheet-tab.active { background: var(--n-bubble); color: var(--n-text); font-weight: 500; }
+
+.chat-ui .n-sheet-scroll {
+  flex: 1;
+  overflow: auto;
+}
+
+.chat-ui .n-sheet-scroll {
+  contain: strict;
+}
+
+.chat-ui .n-sheet-grid {
+  table-layout: fixed;
+  width: max-content;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--n-text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-ui .n-sheet-grid tr {
+  height: 32px;
+}
+
+.chat-ui .n-sheet-grid .n-sheet-gap {
+  padding: 0;
+  border: 0;
+}
+
+.chat-ui .n-sheet-grid th,
+.chat-ui .n-sheet-grid td {
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 4px 10px;
+  border-right: 1px solid var(--n-line);
+  border-bottom: 1px solid var(--n-line);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-ui .n-sheet-grid th {
+  position: sticky;
+  z-index: 1;
+  background: var(--n-bubble);
+  color: var(--n-text-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.chat-ui .n-sheet-grid thead th { top: 0; text-align: center; }
+.chat-ui .n-sheet-grid tbody th { left: 0; min-width: 40px; text-align: center; }
+.chat-ui .n-sheet-grid thead th:first-child { left: 0; z-index: 2; }
 
 /* A passage of an answer, shown where it is at a click on its card. */
 .chat-ui .n-quote-card.is-showable {

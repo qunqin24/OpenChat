@@ -248,6 +248,63 @@ func (q *Queries) ListAttachmentsForUser(ctx context.Context, arg ListAttachment
 	return items, nil
 }
 
+const listConversationTextFileMessages = `-- name: ListConversationTextFileMessages :many
+SELECT m.id, m.conversation_id, m.role, m.content, m.status, m.metadata, m.created_at, m.updated_at, m.parts, m.stop_reason, m.model, m.provider, m.usage, m.error_code, m.run_id, m.origin
+FROM messages m
+WHERE m.conversation_id = $1
+  AND m.role = 'user'
+  AND m.status <> 'blocked'
+  AND EXISTS (
+    SELECT 1 FROM attachments a
+    WHERE a.message_id = m.id
+      AND a.content_type IN ('text/plain', 'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  )
+ORDER BY m.created_at, m.id
+`
+
+// The person's messages in a conversation that carry files read as words -
+// text files, Word, Excel and PDF - oldest first: what the file tools
+// (agent/files.go) look files up in. A refused message's files are never read
+// for the model.
+func (q *Queries) ListConversationTextFileMessages(ctx context.Context, conversationID uuid.UUID) ([]Message, error) {
+	rows, err := q.db.Query(ctx, listConversationTextFileMessages, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Message{}
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConversationID,
+			&i.Role,
+			&i.Content,
+			&i.Status,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Parts,
+			&i.StopReason,
+			&i.Model,
+			&i.Provider,
+			&i.Usage,
+			&i.ErrorCode,
+			&i.RunID,
+			&i.Origin,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLibraryFiles = `-- name: ListLibraryFiles :many
 SELECT a.id, a.message_id, a.storage_key, a.filename, a.content_type, a.size_bytes, a.created_at, a.user_id,
        c.id    AS conversation_id,

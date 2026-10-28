@@ -223,8 +223,11 @@
 }
 
 .chat-ui .n-library-sub {
+  overflow: hidden;
   color: var(--n-text-2);
   font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat-ui .n-library-menu {
@@ -350,4 +353,97 @@
   .chat-ui .n-library-thumb {
     transition: none;
   }
+}
+
+/* A file that is words, in the grid (FilePagePreview): a small sheet of its
+   first lines on the card's grey, fading out at the foot. */
+.chat-ui .n-library-thumb:has(.n-page-preview) {
+  border-color: transparent;
+  background: var(--n-bubble);
+}
+
+.chat-ui .n-page-preview {
+  position: relative;
+  align-self: stretch;
+  width: 100%;
+  padding: 14px 16px 0;
+}
+
+.chat-ui .n-page-paper {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  padding: 10px 11px;
+  border-radius: 8px 8px 0 0;
+  background: var(--n-panel);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 6%);
+  color: var(--n-text-2);
+  font-size: 8px;
+  line-height: 1.5;
+  text-align: start;
+}
+
+.chat-ui .n-page-paper::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 40%;
+  background: linear-gradient(transparent, var(--n-panel));
+}
+
+.chat-ui .n-page-paper strong {
+  display: block;
+  margin-bottom: 3px;
+  overflow: hidden;
+  color: var(--n-text);
+  font-size: 9.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-ui .n-page-paper p {
+  margin: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.chat-ui .n-page-paper table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.chat-ui .n-page-paper td {
+  overflow: hidden;
+  padding: 1px 4px;
+  border: 1px solid var(--n-line);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Words that could not be had: the badge alone, in the middle. */
+.chat-ui .n-page-preview .n-file-badge {
+  position: absolute;
+  bottom: 50%;
+  left: 50%;
+  transform: translate(-50%, 50%) scale(1.3);
+}
+
+/* The card's foot: the file's badge beside its name, as on a sent file, a
+   size smaller. */
+.chat-ui .n-library-card-foot .n-file-badge {
+  width: 25px;
+  height: 30px;
+  margin: 2px 4px 0 0;
+  padding-bottom: 4px;
+  border-radius: 4px 9px 4px 4px;
+  font-size: 7px;
+}
+
+.chat-ui .n-library-card-foot .n-file-badge::before {
+  width: 8px;
+  height: 8px;
+  border-radius: 0 9px 0 4px;
 }

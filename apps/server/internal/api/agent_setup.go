@@ -202,6 +202,14 @@ func basePrompt(offered []agent.Tool) string {
 		b.WriteString("\n\nYou can read a web page with web_fetch. Read the pages that matter instead of " +
 			"relying on search excerpts when the details count.")
 	}
+	if names[agent.ToolFileRead] {
+		b.WriteString("\n\n## Long files\n" +
+			"A long text file the user attached appears as a <file ... partial=\"true\"> card showing only its first " +
+			"lines and, for Markdown, its headings. Before answering about it, read what the question needs: find the " +
+			"passages with file_search and read around them with file_read, or, when the task needs all of it - " +
+			"summarising, translating or reviewing the whole file - read it through in consecutive ranges. Never " +
+			"answer about a part you have not read as if you had; if you read only some of it, say which part.")
+	}
 	if names[agent.ToolAskUser] {
 		b.WriteString("\n\nYou can ask the user multiple-choice questions with ask_user. Use it only when you " +
 			"are blocked on a decision that is theirs to make; otherwise pick a sensible default and go on. " +

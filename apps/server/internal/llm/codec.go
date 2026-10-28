@@ -55,6 +55,8 @@ type partJSON struct {
 	MediaType string `json:"mediaType,omitempty"`
 	SHA256    string `json:"sha256,omitempty"`
 	Size      int64  `json:"size,omitempty"`
+	TextSize  int64  `json:"textSize,omitempty"`
+	Pages     int    `json:"pages,omitempty"`
 }
 
 // MarshalPart encodes one part.
@@ -83,7 +85,7 @@ func toPartJSON(part Part) partJSON {
 		return partJSON{Type: PartToolResult, CallID: p.CallID, Name: p.Name, Content: p.Content,
 			Status: p.Status, Error: p.Error, Details: p.Details, DurationMS: p.DurationMS}
 	case AttachmentPart:
-		return partJSON{Type: PartAttachment, Ref: p.Ref, Filename: p.Filename, MediaType: p.MediaType, SHA256: p.SHA256, Size: p.Size}
+		return partJSON{Type: PartAttachment, Ref: p.Ref, Filename: p.Filename, MediaType: p.MediaType, SHA256: p.SHA256, Size: p.Size, TextSize: p.TextSize, Pages: p.Pages}
 	}
 	// Part is a closed set; this is unreachable for any value of it.
 	panic(fmt.Sprintf("llm: unknown part %T", part))
@@ -101,7 +103,7 @@ func (raw partJSON) part() (Part, error) {
 		return ToolResultPart{CallID: raw.CallID, Name: raw.Name, Content: raw.Content, Status: raw.Status,
 			Error: raw.Error, Details: raw.Details, DurationMS: raw.DurationMS}, nil
 	case PartAttachment:
-		return AttachmentPart{Ref: raw.Ref, Filename: raw.Filename, MediaType: raw.MediaType, SHA256: raw.SHA256, Size: raw.Size}, nil
+		return AttachmentPart{Ref: raw.Ref, Filename: raw.Filename, MediaType: raw.MediaType, SHA256: raw.SHA256, Size: raw.Size, TextSize: raw.TextSize, Pages: raw.Pages}, nil
 	}
 	return nil, fmt.Errorf("llm: unknown part type %q", raw.Type)
 }

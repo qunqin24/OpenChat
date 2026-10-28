@@ -14,6 +14,7 @@ const model = (id: string, atCapacity = false): ChatModel => ({
   contextLimit: 0,
   outputLimit: 0,
   inputModalities: [],
+  pdfAsText: false,
   reasoningEfforts: [],
   atCapacity,
 })

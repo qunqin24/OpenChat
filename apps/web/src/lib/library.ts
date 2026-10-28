@@ -11,7 +11,7 @@ import type { TranscriptPages } from './transcript-pages'
 
 export type LibraryFilter = 'all' | LibraryFileType
 
-export const libraryFilters: LibraryFilter[] = ['all', 'image', 'pdf', 'text']
+export const libraryFilters: LibraryFilter[] = ['all', 'image', 'pdf', 'document', 'text']
 
 export type LibraryPages = InfiniteData<LibraryFilePage, string | undefined>
 

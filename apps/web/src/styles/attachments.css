@@ -32,11 +32,15 @@
   width: var(--n-attach-size);
 }
 
+/* A file waiting to go: the same card as a sent one (n-msg-chip), with room
+   for the remove button. */
 .chat-ui .n-attach.is-pdf,
 .chat-ui .n-attach.is-text {
-  gap: 8px;
-  max-width: 220px;
-  padding: 0 28px 0 10px;
+  gap: 10px;
+  max-width: 240px;
+  padding: 0 28px 0 8px;
+  border-color: transparent;
+  background: var(--n-bubble);
 }
 
 .chat-ui .n-attach.is-error {
@@ -193,21 +197,24 @@
   object-fit: cover;
 }
 
+/* A sent file: the question bubble's grey, no frame, the file's badge
+   (FileBadge) and its name over what it is. */
 .chat-ui .n-msg-chip {
   display: flex;
   align-items: center;
-  gap: 8px;
-  max-width: 260px;
-  padding: 8px 14px 8px 10px;
-  border: 1px solid var(--n-line);
-  border-radius: 14px;
-  background: var(--n-panel);
+  gap: 10px;
+  max-width: 280px;
+  padding: 8px 14px 8px 8px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background: var(--n-bubble);
   color: var(--n-text);
   text-decoration: none;
+  transition: background-color 0.15s ease;
 }
 
 .chat-ui .n-msg-chip:hover {
-  background: var(--n-hover);
+  background: color-mix(in srgb, var(--n-bubble), var(--n-text) 5%);
 }
 
 /* A text file's chip opens it in the side panel, so it is a button. */
@@ -219,6 +226,7 @@
 
 /* A file deleted from the library: where it was, not a way to it. */
 .chat-ui .n-msg-chip.is-removed {
+  border-color: var(--n-line);
   border-style: dashed;
   background: transparent;
   color: var(--n-text-3);
@@ -238,6 +246,7 @@
    told apart by their extension (lib/file-look.ts). */
 .chat-ui .n-file-icon { flex: none; }
 .chat-ui .n-file-icon.is-note { color: #2f7cf6; }
+.chat-ui .n-file-icon.is-doc { color: #2b5cb8; }
 .chat-ui .n-file-icon.is-data { color: #16a34a; }
 .chat-ui .n-file-icon.is-config { color: #d97706; }
 .chat-ui .n-file-icon.is-web { color: var(--n-text); }
@@ -246,4 +255,45 @@
 .chat-ui .n-file-icon.is-image { color: #0d9488; }
 .chat-ui .n-file-icon.is-file { color: var(--n-text-2); }
 .dark .chat-ui .n-file-icon.is-note { color: #5b9bff; }
+.dark .chat-ui .n-file-icon.is-doc { color: #6f9bf0; }
 .dark .chat-ui .n-file-icon.is-code { color: #a78bfa; }
+
+/* A file's badge (FileBadge): a page with a folded corner, in the colour of
+   its kind, its extension at the foot. Colours as the icons', deep enough for
+   white letters in either theme. */
+.chat-ui .n-file-badge {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: end center;
+  width: 30px;
+  height: 36px;
+  padding-bottom: 5px;
+  border-radius: 5px 11px 5px 5px;
+  background: #6b7280;
+  color: #fff;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  line-height: 1;
+}
+
+.chat-ui .n-file-badge::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 0 11px 0 5px;
+  background: rgb(255 255 255 / 35%);
+}
+
+.chat-ui .n-file-badge.is-note { background: #2f7cf6; }
+.chat-ui .n-file-badge.is-doc { background: #2b5cb8; }
+.chat-ui .n-file-badge.is-data { background: #16834a; }
+.chat-ui .n-file-badge.is-config { background: #c26a06; }
+.chat-ui .n-file-badge.is-web { background: #475467; }
+.chat-ui .n-file-badge.is-code { background: #7c3aed; }
+.chat-ui .n-file-badge.is-pdf { background: #e5484d; }
+.chat-ui .n-file-badge.is-image { background: #0d9488; }

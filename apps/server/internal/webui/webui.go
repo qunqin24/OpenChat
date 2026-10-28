@@ -298,7 +298,7 @@ func classify(name string) string {
 }
 
 // types holds what the build emits that the platform's mime table may lack:
-// distroless has no /etc/mime.types, and Go's built-in table omits fonts.
+// the Alpine image has no /etc/mime.types, and Go's built-in table omits fonts.
 var types = map[string]string{
 	".html":        "text/html; charset=utf-8",
 	".js":          "text/javascript; charset=utf-8",

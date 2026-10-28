@@ -112,34 +112,76 @@ func licenseName(license, version string) string {
 	return name
 }
 
-// getJSON asks a service and decodes its answer. A refusal for asking too
-// often blocks the service's searches for the time it names in header.
+// getJSON asks a service and decodes its answer (getBody).
 func getJSON(ctx context.Context, client *http.Client, address string, limit *limiter, header string, out any) error {
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
+	body, err := getBody(ctx, client, address, limit, header, http.Header{"Accept": {"application/json"}, "User-Agent": {userAgent}})
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", userAgent)
-	if client == nil {
-		client = http.DefaultClient
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrUnavailable, err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusTooManyRequests {
-		limit.block(time.Now(), resp.Header.Get(header))
-		return fmt.Errorf("%w: rate limited", ErrUnavailable)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%w: status %d", ErrUnavailable, resp.StatusCode)
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(out); err != nil {
+	if err := json.Unmarshal(body, out); err != nil {
 		return fmt.Errorf("%w: %v", ErrUnavailable, err)
 	}
 	return nil
+}
+
+// getBody asks a service, with the request headers given, and reads its
+// answer. A refusal for asking too often blocks the service's searches for
+// the time it names in header. A service that is down for a moment (502-504:
+// Commons' search often is, for one request in several) is asked again after
+// a short wait, within the same time limit.
+func getBody(ctx context.Context, client *http.Client, address string, limit *limiter, header string, headers http.Header) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	if client == nil {
+		client = http.DefaultClient
+	}
+	var body []byte
+	var err error
+	for attempt, wait := range retryWaits {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, err
+			case <-time.After(wait):
+			}
+		}
+		var retry bool
+		if body, retry, err = getOnce(ctx, client, address, limit, header, headers); !retry {
+			return body, err
+		}
+	}
+	return nil, err
+}
+
+// retryWaits is the wait before each try: none before the first.
+var retryWaits = []time.Duration{0, 700 * time.Millisecond, 2 * time.Second}
+
+// getOnce is one try, and whether a failed one is worth another.
+func getOnce(ctx context.Context, client *http.Client, address string, limit *limiter, header string, headers http.Header) ([]byte, bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
+	if err != nil {
+		return nil, false, err
+	}
+	for name, values := range headers {
+		req.Header[name] = values
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, false, fmt.Errorf("%w: %v", ErrUnavailable, err)
+	}
+	defer resp.Body.Close()
+	switch {
+	case resp.StatusCode == http.StatusTooManyRequests:
+		limit.block(time.Now(), resp.Header.Get(header))
+		return nil, false, fmt.Errorf("%w: rate limited", ErrUnavailable)
+	case resp.StatusCode >= http.StatusBadGateway && resp.StatusCode <= http.StatusGatewayTimeout:
+		return nil, true, fmt.Errorf("%w: status %d", ErrUnavailable, resp.StatusCode)
+	case resp.StatusCode != http.StatusOK:
+		return nil, false, fmt.Errorf("%w: status %d", ErrUnavailable, resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if err != nil {
+		return nil, false, fmt.Errorf("%w: %v", ErrUnavailable, err)
+	}
+	return body, false, nil
 }

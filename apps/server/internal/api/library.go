@@ -1,14 +1,17 @@
 package api
 
 import (
+	"log/slog"
 	"net/http"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
 	"github.com/qunqin24/openchat/apps/server/internal/agent"
 	"github.com/qunqin24/openchat/apps/server/internal/auth"
 	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/doctext"
 	"github.com/qunqin24/openchat/apps/server/internal/httpx"
 	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
@@ -26,6 +29,8 @@ var libraryTypes = map[LibraryFileType]string{
 	LibraryFileTypeImage: "image/%",
 	LibraryFileTypePdf:   "application/pdf",
 	LibraryFileTypeText:  llm.TextMediaType,
+	// Word and Excel, both Office Open XML.
+	LibraryFileTypeDocument: "application/vnd.openxmlformats-officedocument.%",
 }
 
 func (s *Server) ListFiles(w http.ResponseWriter, r *http.Request, params ListFilesParams) {
@@ -105,6 +110,61 @@ func (s *Server) GetFileDownload(w http.ResponseWriter, r *http.Request, fileId 
 		return
 	}
 	httpx.JSON(w, http.StatusOK, FileDownload{Url: url, ExpiresAt: time.Now().UTC().Add(downloadTTL)})
+}
+
+// GetFileText serves the words of one of the caller's documents (doctext),
+// for the file panel: what a model is sent of it.
+func (s *Server) GetFileText(w http.ResponseWriter, r *http.Request, fileId FileId, params GetFileTextParams) {
+	ctx := r.Context()
+	user := auth.MustUser(ctx)
+	// Any file of the caller's own, the library's or a temporary chat's.
+	rows, err := s.q.ListAttachmentsForUser(ctx, sqlc.ListAttachmentsForUserParams{Ids: []uuid.UUID{fileId}, UserID: &user.ID})
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	if len(rows) == 0 {
+		httpx.Fail(w, r, httpx.NewError(http.StatusNotFound, "not_found", "no such file"))
+		return
+	}
+	row := rows[0]
+	if !doctext.Supported(row.ContentType) {
+		httpx.Fail(w, r, httpx.NewError(http.StatusUnsupportedMediaType, "not_a_document", "only Word, Excel and PDF files are read as words"))
+		return
+	}
+	data, err := s.store.Read(ctx, row.StorageKey, uploadable[row.ContentType])
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	text, err := doctext.Extract(ctx, row.ContentType, data)
+	if err != nil {
+		slog.InfoContext(ctx, "read a document's words", "attachment_id", row.ID, "error", err)
+		httpx.Fail(w, r, httpx.NewError(http.StatusUnprocessableEntity, "document_unreadable", "the document's words cannot be read"))
+		return
+	}
+	content := text.Content
+	if params.Preview != nil && *params.Preview {
+		content = beginning(content, filePreviewBytes)
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	_, _ = w.Write([]byte(content))
+}
+
+// filePreviewBytes is how much of a document a library card shows the start of.
+const filePreviewBytes = 2 << 10
+
+// beginning is text cut to at most limit bytes, at a character's edge.
+func beginning(text string, limit int) string {
+	if len(text) <= limit {
+		return text
+	}
+	for limit > 0 && !utf8.RuneStart(text[limit]) {
+		limit--
+	}
+	return text[:limit]
 }
 
 // DeleteFile removes a file from the library: its row, then its bytes. The

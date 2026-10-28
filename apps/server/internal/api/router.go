@@ -152,6 +152,7 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 			r.Get("/files", wrapper.ListFiles)
 			r.Delete("/files/{fileId}", wrapper.DeleteFile)
 			r.Get("/files/{fileId}/download", wrapper.GetFileDownload)
+			r.Get("/files/{fileId}/text", wrapper.GetFileText)
 
 			// ---- admin ---------------------------------------------------
 			r.Group(func(r chi.Router) {

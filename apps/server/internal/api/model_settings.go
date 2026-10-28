@@ -12,6 +12,7 @@ import (
 	"github.com/qunqin24/openchat/apps/server/internal/auth"
 	"github.com/qunqin24/openchat/apps/server/internal/catalog"
 	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/doctext"
 	"github.com/qunqin24/openchat/apps/server/internal/httpx"
 	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
@@ -354,6 +355,7 @@ func (s *Server) chatModels(ctx context.Context, who asker) ([]ChatModel, error)
 			InputModalities:  view.InputModalities,
 			ReasoningEfforts: view.ReasoningEfforts,
 			AtCapacity:       capped[row.ModelID].appliesTo(who.admin) && spend[row.ModelID].reached,
+			PdfAsText:        doctext.PDFReadable(),
 		})
 	}
 	return out, nil

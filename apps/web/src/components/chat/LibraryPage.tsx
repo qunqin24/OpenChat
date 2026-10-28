@@ -2,7 +2,7 @@ import { isOpenChatError, type LibraryFile } from '@openchat/api-client'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { Download, LayoutGrid, List, MessageSquare, MoreHorizontal, Search, Trash2 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -19,8 +19,8 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useDebounced } from '@/hooks/use-debounced'
 import { downloadFile, useDeleteFile, useLibraryFiles } from '@/hooks/use-library'
-import { formatSize, TEXT_TYPE } from '@/lib/attachments'
-import { loadPanelWidth, savePanelWidth } from '@/lib/panel-width'
+import { formatSize, opensInPanel } from '@/lib/attachments'
+import { hasPagePreview } from '@/lib/file-preview'
 import { libraryFilters, withoutFile, type LibraryFilter, type LibraryPages } from '@/lib/library'
 import { queryKeys } from '@/lib/query-keys'
 import { useDisplayTitle } from '@/lib/titles'
@@ -30,8 +30,9 @@ import { useImageViewer, type ViewerImage } from '@/stores/image-viewer-store'
 import { useUIStore } from '@/stores/ui-store'
 import { SidebarToggle } from './ChatShell'
 import { FileIcon } from './FileIcon'
+import { FileBadge } from './FileBadge'
+import { FilePagePreview } from './FilePagePreview'
 import FilePanel from './FilePanel'
-import PanelResizer from './PanelResizer'
 
 /**
  * The library: every file the person sent, across their conversations, newest
@@ -55,16 +56,10 @@ export default function LibraryPage() {
 
   const items = useMemo(() => files.data?.pages.flatMap((page) => page.items) ?? [], [files.data])
   const openViewer = useImageViewer((s) => s.open)
-  // A text file opened here is read in the side panel, which goes with the page.
+  // A file opened here is read over the whole window, and goes with the page.
   const filePanel = useFilePanel()
   const openFile = filePanel.open
   const fileOpen = filePanel.conversationId === LIBRARY && filePanel.file !== null
-  // Dragged wider or narrower as beside a conversation, and remembered with it.
-  const [panelWidth, setPanelWidth] = useState(loadPanelWidth)
-  const resizePanel = useCallback((width: number | null) => {
-    setPanelWidth(width)
-    savePanelWidth(width)
-  }, [])
   useEffect(
     () => () => {
       if (useFilePanel.getState().conversationId === LIBRARY) useFilePanel.getState().close()
@@ -114,11 +109,11 @@ export default function LibraryPage() {
     }
   }
 
-  // An image opens in the viewer, among the list's others; a text file in the
-  // side panel, as from a conversation; a PDF in a new tab.
+  // An image opens in the viewer, among the list's others; a text, Word or
+  // Excel file in the side panel, as from a conversation; a PDF in a new tab.
   const showImage = (file: LibraryFile) => (event: React.MouseEvent) => {
     if (event.metaKey || event.ctrlKey || event.shiftKey) return
-    if (file.contentType === TEXT_TYPE) {
+    if (opensInPanel(file.contentType)) {
       event.preventDefault()
       openFile(LIBRARY, file)
       return
@@ -132,10 +127,7 @@ export default function LibraryPage() {
   const filtered = search !== '' || filter !== 'all'
 
   return (
-    <main
-      className={cn('n-main n-library', fileOpen && 'has-doc')}
-      style={panelWidth ? ({ '--n-doc-user-w': `${panelWidth}px` } as React.CSSProperties) : undefined}
-    >
+    <main className="n-main n-library">
       <div className="n-topbar">
         <SidebarToggle />
       </div>
@@ -199,9 +191,10 @@ export default function LibraryPage() {
               {items.map((file) => (
                 <li key={file.id} className="n-library-card">
                   <a className="n-library-thumb" href={file.url} target="_blank" rel="noreferrer" aria-label={t('chat.file.open', { name: file.filename })} onClick={showImage(file)}>
-                    <Preview file={file} />
+                    <Preview file={file} page />
                   </a>
                   <div className="n-library-card-foot">
+                    {hasPagePreview(file.contentType) && <FileBadge filename={file.filename} contentType={file.contentType} />}
                     <div className="n-library-card-meta">
                       <span className="n-library-name" dir="auto" title={file.filename}>{file.filename}</span>
                       <span className="n-library-sub">{formatSize(file.size)} · {date.format(new Date(file.createdAt))}</span>
@@ -255,18 +248,22 @@ export default function LibraryPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {fileOpen && filePanel.file && <FilePanel key={filePanel.file.id} file={filePanel.file} />}
-      {fileOpen && <PanelResizer width={panelWidth} onChange={resizePanel} />}
+      {fileOpen && filePanel.file && <FilePanel key={filePanel.file.id} file={filePanel.file} full />}
     </main>
   )
 }
 
-/** An image's thumbnail, or the file icon - also for an image whose link has expired. */
-function Preview({ file }: { file: LibraryFile }) {
+/**
+ * An image's thumbnail; in the grid, a page of a file's first words
+ * (FilePagePreview); else the file icon - also for an image whose link has
+ * expired.
+ */
+function Preview({ file, page = false }: { file: LibraryFile; page?: boolean }) {
   const [broken, setBroken] = useState(false)
   if (file.contentType.startsWith('image/') && !broken) {
     return <img src={file.url} alt="" loading="lazy" decoding="async" onError={() => setBroken(true)} />
   }
+  if (page && hasPagePreview(file.contentType)) return <FilePagePreview file={file} />
   return (
     <span className="n-library-icon" aria-hidden="true">
       <FileIcon filename={file.filename} contentType={file.contentType} />

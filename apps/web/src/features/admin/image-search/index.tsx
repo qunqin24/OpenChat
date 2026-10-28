@@ -1,4 +1,4 @@
-import { CheckCircle2, ExternalLink, Loader2, XCircle } from 'lucide-react'
+import { ArrowDown, ArrowUp, CheckCircle2, ExternalLink, Loader2, XCircle } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -12,6 +12,7 @@ import { Search } from '@/components/shadcn/search'
 import { Alert, AlertDescription, AlertTitle } from '@/components/shadcn/ui/alert'
 import { Badge } from '@/components/shadcn/ui/badge'
 import { Button } from '@/components/shadcn/ui/button'
+import { Checkbox } from '@/components/shadcn/ui/checkbox'
 import { Input } from '@/components/shadcn/ui/input'
 import { Label } from '@/components/shadcn/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/shadcn/ui/select'
@@ -27,18 +28,20 @@ import {
   type ImageSearchTestResult,
 } from './use-image-search'
 
-const PROVIDERS: ImageSearchProvider[] = ['wikimedia', 'openverse', 'pixabay']
+const PROVIDERS: ImageSearchProvider[] = ['pixabay', 'wikimedia', 'bing', 'openverse']
 const PROVIDER_NAMES: Record<ImageSearchProvider, string> = {
   wikimedia: 'Wikimedia Commons',
   openverse: 'Openverse',
   pixabay: 'Pixabay',
+  bing: 'Bing Images',
 }
 
 /**
  * Image search: whether answers describe their pictures for the server to find
  * (api/pictures.go) or may only show pictures their sources listed, which
- * service finds them, and Pixabay's key. Laid out like the web search page:
- * the switch and the service save the moment they change, the key has its own
+ * services find them and in what order - the next is asked when one is down
+ * or finds nothing - and Pixabay's key. Laid out like the web search page: the
+ * switch and the services save the moment they change, the key has its own
  * save, and a search can be tried before anything is saved.
  */
 export function ImageSearch() {
@@ -88,7 +91,7 @@ export default ImageSearch
 function EnabledSwitch({ settings }: { settings: ImageSearchSettings }) {
   const { t } = useTranslation()
   const update = useUpdateImageSearchSettings()
-  const noKey = settings.provider === 'pixabay' && !settings.pixabayKeySet
+  const noKey = settings.providers.every((provider) => provider === 'pixabay') && !settings.pixabayKeySet
   const live = settings.enabled && !noKey
 
   return (
@@ -128,18 +131,22 @@ function EnabledSwitch({ settings }: { settings: ImageSearchSettings }) {
   )
 }
 
-/** The service, Pixabay's key, and a search to prove they work. */
+/** The services in order, Pixabay's key, and a search to prove they work. */
 function ProviderFields({ settings }: { settings: ImageSearchSettings }) {
   const { t } = useTranslation()
   const update = useUpdateImageSearchSettings()
   const test = useTestImageSearch()
   const [key, setKey] = useState('')
   const [query, setQuery] = useState('')
-  const pixabay = settings.provider === 'pixabay'
+  const [tried, setTried] = useState<ImageSearchProvider | 'all'>('all')
+  const used = settings.providers
+  const pixabay = used.includes('pixabay')
+  // Those in use, in their order, then the rest.
+  const rows = [...used, ...PROVIDERS.filter((provider) => !used.includes(provider))]
 
-  const changeProvider = (provider: ImageSearchProvider) =>
+  const saveProviders = (providers: ImageSearchProvider[]) =>
     update.mutate(
-      { provider },
+      { providers },
       {
         onSuccess: () => {
           test.reset()
@@ -148,6 +155,13 @@ function ProviderFields({ settings }: { settings: ImageSearchSettings }) {
         onError: () => toast.error(t('admin.image-search.save-failed')),
       },
     )
+  const toggle = (provider: ImageSearchProvider, on: boolean) =>
+    saveProviders(on ? [...used, provider] : used.filter((other) => other !== provider))
+  const move = (index: number, by: -1 | 1) => {
+    const next = used.filter((_, at) => at !== index)
+    next.splice(index + by, 0, used[index] as ImageSearchProvider)
+    saveProviders(next)
+  }
 
   const saveKey = (pixabayKey: string) =>
     update.mutate(
@@ -164,20 +178,62 @@ function ProviderFields({ settings }: { settings: ImageSearchSettings }) {
   return (
     <div className="space-y-8">
       <div className="space-y-2">
-        <Label htmlFor="image-search-provider">{t('admin.image-search.service')}</Label>
-        <Select value={settings.provider} onValueChange={(value) => changeProvider(value as ImageSearchProvider)} disabled={update.isPending}>
-          <SelectTrigger id="image-search-provider" className="w-[240px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {PROVIDERS.map((provider) => (
-              <SelectItem key={provider} value={provider}>
-                {PROVIDER_NAMES[provider]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="text-muted-foreground text-sm">{t(`admin.image-search.hint-${settings.provider}`)}</p>
+        <Label>{t('admin.image-search.service')}</Label>
+        <ol className="divide-y rounded-lg border">
+          {rows.map((provider) => {
+            const index = used.indexOf(provider)
+            const on = index >= 0
+            return (
+              <li key={provider} className="flex items-start gap-3 p-4">
+                <Checkbox
+                  id={`image-search-${provider}`}
+                  className="mt-0.5"
+                  checked={on}
+                  // One service always stays.
+                  disabled={update.isPending || (on && used.length === 1)}
+                  onCheckedChange={(checked) => toggle(provider, checked === true)}
+                />
+                <div className="min-w-0 flex-1 space-y-1">
+                  <Label htmlFor={`image-search-${provider}`} className="flex items-center gap-2">
+                    {on && <span className="text-muted-foreground tabular-nums">{index + 1}.</span>}
+                    {PROVIDER_NAMES[provider]}
+                    {on && provider === 'pixabay' && !settings.pixabayKeySet && (
+                      <Badge variant="secondary">{t('admin.image-search.status-no-key')}</Badge>
+                    )}
+                  </Label>
+                  <p className="text-muted-foreground text-sm">{t(`admin.image-search.hint-${provider}`)}</p>
+                </div>
+                {on && used.length > 1 && (
+                  <div className="flex gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8"
+                      aria-label={t('admin.image-search.move-up')}
+                      disabled={update.isPending || index === 0}
+                      onClick={() => move(index, -1)}
+                    >
+                      <ArrowUp />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8"
+                      aria-label={t('admin.image-search.move-down')}
+                      disabled={update.isPending || index === used.length - 1}
+                      onClick={() => move(index, 1)}
+                    >
+                      <ArrowDown />
+                    </Button>
+                  </div>
+                )}
+              </li>
+            )
+          })}
+        </ol>
+        <p className="text-muted-foreground text-sm">{t('admin.image-search.order-hint')}</p>
       </div>
 
       {pixabay && (
@@ -230,9 +286,26 @@ function ProviderFields({ settings }: { settings: ImageSearchSettings }) {
           onSubmit={(event) => {
             event.preventDefault()
             if (!query.trim()) return
-            test.mutate({ query: query.trim(), ...(pixabay && key.trim() ? { pixabayKey: key.trim() } : {}) })
+            test.mutate({
+              query: query.trim(),
+              ...(tried !== 'all' ? { provider: tried } : {}),
+              ...(pixabay && key.trim() ? { pixabayKey: key.trim() } : {}),
+            })
           }}
         >
+          <Select value={tried} onValueChange={(value) => setTried(value as ImageSearchProvider | 'all')}>
+            <SelectTrigger className="w-[200px]" aria-label={t('admin.image-search.test-service')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('admin.image-search.test-all')}</SelectItem>
+              {PROVIDERS.map((provider) => (
+                <SelectItem key={provider} value={provider}>
+                  {PROVIDER_NAMES[provider]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Input
             id="image-search-test"
             className="flex-1"
@@ -280,7 +353,9 @@ function TestResult({ result }: { result: ImageSearchTestResult }) {
         <AlertDescription className="space-y-1">
           <div className="text-foreground font-medium break-all">{image.title || '—'}</div>
           <div>
-            {[image.creator, image.license, image.source, `${image.width}×${image.height}`].filter(Boolean).join(' · ')}
+            {[PROVIDER_NAMES[image.provider], image.creator, image.license, image.source, `${image.width}×${image.height}`]
+              .filter(Boolean)
+              .join(' · ')}
           </div>
           {image.landingUrl && (
             <a href={image.landingUrl} target="_blank" rel="noreferrer" className="text-foreground inline-flex items-center gap-1 break-all underline-offset-4 hover:underline">

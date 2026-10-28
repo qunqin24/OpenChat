@@ -1,4 +1,4 @@
-import { readdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { cp, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { extname, join, resolve } from 'node:path'
 import { fileURLToPath, URL } from 'node:url'
 import { promisify } from 'node:util'
@@ -16,7 +16,7 @@ const gzipAsync = promisify(gzip)
 // internally, and images are left to their own codecs.
 const COMPRESSIBLE = new Set([
   '.js', '.mjs', '.css', '.html', '.svg', '.json', '.txt', '.xml', '.map',
-  '.webmanifest', '.ttf', '.otf',
+  '.webmanifest', '.ttf', '.otf', '.wasm',
 ])
 // Below this a response fits in one packet either way.
 const MIN_BYTES = 256
@@ -81,12 +81,50 @@ function precompress(): Plugin {
   }
 }
 
+/**
+ * What pdf.js reads besides its code, served at /pdfjs/ (lib/pdf-viewer.ts):
+ * the character maps of CJK fonts, without which much of a Chinese PDF draws
+ * as nothing, and the WebAssembly decoders of JPEG 2000 pictures, common in
+ * scanned PDFs. The standard fonts stay out: the browser's own stand in for
+ * them (useSystemFonts). Copied into the build, and served from node_modules
+ * in dev; fetched only when a PDF is opened.
+ */
+function pdfjsAssets(): Plugin {
+  const source = fileURLToPath(new URL('./node_modules/pdfjs-dist/', import.meta.url))
+  const parts = ['cmaps', 'wasm']
+  let outDir = ''
+  return {
+    name: 'openchat:pdfjs-assets',
+    configResolved(config) {
+      outDir = resolve(config.root, config.build.outDir)
+    },
+    configureServer(server) {
+      server.middlewares.use('/pdfjs', (req, res, next) => {
+        const path = decodeURIComponent((req.url ?? '').split('?')[0] ?? '')
+        const [, part, ...rest] = path.split('/')
+        if (!part || !parts.includes(part) || rest.some((piece) => piece === '..' || piece === '')) return next()
+        readFile(join(source, part, ...rest)).then(
+          (data) => {
+            res.setHeader('Content-Type', path.endsWith('.wasm') ? 'application/wasm' : 'application/octet-stream')
+            res.end(data)
+          },
+          () => next(),
+        )
+      })
+    },
+    async writeBundle() {
+      for (const part of parts) await cp(join(source, part), join(outDir, 'pdfjs', part), { recursive: true })
+    },
+  }
+}
+
 export default defineConfig({
   plugins: [
     // Must precede the React plugin: it generates routeTree.gen.ts from src/routes.
     tanstackRouter({ target: 'react', autoCodeSplitting: true }),
     react(),
     tailwindcss(),
+    pdfjsAssets(),
     precompress(),
   ],
   resolve: {

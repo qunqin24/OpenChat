@@ -446,6 +446,7 @@ func (e HealthStatus) Valid() bool {
 
 // Defines values for ImageSearchProvider.
 const (
+	Bing      ImageSearchProvider = "bing"
 	Openverse ImageSearchProvider = "openverse"
 	Pixabay   ImageSearchProvider = "pixabay"
 	Wikimedia ImageSearchProvider = "wikimedia"
@@ -454,6 +455,8 @@ const (
 // Valid indicates whether the value is a known member of the ImageSearchProvider enum.
 func (e ImageSearchProvider) Valid() bool {
 	switch e {
+	case Bing:
+		return true
 	case Openverse:
 		return true
 	case Pixabay:
@@ -491,14 +494,17 @@ func (e InputModality) Valid() bool {
 
 // Defines values for LibraryFileType.
 const (
-	LibraryFileTypeImage LibraryFileType = "image"
-	LibraryFileTypePdf   LibraryFileType = "pdf"
-	LibraryFileTypeText  LibraryFileType = "text"
+	LibraryFileTypeDocument LibraryFileType = "document"
+	LibraryFileTypeImage    LibraryFileType = "image"
+	LibraryFileTypePdf      LibraryFileType = "pdf"
+	LibraryFileTypeText     LibraryFileType = "text"
 )
 
 // Valid indicates whether the value is a known member of the LibraryFileType enum.
 func (e LibraryFileType) Valid() bool {
 	switch e {
+	case LibraryFileTypeDocument:
+		return true
 	case LibraryFileTypeImage:
 		return true
 	case LibraryFileTypePdf:
@@ -2051,6 +2057,11 @@ type ChatModel struct {
 	// OutputLimit Zero when unknown.
 	OutputLimit int64 `json:"outputLimit"`
 
+	// PdfAsText A PDF can be attached for this model although `inputModalities`
+	// does not list `pdf`: the server reads its words and sends those.
+	// False on a server that cannot read PDFs (no pdftotext).
+	PdfAsText bool `json:"pdfAsText"`
+
 	// ProviderId The catalogue's brand for the model, for its icon. Empty when unknown.
 	ProviderId string `json:"providerId"`
 	Reasoning  bool   `json:"reasoning"`
@@ -2613,8 +2624,20 @@ type ImageSearchHit struct {
 	Height     int     `json:"height"`
 	LandingUrl *string `json:"landingUrl,omitempty"`
 	License    string  `json:"license"`
-	Source     string  `json:"source"`
-	Title      string  `json:"title"`
+
+	// Provider Where the pictures answers describe are found (`searchImage`).
+	// `wikimedia` is Wikimedia Commons' own search: no key, quick, but with
+	// no safe-search filter. `openverse` searches Creative Commons images
+	// from many sites with mature content filtered out, no key, but allows
+	// an anonymous server 200 searches a day and is often slow. `pixabay`
+	// is Pixabay's stock photos with safe search, and needs a free key.
+	// `bing` is Bing Images through the endpoint its results page uses: no
+	// key, quick, finds nearly anything, with strict safe search - but it is
+	// not an API and may stop working or ask for a check at any time, and
+	// its pictures are other sites', with their rights, not freely licensed.
+	Provider ImageSearchProvider `json:"provider"`
+	Source   string              `json:"source"`
+	Title    string              `json:"title"`
 
 	// Url The picture at the service
 	Url   string `json:"url"`
@@ -2627,6 +2650,10 @@ type ImageSearchHit struct {
 // from many sites with mature content filtered out, no key, but allows
 // an anonymous server 200 searches a day and is often slow. `pixabay`
 // is Pixabay's stock photos with safe search, and needs a free key.
+// `bing` is Bing Images through the endpoint its results page uses: no
+// key, quick, finds nearly anything, with strict safe search - but it is
+// not an API and may stop working or ask for a check at any time, and
+// its pictures are other sites', with their rights, not freely licensed.
 type ImageSearchProvider string
 
 // ImageSearchSettings defines model for ImageSearchSettings.
@@ -2643,13 +2670,11 @@ type ImageSearchSettings struct {
 	// PixabayKeySet Whether a Pixabay API key is stored; `pixabay` needs one. Write-only, like a channel's.
 	PixabayKeySet bool `json:"pixabayKeySet"`
 
-	// Provider Where the pictures answers describe are found (`searchImage`).
-	// `wikimedia` is Wikimedia Commons' own search: no key, quick, but with
-	// no safe-search filter. `openverse` searches Creative Commons images
-	// from many sites with mature content filtered out, no key, but allows
-	// an anonymous server 200 searches a day and is often slow. `pixabay`
-	// is Pixabay's stock photos with safe search, and needs a free key.
-	Provider ImageSearchProvider `json:"provider"`
+	// Providers The services asked, in order: when one cannot search (down, slow,
+	// limiting this server, or Pixabay without a key) or finds nothing,
+	// the next is asked. A service that failed lately is asked after the
+	// others for a minute. Never empty.
+	Providers []ImageSearchProvider `json:"providers"`
 }
 
 // ImageSearchTestRequest defines model for ImageSearchTestRequest.
@@ -2657,7 +2682,7 @@ type ImageSearchTestRequest struct {
 	// PixabayKey A Pixabay key to try before saving it. The stored key when absent.
 	PixabayKey *string `json:"pixabayKey,omitempty"`
 
-	// Provider A service to try before choosing it. The configured one when absent.
+	// Provider One service to try. The configured services, in their order, when absent.
 	Provider *ImageSearchProvider `json:"provider,omitempty"`
 	Query    string               `json:"query"`
 }
@@ -3890,13 +3915,8 @@ type UpdateImageSearchSettingsRequest struct {
 	// PixabayKey The Pixabay API key. Empty removes the stored one.
 	PixabayKey *string `json:"pixabayKey,omitempty"`
 
-	// Provider Where the pictures answers describe are found (`searchImage`).
-	// `wikimedia` is Wikimedia Commons' own search: no key, quick, but with
-	// no safe-search filter. `openverse` searches Creative Commons images
-	// from many sites with mature content filtered out, no key, but allows
-	// an anonymous server 200 searches a day and is often slow. `pixabay`
-	// is Pixabay's stock photos with safe search, and needs a free key.
-	Provider *ImageSearchProvider `json:"provider,omitempty"`
+	// Providers The services to ask, in order.
+	Providers *[]ImageSearchProvider `json:"providers,omitempty"`
 }
 
 // UpdateMeRequest Only the fields present are changed.
@@ -4528,8 +4548,14 @@ type ListFilesParams struct {
 	// `type`) the same while following `nextCursor`.
 	Search *string `form:"search,omitempty" json:"search,omitempty"`
 
-	// Type Only images, or only PDFs.
+	// Type Only images, PDFs, text files, or Word and Excel files (`document`).
 	Type *LibraryFileType `form:"type,omitempty" json:"type,omitempty"`
+}
+
+// GetFileTextParams defines parameters for GetFileText.
+type GetFileTextParams struct {
+	// Preview Only the beginning, at most 2 KB, for a card's preview in the library.
+	Preview *bool `form:"preview,omitempty" json:"preview,omitempty"`
 }
 
 // SearchImageParams defines parameters for SearchImage.
@@ -5847,6 +5873,9 @@ type ServerInterface interface {
 	// GetFileDownload A download link for one of your files
 	// (GET /files/{fileId}/download)
 	GetFileDownload(w http.ResponseWriter, r *http.Request, fileId FileId)
+	// GetFileText The words of one of your documents
+	// (GET /files/{fileId}/text)
+	GetFileText(w http.ResponseWriter, r *http.Request, fileId FileId, params GetFileTextParams)
 	// GetHealth Liveness probe
 	// (GET /healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -6468,6 +6497,12 @@ func (_ Unimplemented) DeleteFile(w http.ResponseWriter, r *http.Request, fileId
 // GetFileDownload A download link for one of your files
 // (GET /files/{fileId}/download)
 func (_ Unimplemented) GetFileDownload(w http.ResponseWriter, r *http.Request, fileId FileId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetFileText The words of one of your documents
+// (GET /files/{fileId}/text)
+func (_ Unimplemented) GetFileText(w http.ResponseWriter, r *http.Request, fileId FileId, params GetFileTextParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8963,6 +8998,48 @@ func (siw *ServerInterfaceWrapper) GetFileDownload(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// GetFileText operation middleware
+func (siw *ServerInterfaceWrapper) GetFileText(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "fileId" -------------
+	var fileId FileId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "fileId", chi.URLParam(r, "fileId"), &fileId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fileId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetFileTextParams
+
+	// ------------- Optional query parameter "preview" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "preview", r.URL.Query(), &params.Preview, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "preview"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "preview", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetFileText(w, r, fileId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetHealth operation middleware
 func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Request) {
 
@@ -9828,6 +9905,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/files/{fileId}/download", wrapper.GetFileDownload)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/files/{fileId}/text", wrapper.GetFileText)
 	})
 
 	return r

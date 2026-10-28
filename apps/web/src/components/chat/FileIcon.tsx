@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 
 const ICONS: Record<FileLook, typeof File> = {
   note: NotepadText,
+  doc: FileText,
   data: Sheet,
   config: Braces,
   web: Globe,

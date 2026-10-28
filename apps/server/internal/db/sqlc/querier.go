@@ -467,6 +467,11 @@ type Querier interface {
 	ListChannelsServingModels(ctx context.Context, modelIds []string) ([]ListChannelsServingModelsRow, error)
 	// A conversation's documents, each at its latest version.
 	ListConversationDocuments(ctx context.Context, arg ListConversationDocumentsParams) ([]ListConversationDocumentsRow, error)
+	// The person's messages in a conversation that carry files read as words -
+	// text files, Word, Excel and PDF - oldest first: what the file tools
+	// (agent/files.go) look files up in. A refused message's files are never read
+	// for the model.
+	ListConversationTextFileMessages(ctx context.Context, conversationID uuid.UUID) ([]Message, error)
 	// A conversation's recorded requests, oldest first, each with its figures.
 	// Only the caller's own conversation: an administrator reads their own.
 	ListConversationTrace(ctx context.Context, arg ListConversationTraceParams) ([]ListConversationTraceRow, error)

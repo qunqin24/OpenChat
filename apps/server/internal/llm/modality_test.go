@@ -22,9 +22,14 @@ func TestFileBlock(t *testing.T) {
 }
 
 func TestEstimateTextAttachment(t *testing.T) {
-	text := AttachmentPart{MediaType: TextMediaType, Size: 30_000}
-	if got := EstimatePart(text); got != 10_000+MessageOverhead {
-		t.Errorf("a 30 KB text file = %d tokens", got)
+	text := AttachmentPart{MediaType: TextMediaType, Size: 12_000}
+	if got := EstimatePart(text); got != 4_000+MessageOverhead {
+		t.Errorf("a 12 KB text file = %d tokens", got)
+	}
+	// A long one goes as a card.
+	long := AttachmentPart{MediaType: TextMediaType, Size: 200_000}
+	if got := EstimatePart(long); got != FileCardBytes/3+MessageOverhead {
+		t.Errorf("a 200 KB text file = %d tokens", got)
 	}
 	if got := EstimatePart(AttachmentPart{MediaType: "image/png", Size: 30_000}); got != AttachmentTokens {
 		t.Errorf("an image = %d tokens", got)

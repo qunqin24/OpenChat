@@ -55,11 +55,21 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath \
  && mkdir -p /out/data
 
 # ---- runtime -----------------------------------------------------------------
-FROM gcr.io/distroless/static-debian12:nonroot
+# Alpine rather than a distroless image: reading the words of a PDF takes
+# poppler's pdftotext (internal/doctext), a program of its own, and
+# poppler-data, without which Chinese, Japanese and Korean PDFs that use the
+# standard character maps read as nothing. Alpine is the smallest base that
+# has them (about 40 MB to download in all, against 70 MB on Debian slim); the
+# server is a static binary, so its C library does not matter. It runs as the
+# same unprivileged user (65532) the distroless image had, so a data volume
+# made by an older version keeps working.
+FROM alpine:3.22
+RUN apk add --no-cache ca-certificates poppler-utils poppler-data \
+ && addgroup -S -g 65532 nonroot \
+ && adduser -S -D -H -u 65532 -G nonroot -h /nonexistent -s /sbin/nologin nonroot
 # The local storage driver writes to ./data, relative to the working directory:
-# here /app/data, made in the build stage (distroless has no shell to mkdir)
-# and owned by the user the server runs as. Mount a volume on it; a new named
-# volume takes this ownership from the image.
+# here /app/data, owned by the user the server runs as. Mount a volume on it; a
+# new named volume takes this ownership from the image.
 WORKDIR /app
 # Secure cookies and JSON logs unless told otherwise: the image is for serving.
 # The plain-HTTP trial sets development explicitly.

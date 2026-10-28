@@ -19,6 +19,7 @@ import (
 	"github.com/qunqin24/openchat/apps/server/internal/agent"
 	"github.com/qunqin24/openchat/apps/server/internal/auth"
 	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/doctext"
 	"github.com/qunqin24/openchat/apps/server/internal/httpx"
 	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
@@ -95,6 +96,10 @@ var (
 		fmt.Sprintf("a message's files can add up to at most %d MiB", agent.MaxAttachmentBytes>>20))
 	errAttachmentUnsupported = httpx.NewFieldError("attachmentIds", "attachment_unsupported",
 		"the selected model does not accept this kind of file")
+	errAttachmentUnreadable = httpx.NewFieldError("attachmentIds", "attachment_unreadable",
+		"a document could not be read: it is damaged, protected, or not what its name says")
+	errAttachmentTextTooLong = httpx.NewError(http.StatusRequestEntityTooLarge, "attachment_text_too_long",
+		fmt.Sprintf("a document's text can be at most %d MiB", doctext.MaxTextBytes>>20))
 )
 
 // CreateMessage writes the user's input and starts the run that answers it, in
@@ -144,7 +149,7 @@ func (s *Server) CreateMessage(w http.ResponseWriter, r *http.Request, conversat
 	if body.AttachmentIds != nil {
 		ids = *body.AttachmentIds
 	}
-	files, err := s.admitAttachments(ctx, user.ID, choice.modelID, ids)
+	files, digests, err := s.admitAttachments(ctx, user.ID, choice.modelID, ids)
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
@@ -155,7 +160,7 @@ func (s *Server) CreateMessage(w http.ResponseWriter, r *http.Request, conversat
 	//
 	// The check's reading of the pictures and text files is also what is recorded of them
 	// (attachment_digest.go): the model is sent those bytes or none.
-	in, digests := s.checkedFiles(content, files)
+	in := s.checkedFiles(content, files, digests)
 	if refused, err := s.moderated(ctx, s.accountSubject(ctx, user, conversationId, ModerationSourceSend), in); err != nil {
 		if refused {
 			err = s.keepRefused(ctx, conversationId, content, err)
@@ -383,13 +388,16 @@ func inputParts(content string, files []sqlc.Attachment) []llm.Part {
 }
 
 // modelTakes is whether a model with these input modalities can be sent a file
-// of this type. A text file goes as words, which every model takes.
+// of this type. A text file goes as words, which every model takes, and so do
+// a Word or Excel file, and a PDF where this server can read its words.
 func modelTakes(modalities []string, contentType string) bool {
 	switch modality := llm.ModalityOf(contentType); modality {
 	case "":
 		return false
-	case llm.ModalityText:
+	case llm.ModalityText, llm.ModalityDocument:
 		return true
+	case llm.ModalityPDF:
+		return slices.Contains(modalities, modality) || doctext.PDFReadable()
 	default:
 		return slices.Contains(modalities, modality)
 	}
@@ -404,11 +412,12 @@ func attachmentIDs(files []sqlc.Attachment) []uuid.UUID {
 }
 
 // admitAttachments checks the files a message arrives with and returns them in
-// the order they were listed. Everything it refuses is refused before anything
-// is written.
-func (s *Server) admitAttachments(ctx context.Context, userID uuid.UUID, modelID string, ids []uuid.UUID) ([]sqlc.Attachment, error) {
+// the order they were listed, with the words read out of its documents
+// (readDocuments). Everything it refuses is refused before anything is
+// written.
+func (s *Server) admitAttachments(ctx context.Context, userID uuid.UUID, modelID string, ids []uuid.UUID) ([]sqlc.Attachment, *fileDigests, error) {
 	if len(ids) == 0 {
-		return nil, nil
+		return nil, &fileDigests{}, nil
 	}
 	unique := make([]uuid.UUID, 0, len(ids))
 	for _, id := range ids {
@@ -417,15 +426,15 @@ func (s *Server) admitAttachments(ctx context.Context, userID uuid.UUID, modelID
 		}
 	}
 	if len(unique) > agent.MaxMessageAttachments {
-		return nil, errTooManyAttachments
+		return nil, nil, errTooManyAttachments
 	}
 
 	rows, err := s.q.ListPendingAttachments(ctx, sqlc.ListPendingAttachmentsParams{Ids: unique, UserID: &userID})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(rows) != len(unique) {
-		return nil, errAttachmentUnavailable
+		return nil, nil, errAttachmentUnavailable
 	}
 	files := make([]sqlc.Attachment, 0, len(rows))
 	for _, id := range unique {
@@ -436,11 +445,11 @@ func (s *Server) admitAttachments(ctx context.Context, userID uuid.UUID, modelID
 	// What the model takes is settled before storage is asked anything.
 	settings, err := loadModelSettings(ctx, s.q, modelID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	for _, file := range files {
 		if !modelTakes(settings.InputModalities, file.ContentType) {
-			return nil, errAttachmentUnsupported
+			return nil, nil, errAttachmentUnsupported
 		}
 	}
 
@@ -451,17 +460,21 @@ func (s *Server) admitAttachments(ctx context.Context, userID uuid.UUID, modelID
 		size, err := s.store.Size(ctx, file.StorageKey)
 		if err != nil {
 			slog.WarnContext(ctx, "attachment not in storage", "attachment_id", file.ID, "error", err)
-			return nil, errAttachmentUnavailable
+			return nil, nil, errAttachmentUnavailable
 		}
 		if size > uploadable[file.ContentType] {
-			return nil, errAttachmentsTooLarge
+			return nil, nil, errAttachmentsTooLarge
 		}
 		total += size
 	}
 	if total > agent.MaxAttachmentBytes {
-		return nil, errAttachmentsTooLarge
+		return nil, nil, errAttachmentsTooLarge
 	}
-	return files, nil
+	digests, err := s.readDocuments(ctx, files, slices.Contains(settings.InputModalities, llm.ModalityPDF))
+	if err != nil {
+		return nil, nil, err
+	}
+	return files, digests, nil
 }
 
 func sameEffort(a, b *string) bool {

@@ -96,3 +96,22 @@ WITH target AS (SELECT a.id, m.conversation_id
          RETURNING storage_key)
 SELECT gone.storage_key, target.conversation_id
 FROM gone, target;
+
+-- name: ListConversationTextFileMessages :many
+-- The person's messages in a conversation that carry files read as words -
+-- text files, Word, Excel and PDF - oldest first: what the file tools
+-- (agent/files.go) look files up in. A refused message's files are never read
+-- for the model.
+SELECT m.*
+FROM messages m
+WHERE m.conversation_id = $1
+  AND m.role = 'user'
+  AND m.status <> 'blocked'
+  AND EXISTS (
+    SELECT 1 FROM attachments a
+    WHERE a.message_id = m.id
+      AND a.content_type IN ('text/plain', 'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  )
+ORDER BY m.created_at, m.id;

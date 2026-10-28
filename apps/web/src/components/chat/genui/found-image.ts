@@ -9,7 +9,7 @@ import { ImageSource } from './image-source'
  * A picture an answer shows, as its components give it: an address one of the
  * conversation's sources listed, loaded through the conversation's image
  * proxy (ImageSource), or - with image search on - a description such as
- * "laptop keyboard", for which the server finds a freely licensed photo, keeps
+ * "laptop keyboard", for which the server finds a photo, keeps
  * it and serves it (api/pictures.go), so the same words show the same picture
  * on every reload. `found` is that photo, with what its licence asks to be
  * shown. null while it is being found, and for an address no source listed or
@@ -46,14 +46,27 @@ function useFoundImage(query: string): { image: FoundImage | null; settled: bool
     queryFn: async ({ signal }) => {
       const response = await fetch(`${API_BASE_URL}/images/search?q=${encodeURIComponent(query)}`, { signal, credentials: 'include' })
       if (response.status === 404) return null
-      if (!response.ok) throw new Error(`image search ${response.status}`)
+      if (!response.ok) throw new SearchError(response.status)
       return (await response.json()) as FoundImage
     },
     enabled: searchable,
     staleTime: Infinity,
-    retry: false,
+    // The service down for a while (503, the server having tried a few times
+    // itself) is asked again later, the picture's frame kept meanwhile; words
+    // it could not take, or too many asked for, are not.
+    retry: (failures, error) => failures < SEARCH_RETRIES.length && !(error instanceof SearchError && error.status !== 503),
+    retryDelay: (failures) => SEARCH_RETRIES[Math.min(failures, SEARCH_RETRIES.length) - 1] ?? 0,
   })
   return { image: found.data ?? null, settled: !searchable || found.isSuccess || found.isError }
+}
+
+/** The waits, in milliseconds, before asking an unavailable search again. */
+const SEARCH_RETRIES = [4_000, 12_000, 30_000]
+
+class SearchError extends Error {
+  constructor(readonly status: number) {
+    super(`image search ${status}`)
+  }
 }
 
 function pictureSrc(image: FoundImage): string {

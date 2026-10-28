@@ -28,6 +28,8 @@ const SEND_ERRORS = [
   'attachments_too_large',
   'attachment_unsupported',
   'attachment_unavailable',
+  'attachment_unreadable',
+  'attachment_text_too_long',
   'nothing_to_answer',
   'not_latest',
   'message_not_found',

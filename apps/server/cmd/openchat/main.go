@@ -17,8 +17,8 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-	// The zone database, inside the binary. The production image is distroless
-	// and has none, and without it TZ=Asia/Shanghai is silently read as UTC -
+	// The zone database, inside the binary. The production image (Alpine) installs
+	// none, and without it TZ=Asia/Shanghai is silently read as UTC -
 	// which would move the day and month a model's spending cap starts over at.
 	_ "time/tzdata"
 

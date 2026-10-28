@@ -2,13 +2,17 @@ import { TriangleAlert, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import type { PendingAttachment } from '@/hooks/use-attachments'
-import { formatSize, TEXT_TYPE, type FileKind } from '@/lib/attachments'
+import { useFileSummary } from '@/hooks/use-file-summary'
+import { documentTypeOf, formatSize, TEXT_TYPE, type FileKind } from '@/lib/attachments'
 import { cn } from '@/lib/utils'
-import { FileIcon } from './FileIcon'
+import { FileBadge } from './FileBadge'
 import Tooltip from './Tooltip'
 
 /** A type of the kind, for the icon: the tray knows a file by its kind. */
-const TYPE_OF_KIND: Record<FileKind, string> = { image: 'image/png', pdf: 'application/pdf', text: TEXT_TYPE }
+const TYPE_OF_KIND: Record<Exclude<FileKind, 'document'>, string> = { image: 'image/png', pdf: 'application/pdf', text: TEXT_TYPE }
+
+/** A type of the file, for the icon: a document's by its name. */
+const typeOf = (item: PendingAttachment) => (item.kind === 'document' ? documentTypeOf(item.name) : TYPE_OF_KIND[item.kind])
 
 /**
  * The files waiting to go with the message, above the text box: a thumbnail
@@ -36,6 +40,7 @@ export function AttachmentTray({
 
 function AttachmentCard({ item, onRemove }: { item: PendingAttachment; onRemove: () => void }) {
   const { t } = useTranslation()
+  const summary = useFileSummary()
   const percent = Math.round(item.progress * 100)
   const failure = item.error ? t(`chat.file.error.${item.error}`) : ''
 
@@ -44,11 +49,13 @@ function AttachmentCard({ item, onRemove }: { item: PendingAttachment; onRemove:
       ? t('chat.file.uploading', { percent })
       : item.status === 'error'
         ? failure
-        : formatSize(item.size)
+        : item.kind === 'image'
+          ? formatSize(item.size)
+          : summary(item.name, typeOf(item), item.size)
 
   const card = (
     <li
-      className={cn('n-attach', item.kind === 'image' ? 'is-image' : `is-${item.kind}`, item.status === 'error' && 'is-error')}
+      className={cn('n-attach', item.kind === 'image' ? 'is-image' : item.kind === 'document' ? 'is-text' : `is-${item.kind}`, item.status === 'error' && 'is-error')}
       aria-busy={item.status === 'uploading'}
     >
       {item.kind === 'image' ? (
@@ -67,9 +74,13 @@ function AttachmentCard({ item, onRemove }: { item: PendingAttachment; onRemove:
         </>
       ) : (
         <>
-          <span className="n-attach-icon" aria-hidden>
-            {item.status === 'error' ? <TriangleAlert className="h-4 w-4" /> : <FileIcon filename={item.name} contentType={TYPE_OF_KIND[item.kind]} />}
-          </span>
+          {item.status === 'error' ? (
+            <span className="n-attach-icon" aria-hidden>
+              <TriangleAlert className="h-4 w-4" />
+            </span>
+          ) : (
+            <FileBadge filename={item.name} contentType={typeOf(item)} />
+          )}
           <span className="n-attach-meta">
             <span className="n-attach-name">{item.name}</span>
             <span className="n-attach-status">{status}</span>

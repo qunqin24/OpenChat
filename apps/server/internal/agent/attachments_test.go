@@ -173,13 +173,14 @@ func TestResolveSendsTextFilesAsWords(t *testing.T) {
 
 func TestResolveSaysWhatItLeftOut(t *testing.T) {
 	s := newStore()
-	pdf := s.add("r.pdf", "application/pdf", tinyPDF)
+	picture := s.add("r.png", "image/png", tinyPNG)
 	gone := llm.AttachmentPart{Ref: uuid.NewString(), Filename: "gone.png", MediaType: "image/png"}
 	garbage := llm.AttachmentPart{Ref: "not-a-uuid", Filename: "x.png", MediaType: "image/png"}
 
-	// An image-only model, a file that is not there, and a ref that is no id.
-	got, err := s.resolver(1<<20, llm.ModalityImage).resolve(context.Background(),
-		[]llm.Message{userWith("hi", pdf, gone, garbage)})
+	// A model that reads no pictures, a file that is not there, and a ref that
+	// is no id. (A PDF goes as its words to a model that does not read PDFs.)
+	got, err := s.resolver(1<<20).resolve(context.Background(),
+		[]llm.Message{userWith("hi", picture, gone, garbage)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +188,7 @@ func TestResolveSaysWhatItLeftOut(t *testing.T) {
 		t.Fatalf("parts = %+v, want no file", got[0].Parts)
 	}
 	note := noteText(got[0])
-	for _, want := range []string{"r.pdf", "does not accept", "gone.png", "no longer available", "x.png"} {
+	for _, want := range []string{"r.png", "does not accept", "gone.png", "no longer available", "x.png"} {
 		if !strings.Contains(note, want) {
 			t.Errorf("note %q lacks %q", note, want)
 		}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -24,8 +25,9 @@ import (
 // Pictures an answer describes. With image search on, an answer's interface
 // components describe a picture in a few words ("laptop keyboard") rather than
 // give its address, and the server finds one - a freely licensed photo from
-// Wikimedia Commons, Openverse or Pixabay, as the settings choose - the way
-// ChatGPT's answers get theirs. With it off, an answer shows only pictures its
+// Wikimedia Commons, Openverse or Pixabay, or any site's through Bing Images,
+// asked in the order the settings give, the next when one is down or finds
+// nothing - the way ChatGPT's answers get theirs. With it off, an answer shows only pictures its
 // own sources listed, through the proxy in images.go.
 //
 // What a description found is kept (image_searches), so the same words show
@@ -52,14 +54,17 @@ const (
 
 // imageSearchConfig is the stored form of the settings.
 type imageSearchConfig struct {
-	Enabled  bool   `json:"enabled"`
-	Provider string `json:"provider"`
+	Enabled bool `json:"enabled"`
+	// Providers are the services asked, in order.
+	Providers []string `json:"providers"`
+	// Provider is the one service settings saved before v1.2.1 named.
+	Provider string `json:"provider,omitempty"`
 }
 
 // loadImageSearch is the settings and the stored Pixabay key. Off, with
 // Wikimedia Commons chosen, until an administrator turns it on.
 func loadImageSearch(ctx context.Context, q *sqlc.Queries) (imageSearchConfig, string, error) {
-	config := imageSearchConfig{Provider: string(Wikimedia)}
+	config := imageSearchConfig{}
 	values, err := q.GetSettings(ctx, []string{settingImageSearch, settingPixabayKey})
 	if err != nil {
 		return config, "", err
@@ -73,27 +78,61 @@ func loadImageSearch(ctx context.Context, q *sqlc.Queries) (imageSearchConfig, s
 			_ = json.Unmarshal(row.Value, &key)
 		}
 	}
-	if !ImageSearchProvider(config.Provider).Valid() {
-		config.Provider = string(Wikimedia)
+	if len(config.Providers) == 0 && config.Provider != "" {
+		config.Providers = []string{config.Provider}
+	}
+	config.Provider = ""
+	config.Providers = validProviders(config.Providers)
+	if len(config.Providers) == 0 {
+		config.Providers = []string{string(Wikimedia)}
 	}
 	return config, strings.TrimSpace(key), nil
+}
+
+// validProviders is the names that are services, each once, in their order.
+func validProviders(names []string) []string {
+	valid := make([]string, 0, len(names))
+	for _, name := range names {
+		if ImageSearchProvider(name).Valid() && !slices.Contains(valid, name) {
+			valid = append(valid, name)
+		}
+	}
+	return valid
 }
 
 // imageSearchOn is whether answers describe their pictures: on, with a
 // service that can search.
 func imageSearchOn(ctx context.Context, q *sqlc.Queries) bool {
 	config, key, err := loadImageSearch(ctx, q)
-	return err == nil && config.Enabled && pictureSearcher(config.Provider, key) != nil
+	return err == nil && config.Enabled && configuredSearcher(config, key) != nil
+}
+
+// configuredSearcher asks the configured services that can search, in order
+// (pictureFallback); nil when none can.
+func configuredSearcher(config imageSearchConfig, key string) imagesearch.Searcher {
+	var searchers []imagesearch.Searcher
+	for _, provider := range config.Providers {
+		if searcher := pictureSearcher(provider, key); searcher != nil {
+			searchers = append(searchers, searcher)
+		}
+	}
+	if len(searchers) == 0 {
+		return nil
+	}
+	return pictureFallback.Of(searchers...)
 }
 
 var (
 	pictureClient   = tools.GuardedClient(imageTimeout)
 	wikimediaSearch = imagesearch.NewWikimedia(pictureClient)
 	openverseSearch = imagesearch.NewOpenverse(pictureClient)
+	bingSearch      = imagesearch.NewBing(pictureClient)
 	// pixabaySearch is the search with the stored key, kept while the key is
 	// the same so its count of the minute's searches carries on.
 	pixabayMu     sync.Mutex
 	pixabaySearch *imagesearch.Pixabay
+	// pictureFallback remembers, across searches, which services failed lately.
+	pictureFallback = &imagesearch.Fallback{}
 	// imageSearches makes one search of words several readers ask for at once.
 	imageSearches singleflight.Group
 	// userImageSearches bounds how often one account may ask, so nobody can
@@ -132,6 +171,8 @@ func pictureSearcher(provider, key string) imagesearch.Searcher {
 	switch ImageSearchProvider(provider) {
 	case Openverse:
 		return openverseSearch
+	case Bing:
+		return bingSearch
 	case Pixabay:
 		if key == "" {
 			return nil
@@ -203,7 +244,7 @@ func (s *Server) findImage(ctx context.Context, raw string) (sqlc.Picture, error
 		if !config.Enabled {
 			return sqlc.Picture{}, httpx.NewError(http.StatusNotFound, "image_not_found", "image search is off")
 		}
-		if searcher = pictureSearcher(config.Provider, key); searcher == nil {
+		if searcher = configuredSearcher(config, key); searcher == nil {
 			return sqlc.Picture{}, httpx.NewError(http.StatusServiceUnavailable, "image_search_unavailable", "pictures cannot be searched for now")
 		}
 	}
@@ -338,7 +379,11 @@ func httpOnly(address string) *string {
 // ------------------------------------------------------------------ settings
 
 func toImageSearchSettings(c imageSearchConfig, key string) ImageSearchSettings {
-	out := ImageSearchSettings{Enabled: c.Enabled, Provider: ImageSearchProvider(c.Provider), PixabayKeySet: key != ""}
+	providers := make([]ImageSearchProvider, len(c.Providers))
+	for i, provider := range c.Providers {
+		providers[i] = ImageSearchProvider(provider)
+	}
+	out := ImageSearchSettings{Enabled: c.Enabled, Providers: providers, PixabayKeySet: key != ""}
 	if preview := keyPreview(key); preview != "" {
 		out.PixabayKeyPreview = &preview
 	}
@@ -369,12 +414,16 @@ func (s *Server) UpdateImageSearchSettings(w http.ResponseWriter, r *http.Reques
 	if body.Enabled != nil {
 		config.Enabled = *body.Enabled
 	}
-	if body.Provider != nil {
-		if !body.Provider.Valid() {
-			httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "invalid_provider", "unknown image search service"))
+	if body.Providers != nil {
+		names := make([]string, len(*body.Providers))
+		for i, provider := range *body.Providers {
+			names[i] = string(provider)
+		}
+		if len(names) == 0 || len(validProviders(names)) != len(names) {
+			httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "invalid_provider", "name each image search service once"))
 			return
 		}
-		config.Provider = string(*body.Provider)
+		config.Providers = names
 	}
 	value, _ := json.Marshal(config)
 	if err := s.q.SetSetting(ctx, sqlc.SetSettingParams{Key: settingImageSearch, Value: value}); err != nil {
@@ -389,7 +438,7 @@ func (s *Server) UpdateImageSearchSettings(w http.ResponseWriter, r *http.Reques
 		}
 	}
 	// Never the key itself, not even at debug level.
-	slog.InfoContext(ctx, "image search settings changed", "enabled", config.Enabled, "provider", config.Provider,
+	slog.InfoContext(ctx, "image search settings changed", "enabled", config.Enabled, "providers", config.Providers,
 		"key_changed", body.PixabayKey != nil, "actor", auth.MustUser(ctx).Email)
 	config, key, err := loadImageSearch(ctx, s.q)
 	if err != nil {
@@ -400,7 +449,7 @@ func (s *Server) UpdateImageSearchSettings(w http.ResponseWriter, r *http.Reques
 }
 
 // TestImageSearch searches once, the service and key given or the configured
-// ones, keeping nothing.
+// services in their order, keeping nothing.
 func (s *Server) TestImageSearch(w http.ResponseWriter, r *http.Request) {
 	var body ImageSearchTestRequest
 	if err := httpx.DecodeJSON(r, &body); err != nil {
@@ -414,14 +463,14 @@ func (s *Server) TestImageSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.Provider != nil && body.Provider.Valid() {
-		config.Provider = string(*body.Provider)
+		config.Providers = []string{string(*body.Provider)}
 	}
 	if body.PixabayKey != nil && strings.TrimSpace(*body.PixabayKey) != "" {
 		key = strings.TrimSpace(*body.PixabayKey)
 	}
 	searcher := s.imageSearch
 	if searcher == nil {
-		searcher = pictureSearcher(config.Provider, key)
+		searcher = configuredSearcher(config, key)
 	}
 	result := ImageSearchTestResult{}
 	if searcher == nil {
@@ -442,6 +491,7 @@ func (s *Server) TestImageSearch(w http.ResponseWriter, r *http.Request) {
 		result.Image = &ImageSearchHit{
 			Url: found.URL, Width: found.Width, Height: found.Height, Title: found.Title, Creator: nonEmpty(found.Creator),
 			License: found.License, LandingUrl: httpOnly(found.Landing), Source: found.Source,
+			Provider: ImageSearchProvider(found.Provider),
 		}
 	default:
 		result.Ok = true
