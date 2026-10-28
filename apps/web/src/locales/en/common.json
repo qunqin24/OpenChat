@@ -14,6 +14,14 @@
     "settings": "Settings"
   },
   "chat": {
+    "ask-selection": "Ask about this",
+    "quote-label": "From the answer",
+    "quote-remove": "Remove the quote",
+    "quote-placeholder": "Ask about the selected text",
+    "link-open": "Open link",
+    "link-copy": "Copy link",
+    "link-copied": "Copied",
+    "panel-resize": "Drag to resize the panel; double-click to reset",
     "error-id": "Error ID {{id}}",
     "error-id-copy": "Click to copy the error ID, and include it when reporting the problem",
     "error-id-copied": "Copied",
@@ -89,9 +97,7 @@
       "tag": "Not sent",
       "text": "This message did not pass content moderation. Please change your prompt and try again.",
       "warning_one": "{{count}} more within {{hours}} hours and this account will be disabled.",
-      "warning_other": "{{count}} more within {{hours}} hours and this account will be disabled.",
-      "warning-guest_one": "{{count}} more within {{hours}} hours and guest mode will be closed to you.",
-      "warning-guest_other": "{{count}} more within {{hours}} hours and guest mode will be closed to you."
+      "warning_other": "{{count}} more within {{hours}} hours and this account will be disabled."
     },
     "revise": {
       "label": "Revise the refused message to send it again"
@@ -110,9 +116,6 @@
       "not_pending": "This question was already answered, skipped, or deleted.",
       "invalid_answers": "The answers are incomplete. Check each question.",
       "generic": "Sending failed. Try again.",
-      "guest_ip_limit": "This network has used up its guest requests for the hour. Try again later, or sign in.",
-      "guest_daily_limit": "Guests have used up today's requests. Try again later, or sign in.",
-      "guest_unreachable": "The server could not be reached, so nothing was sent.",
       "model_capacity_reached": "This model has reached its maximum capacity.",
       "content_blocked": "This message did not pass content moderation and was not sent.",
       "revise_refused": "The last message was refused by content moderation. Revise it before going on.",
@@ -227,9 +230,20 @@
       "collapse": "Collapse the composer"
     },
     "file": {
+      "panel": "File",
+      "copy-text": "Copy contents",
+      "copied": "Copied",
+      "download": "Download",
+      "close-panel": "Close",
+      "load-failed": "This file could not be opened; its link may have expired. Reload the page and try again.",
+      "loading": "Reading…",
       "add": "Add Files",
       "drop": "Drop images or PDFs here to attach them",
       "upload": "Attach a file",
+      "upload-all": "Add images, PDFs or text files",
+      "upload-image-text": "Add images or text files (this model does not take PDFs)",
+      "upload-pdf-text": "Add PDFs or text files (this model does not take images)",
+      "upload-text": "Add text files (this model does not take images or PDFs)",
       "upload-both": "Attach an image or PDF",
       "upload-image": "Attach an image (this model does not read PDFs)",
       "upload-pdf": "Attach a PDF (this model does not read images)",
@@ -247,15 +261,18 @@
         "failed": "Upload failed"
       },
       "reject": {
-        "type": "{{name}}: only images (PNG, JPEG, WebP, GIF) and PDFs can be attached",
+        "type": "{{name}}: only images (PNG, JPEG, WebP, GIF), PDFs and text files can be attached",
         "model-image": "{{name}}: the selected model does not accept images",
         "model-pdf": "{{name}}: the selected model does not accept PDFs",
         "size-image": "{{name}} is over the 5 MB limit for images",
         "size-pdf": "{{name}} is over the 10 MB limit for PDFs",
+        "size-text": "{{name}} is over the 256 KB limit for text files",
         "empty": "{{name}} is empty",
         "count": "A message can carry at most {{max}} files",
         "total": "The files in one message can add up to at most {{max}} MB"
-      }
+      },
+      "removed": "File deleted",
+      "removed-hint": "This file was deleted from your library"
     },
     "time": {
       "now": "just now",
@@ -355,6 +372,9 @@
       "identifier": "Email or username",
       "identifier-placeholder": "Your email or username"
     },
+    "panel": {
+      "claim": "Say a word,\nand the world answers back."
+    },
     "overlay": {
       "admin": "Admin: {{name}}"
     },
@@ -374,13 +394,15 @@
     },
     "login": {
       "title": "Sign in to {{name}}",
+      "subtitle": "Welcome back",
       "action": "Sign in",
-      "no-account": "Don't have an account?",
-      "guest": "Continue as guest",
-      "guest-hint": "No account needed. Your conversations stay in this browser."
+      "passkey": "Sign in with a passkey",
+      "no-account": "Don't have an account?"
     },
     "register": {
-      "title": "Sign up to {{name}}",
+      "title": "Create your account",
+      "subtitle": "Start chatting",
+      "password-hint": "At least {{min}} characters",
       "action": "Create Account",
       "link": "Sign up",
       "have-account": "Already have an account?",
@@ -389,6 +411,8 @@
       "to-login": "Back to sign in"
     },
     "error": {
+      "invalid-passkey": "That passkey could not sign you in. Try another, or your password.",
+      "passkey-unsupported": "This browser does not support passkeys.",
       "invalid-credentials": "Those credentials are incorrect",
       "email-taken": "That email is already registered",
       "email-required": "Enter your email",
@@ -410,15 +434,46 @@
     }
   },
   "admin": {
+    "authentication": {
+      "title": "Authentication",
+      "subtitle": "The ways an account can prove who it is.",
+      "save": "Save",
+      "saved": "Saved",
+      "save-failed": "Could not save",
+      "passkeys": {
+        "tab": "Passkeys",
+        "enabled": "Allow passkeys",
+        "on": "On",
+        "off": "Off",
+        "on-hint": "People can add passkeys in their account settings and sign in with them. {{count}} passkeys are registered.",
+        "off-hint": "The sign-in page offers no passkey. The {{count}} registered passkeys are kept and work again once this is back on.",
+        "turned-on": "Passkeys are on",
+        "turned-off": "Passkeys are off",
+        "rp": "Relying party",
+        "rp-hint": "A passkey is bound to one domain. Empty uses the domain the page is served from; pin it for a production deployment.",
+        "rp-id": "Relying party ID (domain)",
+        "rp-id-hint": "Such as chat.example.com. In force now: {{current}}. Changing it makes passkeys made for the old domain unusable.",
+        "rp-id-invalid": "Enter a domain, such as chat.example.com",
+        "origins": "Allowed origins",
+        "origins-hint": "One per line, such as https://chat.example.com. Empty uses the page's own origin, now {{current}}.",
+        "origins-invalid": "One origin per line, scheme and host only, such as https://chat.example.com",
+        "verification": "User verification",
+        "verification-preferred": "Preferred (recommended)",
+        "verification-required": "Required",
+        "verification-hint": "Required asks for a fingerprint, face or device PIN every time; security keys that cannot do that will not work."
+      }
+    },
     "title": "Admin",
     "back-to-chat": "Back to chat",
     "nav": {
+      "authentication": "Authentication",
       "dashboard": "Dashboard",
       "users": "Users",
       "manage": "Manage",
       "channels": "Channels",
       "models": "Models",
       "web-search": "Web search",
+      "image-search": "Image search",
       "storage": "File storage",
       "usage-logs": "Usage logs",
       "moderation-logs": "Moderation log"
@@ -480,7 +535,6 @@
       "users": {
         "title": "Top spenders",
         "subtitle": "Highest cost first",
-        "anonymous": "Guest",
         "requests": "{{n}} requests"
       },
       "errors": {
@@ -548,7 +602,14 @@
         "password-mismatch": "The passwords do not match",
         "name-taken": "That username is already taken",
         "name-invalid": "A username cannot contain @"
-      }
+      },
+      "delete": "Delete account",
+      "delete-title": "Delete this account for good?",
+      "delete-confirm": "{{name}}'s account will be deleted for good, with all its conversations, uploaded files, memories, custom instructions and scheduled tasks; answers in progress are stopped. Usage records are kept (shown as a deleted account). This can't be undone; to only stop them signing in, disable the account instead.",
+      "delete-type": "Type the account name “{{name}}” to confirm",
+      "delete-done": "Deleted {{name}}'s account",
+      "delete-failed": "Couldn't delete this account",
+      "last-admin": "This is the last enabled administrator and can't be deleted"
     },
     "bulk": {
       "announce": "{{n}} {{entity}} selected. Bulk actions are available.",
@@ -709,6 +770,7 @@
         "tabs": {
           "general": "General",
           "chat": "Chat",
+          "subagents": "Sub-agents",
           "access": "Access",
           "moderation": "Moderation",
           "data": "Data"
@@ -773,10 +835,6 @@
           "whole": "Enter a whole number",
           "range": "Between {{min}} and {{max}}"
         },
-        "guest": "Guest mode",
-        "guest-hint": "Lets anyone use the chat without an account, from a button on the sign-in page. A guest's conversations, memories and instructions are kept in their own browser; the server holds none of them, and only the model request itself is made here. Off by default.",
-        "guest-on": "Guest mode is on",
-        "guest-off": "Guest mode is off",
         "allow-registration": "Allow registration",
         "allow-registration-hint": "Off, the sign-in page stops offering registration and only administrators can add accounts, in Admin → Users. On a fresh install the first account is exempt: it can still register, and becomes the administrator. On by default.",
         "allow-registration-on": "Registration is allowed",
@@ -785,22 +843,33 @@
         "approval-hint": "On, an account that signs itself up is pending and cannot sign in until an administrator approves it in Admin → Users; accounts an administrator adds need no approval. Only applies while registration is allowed. On by default.",
         "approval-on": "New users need approval",
         "approval-off": "New users do not need approval",
-        "guest-limits": {
-          "title": "Guest limits",
-          "hint": "Guest requests are not tied to an account, so they are limited by network address and in total. A title on request counts as a request. 0 means no limit.",
-          "hourly": "Requests per address per hour",
-          "hourly-hint": "One guest on one network address (an IPv6 address counts as its /64) may send this many in an hour. The server has to sit behind a proxy that sets X-Forwarded-For, or the address can be faked.",
-          "daily": "Requests per day, all guests",
-          "daily-hint": "All guests together, over the last 24 hours.",
-          "runs": "Answers at once per address",
-          "runs-hint": "Counted per the same network address as the hourly limit. A guest's answer exists only while its request is open, so closing the page frees the slot. 0 is unlimited; the default is 2.",
-          "runs-unit": "answers",
-          "unit": "requests",
-          "save": "Save",
-          "saved": "Guest limits saved",
-          "required": "Enter a number; 0 means no limit",
+        "tasks": "Scheduled tasks",
+        "tasks-hint": "On, people can schedule tasks on the Scheduled tasks page, and models can schedule them for people; each runs in its own conversation in the person's name and counts towards usage as usual. Off, nothing runs (tasks are kept). At most 10 running tasks per person. On by default.",
+        "tasks-on": "Scheduled tasks turned on",
+        "tasks-off": "Scheduled tasks turned off",
+        "traces": "Request traces (debugging)",
+        "traces-hint": "On, administrators' own model requests are recorded as sent, with what came back, and an administrator can switch their own conversations to Trace to see timing, tokens and the full request. Only their own conversations; kept for 7 days. For development; off by default. Off, nothing is recorded and the view is hidden.",
+        "traces-on": "Request traces turned on",
+        "traces-off": "Request traces turned off",
+        "subagents": {
+          "enabled": "Sub-agents",
+          "enabled-hint": "Let models hand self-contained, context-heavy work (researching across many pages, reading a set of sources) to sub-agents, which do it in a context of their own and hand back only a report. Off by default; multi-agent work uses many more tokens, logged as Sub-agent in the usage log.",
+          "model": "Sub-agent model",
+          "model-hint": "The model sub-agents use. With “Same as the main model” they use the model of the reply that launched them; to keep costs down, pick a cheaper model and give it a spending cap.",
+          "model-main": "Same as the main model",
+          "background": "Allow background work",
+          "background-hint": "Let the main agent leave sub-agents working in the background while it goes on talking with the user; their reports are delivered when ready. Off, every sub-agent runs in the foreground and the main agent waits for it.",
+          "limits": "Limits",
+          "limits-hint": "Sub-agents' runs do not count against a person's own concurrent answers; they are counted here.",
+          "per-run": "Launched per reply",
+          "per-conversation": "Working at once per conversation",
+          "per-user": "Working at once per person",
+          "report-chars": "Longest report (characters)",
+          "save": "Save limits",
+          "saved": "Saved",
+          "required": "Required",
           "whole": "Enter a whole number",
-          "range": "Between {{min}} and {{max}}; 0 is unlimited"
+          "range": "Enter a number from {{min}} to {{max}}"
         }
       }
     },
@@ -969,7 +1038,7 @@
         "section-capacity": "Capacity",
         "capacity": "Spending cap (USD)",
         "capacity-placeholder": "No cap",
-        "capacity-hint": "Once this model's spend in the period reaches this amount it can no longer be used. Requests from every user, guests included, count. Leave empty for no cap.",
+        "capacity-hint": "Once this model's spend in the period reaches this amount it can no longer be used. Requests from every user count. Leave empty for no cap.",
         "capacity-invalid": "Enter an amount above 0, with at most 6 decimals",
         "capacity-period": "Period",
         "period-total": "Total",
@@ -1003,6 +1072,39 @@
       "synced": "Catalogue updated {{time}}",
       "sync-failed": "Catalogue refresh failed",
       "sync-hint": "Model names, context lengths, prices and the like come from models.dev, refreshed daily"
+    },
+    "image-search": {
+      "title": "Image search",
+      "subtitle": "Let answers ask for pictures by description: the model writes what it wants to show (\"laptop keyboard\") and the server finds a freely licensed photo.",
+      "enabled": "Pictures by description",
+      "status-live": "On",
+      "status-off": "Off",
+      "status-no-key": "Pixabay key missing",
+      "status-live-hint": "The model describes pictures; the server finds, downloads and keeps them in file storage, so the same words always show the same picture.",
+      "status-off-hint": "Off, the model can show only pictures whose addresses appeared in pages it read or searches it ran.",
+      "turned-on": "Pictures by description are on",
+      "turned-off": "Pictures by description are off",
+      "saved": "Saved",
+      "save-failed": "Could not save",
+      "provider": "Picture source",
+      "provider-hint": "Pictures found are downloaded into your file storage; readers' browsers never contact the library.",
+      "service": "Service",
+      "hint-wikimedia": "Wikimedia Commons: no key, fast, documentary photos; no safe-search filter.",
+      "hint-openverse": "Openverse: Creative Commons images from many sites with mature content filtered out; no key, but about 200 searches a day per server, and sometimes slow.",
+      "hint-pixabay": "Pixabay: stock-style photos with safe search; needs a free API key, 100 searches a minute.",
+      "key": "Pixabay API key",
+      "save-key": "Save key",
+      "key-saved": "Key saved",
+      "key-removed": "Key removed",
+      "key-stored": "A key is stored; only its last four characters are shown.",
+      "key-missing": "No key yet: Pixabay cannot search.",
+      "get-key": "Get a free key",
+      "test": "Try a search",
+      "test-run": "Search",
+      "test-hint": "Searches once with the service chosen above; nothing is kept.",
+      "test-failed": "Search failed",
+      "test-found": "Found one · {{ms}} ms",
+      "test-none": "No matching picture · {{ms}} ms"
     },
     "web-search": {
       "title": "Web search",
@@ -1123,7 +1225,7 @@
       "save-failed": "Could not save. Try again."
     },
     "moderation": {
-      "intro": "Every message and image a user sends goes out under your upstream accounts (OpenAI, Anthropic, a relay), and abusive content can get those accounts banned. With moderation on, each new message is checked before it is sent to a model: one that fails is refused and logged, and someone who keeps failing has their account disabled or their guest address banned. Only what a user newly sends is checked (sending, editing, answering the model's question, a guest's message) - not tool results, web pages, earlier turns or titles.",
+      "intro": "Every message and image a user sends goes out under your upstream accounts (OpenAI, Anthropic, a relay), and abusive content can get those accounts banned. With moderation on, each new message is checked before it is sent to a model: one that fails is refused and logged, and someone who keeps failing has their account disabled. Only what a user newly sends is checked (sending, editing, answering the model's question) - not tool results, web pages, earlier turns or titles.",
       "open-log": "Open the moderation log",
       "mode": {
         "off": "Off",
@@ -1155,7 +1257,7 @@
         "on-error": "When moderation is unavailable",
         "on-error-allow": "Send the message anyway",
         "on-error-block": "Refuse the message",
-        "on-error-hint": "What happens to an account's message when the service errors, times out, has no channel or the model is at its cap. A guest's message is always refused then.",
+        "on-error-hint": "What happens to an account's message when the service errors, times out, has no channel or the model is at its cap.",
         "save": "Save",
         "saved": "Moderation settings saved",
         "required": "Enter a number",
@@ -1168,14 +1270,12 @@
       },
       "sanctions": {
         "title": "Sanctions",
-        "hint": "When an account (or a guest network address) has this many messages refused within the window, it is sanctioned: the account is disabled and signed out, the guest address is banned. The count starts over after a sanction.",
+        "hint": "When an account has this many messages refused within the window, it is sanctioned: the account is disabled and signed out. The count starts over after a sanction.",
         "strikes": "Strikes",
         "strikes-hint": "How many refused messages set it off. 0 never sanctions and only logs. Administrators are only logged.",
         "strikes-unit": "messages",
         "strikeWindowHours": "Window",
         "strikeWindowHours-hint": "Only refused messages this recent count.",
-        "guestBanHours": "Guest ban length",
-        "guestBanHours-hint": "0 is permanent. An address shared by many people (a campus, a company) makes a permanent ban risky, so the default is 168 hours (7 days).",
         "hours": "hours"
       },
       "category": {
@@ -1197,24 +1297,15 @@
         "send": "Send",
         "edit": "Edit",
         "answer": "Answer",
-        "guest": "Guest",
         "instructions": "Custom instructions",
         "memory": "Memory",
-        "snapshot": "Checked at chat start"
+        "snapshot": "Checked at chat start",
+        "task": "Scheduled task saved",
+        "task_run": "Scheduled task, before it ran",
+        "document": "Writing block, before a model read it"
       },
       "sanction": {
-        "disabled": "Account disabled",
-        "banned": "Address banned"
-      },
-      "bans": {
-        "title": "Banned guest addresses",
-        "hint": "These network addresses cannot use guest mode now. A ban past its end stops counting and is cleaned up.",
-        "none": "No address is banned",
-        "since": "Since {{time}}",
-        "until": "until {{time}}",
-        "permanent": "permanent",
-        "lift": "Lift ban",
-        "lifted": "Lifted the ban on {{ip}}"
+        "disabled": "Account disabled"
       },
       "log": {
         "subtitle": "Messages moderation refused: who sent them, which categories matched, the start of the text. Only refused messages are logged, for 90 days, and only administrators can see them.",
@@ -1225,11 +1316,7 @@
         "sanction": "Sanction",
         "actions": "Actions",
         "disabled": "Account disabled",
-        "banned": "Address banned",
-        "ban": "Ban this address",
-        "banned-toast": "Banned {{ip}}",
         "open-account": "Open account",
-        "address": "Guest address",
         "category": "Category",
         "any-category": "All categories",
         "none": "No message was refused"
@@ -1294,7 +1381,9 @@
       "speed-title": "Output speed",
       "speed-hint": "Output tokens over the whole request, the wait for the first token included. Not shown for tiny, failed or estimated requests.",
       "no-duration": "The provider rejected the request at once; no time was spent",
-      "guest": "Guest"
+      "no-account": "No account",
+      "deleted-user": "Deleted account: {{name}}",
+      "kind-subagent": "Sub-agent"
     }
   },
   "settings": {
@@ -1376,6 +1465,22 @@
       "editor-hint": "One lasting fact or preference, in a sentence. ⌘/Ctrl + Enter saves."
     },
     "account": {
+      "passkeys": {
+        "title": "Passkeys",
+        "desc": "Sign in with your fingerprint, face or device PIN instead of a password. Passkeys live on your devices or in your password manager.",
+        "add": "Add a passkey",
+        "added": "Passkey added",
+        "add-failed": "The passkey could not be added. Try again.",
+        "exists": "This device already has a passkey for your account.",
+        "created": "Added {{when}}",
+        "used": "Last used {{when}}",
+        "never-used": "Not used yet",
+        "synced": "Synced",
+        "rename": "Rename",
+        "remove": "Remove",
+        "confirm-remove": "Remove it",
+        "keep": "Keep"
+      },
       "name": "Username",
       "name-hint": "You can sign in with your username or email.",
       "email": "Email",
@@ -1431,19 +1536,416 @@
       "data": "data,export,delete,temporary chat"
     }
   },
-  "guest": {
-    "notice": "Guest mode: conversations are only saved in this browser",
-    "notice-unsaved": "Guest mode: this browser would not let the page store anything, so conversations are lost when you reload",
-    "sign-in": "Sign in",
-    "name": "Guest",
-    "menu-hint": "Not signed in",
-    "banned": {
-      "title": "You've been banned",
-      "subtitle": "Guest mode is no longer available",
-      "text": "This network address has been banned from guest mode for sending content that breaks the rules.\nIf you have an account, you can sign in to keep using the app.",
-      "until": "Banned until {{time}}",
-      "permanent": "This ban has no end date.",
-      "sign-in": "Sign in"
+  "library": {
+    "title": "Library",
+    "search": "Search files",
+    "filter": "File type",
+    "type": {
+      "all": "All",
+      "image": "Images",
+      "pdf": "PDFs",
+      "text": "Text"
+    },
+    "view": {
+      "label": "View",
+      "grid": "Grid",
+      "list": "List"
+    },
+    "column": {
+      "name": "Name",
+      "conversation": "Conversation",
+      "size": "Size",
+      "date": "Uploaded"
+    },
+    "empty": "No files yet",
+    "empty-hint": "Images and PDFs you send in conversations show up here.",
+    "no-match": "No files match",
+    "retry": "Couldn't load files. Click to retry",
+    "load-more": "Load more files",
+    "actions": "Actions for {{name}}",
+    "open-chat": "Open conversation: {{title}}",
+    "download": "Download",
+    "download-failed": "Couldn't download this file",
+    "delete-title": "Delete this file?",
+    "delete-description": "“{{name}}” will be deleted for good. Its message will show it as deleted, and models can no longer read it. This can't be undone.",
+    "deleted": "Deleted “{{name}}”",
+    "delete-failed": "Couldn't delete this file"
+  },
+  "tasks": {
+    "title": "Scheduled tasks",
+    "new": "New task",
+    "edit": "Edit task",
+    "create": "Create",
+    "save": "Save",
+    "created": "Task scheduled",
+    "saved": "Saved",
+    "deleted": "Deleted “{{title}}”",
+    "paused": "Paused “{{title}}”",
+    "resumed": "Resumed “{{title}}”",
+    "started": "“{{title}}” is running",
+    "off": "Scheduled tasks are turned off by an administrator",
+    "retry": "Couldn't load tasks. Click to retry",
+    "empty": "Schedule a task",
+    "empty-hint": "Have a model do things for you at set times: a daily briefing, a weekly review, a reminder.",
+    "ask-hint": "You can also just say in a chat: “send me a news summary every morning at 8”.",
+    "none-active": "No tasks are running.",
+    "limit": "{{count}} of {{limit}} tasks running",
+    "actions": "Actions for {{title}}",
+    "run-now": "Run now",
+    "pause": "Pause",
+    "resume": "Resume",
+    "open-chat": "Open conversation",
+    "next": "next {{when}}",
+    "last-error": "Last time it didn't run: {{reason}}",
+    "delete-title": "Delete this task?",
+    "delete-description": "“{{title}}” will no longer run. Its conversation and what it wrote there stay.",
+    "step": "Scheduled tasks",
+    "step-running": "Scheduling a task",
+    "section": {
+      "active": "Running",
+      "rest": "Paused / done"
+    },
+    "status": {
+      "paused": "paused",
+      "completed": "done"
+    },
+    "kind": {
+      "once": "Once",
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "monthly": "Monthly"
+    },
+    "schedule": {
+      "once": "{{when}} (once)",
+      "once-none": "Once",
+      "daily": "Daily at {{time}}",
+      "weekly": "Every {{days}} at {{time}}",
+      "monthly": "Monthly on day {{day}} at {{time}}",
+      "separator": ", "
+    },
+    "field": {
+      "title": "Name",
+      "title-placeholder": "e.g. Daily news summary",
+      "prompt": "What to do",
+      "prompt-placeholder": "e.g. Find today's five most important tech stories and summarise each in one sentence.",
+      "prompt-hint": "At each run this is sent in your name to the task's own conversation. The model sees no other conversation, so make it complete.",
+      "when": "When",
+      "weekdays": "Days",
+      "date": "Date",
+      "time": "Time",
+      "month-day": "Day of month",
+      "day": "Day {{day}}",
+      "month-end": "In a month without that day, it runs on the last day.",
+      "model": "Model",
+      "model-default": "Default model"
+    },
+    "error": {
+      "past": "That time has passed",
+      "too-many": "You have the most running tasks allowed. Pause or delete one first",
+      "blocked": "Content moderation refused this task. Please change it",
+      "schedule": "That schedule isn't valid",
+      "moderation": "Content moderation is unavailable. Try again later",
+      "busy": "The task's conversation is answering. Try again shortly",
+      "generic": "Something went wrong. Please try again"
+    },
+    "reason": {
+      "conversation_busy": "its conversation was answering",
+      "content_blocked": "content moderation refused it (task paused)",
+      "moderation_unavailable": "content moderation was unavailable",
+      "model_unavailable": "the model was unavailable",
+      "no_models": "no model was available",
+      "model_capacity_reached": "the model's budget was used up",
+      "too_many_runs": "too many conversations were running",
+      "revise_refused": "a refused message in its conversation needs rewording",
+      "account_unavailable": "the account was unavailable",
+      "missed": "the server couldn't run it on time, so it was skipped",
+      "failed": "something went wrong"
+    },
+    "chip": {
+      "create": "Task scheduled",
+      "update": "Task updated",
+      "pause": "Task paused",
+      "resume": "Task resumed",
+      "delete": "Task deleted"
+    },
+    "ideas": {
+      "news": {
+        "title": "Daily news briefing",
+        "hint": "The news worth knowing, every morning.",
+        "prompt": "Find today's five most notable news stories (covering tech, business and world news), summarise each in a sentence or two, and link the sources."
+      },
+      "weekly-review": {
+        "title": "Weekly review",
+        "hint": "Look back on your week on Friday evening.",
+        "prompt": "Help me review my week: ask a few questions about what I got done, what got in the way, and the three most important things for next week."
+      },
+      "learn": {
+        "title": "Something new every day",
+        "hint": "Learn one thing before bed.",
+        "prompt": "Teach me one interesting and useful fact from a random field, in plain words, with an everyday example."
+      },
+      "meals": {
+        "title": "Weekly meal plan",
+        "hint": "Plan the week's meals and a shopping list.",
+        "prompt": "Plan seven healthy dinners for next week with short instructions for each, then a shopping list grouped by category."
+      },
+      "deals": {
+        "title": "Flight price watch",
+        "hint": "Check fares on a route you care about every week.",
+        "prompt": "Search for current round-trip fares from New York to London and tell me the typical price range and the cheapest departure dates."
+      },
+      "monthly": {
+        "title": "Start-of-month money check",
+        "hint": "On the 1st, a reminder to tidy your finances.",
+        "prompt": "Remind me to do my start-of-month finances: review last month's spending, check auto-renewing subscriptions, set this month's budget, with a short checklist."
+      }
+    }
+  },
+  "trace": {
+    "title": "Trace",
+    "conversation": "Chat",
+    "switch": "Chat or trace",
+    "requests": "{{count}} requests",
+    "total": "{{seconds}} s in all",
+    "tokens": "in {{input}} / out {{output}} tok",
+    "cache": "cache hit {{percent}}%",
+    "search": "Search trace",
+    "refresh": "Refresh",
+    "retry": "Couldn't load the trace. Click to retry",
+    "timeline": "Timeline",
+    "empty": "No trace for this conversation yet",
+    "empty-hint": "Only administrators' own requests are recorded, for {{days}} days; earlier ones were not.",
+    "empty-text": "(empty)",
+    "ok": "Done",
+    "failed": "Failed",
+    "estimated": "Usage is estimated (the provider reported none)",
+    "detail": "Request {{index}} details",
+    "track": {
+      "model": "Model",
+      "tool": "Tools"
+    },
+    "kind": {
+      "system": "System",
+      "user": "User",
+      "history": "History",
+      "reasoning": "Thinking",
+      "assistant": "Assistant",
+      "tool_call": "Tool call",
+      "tool_result": "Tool result"
+    },
+    "role": {
+      "system": "System",
+      "user": "User",
+      "assistant": "Assistant",
+      "tool": "Tool"
+    },
+    "request-kind": {
+      "chat": "Chat request",
+      "compression": "Compression"
+    },
+    "tab": {
+      "content": "Content",
+      "overview": "Overview",
+      "request": "Request",
+      "response": "Response",
+      "raw": "Raw"
+    },
+    "section": {
+      "system": "System prompt",
+      "messages": "Messages ({{count}})",
+      "tools": "Tools offered ({{count}})"
+    },
+    "fact": {
+      "status": "Status",
+      "error": "Error",
+      "model": "Model",
+      "channel": "Channel",
+      "started": "Started",
+      "duration": "Duration",
+      "first-token": "First token",
+      "generation": "Generation",
+      "throughput": "Throughput",
+      "input": "Input",
+      "input-value": "{{total}} tok (cache read {{cached}}, written {{written}})",
+      "cache": "Cache hit",
+      "output": "Output",
+      "output-value": "{{total}} tok (thinking {{reasoning}})",
+      "cost": "Cost"
+    }
+  },
+  "viewer": {
+    "open": "View {{name}}",
+    "image": "Image",
+    "count": "{{index}} of {{total}}",
+    "download": "Download",
+    "original": "Open the original in a new tab",
+    "source": "Open the source page",
+    "close": "Close",
+    "previous": "Previous",
+    "next": "Next",
+    "failed": "The image couldn't be loaded",
+    "fit": "Fit to window",
+    "actual": "View at actual size"
+  },
+  "document": {
+    "menu": {
+      "label": "Writing",
+      "heading": "Writing in this chat",
+      "open_one": "Open writing ({{count}})",
+      "open_other": "Open writing ({{count}})"
+    },
+    "label": "Writing",
+    "writing": "Writing…",
+    "count_one": "{{count}} character",
+    "count_other": "{{count}} characters",
+    "pill-updated": "Edited",
+    "pill-version": "v{{version}}",
+    "step": {
+      "read": "Read “{{title}}”",
+      "read-untitled": "Read the document",
+      "reading": "Reading the document…",
+      "read-failed": "Couldn't read the document",
+      "list": "Looked at this chat's documents",
+      "listing": "Looking at the documents…",
+      "writing": "Writing…",
+      "create-failed": "The writing didn't go through",
+      "updating": "Editing…",
+      "update-failed": "The edit didn't go through",
+      "generic": "Used a writing block"
+    },
+    "updated": "Edited writing",
+    "open": "Open beside the chat",
+    "copy": "Copy",
+    "gone": "This document no longer exists",
+    "panel": "Writing panel",
+    "editor": "Document text",
+    "placeholder": "Start writing…",
+    "title": "Title",
+    "previous": "Previous version",
+    "next": "Next version",
+    "download": "Download as Markdown",
+    "full": "Full screen",
+    "exit-full": "Exit full screen",
+    "close": "Close",
+    "viewing": "Viewing version {{version}} of {{total}} ({{who}})",
+    "by": {
+      "model": "written by the model",
+      "user": "your edit"
+    },
+    "restore": "Restore this version",
+    "latest": "Back to latest",
+    "restored": "Restored version {{version}}",
+    "conflict": "The model just changed this document; the latest version is loaded",
+    "save-failed": "Couldn't save. Try again",
+    "saving": "Saving…",
+    "version": "Version {{version}} of {{total}}",
+    "ask": "Ask for a change",
+    "link": "Link",
+    "link-placeholder": "Type or paste a URL; empty removes the link",
+    "link-apply": "Apply link",
+    "bold": "Bold",
+    "italic": "Italic",
+    "block": {
+      "paragraph": "Body",
+      "h1": "Heading 1",
+      "h2": "Heading 2",
+      "h3": "Heading 3",
+      "bullet": "Bulleted list",
+      "ordered": "Numbered list",
+      "quote": "Quote",
+      "label": "Paragraph style"
+    },
+    "quote-label": "Writing selection",
+    "quote-remove": "Remove the selection",
+    "quote-placeholder": "Describe the change you want to the selection",
+    "rewriting": "Rewriting…"
+  },
+  "subagents": {
+    "name": "Sub-agents",
+    "open": "Show sub-agents",
+    "launch": {
+      "started": "{{names}} started working",
+      "preparing": "Launching a sub-agent…",
+      "to-background": "Move to background",
+      "queued": "{{names}} queued",
+      "mixed": "{{started}}; {{queued}}",
+      "progress": "{{total}} sub-agents working",
+      "finished": "{{total}} sub-agents done · {{duration}}",
+      "ended": "{{total}} sub-agents ended · {{duration}}",
+      "extra-queued": " · {{count}} queued",
+      "extra-stopped": " · {{count}} stopped",
+      "extra-failed": " · {{count}} failed",
+      "extra-done": " · {{count}} done"
+    },
+    "done": {
+      "completed": "{{name}} finished",
+      "failed": "{{name}} failed",
+      "cancelled": "{{name}} was stopped",
+      "partial": "handed back partial results"
+    },
+    "duration": {
+      "seconds": "{{seconds}}s",
+      "minutes": "{{minutes}}m {{seconds}}s"
+    },
+    "summary": {
+      "label": "Sub-agents",
+      "running": "{{count}} running",
+      "done": "{{count}} done",
+      "queued": "{{count}} queued"
+    },
+    "panel": {
+      "title": "Sub-agents",
+      "running": "Running · {{count}}",
+      "finished": "Finished · {{count}}",
+      "close": "Close",
+      "back": "Back to the list",
+      "stop": "Stop",
+      "resume": "Continue",
+      "empty": "This conversation has no sub-agents yet.",
+      "loading": "Loading…",
+      "task": "Task",
+      "message": "From the main agent",
+      "show-more": "Show more",
+      "show-less": "Show less",
+      "stopped-by-user": "You stopped it",
+      "waiting": "Waiting…",
+      "running-queued": "Running · {{count}} · {{queued}} queued",
+      "queued": "Queued · waiting for a free slot",
+      "cancel": "Cancel"
+    },
+    "state": {
+      "running": "Running",
+      "completed": "Finished",
+      "failed": "Failed",
+      "cancelled": "Stopped",
+      "queued": "Queued"
+    },
+    "activity": {
+      "thinking": "Thinking",
+      "web_search": "Searching",
+      "web_fetch": "Reading a page",
+      "document": "Reading a document",
+      "calls_one": "{{count}} tool call",
+      "calls_other": "{{count}} tool calls"
+    },
+    "age": {
+      "now": "just now",
+      "minute": "{{count}} min ago",
+      "hour": "{{count}} h ago",
+      "day": "{{count}} d ago"
+    },
+    "step": {
+      "message": "Messaged {{name}}",
+      "message-running": "Messaging {{name}}",
+      "stop": "Stopped {{name}}",
+      "stop-running": "Stopping {{name}}",
+      "failed": "Could not launch {{name}}",
+      "unnamed": "a sub-agent"
+    },
+    "error": {
+      "too-many": "Too many sub-agents are working at once; try again when one finishes.",
+      "busy": "It is already working.",
+      "generic": "That did not work; try again."
     }
   }
 }

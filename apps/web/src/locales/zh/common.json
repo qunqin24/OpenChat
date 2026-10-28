@@ -14,6 +14,14 @@
     "settings": "设置"
   },
   "chat": {
+    "ask-selection": "引用提问",
+    "quote-label": "回答选段",
+    "quote-remove": "移除引用",
+    "quote-placeholder": "就选中的内容提问",
+    "link-open": "打开链接",
+    "link-copy": "复制链接",
+    "link-copied": "已复制",
+    "panel-resize": "拖动调整面板宽度，双击还原",
     "error-id-copied": "已复制",
     "error-id": "错误编号 {{id}}",
     "error-id-copy": "点击复制错误编号，反馈问题时附上它",
@@ -89,9 +97,7 @@
       "tag": "未发送",
       "text": "这条消息未通过内容审核。请修改提示词后再试。",
       "warning_one": "{{hours}} 小时内再违规 {{count}} 次，账号将被停用。",
-      "warning_other": "{{hours}} 小时内再违规 {{count}} 次，账号将被停用。",
-      "warning-guest_one": "{{hours}} 小时内再违规 {{count}} 次，将被禁止使用游客模式。",
-      "warning-guest_other": "{{hours}} 小时内再违规 {{count}} 次，将被禁止使用游客模式。"
+      "warning_other": "{{hours}} 小时内再违规 {{count}} 次，账号将被停用。"
     },
     "revise": {
       "label": "修改被拦下的消息后重新发送"
@@ -110,9 +116,6 @@
       "not_pending": "这个问题已经回答过、被跳过，或已被删除。",
       "invalid_answers": "回答不完整，请检查每个问题。",
       "generic": "发送失败，请重试。",
-      "guest_ip_limit": "这个网络本小时的游客请求次数已用完，请稍后再试，或登录后继续使用。",
-      "guest_daily_limit": "今天游客的总请求次数已用完，请稍后再试，或登录后继续使用。",
-      "guest_unreachable": "连不上服务器，消息没有发出去。",
       "model_capacity_reached": "此模型已达到最大容量。",
       "content_blocked": "这条消息未通过内容审核，没有发送。",
       "revise_refused": "上一条消息未通过内容审核，请先修改它再继续。",
@@ -227,9 +230,20 @@
       "collapse": "收起输入框"
     },
     "file": {
+      "panel": "文件",
+      "copy-text": "复制内容",
+      "copied": "已复制",
+      "download": "下载",
+      "close-panel": "关闭",
+      "load-failed": "打不开这个文件，链接可能已过期，刷新页面再试。",
+      "loading": "正在读取…",
       "add": "添加文件",
       "drop": "将图片或 PDF 拖到这里即可添加",
       "upload": "添加文件",
+      "upload-all": "添加图片、PDF 或文本文件",
+      "upload-image-text": "添加图片或文本文件（当前模型不支持 PDF）",
+      "upload-pdf-text": "添加 PDF 或文本文件（当前模型不支持图片）",
+      "upload-text": "添加文本文件（当前模型不支持图片和 PDF）",
       "upload-both": "添加图片或 PDF",
       "upload-image": "添加图片（当前模型不支持 PDF）",
       "upload-pdf": "添加 PDF（当前模型不支持图片）",
@@ -247,15 +261,18 @@
         "failed": "上传失败"
       },
       "reject": {
-        "type": "{{name}}：只能添加图片（PNG、JPEG、WebP、GIF）和 PDF",
+        "type": "{{name}}：只能添加图片（PNG、JPEG、WebP、GIF）、PDF 和文本文件",
         "model-image": "{{name}}：当前模型不支持图片",
         "model-pdf": "{{name}}：当前模型不支持 PDF",
         "size-image": "{{name}} 超过了图片 5 MB 的上限",
         "size-pdf": "{{name}} 超过了 PDF 10 MB 的上限",
+        "size-text": "{{name}} 超过了文本文件 256 KB 的上限",
         "empty": "{{name}} 是空文件",
         "count": "一条消息最多带 {{max}} 个文件",
         "total": "一条消息的文件加起来最多 {{max}} MB"
-      }
+      },
+      "removed": "文件已删除",
+      "removed-hint": "这个文件已从库中删除"
     },
     "time": {
       "now": "刚刚",
@@ -355,6 +372,9 @@
       "identifier": "邮箱或用户名",
       "identifier-placeholder": "输入你的邮箱或用户名"
     },
+    "panel": {
+      "claim": "话一出口，\n世界便有了回声。"
+    },
     "overlay": {
       "admin": "管理员：{{name}}"
     },
@@ -374,13 +394,15 @@
     },
     "login": {
       "title": "登录 {{name}}",
+      "subtitle": "欢迎回来",
       "action": "登录",
-      "no-account": "没有账号？",
-      "guest": "以游客身份使用",
-      "guest-hint": "无需账号，对话只保存在这个浏览器里。"
+      "passkey": "使用通行密钥登录",
+      "no-account": "没有账号？"
     },
     "register": {
-      "title": "注册 {{name}}",
+      "title": "创建账号",
+      "subtitle": "开始第一段对话",
+      "password-hint": "至少 {{min}} 位",
       "action": "创建账号",
       "link": "注册",
       "have-account": "已拥有账号？",
@@ -389,6 +411,8 @@
       "to-login": "返回登录"
     },
     "error": {
+      "invalid-passkey": "这个通行密钥无法登录，请换一个或使用密码。",
+      "passkey-unsupported": "这个浏览器不支持通行密钥。",
       "invalid-credentials": "账号或密码不正确",
       "email-taken": "该邮箱已被注册",
       "email-required": "请填写邮箱",
@@ -410,15 +434,46 @@
     }
   },
   "admin": {
+    "authentication": {
+      "title": "身份验证",
+      "subtitle": "账号可以用哪些方式证明自己的身份。",
+      "save": "保存",
+      "saved": "已保存",
+      "save-failed": "保存失败",
+      "passkeys": {
+        "tab": "通行密钥",
+        "enabled": "允许使用通行密钥",
+        "on": "已开启",
+        "off": "已关闭",
+        "on-hint": "用户可以在账号设置里添加通行密钥，并在登录页用它登录。目前共有 {{count}} 个通行密钥。",
+        "off-hint": "登录页不显示通行密钥，已有的 {{count}} 个通行密钥会保留，重新开启后可以继续使用。",
+        "turned-on": "已开启通行密钥",
+        "turned-off": "已关闭通行密钥",
+        "rp": "依赖方",
+        "rp-hint": "通行密钥绑定在一个域名上。留空时使用访问页面的域名；正式部署建议填写固定的域名。",
+        "rp-id": "依赖方 ID（域名）",
+        "rp-id-hint": "例如 chat.example.com。现在生效的是 {{current}}。改了之后，按旧域名创建的通行密钥将无法使用。",
+        "rp-id-invalid": "请填写一个域名，例如 chat.example.com",
+        "origins": "允许的来源",
+        "origins-hint": "每行一个，例如 https://chat.example.com。留空时使用页面自己的来源，现在是 {{current}}。",
+        "origins-invalid": "每行一个来源，只写协议和域名，例如 https://chat.example.com",
+        "verification": "用户验证",
+        "verification-preferred": "尽量验证（推荐）",
+        "verification-required": "必须验证",
+        "verification-hint": "「必须验证」要求每次都用指纹、面容或设备密码确认是本人；不支持的安全密钥将无法使用。"
+      }
+    },
     "title": "管理后台",
     "back-to-chat": "返回对话",
     "nav": {
+      "authentication": "身份验证",
       "dashboard": "仪表盘",
       "users": "用户",
       "manage": "管理",
       "channels": "渠道",
       "models": "模型市场",
       "web-search": "联网搜索",
+      "image-search": "图片搜索",
       "storage": "文件存储",
       "usage-logs": "使用日志",
       "moderation-logs": "审核日志"
@@ -480,7 +535,6 @@
       "users": {
         "title": "用户花费",
         "subtitle": "按费用排序",
-        "anonymous": "游客",
         "requests": "{{n}} 次请求"
       },
       "errors": {
@@ -548,7 +602,14 @@
         "password-mismatch": "两次输入的密码不一致",
         "name-taken": "该用户名已被占用",
         "name-invalid": "用户名不能包含 @"
-      }
+      },
+      "delete": "删除账号",
+      "delete-title": "永久删除这个账号？",
+      "delete-confirm": "将永久删除 {{name}} 的账号，以及其全部对话、上传的文件、记忆、自定义指令和定时任务，正在进行的回答会被停止。用量记录会保留（显示为「已删除的账号」）。此操作无法撤销；只想阻止登录请改用「停用」。",
+      "delete-type": "输入账号名「{{name}}」以确认",
+      "delete-done": "已删除 {{name}} 的账号",
+      "delete-failed": "无法删除这个账号",
+      "last-admin": "这是最后一个启用的管理员，不能删除"
     },
     "bulk": {
       "announce": "已选中 {{n}} 个{{entity}}，可使用批量操作。",
@@ -709,6 +770,7 @@
         "tabs": {
           "general": "常规",
           "chat": "对话",
+          "subagents": "子智能体",
           "access": "访问",
           "moderation": "审核",
           "data": "数据"
@@ -773,10 +835,6 @@
           "whole": "请输入整数",
           "range": "范围是 {{min}}–{{max}}"
         },
-        "guest": "游客模式",
-        "guest-hint": "允许任何人不注册账号直接使用聊天，入口是登录页上的按钮。游客的对话、记忆和自定义指令都保存在他们自己的浏览器里，服务器不留任何一份，只负责模型请求本身。默认关闭。",
-        "guest-on": "已开启游客模式",
-        "guest-off": "已关闭游客模式",
         "allow-registration": "允许注册",
         "allow-registration-hint": "关闭后，登录页不再显示注册入口，只有管理员能在 后台 → 用户 里新建账号。全新安装时第一个账号不受此限：它仍可注册，并成为管理员。默认开启。",
         "allow-registration-on": "已允许注册",
@@ -785,22 +843,33 @@
         "approval-hint": "开启后，自行注册的账号处于待审批状态，不能登录，直到管理员在 后台 → 用户 里批准；管理员新建的账号不需要审批。只在允许注册时生效。默认开启。",
         "approval-on": "新用户需要审批",
         "approval-off": "新用户无需审批",
-        "guest-limits": {
-          "title": "游客限额",
-          "hint": "游客的请求不属于任何账号，所以按网络地址和总量限制。按需生成标题也算一次请求。填 0 表示不限制。",
-          "hourly": "每个地址每小时请求数",
-          "hourly-hint": "同一网络地址的游客一小时内最多发这么多次（IPv6 地址按 /64 算作一个）。服务器需要部署在会设置 X-Forwarded-For 的代理后面，否则地址可以被伪造。",
-          "daily": "所有游客每天请求总数",
-          "daily-hint": "全部游客合计，按最近 24 小时计算。",
-          "runs": "每个地址同时进行的回答数",
-          "runs-hint": "按和每小时限额相同的网络地址计算。游客的回答只在请求连接期间存在，关闭页面即释放名额。0 表示不限制，默认 2。",
-          "runs-unit": "个",
-          "unit": "次",
-          "save": "保存",
-          "saved": "已保存游客限额",
-          "required": "请输入数字，0 表示不限制",
-          "whole": "请输入整数",
-          "range": "范围 {{min}} 到 {{max}}，0 表示不限制"
+        "tasks": "定时任务",
+        "tasks-hint": "开启后，用户可以在「定时任务」页面安排任务，模型也可以替用户安排；到时间后任务会以用户的名义在专属对话里运行，并照常计入用量。关闭后不再运行任何任务（已有任务保留）。每人最多 10 个运行中的任务。默认开启。",
+        "tasks-on": "定时任务已开启",
+        "tasks-off": "定时任务已关闭",
+        "traces": "请求轨迹（调试）",
+        "traces-hint": "开启后，记录管理员自己每次模型请求实际发出的内容和返回结果，管理员可以在自己对话的顶栏切换到「轨迹」查看耗时、token 和完整请求。只看得到自己的对话，记录保留 7 天。用于开发调试，默认关闭；关闭后不再记录，入口也会隐藏。",
+        "traces-on": "请求轨迹已开启",
+        "traces-off": "请求轨迹已关闭",
+        "subagents": {
+          "enabled": "子智能体",
+          "enabled-hint": "允许模型把独立、费上下文的工作（查一圈资料、读一批网页）交给子智能体，在它自己的上下文里做完，只把报告交回。默认关闭；多智能体的 token 消耗明显更高，用量在使用日志里单独记为「子智能体」。",
+          "model": "子智能体的模型",
+          "model-hint": "子智能体用哪个模型。选「与主模型相同」时用派出它的那次回答的模型；要控制花费，选一个便宜的模型并给它设容量上限。",
+          "model-main": "与主模型相同",
+          "background": "允许后台运行",
+          "background-hint": "允许主智能体让子智能体在后台工作、自己接着和用户聊，报告做完后自动送达。关掉后每个子智能体都在前台，主智能体等它做完。",
+          "limits": "上限",
+          "limits-hint": "子智能体的运行不占用户自己的「同时回答数」，单独按这里计数。",
+          "per-run": "每次回答最多派出",
+          "per-conversation": "每个对话同时运行",
+          "per-user": "每个用户同时运行",
+          "report-chars": "报告最长字数",
+          "save": "保存上限",
+          "saved": "已保存",
+          "required": "请填写",
+          "whole": "请填写整数",
+          "range": "请填写 {{min}} 到 {{max}} 之间的数"
         }
       }
     },
@@ -969,7 +1038,7 @@
         "section-capacity": "容量",
         "capacity": "容量上限（美元）",
         "capacity-placeholder": "不限制",
-        "capacity-hint": "这个模型在统计周期内的花费达到该金额后，就无法再使用。所有用户（含访客）的请求都会计入。留空即不限制。",
+        "capacity-hint": "这个模型在统计周期内的花费达到该金额后，就无法再使用。所有用户的请求都会计入。留空即不限制。",
         "capacity-invalid": "请输入大于 0 的金额，最多 6 位小数",
         "capacity-period": "统计周期",
         "period-total": "总计",
@@ -1003,6 +1072,39 @@
       "synced": "目录更新于 {{time}}",
       "sync-failed": "目录刷新失败",
       "sync-hint": "模型名称、上下文长度、价格等信息来自 models.dev，每天自动更新"
+    },
+    "image-search": {
+      "title": "图片搜索",
+      "subtitle": "让回答按描述配图：模型写出想要的图片（比如「laptop keyboard」），服务器去图库找一张自由授权的照片。",
+      "enabled": "按描述配图",
+      "status-live": "已开启",
+      "status-off": "未开启",
+      "status-no-key": "缺少 Pixabay Key",
+      "status-live-hint": "模型描述图片，服务器搜图、下载并保存到文件存储，同一描述每次显示同一张。",
+      "status-off-hint": "关闭时，模型只能使用它读过的网页或搜索结果里出现过的图片地址。",
+      "turned-on": "已开启按描述配图",
+      "turned-off": "已关闭按描述配图",
+      "saved": "已保存",
+      "save-failed": "保存失败",
+      "provider": "图片来源",
+      "provider-hint": "找到的图片会下载到你的文件存储里，读者的浏览器不会直接访问图库。",
+      "service": "服务",
+      "hint-wikimedia": "维基共享资源：不需要 Key、速度快、照片偏写实和资料性；没有安全搜索过滤。",
+      "hint-openverse": "Openverse：汇集多个网站的知识共享授权图片并过滤成人内容；不需要 Key，但每台服务器每天只能搜约 200 次，有时很慢。",
+      "hint-pixabay": "Pixabay：图库风格的照片，带安全搜索；需要免费 API Key，每分钟可搜 100 次。",
+      "key": "Pixabay API Key",
+      "save-key": "保存 Key",
+      "key-saved": "已保存 Key",
+      "key-removed": "已移除 Key",
+      "key-stored": "已保存 Key，只显示末尾四位。",
+      "key-missing": "还没有 Key，Pixabay 搜不了图。",
+      "get-key": "免费获取 Key",
+      "test": "试搜一张",
+      "test-run": "搜索",
+      "test-hint": "用上面选择的服务搜一次，不会保存结果。",
+      "test-failed": "搜索失败",
+      "test-found": "找到了 · {{ms}} 毫秒",
+      "test-none": "没有找到匹配的图片 · {{ms}} 毫秒"
     },
     "web-search": {
       "title": "联网搜索",
@@ -1123,7 +1225,7 @@
       "save-failed": "保存失败，请重试"
     },
     "moderation": {
-      "intro": "用户发出的每一条消息和图片，都是以你的上游账号（OpenAI、Anthropic、中转站）的名义发出去的，违规内容可能让这些账号被封。开启审核后，新消息发给模型前先检查，不通过的直接拒绝并记入日志；同一个人反复违规会被停用账号或封禁游客地址。只检查用户新发的内容（发送、改写、回答模型的提问、游客的消息），不检查工具结果、网页、历史对话和标题。",
+      "intro": "用户发出的每一条消息和图片，都是以你的上游账号（OpenAI、Anthropic、中转站）的名义发出去的，违规内容可能让这些账号被封。开启审核后，新消息发给模型前先检查，不通过的直接拒绝并记入日志；同一个人反复违规会被停用账号。只检查用户新发的内容（发送、改写、回答模型的提问），不检查工具结果、网页、历史对话和标题。",
       "open-log": "查看审核日志",
       "mode": {
         "off": "关闭",
@@ -1155,7 +1257,7 @@
         "on-error": "审核不可用时",
         "on-error-allow": "照常发送",
         "on-error-block": "拒绝发送",
-        "on-error-hint": "审核服务出错、超时、没有可用渠道或模型达到容量上限时，账号用户的消息怎么处理。游客的消息在这种情况下始终被拒绝。",
+        "on-error-hint": "审核服务出错、超时、没有可用渠道或模型达到容量上限时，账号用户的消息怎么处理。",
         "save": "保存",
         "saved": "审核设置已保存",
         "required": "请输入数字",
@@ -1168,14 +1270,12 @@
       },
       "sanctions": {
         "title": "处罚",
-        "hint": "一个账号（或一个游客网络地址）在时间窗口内被拒绝的消息达到次数，就会被处罚：账号停用并退出登录，游客地址被封禁。处罚后重新计数。",
+        "hint": "一个账号在时间窗口内被拒绝的消息达到次数，就会被处罚：账号停用并退出登录。处罚后重新计数。",
         "strikes": "违规次数",
         "strikes-hint": "达到这个次数触发处罚。0 表示从不处罚，只记录。管理员只记录。",
         "strikes-unit": "次",
         "strikeWindowHours": "统计窗口",
         "strikeWindowHours-hint": "只统计最近这么久内被拒绝的消息。",
-        "guestBanHours": "游客封禁时长",
-        "guestBanHours-hint": "0 表示永久。多人共用一个地址（校园网、公司出口）时永久封禁风险很大，默认 168 小时（7 天）。",
         "hours": "小时"
       },
       "category": {
@@ -1197,24 +1297,15 @@
         "send": "发送",
         "edit": "改写",
         "answer": "回答提问",
-        "guest": "游客",
         "instructions": "自定义指令",
         "memory": "记忆",
-        "snapshot": "对话开始时的检查"
+        "snapshot": "对话开始时的检查",
+        "task": "保存定时任务",
+        "task_run": "定时任务运行前的检查",
+        "document": "写作块（模型读取前的检查）"
       },
       "sanction": {
-        "disabled": "已停用账号",
-        "banned": "已封禁地址"
-      },
-      "bans": {
-        "title": "被封禁的游客地址",
-        "hint": "这些网络地址现在不能使用游客模式。过期的封禁会自动失效并被清理。",
-        "none": "没有被封禁的地址",
-        "since": "自 {{time}}",
-        "until": "至 {{time}}",
-        "permanent": "永久",
-        "lift": "解封",
-        "lifted": "已解封 {{ip}}"
+        "disabled": "已停用账号"
       },
       "log": {
         "subtitle": "被审核拒绝的消息：谁发的、命中什么类别、消息开头的一段。只记录被拒绝的，保留 90 天，只有管理员看得到。",
@@ -1225,11 +1316,7 @@
         "sanction": "处罚",
         "actions": "操作",
         "disabled": "账号已停用",
-        "banned": "地址已封禁",
-        "ban": "封禁此地址",
-        "banned-toast": "已封禁 {{ip}}",
         "open-account": "查看账号",
-        "address": "游客地址",
         "category": "类别",
         "any-category": "全部类别",
         "none": "没有被拒绝的消息"
@@ -1294,7 +1381,9 @@
       "speed-title": "输出速度",
       "speed-hint": "输出 token ÷ 整个请求的耗时（含等待首字）。输出太少、失败或估算的请求不计。",
       "no-duration": "服务商一收到请求就拒绝了，没有耗时",
-      "guest": "游客"
+      "no-account": "无账号",
+      "deleted-user": "已删除的账号：{{name}}",
+      "kind-subagent": "子智能体"
     }
   },
   "settings": {
@@ -1376,6 +1465,22 @@
       "editor-hint": "一条记忆写一个长期事实或偏好，一句话即可。⌘/Ctrl + Enter 保存。"
     },
     "account": {
+      "passkeys": {
+        "title": "通行密钥",
+        "desc": "用指纹、面容或设备密码登录，不用输入密码。通行密钥保存在你的设备或密码管理器里。",
+        "add": "添加通行密钥",
+        "added": "已添加通行密钥",
+        "add-failed": "没能添加通行密钥，请再试一次。",
+        "exists": "这个设备上已经有你的通行密钥了。",
+        "created": "添加于{{when}}",
+        "used": "上次使用{{when}}",
+        "never-used": "还没用过",
+        "synced": "已同步",
+        "rename": "重命名",
+        "remove": "移除",
+        "confirm-remove": "确认移除",
+        "keep": "保留"
+      },
       "name": "用户名",
       "name-hint": "登录时可以使用用户名或邮箱。",
       "email": "邮箱",
@@ -1431,19 +1536,416 @@
       "data": "数据,导出,删除,临时聊天,data,export"
     }
   },
-  "guest": {
-    "notice": "游客模式：对话只保存在这个浏览器里",
-    "notice-unsaved": "游客模式：这个浏览器不允许此页面保存数据，刷新后对话会丢失",
-    "sign-in": "登录",
-    "name": "游客",
-    "menu-hint": "未登录",
-    "banned": {
-      "title": "你已被封禁",
-      "subtitle": "游客模式已不可用",
-      "text": "当前网络地址因发送违规内容，已被禁止使用游客模式。\n如果你有账号，可以登录后继续使用。",
-      "until": "封禁至 {{time}}",
-      "permanent": "此封禁没有到期时间。",
-      "sign-in": "登录"
+  "library": {
+    "title": "库",
+    "search": "搜索文件",
+    "filter": "文件类型",
+    "type": {
+      "all": "全部",
+      "image": "图片",
+      "pdf": "PDF",
+      "text": "文本"
+    },
+    "view": {
+      "label": "显示方式",
+      "grid": "网格",
+      "list": "列表"
+    },
+    "column": {
+      "name": "名称",
+      "conversation": "来源对话",
+      "size": "大小",
+      "date": "上传时间"
+    },
+    "empty": "还没有文件",
+    "empty-hint": "在对话中发送的图片和 PDF 会出现在这里。",
+    "no-match": "没有找到匹配的文件",
+    "retry": "文件加载失败，点击重试",
+    "load-more": "加载更多文件",
+    "actions": "{{name}} 的操作",
+    "open-chat": "打开对话：{{title}}",
+    "download": "下载",
+    "download-failed": "无法下载这个文件",
+    "delete-title": "要删除这个文件吗？",
+    "delete-description": "将永久删除「{{name}}」。它所在的消息会显示为「文件已删除」，模型也将无法再读取它，删除后无法恢复。",
+    "deleted": "已删除「{{name}}」",
+    "delete-failed": "无法删除这个文件"
+  },
+  "tasks": {
+    "title": "定时任务",
+    "new": "新建任务",
+    "edit": "编辑任务",
+    "create": "创建",
+    "save": "保存",
+    "created": "已创建定时任务",
+    "saved": "已保存",
+    "deleted": "已删除「{{title}}」",
+    "paused": "已暂停「{{title}}」",
+    "resumed": "已恢复「{{title}}」",
+    "started": "「{{title}}」已开始运行",
+    "off": "定时任务已被管理员关闭",
+    "retry": "任务加载失败，点击重试",
+    "empty": "安排任务",
+    "empty-hint": "让模型在指定时间替你做事：每天的简报、每周的回顾、到点的提醒。",
+    "ask-hint": "也可以直接在对话里说「每天早上 8 点给我发一份新闻摘要」。",
+    "none-active": "没有在运行的任务。",
+    "limit": "{{count}} / {{limit}} 个任务在运行",
+    "actions": "{{title}} 的操作",
+    "run-now": "立即运行",
+    "pause": "暂停",
+    "resume": "恢复",
+    "open-chat": "打开对话",
+    "next": "下次 {{when}}",
+    "last-error": "上次未能运行：{{reason}}",
+    "delete-title": "要删除这个任务吗？",
+    "delete-description": "「{{title}}」将不再运行。它的对话和已有的结果会保留。",
+    "step": "定时任务",
+    "step-running": "正在安排定时任务",
+    "section": {
+      "active": "运行中",
+      "rest": "已暂停 / 已完成"
+    },
+    "status": {
+      "paused": "已暂停",
+      "completed": "已完成"
+    },
+    "kind": {
+      "once": "一次",
+      "daily": "每天",
+      "weekly": "每周",
+      "monthly": "每月"
+    },
+    "schedule": {
+      "once": "{{when}}（一次）",
+      "once-none": "一次",
+      "daily": "每天 {{time}}",
+      "weekly": "每周 {{days}} {{time}}",
+      "monthly": "每月 {{day}} 日 {{time}}",
+      "separator": "、"
+    },
+    "field": {
+      "title": "名称",
+      "title-placeholder": "例如：每日新闻摘要",
+      "prompt": "要做的事",
+      "prompt-placeholder": "例如：搜索今天科技领域最重要的 5 条新闻，用中文各写一句话摘要。",
+      "prompt-hint": "到时间后会以你的名义把这段话发到任务专属的对话里，模型看不到别的对话，请写清楚。",
+      "when": "时间",
+      "weekdays": "星期",
+      "date": "日期",
+      "time": "时刻",
+      "month-day": "日期",
+      "day": "{{day}} 日",
+      "month-end": "当月没有这一天时，会在月底最后一天运行。",
+      "model": "模型",
+      "model-default": "默认模型"
+    },
+    "error": {
+      "past": "时间已经过去了",
+      "too-many": "运行中的任务已达上限，请先暂停或删除一个",
+      "blocked": "内容审核未通过，请修改任务内容",
+      "schedule": "时间设置无效",
+      "moderation": "内容审核服务暂不可用，请稍后再试",
+      "busy": "这个任务的对话正在回答，请稍后再试",
+      "generic": "操作失败，请重试"
+    },
+    "reason": {
+      "conversation_busy": "当时对话正在回答",
+      "content_blocked": "内容审核未通过（任务已暂停）",
+      "moderation_unavailable": "内容审核服务不可用",
+      "model_unavailable": "模型不可用",
+      "no_models": "没有可用的模型",
+      "model_capacity_reached": "模型额度已用完",
+      "too_many_runs": "同时运行的对话太多",
+      "revise_refused": "对话里有被拒绝的消息待修改",
+      "account_unavailable": "账号不可用",
+      "missed": "服务器未能按时运行，已跳过这一次",
+      "failed": "出错了"
+    },
+    "chip": {
+      "create": "已安排定时任务",
+      "update": "已修改定时任务",
+      "pause": "已暂停定时任务",
+      "resume": "已恢复定时任务",
+      "delete": "已删除定时任务"
+    },
+    "ideas": {
+      "news": {
+        "title": "每日新闻简报",
+        "hint": "每天早上汇总值得关注的新闻。",
+        "prompt": "搜索今天最值得关注的 5 条新闻（科技、财经、国际各有涉及），每条用一两句话概括，并附上来源链接。"
+      },
+      "weekly-review": {
+        "title": "每周回顾",
+        "hint": "周五傍晚帮你复盘这一周。",
+        "prompt": "帮我做一次本周回顾：提几个问题引导我回顾这周完成了什么、遇到什么困难、下周最重要的三件事。"
+      },
+      "learn": {
+        "title": "每日一个知识点",
+        "hint": "睡前学一点新东西。",
+        "prompt": "给我讲一个有趣且实用的知识点（领域随机），用通俗的语言解释，并给出一个生活中的例子。"
+      },
+      "meals": {
+        "title": "每周饮食计划",
+        "hint": "规划一周的餐食并列出采购清单。",
+        "prompt": "为我规划下周七天的健康晚餐，每餐简短说明做法，最后汇总一份按类别整理的食材采购清单。"
+      },
+      "deals": {
+        "title": "机票价格观察",
+        "hint": "每周看看你关心的航线有没有便宜票。",
+        "prompt": "搜索近期从上海出发到东京的往返机票价格行情，告诉我大概的价格区间和比较划算的出发日期。"
+      },
+      "monthly": {
+        "title": "月初财务提醒",
+        "hint": "每月 1 号提醒你记账和检查订阅。",
+        "prompt": "提醒我做月初的财务整理：核对上月支出、检查自动续费的订阅、设定本月预算，并给出一个简单的检查清单。"
+      }
+    }
+  },
+  "trace": {
+    "title": "轨迹",
+    "conversation": "对话",
+    "switch": "对话或轨迹",
+    "requests": "{{count}} 次请求",
+    "total": "共 {{seconds}} 秒",
+    "tokens": "输入 {{input}} / 输出 {{output}} tok",
+    "cache": "缓存命中 {{percent}}%",
+    "search": "搜索轨迹",
+    "refresh": "刷新",
+    "retry": "轨迹加载失败，点击重试",
+    "timeline": "时间线",
+    "empty": "这个对话还没有轨迹",
+    "empty-hint": "只记录管理员自己的请求，保留 {{days}} 天；开启之前的请求没有记录。",
+    "empty-text": "（空）",
+    "ok": "已完成",
+    "failed": "失败",
+    "estimated": "用量是估算的（服务商没有报告）",
+    "detail": "第 {{index}} 次请求的详情",
+    "track": {
+      "model": "模型",
+      "tool": "工具"
+    },
+    "kind": {
+      "system": "系统",
+      "user": "用户",
+      "history": "历史",
+      "reasoning": "思考",
+      "assistant": "助手",
+      "tool_call": "工具调用",
+      "tool_result": "工具结果"
+    },
+    "role": {
+      "system": "系统",
+      "user": "用户",
+      "assistant": "助手",
+      "tool": "工具"
+    },
+    "request-kind": {
+      "chat": "对话请求",
+      "compression": "压缩请求"
+    },
+    "tab": {
+      "content": "内容",
+      "overview": "概述",
+      "request": "请求",
+      "response": "响应",
+      "raw": "原始"
+    },
+    "section": {
+      "system": "系统提示词",
+      "messages": "消息（{{count}} 条）",
+      "tools": "提供的工具（{{count}} 个）"
+    },
+    "fact": {
+      "status": "状态",
+      "error": "错误",
+      "model": "模型",
+      "channel": "渠道",
+      "started": "开始时间",
+      "duration": "总时长",
+      "first-token": "首 token 延迟",
+      "generation": "生成",
+      "throughput": "吞吐量",
+      "input": "输入",
+      "input-value": "{{total}} tok（缓存读 {{cached}}，写 {{written}}）",
+      "cache": "缓存命中",
+      "output": "输出",
+      "output-value": "{{total}} tok（思考 {{reasoning}}）",
+      "cost": "费用"
+    }
+  },
+  "viewer": {
+    "open": "查看 {{name}}",
+    "image": "图片",
+    "count": "{{index}} / {{total}}",
+    "download": "下载",
+    "original": "在新标签页打开原图",
+    "source": "打开来源网页",
+    "close": "关闭",
+    "previous": "上一张",
+    "next": "下一张",
+    "failed": "图片加载失败",
+    "fit": "适应窗口",
+    "actual": "查看原始大小"
+  },
+  "document": {
+    "menu": {
+      "label": "写作",
+      "heading": "这个对话里的写作",
+      "open_one": "打开写作（共 {{count}} 篇）",
+      "open_other": "打开写作（共 {{count}} 篇）"
+    },
+    "label": "写作",
+    "writing": "正在写作…",
+    "count_one": "{{count}} 字",
+    "count_other": "{{count}} 字",
+    "pill-updated": "已修改",
+    "pill-version": "v{{version}}",
+    "step": {
+      "read": "读取了《{{title}}》",
+      "read-untitled": "读取了文档",
+      "reading": "正在读取文档…",
+      "read-failed": "读取文档未成功",
+      "list": "查看了本对话的文档",
+      "listing": "正在查看文档…",
+      "writing": "正在写作…",
+      "create-failed": "写作未成功",
+      "updating": "正在修改…",
+      "update-failed": "修改未成功",
+      "generic": "使用了写作块"
+    },
+    "updated": "已修改写作",
+    "open": "在旁边打开",
+    "copy": "复制",
+    "gone": "这篇文档已不存在",
+    "panel": "写作面板",
+    "editor": "文档内容",
+    "placeholder": "开始写作…",
+    "title": "标题",
+    "previous": "上一个版本",
+    "next": "下一个版本",
+    "download": "下载为 Markdown",
+    "full": "全屏",
+    "exit-full": "退出全屏",
+    "close": "关闭",
+    "viewing": "正在查看第 {{version}} 版（共 {{total}} 版，{{who}}）",
+    "by": {
+      "model": "模型写的",
+      "user": "你改的"
+    },
+    "restore": "恢复这个版本",
+    "latest": "回到最新",
+    "restored": "已恢复到第 {{version}} 版",
+    "conflict": "模型刚修改了这篇文档，已载入最新版本",
+    "save-failed": "保存失败，请重试",
+    "saving": "正在保存…",
+    "version": "第 {{version}} 版，共 {{total}} 版",
+    "ask": "提出修改请求",
+    "link": "链接",
+    "link-placeholder": "输入或粘贴网址，留空则移除链接",
+    "link-apply": "应用链接",
+    "bold": "加粗",
+    "italic": "斜体",
+    "block": {
+      "paragraph": "正文",
+      "h1": "标题 1",
+      "h2": "标题 2",
+      "h3": "标题 3",
+      "bullet": "项目列表",
+      "ordered": "编号列表",
+      "quote": "引用",
+      "label": "段落样式"
+    },
+    "quote-label": "写作块选段",
+    "quote-remove": "移除选段",
+    "quote-placeholder": "描述希望对所选内容做出的修改",
+    "rewriting": "正在修改…"
+  },
+  "subagents": {
+    "name": "子智能体",
+    "open": "查看子智能体",
+    "launch": {
+      "started": "{{names}}开始工作",
+      "preparing": "正在派出子智能体…",
+      "to-background": "转到后台",
+      "queued": "{{names}}排队中",
+      "mixed": "{{started}}，{{queued}}",
+      "progress": "{{total}} 个子智能体工作中",
+      "finished": "{{total}} 个子智能体已完成 · {{duration}}",
+      "ended": "{{total}} 个子智能体已结束 · {{duration}}",
+      "extra-queued": " · {{count}} 个排队中",
+      "extra-stopped": " · {{count}} 个已停止",
+      "extra-failed": " · {{count}} 个失败",
+      "extra-done": " · {{count}} 个已完成"
+    },
+    "done": {
+      "completed": "{{name}}完成",
+      "failed": "{{name}}失败",
+      "cancelled": "{{name}}已停止",
+      "partial": "交回了部分结果"
+    },
+    "duration": {
+      "seconds": "{{seconds}} 秒",
+      "minutes": "{{minutes}} 分 {{seconds}} 秒"
+    },
+    "summary": {
+      "label": "子智能体",
+      "running": "{{count}} 个运行中",
+      "done": "{{count}} 完成",
+      "queued": "{{count}} 个排队中"
+    },
+    "panel": {
+      "title": "子智能体",
+      "running": "运行中 · {{count}}",
+      "finished": "已完成 · {{count}}",
+      "close": "关闭",
+      "back": "返回列表",
+      "stop": "停止",
+      "resume": "继续",
+      "empty": "这个对话还没有子智能体。",
+      "loading": "正在载入…",
+      "task": "任务",
+      "message": "主智能体的消息",
+      "show-more": "显示更多",
+      "show-less": "收起",
+      "stopped-by-user": "你停掉了它",
+      "waiting": "正在等待…",
+      "running-queued": "运行中 · {{count}} · 排队 {{queued}}",
+      "queued": "排队中 · 等待空位",
+      "cancel": "取消"
+    },
+    "state": {
+      "running": "运行中",
+      "completed": "已完成",
+      "failed": "失败",
+      "cancelled": "已停止",
+      "queued": "排队中"
+    },
+    "activity": {
+      "thinking": "思考中",
+      "web_search": "正在搜索",
+      "web_fetch": "正在读网页",
+      "document": "正在读文档",
+      "calls_one": "{{count}} 次工具调用",
+      "calls_other": "{{count}} 次工具调用"
+    },
+    "age": {
+      "now": "刚刚",
+      "minute": "{{count}} 分钟前",
+      "hour": "{{count}} 小时前",
+      "day": "{{count}} 天前"
+    },
+    "step": {
+      "message": "给{{name}}发了消息",
+      "message-running": "正在给{{name}}发消息",
+      "stop": "停止了{{name}}",
+      "stop-running": "正在停止{{name}}",
+      "failed": "没能派出{{name}}",
+      "unnamed": "子智能体"
+    },
+    "error": {
+      "too-many": "同时运行的子智能体太多了，等一个结束再试。",
+      "busy": "它已经在运行了。",
+      "generic": "操作没有成功，请重试。"
     }
   }
 }

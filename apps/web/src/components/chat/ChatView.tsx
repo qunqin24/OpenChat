@@ -26,13 +26,12 @@ import {
   useSendMessage,
 } from '@/hooks/use-send-message'
 import { useSession } from '@/features/auth/use-auth'
-import { API_BASE_URL } from '@/lib/api'
-import { useChatPaths } from '@/lib/chat-paths'
+import { cn } from '@/lib/utils'
 import { loadComposerPrefs, saveComposerPrefs } from '@/lib/composer-prefs'
 import { defaultModelId } from '@/lib/model-capacity'
 import { smoothScrollBehavior } from '@/lib/motion'
 import { displayTitle } from '@/lib/titles'
-import { acceptAttribute, acceptsOf } from '@/lib/attachments'
+import { acceptAttribute, acceptsOf, TEXT_TYPE } from '@/lib/attachments'
 import { isRunning } from '@/lib/run-state'
 import { composerMode, reviseDraft } from '@/lib/revise'
 import { returnableFiles, startWroteNothing } from '@/lib/start-failure'
@@ -45,12 +44,29 @@ import Composer from './Composer'
 import ContextMeter from './ContextMeter'
 import { DropOverlay } from './DropOverlay'
 import { ChoicesContext, type ChoicesActions } from './genui/choices-context'
-import { ImageSource, proxiedImages } from './genui/image-source'
 import { AssistantTurn, PendingReply, RefusedReply, UserMessage } from './MessageItem'
 import ModelPicker from './ModelPicker'
 import ThinkingPicker from './ThinkingPicker'
 import WebSearchToggle from './WebSearchToggle'
 import { SidebarToggle } from './ChatShell'
+import TraceView from './TraceView'
+import DocumentPanel from './DocumentPanel'
+import { useDocumentPanel } from '@/stores/document-panel-store'
+import { API_BASE_URL } from '@/lib/api'
+import { ImageSource, proxiedImages } from './genui/image-source'
+import SubagentPanel from './SubagentPanel'
+import SubagentSummary from './SubagentSummary'
+import PanelResizer from './PanelResizer'
+import DocumentsMenu from './DocumentsMenu'
+import SubagentsButton from './SubagentsButton'
+import { loadPanelWidth, savePanelWidth } from '@/lib/panel-width'
+import { SubagentReportLines } from './SubagentLines'
+import { useSubagentPanel } from '@/stores/subagent-panel-store'
+import { useFilePanel } from '@/stores/file-panel-store'
+import FilePanel from './FilePanel'
+import { useDocumentQuote } from '@/stores/document-quote-store'
+import { answerQuote, quoteMessage } from '@/lib/document-selection'
+import AskSelection from './AskSelection'
 import { TemporaryBar, TemporaryToggle } from './TemporaryChat'
 import Welcome from './Welcome'
 
@@ -82,13 +98,14 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const paths = useChatPaths()
 
   const [input, setInput] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
   const columnRef = useRef<HTMLDivElement>(null)
   const parked = useRef(true)
   const [showJump, setShowJump] = useState(false)
+  // The 轨迹 tab an administrator opened instead of the transcript.
+  const [traceOpen, setTraceOpen] = useState(false)
 
   const conversation = useConversation(conversationId ?? '')
   const messages = useMessages(conversationId ?? '')
@@ -126,7 +143,8 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
   const working = superseded || answerQuestion.isPending
 
   // What the composer was last set to, anywhere, for a new chat to open with.
-  const userId = useSession().data?.id ?? (paths.guest ? 'guest' : undefined)
+  const session = useSession().data
+  const userId = session?.id
   const saved = useMemo(() => loadComposerPrefs(userId), [userId])
 
   // The model: what this conversation remembers, else what was picked on the
@@ -150,19 +168,28 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
 
   // Files: only what the selected model takes. With none that does, the button
   // and the drop zone say so rather than going quiet.
+  // Text files go to any model as words.
   const accepts = useMemo(() => acceptsOf(modelById.get(modelId)), [modelById, modelId])
   const anyModelTakesFiles = available.some((m) => acceptsOf(m).image || acceptsOf(m).pdf)
   const attachments = useAttachments(accepts)
-  const uploadHint = accepts.image
-    ? accepts.pdf
-      ? t('chat.file.upload-both')
-      : t('chat.file.upload-image')
-    : accepts.pdf
-      ? t('chat.file.upload-pdf')
-      : anyModelTakesFiles
-        ? t('chat.file.unsupported')
-        : t('chat.file.none')
-  const canAttach = accepts.image || accepts.pdf
+  const uploadHint = accepts.text
+    ? accepts.image
+      ? accepts.pdf
+        ? t('chat.file.upload-all')
+        : t('chat.file.upload-image-text')
+      : accepts.pdf
+        ? t('chat.file.upload-pdf-text')
+        : t('chat.file.upload-text')
+    : accepts.image
+      ? accepts.pdf
+        ? t('chat.file.upload-both')
+        : t('chat.file.upload-image')
+      : accepts.pdf
+        ? t('chat.file.upload-pdf')
+        : anyModelTakesFiles
+          ? t('chat.file.unsupported')
+          : t('chat.file.none')
+  const canAttach = accepts.image || accepts.pdf || accepts.text
   const fileDrop = useFileDrop((files) => {
     if (canAttach) attachments.add(files)
     else toast.error(uploadHint, { id: 'file-upload-unavailable' })
@@ -208,7 +235,8 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     [conversationId, updateSettings, userId],
   )
 
-  // Pictures in answers come through the server, for this conversation only.
+  // Pictures an answer gives by address come through the server, for this
+  // conversation only; described ones are found by it (found-image.ts).
   const images = useMemo(
     () => (conversationId ? proxiedImages(API_BASE_URL, conversationId) : () => null),
     [conversationId],
@@ -238,6 +266,10 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
   // is an edit of the refused message), and nothing else is offered below.
   const mode = useMemo(() => composerMode(turns), [turns])
   const revising = mode.kind === 'revise' ? mode.message : null
+  // A writing block's passage waiting in this conversation's composer.
+  const quoteState = useDocumentQuote()
+  const quote = quoteState.quote && quoteState.quote.conversationId === conversationId ? quoteState.quote : null
+  const setQuote = quoteState.set
 
   // The last answer can be asked for again (not while a refused message ends the
   // conversation: it is reworded first).
@@ -583,8 +615,13 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
   }, [modelById, modelId, queryClient, t])
 
   const handleSend = useCallback(async () => {
-    const content = input.trim()
-    if (!content || attachments.uploading || attachments.failed) return
+    const typed = input.trim()
+    if (!typed || attachments.uploading || attachments.failed) return
+    // A passage of a writing block quoted for this request goes with it, in
+    // front (lib/document-selection), unless this is the rewording of a
+    // refused message, which keeps its own words.
+    const quoted = quote && !revising ? quote : null
+    const content = quoted ? quoteMessage(quoted, typed) : typed
     // An answer is being made, or a message is on its way: one at a time, as the
     // server says (`conversation_busy`). Read from the store, not from this
     // render, so a second Enter in the same moment finds the first.
@@ -602,6 +639,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     if (await capacityRefused()) return
     const attachmentIds = attachments.ids
     setInput('')
+    if (quoted) setQuote(null)
     // Shown at once, at the bottom, while the request is on its way.
     const item = {
       content,
@@ -610,7 +648,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
         .map((file) => ({
           id: file.id!,
           filename: file.name,
-          contentType: file.kind === 'image' ? 'image/*' : 'application/pdf',
+          contentType: file.kind === 'image' ? 'image/*' : file.kind === 'pdf' ? 'application/pdf' : TEXT_TYPE,
           size: file.size,
           url: file.preview ?? '',
         })),
@@ -724,13 +762,13 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
       for (const file of attachments.items) if (!usable.includes(file)) attachments.remove(file.key)
       setInput((current) => current || content)
       if (wroteNothing) onRemoved(madeId)
-      else await navigate({ to: paths.chat, params: { conversationId: madeId }, replace: true })
+      else await navigate({ to: '/chat/$conversationId', params: { conversationId: madeId }, replace: true })
       return
     }
     if (!alive.current) return
     attachments.clear()
     // `replace`: the new-chat screen was a draft, not a place to come back to.
-    await navigate({ to: paths.chat, params: { conversationId: madeId }, replace: true })
+    await navigate({ to: '/chat/$conversationId', params: { conversationId: madeId }, replace: true })
   }, [
     attachments,
     canSearch,
@@ -746,10 +784,11 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     navigate,
     onCreated,
     onRemoved,
-    paths.chat,
     post,
+    quote,
     revising,
     sendMessage,
+    setQuote,
     working,
     setTemporaryChat,
     t,
@@ -820,7 +859,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
   const temporaryMode = conversationId ? Boolean(conversation.data?.temporary) : temporaryChat
   const exitTemporary = () => {
     setTemporaryChat(false)
-    if (conversationId) void navigate({ to: paths.home })
+    if (conversationId) void navigate({ to: '/' })
   }
 
   const title = conversationId ? displayTitle(conversation.data?.title, t) : t('chat.nav.new')
@@ -835,6 +874,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
       onSend={() => void handleSend()}
       onStop={handleStop}
       note={revising ? t('chat.revise.label') : undefined}
+      quote={quote && !revising ? { title: quote.title, passage: quote.passage, fromAnswer: !quote.documentId, onRemove: () => setQuote(null) } : undefined}
       working={working}
       disabled={createConversation.isPending}
       modelSlot={
@@ -862,17 +902,69 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     />
   )
 
+  // 轨迹 is an administrator's, of their own saved conversations (api/traces.go).
+  const traceable =
+    Boolean(conversationId) && !temporaryMode && session?.role === 'admin' && features.data?.requestTraces === true
+  const tracing = traceable && traceOpen
+  // A writing block of this conversation open beside the chat.
+  const panel = useDocumentPanel()
+  const docOpen = Boolean(conversationId) && panel.conversationId === conversationId && panel.documentId !== null
+  // Or its sub-agents, in the same place (one or the other).
+  const subagentPanel = useSubagentPanel()
+  const subagentsOn = Boolean(conversationId) && features.data?.subagents === true
+  const agentsOpen = subagentsOn && subagentPanel.conversationId === conversationId
+  // A text file someone sent, read beside the chat.
+  const filePanel = useFilePanel()
+  const fileOpen = Boolean(conversationId) && filePanel.conversationId === conversationId && filePanel.file !== null
+  const beside = (docOpen && !panel.closing) || agentsOpen || fileOpen
+  // How wide the person dragged the panel; null is its default width.
+  const [panelWidth, setPanelWidth] = useState(loadPanelWidth)
+  const resizePanel = useCallback((width: number | null) => {
+    setPanelWidth(width)
+    savePanelWidth(width)
+  }, [])
+
   return (
-    <main className={temporaryMode ? 'n-main is-temporary' : 'n-main'} {...fileDrop.handlers}>
+    <main
+      className={cn('n-main', temporaryMode && 'is-temporary', beside && 'has-doc', docOpen && !panel.closing && panel.full && 'is-doc-full')}
+      style={panelWidth ? ({ '--n-doc-user-w': `${panelWidth}px` } as React.CSSProperties) : undefined}
+      {...fileDrop.handlers}
+    >
       <DropOverlay show={fileDrop.dragging} unavailable={canAttach ? undefined : uploadHint} />
       <div className={conversationId ? 'n-topbar has-chat' : 'n-topbar'}>
         <SidebarToggle />
         {/* A temporary chat is never titled; its band says what it is. */}
         {conversationId && !temporaryMode && <div className="n-chat-title">{title}</div>}
+        {traceable && (
+          <div className="n-view-switch" role="tablist" aria-label={t('trace.switch')}>
+            <button type="button" role="tab" aria-selected={!tracing} className={cn('n-view-tab', !tracing && 'active')} onClick={() => setTraceOpen(false)}>
+              {t('trace.conversation')}
+            </button>
+            <button type="button" role="tab" aria-selected={tracing} className={cn('n-view-tab', tracing && 'active')} onClick={() => setTraceOpen(true)}>
+              {t('trace.title')}
+            </button>
+          </div>
+        )}
         <div className="n-topbar-end">
           {!temporaryMode && !conversationId && <TemporaryToggle />}
+          {subagentsOn && conversationId && !tracing && <SubagentsButton conversationId={conversationId} />}
+          {conversationId && !tracing && <DocumentsMenu conversationId={conversationId} />}
         </div>
       </div>
+      {tracing && conversationId && <TraceView conversationId={conversationId} running={isRunning(live)} />}
+      {docOpen && panel.documentId && <DocumentPanel key={panel.documentId} documentId={panel.documentId} />}
+      {agentsOpen && conversationId && <SubagentPanel conversationId={conversationId} />}
+      {fileOpen && filePanel.file && <FilePanel key={filePanel.file.id} file={filePanel.file} />}
+      {conversationId && !revising && (
+        <AskSelection
+          scope={columnRef}
+          onAsk={(passage) => {
+            setQuote({ ...answerQuote(passage), conversationId })
+            dock.current?.querySelector<HTMLTextAreaElement>('textarea')?.focus()
+          }}
+        />
+      )}
+      {beside && !(docOpen && panel.full) && <PanelResizer width={panelWidth} onChange={resizePanel} />}
 
       <div className={isEmpty ? 'n-scroll n-scroll-welcome' : 'n-scroll'} ref={scrollRef} onScroll={handleScroll}>
         {conversationId && messages.isPending && !outgoing ? (
@@ -903,6 +995,12 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
                       restoredDraft={refusedEdit?.id === turn.message.id ? refusedEdit.content : undefined}
                       onDraftDone={() => setRefusedEdit(null)}
                     />
+                  ) : turn.kind === 'reports' ? (
+                    // Sub-agents' reports, delivered while the conversation was idle:
+                    // a divider each, and the reply they started below.
+                    <div className="n-msg-notice">
+                      <SubagentReportLines conversationId={turn.message.conversationId} notices={turn.notices} divider />
+                    </div>
                   ) : turn.kind === 'refusal' ? (
                     // The reply to a message moderation refused, where the model's would be.
                     <RefusedReply modelId={modelId} model={modelById.get(modelId)} refusal={refusals[turn.message.id] ?? {}} />
@@ -974,6 +1072,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
               <ArrowDown className="h-4 w-4" />
             </button>
           )}
+          {subagentsOn && conversationId && <SubagentSummary conversationId={conversationId} />}
           {composer}
         </div>
       </div>

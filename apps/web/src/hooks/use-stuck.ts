@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 
+/** What a sticky header scrolls in: the chat, or a sub-agent's work in its panel. */
+const SCROLLERS = '.n-scroll, .n-subagent-transcript'
+
 /**
  * Whether a sticky header is pinned right now: scrolled past its own place and
  * held at the top of the transcript. CSS can say where a box sticks but not
@@ -18,7 +21,7 @@ export function useStuck<T extends HTMLElement>(active: boolean) {
 
   useEffect(() => {
     const el = ref.current
-    const scroller = el?.closest('.n-scroll')
+    const scroller = el?.closest(SCROLLERS)
     if (!active || !el || !el.parentElement || !scroller) return
     const parent = el.parentElement
     let frame = 0
@@ -55,7 +58,7 @@ export function useStuck<T extends HTMLElement>(active: boolean) {
  */
 export function keepHeaderInPlace(header: HTMLElement | null) {
   const parent = header?.parentElement
-  const scroller = header?.closest<HTMLElement>('.n-scroll')
+  const scroller = header?.closest<HTMLElement>(SCROLLERS)
   if (!header || !parent || !scroller) return
   const pinnedBy = header.getBoundingClientRect().top - parent.getBoundingClientRect().top
   if (pinnedBy > 0.5) scroller.scrollTo({ top: scroller.scrollTop - pinnedBy, behavior: 'instant' })

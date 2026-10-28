@@ -6,6 +6,7 @@ import { chatFeaturesQueryOptions, chatModelsQueryOptions } from '@/hooks/use-ch
 import { conversationsQueryOptions } from '@/hooks/use-conversations'
 import { adoptQueryCache } from '@/lib/query-persist'
 import { isSettingsTab, type SettingsTab } from '@/lib/settings'
+import { syncTimeZone } from '@/lib/time-zone'
 
 /**
  * Pathless layout wrapping everything that requires a session. The guard runs
@@ -37,6 +38,7 @@ export const Route = createFileRoute('/_authed')({
     if (!session) {
       throw redirect({ to: '/login', search: { redirect: location.href } })
     }
+    syncTimeZone(queryClient, session)
   },
   component: ChatShell,
 })

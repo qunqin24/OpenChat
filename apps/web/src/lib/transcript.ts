@@ -2,6 +2,7 @@ import type { ContextSummary, Message, MessagePart, ToolResultPart } from '@open
 
 import { ASK_USER } from './ask-user'
 import type { LiveRun } from './run-state'
+import { isReportRow, parseReports, type ReportNotice } from './subagents'
 
 /**
  * What the chat screen draws: the user's turns, and between them the
@@ -17,9 +18,22 @@ import type { LiveRun } from './run-state'
  * other, followed by a `refusal` turn: the reply that stands where the model's
  * answer would have been. Neither is part of what the conversation asked or
  * was answered (`sentTurns`).
+ *
+ * A row that delivers sub-agents' reports (`origin: 'subagent'`) is no
+ * question of the person's. Delivered while the conversation was idle, it is
+ * the input of the run started for it: a `reports` turn, one line per report,
+ * before that run's reply. Delivered into a run that was going, it is part of
+ * that run's reply, drawn among its parts (`AssistantTurn.reports`).
  */
 export type Turn =
   | { kind: 'user'; key: string; message: Message; after?: ContextSummary }
+  | {
+      kind: 'reports'
+      key: string
+      message: Message
+      notices: ReportNotice[]
+      after?: ContextSummary
+    }
   | {
       kind: 'refusal'
       key: string
@@ -51,6 +65,13 @@ export type Turn =
       inside?: { index: number; summary: ContextSummary }
       /** Response rows in order; tool rows are folded into `results`. */
       responses: Message[]
+      /**
+       * Sub-agents' reports delivered into this reply while it was being
+       * written, each after the response with index `index` (counting from 1;
+       * 0 is before the first). Kept out of the user's turns; not drawn (the
+       * launch line says how each sub-agent stands).
+       */
+      reports: { index: number; message: Message; notices: ReportNotice[] }[]
       /** Every run that wrote a row of this reply: more than one when it went on after a question. */
       runs: string[]
       results: Record<string, ToolResultPart>
@@ -162,13 +183,28 @@ export function buildTurns(
   const endsAt = new Map<AssistantTurn, number>()
 
   const assistantTurn = (key: string): AssistantTurn => {
-    const turn: AssistantTurn = { kind: 'assistant', key, responses: [], runs: [], results: {}, partial: null, live: null }
+    const turn: AssistantTurn = { kind: 'assistant', key, responses: [], reports: [], runs: [], results: {}, partial: null, live: null }
     turns.push(turn)
     return turn
   }
 
   for (const message of rows) {
     if (message.role === 'user' || message.role === 'assistant' || message.role === 'tool') tail = null
+    if (isReportRow(message)) {
+      const notices = parseReports(message.content)
+      if (message.runId) {
+        // Delivered into the run that was going: a line of its reply.
+        const turn: AssistantTurn = current ?? assistantTurn(message.runId)
+        current = turn
+        if (!turn.runs.includes(message.runId)) turn.runs.push(message.runId)
+        turn.reports.push({ index: turn.responses.length, message, notices })
+        continue
+      }
+      // The input of the run started for it, which is a reply of its own.
+      current = null
+      turns.push({ kind: 'reports', key: message.id, message, notices, ...(message.id === summary?.throughMessageId ? { after: summary } : {}) })
+      continue
+    }
     if (message.role === 'user') {
       const refused = message.status === 'blocked'
       // A refused message is no question: a reply that went on after the

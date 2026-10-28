@@ -3,6 +3,12 @@ import { create } from 'zustand'
 
 import { applyBatch, finishedBy, fromSnapshot, idle, rememberFinished, withSentInput, type ConversationLive } from '@/lib/run-state'
 import type { Refusal } from '@/lib/moderation-refusal'
+import { useDocumentActivity } from './document-activity-store'
+import { useDocumentPanel } from './document-panel-store'
+import { useDocumentQuote } from './document-quote-store'
+import { useImageViewer } from './image-viewer-store'
+import { useSubagentPanel } from './subagent-panel-store'
+import { useFilePanel } from './file-panel-store'
 import type { Replacing } from '@/lib/transcript'
 
 /**
@@ -182,10 +188,17 @@ export const useChatStore = create<ChatState>()((set) => ({
 }))
 
 /**
- * Back to a blank page: the state of one person's (or one mode's) chat screen
- * must not be seen by the next. Used when the account or the guest/account mode
- * changes, and when the session ends.
+ * Back to a blank page: the state of one person's chat screen must not be seen
+ * by the next. Used when the account changes, and when the session ends.
  */
 export function resetChatStore() {
   useChatStore.setState({ live: {}, finished: [], outbox: {}, replacing: {}, refusals: {}, temporaryChat: false })
+  // Every other store that holds what one person's chat shows: an image of
+  // theirs on a signed URL, a passage of their document, which panel is open.
+  useImageViewer.setState({ images: [], index: 0 })
+  useDocumentPanel.setState({ documentId: null, conversationId: null, viewing: null, full: false, closing: false })
+  useDocumentQuote.setState({ quote: null })
+  useDocumentActivity.setState({ edits: {} })
+  useSubagentPanel.getState().close()
+  useFilePanel.getState().close()
 }

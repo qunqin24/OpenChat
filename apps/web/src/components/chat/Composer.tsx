@@ -1,4 +1,4 @@
-import { ArrowUp, Maximize2, Minimize2, Plus, Square } from 'lucide-react'
+import { ArrowUp, Maximize2, MessageSquareQuote, Minimize2, NotebookPen, Plus, Square, X } from 'lucide-react'
 import { useEffect, useRef, useState, type ClipboardEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -30,6 +30,11 @@ interface ComposerProps {
    * model takes no files, which leaves the button off; `hint` says what the
    * button does, or why it does not.
    */
+  /**
+   * A passage of a writing block quoted for the request being written ("提出
+   * 修改请求"): shown above the box, which then asks for the change.
+   */
+  quote?: { title: string; passage: string; fromAnswer?: boolean; onRemove: () => void }
   attach?: {
     accept: string
     hint: string
@@ -51,6 +56,7 @@ export function Composer({
   modelSlot,
   toolsSlot,
   note,
+  quote,
   attach,
 }: ComposerProps) {
   const { t } = useTranslation()
@@ -119,6 +125,20 @@ export function Composer({
           </Tooltip>
         )}
 
+        {quote && (
+          <div className="n-quote-tray">
+            <div className="n-quote-card">
+              <p className="n-quote-text" dir="auto">{quote.passage}</p>
+              <span className="n-quote-label">
+                {quote.fromAnswer ? <MessageSquareQuote aria-hidden="true" /> : <NotebookPen aria-hidden="true" />}
+                {quote.fromAnswer ? t('chat.quote-label') : quote.title || t('document.quote-label')}
+              </span>
+              <button type="button" className="n-quote-remove" aria-label={t(quote.fromAnswer ? 'chat.quote-remove' : 'document.quote-remove')} onClick={quote.onRemove}>
+                <X aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        )}
         {attach && <AttachmentTray items={attach.items} onRemove={attach.onRemove} />}
 
         <div className="n-composer-field">
@@ -129,8 +149,8 @@ export function Composer({
             rows={1}
             value={value}
             disabled={disabled}
-            aria-label={t('chat.placeholder')}
-            placeholder={t('chat.placeholder')}
+            aria-label={quote ? t(quote.fromAnswer ? 'chat.quote-placeholder' : 'document.quote-placeholder') : t('chat.placeholder')}
+            placeholder={quote ? t(quote.fromAnswer ? 'chat.quote-placeholder' : 'document.quote-placeholder') : t('chat.placeholder')}
             onChange={(event) => onValueChange(event.target.value)}
             onPaste={handlePaste}
             onKeyDown={(event) => {

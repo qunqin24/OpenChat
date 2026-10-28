@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next'
 import type { ChatModel, Message, MessagePart } from '@openchat/api-client'
-import { Check, Copy, Pencil, RefreshCw } from 'lucide-react'
+import { Check, Copy, MessageSquareQuote, NotebookPen, Pencil, RefreshCw } from 'lucide-react'
 import { Collapsible } from 'radix-ui'
 import { isValidElement, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -13,8 +13,15 @@ import { splitSegments } from '@/lib/genui/segments'
 import { turnText, type Turn } from '@/lib/transcript'
 import AskUserCard, { PreparingLine } from './AskUserCard'
 import { MEMORY_TOOL, memoryChangeOf } from '@/lib/memory-tool'
+import { TASK_TOOL, taskChangeOf } from '@/lib/task-tool'
+import { DOCUMENT_TOOL, documentChangeOf } from '@/lib/document-tool'
+import { launchesOf, SUBAGENT_TOOL } from '@/lib/subagents'
+import { SubagentLaunchLine } from './SubagentLines'
+import { parseQuote, quoteMessage } from '@/lib/document-selection'
 import GenUIBlock from './genui/GenUIBlock'
 import MemoryChip from './MemoryChip'
+import TaskChip from './TaskChip'
+import DocumentCard from './DocumentCard'
 import MessageAttachments from './MessageAttachments'
 import { Markdown } from './MarkdownText'
 import CompactionDivider from './CompactionDivider'
@@ -73,8 +80,14 @@ export function UserMessage({
 }) {
   const { t } = useTranslation()
   const [typed, setTyped] = useState<string | null>(null)
+  // A request about a quoted passage of a writing block: the passage is a card
+  // above the words, and editing changes the words only.
+  const quoted = parseQuote(message.content)
+  const words = quoted ? quoted.request : message.content
   const draft = typed ?? restoredDraft ?? null
-  const files = message.attachments && message.attachments.length > 0 && <MessageAttachments items={message.attachments} />
+  const files = (message.attachments?.length || message.removedAttachments?.length) ? (
+    <MessageAttachments conversationId={message.conversationId} items={message.attachments ?? []} removed={message.removedAttachments} />
+  ) : null
   const closeField = () => {
     setTyped(null)
     onDraftDone?.()
@@ -92,7 +105,7 @@ export function UserMessage({
             onEdit &&
             ((content) => {
               closeField()
-              onEdit(content)
+              onEdit(quoted ? quoteMessage(quoted.quote, content) : content)
             })
           }
         />
@@ -103,15 +116,30 @@ export function UserMessage({
   return (
     <div className="n-msg-user">
       {files}
-      <div className="n-bubble">{message.content}</div>
+      {quoted && <QuoteCard title={quoted.quote.title} passage={quoted.quote.passage} fromAnswer={!quoted.quote.documentId} />}
+      <div className="n-bubble">{words}</div>
       <div className="n-actions">
-        <CopyButton content={message.content} />
+        <CopyButton content={words} />
         {onEdit && (
-          <button type="button" className="n-icon-btn sm" aria-label={t('chat.edit')} onClick={() => setTyped(message.content)}>
+          <button type="button" className="n-icon-btn sm" aria-label={t('chat.edit')} onClick={() => setTyped(words)}>
             <Pencil className="h-3.5 w-3.5" />
           </button>
         )}
       </div>
+    </div>
+  )
+}
+
+/** The passage a request is about - of a writing block or an answer - above its words. */
+function QuoteCard({ title, passage, fromAnswer }: { title: string; passage: string; fromAnswer: boolean }) {
+  const { t } = useTranslation()
+  return (
+    <div className="n-quote-card is-sent">
+      <p className="n-quote-text" dir="auto">{passage}</p>
+      <span className="n-quote-label">
+        {fromAnswer ? <MessageSquareQuote aria-hidden="true" /> : <NotebookPen aria-hidden="true" />}
+        {fromAnswer ? t('chat.quote-label') : title || t('document.quote-label')}
+      </span>
     </div>
   )
 }
@@ -342,6 +370,7 @@ export function AssistantTurn({
   const { t } = useTranslation()
   const live = turn.live
   const running = live?.run.status === 'running'
+  const conversationId = live?.run.conversationId ?? turn.responses[0]?.conversationId ?? turn.reports[0]?.message.conversationId
 
   const toolStatus = (callId: string): ToolStatus => {
     const result = turn.results[callId]
@@ -412,6 +441,32 @@ export function AssistantTurn({
             if (change) return <MemoryChip key={key} change={change} />
             if (!turn.results[part.id] && (streaming || running)) return null
           }
+          if (part.name === DOCUMENT_TOOL) {
+            // A document written or changed is part of the reply itself; one
+            // being written shows as that; reading or listing is a step.
+            const result = turn.results[part.id]
+            const change = documentChangeOf(result)
+            const args = (part.arguments ?? {}) as { op?: unknown }
+            const writing = !result && (streaming || running) && (args.op === undefined || args.op === 'create' || args.op === 'update')
+            if (change || writing) return <DocumentCard key={key} change={change} call={part} />
+          }
+          if (part.name === SUBAGENT_TOOL) {
+            // The sub-agents a response launched are one line of the reply,
+            // drawn where the first of them is; one that could not be
+            // launched is a failed step of the activity instead.
+            const launches = launchesOf(parts, turn.results)
+            if (!launches.find((l) => l.callId === part.id)?.failed) {
+              const shown = launches.filter((l) => !l.failed)
+              if (shown[0]?.callId !== part.id || !conversationId) return null
+              return <SubagentLaunchLine key={key} conversationId={conversationId} launches={shown} streaming={streaming && isLast} />
+            }
+          }
+          if (part.name === TASK_TOOL) {
+            // A task scheduled or changed is a line of the reply, like a note
+            // kept; a list, or a call that failed, is a step.
+            const change = taskChangeOf(turn.results[part.id])
+            if (change) return <TaskChip key={key} change={change} />
+          }
           return { key, step: { call: part, result: turn.results[part.id], status: toolStatus(part.id) } }
         }
         default:
@@ -426,6 +481,8 @@ export function AssistantTurn({
   // (and again once the run hands over to the message list), so the text
   // keeps its node and finishes revealing what it holds rather than being
   // drawn anew all at once (see `Markdown`).
+  // Sub-agents' reports delivered while the reply was being written are not
+  // drawn: the launch line and the side panel already say how each stands.
   for (const [position, response] of turn.responses.entries()) {
     entries.push(...renderParts(response.parts, `r${position}`, false))
     if (response.stopReason === 'error') {

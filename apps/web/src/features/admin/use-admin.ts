@@ -18,11 +18,14 @@ export const adminKeys = {
   users: (page: number, search: string, status: readonly UserStatus[] = []) =>
     [...adminKeys.all, 'users', page, search, status] as const,
   system: () => [...adminKeys.all, 'system'] as const,
+  subagents: () => [...adminKeys.all, 'subagents'] as const,
   version: () => [...adminKeys.all, 'version'] as const,
   /** Shared with features/admin/models, which owns the rest of this subtree. */
   catalog: () => [...adminKeys.all, 'catalog'] as const,
   channels: () => [...adminKeys.all, 'channels'] as const,
   webSearch: () => [...adminKeys.all, 'web-search'] as const,
+  imageSearch: () => [...adminKeys.all, 'image-search'] as const,
+  passkeys: () => [...adminKeys.all, 'passkeys'] as const,
   storage: () => [...adminKeys.all, 'storage'] as const,
 }
 
@@ -97,6 +100,19 @@ export function useUpdateUser() {
   return useMutation({
     mutationFn: async ({ userId, ...body }: UpdateUserRequest & { userId: string }) =>
       unwrap(await api.PATCH('/admin/users/{userId}', { params: { path: { userId } }, body })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.all })
+    },
+  })
+}
+
+/** Deletes an account for good, with its conversations, files and memories. */
+export function useDeleteUser() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (userId: string) =>
+      unwrap(await api.DELETE('/admin/users/{userId}', { params: { path: { userId } } })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.all })
     },

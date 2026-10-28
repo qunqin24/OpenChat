@@ -1,17 +1,17 @@
 import type { TFunction } from 'i18next'
 import type { ToolCallPart, ToolResultPart } from '@openchat/api-client'
-import { Brain, ChevronRight, Globe, Search, TriangleAlert, Wrench } from 'lucide-react'
+import { AlarmClock, Brain, ChevronRight, Globe, NotebookPen, Search, TriangleAlert, Wrench } from 'lucide-react'
 import { Collapsible } from 'radix-ui'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { keepHeaderInPlace, useStuck } from '@/hooks/use-stuck'
 import { API_BASE_URL } from '@/lib/api'
-import { isGuestMode } from '@/lib/guest/mode'
 import { isHttpUrl, siteName } from '@/lib/urls'
 import { cn } from '@/lib/utils'
 import { ThinkingOrb } from './ThinkingOrb'
 import { PlainReveal } from './MarkdownText'
+import { SubagentsIcon } from './SubagentAvatar'
 
 export type ToolStatus = 'pending' | 'running' | ToolResultPart['status']
 
@@ -108,13 +108,11 @@ export function ToolActivity({ items, thinking = false }: { items: ActivityItem[
           }}
         >
           <span className="n-activity-icon">
-            {active ? (
-              // Opacity, not movement, and kept under reduced motion: a frozen
-              // indicator cannot be told apart from a stuck one.
-              <span className="n-activity-pulse" data-motion="essential" role="status" aria-label={t('chat.tool.running')} />
-            ) : thinking ? (
-              // The same mark as thinking anywhere else, between rounds too.
-              <span className="n-activity-orb" role="status" aria-label={t('chat.reasoning.live')}><ThinkingOrb /></span>
+            {active || thinking ? (
+              // The same mark as thinking anywhere else - a search or a read in
+              // flight too, and between rounds - so the model at work always
+              // looks the same.
+              <span className="n-activity-orb" role="status" aria-label={active ? t('chat.tool.running') : t('chat.reasoning.live')}><ThinkingOrb /></span>
             ) : (
               stepIcon(steps[steps.length - 1]!.call.name)
             )}
@@ -212,7 +210,7 @@ export function SourceMark({ url }: { url: string }) {
       {letter}
       {!failed && domain && (
         <img
-          src={`${API_BASE_URL}${isGuestMode() ? '/guest' : ''}/favicons/${encodeURIComponent(domain)}`}
+          src={`${API_BASE_URL}/favicons/${encodeURIComponent(domain)}`}
           alt=""
           loading="lazy"
           decoding="async"
@@ -230,6 +228,9 @@ function stepIcon(name: string) {
   if (name === 'web_search') return <Search aria-hidden="true" />
   if (name === 'web_fetch') return <Globe aria-hidden="true" />
   if (name === 'memory') return <Brain aria-hidden="true" />
+  if (name === 'scheduled_tasks') return <AlarmClock aria-hidden="true" />
+  if (name === 'document') return <NotebookPen aria-hidden="true" />
+  if (name.startsWith('subagent')) return <SubagentsIcon />
   return <Wrench aria-hidden="true" />
 }
 
@@ -248,7 +249,50 @@ function stepLabel(t: T, step: ToolActivityStep, running: boolean): string {
     return running ? t('chat.tool.reading', { host: siteName(url) }) : t('chat.tool.fetch', { host: siteName(url) })
   }
   if (step.call.name === 'memory') return t('chat.memory.step')
+  if (step.call.name === 'scheduled_tasks') return running ? t('tasks.step-running') : t('tasks.step')
+  if (step.call.name === 'document') return documentStepLabel(t, step, args, running)
+  if (step.call.name.startsWith('subagent')) return subagentStepLabel(t, step, args, running)
   return t('chat.tool.generic', { name: step.call.name })
+}
+
+/**
+ * A sub-agent call that is a step: a message to one, stopping one, or a launch
+ * that did not go through (a launch that did is a line of the reply). Named
+ * as the result names it, else as the model did.
+ */
+function subagentStepLabel(t: T, step: ToolActivityStep, args: Record<string, unknown>, running: boolean): string {
+  const details = (step.result?.details ?? {}) as { name?: unknown }
+  const named = typeof details.name === 'string' ? details.name : typeof args.name === 'string' ? args.name : typeof args.to === 'string' ? args.to : ''
+  const name = named || t('subagents.step.unnamed')
+  if (step.call.name === 'subagent_message') return running ? t('subagents.step.message-running', { name }) : t('subagents.step.message', { name })
+  if (step.call.name === 'subagent_stop') return running ? t('subagents.step.stop-running', { name }) : t('subagents.step.stop', { name })
+  return t('subagents.step.failed', { name })
+}
+
+/**
+ * A writing-block call that is a step rather than a card (MessageItem): a
+ * read, a list, or a write that did not go through. A read names the
+ * document once its result does; a failure says which kind of change failed,
+ * its explanation under it.
+ */
+function documentStepLabel(t: T, step: ToolActivityStep, args: Record<string, unknown>, running: boolean): string {
+  const op = typeof args.op === 'string' ? args.op : ''
+  const title = (step.result?.details as { title?: unknown } | undefined)?.title
+  const failed = isFailure(step.status)
+  switch (op) {
+    case 'read':
+      if (failed) return t('document.step.read-failed')
+      if (typeof title === 'string' && title) return t('document.step.read', { title })
+      return running || !step.result ? t('document.step.reading') : t('document.step.read-untitled')
+    case 'list':
+      return running || !step.result ? t('document.step.listing') : t('document.step.list')
+    case 'create':
+      return t(failed ? 'document.step.create-failed' : 'document.step.writing')
+    case 'update':
+      return t(failed ? 'document.step.update-failed' : 'document.step.updating')
+    default:
+      return t('document.step.generic')
+  }
 }
 
 function isFailure(status: ToolStatus) {

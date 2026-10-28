@@ -6,11 +6,10 @@ import { queryKeys } from '@/lib/query-keys'
  * Deletions told to the other tabs of this browser.
  *
  * A page showing a conversation hears of its deletion on that conversation's
- * events stream (`conversation_deleted`, from the server or, for a guest, from
- * the guest hub) and leaves it. The other tabs follow no stream for it, and
- * their sidebars and searches would list it until their next refetch, so the
- * page that deleted tells them here and they drop it at once. Another device
- * finds out when it next reads the list.
+ * events stream (`conversation_deleted`) and leaves it. The other tabs follow
+ * no stream for it, and their sidebars and searches would list it until their
+ * next refetch, so the page that deleted tells them here and they drop it at
+ * once. Another device finds out when it next reads the list.
  */
 const CHANNEL = 'openchat-conversations'
 

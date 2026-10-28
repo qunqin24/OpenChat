@@ -605,7 +605,8 @@
    `.n-palette*` in chat-theme.css; this adds what cmdk and our rows need on
    top of it and overrides its size and spacing. Portalled into the shell root, so `.chat-ui` scopes it. */
 .chat-ui .n-palette-overlay { z-index: 70; }
-.chat-ui .n-palette { border-radius: 24px; }
+/* Open WebUI's modal corner (rounded-4xl, 2rem), as the settings dialog's. */
+.chat-ui .n-palette { border-radius: 32px; }
 .dark .chat-ui .n-palette { box-shadow: 0 0 0 1px rgb(255 255 255 / 8%), 0 12px 40px rgb(0 0 0 / 50%); }
 .chat-ui .n-palette [cmdk-root] { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .chat-ui .n-palette-head { gap: 12px; padding: 18px 22px 10px; }

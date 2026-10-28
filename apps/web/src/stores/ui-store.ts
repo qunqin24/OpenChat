@@ -3,6 +3,9 @@ import { persist } from 'zustand/middleware'
 
 export type Theme = 'light' | 'dark' | 'system'
 
+/** How the library (`/library`) lays out its files. */
+export type LibraryView = 'grid' | 'list'
+
 export const SIDEBAR_WIDTH = { default: 245, min: 220, max: 480 } as const
 
 interface UIState {
@@ -10,11 +13,13 @@ interface UIState {
   sidebarOpen: boolean
   sidebarWidth: number
   sidebarChatsOpen: boolean
+  libraryView: LibraryView
   setTheme: (theme: Theme) => void
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
   setSidebarWidth: (width: number) => void
   setSidebarChatsOpen: (open: boolean) => void
+  setLibraryView: (view: LibraryView) => void
 }
 
 export const useUIStore = create<UIState>()(
@@ -24,6 +29,7 @@ export const useUIStore = create<UIState>()(
       sidebarOpen: true,
       sidebarWidth: SIDEBAR_WIDTH.default,
       sidebarChatsOpen: true,
+      libraryView: 'grid',
       setTheme: (theme) => set({ theme }),
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
       setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
@@ -32,6 +38,7 @@ export const useUIStore = create<UIState>()(
         set({ sidebarWidth: Math.min(SIDEBAR_WIDTH.max, Math.max(SIDEBAR_WIDTH.min, width)) })
       },
       setSidebarChatsOpen: (sidebarChatsOpen) => set({ sidebarChatsOpen }),
+      setLibraryView: (libraryView) => set({ libraryView }),
     }),
     { name: 'openchat.ui' },
   ),

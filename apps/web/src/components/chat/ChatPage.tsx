@@ -8,8 +8,8 @@ import ChatView from './ChatView'
 /**
  * The one chat page, for the new-chat screen and for every conversation.
  *
- * The routes (`_authed._chat`, `guest._chat`) draw this once and their children
- * are only addresses, so going from `/` to `/chat/<id>` does not remount it. What
+ * The route (`_authed._chat`) draws this once and its children are only
+ * addresses, so going from `/` to `/chat/<id>` does not remount it. What
  * does need a fresh page is opening another conversation (the sidebar, search,
  * back and forward, a deep link): the page is then keyed afresh, so nothing typed,
  * scrolled or chosen carries over. Sending the first message is not that: the

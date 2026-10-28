@@ -18,15 +18,12 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useDeleteConversation } from '@/hooks/use-conversations'
-import { useChatPaths } from '@/lib/chat-paths'
 import { queryKeys } from '@/lib/query-keys'
 import { displayTitle } from '@/lib/titles'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useUIStore } from '@/stores/ui-store'
-import { useGuestBan } from '@/stores/guest-ban-store'
-import { GuestBannedScreen } from '@/components/auth/AccountOverlay'
-import GuestNotice from './GuestNotice'
 import Sidebar from './Sidebar'
+import ImageViewer from './ImageViewer'
 import SettingsDialog from './settings/SettingsDialog'
 
 interface ChatShellContextValue {
@@ -57,10 +54,8 @@ export function SidebarToggle() {
 export function ChatShell() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const paths = useChatPaths()
   const queryClient = useQueryClient()
   const deleteConversation = useDeleteConversation()
-  const guestBan = useGuestBan()
 
   const mobile = useIsMobile()
   const sidebarOpen = useUIStore((s) => s.sidebarOpen)
@@ -109,8 +104,8 @@ export function ChatShell() {
         return
       }
     }
-    if (removed === activeId) await navigate({ to: paths.home })
-  }, [activeId, deleteConversation, navigate, paths.home, pendingDelete, queryClient, t])
+    if (removed === activeId) await navigate({ to: '/' })
+  }, [activeId, deleteConversation, navigate, pendingDelete, queryClient, t])
 
   return (
     <ChatShellContext.Provider value={shellContext}>
@@ -142,16 +137,12 @@ export function ChatShell() {
             />
           )}
 
-          <div className={paths.guest ? 'n-route-motion is-guest' : 'n-route-motion'}>
-            {paths.guest && <GuestNotice />}
+          <div className="n-route-motion">
             <Outlet />
           </div>
 
           <SettingsDialog host={host} />
-
-          {paths.guest && guestBan.banned && (
-            <GuestBannedScreen until={guestBan.until} onSignIn={() => void navigate({ to: '/login', search: {} })} />
-          )}
+          <ImageViewer host={host} />
 
           <AlertDialog
             open={pendingDelete !== null}

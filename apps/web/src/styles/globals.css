@@ -27,9 +27,14 @@
 @import './agent.css';
 @import './ask-user.css';
 @import './settings.css';
-@import './guest.css';
 @import './genui.css';
 @import './chat-table.css';
+@import './library.css';
+@import './tasks.css';
+@import './trace.css';
+@import './viewer.css';
+@import './document.css';
+@import './subagents.css';
 
 /* The admin panel keeps shadcn's own look, so its tokens and base layer come
    across unchanged — the base layer scoped so it cannot reach the chat UI. */

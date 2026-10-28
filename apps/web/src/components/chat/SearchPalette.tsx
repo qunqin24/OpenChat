@@ -12,9 +12,9 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useChatModels } from '@/hooks/use-chat-models'
 import { useConversationSearch, useRenameConversation } from '@/hooks/use-conversations'
+import { useDebounced } from '@/hooks/use-debounced'
 import { useMessages } from '@/hooks/use-messages'
 import { API_BASE_URL } from '@/lib/api'
-import { useChatPaths } from '@/lib/chat-paths'
 import { newChatState } from '@/lib/chat-view'
 import { groupConversations, parseTimestamp } from '@/lib/grouping'
 import { displayTitle, useDisplayTitle } from '@/lib/titles'
@@ -59,7 +59,6 @@ export function SearchPalette({
 }: Props) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
-  const paths = useChatPaths()
   const [query, setQuery] = useState('')
   const [cursor, setCursor] = useState('')
   const [renaming, setRenaming] = useState<string | null>(null)
@@ -97,8 +96,8 @@ export function SearchPalette({
   const go = (conversationId?: string) => {
     close()
     onNavigate()
-    if (conversationId) void navigate({ to: paths.chat, params: { conversationId } })
-    else void navigate({ to: paths.home, state: newChatState })
+    if (conversationId) void navigate({ to: '/chat/$conversationId', params: { conversationId } })
+    else void navigate({ to: '/', state: newChatState })
   }
 
   // The older conversations load as the list is scrolled to its end — and a
@@ -358,7 +357,7 @@ function Preview({ conversationId, term }: { conversationId: string | null; term
           <div className="n-palette-transcript" inert>
             {/* Without the messages moderation refused: no search finds them. */}
             {sentTurns(turns).map((turn) =>
-              turn.kind === 'user' ? (
+              turn.kind === 'reports' ? null : turn.kind === 'user' ? (
                 <UserMessage key={turn.key} message={turn.message} />
               ) : (
                 <AssistantTurn key={turn.key} turn={turn} modelId={turnModel(turn) ?? ''} model={modelById.get(turnModel(turn) ?? '')} />
@@ -407,16 +406,6 @@ function Marked({ text, term }: { text: string; term: string }) {
   }
   if (from < text.length) out.push(text.slice(from))
   return <>{out}</>
-}
-
-/** value, once it has stopped changing for `delay` ms. */
-function useDebounced<T>(value: T, delay: number): T {
-  const [settled, setSettled] = useState(value)
-  useEffect(() => {
-    const timer = window.setTimeout(() => setSettled(value), delay)
-    return () => window.clearTimeout(timer)
-  }, [value, delay])
-  return settled
 }
 
 function turnModel(turn: Turn) {

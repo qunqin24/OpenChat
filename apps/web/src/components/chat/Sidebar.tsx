@@ -1,12 +1,12 @@
 import type { Conversation } from '@openchat/api-client'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { ChevronRight, PanelLeft, Search, SquarePen } from 'lucide-react'
+import { AlarmClock, ChevronRight, LibraryBig, PanelLeft, Search, SquarePen } from 'lucide-react'
 import { Collapsible } from 'radix-ui'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { useChatFeatures } from '@/hooks/use-chat-models'
 import { useConversations, useRunningConversations } from '@/hooks/use-conversations'
-import { useChatPaths } from '@/lib/chat-paths'
 import { newChatState } from '@/lib/chat-view'
 import { groupConversations } from '@/lib/grouping'
 import { cn } from '@/lib/utils'
@@ -29,9 +29,11 @@ interface SidebarProps {
 export function Sidebar({ collapsed, mobile, onToggle, onNavigate, activeId, onDelete }: SidebarProps) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
-  const paths = useChatPaths()
   const conversations = useConversations()
   const running = useRunningConversations()
+  // The tasks page is the account's, and only while an administrator allows it.
+  const features = useChatFeatures()
+  const tasksOn = features.data?.scheduledTasks === true
   const width = useUIStore((s) => s.sidebarWidth)
   const setWidth = useUIStore((s) => s.setSidebarWidth)
   const chatsOpen = useUIStore((s) => s.sidebarChatsOpen)
@@ -75,12 +77,12 @@ export function Sidebar({ collapsed, mobile, onToggle, onNavigate, activeId, onD
         event.preventDefault()
         setSearchOpen(false)
         onNavigate()
-        void navigate({ to: paths.home, state: newChatState })
+        void navigate({ to: '/', state: newChatState })
       }
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [navigate, onNavigate, openSearch, paths.home])
+  }, [navigate, onNavigate, openSearch])
 
   const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = conversations
   useEffect(() => {
@@ -121,7 +123,7 @@ export function Sidebar({ collapsed, mobile, onToggle, onNavigate, activeId, onD
             </header>
             <nav className="n-sidebar-nav" aria-label={t('chat.sidebar.navigation')}>
               <Tooltip label={t('chat.nav.new')} side="right">
-                <Link className="n-row n-sidebar-nav-row" to={paths.home} state={newChatState} activeProps={{ className: '' }} aria-label={t('chat.nav.new')} aria-keyshortcuts="Control+Shift+O Meta+Shift+O">
+                <Link className="n-row n-sidebar-nav-row" to="/" state={newChatState} activeProps={{ className: '' }} aria-label={t('chat.nav.new')} aria-keyshortcuts="Control+Shift+O Meta+Shift+O">
                   <SquarePen aria-hidden="true" />
                 </Link>
               </Tooltip>
@@ -130,6 +132,18 @@ export function Sidebar({ collapsed, mobile, onToggle, onNavigate, activeId, onD
                   <Search aria-hidden="true" />
                 </button>
               </Tooltip>
+              <Tooltip label={t('library.title')} side="right">
+                <Link className="n-row n-sidebar-nav-row" to="/library" activeProps={{ className: 'active' }} aria-label={t('library.title')}>
+                  <LibraryBig aria-hidden="true" />
+                </Link>
+              </Tooltip>
+              {tasksOn && (
+                <Tooltip label={t('tasks.title')} side="right">
+                  <Link className="n-row n-sidebar-nav-row" to="/tasks" activeProps={{ className: 'active' }} aria-label={t('tasks.title')}>
+                    <AlarmClock aria-hidden="true" />
+                  </Link>
+                </Tooltip>
+              )}
             </nav>
             {/* The empty length of the rail opens the sidebar too. */}
             <button type="button" className="n-sidebar-rail-fill" tabIndex={-1} aria-hidden="true" onClick={onToggle} />
@@ -140,7 +154,7 @@ export function Sidebar({ collapsed, mobile, onToggle, onNavigate, activeId, onD
         <div id="chat-sidebar-content" className="n-sidebar-panel" inert={collapsed && !mobile}>
           <div className="n-sidebar-inner">
             <header className="n-sidebar-header">
-              <Link to={paths.home} state={newChatState} className="n-sidebar-brand" onClick={(event) => { if (!event.metaKey && !event.ctrlKey) onNavigate() }}>
+              <Link to="/" state={newChatState} className="n-sidebar-brand" onClick={(event) => { if (!event.metaKey && !event.ctrlKey) onNavigate() }}>
                 <span className="n-sidebar-logo" aria-hidden="true" />
                 <span className="n-sidebar-brand-label">{t('app.name')}</span>
               </Link>
@@ -153,7 +167,7 @@ export function Sidebar({ collapsed, mobile, onToggle, onNavigate, activeId, onD
 
             <div ref={scroll} className="n-sidebar-scroll" onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 0)}>
               <nav className="n-sidebar-nav" aria-label={t('chat.sidebar.navigation')}>
-                <Link className="n-row n-sidebar-nav-row" to={paths.home} state={newChatState} activeProps={{ className: '' }} onClick={(event) => { if (!event.metaKey && !event.ctrlKey) onNavigate() }} aria-keyshortcuts="Control+Shift+O Meta+Shift+O">
+                <Link className="n-row n-sidebar-nav-row" to="/" state={newChatState} activeProps={{ className: '' }} onClick={(event) => { if (!event.metaKey && !event.ctrlKey) onNavigate() }} aria-keyshortcuts="Control+Shift+O Meta+Shift+O">
                   <SquarePen aria-hidden="true" />
                   <span className="n-row-label">{t('chat.nav.new')}</span>
                   <kbd className="n-sidebar-hotkey" aria-hidden="true">{modifier} ⇧ O</kbd>
@@ -163,6 +177,16 @@ export function Sidebar({ collapsed, mobile, onToggle, onNavigate, activeId, onD
                   <span className="n-row-label">{t('chat.sidebar.search')}</span>
                   <kbd className="n-sidebar-hotkey" aria-hidden="true">{modifier} K</kbd>
                 </button>
+                <Link className="n-row n-sidebar-nav-row" to="/library" activeProps={{ className: 'active' }} onClick={(event) => { if (!event.metaKey && !event.ctrlKey) onNavigate() }}>
+                  <LibraryBig aria-hidden="true" />
+                  <span className="n-row-label">{t('library.title')}</span>
+                </Link>
+                {tasksOn && (
+                  <Link className="n-row n-sidebar-nav-row" to="/tasks" activeProps={{ className: 'active' }} onClick={(event) => { if (!event.metaKey && !event.ctrlKey) onNavigate() }}>
+                    <AlarmClock aria-hidden="true" />
+                    <span className="n-row-label">{t('tasks.title')}</span>
+                  </Link>
+                )}
               </nav>
 
               <div className="n-sidebar-history">

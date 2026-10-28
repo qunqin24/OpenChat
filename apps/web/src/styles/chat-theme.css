@@ -518,22 +518,12 @@
   min-width: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--n-line) transparent;
+  /* No scrollbar, as Open WebUI's search (scrollbar-hidden): the list
+     scrolls by wheel, touch and the arrow keys, and loads more at its end. */
+  scrollbar-width: none;
 }
 .chat-ui .n-palette-results::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-.chat-ui .n-palette-results::-webkit-scrollbar-track {
-  background: transparent;
-}
-.chat-ui .n-palette-results::-webkit-scrollbar-thumb {
-  background: var(--n-line);
-  border-radius: 999px;
-}
-.chat-ui .n-palette-results::-webkit-scrollbar-thumb:hover {
-  background: var(--n-text-3);
+  display: none;
 }
 .chat-ui .n-palette-item {
   position: relative;
@@ -615,22 +605,10 @@
   min-width: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--n-line) transparent;
+  scrollbar-width: none;
 }
 .chat-ui .n-palette-preview::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-.chat-ui .n-palette-preview::-webkit-scrollbar-track {
-  background: transparent;
-}
-.chat-ui .n-palette-preview::-webkit-scrollbar-thumb {
-  background: var(--n-line);
-  border-radius: 999px;
-}
-.chat-ui .n-palette-preview::-webkit-scrollbar-thumb:hover {
-  background: var(--n-text-3);
+  display: none;
 }
 .chat-ui .n-palette-preview-idle {
   display: flex;

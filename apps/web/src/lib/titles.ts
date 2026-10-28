@@ -2,10 +2,10 @@ import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
 /**
- * What the server (internal/api/titles.go `defaultTitle`) and the guest
- * repository (lib/guest/repo.ts) call a conversation until it is titled. It is
- * stored in English whatever the reader's language, so it is never shown as it
- * is: `displayTitle` swaps it for the translated name. A conversation the
+ * What the server (internal/api/titles.go `defaultTitle`) calls a
+ * conversation until it is titled. It is stored in English whatever the
+ * reader's language, so it is never shown as it is: `displayTitle` swaps it for
+ * the translated name. A conversation the
  * reader renamed to exactly this is shown the same way - it is the same words.
  */
 export const DEFAULT_TITLE = 'New chat'

@@ -11,12 +11,15 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as AdminRouteImport } from './routes/admin'
-import { Route as GuestRouteImport } from './routes/guest'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as AuthedChatRouteImport } from './routes/_authed._chat'
+import { Route as AuthedLibraryRouteImport } from './routes/_authed.library'
+import { Route as AuthedTasksRouteImport } from './routes/_authed.tasks'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminAuthenticationRouteImport } from './routes/admin.authentication'
 import { Route as AdminChannelsRouteImport } from './routes/admin.channels'
+import { Route as AdminImageSearchRouteImport } from './routes/admin.image-search'
 import { Route as AdminModelsRouteImport } from './routes/admin.models'
 import { Route as AdminModerationLogsRouteImport } from './routes/admin.moderation-logs'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
@@ -26,15 +29,12 @@ import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminWebSearchRouteImport } from './routes/admin.web-search'
 import { Route as DevGenuiRouteImport } from './routes/dev.genui'
 import { Route as DevLoadingRouteImport } from './routes/dev.loading'
-import { Route as GuestChatRouteImport } from './routes/guest._chat'
 import { Route as AuthedChatIndexRouteImport } from './routes/_authed._chat.index'
 import { Route as AdminSettingsIndexRouteImport } from './routes/admin.settings.index'
 import { Route as AdminSettingsAccountRouteImport } from './routes/admin.settings.account'
 import { Route as AdminSettingsAppearanceRouteImport } from './routes/admin.settings.appearance'
 import { Route as AdminSettingsSystemRouteImport } from './routes/admin.settings.system'
-import { Route as GuestChatIndexRouteImport } from './routes/guest._chat.index'
 import { Route as AuthedChatChatConversationIdRouteImport } from './routes/_authed._chat.chat.$conversationId'
-import { Route as GuestChatChatConversationIdRouteImport } from './routes/guest._chat.chat.$conversationId'
 
 const AuthedRoute = AuthedRouteImport.update({
   id: '/_authed',
@@ -43,11 +43,6 @@ const AuthedRoute = AuthedRouteImport.update({
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GuestRoute = GuestRouteImport.update({
-  id: '/guest',
-  path: '/guest',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -64,14 +59,34 @@ const AuthedChatRoute = AuthedChatRouteImport.update({
   id: '/_chat',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedLibraryRoute = AuthedLibraryRouteImport.update({
+  id: '/library',
+  path: '/library',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedTasksRoute = AuthedTasksRouteImport.update({
+  id: '/tasks',
+  path: '/tasks',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminAuthenticationRoute = AdminAuthenticationRouteImport.update({
+  id: '/authentication',
+  path: '/authentication',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminChannelsRoute = AdminChannelsRouteImport.update({
   id: '/channels',
   path: '/channels',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminImageSearchRoute = AdminImageSearchRouteImport.update({
+  id: '/image-search',
+  path: '/image-search',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminModelsRoute = AdminModelsRouteImport.update({
@@ -119,10 +134,6 @@ const DevLoadingRoute = DevLoadingRouteImport.update({
   path: '/dev/loading',
   getParentRoute: () => rootRouteImport,
 } as any)
-const GuestChatRoute = GuestChatRouteImport.update({
-  id: '/_chat',
-  getParentRoute: () => GuestRoute,
-} as any)
 const AuthedChatIndexRoute = AuthedChatIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -148,31 +159,23 @@ const AdminSettingsSystemRoute = AdminSettingsSystemRouteImport.update({
   path: '/system',
   getParentRoute: () => AdminSettingsRoute,
 } as any)
-const GuestChatIndexRoute = GuestChatIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => GuestChatRoute,
-} as any)
 const AuthedChatChatConversationIdRoute =
   AuthedChatChatConversationIdRouteImport.update({
     id: '/chat/$conversationId',
     path: '/chat/$conversationId',
     getParentRoute: () => AuthedChatRoute,
   } as any)
-const GuestChatChatConversationIdRoute =
-  GuestChatChatConversationIdRouteImport.update({
-    id: '/chat/$conversationId',
-    path: '/chat/$conversationId',
-    getParentRoute: () => GuestChatRoute,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthedChatIndexRoute
   '/admin': typeof AdminRouteWithChildren
-  '/guest': typeof GuestRouteWithChildren
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/library': typeof AuthedLibraryRoute
+  '/tasks': typeof AuthedTasksRoute
+  '/admin/authentication': typeof AdminAuthenticationRoute
   '/admin/channels': typeof AdminChannelsRoute
+  '/admin/image-search': typeof AdminImageSearchRoute
   '/admin/models': typeof AdminModelsRoute
   '/admin/moderation-logs': typeof AdminModerationLogsRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
@@ -187,16 +190,17 @@ export interface FileRoutesByFullPath {
   '/admin/settings/appearance': typeof AdminSettingsAppearanceRoute
   '/admin/settings/system': typeof AdminSettingsSystemRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
-  '/guest/': typeof GuestChatIndexRoute
   '/chat/$conversationId': typeof AuthedChatChatConversationIdRoute
-  '/guest/chat/$conversationId': typeof GuestChatChatConversationIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof AuthedChatIndexRoute
-  '/guest': typeof GuestChatIndexRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/library': typeof AuthedLibraryRoute
+  '/tasks': typeof AuthedTasksRoute
+  '/admin/authentication': typeof AdminAuthenticationRoute
   '/admin/channels': typeof AdminChannelsRoute
+  '/admin/image-search': typeof AdminImageSearchRoute
   '/admin/models': typeof AdminModelsRoute
   '/admin/moderation-logs': typeof AdminModerationLogsRoute
   '/admin/storage': typeof AdminStorageRoute
@@ -211,17 +215,19 @@ export interface FileRoutesByTo {
   '/admin/settings/system': typeof AdminSettingsSystemRoute
   '/admin/settings': typeof AdminSettingsIndexRoute
   '/chat/$conversationId': typeof AuthedChatChatConversationIdRoute
-  '/guest/chat/$conversationId': typeof GuestChatChatConversationIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authed': typeof AuthedRouteWithChildren
   '/admin': typeof AdminRouteWithChildren
-  '/guest': typeof GuestRouteWithChildren
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/_authed/_chat': typeof AuthedChatRouteWithChildren
+  '/_authed/library': typeof AuthedLibraryRoute
+  '/_authed/tasks': typeof AuthedTasksRoute
+  '/admin/authentication': typeof AdminAuthenticationRoute
   '/admin/channels': typeof AdminChannelsRoute
+  '/admin/image-search': typeof AdminImageSearchRoute
   '/admin/models': typeof AdminModelsRoute
   '/admin/moderation-logs': typeof AdminModerationLogsRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
@@ -231,26 +237,26 @@ export interface FileRoutesById {
   '/admin/web-search': typeof AdminWebSearchRoute
   '/dev/genui': typeof DevGenuiRoute
   '/dev/loading': typeof DevLoadingRoute
-  '/guest/_chat': typeof GuestChatRouteWithChildren
   '/admin/': typeof AdminIndexRoute
   '/admin/settings/account': typeof AdminSettingsAccountRoute
   '/admin/settings/appearance': typeof AdminSettingsAppearanceRoute
   '/admin/settings/system': typeof AdminSettingsSystemRoute
   '/_authed/_chat/': typeof AuthedChatIndexRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
-  '/guest/_chat/': typeof GuestChatIndexRoute
   '/_authed/_chat/chat/$conversationId': typeof AuthedChatChatConversationIdRoute
-  '/guest/_chat/chat/$conversationId': typeof GuestChatChatConversationIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/admin'
-    | '/guest'
     | '/login'
     | '/register'
+    | '/library'
+    | '/tasks'
+    | '/admin/authentication'
     | '/admin/channels'
+    | '/admin/image-search'
     | '/admin/models'
     | '/admin/moderation-logs'
     | '/admin/settings'
@@ -265,16 +271,17 @@ export interface FileRouteTypes {
     | '/admin/settings/appearance'
     | '/admin/settings/system'
     | '/admin/settings/'
-    | '/guest/'
     | '/chat/$conversationId'
-    | '/guest/chat/$conversationId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/guest'
     | '/login'
     | '/register'
+    | '/library'
+    | '/tasks'
+    | '/admin/authentication'
     | '/admin/channels'
+    | '/admin/image-search'
     | '/admin/models'
     | '/admin/moderation-logs'
     | '/admin/storage'
@@ -289,16 +296,18 @@ export interface FileRouteTypes {
     | '/admin/settings/system'
     | '/admin/settings'
     | '/chat/$conversationId'
-    | '/guest/chat/$conversationId'
   id:
     | '__root__'
     | '/_authed'
     | '/admin'
-    | '/guest'
     | '/login'
     | '/register'
     | '/_authed/_chat'
+    | '/_authed/library'
+    | '/_authed/tasks'
+    | '/admin/authentication'
     | '/admin/channels'
+    | '/admin/image-search'
     | '/admin/models'
     | '/admin/moderation-logs'
     | '/admin/settings'
@@ -308,22 +317,18 @@ export interface FileRouteTypes {
     | '/admin/web-search'
     | '/dev/genui'
     | '/dev/loading'
-    | '/guest/_chat'
     | '/admin/'
     | '/admin/settings/account'
     | '/admin/settings/appearance'
     | '/admin/settings/system'
     | '/_authed/_chat/'
     | '/admin/settings/'
-    | '/guest/_chat/'
     | '/_authed/_chat/chat/$conversationId'
-    | '/guest/_chat/chat/$conversationId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AuthedRoute: typeof AuthedRouteWithChildren
   AdminRoute: typeof AdminRouteWithChildren
-  GuestRoute: typeof GuestRouteWithChildren
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
   DevGenuiRoute: typeof DevGenuiRoute
@@ -344,13 +349,6 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/guest': {
-      id: '/guest'
-      path: '/guest'
-      fullPath: '/guest'
-      preLoaderRoute: typeof GuestRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -374,6 +372,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedChatRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/library': {
+      id: '/_authed/library'
+      path: '/library'
+      fullPath: '/library'
+      preLoaderRoute: typeof AuthedLibraryRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/tasks': {
+      id: '/_authed/tasks'
+      path: '/tasks'
+      fullPath: '/tasks'
+      preLoaderRoute: typeof AuthedTasksRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/admin/': {
       id: '/admin/'
       path: '/'
@@ -381,11 +393,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/authentication': {
+      id: '/admin/authentication'
+      path: '/authentication'
+      fullPath: '/admin/authentication'
+      preLoaderRoute: typeof AdminAuthenticationRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/channels': {
       id: '/admin/channels'
       path: '/channels'
       fullPath: '/admin/channels'
       preLoaderRoute: typeof AdminChannelsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/image-search': {
+      id: '/admin/image-search'
+      path: '/image-search'
+      fullPath: '/admin/image-search'
+      preLoaderRoute: typeof AdminImageSearchRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/models': {
@@ -451,13 +477,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DevLoadingRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/guest/_chat': {
-      id: '/guest/_chat'
-      path: ''
-      fullPath: '/guest'
-      preLoaderRoute: typeof GuestChatRouteImport
-      parentRoute: typeof GuestRoute
-    }
     '/_authed/_chat/': {
       id: '/_authed/_chat/'
       path: '/'
@@ -493,26 +512,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsSystemRouteImport
       parentRoute: typeof AdminSettingsRoute
     }
-    '/guest/_chat/': {
-      id: '/guest/_chat/'
-      path: '/'
-      fullPath: '/guest/'
-      preLoaderRoute: typeof GuestChatIndexRouteImport
-      parentRoute: typeof GuestChatRoute
-    }
     '/_authed/_chat/chat/$conversationId': {
       id: '/_authed/_chat/chat/$conversationId'
       path: '/chat/$conversationId'
       fullPath: '/chat/$conversationId'
       preLoaderRoute: typeof AuthedChatChatConversationIdRouteImport
       parentRoute: typeof AuthedChatRoute
-    }
-    '/guest/_chat/chat/$conversationId': {
-      id: '/guest/_chat/chat/$conversationId'
-      path: '/chat/$conversationId'
-      fullPath: '/guest/chat/$conversationId'
-      preLoaderRoute: typeof GuestChatChatConversationIdRouteImport
-      parentRoute: typeof GuestChatRoute
     }
   }
 }
@@ -533,10 +538,14 @@ const AuthedChatRouteWithChildren = AuthedChatRoute._addFileChildren(
 
 interface AuthedRouteChildren {
   AuthedChatRoute: typeof AuthedChatRouteWithChildren
+  AuthedLibraryRoute: typeof AuthedLibraryRoute
+  AuthedTasksRoute: typeof AuthedTasksRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedChatRoute: AuthedChatRouteWithChildren,
+  AuthedLibraryRoute: AuthedLibraryRoute,
+  AuthedTasksRoute: AuthedTasksRoute,
 }
 
 const AuthedRouteWithChildren =
@@ -561,7 +570,9 @@ const AdminSettingsRouteWithChildren = AdminSettingsRoute._addFileChildren(
 )
 
 interface AdminRouteChildren {
+  AdminAuthenticationRoute: typeof AdminAuthenticationRoute
   AdminChannelsRoute: typeof AdminChannelsRoute
+  AdminImageSearchRoute: typeof AdminImageSearchRoute
   AdminModelsRoute: typeof AdminModelsRoute
   AdminModerationLogsRoute: typeof AdminModerationLogsRoute
   AdminSettingsRoute: typeof AdminSettingsRouteWithChildren
@@ -573,7 +584,9 @@ interface AdminRouteChildren {
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminAuthenticationRoute: AdminAuthenticationRoute,
   AdminChannelsRoute: AdminChannelsRoute,
+  AdminImageSearchRoute: AdminImageSearchRoute,
   AdminModelsRoute: AdminModelsRoute,
   AdminModerationLogsRoute: AdminModerationLogsRoute,
   AdminSettingsRoute: AdminSettingsRouteWithChildren,
@@ -586,34 +599,9 @@ const AdminRouteChildren: AdminRouteChildren = {
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
-interface GuestChatRouteChildren {
-  GuestChatIndexRoute: typeof GuestChatIndexRoute
-  GuestChatChatConversationIdRoute: typeof GuestChatChatConversationIdRoute
-}
-
-const GuestChatRouteChildren: GuestChatRouteChildren = {
-  GuestChatIndexRoute: GuestChatIndexRoute,
-  GuestChatChatConversationIdRoute: GuestChatChatConversationIdRoute,
-}
-
-const GuestChatRouteWithChildren = GuestChatRoute._addFileChildren(
-  GuestChatRouteChildren,
-)
-
-interface GuestRouteChildren {
-  GuestChatRoute: typeof GuestChatRouteWithChildren
-}
-
-const GuestRouteChildren: GuestRouteChildren = {
-  GuestChatRoute: GuestChatRouteWithChildren,
-}
-
-const GuestRouteWithChildren = GuestRoute._addFileChildren(GuestRouteChildren)
-
 const rootRouteChildren: RootRouteChildren = {
   AuthedRoute: AuthedRouteWithChildren,
   AdminRoute: AdminRouteWithChildren,
-  GuestRoute: GuestRouteWithChildren,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
   DevGenuiRoute: DevGenuiRoute,

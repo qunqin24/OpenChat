@@ -10,7 +10,6 @@ import {
 import { toast } from 'sonner'
 
 import { useGenerateTitle, useRenameConversation } from '@/hooks/use-conversations'
-import { useChatPaths } from '@/lib/chat-paths'
 import { formatRelative } from '@/lib/grouping'
 import { useDisplayTitle } from '@/lib/titles'
 import { cn } from '@/lib/utils'
@@ -28,7 +27,6 @@ interface Props {
 export function SidebarConversation({ conversation, active, running = false, onDelete, onNavigate }: Props) {
   const { t } = useTranslation()
   const display = useDisplayTitle()
-  const paths = useChatPaths()
   const rename = useRenameConversation()
   const smartTitle = useGenerateTitle()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -84,7 +82,7 @@ export function SidebarConversation({ conversation, active, running = false, onD
           <Link
             ref={link}
             className={cn('n-row n-conversation-link', active && 'active')}
-            to={paths.chat}
+            to="/chat/$conversationId"
             params={{ conversationId: conversation.id }}
             aria-current={active ? 'page' : undefined}
             draggable={false}

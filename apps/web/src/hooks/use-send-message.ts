@@ -5,7 +5,6 @@ import { toast } from 'sonner'
 
 import { api, unwrap } from '@/lib/api'
 import type { AskAnswer } from '@/lib/ask-user'
-import { isGuestMode } from '@/lib/guest/mode'
 import { CAPACITY_CODE } from '@/lib/model-capacity'
 import { refusalOf, type Refusal } from '@/lib/moderation-refusal'
 import { queryKeys } from '@/lib/query-keys'
@@ -34,9 +33,6 @@ const SEND_ERRORS = [
   'message_not_found',
   'not_pending',
   'invalid_answers',
-  'guest_ip_limit',
-  'guest_daily_limit',
-  'guest_unreachable',
 ] as const
 
 function useSendError(conversationId?: string) {
@@ -44,9 +40,9 @@ function useSendError(conversationId?: string) {
   const queryClient = useQueryClient()
   return (error: Error) => {
     const code = isOpenChatError(error) ? error.code : ''
-    // Said by the page itself, not a toast: a banned guest's window is covered
-    // by the ban, and a signed-out account is taken to sign-in.
-    if (code === 'guest_banned' || (isOpenChatError(error) && error.status === 401)) return
+    // Said by the page itself, not a toast: a signed-out account is taken to
+    // sign-in.
+    if (isOpenChatError(error) && error.status === 401) return
     // Content moderation: a toast that says so and, if it applies, how close
     // the sanction is. Not a fault, so no error id. (A refused send is also in
     // the conversation, as the message that was kept - see `useSendMessage`.)
@@ -54,7 +50,7 @@ function useSendError(conversationId?: string) {
     if (refusal) {
       toast.error(t('chat.send-error.content_blocked'), {
         description: refusal.strikesLeft
-          ? t(isGuestMode() ? 'chat.refused.warning-guest' : 'chat.refused.warning', {
+          ? t('chat.refused.warning', {
               count: refusal.strikesLeft,
               hours: refusal.windowHours,
             })

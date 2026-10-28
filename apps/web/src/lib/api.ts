@@ -3,24 +3,14 @@ import type { ApiError } from '@openchat/api-client'
 
 import { API_BASE_URL } from './api-base'
 import { noteBuild } from './build-check'
-import { isGuestMode } from './guest/mode'
 
 export { API_BASE_URL }
 
-/**
- * The page's fetch. An account's calls go to the network. A guest's are
- * answered in the page where they can be - their conversations are kept in the
- * browser (lib/guest) - and the guest code is loaded only when one is made, so
- * an account never downloads it.
- */
+/** The page's fetch: the network's, with every answer checked for a newer build. */
 export const appFetch: typeof globalThis.fetch = async (input, init) => {
-  if (!isGuestMode()) {
-    const response = await globalThis.fetch(input, init)
-    noteBuild(response)
-    return response
-  }
-  const { guestFetch } = await import('./guest')
-  return guestFetch(input, init)
+  const response = await globalThis.fetch(input, init)
+  noteBuild(response)
+  return response
 }
 
 /**

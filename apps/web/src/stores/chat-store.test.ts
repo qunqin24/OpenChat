@@ -168,3 +168,19 @@ describe('unpost', () => {
     expect(useChatStore.getState().outbox['']).toBeUndefined()
   })
 })
+
+describe('resetChatStore', () => {
+  it('leaves nothing of the last person behind: their images, quotes, open panels', async () => {
+    const { resetChatStore } = await import('./chat-store')
+    const { useImageViewer } = await import('./image-viewer-store')
+    const { useDocumentPanel } = await import('./document-panel-store')
+    const { useDocumentQuote } = await import('./document-quote-store')
+    useImageViewer.getState().open([{ src: 'https://files.test/signed', title: 'a.png' }], 0)
+    useDocumentPanel.getState().open('c1', 'd1')
+    useDocumentQuote.getState().set({ conversationId: 'c1', documentId: 'd1', title: 'T', passage: 'private words' })
+    resetChatStore()
+    expect(useImageViewer.getState().images).toEqual([])
+    expect(useDocumentPanel.getState().documentId).toBeNull()
+    expect(useDocumentQuote.getState().quote).toBeNull()
+  })
+})

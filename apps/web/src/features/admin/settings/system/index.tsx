@@ -16,9 +16,9 @@ import { Switch } from '@/components/shadcn/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn/ui/tabs'
 import { ModerationPanel } from '@/features/admin/moderation/moderation-panel'
 import { ContentSection } from '../components/content-section'
-import { GuestLimitsForm } from './guest-limits-form'
 import { RetentionForm } from './retention-form'
 import { RunLimitForm } from './run-limit-form'
+import { SubagentsPanel } from './subagents-panel'
 import { SYSTEM_TABS, type SystemTab } from './tabs'
 import { VersionRow } from './version-row'
 
@@ -46,14 +46,16 @@ export function SettingsSystem() {
   const toggleGenUI = useSystemToggle('generativeUi', 'genui')
   const toggleAskUser = useSystemToggle('askUser', 'ask-user')
   const toggleMemory = useSystemToggle('memory', 'memory')
+  // The chat's sidebar offers the tasks page from the features.
+  const toggleTasks = useSystemToggle('scheduledTasks', 'tasks', [queryKeys.features])
+  // The chat's top bar offers 轨迹 from the features.
+  const toggleTraces = useSystemToggle('requestTraces', 'traces', [queryKeys.features])
   const toggleCompress = useSystemToggle('compressContext', 'compress-context')
   // The account settings read it from the chat's features.
   const toggleAvatars = useSystemToggle('avatarUploads', 'avatars', [queryKeys.features])
-  // The sign-in pages offer the register link and the guest button from
-  // these (and the /guest routes check guest mode).
+  // The sign-in pages offer the register link from these.
   const toggleRegistration = useSystemToggle('allowRegistration', 'allow-registration', [queryKeys.auth.options])
   const toggleApproval = useSystemToggle('registrationApproval', 'approval', [queryKeys.auth.options])
-  const toggleGuest = useSystemToggle('guestMode', 'guest', [queryKeys.guest.status, queryKeys.auth.options])
   const toggleDebug = useSystemToggle('debugLogging', '')
 
   // What enabled channels offer — the same list the chat's model picker shows.
@@ -144,6 +146,12 @@ export function SettingsSystem() {
           <SettingRow id="memory" label={t('admin.settings.system.memory')} hint={t('admin.settings.system.memory-hint')}>
             {toggle('memory', data?.memory ?? true, toggleMemory)}
           </SettingRow>
+          <SettingRow id="scheduled-tasks" label={t('admin.settings.system.tasks')} hint={t('admin.settings.system.tasks-hint')}>
+            {toggle('scheduled-tasks', data?.scheduledTasks ?? true, toggleTasks)}
+          </SettingRow>
+          <SettingRow id="request-traces" label={t('admin.settings.system.traces')} hint={t('admin.settings.system.traces-hint')}>
+            {toggle('request-traces', data?.requestTraces ?? false, toggleTraces)}
+          </SettingRow>
           <SettingRow
             id="compress-context"
             label={t('admin.settings.system.compress-context')}
@@ -159,6 +167,10 @@ export function SettingsSystem() {
             </div>
             {isPending || !data ? <Skeleton className="my-4 h-28 w-full" /> : <RunLimitForm settings={data} />}
           </div>
+        </TabsContent>
+
+        <TabsContent value="subagents">
+          <SubagentsPanel />
         </TabsContent>
 
         <TabsContent value="access" className="divide-y">
@@ -189,10 +201,6 @@ export function SettingsSystem() {
               />
             )}
           </SettingRow>
-          <SettingRow id="guest-mode" label={t('admin.settings.system.guest')} hint={t('admin.settings.system.guest-hint')}>
-            {toggle('guest-mode', data?.guestMode ?? false, toggleGuest)}
-          </SettingRow>
-          {isPending || !data ? <Skeleton className="my-4 h-56 w-full" /> : <GuestLimitsForm settings={data} />}
           <SettingRow id="avatar-uploads" label={t('admin.settings.system.avatars')} hint={t('admin.settings.system.avatars-hint')}>
             {toggle('avatar-uploads', data?.avatarUploads ?? false, toggleAvatars)}
           </SettingRow>
@@ -244,8 +252,9 @@ type SystemFlag =
   | 'generativeUi'
   | 'askUser'
   | 'memory'
+  | 'scheduledTasks'
+  | 'requestTraces'
   | 'avatarUploads'
-  | 'guestMode'
   | 'debugLogging'
   | 'allowRegistration'
   | 'registrationApproval'

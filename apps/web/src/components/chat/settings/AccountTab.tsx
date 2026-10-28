@@ -9,6 +9,7 @@ import { isAuthFieldError, type AuthErrorKey } from '@/features/auth'
 import { useChangePassword, useSession, useSetAvatar, useUpdateProfile } from '@/features/auth/use-auth'
 import { AVATAR_TYPES, AvatarFailed } from '@/lib/avatar'
 import { Field } from './Field'
+import Passkeys from './Passkeys'
 
 /**
  * Name, email and password, through the self-service endpoints (PATCH /auth/me,
@@ -91,6 +92,7 @@ function Profile({ id, name, email, avatarUrl }: { id: string; name: string; ema
 
         <hr className="n-settings-rule" />
         <Password />
+        <Passkeys />
       </div>
 
       <div className="n-settings-foot">

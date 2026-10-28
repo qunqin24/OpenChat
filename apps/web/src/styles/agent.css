@@ -181,7 +181,16 @@
   background: linear-gradient(to bottom, var(--n-bg) calc(100% - 20px), transparent 100%);
   pointer-events: none;
 }
-.chat-ui .n-main:has([data-stuck]) .n-topbar::before {
+/* In the sub-agent panel there is no top bar for a pinned header to join, and
+   a sticky box stops below its scroller's top padding, leaving a strip of text
+   showing above it: there it pins flush with the scroller's top edge instead
+   (the transcript's top padding, n-subagent-transcript). */
+.chat-ui .n-subagent-transcript .n-reasoning-toggle[data-state='open'],
+.chat-ui .n-subagent-transcript .n-activity.is-open .n-activity-head {
+  top: -8px;
+}
+/* The chat's own headers only: one pinned in the sub-agent panel has no bar to join. */
+.chat-ui .n-main:has(.n-scroll [data-stuck]) .n-topbar::before {
   inset: 0;
   background: var(--n-bg);
 }
@@ -213,13 +222,6 @@
 /* While working, the line is the live status: it shimmers gently. */
 .chat-ui .n-activity.is-active .n-activity-title {
   animation: n-agent-pulse 1.6s ease-in-out infinite;
-}
-.chat-ui .n-activity-pulse {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: currentColor;
-  animation: n-agent-pulse 1.1s ease-in-out infinite;
 }
 .chat-ui .n-activity-failed {
   flex-shrink: 0;
@@ -734,4 +736,124 @@
   color: var(--n-text-2);
   font-size: 13px;
   line-height: 20px;
+}
+
+/* A link's card on hover (MarkdownLink): the site's icon, the whole address,
+   open and copy. Drawn in a portal under <body>, outside .chat-ui, so its
+   rules are not scoped to it; the tokens are :root's and .dark's. */
+.n-link-card {
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(360px, calc(100vw - 24px));
+  padding: 4px 4px 4px 10px;
+  border-radius: 14px;
+  background: var(--n-bg);
+  color: var(--n-text);
+  box-shadow: var(--n-shadow-card-hover);
+  font-family: var(--n-chat-font, var(--font-sans));
+  font-size: 13px;
+  animation: n-tip-in 130ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.dark .n-link-card {
+  background: var(--n-panel);
+}
+.n-link-card .n-activity-mark {
+  position: relative;
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--n-panel);
+  color: var(--n-text-2);
+  font-size: 10px;
+  font-weight: 600;
+}
+.n-link-card .n-activity-mark img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: var(--n-bg);
+}
+.n-link-card-url {
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-underline-offset: 3px;
+  text-overflow: ellipsis;
+  margin-inline-start: 2px;
+  margin-inline-end: 2px;
+  white-space: nowrap;
+}
+.n-link-card-button {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--n-text);
+  cursor: pointer;
+}
+.n-link-card-button:hover {
+  background: var(--n-hover);
+}
+.n-link-card-button svg {
+  width: 15px;
+  height: 15px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .n-link-card {
+    animation: none;
+  }
+}
+
+/* "引用提问" over text selected in an answer (AskSelection). In a portal under
+   <body>, outside .chat-ui, so its rules are not scoped to it; the tokens are
+   :root's and .dark's. */
+.n-ask-bubble {
+  position: fixed;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--n-bg);
+  color: var(--n-text);
+  box-shadow: var(--n-shadow-card-hover);
+  font-family: var(--n-chat-font, var(--font-sans));
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+  animation: n-tip-in 130ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.dark .n-ask-bubble {
+  background: var(--n-panel);
+}
+.n-ask-bubble:hover {
+  background: color-mix(in srgb, var(--n-bg), var(--n-text) 6%);
+}
+.n-ask-bubble svg {
+  width: 16px;
+  height: 16px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .n-ask-bubble {
+    animation: none;
+  }
 }
