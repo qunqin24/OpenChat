@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { api, API_BASE_URL, appFetch, unwrap } from '@/lib/api'
 import { announceDeleted, forgetDeleted } from '@/lib/conversation-sync'
+import { queryKeys } from '@/lib/query-keys'
 
 /**
  * The person's own data as a whole: take it out, or delete it. Both are
@@ -54,6 +55,8 @@ export function useDeleteAllConversations() {
     onSuccess: () => {
       forgetDeleted(queryClient, 'all')
       announceDeleted('all')
+      // Their files went with them.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.storage })
     },
   })
 }

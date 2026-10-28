@@ -61,9 +61,27 @@ func (s *Server) ListUsers(w http.ResponseWriter, r *http.Request, params ListUs
 		return
 	}
 
+	ids := make([]uuid.UUID, len(rows))
+	for i, row := range rows {
+		ids[i] = row.ID
+	}
+	used, err := s.q.UsersStorageUsed(r.Context(), ids)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	usedBy := make(map[uuid.UUID]int64, len(used))
+	for _, row := range used {
+		if row.UserID != nil {
+			usedBy[*row.UserID] = row.Bytes
+		}
+	}
 	items := make([]User, 0, len(rows))
 	for _, row := range rows {
-		items = append(items, s.user(r.Context(), row))
+		user := s.user(r.Context(), row)
+		bytes := usedBy[row.ID]
+		user.StorageUsedBytes = &bytes
+		items = append(items, user)
 	}
 
 	httpx.JSON(w, http.StatusOK, UserPage{
@@ -135,7 +153,7 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, userId opena
 		return
 	}
 	if body.Role == nil && body.Disabled == nil && body.Name == nil &&
-		body.Email == nil && body.Password == nil && body.Approved == nil {
+		body.Email == nil && body.Password == nil && body.Approved == nil && body.StorageQuotaBytes == nil {
 		httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "nothing_to_update", "no changes were given"))
 		return
 	}
@@ -216,6 +234,11 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, userId opena
 				"you cannot remove your own admin access")
 		}
 
+		if body.StorageQuotaBytes != nil {
+			if err := setUserQuota(r.Context(), q, userId, *body.StorageQuotaBytes); err != nil {
+				return err
+			}
+		}
 		updated, err = q.AdminUpdateUser(r.Context(), sqlc.AdminUpdateUserParams{
 			ID:           userId,
 			Name:         name,

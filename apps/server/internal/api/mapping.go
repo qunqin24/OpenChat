@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
@@ -20,7 +22,17 @@ func toConversation(row sqlc.Conversation) Conversation {
 		Temporary:       row.Temporary,
 		CreatedAt:       row.CreatedAt.Time,
 		UpdatedAt:       row.UpdatedAt.Time,
+		PinnedAt:        timePtr(row.PinnedAt),
 	}
+}
+
+// timePtr is a nullable timestamp column as an optional field.
+func timePtr(column pgtype.Timestamptz) *time.Time {
+	if !column.Valid {
+		return nil
+	}
+	at := column.Time
+	return &at
 }
 
 // toEffort reads a reasoning_effort column, where NULL is automatic.
@@ -76,5 +88,6 @@ func (s *Server) user(ctx context.Context, row sqlc.User) User {
 		seen := row.LastSeenAt.Time
 		user.LastSeenAt = &seen
 	}
+	user.StorageQuotaBytes = row.StorageQuotaBytes
 	return user
 }

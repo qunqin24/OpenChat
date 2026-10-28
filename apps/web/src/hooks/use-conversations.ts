@@ -83,6 +83,37 @@ export function useConversations() {
   return useInfiniteQuery({ ...conversationsQueryOptions, placeholderData: (previous) => previous })
 }
 
+/** The pinned conversations, the latest pinned first: shown above the list whatever their age. */
+export function usePinnedConversations() {
+  return useQuery({
+    queryKey: queryKeys.conversations.pinned(),
+    queryFn: async ({ signal }) => unwrap(await api.GET('/conversations', { params: { query: { pinned: true } }, signal })).items,
+  })
+}
+
+/** Pins a conversation to the top of the list, or unpins it. */
+export function usePinConversation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ conversationId, pinned }: { conversationId: string; pinned: boolean }) =>
+      unwrap(
+        await api.PATCH('/conversations/{conversationId}', {
+          params: { path: { conversationId } },
+          body: { pinned },
+        }),
+      ),
+    onSuccess: (conversation: Conversation) => {
+      queryClient.setQueryData(queryKeys.conversations.detail(conversation.id), conversation)
+      // At once, before the refetch: the row moves as the menu closes.
+      queryClient.setQueryData<Conversation[]>(queryKeys.conversations.pinned(), (held) => {
+        const others = (held ?? []).filter((item) => item.id !== conversation.id)
+        return conversation.pinnedAt ? [conversation, ...others] : others
+      })
+      refreshLists(queryClient)
+    },
+  })
+}
+
 /** One conversation's settings and title. Shared with the route loader. */
 export const conversationQueryOptions = (conversationId: string) =>
   queryOptions({

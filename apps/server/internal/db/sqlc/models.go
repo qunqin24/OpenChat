@@ -458,6 +458,7 @@ type Conversation struct {
 	LaunchCallID    *string            `json:"launch_call_id"`
 	Background      bool               `json:"background"`
 	StoppedByUser   bool               `json:"stopped_by_user"`
+	PinnedAt        pgtype.Timestamptz `json:"pinned_at"`
 }
 
 type Document struct {
@@ -714,6 +715,7 @@ type User struct {
 	InstructionsStyleCheckedHash *string            `json:"instructions_style_checked_hash"`
 	InstructionsStyleBlockedHash *string            `json:"instructions_style_blocked_hash"`
 	TimeZone                     *string            `json:"time_zone"`
+	StorageQuotaBytes            *int64             `json:"storage_quota_bytes"`
 }
 
 type UserMemory struct {

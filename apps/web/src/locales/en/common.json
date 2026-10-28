@@ -39,6 +39,10 @@
     "edit": "Edit",
     "edit-send": "Send",
     "edit-cancel": "Cancel",
+    "pin": "Pin",
+    "unpin": "Unpin",
+    "pin-failed": "Could not pin",
+    "unpin-failed": "Could not unpin",
     "rename": "Rename",
     "smart-title": "Smart rename",
     "smart-title-pending": "Naming…",
@@ -124,6 +128,7 @@
       "too_many_attachments": "A message can carry at most 10 files.",
       "attachments_too_large": "The files in one message can add up to at most 20 MB.",
       "attachment_unsupported": "The selected model does not accept this kind of file. Remove it or pick another model.",
+      "storage_quota_exceeded": "Your storage is full. Delete files you no longer need from the library, then send again.",
       "attachment_unreadable": "A document could not be read: it may be damaged, password-protected, or not the format its name says.",
       "attachment_text_too_long": "A document's text is over 2 MB, too long to send. Split it and try again.",
       "attachment_unavailable": "A file did not upload, or was already sent. Remove it and add it again.",
@@ -278,6 +283,7 @@
       "error": {
         "type": "Not supported",
         "size": "Too large",
+        "quota": "Storage full",
         "failed": "Upload failed"
       },
       "reject": {
@@ -294,6 +300,7 @@
       },
       "removed": "File deleted",
       "kind": {"word": "Word document", "excel": "Excel workbook", "pdf": "PDF", "note": "Text", "data": "Table", "config": "Settings", "web": "Web page", "code": "Code", "image": "Image", "file": "File"},
+      "storage-full": "Your storage is full: delete files you no longer need from the library to upload again",
       "removed-hint": "This file was deleted from your library"
     },
     "time": {
@@ -304,12 +311,15 @@
       "weeks": "{{n}}w ago"
     },
     "group": {
+      "pinned": "Pinned",
       "today": "Today",
       "yesterday": "Yesterday",
       "week": "Previous 7 days",
       "month": "Previous 30 days"
     },
     "welcome": {
+      "hello": {"morning": "Good morning, {{name}}", "noon": "Good afternoon, {{name}}", "afternoon": "Good afternoon, {{name}}", "evening": "Good evening, {{name}}", "night": "Up late, {{name}}"},
+      "hello-bare": {"morning": "Good morning", "noon": "Good afternoon", "afternoon": "Good afternoon", "evening": "Good evening", "night": "Up late"},
       "greeting": "How can I help you today?",
       "suggestions": "Suggested",
       "items": {
@@ -568,6 +578,7 @@
       "empty": "No requests in this window yet"
     },
     "users": {
+      "storage": "Storage",
       "search": "Search email or username",
       "total": "{{n}} accounts",
       "none": "No matching accounts",
@@ -611,6 +622,10 @@
       "edit-hint": "Changes take effect immediately.",
       "create-hint": "The account can sign in right away — pass the password on yourself.",
       "form": {
+        "storage": "Storage limit",
+        "storage-default": "Default",
+        "storage-hint": "Blank uses the default limit. {{used}} used.",
+        "storage-invalid": "Enter 0 or more",
         "name": "Username",
         "email": "Email",
         "password": "Password",
@@ -1204,6 +1219,7 @@
       "test-served-by": "answered by {{name}}"
     },
     "storage": {
+      "quota": {"title": "Storage per person", "hint": "What each person uploads - sent or not, in any conversation - may add up to at most this; past it, uploads are refused. A person can be given their own on the Users page.", "label": "Default limit", "description": "Every account without its own limit has this one. Lowering it deletes nothing: someone over it can upload again once they delete some files.", "invalid": "Enter 0 or more", "save": "Save", "saved": "Storage limit saved", "save-failed": "Could not save"},
       "title": "File storage",
       "subtitle": "Where attachments are kept. Changes take effect as soon as you save; no restart needed.",
       "driver": "Storage",
@@ -1540,6 +1556,13 @@
       "avatar-failed": "The picture could not be saved. Try another image."
     },
     "data": {
+      "storage-title": "Storage",
+      "storage-used": "{{used}} of {{quota}} used",
+      "storage-failed": "Usage could not be read",
+      "storage-manage": "Manage files",
+      "storage-full": "Your storage is full. Delete files you no longer need to upload again.",
+      "storage-nearly-full": "Your storage is nearly full. You can delete files you no longer need in the library.",
+      "storage-kind": {"image": "Images", "pdf": "PDFs", "document": "Documents", "text": "Text", "other": "Other"},
       "temporary": "Temporary chats are deleted 24 hours after they start.",
       "export-title": "Export all chats",
       "export-desc": "Downloads a JSON file with every chat you keep and, for each, its messages. Temporary chats and the tool calls behind answers are not in it.",

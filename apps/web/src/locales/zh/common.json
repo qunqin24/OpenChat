@@ -39,6 +39,10 @@
     "edit": "编辑",
     "edit-send": "发送",
     "edit-cancel": "取消",
+    "pin": "置顶",
+    "unpin": "取消置顶",
+    "pin-failed": "置顶失败",
+    "unpin-failed": "取消置顶失败",
     "rename": "重命名",
     "smart-title": "智能命名",
     "smart-title-pending": "正在命名…",
@@ -124,6 +128,7 @@
       "too_many_attachments": "一条消息最多带 10 个文件。",
       "attachments_too_large": "一条消息的文件加起来最多 20 MB。",
       "attachment_unsupported": "所选模型不支持这类文件，请移除文件或换一个模型。",
+      "storage_quota_exceeded": "存储空间已满，删除文件库里不需要的文件后再发送。",
       "attachment_unreadable": "有文档读不出来：可能已损坏、加了密码，或者并不是它扩展名说的格式。",
       "attachment_text_too_long": "有文档的文字超过 2 MB，太长了，请拆分后再发。",
       "attachment_unavailable": "有文件没有上传成功或已经发送过，请移除后重新添加。",
@@ -278,6 +283,7 @@
       "error": {
         "type": "不支持",
         "size": "文件过大",
+        "quota": "空间已满",
         "failed": "上传失败"
       },
       "reject": {
@@ -294,6 +300,7 @@
       },
       "removed": "文件已删除",
       "kind": {"word": "Word 文档", "excel": "Excel 表格", "pdf": "PDF", "note": "文本", "data": "表格数据", "config": "配置", "web": "网页", "code": "代码", "image": "图片", "file": "文件"},
+      "storage-full": "存储空间已满，删除文件库里不需要的文件后才能继续上传",
       "removed-hint": "这个文件已从库中删除"
     },
     "time": {
@@ -304,12 +311,15 @@
       "weeks": "{{n}}周前"
     },
     "group": {
+      "pinned": "置顶",
       "today": "今天",
       "yesterday": "昨天",
       "week": "过去 7 天",
       "month": "过去 30 天"
     },
     "welcome": {
+      "hello": {"morning": "早上好，{{name}}", "noon": "中午好，{{name}}", "afternoon": "下午好，{{name}}", "evening": "晚上好，{{name}}", "night": "夜深了，{{name}}"},
+      "hello-bare": {"morning": "早上好", "noon": "中午好", "afternoon": "下午好", "evening": "晚上好", "night": "夜深了"},
       "greeting": "有什么我能帮您的吗？",
       "suggestions": "建议",
       "items": {
@@ -568,6 +578,7 @@
       "empty": "这段时间还没有请求"
     },
     "users": {
+      "storage": "存储",
       "search": "搜索邮箱或用户名",
       "total": "共 {{n}} 个账号",
       "none": "没有匹配的账号",
@@ -611,6 +622,10 @@
       "edit-hint": "修改后立即生效。",
       "create-hint": "账号创建后即可登录，密码请另行告知对方。",
       "form": {
+        "storage": "存储上限",
+        "storage-default": "默认",
+        "storage-hint": "留空则使用默认上限。已使用 {{used}}。",
+        "storage-invalid": "请输入 0 或更大的数字",
         "name": "用户名",
         "email": "邮箱",
         "password": "密码",
@@ -1204,6 +1219,7 @@
       "test-served-by": "由 {{name}} 返回"
     },
     "storage": {
+      "quota": {"title": "每位用户的存储空间", "hint": "每个人上传的文件（无论是否已发送、在哪个对话里）加起来不能超过这个上限，满了就不能再上传。可以在「用户」页给某个人单独设置。", "label": "默认上限", "description": "没有单独设置的账号都用这个值。调低不会删除任何文件，超出的人删掉一些文件后才能继续上传。", "invalid": "请输入 0 或更大的数字", "save": "保存", "saved": "已保存存储上限", "save-failed": "保存失败"},
       "title": "文件存储",
       "subtitle": "决定附件保存在哪里。修改在保存后立即生效，不需要重启。",
       "driver": "存储方式",
@@ -1540,6 +1556,13 @@
       "avatar-failed": "头像没能保存，请换一张图片再试。"
     },
     "data": {
+      "storage-title": "存储空间",
+      "storage-used": "已使用 {{used}}，共 {{quota}}",
+      "storage-failed": "暂时读不到用量",
+      "storage-manage": "管理文件",
+      "storage-full": "存储空间已满，删除不需要的文件后才能继续上传。",
+      "storage-nearly-full": "存储空间快满了，可以去文件库删掉不需要的文件。",
+      "storage-kind": {"image": "图片", "pdf": "PDF", "document": "文档", "text": "文本", "other": "其他"},
       "temporary": "临时聊天在创建 24 小时后自动删除。",
       "export-title": "导出所有对话",
       "export-desc": "下载一份 JSON 文件，包含你保留的所有对话，以及每个对话的消息。临时聊天、工具调用的过程不在其中。",

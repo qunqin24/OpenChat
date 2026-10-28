@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { useTranslation } from 'react-i18next'
 
 import { useChatFeatures } from '@/hooks/use-chat-models'
-import { useConversations, useRunningConversations } from '@/hooks/use-conversations'
+import { useConversations, usePinnedConversations, useRunningConversations } from '@/hooks/use-conversations'
 import { newChatState } from '@/lib/chat-view'
 import { groupConversations } from '@/lib/grouping'
 import { cn } from '@/lib/utils'
@@ -56,10 +56,15 @@ export function Sidebar({ collapsed, mobile, onToggle, onNavigate, activeId, onD
     }
     return [...unique.values()]
   }, [conversations.data])
-  const groups = useMemo(
-    () => groupConversations(history, t, i18n.resolvedLanguage),
-    [history, t, i18n.resolvedLanguage],
-  )
+  // The pinned ones stand above the rest, whatever their age, and not again
+  // below among them.
+  const pins = usePinnedConversations()
+  const groups = useMemo(() => {
+    const pinned = pins.data ?? []
+    const ids = new Set(pinned.map((item) => item.id))
+    const dated = groupConversations(history.filter((item) => !ids.has(item.id)), t, i18n.resolvedLanguage)
+    return pinned.length > 0 ? [{ key: 'pinned', label: t('chat.group.pinned'), items: pinned }, ...dated] : dated
+  }, [history, pins.data, t, i18n.resolvedLanguage])
 
   const openSearch = useCallback(() => {
     searchOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null

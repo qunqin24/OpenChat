@@ -87,6 +87,7 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 			r.Put("/me/avatar", wrapper.UpdateMyAvatar)
 			r.Delete("/me/avatar", wrapper.DeleteMyAvatar)
 			r.Get("/me/export", wrapper.ExportMyConversations)
+			r.Get("/me/storage", wrapper.GetMyStorage)
 			r.Delete("/me/conversations", wrapper.DeleteAllMyConversations)
 
 			// Personal memory: always the caller's own, from the session.
@@ -175,6 +176,8 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 				r.Post("/admin/image-search/test", wrapper.TestImageSearch)
 				r.Get("/admin/storage", wrapper.GetStorageSettings)
 				r.Patch("/admin/storage", wrapper.UpdateStorageSettings)
+				r.Get("/admin/storage/quota", wrapper.GetStorageQuota)
+				r.Patch("/admin/storage/quota", wrapper.UpdateStorageQuota)
 				r.Post("/admin/storage/test", wrapper.TestStorage)
 				r.Patch("/admin/system", wrapper.UpdateSystemSettings)
 				r.Get("/admin/subagents", wrapper.GetSubagentSettings)

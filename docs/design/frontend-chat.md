@@ -29,6 +29,7 @@
 
 ## 对话标题的显示
 
+- 新对话页（`Welcome`、`WelcomeStarters`，样式在 `chat-layout.css` 的 `.n-main.is-welcome`）：像 Claude 一样，我们的水波标志加一句按时段的问候（`lib/greeting.ts` 的 `dayPeriod`：早上、中午、下午、晚上、深夜「夜深了」，带用户名，衬线字，打开页面时定下不再变）；宽屏上问候和输入框一起在页面略偏上的正中，输入框比对话页窄（52rem），建议是输入框下面一排胶囊，点了只填进输入框不发送；有了消息就回到普通布局，输入框在底部：离开欢迎页的那一帧，`ChatView` 用记下的上一次位置把输入框挪回原处再放开（`element.animate` 的 FLIP，`DOCK_GLIDE_MS`），宽度由 `.n-column` 的 `max-width` 过渡跟上，减少动态效果时都不做。手机上输入框始终在底部，建议横排在它上方、可以左右滑。临时聊天显示幽灵图标和说明，不显示问候和建议。输入框仍然只有一个实例，欢迎页只是换布局。
 - 对话标题：服务端把没起名的对话叫 `New chat`（英文，不随语言），显示时一律经 `lib/titles.ts` 的 `displayTitle`/`useDisplayTitle`（侧栏、搜索、对话页顶、删除确认），它把空标题和 `New chat` 换成 `chat.untitled`；重命名框也以显示出来的名字起头。别直接渲染 `conversation.title`。
 
 ## 流式文字的显现与滚动
@@ -45,6 +46,7 @@
 ## 侧边栏、删除对话与事件
 
 - 侧边栏标记正在回答的对话靠 `GET /conversations/running`（`useRunningConversations`）：有在跑的才每 3 秒轮询，`run_started` 时由事件流让它失效；某个 id 消失时刷新列表（标题、顺序可能变了）。当前打开的对话不标，它自己的页面已经在显示。
+- 置顶对话：`conversations.pinned_at`（NULL 为未置顶），`PATCH /conversations/{id}` 的 `pinned` 置顶或取消，不动 `updated_at`（置顶不算活动），临时聊天不能置顶（400 `temporary_not_pinnable`）。侧栏最上面的「置顶」分组来自单独的 `GET /conversations?pinned=true`（最新置顶在前，一页最多 200，不分页，因为置顶的可能很旧），其余对话照旧按时间分组、去掉已置顶的；列表本身仍包含置顶对话。前端键 `queryKeys.conversations.pinned()` 放在 `list()` 下面，凡是刷新列表的地方都会一起刷新、一起持久化；置顶/取消时先改本地缓存再刷新，行在菜单关上时就挪过去。菜单项在侧栏行的「…」里（`SidebarConversation`）。
 - 删除对话：服务端在删除提交后往该对话的事件流发 `conversation_deleted`（nil run id、version 0；全部删除时每个对话各一条），正在看它的页面（任何标签页、任何设备）收到就停止跟随并回到首页。同一浏览器的其他标签页靠 `lib/conversation-sync.ts` 的 BroadcastChannel（`announceDeleted` / `followDeletions`）立刻从侧栏和搜索里去掉它。新增删除对话的路径要两样都做。
 - 收到 `transcript_changed` 时（`use-conversation-events.ts`）先按事件的 `from`（或本页自己的 `replacing`）截缓存，赶在 `run_started` 结束 `replacing` 之前，再用 `refreshNewestMessages` 重取最新一页，不要 `invalidateQueries` 消息键。`spliceNewest`（`lib/transcript-pages.ts`，有测试）在新一页的第一行不在已持有的行里时整页替换，所以行被删光也对。重新生成时其他标签页没有 `from`，靠 `buildTurns` 里「run 的输入已在列表」那条藏旧回答。
 

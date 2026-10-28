@@ -176,3 +176,25 @@ SELECT *
 FROM conversations
 WHERE id = $1
 FOR UPDATE;
+
+-- name: ListPinnedConversations :many
+-- The caller's pinned conversations, the latest pinned first: shown above the
+-- rest of the list whatever their age, so not paged with it.
+SELECT *
+FROM conversations
+WHERE user_id = sqlc.arg('user_id')
+  AND deleted_at IS NULL
+  AND kind = 'chat'
+  AND NOT temporary
+  AND pinned_at IS NOT NULL
+ORDER BY pinned_at DESC, id DESC
+LIMIT 200;
+
+-- name: SetConversationPinned :one
+-- Pins or unpins without touching updated_at: pinning is not activity.
+UPDATE conversations
+SET pinned_at = CASE WHEN sqlc.arg('pinned')::boolean THEN COALESCE(pinned_at, now()) ELSE NULL END
+WHERE id = sqlc.arg('id')
+  AND user_id = sqlc.arg('user_id')
+  AND deleted_at IS NULL
+RETURNING *;

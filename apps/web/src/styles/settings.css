@@ -284,6 +284,40 @@
 .chat-ui .n-settings-soft:disabled,
 .chat-ui .n-settings-danger:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* The data tab's storage meter (DataTab, StorageMeter): a bar in the colours
+   of the kinds of file - their badges' - and each kind's share under it. */
+.chat-ui .n-storage-bar {
+  display: flex;
+  height: 8px;
+  margin-top: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--n-hover);
+}
+.chat-ui .n-storage-part { flex: none; min-width: 2px; height: 100%; }
+.chat-ui .n-storage-part + .n-storage-part { box-shadow: inset 2px 0 0 var(--n-bg); }
+.chat-ui :is(.n-storage-part, .n-storage-dot).is-image { --n-storage-color: #0d9488; }
+.chat-ui :is(.n-storage-part, .n-storage-dot).is-pdf { --n-storage-color: #e5484d; }
+.chat-ui :is(.n-storage-part, .n-storage-dot).is-document { --n-storage-color: #2b5cb8; }
+.chat-ui :is(.n-storage-part, .n-storage-dot).is-text { --n-storage-color: #7c3aed; }
+.chat-ui :is(.n-storage-part, .n-storage-dot).is-other { --n-storage-color: #8a8f98; }
+.chat-ui .n-storage-part,
+.chat-ui .n-storage-dot { background: var(--n-storage-color); }
+.chat-ui .n-storage-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 10px 0 0;
+  padding: 0;
+  color: var(--n-text-2);
+  font-size: 13px;
+  list-style: none;
+}
+.chat-ui .n-storage-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.chat-ui .n-storage-dot { width: 8px; height: 8px; border-radius: 50%; }
+.chat-ui .n-storage-amount { color: var(--n-text-3); font-variant-numeric: tabular-nums; }
+.chat-ui .n-settings-help.is-warning { margin-top: 10px; color: var(--n-err); }
+
 /* The data tab: a row for each thing to do, its words left and its button right. */
 .chat-ui .n-settings-data-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 14px; }
 .chat-ui .n-settings-data-text { min-width: 0; }

@@ -29,7 +29,7 @@ import { useSession } from '@/features/auth/use-auth'
 import { cn } from '@/lib/utils'
 import { loadComposerPrefs, saveComposerPrefs } from '@/lib/composer-prefs'
 import { defaultModelId } from '@/lib/model-capacity'
-import { smoothScrollBehavior } from '@/lib/motion'
+import { prefersReducedMotion, smoothScrollBehavior } from '@/lib/motion'
 import { displayTitle } from '@/lib/titles'
 import { acceptAttribute, acceptsOf, TEXT_TYPE } from '@/lib/attachments'
 import { isRunning } from '@/lib/run-state'
@@ -69,7 +69,7 @@ import { answerQuote, quoteMessage } from '@/lib/document-selection'
 import { gapLabel, timeGaps } from '@/lib/time-gap'
 import AskSelection from './AskSelection'
 import { TemporaryBar, TemporaryToggle } from './TemporaryChat'
-import Welcome from './Welcome'
+import Welcome, { WelcomeStarters } from './Welcome'
 
 /** Distance from the bottom, in px, still counted as "parked at the tail". */
 const BOTTOM_SLACK = 24
@@ -360,6 +360,27 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
   const [refusedEdit, setRefusedEdit] = useState<{ id: string; content: string } | null>(null)
 
   const isEmpty = !outgoing && (!conversationId || (!messages.isPending && turns.length === 0))
+
+  // Leaving the new-chat page (`.n-main.is-welcome`), the composer glides from
+  // the middle of the page to its foot rather than jumping there: where it
+  // stood is noted after every layout, and the frame the page stops being a
+  // welcome it is moved back there and let go (its width follows in CSS).
+  const dockTop = useRef<number | null>(null)
+  const wasWelcome = useRef(isEmpty)
+  useLayoutEffect(() => {
+    const element = dock.current
+    if (!element) return
+    const top = element.getBoundingClientRect().top
+    const from = dockTop.current
+    if (wasWelcome.current && !isEmpty && from !== null && Math.abs(from - top) > 4 && !prefersReducedMotion()) {
+      element.animate([{ transform: `translateY(${from - top}px)` }, { transform: 'none' }], {
+        duration: DOCK_GLIDE_MS,
+        easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+      })
+    }
+    wasWelcome.current = isEmpty
+    dockTop.current = top
+  })
 
   // Grows as the reply streams, so the tail-follow below reacts to tokens and
   // not only to new rows.
@@ -880,7 +901,6 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
   }
 
   const title = conversationId ? displayTitle(conversation.data?.title, t) : t('chat.nav.new')
-  const modelName = modelById.get(modelId)?.name ?? (modelId || 'OpenChat')
 
   // Exactly one composer for every state; on the empty state it docks beneath
   // the centred welcome rather than living inside it.
@@ -947,7 +967,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
 
   return (
     <main
-      className={cn('n-main', temporaryMode && 'is-temporary', beside && 'has-doc', docOpen && !panel.closing && panel.full && 'is-doc-full')}
+      className={cn('n-main', isEmpty && 'is-welcome', temporaryMode && 'is-temporary', beside && 'has-doc', docOpen && !panel.closing && panel.full && 'is-doc-full')}
       style={panelWidth ? ({ '--n-doc-user-w': `${panelWidth}px` } as React.CSSProperties) : undefined}
       {...fileDrop.handlers}
     >
@@ -993,7 +1013,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
             <span className="n-spinner" data-motion="essential" />
           </div>
         ) : isEmpty ? (
-          <Welcome onPick={setInput} modelName={modelName} model={modelById.get(modelId)} />
+          <Welcome />
         ) : (
           <ImageSource.Provider value={images}>
             <div className={attachments.items.length > 0 ? 'n-column n-chat-fade has-files' : 'n-column n-chat-fade'} ref={columnRef}>
@@ -1103,6 +1123,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
           )}
           {subagentsOn && conversationId && <SubagentSummary conversationId={conversationId} />}
           {composer}
+          {isEmpty && !temporaryMode && <WelcomeStarters onPick={setInput} />}
         </div>
       </div>
       {/* Last, so turning it on or off never shifts the elements above it. */}
@@ -1110,6 +1131,9 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     </main>
   )
 }
+
+/** How long the composer takes to glide from the new-chat page's middle to the foot. */
+const DOCK_GLIDE_MS = 420
 
 /** The model a reply was answered with: its run's, or its rows'. */
 function turnModel(turn: Extract<ReturnType<typeof buildTurns>[number], { kind: 'assistant' }>) {

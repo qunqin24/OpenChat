@@ -1081,6 +1081,40 @@ paths:
               schema: { $ref: "#/components/schemas/StorageSettings" }
         default: { $ref: "#/components/responses/Error" }
 
+  /admin/storage/quota:
+    get:
+      tags: [admin]
+      summary: How much each person may keep in files
+      operationId: getStorageQuota
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StorageQuotaSettings" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [admin]
+      summary: Change how much each person may keep in files
+      description: |
+        The default for every account without a quota of its own
+        (`UpdateUserRequest.storageQuotaBytes`). Lowering it below what
+        someone keeps deletes nothing: they can upload again once they have
+        made room.
+      operationId: updateStorageQuota
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StorageQuotaSettings" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StorageQuotaSettings" }
+        default: { $ref: "#/components/responses/Error" }
+
   /admin/storage/test:
     post:
       tags: [admin]
@@ -1246,6 +1280,13 @@ paths:
             conversation found by what was said in it carries `match`. Keep it
             the same while following `nextCursor`.
           schema: { type: string, maxLength: 200 }
+        - name: pinned
+          in: query
+          description: |
+            Only the pinned conversations, the latest pinned first, all on one
+            page (at most 200). The list without it holds them too, in their
+            place by date.
+          schema: { type: boolean }
       responses:
         "200":
           description: a page of conversations
@@ -1831,6 +1872,24 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SessionUser" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /me/storage:
+    get:
+      tags: [files]
+      summary: How much your files take
+      description: |
+        What your uploaded files add up to - sent or not yet, in any
+        conversation - against how much you may keep. An upload that would go
+        past it is refused (413 `storage_quota_exceeded`); deleting files from
+        the library makes room.
+      operationId: getMyStorage
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MyStorage" }
         default: { $ref: "#/components/responses/Error" }
 
   /me/export:
@@ -2626,6 +2685,10 @@ components:
             Has no effect where the server offers no web search.
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+        pinnedAt:
+          type: string
+          format: date-time
+          description: When it was pinned to the top of the list; absent when it is not.
         match:
           description: |
             Only in a search's results: the latest message containing the
@@ -2689,6 +2752,9 @@ components:
           description: The model the conversation's next run uses.
         reasoningEffort: { $ref: "#/components/schemas/ReasoningEffort" }
         webSearch: { type: boolean }
+        pinned:
+          type: boolean
+          description: Pins it to the top of the list, or unpins it. Not its activity - `updatedAt` stays.
 
     FoundImage:
       type: object
@@ -4041,6 +4107,14 @@ components:
             an account cannot sign in. It can also be `disabled` (rejected).
         createdAt: { type: string, format: date-time }
         lastSeenAt: { type: string, format: date-time, nullable: true }
+        storageQuotaBytes:
+          type: integer
+          format: int64
+          description: The account's own quota in bytes; absent when it has the default.
+        storageUsedBytes:
+          type: integer
+          format: int64
+          description: What its files take, in bytes. Given in `listUsers`.
 
     UserPage:
       type: object
@@ -4248,6 +4322,36 @@ components:
         role: { $ref: "#/components/schemas/UserRole" }
         disabled: { type: boolean, default: false }
 
+    MyStorage:
+      type: object
+      required: [usedBytes, quotaBytes, files, kinds]
+      properties:
+        usedBytes: { type: integer, format: int64 }
+        quotaBytes: { type: integer, format: int64 }
+        files: { type: integer, format: int64 }
+        kinds:
+          type: array
+          description: What each kind of file takes, largest first.
+          items: { $ref: "#/components/schemas/StorageKindUsage" }
+
+    StorageKindUsage:
+      type: object
+      required: [kind, files, bytes]
+      properties:
+        kind: { type: string, enum: [image, pdf, document, text, other] }
+        files: { type: integer, format: int64 }
+        bytes: { type: integer, format: int64 }
+
+    StorageQuotaSettings:
+      type: object
+      required: [defaultBytes]
+      properties:
+        defaultBytes:
+          type: integer
+          format: int64
+          minimum: 0
+          description: How much an account without a quota of its own may keep in files, in bytes. 5 GiB unless set.
+
     UpdateUserRequest:
       type: object
       description: |
@@ -4255,6 +4359,11 @@ components:
         account out everywhere — the old sessions outlive the old credential
         otherwise.
       properties:
+        storageQuotaBytes:
+          type: integer
+          format: int64
+          minimum: -1
+          description: How much this account may keep in files, in bytes; -1 gives it the default again.
         name: { $ref: "#/components/schemas/Username" }
         email: { type: string, format: email }
         password: { type: string, minLength: 8, maxLength: 200 }

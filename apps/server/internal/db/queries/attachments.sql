@@ -115,3 +115,44 @@ WHERE m.conversation_id = $1
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   )
 ORDER BY m.created_at, m.id;
+
+-- name: LockUserStorage :exec
+-- Held while a person's files are counted against their quota and one is
+-- added, so two uploads at once cannot both fit in the room left for one.
+SELECT pg_advisory_xact_lock(hashtextextended('user-storage:' || sqlc.arg('user_id')::uuid::text, 0));
+
+-- name: UserStorageByKind :many
+-- What a person's files take, by kind: everything they uploaded, sent or not
+-- yet, in kept or temporary conversations alike - all of it is stored.
+SELECT (CASE
+            WHEN content_type LIKE 'image/%' THEN 'image'
+            WHEN content_type = 'application/pdf' THEN 'pdf'
+            WHEN content_type LIKE 'application/vnd.openxmlformats-officedocument.%' THEN 'document'
+            WHEN content_type = 'text/plain' THEN 'text'
+            ELSE 'other'
+        END)::text AS kind,
+       count(*) AS files,
+       COALESCE(sum(size_bytes), 0)::bigint AS bytes
+FROM attachments
+WHERE user_id = sqlc.arg('user_id')
+GROUP BY 1;
+
+-- name: UserStorageUsed :one
+SELECT COALESCE(sum(size_bytes), 0)::bigint
+FROM attachments
+WHERE user_id = sqlc.arg('user_id');
+
+-- name: UsersStorageUsed :many
+-- The admin users table's column: what each of a page of accounts keeps.
+SELECT user_id, COALESCE(sum(size_bytes), 0)::bigint AS bytes
+FROM attachments
+WHERE user_id = ANY (sqlc.arg('user_ids')::uuid[])
+GROUP BY user_id;
+
+-- name: SetAttachmentSize :exec
+-- An upload's size as stored, over the one its uploader announced, before a
+-- message claims it.
+UPDATE attachments
+SET size_bytes = sqlc.arg('size_bytes')
+WHERE id = sqlc.arg('id')
+  AND message_id IS NULL;

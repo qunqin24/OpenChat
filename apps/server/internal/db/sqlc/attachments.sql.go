@@ -431,3 +431,122 @@ func (q *Queries) ListPendingAttachments(ctx context.Context, arg ListPendingAtt
 	}
 	return items, nil
 }
+
+const lockUserStorage = `-- name: LockUserStorage :exec
+SELECT pg_advisory_xact_lock(hashtextextended('user-storage:' || $1::uuid::text, 0))
+`
+
+// Held while a person's files are counted against their quota and one is
+// added, so two uploads at once cannot both fit in the room left for one.
+func (q *Queries) LockUserStorage(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, lockUserStorage, userID)
+	return err
+}
+
+const setAttachmentSize = `-- name: SetAttachmentSize :exec
+UPDATE attachments
+SET size_bytes = $1
+WHERE id = $2
+  AND message_id IS NULL
+`
+
+type SetAttachmentSizeParams struct {
+	SizeBytes int64     `json:"size_bytes"`
+	ID        uuid.UUID `json:"id"`
+}
+
+// An upload's size as stored, over the one its uploader announced, before a
+// message claims it.
+func (q *Queries) SetAttachmentSize(ctx context.Context, arg SetAttachmentSizeParams) error {
+	_, err := q.db.Exec(ctx, setAttachmentSize, arg.SizeBytes, arg.ID)
+	return err
+}
+
+const userStorageByKind = `-- name: UserStorageByKind :many
+SELECT (CASE
+            WHEN content_type LIKE 'image/%' THEN 'image'
+            WHEN content_type = 'application/pdf' THEN 'pdf'
+            WHEN content_type LIKE 'application/vnd.openxmlformats-officedocument.%' THEN 'document'
+            WHEN content_type = 'text/plain' THEN 'text'
+            ELSE 'other'
+        END)::text AS kind,
+       count(*) AS files,
+       COALESCE(sum(size_bytes), 0)::bigint AS bytes
+FROM attachments
+WHERE user_id = $1
+GROUP BY 1
+`
+
+type UserStorageByKindRow struct {
+	Kind  string `json:"kind"`
+	Files int64  `json:"files"`
+	Bytes int64  `json:"bytes"`
+}
+
+// What a person's files take, by kind: everything they uploaded, sent or not
+// yet, in kept or temporary conversations alike - all of it is stored.
+func (q *Queries) UserStorageByKind(ctx context.Context, userID *uuid.UUID) ([]UserStorageByKindRow, error) {
+	rows, err := q.db.Query(ctx, userStorageByKind, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []UserStorageByKindRow{}
+	for rows.Next() {
+		var i UserStorageByKindRow
+		if err := rows.Scan(&i.Kind, &i.Files, &i.Bytes); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const userStorageUsed = `-- name: UserStorageUsed :one
+SELECT COALESCE(sum(size_bytes), 0)::bigint
+FROM attachments
+WHERE user_id = $1
+`
+
+func (q *Queries) UserStorageUsed(ctx context.Context, userID *uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, userStorageUsed, userID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const usersStorageUsed = `-- name: UsersStorageUsed :many
+SELECT user_id, COALESCE(sum(size_bytes), 0)::bigint AS bytes
+FROM attachments
+WHERE user_id = ANY ($1::uuid[])
+GROUP BY user_id
+`
+
+type UsersStorageUsedRow struct {
+	UserID *uuid.UUID `json:"user_id"`
+	Bytes  int64      `json:"bytes"`
+}
+
+// The admin users table's column: what each of a page of accounts keeps.
+func (q *Queries) UsersStorageUsed(ctx context.Context, userIds []uuid.UUID) ([]UsersStorageUsedRow, error) {
+	rows, err := q.db.Query(ctx, usersStorageUsed, userIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []UsersStorageUsedRow{}
+	for rows.Next() {
+		var i UsersStorageUsedRow
+		if err := rows.Scan(&i.UserID, &i.Bytes); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

@@ -372,6 +372,8 @@ type Querier interface {
 	// row the planner returned first, which is the wrong account rather than an
 	// error. Addresses win, so nobody's username can shadow somebody's email.
 	GetUserByLogin(ctx context.Context, identifier string) (User, error)
+	// An account's own quota; NULL for the instance's default.
+	GetUserStorageQuota(ctx context.Context, id uuid.UUID) (*int64, error)
 	// Whether anyone has registered yet. While nobody has, registration is open to
 	// the one account that becomes the administrator, however the switch is set.
 	HasAccounts(ctx context.Context) (bool, error)
@@ -520,6 +522,9 @@ type Querier interface {
 	ListPasskeys(ctx context.Context, userID uuid.UUID) ([]ListPasskeysRow, error)
 	// The caller's own uploads that no message has claimed yet.
 	ListPendingAttachments(ctx context.Context, arg ListPendingAttachmentsParams) ([]Attachment, error)
+	// The caller's pinned conversations, the latest pinned first: shown above the
+	// rest of the list whatever their age, so not paged with it.
+	ListPinnedConversations(ctx context.Context, userID *uuid.UUID) ([]Conversation, error)
 	// The newest rows of the conversation, oldest first: the raw material of a
 	// model request. Newest, not oldest — a long conversation is answered from its
 	// end. A message that moderation refused (status 'blocked') is not a row of the
@@ -660,6 +665,9 @@ type Querier interface {
 	// edit or a regeneration does (LockConversation), so none of those can be
 	// starting a run in one of them while it goes.
 	LockUserConversations(ctx context.Context, userID *uuid.UUID) ([]uuid.UUID, error)
+	// Held while a person's files are counted against their quota and one is
+	// added, so two uploads at once cannot both fit in the room left for one.
+	LockUserStorage(ctx context.Context, userID uuid.UUID) error
 	// What a snapshot-time check decided about the instructions, recorded only
 	// while the text still hashes to what was checked: an edit made meanwhile is
 	// another text, and nobody has looked at it. A NULL argument leaves its column.
@@ -746,6 +754,9 @@ type Querier interface {
 	// and moves down this list only when a request fails before the model wrote
 	// anything (agent failover).
 	ServingChannels(ctx context.Context, modelID string) ([]ServingChannelsRow, error)
+	// An upload's size as stored, over the one its uploader announced, before a
+	// message claims it.
+	SetAttachmentSize(ctx context.Context, arg SetAttachmentSizeParams) error
 	// The only statement in this file that changes `enabled` on a row that already
 	// exists. The inserts set it once, when the row is created and there is no
 	// decision to preserve; a refresh never touches it. That is the whole point of
@@ -755,6 +766,8 @@ type Querier interface {
 	// The model a conversation's next run uses. Remembered per conversation so a
 	// reload, or another device, continues with the same one.
 	SetConversationModel(ctx context.Context, arg SetConversationModelParams) (Conversation, error)
+	// Pins or unpins without touching updated_at: pinning is not activity.
+	SetConversationPinned(ctx context.Context, arg SetConversationPinnedParams) (Conversation, error)
 	// NULL is automatic: the model's own default.
 	SetConversationReasoning(ctx context.Context, arg SetConversationReasoningParams) (Conversation, error)
 	// Only the first one is kept: two requests that both found none cannot
@@ -775,6 +788,7 @@ type Querier interface {
 	// UpdateOwnProfile on purpose: the picture is its own endpoint, with its own
 	// checks, and the profile form has no business with it.
 	SetUserAvatar(ctx context.Context, arg SetUserAvatarParams) (User, error)
+	SetUserStorageQuota(ctx context.Context, arg SetUserStorageQuotaParams) error
 	SetUserTimeZone(ctx context.Context, arg SetUserTimeZoneParams) error
 	// Everything the user has, temporary chats included, in one statement. The
 	// owner is the only filter there is: nobody else's rows can be reached from here.
@@ -878,6 +892,12 @@ type Querier interface {
 	UserIsAdmin(ctx context.Context, id uuid.UUID) (*bool, error)
 	// What a registration leaves out (the same authenticator twice).
 	UserPasskeyCredentials(ctx context.Context, userID uuid.UUID) ([][]byte, error)
+	// What a person's files take, by kind: everything they uploaded, sent or not
+	// yet, in kept or temporary conversations alike - all of it is stored.
+	UserStorageByKind(ctx context.Context, userID *uuid.UUID) ([]UserStorageByKindRow, error)
+	UserStorageUsed(ctx context.Context, userID *uuid.UUID) (int64, error)
+	// The admin users table's column: what each of a page of accounts keeps.
+	UsersStorageUsed(ctx context.Context, userIds []uuid.UUID) ([]UsersStorageUsedRow, error)
 	WriteConversationSnapshot(ctx context.Context, arg WriteConversationSnapshotParams) error
 }
 

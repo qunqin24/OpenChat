@@ -6,6 +6,8 @@ export const queryKeys = {
   conversations: {
     all: ['conversations'] as const,
     list: () => [...queryKeys.conversations.all, 'list'] as const,
+    /** Under `list`, so whatever refreshes the list refreshes the pins too, and they are persisted with it. */
+    pinned: () => [...queryKeys.conversations.list(), 'pinned'] as const,
     /** Kept apart from `list`, which is persisted: search results quote messages. */
     /** Not persisted: it is only ever true for a moment. */
     running: () => [...queryKeys.conversations.all, 'running'] as const,
@@ -27,6 +29,8 @@ export const queryKeys = {
     all: ['library'] as const,
     list: (search: string, type: string) => [...queryKeys.library.all, 'list', search, type] as const,
   },
+  /** What the person's files take against their quota (GET /me/storage): changes with every upload, never persisted. */
+  storage: ['storage'] as const,
   /** Scheduled tasks: small, and moved on by the server, so never persisted. */
   tasks: {
     all: ['tasks'] as const,

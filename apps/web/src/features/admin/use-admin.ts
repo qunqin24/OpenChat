@@ -27,6 +27,7 @@ export const adminKeys = {
   imageSearch: () => [...adminKeys.all, 'image-search'] as const,
   passkeys: () => [...adminKeys.all, 'passkeys'] as const,
   storage: () => [...adminKeys.all, 'storage'] as const,
+  storageQuota: () => [...adminKeys.all, 'storage-quota'] as const,
 }
 
 export function useAdminDashboard(range: DashboardRange) {

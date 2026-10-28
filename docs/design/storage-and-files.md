@@ -8,6 +8,12 @@
 
 - 附件存储在 后台 → 文件存储 里配置（`/admin/storage`，存于 `app_settings`，运行时生效，不用重启，也没有任何存储相关的环境变量）。驱动是本地磁盘或 S3 兼容存储；`storage.Switch` 把新上传交给当前驱动，读取则先看本地磁盘有没有、再找 S3，所以切换驱动不会让旧文件失联。本地驱动由我们自己的 API 签发 HMAC 签名的读写地址 `/api/v1/files/content/{key}`，签名密钥在首次启动时自动生成并存进 `app_settings`（`storage_signing_key`，不经任何 API 暴露）；S3 密钥只写不读。库里的设置应用失败时回退到本地 `./data`，不拒绝启动。
 
+## 每人的存储上限
+
+- 每个人上传的文件（发了没发、在哪个对话里都算，因为都存着）加起来不能超过上限（`internal/api/storage_quota.go`）。默认 5 GiB，存在 `app_settings` 的 `storage_quota`（字节），后台「文件存储」页最上面改（`/admin/storage/quota`）；某个人单独的上限是 `users.storage_quota_bytes`（NULL 表示用默认），后台「用户」编辑对话框里改，`UpdateUserRequest.storageQuotaBytes = -1` 恢复默认。调低不删任何文件。
+- 检查两次，都在 `LockUserStorage`（按用户的 advisory xact lock）之下数（`roomFor`）：申请上传时（`CreateUpload`，和建附件行同一事务，同时上传的几个文件不会挤进只够一个的空间），以及消息认领时（`admitAttachments`）——上传声明的大小只是声明，存储里实际大小不同就改写 `size_bytes`（`SetAttachmentSize`，只改还没被认领的）再数一次。超出是 413 `storage_quota_exceeded`。
+- 设置「数据」页最上面显示用量（`GET /me/storage`，按图片/PDF/文档/文本分类，颜色同文件角标），满 90% 提示快满、满了提示删文件，「管理文件」去文件库；后台用户列表多一列「存储」（本页用户的用量一次查出，`UsersStorageUsed`）。前端上传被拒时卡片写「空间已满」并提示一次，上传成功、删文件、删全部对话后重新取用量（`queryKeys.storage`）。
+
 ## 上传的文件写一次
 
 - **上传的文件写一次**：审核读的图片和模型读的图片必须是同一份字节，而上传是「PUT 到签名地址 → 消息按 id 认领」两步，审核读文件发生在中间。两个驱动各用一招，缺一不可：①本地驱动的 `PUT /files/content/{key}` 用 `Local.PutNew`（硬链接提交，名字被占就失败，竞争的写入者只有一个赢），对象一旦写成，再 PUT 一律 409 `already_uploaded`（认领之后仍是 409 `already_attached`）；要换文件就重新申请一个上传。②S3 的预签名 PUT 拒绝不了第二次写入，认领之后 15 分钟内仍然有效，所以**审核留下收据**：`CreateMessage` 里 `checkedImages` 把审核实际读到并交给审核服务的那几份字节算 SHA-256，写进用户消息的 `AttachmentPart.SHA256`（`messages.parts` 的 JSON，不用迁移；不是读两次，所以「审了」和「记了」之间没有缝）。`agent.attachmentResolver` 每次把文件读进请求前都比对，对不上就不发这个文件，换成一行「[Attachment … was not included: the file changed after it was checked.]」，运行照常。改写问题会把旧提问的附件引用连同摘要一起带到新问题上。没有读过图片的情况（审核关着、`model` 模式只审文字、管理员豁免、PDF）不记摘要，也就没有可比的东西——收据只担保「审过的就是发的」。访客不受影响：文件字节就在请求里，服务端自己 `PutObject`，审核看的和存的是同一个 `[]byte`，没有上传地址可以回头写。新增读用户上传文件的地方，如果会把它发给模型，必须走这条解析（`attachmentResolver`），别自己 `Read` 了就发。

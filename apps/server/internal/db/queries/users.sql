@@ -240,3 +240,15 @@ WITH files AS (SELECT a.storage_key
 SELECT gone.avatar_key,
        COALESCE((SELECT array_agg(DISTINCT files.storage_key) FROM files), '{}')::text[] AS storage_keys
 FROM gone;
+
+-- name: GetUserStorageQuota :one
+-- An account's own quota; NULL for the instance's default.
+SELECT storage_quota_bytes
+FROM users
+WHERE id = $1;
+
+-- name: SetUserStorageQuota :exec
+UPDATE users
+SET storage_quota_bytes = sqlc.narg('storage_quota_bytes'),
+    updated_at          = now()
+WHERE id = sqlc.arg('id');

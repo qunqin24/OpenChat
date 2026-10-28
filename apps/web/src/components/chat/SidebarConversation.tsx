@@ -1,6 +1,6 @@
 import type { Conversation } from '@openchat/api-client'
 import { Link } from '@tanstack/react-router'
-import { Check, MoreHorizontal, PencilLine, Sparkles, Trash2, X } from 'lucide-react'
+import { Check, MoreHorizontal, PencilLine, Pin, PinOff, Sparkles, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { toast } from 'sonner'
 
-import { useGenerateTitle, useRenameConversation } from '@/hooks/use-conversations'
+import { useGenerateTitle, usePinConversation, useRenameConversation } from '@/hooks/use-conversations'
 import { formatRelative } from '@/lib/grouping'
 import { useDisplayTitle } from '@/lib/titles'
 import { cn } from '@/lib/utils'
@@ -28,6 +28,8 @@ export function SidebarConversation({ conversation, active, running = false, onD
   const { t } = useTranslation()
   const display = useDisplayTitle()
   const rename = useRenameConversation()
+  const pin = usePinConversation()
+  const pinned = Boolean(conversation.pinnedAt)
   const smartTitle = useGenerateTitle()
   const [menuOpen, setMenuOpen] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -109,6 +111,17 @@ export function SidebarConversation({ conversation, active, running = false, onD
               <button type="button" className="n-row-menu n-sidebar-inline-button" aria-label={t('chat.more')}><MoreHorizontal /></button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" onCloseAutoFocus={(event) => { if (editing) event.preventDefault() }}>
+              <DropdownMenuItem
+                disabled={pin.isPending}
+                onSelect={() =>
+                  pin.mutate(
+                    { conversationId: conversation.id, pinned: !pinned },
+                    { onError: () => toast.error(t(pinned ? 'chat.unpin-failed' : 'chat.pin-failed')) },
+                  )
+                }
+              >
+                {pinned ? <PinOff /> : <Pin />}<span>{t(pinned ? 'chat.unpin' : 'chat.pin')}</span>
+              </DropdownMenuItem>
               <DropdownMenuItem onSelect={startEditing}><PencilLine /><span>{t('chat.rename')}</span></DropdownMenuItem>
               <DropdownMenuItem
                 disabled={smartTitle.isPending}

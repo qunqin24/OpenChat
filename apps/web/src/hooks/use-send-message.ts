@@ -29,6 +29,7 @@ const SEND_ERRORS = [
   'attachment_unsupported',
   'attachment_unavailable',
   'attachment_unreadable',
+  'storage_quota_exceeded',
   'attachment_text_too_long',
   'nothing_to_answer',
   'not_latest',

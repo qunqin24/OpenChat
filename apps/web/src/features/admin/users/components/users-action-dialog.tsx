@@ -37,6 +37,19 @@ import {
 import { Switch } from '@/components/shadcn/ui/switch'
 import { useCreateUser, useUpdateUser } from '@/features/admin/use-admin'
 import { MIN_PASSWORD_LENGTH } from '@/components/auth/validation'
+import { formatSize } from '@/lib/attachments'
+
+const GIB = 1024 ** 3
+
+/**
+ * The quota change a save makes, if any: blank gives the account the default
+ * again (-1), a number its own in bytes.
+ */
+function storageChange(gigabytes: string, current: number | undefined): { storageQuotaBytes?: number } {
+  if (gigabytes === '') return current === undefined ? {} : { storageQuotaBytes: -1 }
+  const bytes = Math.round(Number(gigabytes) * GIB)
+  return bytes === current ? {} : { storageQuotaBytes: bytes }
+}
 
 type UsersActionDialogProps = {
   /** Absent in create mode. */
@@ -110,6 +123,11 @@ function UserForm({
       enabled: z.boolean(),
       // Only offered for an account that is waiting; off leaves it waiting.
       approve: z.boolean(),
+      // GB, or blank for the instance's default (admin → 文件存储).
+      storageGb: z
+        .string()
+        .trim()
+        .refine((value) => value === '' || (Number.isFinite(Number(value)) && Number(value) >= 0), t('admin.users.form.storage-invalid')),
       password: z.string(),
       confirmPassword: z.string(),
     })
@@ -150,6 +168,7 @@ function UserForm({
       role: user?.role ?? 'user',
       enabled: !user?.disabled,
       approve: false,
+      storageGb: user?.storageQuotaBytes == null ? '' : String(Number((user.storageQuotaBytes / GIB).toFixed(2))),
       password: '',
       confirmPassword: '',
     },
@@ -175,6 +194,7 @@ function UserForm({
           ...(values.enabled !== wasEnabled ? { disabled: !values.enabled } : {}),
           ...(user.pending && values.approve ? { approved: true } : {}),
           ...(values.password ? { password: values.password } : {}),
+          ...storageChange(values.storageGb, user.storageQuotaBytes),
         })
         toast.success(t('admin.users.updated'))
       } else {
@@ -309,6 +329,28 @@ function UserForm({
                     <FormDescription className="col-span-4 col-start-3 text-xs">
                       {t('admin.users.pending-hint')}
                     </FormDescription>
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {isEdit && (
+              <FormField
+                control={form.control}
+                name="storageGb"
+                render={({ field }) => (
+                  <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
+                    <FormLabel className="col-span-2">{t('admin.users.form.storage')}</FormLabel>
+                    <div className="col-span-4 flex items-center gap-2">
+                      <FormControl>
+                        <Input type="number" inputMode="decimal" step="0.5" min={0} className="w-32" placeholder={t('admin.users.form.storage-default')} {...field} />
+                      </FormControl>
+                      <span className="text-muted-foreground text-sm">GB</span>
+                    </div>
+                    <FormDescription className="col-span-4 col-start-3 text-xs">
+                      {t('admin.users.form.storage-hint', { used: formatSize(user.storageUsedBytes ?? 0) })}
+                    </FormDescription>
+                    <FormMessage className="col-span-4 col-start-3" />
                   </FormItem>
                 )}
               />

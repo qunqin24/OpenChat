@@ -456,7 +456,8 @@ func (s *Server) admitAttachments(ctx context.Context, userID uuid.UUID, modelID
 	// The sizes the client announced were only announced: what was stored is
 	// what counts, and a file that never arrived is not one.
 	var total int64
-	for _, file := range files {
+	var resized []sqlc.Attachment
+	for i, file := range files {
 		size, err := s.store.Size(ctx, file.StorageKey)
 		if err != nil {
 			slog.WarnContext(ctx, "attachment not in storage", "attachment_id", file.ID, "error", err)
@@ -465,10 +466,33 @@ func (s *Server) admitAttachments(ctx context.Context, userID uuid.UUID, modelID
 		if size > uploadable[file.ContentType] {
 			return nil, nil, errAttachmentsTooLarge
 		}
+		if size != file.SizeBytes {
+			files[i].SizeBytes = size
+			resized = append(resized, files[i])
+		}
 		total += size
 	}
 	if total > agent.MaxAttachmentBytes {
 		return nil, nil, errAttachmentsTooLarge
+	}
+	// An upload larger than it said it would be is counted at its size, and
+	// refused if that takes its owner past their quota (storage_quota.go).
+	if len(resized) > 0 {
+		err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+			q := s.q.WithTx(tx)
+			if err := q.LockUserStorage(ctx, userID); err != nil {
+				return err
+			}
+			for _, file := range resized {
+				if err := q.SetAttachmentSize(ctx, sqlc.SetAttachmentSizeParams{ID: file.ID, SizeBytes: file.SizeBytes}); err != nil {
+					return err
+				}
+			}
+			return roomFor(ctx, q, userID, 0)
+		})
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	digests, err := s.readDocuments(ctx, files, slices.Contains(settings.InputModalities, llm.ModalityPDF))
 	if err != nil {

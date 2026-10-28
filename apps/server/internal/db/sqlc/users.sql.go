@@ -15,7 +15,7 @@ const adminCreateUser = `-- name: AdminCreateUser :one
 INSERT INTO users (email, name, password_hash, role, disabled_at)
 VALUES ($1, $2, $3, $4,
         CASE WHEN $5::boolean THEN now() ELSE NULL END)
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes
 `
 
 type AdminCreateUserParams struct {
@@ -58,6 +58,7 @@ func (q *Queries) AdminCreateUser(ctx context.Context, arg AdminCreateUserParams
 		&i.InstructionsStyleCheckedHash,
 		&i.InstructionsStyleBlockedHash,
 		&i.TimeZone,
+		&i.StorageQuotaBytes,
 	)
 	return i, err
 }
@@ -76,7 +77,7 @@ SET name          = COALESCE($1::text, name),
     pending       = CASE WHEN $6::boolean IS TRUE THEN false ELSE pending END,
     updated_at    = now()
 WHERE id = $7
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes
 `
 
 type AdminUpdateUserParams struct {
@@ -130,6 +131,7 @@ func (q *Queries) AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams
 		&i.InstructionsStyleCheckedHash,
 		&i.InstructionsStyleBlockedHash,
 		&i.TimeZone,
+		&i.StorageQuotaBytes,
 	)
 	return i, err
 }
@@ -331,7 +333,7 @@ func (q *Queries) GetContactAdmin(ctx context.Context) (GetContactAdminRow, erro
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes
 FROM users
 WHERE id = $1
 `
@@ -360,12 +362,13 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.InstructionsStyleCheckedHash,
 		&i.InstructionsStyleBlockedHash,
 		&i.TimeZone,
+		&i.StorageQuotaBytes,
 	)
 	return i, err
 }
 
 const getUserByAvatarKey = `-- name: GetUserByAvatarKey :one
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes
 FROM users
 WHERE avatar_key = $1
 `
@@ -396,12 +399,13 @@ func (q *Queries) GetUserByAvatarKey(ctx context.Context, avatarKey *string) (Us
 		&i.InstructionsStyleCheckedHash,
 		&i.InstructionsStyleBlockedHash,
 		&i.TimeZone,
+		&i.StorageQuotaBytes,
 	)
 	return i, err
 }
 
 const getUserByLogin = `-- name: GetUserByLogin :one
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes
 FROM users
 WHERE (lower(email) = lower($1::text)
     OR lower(name) = lower($1::text))
@@ -441,8 +445,23 @@ func (q *Queries) GetUserByLogin(ctx context.Context, identifier string) (User, 
 		&i.InstructionsStyleCheckedHash,
 		&i.InstructionsStyleBlockedHash,
 		&i.TimeZone,
+		&i.StorageQuotaBytes,
 	)
 	return i, err
+}
+
+const getUserStorageQuota = `-- name: GetUserStorageQuota :one
+SELECT storage_quota_bytes
+FROM users
+WHERE id = $1
+`
+
+// An account's own quota; NULL for the instance's default.
+func (q *Queries) GetUserStorageQuota(ctx context.Context, id uuid.UUID) (*int64, error) {
+	row := q.db.QueryRow(ctx, getUserStorageQuota, id)
+	var storage_quota_bytes *int64
+	err := row.Scan(&storage_quota_bytes)
+	return storage_quota_bytes, err
 }
 
 const hasAccounts = `-- name: HasAccounts :one
@@ -477,7 +496,7 @@ func (q *Queries) LabelDeletedUserUsage(ctx context.Context, arg LabelDeletedUse
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes
 FROM users
 WHERE ($1::text IS NULL
     OR email ILIKE '%' || $1::text || '%'
@@ -536,6 +555,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.InstructionsStyleCheckedHash,
 			&i.InstructionsStyleBlockedHash,
 			&i.TimeZone,
+			&i.StorageQuotaBytes,
 		); err != nil {
 			return nil, err
 		}
@@ -548,7 +568,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 }
 
 const listUsersByIDs = `-- name: ListUsersByIDs :many
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes
 FROM users
 WHERE id = ANY ($1::uuid[])
 `
@@ -583,6 +603,7 @@ func (q *Queries) ListUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]User, 
 			&i.InstructionsStyleCheckedHash,
 			&i.InstructionsStyleBlockedHash,
 			&i.TimeZone,
+			&i.StorageQuotaBytes,
 		); err != nil {
 			return nil, err
 		}
@@ -630,7 +651,7 @@ SELECT $1::text,
 FROM (SELECT count(*) AS n FROM users) c
 WHERE c.n = 0
    OR $5::boolean
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes
 `
 
 type RegisterUserParams struct {
@@ -678,6 +699,7 @@ func (q *Queries) RegisterUser(ctx context.Context, arg RegisterUserParams) (Use
 		&i.InstructionsStyleCheckedHash,
 		&i.InstructionsStyleBlockedHash,
 		&i.TimeZone,
+		&i.StorageQuotaBytes,
 	)
 	return i, err
 }
@@ -687,7 +709,7 @@ UPDATE users
 SET avatar_key = $1::text,
     updated_at = now()
 WHERE id = $2
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes
 `
 
 type SetUserAvatarParams struct {
@@ -722,8 +744,26 @@ func (q *Queries) SetUserAvatar(ctx context.Context, arg SetUserAvatarParams) (U
 		&i.InstructionsStyleCheckedHash,
 		&i.InstructionsStyleBlockedHash,
 		&i.TimeZone,
+		&i.StorageQuotaBytes,
 	)
 	return i, err
+}
+
+const setUserStorageQuota = `-- name: SetUserStorageQuota :exec
+UPDATE users
+SET storage_quota_bytes = $1,
+    updated_at          = now()
+WHERE id = $2
+`
+
+type SetUserStorageQuotaParams struct {
+	StorageQuotaBytes *int64    `json:"storage_quota_bytes"`
+	ID                uuid.UUID `json:"id"`
+}
+
+func (q *Queries) SetUserStorageQuota(ctx context.Context, arg SetUserStorageQuotaParams) error {
+	_, err := q.db.Exec(ctx, setUserStorageQuota, arg.StorageQuotaBytes, arg.ID)
+	return err
 }
 
 const touchUserSeen = `-- name: TouchUserSeen :exec
@@ -743,7 +783,7 @@ SET name       = COALESCE($1::text, name),
     email      = COALESCE($2::text, email),
     updated_at = now()
 WHERE id = $3
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes
 `
 
 type UpdateOwnProfileParams struct {
@@ -779,6 +819,7 @@ func (q *Queries) UpdateOwnProfile(ctx context.Context, arg UpdateOwnProfilePara
 		&i.InstructionsStyleCheckedHash,
 		&i.InstructionsStyleBlockedHash,
 		&i.TimeZone,
+		&i.StorageQuotaBytes,
 	)
 	return i, err
 }

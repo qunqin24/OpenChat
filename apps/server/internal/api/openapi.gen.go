@@ -1092,6 +1092,33 @@ func (e StorageDriver) Valid() bool {
 	}
 }
 
+// Defines values for StorageKindUsageKind.
+const (
+	StorageKindUsageKindDocument StorageKindUsageKind = "document"
+	StorageKindUsageKindImage    StorageKindUsageKind = "image"
+	StorageKindUsageKindOther    StorageKindUsageKind = "other"
+	StorageKindUsageKindPdf      StorageKindUsageKind = "pdf"
+	StorageKindUsageKindText     StorageKindUsageKind = "text"
+)
+
+// Valid indicates whether the value is a known member of the StorageKindUsageKind enum.
+func (e StorageKindUsageKind) Valid() bool {
+	switch e {
+	case StorageKindUsageKindDocument:
+		return true
+	case StorageKindUsageKindImage:
+		return true
+	case StorageKindUsageKindOther:
+		return true
+	case StorageKindUsageKindPdf:
+		return true
+	case StorageKindUsageKindText:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SubagentState.
 const (
 	SubagentStateCancelled SubagentState = "cancelled"
@@ -2194,6 +2221,9 @@ type Conversation struct {
 	Match *ConversationMatch `json:"match,omitempty"`
 	Model *string            `json:"model,omitempty"`
 
+	// PinnedAt When it was pinned to the top of the list; absent when it is not.
+	PinnedAt *time.Time `json:"pinnedAt,omitempty"`
+
 	// ReasoningEffort How hard a reasoning model thinks. `auto` sends nothing and leaves the
 	// model at its own default. The other values are the levels providers
 	// use; each model accepts its own subset, listed as
@@ -3091,6 +3121,16 @@ type ModerationSettings struct {
 // of a writing block as a model was about to read it (`document`).
 type ModerationSource string
 
+// MyStorage defines model for MyStorage.
+type MyStorage struct {
+	Files int64 `json:"files"`
+
+	// Kinds What each kind of file takes, largest first.
+	Kinds      []StorageKindUsage `json:"kinds"`
+	QuotaBytes int64              `json:"quotaBytes"`
+	UsedBytes  int64              `json:"usedBytes"`
+}
+
 // PartDeltaEvent Text for a text or reasoning part, raw argument JSON for a tool call.
 type PartDeltaEvent struct {
 	Delta string             `json:"delta"`
@@ -3411,6 +3451,22 @@ type SnapshotEventType string
 
 // StorageDriver Where new uploads go.
 type StorageDriver string
+
+// StorageKindUsage defines model for StorageKindUsage.
+type StorageKindUsage struct {
+	Bytes int64                `json:"bytes"`
+	Files int64                `json:"files"`
+	Kind  StorageKindUsageKind `json:"kind"`
+}
+
+// StorageKindUsageKind defines model for StorageKindUsage.Kind.
+type StorageKindUsageKind string
+
+// StorageQuotaSettings defines model for StorageQuotaSettings.
+type StorageQuotaSettings struct {
+	// DefaultBytes How much an account without a quota of its own may keep in files, in bytes. 5 GiB unless set.
+	DefaultBytes int64 `json:"defaultBytes"`
+}
 
 // StorageS3Settings defines model for StorageS3Settings.
 type StorageS3Settings struct {
@@ -3891,6 +3947,9 @@ type UpdateConversationRequest struct {
 	// Model The model the conversation's next run uses.
 	Model *string `json:"model,omitempty"`
 
+	// Pinned Pins it to the top of the list, or unpins it. Not its activity - `updatedAt` stays.
+	Pinned *bool `json:"pinned,omitempty"`
+
 	// ReasoningEffort How hard a reasoning model thinks. `auto` sends nothing and leaves the
 	// model at its own default. The other values are the levels providers
 	// use; each model accepts its own subset, listed as
@@ -4076,6 +4135,9 @@ type UpdateUserRequest struct {
 	Name     *Username `json:"name,omitempty"`
 	Password *string   `json:"password,omitempty"`
 	Role     *UserRole `json:"role,omitempty"`
+
+	// StorageQuotaBytes How much this account may keep in files, in bytes; -1 gives it the default again.
+	StorageQuotaBytes *int64 `json:"storageQuotaBytes,omitempty"`
 }
 
 // UpdateWebSearchSettingsRequest Only the fields present are changed.
@@ -4276,6 +4338,12 @@ type User struct {
 	// an account cannot sign in. It can also be `disabled` (rejected).
 	Pending bool     `json:"pending"`
 	Role    UserRole `json:"role"`
+
+	// StorageQuotaBytes The account's own quota in bytes; absent when it has the default.
+	StorageQuotaBytes *int64 `json:"storageQuotaBytes,omitempty"`
+
+	// StorageUsedBytes What its files take, in bytes. Given in `listUsers`.
+	StorageUsedBytes *int64 `json:"storageUsedBytes,omitempty"`
 }
 
 // UserPage defines model for UserPage.
@@ -4524,6 +4592,11 @@ type ListConversationsParams struct {
 	// conversation found by what was said in it carries `match`. Keep it
 	// the same while following `nextCursor`.
 	Search *string `form:"search,omitempty" json:"search,omitempty"`
+
+	// Pinned Only the pinned conversations, the latest pinned first, all on one
+	// page (at most 200). The list without it holds them too, in their
+	// place by date.
+	Pinned *bool `form:"pinned,omitempty" json:"pinned,omitempty"`
 }
 
 // GetConversationImageParams defines parameters for GetConversationImage.
@@ -4595,6 +4668,9 @@ type UpdateModerationSettingsJSONRequestBody = UpdateModerationSettingsRequest
 
 // UpdateStorageSettingsJSONRequestBody defines body for UpdateStorageSettings for application/json ContentType.
 type UpdateStorageSettingsJSONRequestBody = UpdateStorageSettingsRequest
+
+// UpdateStorageQuotaJSONRequestBody defines body for UpdateStorageQuota for application/json ContentType.
+type UpdateStorageQuotaJSONRequestBody = StorageQuotaSettings
 
 // TestStorageJSONRequestBody defines body for TestStorage for application/json ContentType.
 type TestStorageJSONRequestBody = UpdateStorageSettingsRequest
@@ -5684,6 +5760,12 @@ type ServerInterface interface {
 	// UpdateStorageSettings Change file storage settings
 	// (PATCH /admin/storage)
 	UpdateStorageSettings(w http.ResponseWriter, r *http.Request)
+	// GetStorageQuota How much each person may keep in files
+	// (GET /admin/storage/quota)
+	GetStorageQuota(w http.ResponseWriter, r *http.Request)
+	// UpdateStorageQuota Change how much each person may keep in files
+	// (PATCH /admin/storage/quota)
+	UpdateStorageQuota(w http.ResponseWriter, r *http.Request)
 	// TestStorage Try a storage configuration without saving it
 	// (POST /admin/storage/test)
 	TestStorage(w http.ResponseWriter, r *http.Request)
@@ -5921,6 +6003,9 @@ type ServerInterface interface {
 	// UpdatePersonalization Change your custom instructions or memory switch
 	// (PATCH /me/personalization)
 	UpdatePersonalization(w http.ResponseWriter, r *http.Request)
+	// GetMyStorage How much your files take
+	// (GET /me/storage)
+	GetMyStorage(w http.ResponseWriter, r *http.Request)
 	// ListChatModels The models a conversation can use
 	// (GET /models)
 	ListChatModels(w http.ResponseWriter, r *http.Request)
@@ -6119,6 +6204,18 @@ func (_ Unimplemented) GetStorageSettings(w http.ResponseWriter, r *http.Request
 // UpdateStorageSettings Change file storage settings
 // (PATCH /admin/storage)
 func (_ Unimplemented) UpdateStorageSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetStorageQuota How much each person may keep in files
+// (GET /admin/storage/quota)
+func (_ Unimplemented) GetStorageQuota(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateStorageQuota Change how much each person may keep in files
+// (PATCH /admin/storage/quota)
+func (_ Unimplemented) UpdateStorageQuota(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -6593,6 +6690,12 @@ func (_ Unimplemented) GetPersonalization(w http.ResponseWriter, r *http.Request
 // UpdatePersonalization Change your custom instructions or memory switch
 // (PATCH /me/personalization)
 func (_ Unimplemented) UpdatePersonalization(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetMyStorage How much your files take
+// (GET /me/storage)
+func (_ Unimplemented) GetMyStorage(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7352,6 +7455,34 @@ func (siw *ServerInterfaceWrapper) UpdateStorageSettings(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// GetStorageQuota operation middleware
+func (siw *ServerInterfaceWrapper) GetStorageQuota(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetStorageQuota(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateStorageQuota operation middleware
+func (siw *ServerInterfaceWrapper) UpdateStorageQuota(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateStorageQuota(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // TestStorage operation middleware
 func (siw *ServerInterfaceWrapper) TestStorage(w http.ResponseWriter, r *http.Request) {
 
@@ -8045,6 +8176,19 @@ func (siw *ServerInterfaceWrapper) ListConversations(w http.ResponseWriter, r *h
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "search"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "search", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pinned" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pinned", r.URL.Query(), &params.Pinned, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pinned"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pinned", Err: err})
 		}
 		return
 	}
@@ -9305,6 +9449,20 @@ func (siw *ServerInterfaceWrapper) UpdatePersonalization(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// GetMyStorage operation middleware
+func (siw *ServerInterfaceWrapper) GetMyStorage(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMyStorage(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListChatModels operation middleware
 func (siw *ServerInterfaceWrapper) ListChatModels(w http.ResponseWriter, r *http.Request) {
 
@@ -9721,6 +9879,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Patch(options.BaseURL+"/admin/storage", wrapper.UpdateStorageSettings)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/storage/quota", wrapper.GetStorageQuota)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/admin/storage/quota", wrapper.UpdateStorageQuota)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/admin/storage/test", wrapper.TestStorage)
 	})
 	r.Group(func(r chi.Router) {
@@ -9818,6 +9982,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/me/avatar", wrapper.UpdateMyAvatar)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/me/storage", wrapper.GetMyStorage)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/me/export", wrapper.ExportMyConversations)

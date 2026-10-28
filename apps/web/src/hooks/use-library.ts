@@ -62,6 +62,7 @@ export function useDeleteFile() {
     onSuccess: (_data, file) => {
       queryClient.setQueriesData<LibraryPages>({ queryKey: queryKeys.library.all }, (held) => withoutFile(held, file.id))
       queryClient.setQueryData<TranscriptPages>(queryKeys.messages.list(file.conversationId), (held) => markRemoved(held, file.id))
+      void queryClient.invalidateQueries({ queryKey: queryKeys.storage })
     },
   })
 }

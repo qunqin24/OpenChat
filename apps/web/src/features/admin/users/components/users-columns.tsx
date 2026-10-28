@@ -2,6 +2,7 @@ import type { User } from '@openchat/api-client'
 import { type ColumnDef } from '@tanstack/react-table'
 import type { TFunction } from 'i18next'
 
+import { formatSize } from '@/lib/attachments'
 import { cn } from '@/lib/utils'
 import { formatRelative } from '@/lib/grouping'
 import { LongText } from '@/components/shadcn/long-text'
@@ -99,6 +100,18 @@ export function usersColumns(t: TFunction<'common'>, currentUserId?: string): Co
         ) : (
           <Badge variant="outline">{t('admin.users.enabled')}</Badge>
         ),
+      enableSorting: false,
+    },
+    {
+      id: 'storage',
+      meta: { title: t('admin.users.storage') },
+      header: ({ column }) => <DataTableColumnHeader column={column} title={t('admin.users.storage')} />,
+      cell: ({ row }) => (
+        <span className="text-muted-foreground text-sm whitespace-nowrap tabular-nums">
+          {formatSize(row.original.storageUsedBytes ?? 0)}
+          {row.original.storageQuotaBytes !== undefined && ` / ${formatSize(row.original.storageQuotaBytes)}`}
+        </span>
+      ),
       enableSorting: false,
     },
     {

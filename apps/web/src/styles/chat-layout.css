@@ -195,6 +195,12 @@
 .chat-ui .n-composer-dock .n-column {
   max-width: 58rem;
   padding-inline: 8px;
+  /* Widens with the glide from the new-chat page (ChatView, DOCK_GLIDE_MS). */
+  transition: max-width 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-ui .n-composer-dock .n-column { transition: none; }
 }
 
 @keyframes n-suggestion-in {
@@ -392,4 +398,120 @@
 .n-context-note {
   margin-top: 4px;
   opacity: 0.65;
+}
+
+/* ---- a new chat: greeting and composer in the middle ---------------------- */
+/* As Claude's and ChatGPT's: on a wide screen the greeting and the composer
+   stand together a little above the middle of the page, the starters under
+   the composer (Welcome, WelcomeStarters). Once there is a message the page is
+   a transcript again, the composer at the foot. On a phone the composer stays
+   at the foot, where the thumb and the keyboard are. */
+.chat-ui .n-main.is-welcome .n-welcome { text-align: center; }
+
+.chat-ui .n-welcome-greeting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin: 0;
+  color: var(--n-chat-heading, var(--n-text));
+  /* A serif for the greeting alone, as a letter opens: Latin from the
+     system's serif, Chinese from Songti or Noto Serif where installed, and
+     the chat's own face where neither is (Windows' SimSun is left out). */
+  font-family: ui-serif, 'Iowan Old Style', Georgia, 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'STSong', var(--n-chat-font);
+  font-size: 34px;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+}
+
+.chat-ui .n-welcome-greeting > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-ui .n-welcome-greeting .n-welcome-logo {
+  flex: none;
+  width: 34px;
+  height: 34px;
+}
+
+.chat-ui .n-welcome-starters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.chat-ui .n-starter {
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--n-line);
+  color: var(--n-text-2);
+  font: inherit;
+  font-size: 13.5px;
+  white-space: nowrap;
+  cursor: pointer;
+  animation: n-suggestion-in 200ms ease both;
+  transition: background-color 120ms, color 120ms;
+}
+
+.chat-ui .n-starter:hover,
+.chat-ui .n-starter:focus-visible {
+  outline: none;
+  background: var(--n-hover);
+  color: var(--n-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-ui .n-starter { animation: none; }
+}
+
+@media (min-width: 768px) {
+  .chat-ui .n-main.is-welcome {
+    justify-content: safe center;
+    /* A little above the middle, where the eye starts. */
+    padding-bottom: 12vh;
+  }
+
+  .chat-ui .n-main.is-welcome .n-scroll {
+    flex: none;
+    overflow: visible;
+    padding-top: 0;
+  }
+
+  .chat-ui .n-main.is-welcome .n-welcome {
+    margin: 0 auto 28px;
+  }
+
+  /* Narrower than in a conversation: under one line of greeting, the
+     transcript's width reads as a long empty bar. */
+  .chat-ui .n-main.is-welcome .n-composer-dock .n-column {
+    max-width: 52rem;
+  }
+}
+
+@media (max-width: 767px) {
+  .chat-ui .n-welcome-greeting { gap: 10px; font-size: 26px; }
+  .chat-ui .n-welcome-greeting .n-welcome-logo { width: 26px; height: 26px; }
+
+  /* Above the composer, in a row that scrolls sideways. */
+  .chat-ui .n-main.is-welcome .n-composer-dock .n-column {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .chat-ui .n-main.is-welcome .n-welcome-starters {
+    order: -1;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    margin: 0 0 10px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
 }

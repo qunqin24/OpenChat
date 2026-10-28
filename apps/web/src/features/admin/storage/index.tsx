@@ -27,6 +27,7 @@ import {
 import { Input } from '@/components/shadcn/ui/input'
 import { RadioGroup, RadioGroupItem } from '@/components/shadcn/ui/radio-group'
 import { Separator } from '@/components/shadcn/ui/separator'
+import { QuotaForm } from './quota-form'
 import { Skeleton } from '@/components/shadcn/ui/skeleton'
 import { Switch } from '@/components/shadcn/ui/switch'
 import {
@@ -97,7 +98,9 @@ export function FileStorage() {
             <Skeleton className="h-72 w-full" />
           </div>
         ) : (
-          <div className="max-w-2xl pb-12">
+          <div className="max-w-2xl space-y-10 pb-12">
+            <QuotaForm />
+            <Separator />
             <StorageForm settings={data} />
           </div>
         )}

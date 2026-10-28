@@ -4,7 +4,7 @@ import { api, unwrap } from '@/lib/api'
 import { mediaTypeOf } from '@/lib/attachments'
 
 /** Why an upload failed, as the `chat.file.error.*` key that explains it. */
-export type UploadError = 'type' | 'size' | 'failed'
+export type UploadError = 'type' | 'size' | 'quota' | 'failed'
 
 export class UploadFailed extends Error {
   constructor(readonly reason: UploadError) {
@@ -37,6 +37,7 @@ export async function uploadFile(
     const code = isOpenChatError(error) ? error.code : ''
     if (code === 'unsupported_file_type') throw new UploadFailed('type')
     if (code === 'file_too_large') throw new UploadFailed('size')
+    if (code === 'storage_quota_exceeded') throw new UploadFailed('quota')
     throw new UploadFailed('failed')
   }
 

@@ -897,6 +897,30 @@ export interface paths {
         patch: operations["updateStorageSettings"];
         trace?: never;
     };
+    "/admin/storage/quota": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How much each person may keep in files */
+        get: operations["getStorageQuota"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change how much each person may keep in files
+         * @description The default for every account without a quota of its own
+         *     (`UpdateUserRequest.storageQuotaBytes`). Lowering it below what
+         *     someone keeps deletes nothing: they can upload again once they have
+         *     made room.
+         */
+        patch: operations["updateStorageQuota"];
+        trace?: never;
+    };
     "/admin/storage/test": {
         parameters: {
             query?: never;
@@ -1612,6 +1636,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How much your files take
+         * @description What your uploaded files add up to - sent or not yet, in any
+         *     conversation - against how much you may keep. An upload that would go
+         *     past it is refused (413 `storage_quota_exceeded`); deleting files from
+         *     the library makes room.
+         */
+        get: operations["getMyStorage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/export": {
         parameters: {
             query?: never;
@@ -2301,6 +2348,11 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             /**
+             * Format: date-time
+             * @description When it was pinned to the top of the list; absent when it is not.
+             */
+            pinnedAt?: string;
+            /**
              * @description Only in a search's results: the latest message containing the
              *     search, cut down to the words around it.
              */
@@ -2346,6 +2398,8 @@ export interface components {
             model?: string;
             reasoningEffort?: components["schemas"]["ReasoningEffort"];
             webSearch?: boolean;
+            /** @description Pins it to the top of the list, or unpins it. Not its activity - `updatedAt` stays. */
+            pinned?: boolean;
         };
         /**
          * @description A freely licensed picture found for an answer, with what its licence
@@ -3485,6 +3539,16 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             lastSeenAt?: string | null;
+            /**
+             * Format: int64
+             * @description The account's own quota in bytes; absent when it has the default.
+             */
+            storageQuotaBytes?: number;
+            /**
+             * Format: int64
+             * @description What its files take, in bytes. Given in `listUsers`.
+             */
+            storageUsedBytes?: number;
         };
         UserPage: {
             items: components["schemas"]["User"][];
@@ -3685,12 +3749,42 @@ export interface components {
             /** @default false */
             disabled: boolean;
         };
+        MyStorage: {
+            /** Format: int64 */
+            usedBytes: number;
+            /** Format: int64 */
+            quotaBytes: number;
+            /** Format: int64 */
+            files: number;
+            /** @description What each kind of file takes, largest first. */
+            kinds: components["schemas"]["StorageKindUsage"][];
+        };
+        StorageKindUsage: {
+            /** @enum {string} */
+            kind: "image" | "pdf" | "document" | "text" | "other";
+            /** Format: int64 */
+            files: number;
+            /** Format: int64 */
+            bytes: number;
+        };
+        StorageQuotaSettings: {
+            /**
+             * Format: int64
+             * @description How much an account without a quota of its own may keep in files, in bytes. 5 GiB unless set.
+             */
+            defaultBytes: number;
+        };
         /**
          * @description Only the fields present are changed. Setting `password` signs the
          *     account out everywhere — the old sessions outlive the old credential
          *     otherwise.
          */
         UpdateUserRequest: {
+            /**
+             * Format: int64
+             * @description How much this account may keep in files, in bytes; -1 gives it the default again.
+             */
+            storageQuotaBytes?: number;
             name?: components["schemas"]["Username"];
             /** Format: email */
             email?: string;
@@ -6050,6 +6144,52 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    getStorageQuota: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageQuotaSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateStorageQuota: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StorageQuotaSettings"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageQuotaSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     testStorage: {
         parameters: {
             query?: never;
@@ -6254,6 +6394,12 @@ export interface operations {
                  *     the same while following `nextCursor`.
                  */
                 search?: string;
+                /**
+                 * @description Only the pinned conversations, the latest pinned first, all on one
+                 *     page (at most 200). The list without it holds them too, in their
+                 *     place by date.
+                 */
+                pinned?: boolean;
             };
             header?: never;
             path?: never;
@@ -6841,6 +6987,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionUser"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getMyStorage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyStorage"];
                 };
             };
             default: components["responses"]["Error"];

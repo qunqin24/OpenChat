@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -12,6 +13,7 @@ import {
   type Accepts,
   type RejectReason,
 } from '@/lib/attachments'
+import { queryKeys } from '@/lib/query-keys'
 import { UploadFailed, uploadFile, type UploadError } from '@/lib/upload'
 
 /** A file on its way into the next message. */
@@ -39,6 +41,7 @@ export interface PendingAttachment {
  */
 export function useAttachments(accepts: Accepts) {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const [items, setItems] = useState<PendingAttachment[]>([])
   // What is already queued, readable synchronously: a drop of several files is
   // judged against the room left by the ones before it.
@@ -116,16 +119,20 @@ export function useAttachments(accepts: Accepts) {
           (id) => {
             uploads.current.delete(item.key)
             patch(item.key, { status: 'ready', progress: 1, id })
+            void queryClient.invalidateQueries({ queryKey: queryKeys.storage })
           },
           (error: unknown) => {
             uploads.current.delete(item.key)
             if (controller.signal.aborted) return // removed while uploading
-            patch(item.key, { status: 'error', error: error instanceof UploadFailed ? error.reason : 'failed' })
+            const reason = error instanceof UploadFailed ? error.reason : 'failed'
+            patch(item.key, { status: 'error', error: reason })
+            // Full is not this file's fault: said once, with what to do.
+            if (reason === 'quota') toast.error(t('chat.file.storage-full'), { id: 'storage-full' })
           },
         )
       }
     },
-    [accepts, commit, patch, t],
+    [accepts, commit, patch, queryClient, t],
   )
 
   const remove = useCallback(

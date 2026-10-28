@@ -28,6 +28,19 @@ func (s *Server) ListConversations(w http.ResponseWriter, r *http.Request, param
 		s.searchConversations(w, r, user.ID, search, limit, cursorAt, cursorID)
 		return
 	}
+	if params.Pinned != nil && *params.Pinned {
+		rows, err := s.q.ListPinnedConversations(r.Context(), &user.ID)
+		if err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+		page := ConversationPage{Items: make([]Conversation, 0, len(rows))}
+		for _, row := range rows {
+			page.Items = append(page.Items, toConversation(row))
+		}
+		httpx.JSON(w, http.StatusOK, page)
+		return
+	}
 	// Fetch one extra row to learn whether another page exists.
 	rows, err := s.q.ListConversations(r.Context(), sqlc.ListConversationsParams{
 		UserID:          &user.ID,
@@ -123,9 +136,9 @@ func (s *Server) UpdateConversation(w http.ResponseWriter, r *http.Request, conv
 		httpx.Fail(w, r, err)
 		return
 	}
-	if body.Title == nil && body.Model == nil && body.ReasoningEffort == nil && body.WebSearch == nil {
+	if body.Title == nil && body.Model == nil && body.ReasoningEffort == nil && body.WebSearch == nil && body.Pinned == nil {
 		httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "nothing_to_update",
-			"give a title, a model, a reasoning effort or a web search choice"))
+			"give a title, a model, a reasoning effort, a web search choice or a pin"))
 		return
 	}
 	var effort *string
@@ -151,6 +164,18 @@ func (s *Server) UpdateConversation(w http.ResponseWriter, r *http.Request, conv
 	if err != nil {
 		httpx.Fail(w, r, dbErr(err))
 		return
+	}
+	if body.Pinned != nil {
+		if row.Temporary && *body.Pinned {
+			httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "temporary_not_pinnable", "a temporary chat is not in the list to be pinned"))
+			return
+		}
+		if row, err = s.q.SetConversationPinned(ctx, sqlc.SetConversationPinnedParams{
+			ID: conversationId, UserID: &user.ID, Pinned: *body.Pinned,
+		}); err != nil {
+			httpx.Fail(w, r, dbErr(err))
+			return
+		}
 	}
 	if body.Title != nil {
 		if row, err = s.q.UpdateConversationTitle(ctx, sqlc.UpdateConversationTitleParams{

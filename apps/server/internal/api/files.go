@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/qunqin24/openchat/apps/server/internal/auth"
 	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
@@ -109,12 +110,23 @@ func (s *Server) CreateUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	row, err := s.q.CreateAttachment(r.Context(), sqlc.CreateAttachmentParams{
-		UserID:      &user.ID,
-		StorageKey:  key,
-		Filename:    filename,
-		ContentType: contentType,
-		SizeBytes:   body.Size,
+	// Counted against the person's quota (storage_quota.go) and recorded
+	// together, so that uploads asked for at once are counted one by one.
+	var row sqlc.Attachment
+	err = pgx.BeginFunc(r.Context(), s.pool, func(tx pgx.Tx) error {
+		q := s.q.WithTx(tx)
+		if err := roomFor(r.Context(), q, user.ID, body.Size); err != nil {
+			return err
+		}
+		var err error
+		row, err = q.CreateAttachment(r.Context(), sqlc.CreateAttachmentParams{
+			UserID:      &user.ID,
+			StorageKey:  key,
+			Filename:    filename,
+			ContentType: contentType,
+			SizeBytes:   body.Size,
+		})
+		return err
 	})
 	if err != nil {
 		httpx.Fail(w, r, err)
