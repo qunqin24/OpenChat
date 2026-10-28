@@ -8,7 +8,7 @@
 
 [简体中文](README.md) · **English**
 
-[![License: MIT](https://img.shields.io/github/license/qunqin24/OpenChat)](LICENSE)
+[![License: AGPL-3.0](https://img.shields.io/github/license/qunqin24/OpenChat)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/qunqin24/OpenChat?include_prereleases&sort=semver)](https://github.com/qunqin24/OpenChat/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/qunqin24/OpenChat/ci.yml?branch=main&label=CI)](https://github.com/qunqin24/OpenChat/actions/workflows/ci.yml)
 [![Docker image](https://img.shields.io/badge/ghcr.io-qunqin24%2Fopenchat-2496ED?logo=docker&logoColor=white)](https://github.com/qunqin24/OpenChat/pkgs/container/openchat)
@@ -172,4 +172,8 @@ Open `http://localhost:5173`. `make help` lists every command.
 
 ## 📄 License
 
-[MIT](LICENSE)
+Copyright (C) 2026 qunqin
+
+OpenChat is released under the [GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE). You may use, modify and distribute it, but if you distribute a modified version, or let others use a modified version over a network, you must make its complete source code available under the same license.
+
+v1.2.0 and earlier remain available under the MIT license they were released with.

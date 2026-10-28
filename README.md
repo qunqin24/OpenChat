@@ -8,7 +8,7 @@
 
 **简体中文** · [English](README.en.md)
 
-[![License: MIT](https://img.shields.io/github/license/qunqin24/OpenChat)](LICENSE)
+[![License: AGPL-3.0](https://img.shields.io/github/license/qunqin24/OpenChat)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/qunqin24/OpenChat?include_prereleases&sort=semver)](https://github.com/qunqin24/OpenChat/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/qunqin24/OpenChat/ci.yml?branch=main&label=CI)](https://github.com/qunqin24/OpenChat/actions/workflows/ci.yml)
 [![Docker 镜像](https://img.shields.io/badge/ghcr.io-qunqin24%2Fopenchat-2496ED?logo=docker&logoColor=white)](https://github.com/qunqin24/OpenChat/pkgs/container/openchat)
@@ -171,4 +171,8 @@ make check   # lint + test + build，也就是 CI 跑的那一套
 
 ## 📄 许可证
 
-[MIT](LICENSE)
+Copyright (C) 2026 qunqin
+
+OpenChat 以 [GNU Affero 通用公共许可证 第 3 版（AGPL-3.0）](LICENSE) 发布。你可以使用、修改和分发它，但分发修改后的版本，或把修改后的版本作为网络服务提供给他人使用时，必须以同一许可证公开完整源代码。
+
+v1.2.0 及更早的版本仍按当时的 MIT 许可证提供。
