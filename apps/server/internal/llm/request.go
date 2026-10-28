@@ -19,9 +19,9 @@ type Request struct {
 	// to route a conversation's requests together and keep its prompt cache.
 	Session string
 
-	// User is a stable, non-reversible identifier of the person (or guest
-	// address) the request is made for, which providers ask for so that an
-	// operator's account is not blamed for one user's abuse (OpenAI's
+	// User is a stable, non-reversible identifier of the person the request is
+	// made for, which providers ask for so that an operator's account is not
+	// blamed for one user's abuse (OpenAI's
 	// safety_identifier, Anthropic's metadata.user_id). It is a hash and never
 	// an email or a name. Empty sends nothing; an adapter sends it only when its
 	// Config says the endpoint takes it, and Gemini has no such field.

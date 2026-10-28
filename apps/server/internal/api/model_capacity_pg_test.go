@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,13 +14,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/qunqin/openchat/apps/server/internal/agent"
-	"github.com/qunqin/openchat/apps/server/internal/auth"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/tools"
+	"github.com/qunqin24/openchat/apps/server/internal/agent"
+	"github.com/qunqin24/openchat/apps/server/internal/auth"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/tools"
 )
 
 // Per-model spending caps against a real database and, where a run is needed,
@@ -205,31 +203,19 @@ func (f *capFixture) listed() CatalogModel {
 	return CatalogModel{}
 }
 
-// picker is the model as GET /models shows it to a requester (nil is a guest).
+// picker is the model as GET /models shows it to a requester.
 func (f *capFixture) picker(as *sqlc.User) ChatModel {
 	f.t.Helper()
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	if as != nil {
-		req = req.WithContext(auth.WithUser(req.Context(), *as))
-		f.server.ListChatModels(rec, req)
-	} else {
-		f.server.GetGuestConfig(rec, req)
-	}
+	req = req.WithContext(auth.WithUser(req.Context(), *as))
+	f.server.ListChatModels(rec, req)
 	if rec.Code != http.StatusOK {
 		f.t.Fatalf("models: %d %s", rec.Code, rec.Body)
 	}
 	var models []ChatModel
-	if as != nil {
-		if err := json.Unmarshal(rec.Body.Bytes(), &models); err != nil {
-			f.t.Fatal(err)
-		}
-	} else {
-		var config GuestConfig
-		if err := json.Unmarshal(rec.Body.Bytes(), &config); err != nil {
-			f.t.Fatal(err)
-		}
-		models = config.Models
+	if err := json.Unmarshal(rec.Body.Bytes(), &models); err != nil {
+		f.t.Fatal(err)
 	}
 	for _, m := range models {
 		if m.Id == f.modelID {
@@ -303,7 +289,7 @@ func TestCapacityCountsPeriodsInTheServersZone(t *testing.T) {
 	}
 	f.server.now = func() time.Time { return at(10, 15, 10, 0, 0) }
 
-	// Different users, kinds and a guest's (no owner): all of it counts. The
+	// Different users, kinds and one with no owner (a deleted account's): all of it counts. The
 	// edges are the second before and the instant a day and a month begin.
 	f.spend(money("4"), at(9, 30, 23, 59, 59), "chat", &f.member.ID)  // last month
 	f.spend(money("8"), at(10, 1, 0, 0, 0), "chat", &f.admin.ID)      // this month, first instant
@@ -560,7 +546,7 @@ func TestChatModelsReportCapacityPerRequester(t *testing.T) {
 	f.mustSetCap(`{"capacity":0.25,"capacityPeriod":"total","capacityAdminExempt":true}`)
 
 	// Under the cap: nobody is marked.
-	for name, as := range map[string]*sqlc.User{"member": &f.member, "admin": &f.admin, "guest": nil} {
+	for name, as := range map[string]*sqlc.User{"member": &f.member, "admin": &f.admin} {
 		if f.picker(as).AtCapacity {
 			t.Errorf("%s: at capacity with nothing spent", name)
 		}
@@ -571,9 +557,8 @@ func TestChatModelsReportCapacityPerRequester(t *testing.T) {
 		as   *sqlc.User
 		want bool
 	}{
-		"member":              {&f.member, true},
-		"admin, exempt":       {&f.admin, false},
-		"guest, never exempt": {nil, true},
+		"member":        {&f.member, true},
+		"admin, exempt": {&f.admin, false},
 	} {
 		if got := f.picker(c.as).AtCapacity; got != c.want {
 			t.Errorf("%s: atCapacity = %v, want %v", name, got, c.want)
@@ -641,47 +626,6 @@ func TestCapacityStopsARunBetweenRequests(t *testing.T) {
 				t.Errorf("%d ledger rows, want %d", f.ledgerRows(), c.wantLedge)
 			}
 		})
-	}
-}
-
-// A guest is never exempt: the request is refused before anything is staged.
-func TestCapacityRefusesAGuest(t *testing.T) {
-	h := newGuestHarness(t)
-	ctx := context.Background()
-	// The harness's model gets a price and a cap that its own ledger row meets.
-	if _, err := h.pool.Exec(ctx, `INSERT INTO catalog_models (provider_id, model_id, name, raw) VALUES ($1, $2, $2, $3::jsonb)`,
-		"cap-"+h.model, h.model, `{"cost":{"input":3,"output":15}}`); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		_, _ = h.pool.Exec(context.Background(), "DELETE FROM catalog_models WHERE provider_id = $1", "cap-"+h.model)
-		_, _ = h.pool.Exec(context.Background(), "DELETE FROM usage_logs WHERE model_id = $1", h.model)
-	})
-	if _, err := h.pool.Exec(ctx, `INSERT INTO usage_logs (kind, status, model_id, cost) VALUES ('chat', 'ok', $1, 0.5)`, h.model); err != nil {
-		t.Fatal(err)
-	}
-	// Not exempt-able, but set to exempt anyway: that is for administrators.
-	if _, err := h.q.SaveModelOverride(ctx, sqlc.SaveModelOverrideParams{
-		ModelID: h.model, InputModalities: []string{"image"},
-		Capacity: pgtype.Numeric{Int: big.NewInt(25), Exp: -2, Valid: true},
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	frames := h.run(map[string]any{
-		"action": "send", "conversationId": uuid.New(), "model": h.model, "messages": []any{},
-		"input": userRow(uuid.New(), "hello", time.Now()),
-	})
-	if frames.status != http.StatusConflict || frames.error["code"] != "model_capacity_reached" {
-		t.Fatalf("a guest at the cap: %d %v", frames.status, frames.error)
-	}
-	if got := len(h.requests()); got != 0 {
-		t.Errorf("the model was asked %d times", got)
-	}
-	var guests int
-	_ = h.pool.QueryRow(ctx, `SELECT count(*) FROM users WHERE guest`).Scan(&guests)
-	if guests != 0 {
-		t.Errorf("%d guest users staged for a refused request", guests)
 	}
 }
 

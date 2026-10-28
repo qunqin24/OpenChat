@@ -1,8 +1,6 @@
 package api
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -15,10 +13,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/qunqin/openchat/apps/server/internal/agent"
-	"github.com/qunqin/openchat/apps/server/internal/auth"
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/agent"
+	"github.com/qunqin24/openchat/apps/server/internal/auth"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 // A request that was stopped before the provider's usage frame still cost
@@ -237,61 +235,5 @@ func TestStoppedCompressionIsEstimated(t *testing.T) {
 	rows := f.usageRows("compression")
 	if len(rows) != 1 || !rows[0].estimated || rows[0].input <= 0 || rows[0].cost == nil {
 		t.Fatalf("rows = %+v", rows)
-	}
-}
-
-// A guest's stopped run is metered with no owner, like its answered ones.
-func TestGuestStoppedRunIsEstimated(t *testing.T) {
-	h := newGuestHarness(t)
-	h.pace = 30 * time.Second
-	if _, err := h.pool.Exec(context.Background(), `DELETE FROM usage_logs WHERE model_id = $1`, h.model); err != nil {
-		t.Fatal(err)
-	}
-	conv := uuid.New()
-	raw, _ := json.Marshal(map[string]any{
-		"action": "send", "conversationId": conv, "model": h.model,
-		"messages": []any{}, "input": userRow(uuid.New(), strings.Repeat("a long question ", 100), time.Now()),
-	})
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, h.http.URL+"/api/v1/guest/runs", bytes.NewReader(raw))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	scanner := bufio.NewScanner(resp.Body)
-	for scanner.Scan() { // the first batch says the run has started
-		if strings.HasPrefix(scanner.Text(), "data: ") {
-			break
-		}
-	}
-	// The model is being waited on; the guest closes the page.
-	deadline := time.Now().Add(5 * time.Second)
-	for len(h.requests()) == 0 && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
-	}
-	cancel()
-	h.noGuestRows(conv)
-
-	var n, input int
-	var estimated bool
-	var user *uuid.UUID
-	deadline = time.Now().Add(5 * time.Second)
-	for {
-		err := h.pool.QueryRow(context.Background(),
-			`SELECT count(*), coalesce(max(input_tokens), 0), coalesce(bool_or(estimated), false), (array_agg(user_id))[1]
-			   FROM usage_logs WHERE model_id = $1`, h.model).Scan(&n, &input, &estimated, &user)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if n > 0 || time.Now().After(deadline) {
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	if n != 1 || !estimated || input < 300 || user != nil {
-		t.Fatalf("%d rows, estimated %v, input %d, owner %v: want one ownerless estimated row", n, estimated, input, user)
 	}
 }

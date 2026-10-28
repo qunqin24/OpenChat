@@ -13,7 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
 )
 
 func TestUsageLogsPageByCursor(t *testing.T) {
@@ -37,7 +37,7 @@ func TestUsageLogsPageByCursor(t *testing.T) {
 			model, status = modelB, "error"
 		}
 		code := "model_error"
-		if err := m.q.InsertUsageLog(ctx, sqlc.InsertUsageLogParams{
+		if _, err := m.q.InsertUsageLog(ctx, sqlc.InsertUsageLogParams{
 			CreatedAt: pgtype.Timestamptz{Time: base.Add(time.Duration(i/2) * time.Second), Valid: true},
 			Kind:      "chat", Status: status, ErrorCode: map[bool]*string{true: &code}[status == "error"],
 			UserID: &user.ID, ChannelName: "cursor channel", ModelID: model, InputTokens: 10, OutputTokens: 5,

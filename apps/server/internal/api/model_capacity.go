@@ -13,8 +13,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/httpx"
 )
 
 // A model's spending cap.
@@ -22,7 +22,7 @@ import (
 // The operator gives a model a capacity in USD and a period (total, monthly,
 // daily). What counts against it is the model's `cost` in the usage ledger
 // since the period began: every logged request for that model, chat or title,
-// from every user, guests and administrators included. Once that reaches the
+// from every user, administrators included. Once that reaches the
 // capacity the model cannot start a run or make another request inside one,
 // for anyone the cap applies to: everybody, except administrators when the
 // cap's exemption switch is on (their spend still counts).
@@ -191,8 +191,8 @@ func (g capacityGuard) reached(ctx context.Context, modelID string, admin bool) 
 	return states[modelID].reached, nil
 }
 
-// isAdmin is whether a user is an administrator. The zero id (a guest's title,
-// which has no account) and a user that is gone are not.
+// isAdmin is whether a user is an administrator. The zero id and a user that
+// is gone are not.
 func (g capacityGuard) isAdmin(ctx context.Context, userID uuid.UUID) (bool, error) {
 	if userID == uuid.Nil {
 		return false, nil

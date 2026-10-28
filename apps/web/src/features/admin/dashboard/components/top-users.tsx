@@ -17,7 +17,9 @@ export function TopUsers({ users }: { users: AdminDashboard['users'] }) {
           <UserAvatar id={u.userId ?? undefined} name={u.userName ?? undefined} email={u.userEmail ?? undefined} src={u.userAvatarUrl} className="size-8 text-xs" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm leading-none font-medium">
-              {u.userName ?? u.userEmail ?? t('admin.dashboard.users.anonymous')}
+              {u.userName ??
+                u.userEmail ??
+                (u.deletedUser ? t('admin.usage.deleted-user', { name: u.deletedUser }) : t('admin.usage.no-account'))}
             </p>
             <p className="text-muted-foreground mt-1 truncate text-xs">
               {u.userName && u.userEmail ? u.userEmail : t('admin.dashboard.users.requests', { n: formatCount(u.requests) })}

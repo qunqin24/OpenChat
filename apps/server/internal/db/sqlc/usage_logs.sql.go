@@ -12,22 +12,27 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const insertUsageLog = `-- name: InsertUsageLog :exec
+const insertUsageLog = `-- name: InsertUsageLog :one
 INSERT INTO usage_logs (created_at, kind, status, error_code, error_message,
-                        user_id, conversation_id, run_id, channel_id, channel_name,
+                        user_id, conversation_id, run_id, channel_id, channel_name, deleted_user,
                         model_id, served_model,
                         input_tokens, output_tokens, reasoning_tokens, cache_read_tokens, cache_write_tokens,
                         input_price, output_price, cache_read_price, cache_write_price, cost,
                         streamed, first_token_ms, duration_ms, estimated)
 VALUES ($1, $2, $3, $4, $5,
-        $6, $7, $8, $9, $10,
-        $11, $12,
-        $13, $14, $15,
-        $16, $17,
-        round(($18::double precision)::numeric, 10), round(($19::double precision)::numeric, 10),
-        round(($20::double precision)::numeric, 10), round(($21::double precision)::numeric, 10),
-        round(($22::double precision)::numeric, 10),
-        $23, $24, $25, $26)
+        (SELECT id FROM users WHERE id = $6::uuid),
+        (SELECT id FROM conversations WHERE id = $7::uuid),
+        (SELECT id FROM runs WHERE id = $8::uuid),
+        (SELECT id FROM channels WHERE id = $9::uuid),
+        $10, $11,
+        $12, $13,
+        $14, $15, $16,
+        $17, $18,
+        round(($19::double precision)::numeric, 10), round(($20::double precision)::numeric, 10),
+        round(($21::double precision)::numeric, 10), round(($22::double precision)::numeric, 10),
+        round(($23::double precision)::numeric, 10),
+        $24, $25, $26, $27)
+RETURNING id
 `
 
 type InsertUsageLogParams struct {
@@ -41,6 +46,7 @@ type InsertUsageLogParams struct {
 	RunID            *uuid.UUID         `json:"run_id"`
 	ChannelID        *uuid.UUID         `json:"channel_id"`
 	ChannelName      string             `json:"channel_name"`
+	DeletedUser      *string            `json:"deleted_user"`
 	ModelID          string             `json:"model_id"`
 	ServedModel      string             `json:"served_model"`
 	InputTokens      int32              `json:"input_tokens"`
@@ -62,8 +68,17 @@ type InsertUsageLogParams struct {
 // Prices and cost arrive as double precision and are stored as numeric rounded
 // to ten places, so a float's tail (0.30000000000000004) never reaches the
 // ledger.
-func (q *Queries) InsertUsageLog(ctx context.Context, arg InsertUsageLogParams) error {
-	_, err := q.db.Exec(ctx, insertUsageLog,
+//
+// The row is written when the request ends, and what it names may have gone
+// meanwhile: an account or a channel an administrator deleted, a conversation
+// or a run that was removed. The request still cost what it cost, so a name
+// that is gone is written as NULL, as the foreign key would have set it, and
+// the row keeps the account's name (deleted_user) and the channel's, both
+// taken when the request began. deleted_user is read only where user_id is
+// NULL, so writing it for every account's request is what labels the one whose
+// account is deleted while it is out.
+func (q *Queries) InsertUsageLog(ctx context.Context, arg InsertUsageLogParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, insertUsageLog,
 		arg.CreatedAt,
 		arg.Kind,
 		arg.Status,
@@ -74,6 +89,7 @@ func (q *Queries) InsertUsageLog(ctx context.Context, arg InsertUsageLogParams) 
 		arg.RunID,
 		arg.ChannelID,
 		arg.ChannelName,
+		arg.DeletedUser,
 		arg.ModelID,
 		arg.ServedModel,
 		arg.InputTokens,
@@ -91,7 +107,9 @@ func (q *Queries) InsertUsageLog(ctx context.Context, arg InsertUsageLogParams) 
 		arg.DurationMs,
 		arg.Estimated,
 	)
-	return err
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const latestContextTokens = `-- name: LatestContextTokens :one
@@ -129,13 +147,11 @@ SELECT l.id,
        l.status,
        l.error_code,
        l.error_message,
-       -- The join leaves a guest out (users.guest), so a guest's request has no
-       -- user_name here, as once the guest is deleted it has no user_id at all:
-       -- the page labels a request without an owner a guest's.
        l.user_id,
        u.name                          AS user_name,
        u.email                         AS user_email,
        u.avatar_key                    AS user_avatar_key,
+       l.deleted_user,
        l.conversation_id,
        l.run_id,
        l.channel_id,
@@ -156,7 +172,7 @@ SELECT l.id,
        l.duration_ms,
        l.estimated
 FROM usage_logs l
-         LEFT JOIN users u ON u.id = l.user_id AND NOT u.guest
+         LEFT JOIN users u ON u.id = l.user_id
 WHERE ($1::timestamptz IS NULL
     OR (l.created_at, l.id) < ($1::timestamptz, $2::uuid))
   AND ($3::uuid IS NULL OR l.user_id = $3::uuid)
@@ -194,6 +210,7 @@ type ListUsageLogsRow struct {
 	UserName         *string            `json:"user_name"`
 	UserEmail        *string            `json:"user_email"`
 	UserAvatarKey    *string            `json:"user_avatar_key"`
+	DeletedUser      *string            `json:"deleted_user"`
 	ConversationID   *uuid.UUID         `json:"conversation_id"`
 	RunID            *uuid.UUID         `json:"run_id"`
 	ChannelID        *uuid.UUID         `json:"channel_id"`
@@ -253,6 +270,7 @@ func (q *Queries) ListUsageLogs(ctx context.Context, arg ListUsageLogsParams) ([
 			&i.UserName,
 			&i.UserEmail,
 			&i.UserAvatarKey,
+			&i.DeletedUser,
 			&i.ConversationID,
 			&i.RunID,
 			&i.ChannelID,
@@ -364,15 +382,17 @@ func (q *Queries) SummarizeUsageLogs(ctx context.Context, arg SummarizeUsageLogs
 
 const usagePricing = `-- name: UsagePricing :one
 SELECT c.name                                                     AS channel_name,
+       u.name                                                     AS user_name,
        (m.raw -> 'cost' ->> 'input')::numeric       AS input_price,
        (m.raw -> 'cost' ->> 'output')::numeric      AS output_price,
        (m.raw -> 'cost' ->> 'cache_read')::numeric  AS cache_read_price,
        (m.raw -> 'cost' ->> 'cache_write')::numeric AS cache_write_price
 FROM (SELECT 1) one
          LEFT JOIN channels c ON c.id = $1::uuid
+         LEFT JOIN users u ON u.id = $2::uuid
          LEFT JOIN LATERAL (SELECT cm.raw
                             FROM catalog_models cm
-                            WHERE cm.model_id = $2
+                            WHERE cm.model_id = $3
                             ORDER BY (cm.raw -> 'cost' ->> 'input') IS NOT NULL DESC,
                                      (cm.provider_id = c.type::text) DESC,
                                      cm.provider_id
@@ -381,11 +401,13 @@ FROM (SELECT 1) one
 
 type UsagePricingParams struct {
 	ChannelID *uuid.UUID `json:"channel_id"`
+	UserID    *uuid.UUID `json:"user_id"`
 	ModelID   string     `json:"model_id"`
 }
 
 type UsagePricingRow struct {
 	ChannelName     *string        `json:"channel_name"`
+	UserName        *string        `json:"user_name"`
 	InputPrice      pgtype.Numeric `json:"input_price"`
 	OutputPrice     pgtype.Numeric `json:"output_price"`
 	CacheReadPrice  pgtype.Numeric `json:"cache_read_price"`
@@ -401,11 +423,14 @@ type UsagePricingRow struct {
 // actually carries a price beats one that does not. An operator's overrides
 // (model_overrides) have no price columns, so the catalogue is the only source.
 // Always one row: a request whose channel or model is unknown gets NULLs.
+// Also the name of the account it is for, kept with the row in
+// case the account is deleted before the request ends.
 func (q *Queries) UsagePricing(ctx context.Context, arg UsagePricingParams) (UsagePricingRow, error) {
-	row := q.db.QueryRow(ctx, usagePricing, arg.ChannelID, arg.ModelID)
+	row := q.db.QueryRow(ctx, usagePricing, arg.ChannelID, arg.UserID, arg.ModelID)
 	var i UsagePricingRow
 	err := row.Scan(
 		&i.ChannelName,
+		&i.UserName,
 		&i.InputPrice,
 		&i.OutputPrice,
 		&i.CacheReadPrice,

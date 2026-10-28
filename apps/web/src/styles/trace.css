@@ -1,0 +1,354 @@
+/*
+ * 轨迹 (TraceView): an administrator's own conversation as the model saw it,
+ * drawn over the transcript below the top bar, with the switch in the bar
+ * (ChatView). Chat-side tokens only.
+ */
+
+/* The 对话 / 轨迹 switch, in the top bar after the title. */
+.chat-ui .n-view-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--n-hover);
+}
+
+.chat-ui .n-view-tab {
+  height: 26px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--n-text-2);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chat-ui .n-view-tab.active {
+  background: var(--n-bg);
+  color: var(--n-text);
+  box-shadow: var(--n-ring);
+}
+
+.chat-ui .n-trace {
+  position: absolute;
+  inset: var(--n-topbar-h) 0 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--n-bg);
+  border-top: 1px solid var(--n-line);
+}
+
+.chat-ui .n-trace-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--n-line);
+  color: var(--n-text-2);
+  font-size: 12px;
+}
+
+.chat-ui .n-trace-tools-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.chat-ui .n-trace-search {
+  width: 200px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--n-line);
+  border-radius: 8px;
+  background: var(--n-bg);
+  color: var(--n-text);
+  font-size: 12px;
+  outline: none;
+}
+
+@keyframes n-trace-spin { to { transform: rotate(360deg); } }
+.chat-ui .n-trace-spin { animation: n-trace-spin 0.9s linear infinite; }
+
+.chat-ui .n-trace-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.chat-ui .n-trace-main {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+/* ------------------------------------------------------------- timeline */
+.chat-ui .n-trace-timeline {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px 16px 8px;
+  border-bottom: 1px solid var(--n-line);
+  background: var(--n-bg);
+}
+
+.chat-ui .n-trace-track {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 18px;
+}
+
+.chat-ui .n-trace-track-label {
+  flex: none;
+  width: 32px;
+  color: var(--n-text-3);
+  font-size: 11px;
+}
+
+.chat-ui .n-trace-lane {
+  position: relative;
+  flex: 1;
+  height: 10px;
+}
+
+.chat-ui .n-trace-span {
+  position: absolute;
+  top: 0;
+  height: 10px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.chat-ui .n-trace-span.is-model { background: #8b5cf6; }
+.chat-ui .n-trace-span.is-tool { background: #f59e0b; }
+.chat-ui .n-trace-span.is-error { background: var(--n-err); }
+.chat-ui .n-trace-span.is-selected { outline: 2px solid var(--n-accent); outline-offset: 1px; }
+
+/* The wait for the first token, drawn lighter than the generation after it. */
+.chat-ui .n-trace-wait {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: rgb(255 255 255 / 55%);
+}
+
+/* ----------------------------------------------------------------- rows */
+.chat-ui .n-trace-rows {
+  margin: 0;
+  padding: 0 0 24px;
+  list-style: none;
+}
+
+.chat-ui .n-trace-row {
+  position: relative;
+  border-bottom: 1px solid var(--n-line);
+}
+
+.chat-ui .n-trace-row.is-first {
+  border-top: 1px solid var(--n-line-strong, var(--n-line));
+}
+
+.chat-ui .n-trace-row.is-selected {
+  background: var(--n-hover-strong);
+  box-shadow: inset 2px 0 0 var(--n-accent);
+}
+
+/* The rows of a request picked on the timeline. */
+.chat-ui .n-trace-row.is-in-selected {
+  background: var(--n-hover);
+}
+
+.chat-ui .n-trace-row-button:hover {
+  background: var(--n-hover);
+}
+
+.chat-ui .n-trace-row-index {
+  position: absolute;
+  top: 10px;
+  left: 8px;
+  color: var(--n-text-3);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-ui .n-trace-row-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 38px;
+  padding: 6px 16px 6px 40px;
+  border: 0;
+  background: transparent;
+  color: var(--n-text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-ui .n-trace-chip {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--n-hover-strong);
+  color: var(--n-text-2);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.chat-ui .n-trace-chip.is-user { background: rgb(59 130 246 / 12%); color: #2563eb; }
+.chat-ui .n-trace-chip.is-history { background: rgb(34 197 94 / 12%); color: #15803d; }
+.chat-ui .n-trace-chip.is-assistant { background: rgb(139 92 246 / 12%); color: #7c3aed; }
+.chat-ui .n-trace-chip.is-reasoning { background: rgb(139 92 246 / 8%); color: #8b5cf6; }
+.chat-ui :is(.n-trace-chip.is-tool_call, .n-trace-chip.is-tool_result) { background: rgb(245 158 11 / 14%); color: #b45309; }
+
+.chat-ui .n-trace-row-name {
+  flex: none;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+
+.chat-ui .n-trace-row-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-ui .n-trace-row-text.is-code {
+  color: var(--n-text-2);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+
+.chat-ui .n-trace-row-text.is-error { color: var(--n-err); }
+
+/* --------------------------------------------------------------- detail */
+.chat-ui .n-trace-detail {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: min(440px, 45%);
+  min-height: 0;
+  border-left: 1px solid var(--n-line);
+}
+
+.chat-ui .n-trace-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 6px 16px;
+}
+
+.chat-ui .n-trace-detail-title {
+  flex: 1;
+  color: var(--n-text-2);
+  font-size: 12px;
+}
+
+.chat-ui .n-trace-tabs {
+  display: flex;
+  gap: 16px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--n-line);
+}
+
+.chat-ui .n-trace-tab {
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--n-text-2);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chat-ui .n-trace-tab.active {
+  border-bottom-color: var(--n-accent);
+  color: var(--n-text);
+}
+
+.chat-ui .n-trace-detail-body {
+  flex: 1;
+  min-height: 0;
+  padding: 12px 16px 24px;
+  overflow-y: auto;
+  font-size: 13px;
+}
+
+.chat-ui .n-trace-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  margin: 0;
+}
+
+.chat-ui .n-trace-facts dt { color: var(--n-text-2); }
+.chat-ui .n-trace-facts dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.chat-ui .n-trace-facts dd.is-error { color: var(--n-err); }
+
+.chat-ui .n-trace-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.chat-ui .n-trace-section-title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.chat-ui .n-trace-message {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.chat-ui .n-trace-pre {
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--n-ui-tint, var(--n-panel));
+  color: var(--n-text);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A message or a thought reads as text, not as code. */
+.chat-ui .n-trace-pre.is-prose {
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.chat-ui .n-trace-pre.is-error {
+  color: var(--n-err);
+}
+
+.chat-ui .n-trace-tools {
+  margin: 0;
+  color: var(--n-text-2);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .chat-ui .n-trace-body { flex-direction: column; }
+  .chat-ui .n-trace-detail { width: 100%; max-height: 55%; border-top: 1px solid var(--n-line); border-left: 0; }
+  .chat-ui .n-trace-tools-bar { width: 100%; margin-left: 0; }
+  .chat-ui .n-trace-search { flex: 1; width: auto; }
+}

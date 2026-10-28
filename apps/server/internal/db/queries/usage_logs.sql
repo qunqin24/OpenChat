@@ -1,22 +1,36 @@
--- name: InsertUsageLog :exec
+-- name: InsertUsageLog :one
 -- Prices and cost arrive as double precision and are stored as numeric rounded
 -- to ten places, so a float's tail (0.30000000000000004) never reaches the
 -- ledger.
+--
+-- The row is written when the request ends, and what it names may have gone
+-- meanwhile: an account or a channel an administrator deleted, a conversation
+-- or a run that was removed. The request still cost what it cost, so a name
+-- that is gone is written as NULL, as the foreign key would have set it, and
+-- the row keeps the account's name (deleted_user) and the channel's, both
+-- taken when the request began. deleted_user is read only where user_id is
+-- NULL, so writing it for every account's request is what labels the one whose
+-- account is deleted while it is out.
 INSERT INTO usage_logs (created_at, kind, status, error_code, error_message,
-                        user_id, conversation_id, run_id, channel_id, channel_name,
+                        user_id, conversation_id, run_id, channel_id, channel_name, deleted_user,
                         model_id, served_model,
                         input_tokens, output_tokens, reasoning_tokens, cache_read_tokens, cache_write_tokens,
                         input_price, output_price, cache_read_price, cache_write_price, cost,
                         streamed, first_token_ms, duration_ms, estimated)
 VALUES (sqlc.arg('created_at'), sqlc.arg('kind'), sqlc.arg('status'), sqlc.narg('error_code'), sqlc.narg('error_message'),
-        sqlc.narg('user_id'), sqlc.narg('conversation_id'), sqlc.narg('run_id'), sqlc.narg('channel_id'), sqlc.arg('channel_name'),
+        (SELECT id FROM users WHERE id = sqlc.narg('user_id')::uuid),
+        (SELECT id FROM conversations WHERE id = sqlc.narg('conversation_id')::uuid),
+        (SELECT id FROM runs WHERE id = sqlc.narg('run_id')::uuid),
+        (SELECT id FROM channels WHERE id = sqlc.narg('channel_id')::uuid),
+        sqlc.arg('channel_name'), sqlc.narg('deleted_user'),
         sqlc.arg('model_id'), sqlc.arg('served_model'),
         sqlc.arg('input_tokens'), sqlc.arg('output_tokens'), sqlc.arg('reasoning_tokens'),
         sqlc.arg('cache_read_tokens'), sqlc.arg('cache_write_tokens'),
         round((sqlc.narg('input_price')::double precision)::numeric, 10), round((sqlc.narg('output_price')::double precision)::numeric, 10),
         round((sqlc.narg('cache_read_price')::double precision)::numeric, 10), round((sqlc.narg('cache_write_price')::double precision)::numeric, 10),
         round((sqlc.narg('cost')::double precision)::numeric, 10),
-        sqlc.arg('streamed'), sqlc.narg('first_token_ms'), sqlc.arg('duration_ms'), sqlc.arg('estimated'));
+        sqlc.arg('streamed'), sqlc.narg('first_token_ms'), sqlc.arg('duration_ms'), sqlc.arg('estimated'))
+RETURNING id;
 
 -- name: UsagePricing :one
 -- What a request needs to be priced and labelled: the channel's current name,
@@ -28,13 +42,17 @@ VALUES (sqlc.arg('created_at'), sqlc.arg('kind'), sqlc.arg('status'), sqlc.narg(
 -- actually carries a price beats one that does not. An operator's overrides
 -- (model_overrides) have no price columns, so the catalogue is the only source.
 -- Always one row: a request whose channel or model is unknown gets NULLs.
+-- Also the name of the account it is for, kept with the row in
+-- case the account is deleted before the request ends.
 SELECT c.name                                                     AS channel_name,
+       u.name                                                     AS user_name,
        (m.raw -> 'cost' ->> 'input')::numeric       AS input_price,
        (m.raw -> 'cost' ->> 'output')::numeric      AS output_price,
        (m.raw -> 'cost' ->> 'cache_read')::numeric  AS cache_read_price,
        (m.raw -> 'cost' ->> 'cache_write')::numeric AS cache_write_price
 FROM (SELECT 1) one
          LEFT JOIN channels c ON c.id = sqlc.narg('channel_id')::uuid
+         LEFT JOIN users u ON u.id = sqlc.narg('user_id')::uuid
          LEFT JOIN LATERAL (SELECT cm.raw
                             FROM catalog_models cm
                             WHERE cm.model_id = sqlc.arg('model_id')
@@ -57,13 +75,11 @@ SELECT l.id,
        l.status,
        l.error_code,
        l.error_message,
-       -- The join leaves a guest out (users.guest), so a guest's request has no
-       -- user_name here, as once the guest is deleted it has no user_id at all:
-       -- the page labels a request without an owner a guest's.
        l.user_id,
        u.name                          AS user_name,
        u.email                         AS user_email,
        u.avatar_key                    AS user_avatar_key,
+       l.deleted_user,
        l.conversation_id,
        l.run_id,
        l.channel_id,
@@ -84,7 +100,7 @@ SELECT l.id,
        l.duration_ms,
        l.estimated
 FROM usage_logs l
-         LEFT JOIN users u ON u.id = l.user_id AND NOT u.guest
+         LEFT JOIN users u ON u.id = l.user_id
 WHERE (sqlc.narg('cursor_created_at')::timestamptz IS NULL
     OR (l.created_at, l.id) < (sqlc.narg('cursor_created_at')::timestamptz, sqlc.narg('cursor_id')::uuid))
   AND (sqlc.narg('user_id')::uuid IS NULL OR l.user_id = sqlc.narg('user_id')::uuid)

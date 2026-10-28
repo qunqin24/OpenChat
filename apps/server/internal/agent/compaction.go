@@ -13,9 +13,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/llm"
-	ledger "github.com/qunqin/openchat/apps/server/internal/usage"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
+	ledger "github.com/qunqin24/openchat/apps/server/internal/usage"
 )
 
 // Compressing a conversation's context.
@@ -338,6 +338,7 @@ func (c *Compactor) fold(ctx context.Context, p CompactParams, existing, latest 
 		ChannelID:      p.ChannelID,
 		ModelID:        p.ModelID,
 		InputEstimate:  llm.EstimateInput(request),
+		Request:        &request,
 	}, c.now)
 	defer meter.Release()
 	// A summary that would take the model over its cap is not written; to a

@@ -9,6 +9,7 @@ package usage
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"math"
@@ -18,10 +19,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/qunqin/openchat/apps/server/internal/db/sqlc"
-	"github.com/qunqin/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
 // Kind is what a request was for.
@@ -35,6 +37,8 @@ const (
 	// KindCompression is the request that writes a conversation's context
 	// summary, made with the conversation's own model.
 	KindCompression Kind = "compression"
+	// KindSubagent is a model request of a sub-agent's run.
+	KindSubagent Kind = "subagent"
 	// KindModeration is the request that has a model classify a message for
 	// content moderation (api/moderation.go).
 	KindModeration Kind = "moderation"
@@ -63,6 +67,20 @@ const (
 type Recorder struct {
 	q        *sqlc.Queries
 	reserver Reserver
+	tracer   Tracer
+}
+
+// Tracer says whether a person's requests are traced: what each carried and
+// what came back, kept beside its row for the 轨迹 view (request_traces).
+// Asked once per request that offers a trace (Call.Request).
+type Tracer func(ctx context.Context, userID uuid.UUID) bool
+
+// SetTracer sets who decides which requests are traced. Called while the
+// application is assembled; without one nothing is traced.
+func (r *Recorder) SetTracer(t Tracer) {
+	if r != nil {
+		r.tracer = t
+	}
 }
 
 func NewRecorder(q *sqlc.Queries) *Recorder { return &Recorder{q: q} }
@@ -94,8 +112,7 @@ func (r *Recorder) SetReserver(rv Reserver) {
 type Call struct {
 	Kind Kind
 	// UserID is whose request it is: a run's user, or a conversation's owner
-	// for its title. The zero value is nobody's - a guest's title, which has
-	// no account to charge - and is recorded as no owner.
+	// for its title. The zero value is nobody's and is recorded as no owner.
 	UserID         uuid.UUID
 	ConversationID *uuid.UUID
 	RunID          *uuid.UUID
@@ -107,6 +124,10 @@ type Call struct {
 	// stopped or broke before the usage frame - and is what a Reserver holds
 	// back for it. Zero when the caller did not estimate.
 	InputEstimate int
+	// Request is the request as it is sent, for a trace (Tracer). Nil offers
+	// none. Only its messages, tools and options are kept; files are kept as
+	// the references they are in the message, never their bytes.
+	Request *llm.Request
 }
 
 // Meter times and then records one request.
@@ -123,6 +144,10 @@ type Meter struct {
 	// taken up, so whatever it cost is owed whether or not usage ever arrives.
 	alive   bool
 	release func()
+	// labels are the channel's and account's names and the model's prices,
+	// taken by Reserve while they still exist; End looks them up itself for a
+	// request that was never reserved.
+	labels *sqlc.UsagePricingRow
 }
 
 // Begin starts timing a request. A nil Recorder is a ledger that is switched
@@ -161,7 +186,17 @@ func (m *Meter) Wrap(next func(llm.Event) error) func(llm.Event) error {
 // just before the request is made; the timing starts again here, so the check
 // is not part of the request's duration.
 func (m *Meter) Reserve(ctx context.Context) error {
-	if m.rec == nil || m.rec.reserver == nil {
+	if m.rec == nil {
+		return nil
+	}
+	if m.rec.q != nil {
+		if labels, ok := m.lookup(ctx); ok {
+			m.mu.Lock()
+			m.labels = &labels
+			m.mu.Unlock()
+		}
+	}
+	if m.rec.reserver == nil {
 		return nil
 	}
 	release, err := m.rec.reserver.Reserve(ctx, m.call)
@@ -251,9 +286,91 @@ func (m *Meter) End(ctx context.Context, resp llm.ModelResponse, err error) {
 	wctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), writeTimeout)
 	defer cancel()
 	m.price(wctx, &row, usage)
-	if werr := m.rec.q.InsertUsageLog(wctx, row); werr != nil {
-		slog.Warn("usage: record request", "kind", m.call.Kind, "model", m.call.ModelID, "error", werr)
+	id, werr := m.rec.q.InsertUsageLog(wctx, row)
+	if pgErr := (*pgconn.PgError)(nil); errors.As(werr, &pgErr) && pgErr.Code == "23503" {
+		// What the row names was deleted while this insert was being written;
+		// once more, and the insert sees it gone (23503 is foreign_key_violation).
+		id, werr = m.rec.q.InsertUsageLog(wctx, row)
 	}
+	if werr != nil {
+		slog.Warn("usage: record request", "kind", m.call.Kind, "model", m.call.ModelID, "error", werr)
+		return
+	}
+	m.trace(wctx, id, resp, ended)
+}
+
+// trace keeps what the request carried and what came back, when it offered a
+// trace and its owner's requests are traced. Best effort: a trace that cannot
+// be written is a debugging aid lost, never a request failed.
+func (m *Meter) trace(ctx context.Context, usageLogID uuid.UUID, resp llm.ModelResponse, ended time.Time) {
+	req := m.call.Request
+	if req == nil || m.rec.tracer == nil || m.call.ConversationID == nil || m.call.UserID == uuid.Nil {
+		return
+	}
+	if !m.rec.tracer(ctx, m.call.UserID) {
+		return
+	}
+	tools := make([]traceTool, 0, len(req.Tools))
+	for _, tool := range req.Tools {
+		tools = append(tools, traceTool{Name: tool.Name, Description: tool.Description, Parameters: tool.Parameters})
+	}
+	request, err := json.Marshal(traceRequest{Messages: req.Messages, Tools: tools, Options: traceOptionsOf(req.Options)})
+	if err != nil {
+		slog.Warn("usage: encode trace request", "error", err)
+		return
+	}
+	response, err := json.Marshal(traceResponse{
+		Message:      resp.Message,
+		FinishReason: string(resp.FinishReason),
+		RawFinish:    resp.RawFinishReason,
+		EndedAt:      ended,
+	})
+	if err != nil {
+		slog.Warn("usage: encode trace response", "error", err)
+		return
+	}
+	if err := m.rec.q.InsertRequestTrace(ctx, sqlc.InsertRequestTraceParams{
+		UsageLogID: usageLogID, UserID: m.call.UserID, ConversationID: *m.call.ConversationID,
+		Request: request, Response: response,
+	}); err != nil {
+		slog.Warn("usage: record trace", "error", err)
+	}
+}
+
+// What a trace keeps of a request and its response. Messages encode as the
+// transcript does (llm's codec), which carries a file as its reference.
+type traceRequest struct {
+	Messages []llm.Message `json:"messages"`
+	Tools    []traceTool   `json:"tools"`
+	Options  traceOptions  `json:"options"`
+}
+
+type traceTool struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Parameters  json.RawMessage `json:"parameters,omitempty"`
+}
+
+type traceOptions struct {
+	MaxTokens   *int     `json:"maxTokens,omitempty"`
+	Temperature *float64 `json:"temperature,omitempty"`
+	ToolChoice  string   `json:"toolChoice,omitempty"`
+	Reasoning   string   `json:"reasoning,omitempty"`
+}
+
+func traceOptionsOf(o llm.Options) traceOptions {
+	out := traceOptions{MaxTokens: o.MaxTokens, Temperature: o.Temperature, ToolChoice: string(o.ToolChoice)}
+	if o.Reasoning != nil {
+		out.Reasoning = string(o.Reasoning.Effort)
+	}
+	return out
+}
+
+type traceResponse struct {
+	Message      llm.Message `json:"message"`
+	FinishReason string      `json:"finishReason,omitempty"`
+	RawFinish    string      `json:"rawFinishReason,omitempty"`
+	EndedAt      time.Time   `json:"endedAt"`
 }
 
 // settle is the usage a row is written with: the provider's when it reported
@@ -307,15 +424,31 @@ func (m *Meter) settle(ctx context.Context, resp llm.ModelResponse, err error) (
 // price fills in the channel's name and the prices the model had when the
 // request was made, and the cost that follows. A failed lookup leaves them
 // out; the row is still worth having.
-func (m *Meter) price(ctx context.Context, row *sqlc.InsertUsageLogParams, usage *llm.Usage) {
-	p, err := m.rec.q.UsagePricing(ctx, sqlc.UsagePricingParams{ChannelID: m.call.ChannelID, ModelID: m.call.ModelID})
+func (m *Meter) lookup(ctx context.Context) (sqlc.UsagePricingRow, bool) {
+	p, err := m.rec.q.UsagePricing(ctx, sqlc.UsagePricingParams{ChannelID: m.call.ChannelID, UserID: owner(m.call.UserID), ModelID: m.call.ModelID})
 	if err != nil {
 		slog.Warn("usage: look up prices", "model", m.call.ModelID, "error", err)
-		return
+		return p, false
 	}
+	return p, true
+}
+
+func (m *Meter) price(ctx context.Context, row *sqlc.InsertUsageLogParams, usage *llm.Usage) {
+	m.mu.Lock()
+	labels := m.labels
+	m.mu.Unlock()
+	if labels == nil {
+		p, ok := m.lookup(ctx)
+		if !ok {
+			return
+		}
+		labels = &p
+	}
+	p := *labels
 	if p.ChannelName != nil {
 		row.ChannelName = *p.ChannelName
 	}
+	row.DeletedUser = p.UserName
 	row.InputPrice = number(p.InputPrice)
 	row.OutputPrice = number(p.OutputPrice)
 	row.CacheReadPrice = number(p.CacheReadPrice)

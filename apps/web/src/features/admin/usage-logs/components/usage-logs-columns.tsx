@@ -101,9 +101,12 @@ export function usageLogsColumns(t: TFunction<'common'>): ColumnDef<UsageLog>[] 
       header: header(t('admin.usage.user')),
       cell: ({ row }) => {
         const log = row.original
-        // No owner: accounts are never deleted, so the request is a guest's - their
-        // rows are deleted when the run ends (users.guest).
-        if (!log.userId) return <span className="text-muted-foreground">{t('admin.usage.guest')}</span>
+        // No owner: an account an administrator deleted (it keeps the name it
+        // had), else a row from before accounts were required.
+        if (!log.userId && log.deletedUser) {
+          return <span className="text-muted-foreground">{t('admin.usage.deleted-user', { name: log.deletedUser })}</span>
+        }
+        if (!log.userId) return <span className="text-muted-foreground">{t('admin.usage.no-account')}</span>
         return (
           <div className="flex items-center gap-2">
             <UserAvatar
