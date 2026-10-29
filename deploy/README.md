@@ -1,65 +1,14 @@
-# 部署
+# 部署文件
 
-一台装了 Docker 的服务器，一个解析到它的域名。镜像把前端打进了二进制，一个容器同时提供网页和 API；Postgres 存数据，Caddy 负责 HTTPS。
+这个目录放生产部署用的文件：`docker-compose.yml`（Postgres、应用、Caddy）、`Caddyfile`、`docker-compose.build.yml`（用当前代码自己构建镜像）、`docker-compose.trial.yml`（没有域名时的纯 HTTP 试用），以及配置模板 `.env.example`。
 
-## 第一次上线
+在仓库根目录，复制 `deploy/.env.example` 为 `deploy/.env` 并填好 `DOMAIN` 和 `POSTGRES_PASSWORD`，然后：
 
 ```bash
-git clone <仓库> openchat && cd openchat
-cp deploy/.env.example deploy/.env
-# 编辑 deploy/.env：DOMAIN 填域名，POSTGRES_PASSWORD 填一串随机字符（openssl rand -hex 24）
 docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
 ```
 
-- 应用镜像直接从 GitHub 拉取（`ghcr.io/qunqin24/openchat:latest`）；想用这份代码自己构建，见下面「注意」里的 `docker-compose.build.yml`。要固定版本，在 `deploy/.env` 里写 `OPENCHAT_IMAGE=ghcr.io/qunqin24/openchat:1.0.0`。
-- 域名的 A/AAAA 记录要先指到这台服务器，80 和 443 端口要开着，Caddy 第一次启动时会自动申请证书。
-- 打开 `https://<域名>`，**第一个注册的账号就是管理员**（不受下面的注册开关限制，也不需要审批），所以上线后立刻自己先注册。
-- 注册默认是**审批模式**：之后自己注册的账号要等管理员在 后台 → 用户 批准才能登录。想完全开放，或者关闭注册、只由管理员新建账号，在 后台 → 系统 里改「允许注册」「新用户需审批」。
-- 进 后台 → 渠道 添加模型渠道。
+配置变量、更新、备份与恢复、时区、限流与代理、发布新版本、排错，都在部署指南里：
 
-## 更新
-
-```bash
-git pull
-docker compose -f deploy/docker-compose.yml --env-file deploy/.env pull openchat
-docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
-```
-
-发版本：在仓库里打一个版本标签推上去，GitHub 工作流会构建 amd64 和 arm64 的镜像，推送为 `:版本号` 和 `:latest`，并创建 Release：
-
-```bash
-git tag v1.0.0 && git push origin v1.0.0
-```
-
-带后缀的预发布版本（如 `v1.1.0-rc.1`）只推版本号标签，不动 `latest`。
-
-数据库迁移在服务启动时自动执行。
-
-## 数据在哪
-
-| 卷 | 内容 |
-|---|---|
-| `openchat_postgres-data` | 数据库 |
-| `openchat_openchat-data` | 附件（本地存储驱动）、头像 |
-| `openchat_caddy-data` | 证书 |
-
-备份数据库：
-
-```bash
-docker compose -f deploy/docker-compose.yml exec postgres pg_dump -U openchat openchat > backup.sql
-```
-
-附件也可以之后在 后台 → 文件存储 切到 S3 兼容存储，不用改部署文件。
-
-## 时区
-
-每个模型可以在 后台 → 模型 → 设置 里设容量上限，按「每月」或「每天」统计时，在**服务器的时区**的零点自动清零。时区由 `deploy/.env` 里的 `TZ` 决定，默认 `Asia/Shanghai`，填 IANA 名称（如 `America/New_York`）；改了之后 `up -d` 重新创建容器即可。镜像里没有系统时区库，二进制自带了一份，所以不用额外挂载。`TZ` 写错时服务会在日志里警告，并退回按 UTC 计算。
-
-「总计」上限不看时区。
-
-## 注意
-
-- `APP_ENV=production` 时登录 Cookie 只走 HTTPS。没有域名、只想用 `http://IP:8080` 先试一下：`docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.trial.yml --env-file deploy/.env up -d postgres openchat`。
-- 想用这份代码自己构建镜像，而不是拉取：再叠加 `-f deploy/docker-compose.build.yml`，并在 `up` 后加 `--build`。
-- 登录/注册的失败次数限制（登录每 IP 每 15 分钟 10 次失败、同一标识 5 次，注册每 IP 每小时 5 次）都按访客 IP 算，读的是 `X-Forwarded-For`，也认 `X-Real-IP` 和 `True-Client-IP`。Caddyfile 已经用访客的真实地址覆盖前两者并丢掉后者；如果前面还有别的代理或 CDN，要让它们也正确传递，并且不要让访客自己带的这几个头原样到达应用，否则限流按代理的地址算，或者可以被伪造。
-- 看日志：`docker compose -f deploy/docker-compose.yml logs -f openchat`。容器日志按大小轮转；应用还把日志写一份到数据卷的 `logs/openchat.log`，更新镜像后也还在。用户报来的「错误编号」可以直接在日志里搜，详见 [部署指南的排错一节](../docs/deployment.md#排错)。
+- 简体中文：[docs/deployment.md](../docs/deployment.md)
+- English: [docs/deployment.en.md](../docs/deployment.en.md)

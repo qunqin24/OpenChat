@@ -253,7 +253,7 @@ Pi 的 [`faux` provider][faux] 和测试目录可用于参考测试组织。
 
 相关：[研究索引](README.md) ·
 [Hermes](hermes-agent.md) · [OpenCode](opencode.md) · [Cherry Studio](cherry-studio.md) ·
-[当前后端](../backend.md)。
+[当前设计](../design/README.md)。
 
 [types]: https://github.com/earendil-works/pi/blob/d981de1229ef899957bbe968bc8dcda02a21f477/packages/ai/src/types.ts
 [index]: https://github.com/earendil-works/pi/blob/d981de1229ef899957bbe968bc8dcda02a21f477/packages/ai/src/index.ts

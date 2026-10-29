@@ -245,7 +245,7 @@ Chat Service：创建运行、装配用户上下文、控制持久化与订阅
 传输层是否批量合并 delta，以及动态扩展对权限和重试的影响。
 
 相关：[研究索引](README.md) · [Pi AI](pi-ai.md) ·
-[OpenWebUI 同步研究](openwebui-experience-streaming.md) · [当前后端](../backend.md)。
+[OpenWebUI 同步研究](openwebui-experience-streaming.md) · [当前设计](../design/README.md)。
 
 [processor]: https://github.com/anomalyco/opencode/blob/95daf90670b7c039c436c85537da5fbfe2205b41/packages/opencode/src/session/processor.ts
 [prompt]: https://github.com/anomalyco/opencode/blob/95daf90670b7c039c436c85537da5fbfe2205b41/packages/opencode/src/session/prompt.ts

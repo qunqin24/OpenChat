@@ -32,7 +32,7 @@
 
 ## 模型工具 `scheduled_tasks`（`api/task_tool.go`）
 
-- 放在 `api` 包而不是 `tools` 包：它要用服务器的审核、挑模型和上限。运行器在服务器之前创建，所以用 `runner.AddTools(server.TaskTools)` 事后挂上（`main.go`）；在那之前恢复的 run 那一次请求没有这个工具。
+- 放在 `api` 包而不是 `tools` 包：它要用服务器的审核、挑模型和上限。运行器在服务器之前创建，所以用 `runner.AddTools(server.ServerTools)` 事后挂上（`main.go`；`ServerTools` 在 `document_tool.go`，把定时任务、写作块、子智能体的工具合在一起，子智能体的 run 只拿到只读的写作块）。`main.go` 在 `runner.Resume` 之前先装好 `AddTools`、`SetTurnNote`、`SetSubagents`、`AfterRun`，所以进程重启后恢复的 run 一开始就有这些工具和钩子。
 - 操作：list / create / update / pause / resume / delete。用户永远取自 `agent.ScopeFrom(ctx)`，别人的任务 id 读出来就是不存在。
 - 时间：模型只知道日期，所以工具按用户的墙上时间读写，时区取 `users.time_zone`（前端在 `_authed` 的 `beforeLoad` 里发现与浏览器不同就 `PATCH /auth/me {timeZone}`，`lib/time-zone.ts`），没有就 UTC；每个结果都写明用户时区和当地当前时间。
 - 系统提示词只在提供了这个工具时多一段说明（不影响其他请求的提示缓存）。

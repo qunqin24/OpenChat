@@ -30,7 +30,7 @@
 
 | 工具 | 参数 | 作用 |
 | --- | --- | --- |
-| `subagent` | `task`, `name`, `background`, `context?` | 派一个子 Agent。`name` 是 2–4 个词的短名（界面显示、之后按名字发消息）。 |
+| `subagent` | `task`, `name`, `background`（仅后台模式开着时）, `context?` | 派一个子 Agent。`name` 是 2–4 个词的短名（界面显示、之后按名字发消息）。 |
 | `subagent_message` | `to`（名字或 id）, `message` | 给子 Agent 发消息：在跑就**插入**它的下一步，已结束就**续接**（带着历史接着干，干完再报告一次）。 |
 | `subagent_stop` | `to` | 停掉一个在跑的子 Agent，它已有的部分结果照常报告。 |
 
@@ -38,7 +38,7 @@
 
 **前台与后台**：
 
-`background` 是**必填**的：每次由主 Agent 自己判断（各家都交给主模型选；必填而不是给默认值，免得它不经思考就落到某一边）。
+后台设置允许后台模式（`subagent_background`，默认开）时，`background` 是工具的**必填**参数：每次由主 Agent 自己判断（各家都交给主模型选；必填而不是给默认值，免得它不经思考就落到某一边）。后台模式关着时（`SubagentTool.background` 为假）参数根本不出现在工具定义里，每次调用都等报告（说明里写「The call waits for the report」），传了 `background` 也不理会。
 
 - `background: false`：主 Agent 等它做完，报告就是这次工具调用的结果。适合「需要结果才能答这个问题」，同一轮发起的几个前台子 Agent 并行跑。
 - `background: true`：工具立刻返回「已在后台开始（名字、id）。完成时会自动通知你。不要等待、不要轮询、不要重复它的工作；接着做别的，或简短告诉用户你派出了什么并结束这一轮。」——把约束写进返回文本是 OpenCode 的做法。
@@ -68,7 +68,7 @@
 </subagent-report>
 ```
 
-它是模型写的，不审（和工具结果同类）；不能编辑；不算「用户的提问」——重新生成按钮、`lastQuestionIndex`、搜索、标题素材都跳过它；`buildTurns` 把它画成卡片而不是用户气泡。
+它是模型写的，不审（和工具结果同类）；不能编辑；不算「用户的提问」——重新生成的「最后一条提问」（`GetLastInput`，过滤 `origin IS NULL`）、改写、搜索、标题素材都跳过它；`buildTurns` 把它画成卡片而不是用户气泡。
 
 ## 4. 给子 Agent 发消息（纠正方向）
 
@@ -100,7 +100,7 @@
 
 不用大卡片。子 Agent 在回复里只占一行，详细的东西都在侧边面板里。
 
-- **头像**：每个子 Agent 有一个小图标，由它的 id 生成（固定的几种图形 × 几种颜色，同一个子 Agent 在哪儿出现都是同一个），让用户在一行字、角落面板、侧边列表之间一眼对上号。运行中的图标带呼吸动画（`data-motion="essential"`）。
+- **头像**：每个子 Agent 有一个小图标，由它的 id 生成（一个四瓣花的图形 × 8 种颜色，`colorOf`；同一个子 Agent 在哪儿出现都是同一个颜色，实现见 §12），让用户在一行字、角落面板、侧边列表之间一眼对上号。运行中的图标带呼吸动画（`data-motion="essential"`）。
 - **回复里**：派出时一行「🔴🔴🟣 资料调研、价格对比和竞品梳理开始工作」——几个头像挨着，名字用顿号和「和」连起来。不折进「使用了 N 次工具」，也没有框。点这一行打开侧边面板。前台子 Agent 跑着时，这一行末尾有「转到后台」。
 - **报告送达**：转录里也只是一行「🟣 价格对比完成 · 3 分 12 秒」（失败或被停时写明，并注「交回了部分结果」），点开在侧边面板看这个子 Agent；后面紧跟主 Agent 的处理。报告全文不在主对话里铺开。
 - **输入框上方的摘要**：这个对话有子 Agent 时，输入框正上方一个小卡片「子智能体 · 🟣 1 个运行中 · 2 完成」（各种屏幕宽度都在这里），点它打开侧边面板。没有运行中的也保留到用户关掉侧边面板或离开对话，方便回看。
@@ -131,7 +131,7 @@
 ## 10. 已定
 
 1. 工具名 `subagent` / `subagent_message` / `subagent_stop`；界面叫「子智能体」。
-2. 前台还是后台由主 Agent 每次自己选（`background` 必填）。
+2. 前台还是后台由主 Agent 每次自己选（后台模式开着时 `background` 必填；关着时没有这个参数，一律前台）。
 3. 报告送达时主 Agent 空闲就自动起一轮回答，默认开；第一版不做关闭它的设置。
 4. 上限：每次 run 最多派 4 个、每个对话同时 3 个、每个用户同时 5 个（后台可调）；不另设轮数、时长、token 预算；报告 30,000 字。
 5. 子智能体的模型默认「与主模型相同」，管理员可在后台另选。
@@ -169,7 +169,7 @@
 - `subagent_message`：在子对话锁下进 inbox；没有 run 在跑就立即以 inbox 起续接 run（并转为后台）。被用户停掉的不接受。`subagent_stop`：记 `cancel_requested` 后 `runner.Cancel`，报告照写。
 - 用户的入口只有读和三个按钮：`GET /conversations/{id}/subagents`、`GET .../subagents/{sid}`（转录最新 500 行 + 在跑 run 的 live 状态）、`POST .../stop`（标 `stopped_by_user`）、`.../resume`（不带文字，输入是固定的英文「从停下的地方继续」，排在 inbox 已有消息之前）、`.../background`。没有任何接口能把用户的文字写进子对话。
 - 锁的顺序：凡是让子 Agent 开始（派出、排队者开始、`subagent_message` 续接、inbox 续接、「继续」）都先 `lockLive` 主对话、再锁子对话（`holdSubagent`），和删除主对话拿同一把锁：主对话删了就什么都不起，用户的停止在锁下用最新的行判断，排队者在锁下确认还没有 run（只开始一次）。前台调用重放时 `TakeReportForTool` 能再次取到自己已经认领的报告（认领和工具结果不在一个提交里）。`main.go` 先装好所有钩子再 `Resume`，否则恢复的子 run 结束时写不了报告。
-- 删除：改写、重新生成在事务前 `ListSubagentRunningRuns`，提交后 `cancelGoneRuns` 停掉行已随级联消失的子 run；软删除对话靠 `CancelConversationRuns` 的子查询。被删掉的 run 再提交时 `execution.fail` 认出它已不存在，只记一行 Info。
+- 删除：改写、重新生成在事务前 `runningSubagents`（包装 `ListSubagentRunningRuns`），提交后 `cancelGoneRuns` 停掉行已随级联消失的子 run；软删除对话靠 `CancelConversationRuns` 的子查询。被删掉的 run 再提交时 `execution.fail` 认出它已不存在，只记一行 Info。
 - 报告行不是提问：`GetLastInput`、`GetInput`（不能编辑）、`DeleteAnswerTo`（当作回答删掉）、搜索、导出（`ListTranscript`）、标题素材都跳过 `origin` 非空的行。
 
 ### 前端

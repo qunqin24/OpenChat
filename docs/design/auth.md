@@ -1,8 +1,12 @@
 # 认证
 
-> 规则摘要见 [AGENTS.md](../../AGENTS.md)；本文是完整设计说明（原 AGENTS.md 同名章节，未删减）。文中「后端约定」「前端约定」等指原 AGENTS.md 的章节，现按主题分在本目录各文件，索引见 [README.md](README.md)。
+> 规则摘要见 [AGENTS.md](../../AGENTS.md)；本文是完整设计说明。文中「后端约定」「前端约定」等指 AGENTS.md 的章节，细节按主题分在本目录各文件，索引见 [README.md](README.md)。
 
-HttpOnly Cookie 会话，库里只存 token 的 SHA-256；前端从不接触 token，靠 `/auth/session` 判断登录状态，API 客户端必须 `credentials: 'include'`。用户名不能含 `@`（数据库约束保证，登录框同时接受用户名和邮箱）。第一个注册的账号成为管理员（见下「注册」）；最后一个启用的管理员不能被降级或停用：凡是可能让管理员减少的改动（`PATCH /admin/users/{id}` 和 `POST /admin/users/bulk` 的改角色、停用）都在**一个事务里先拿 `LockAdminMembership`（事务级 advisory lock）**，再读目标、更新、数启用的管理员（0 个就回滚，409 `last_admin`），不能「先数后写」分成两步，否则两个管理员同时互相降级会都读到「还有两个」而都成功、一个不剩；批准（`approved`）不会减少管理员，不排队。新增任何能降级或停用账号的路径都要走这把锁（测试在 `admin_last_admin_pg_test.go`，用自己的库，因为数的是全库的管理员）。停用账号或改密码会清掉其会话，已开着的页面下一次请求得到 401 就被带去登录页（见前端约定）。用停用或待审批的账号登录（密码对了服务端才说 `account_disabled` / `pending_approval`）时，登录页不显示一行红字，而是盖上全屏的毛玻璃覆盖层（`components/auth/AccountOverlay.tsx`，照搬 OpenWebUI 的 `AccountPending.svelte`）：「你已被封禁」，或「账号等待审批」加「再次检查」（用刚才的账号密码再登录一次，批准了就直接进去）。「返回」或 Esc 回到清空的表单。两种拒绝（和审批模式注册的 202）都带上要联系的管理员（`details.admin` / `RegisterPending.admin`：最早创建、仍启用的管理员的名字和邮箱，`GetContactAdmin`），覆盖层照 OpenWebUI 显示「管理员：名字（邮箱）」；只有证明了密码（或刚注册）的人才拿得到，密码错时什么都不给。自助接口（`PATCH /auth/me`、`POST /auth/password`）刻意不带角色和停用字段。不做账号删除，停用即可。
+HttpOnly Cookie 会话，库里只存 token 的 SHA-256；前端从不接触 token，靠 `/auth/session` 判断登录状态，API 客户端必须 `credentials: 'include'`。用户名不能含 `@`（数据库约束保证，登录框同时接受用户名和邮箱）。第一个注册的账号成为管理员（见下「注册」）；最后一个启用的管理员不能被降级或停用：凡是可能让管理员减少的改动（`PATCH /admin/users/{id}` 和 `POST /admin/users/bulk` 的改角色、停用）都在**一个事务里先拿 `LockAdminMembership`（事务级 advisory lock）**，再读目标、更新、数启用的管理员（0 个就回滚，409 `last_admin`），不能「先数后写」分成两步，否则两个管理员同时互相降级会都读到「还有两个」而都成功、一个不剩；批准（`approved`）不会减少管理员，不排队。新增任何能降级或停用账号的路径都要走这把锁（测试在 `admin_last_admin_pg_test.go`，用自己的库，因为数的是全库的管理员）。改密码会清掉其会话，已开着的页面下一次请求得到 401 就被带去登录页（见前端约定）。自助接口（`PATCH /auth/me`、`POST /auth/password`）刻意不带角色和停用字段。
+
+## 停用账号
+
+**停用不清会话、不让人退出登录**（`api/account_disabled.go`）：停用时记下原因 `users.disabled_reason`（`admin` 或 `moderation`）和管理员写给对方的 `disabled_note`（可选，≤500 字，`PATCH /admin/users/{id}` 和批量接口的 `disabledNote`；启用时清空）。`auth.Middleware.Require` 在 `GetSessionUser` 查不到时再用 `GetDisabledSessionUser` 看是不是已停用账号的有效会话，是就交给 `OnDisabled`（`NewRouter` 里设成 `failDisabled`）：所有需要登录的接口都回 403 `account_disabled`，`details` 是 `AccountDisabled`（原因、停用时间、管理员的话；审核封禁另有窗口内被拦的条数、小时数和类别，`ModerationBanSummary`；以及要联系的管理员：停用它的那位管理员（`users.disabled_by`，他还是启用的管理员时），否则同其他被拒账号一样是 `GetContactAdmin`），别的什么都做不了。`/auth/logout` 挪出了登录分组，已停用的会话也能退出；重新启用后同一个会话直接能用。前端：任何请求收到它，`lib/account-disabled.ts` 记下详情并跳到 `/disabled`（`_authed` 的守卫也会跳），页面说明原因，「退出登录」才真的退出，「已经恢复了？重新检查」问一次 `/auth/session`，恢复了就回首页。用停用或待审批的账号登录（密码对了服务端才说 `account_disabled` / `pending_approval`，前者带同样的原因）时，登录页不显示一行红字，而是盖上全屏的毛玻璃覆盖层（`components/auth/AccountOverlay.tsx`，照搬 OpenWebUI 的 `AccountPending.svelte`）：停用的原因，或「账号等待审批」加「再次检查」（用刚才的账号密码再登录一次，批准了就直接进去）。「返回」或 Esc 回到清空的表单。两种拒绝（和审批模式注册的 202）都带上要联系的管理员（`details.admin` / `RegisterPending.admin`：最早创建、仍启用的管理员的名字和邮箱，`GetContactAdmin`），覆盖层照 OpenWebUI 显示「管理员：名字（邮箱）」；只有证明了密码（或刚注册）的人才拿得到，密码错时什么都不给。
 
 ## 注册与审批
 
@@ -17,7 +21,7 @@ HttpOnly Cookie 会话，库里只存 token 的 SHA-256；前端从不接触 tok
 - **第一个账号**永远是管理员、永远不 pending、永远不被开关拒绝，否则全新安装会把自己锁在外面。这个判断在 `RegisterUser` 的 INSERT 里做，注册先拿 `LockRegistration` 的 advisory lock，所以两个人同时抢第一个也不会都成为管理员。公开的 `/auth/options` 在还没有账号时报告 `registration: true, approval: false`。
 - 管理员新建的账号（`POST /admin/users`）永远不 pending，关闭注册时它就是唯一的加人方式。
 - `pending` 默认 false，迁移后所有已有账号都算已批准（`migration_signup_pg_test.go` 测）。
-- **pending 的账号什么都碰不到**：登录不发会话，`GetSessionUser` 还多一道 `NOT users.pending` 作为第二把锁，所以 `auth.Middleware.Require`（唯一的登录闸）也会拒绝它——就算有人哪天写出一条给它发会话的路径。新增任何「凭 token 认人」的路径都要走 `GetSessionUser`，别另写。
+- **pending 的账号什么都碰不到**：登录不发会话，`GetSessionUser` 还多一道 `NOT users.pending` 作为第二把锁，所以 `auth.Middleware.Require`（唯一的登录闸）也会拒绝它——就算有人哪天写出一条给它发会话的路径（`GetDisabledSessionUser` 同样排除 pending）。新增任何「凭 token 认人」的路径都要走 `GetSessionUser`，别另写。
 - 批准只有一个方向：`PATCH /admin/users/{id}` 带 `approved: true`，或 `POST /admin/users/bulk` 带 `approved: true`（和 `role`、`disabled` 三选一）；`approved: false` 是 400 `invalid_approval`，没有「退回待审批」。批准和启用/停用互相独立。非管理员调这些接口得到 404。
 - **拒绝 = 停用**（不是删除）：待审批的行上「拒绝」就是 `disabled: true`，之后它是个普通的已停用账号（登录说 `account_disabled`），再「启用」会让它回到待审批名单。用户列表的 `status` 过滤（`pending`/`enabled`/`disabled`，可重复）里 disabled 优先于 pending，所以「待审批」名单只含还在等决定的人。
 - 登录页和注册页靠公开的 `GET /auth/options`（`registration`、`approval`）决定显示什么：注册关闭时隐藏「注册」链接、`/register` 显示「注册已关闭」；审批模式下注册成功后注册页盖上同一个「账号等待审批」覆盖层（「再次检查」用注册时的邮箱和密码登录）而不是跳进聊天。读不到选项时按开放处理（服务端才是裁判）。改了开关要让 `queryKeys.auth.options` 失效。

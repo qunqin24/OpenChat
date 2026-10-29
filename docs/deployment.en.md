@@ -17,6 +17,7 @@ This guide takes you from nothing to OpenChat on your own server: Docker Compose
 - [Behind another reverse proxy or a CDN](#behind-another-reverse-proxy-or-a-cdn)
 - [Running without Docker](#running-without-docker)
 - [Releasing a new version](#releasing-a-new-version)
+- [Forgotten admin password](#forgotten-admin-password)
 - [Troubleshooting](#troubleshooting)
 
 ## How it runs
@@ -54,6 +55,8 @@ Edit `deploy/.env`. It contains a password, so never commit it; the repository a
 | `OPENCHAT_IMAGE` | no | `ghcr.io/qunqin24/openchat:latest` | The app image. To pin a version, write `ghcr.io/qunqin24/openchat:1.0.0` |
 | `TZ` | no | `Asia/Shanghai` | The time zone of "a day" and "a month": when models' daily and monthly spending caps start over, and the dashboard's "today". An IANA name such as `America/New_York` |
 
+> **About `TZ`**: a model can have a dollar cap in Admin → Models → the model's settings → Capacity. With the period set to monthly or daily, it starts over at midnight in the **server's time zone** (a total cap does not depend on the zone). After changing `TZ`, run `up -d` again so the container is recreated. The image has no system time-zone database; the binary carries its own, so nothing needs mounting. If `TZ` is misspelled the service warns in its log (`TZ is not a known time zone`) and counts in UTC instead.
+
 > **About `POSTGRES_PASSWORD`**: the password is written into the data volume when the database is first initialised. Changing the value in `.env` later does not change it in the database, and the app can no longer connect. To change it, run `ALTER USER` in the database and then update `.env`.
 
 ### Pinning an image version
@@ -76,6 +79,9 @@ With Compose these are already set and need no attention. They matter when you r
 | `HTTP_ADDR` | `:8080` | Listen address |
 | `CORS_ORIGINS` | `http://localhost:5173` | Allowed cross-origin sources, comma-separated. Not needed while the web app and API share an origin; Compose sets it to `https://<DOMAIN>` |
 | `SHUTDOWN_TIMEOUT` | `15s` | How long to wait for in-flight requests after a stop signal |
+| `LOG_FILE` | empty (no file) | Path of a copy of the log, as JSON lines. The image sets it to `/app/data/logs/openchat.log`, on the data volume, so it survives image updates. Compose does not forward it from `deploy/.env`; to change it, add it under the `openchat` service's `environment` in `deploy/docker-compose.yml` |
+| `LOG_FILE_MAX_MB` | `20` | Size in MB at which the log file is started over. Compose forwards it from `deploy/.env`; 20 when unset |
+| `LOG_FILE_KEEP` | `5` | How many earlier files are kept (`openchat.log.1` … `.5`). Compose forwards it from `deploy/.env`; 5 when unset |
 
 Attachment storage has **no** environment variables. It is configured in the admin panel (see [Switching attachments to S3](#switching-attachments-to-s3)).
 
@@ -110,7 +116,9 @@ After that, an admin controls sign-up in Admin → System:
 | Open | on | off | Accounts work immediately |
 | Closed | off | (does not apply) | No self-service sign-up; only an admin can create accounts in Admin → Users |
 
-Sign-in and sign-up attempts are rate-limited per IP, which slows password guessing and mass sign-ups.
+Sign-in and sign-up attempts are rate-limited per IP, which slows password guessing and mass sign-ups: failed sign-ins are limited to 10 per IP and 5 against any one account identifier in 15 minutes; sign-ups to 5 per IP per hour; failed passkey sign-ins are counted on their own, 10 per IP in 15 minutes. An IPv6 address counts as its /64. Past a limit the answer is 429. These limits depend on seeing the real visitor IP; see [Per-IP limits depend on correct forwarded headers](#per-ip-limits-depend-on-correct-forwarded-headers).
+
+A disabled account (disabled by an admin, or automatically after repeated moderation violations) is **not signed out**: its session stays, and opening OpenChat shows only the `/disabled` page with the reason and the administrator to contact. Once the account is enabled again, everything is as it was.
 
 ## After it is up
 
@@ -133,11 +141,25 @@ Turn it on in Admin → Web search. There are two kinds of search service:
 - **Free endpoints.** No key. Exa, Parallel, Firecrawl and Keenable take requests in turn, and a service that rate-limits is skipped. They are rate-limited and meant for light use, and search queries are sent to those services.
 - **Tavily.** Needs a saved Tavily key.
 
-Page reading does not depend on the search service and is always available.
+When the model searches it can limit the time range (the past day, week, month or year) and the sites; the "Blocklist" in Admin → Web search hides sites from search results and stops them being read.
 
-### Other system switches
+Page reading does not depend on the search service and is always available: it extracts the page's main content as Markdown and reads a long page in parts. It also reads PDF links, which needs poppler's `pdftotext` on the server (the official image has it; see [Running without Docker](#running-without-docker)).
 
-Admin → System also holds: automatic context compression, memory, generative UI, questions to the user, avatar uploads and debug mode. Its "Data retention" section sets how long deleted conversations, unsent uploads and orphaned files are kept.
+### Other admin pages
+
+Where the rest of the admin panel's settings live:
+
+- **Admin → System** has six tabs:
+  - General: the version and update check, the task model (used for background jobs such as titling conversations), debug mode;
+  - Chat: intelligent UI (generative UI), asking the user, personal memory, scheduled tasks, request traces (for debugging; they record only an admin's own requests, kept for 7 days, off by default), automatic context compression, and the number of answers one account may have going at once;
+  - Sub-agents: the master switch (off by default), the model sub-agents use, whether they may work in the background, and the limits;
+  - Access: allow registration, new users need approval, avatar uploads;
+  - Moderation: the content-moderation mode, blocked categories and sanctions;
+  - Data: how long deleted conversations, unsent uploads and orphaned files are kept.
+- **Admin → Authentication**: the master switch for passkeys (on by default), the relying-party ID and allowed origins, and whether the person must be verified. With no relying party set, the domain the page is opened on is used, so behind a proxy mind the [forwarded headers](#behind-another-reverse-proxy-or-a-cdn); for a real deployment, set a fixed domain here.
+- **Admin → File storage**: local disk or S3, and the default "storage per person" cap (5 GiB by default). A single account's own cap is set in Admin → Users, in that account's edit dialog. The cap only blocks new uploads; it never deletes files.
+- **Admin → Image search**: lets answers find their pictures from a description (off by default; it needs intelligent UI to be on too). The sources are Wikimedia Commons, Openverse, Bing Images and Pixabay (which needs a free API key), asked in order; the pictures found are downloaded into your file storage.
+- **Admin → Moderation log**: the messages content moderation refused, kept for 90 days and visible only to administrators.
 
 ## Updating
 
@@ -155,14 +177,16 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
 
 **With a pinned version:** change `OPENCHAT_IMAGE` in `deploy/.env` to the new version, then run the last two commands above.
 
-Check that the new version is up:
+The "Version" row in Admin → System → General can check for a newer version. Check that the new version is up:
 
 ```bash
 docker compose -f deploy/docker-compose.yml logs --tail 50 openchat
 curl -sS --max-time 20 https://your-domain/healthz
 ```
 
-To roll back, set the image version back **and restore the database backup you took before upgrading**. Migrations only move forward, and an older version may not understand a database a newer one has changed.
+To roll back, set the image version back **and restore the database backup you took before upgrading**. An older version does not understand a database a newer one has changed, and it will not complain on start (it has no migration to run); it only misbehaves where it meets the new changes. So the database must go back with the image. `docker compose run --rm openchat rollback` can undo the latest migration, but it is for investigation only and does not replace the backup.
+
+> Only one instance is supported: one app container per database. Two instances would run the same answer twice, and could run migrations at the same time.
 
 ## Backup and restore
 
@@ -171,7 +195,7 @@ Two things need backing up, and they must be backed up together:
 | Data | Where |
 | --- | --- |
 | The database | the `openchat_postgres-data` volume (Postgres) |
-| Attachments (local storage driver) and avatars | the `openchat_openchat-data` volume, `/app/data` in the container |
+| Attachments (local storage driver), avatars and the pictures image search saved | the `openchat_openchat-data` volume, `/app/data` in the container |
 
 Caddy's certificates live in the `openchat_caddy-data` volume. Losing them only means requesting new ones, so they are optional.
 
@@ -189,7 +213,7 @@ docker run --rm -v openchat_openchat-data:/data -v "$PWD":/backup alpine \
 ```
 
 
-> **The backup holds secrets.** The database dump contains every channel's API key, the web-search key, the S3 secret and the file-signing key, in plain text. Keep it like a password: only somewhere you control, never in a public drive or repository.
+> **The backup holds secrets.** The database dump contains every channel's API key, the web-search and image-search (Pixabay) keys, the OpenAI key used for moderation, the S3 secret, the file-signing key and the secret that makes the user identifiers, in plain text. Keep it like a password: only somewhere you control, never in a public drive or repository.
 
 If attachments have been moved to S3, new uploads are in the bucket and you back that up on the storage service's side; files that were in the volume before the switch still need backing up.
 
@@ -259,12 +283,14 @@ Then have your proxy forward the whole site to `127.0.0.1:8080` and terminate HT
 
 The proxy must:
 
-- **Not buffer the event streams.** Sending a message and the conversation events are SSE (`POST /api/v1/conversations/{id}/messages`, `GET .../events`). Turn buffering off and give them a long read timeout, or long answers are cut off.
+- **Not buffer the event stream, and give it a long read timeout.** Only `GET /api/v1/conversations/{id}/events` is a long-lived connection (SSE): the page keeps it open while a conversation is shown, and the answer's text is pushed down it piece by piece, with a heartbeat from the server every 5 seconds. Sending a message (`POST .../messages`), regenerating and editing return at once with 202 and a small JSON body; the answer is produced in the background and reaches the page through the event stream. So only the event stream needs buffering off and a long read timeout (an hour, say), or long answers are cut off; every other request can use the proxy's defaults.
+- **Allow a larger request body.** With the local storage driver the browser `PUT`s a file straight to the app (`/api/v1/files/content/…`), up to 20 MB each. nginx's default `client_max_body_size` is 1 MB; raise it (25m, for example) or uploads fail with 413. With S3 the files do not pass through the proxy.
 - **Serve HTTPS.** In production mode the session cookie is `Secure`, and browsers send it only over HTTPS.
+- **Keep `Host` and the scheme.** Passkeys are bound to a domain. Unless the relying party is pinned in Admin → Authentication, the app takes the domain and origin from the request's `Origin` header, or, without one, from `X-Forwarded-Proto` plus `Host`. So the proxy must pass the `Host` the visitor used on to the app (do not rewrite it to `127.0.0.1:8080`) and send `X-Forwarded-Proto: https` (Caddy does both by default; in nginx you write them yourself, see [deploy-caddy.md](deploy-caddy.md)). Once you pin the relying-party ID and list the allowed origins in Admin → Authentication, those listed origins decide and the app no longer relies on these two headers.
 
 ### Per-IP limits depend on correct forwarded headers
 
-The sign-in and sign-up attempt limits are **counted per visitor IP**. The app takes the IP from request headers: `True-Client-IP` first, then `X-Real-IP`, and only then `X-Forwarded-For` (its leftmost value); with none of them it uses the connection's peer address. So:
+The sign-in and sign-up attempt limits (the numbers are under [Becoming the administrator](#becoming-the-administrator)) and the failed-passkey limit are all **counted per visitor IP**. The app takes the IP from request headers: `True-Client-IP` first, then `X-Real-IP`, and only then `X-Forwarded-For` (its leftmost value); with none of them it uses the connection's peer address. So:
 
 - Your outermost proxy must **overwrite** these headers with the real visitor address and drop any value the visitor sent. Otherwise anyone can claim any address and slip past the limits.
 - If another proxy or a CDN sits further out, make sure the address is passed correctly through every hop. If it is not, the app sees the proxy's address for everyone and all visitors share one allowance: failed sign-ins are counted site-wide, so a few mistyped passwords can lock everyone out.
@@ -289,9 +315,15 @@ export CORS_ORIGINS='https://your-domain'
 ./bin/openchat    # listens on :8080, migrates on start
 ```
 
-It serves the web app and `/api/v1` together. You still need a reverse proxy in front that terminates HTTPS, with the same requirements as above. The local attachment directory is `./data` under the process's working directory; keep it on persistent disk.
+It serves the web app and `/api/v1` together. You still need a reverse proxy in front that terminates HTTPS, with the same requirements as above. The local attachment directory is `./data` under the process's working directory; keep it on persistent disk. At start the process also reads a `.env` file in its working directory or two levels up, as a supplement to the environment.
+
+**Reading PDFs needs poppler.** The text of a PDF (PDF attachments, and PDF links in page reading) is read by poppler's `pdftotext`, which the official image already contains. When you run the binary yourself, install `poppler-utils` on the host, plus `poppler-data` for Chinese, Japanese and Korean PDFs (`apk add poppler-utils poppler-data` on Alpine, `apt install poppler-utils poppler-data` on Debian/Ubuntu), and make sure `pdftotext` is on the process's `PATH`. Without it a PDF attachment can only go to a model that reads PDFs itself, and page reading cannot read PDFs; Word and Excel files are not affected.
+
+**Time zone**: `TZ` decides in which zone "a day" and "a month" start, as with Compose; unset, the host's zone is used.
 
 The binary has two more subcommands: `./bin/openchat migrate` only runs migrations, and `./bin/openchat rollback` reverts the latest one.
+
+If you forget the admin password, run the admin tool from the source: `cd apps/server && go run ./cmd/adminctl -email you@example.com -password 'new password' -role admin` (see [Forgotten admin password](#forgotten-admin-password)). It reads `DATABASE_URL` from the environment or from `.env`.
 
 ## Releasing a new version
 
@@ -301,10 +333,12 @@ This section is for the repository maintainer. A release is triggered by a Git t
 git tag v1.0.0 && git push origin v1.0.0
 ```
 
-When a `v*` tag is pushed, the Release workflow in GitHub Actions:
+When a tag like `v1.2.3` or `v1.2.3-rc.1` is pushed, the Release workflow in GitHub Actions:
 
 1. builds the image for `linux/amd64` and `linux/arm64` and pushes it to `ghcr.io/qunqin24/openchat` as `1.0.0` and `latest`;
-2. creates a GitHub Release of the same name, with notes generated from the commits and the `docker pull` command.
+2. creates a GitHub Release of the same name. Its notes are the content of `docs/releases/<tag>.md` (for example `docs/releases/v1.0.0.md`), used as they are: no `docker pull` command is added, so write the upgrade instructions in the file (the earlier ones in `docs/releases/` are a model). Only when that file does not exist does it fall back to notes generated from the commits since the last tag, with the `docker pull` command.
+
+So **before tagging, write `docs/releases/vX.Y.Z.md` and commit it**: the workflow checks out the tagged commit, and a file that is not in it is not used.
 
 A tag with a suffix (for example `v1.1.0-rc.1`) pushes only `1.1.0-rc.1`, leaves `latest` alone, and the Release is marked as a pre-release.
 
@@ -321,9 +355,7 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env run --rm --en
   -email you@example.com -password 'new password' -role admin
 ```
 
-It uses the app's own `DATABASE_URL`. The change applies at once, and the account's existing sessions end.
-
-> Only one instance is supported: one app container per database. Two instances would run the same answer twice, and could run migrations at the same time.
+It uses the app's own `DATABASE_URL`. The change applies at once. For an existing account it resets the password and role, re-enables the account if it was disabled, and ends the account's existing sessions; without `-name` the username is left alone. Without Docker, run it from the source, see [Running without Docker](#running-without-docker).
 
 ## Troubleshooting
 
@@ -376,7 +408,7 @@ Admin → System has a "Debug mode" switch. It logs at debug level, takes effect
 **Where logs are kept, and for how long**
 
 - Each container keeps at most 5 × 20 MB of output (`x-logging` in `deploy/docker-compose.yml`), so the disk does not fill. But when a container is replaced (an image update), what `docker compose logs` showed before is gone.
-- The app also writes the same log to `logs/openchat.log` on the data volume, rotated at 20 MB with 5 earlier files kept (`openchat.log.1` … `.5`), and **it survives updates**. `LOG_FILE`, `LOG_FILE_MAX_MB` and `LOG_FILE_KEEP` change where and how much.
+- The app also writes the same log to `logs/openchat.log` on the data volume, rotated at 20 MB with 5 earlier files kept (`openchat.log.1` … `.5`), and **it survives updates**. `LOG_FILE`, `LOG_FILE_MAX_MB` and `LOG_FILE_KEEP` change where and how much (see [Other application variables](#other-application-variables)).
 
 ```bash
 # The log on the data volume (including from before an update)
@@ -407,6 +439,14 @@ A model provider's own error text is only in the server log (the `model request 
 ### Attachment uploads fail (with S3)
 
 Most likely the bucket has no CORS rules; see [Switching attachments to S3](#switching-attachments-to-s3). Use "Test connection" in the admin panel first to confirm that the keys and the bucket themselves work.
+
+### Attachment uploads fail with 413 (local storage)
+
+The file is `PUT` to the app through your proxy, up to 20 MB. nginx lets through only 1 MB by default; raise `client_max_body_size`, see [Behind another reverse proxy or a CDN](#behind-another-reverse-proxy-or-a-cdn).
+
+### Passkey sign-in or adding a passkey fails (behind a proxy)
+
+Unless the relying party is pinned in Admin → Authentication, the app works out the domain from the request's `Origin` (or, without one, from `X-Forwarded-Proto` plus `Host`). Check that the proxy keeps `Host` and sends `X-Forwarded-Proto: https`, or pin the relying-party ID and the allowed origins in Admin → Authentication.
 
 ### Is the service alive?
 

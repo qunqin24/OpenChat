@@ -1,8 +1,8 @@
 # 对话与转录
 
-对话是一条线的转录：发送、改写、重新生成、删除、被审核拒绝的行、上下文压缩与摘要、标题、记忆、临时对话、搜索与导出。规则摘要见 [AGENTS.md](../../AGENTS.md)；下文为完整设计说明（原 AGENTS.md「后端约定」中的相应条目，未删减）。
+对话是一条线的转录：发送、改写、重新生成、删除、被审核拒绝的行、上下文压缩与摘要、标题、记忆、临时对话、搜索与导出。规则摘要见 [AGENTS.md](../../AGENTS.md)；下文为完整设计说明。
 
-> 文中「后端约定」「前端约定」「内容审核」等指原 AGENTS.md 的章节，现按主题分在本目录各文件，索引见 [README.md](README.md)。
+> 文中「后端约定」「前端约定」「内容审核」等指 AGENTS.md 的章节，细节按主题分在本目录各文件，索引见 [README.md](README.md)。
 
 ## 线性转录、改写与重新生成
 
@@ -16,7 +16,7 @@
 
 ## 被审核拒绝的行（`blocked`）
 
-- **被审核拒绝的发送是转录里的一行**（`messages.status = 'blocked'`，role `user`，内容是被拒的原文，迁移 `20261025000004_blocked_messages`；写入见下「内容审核」）。它只是被显示、从不发给模型，所以凡是**构造模型看到的东西**的查询都要跳过它：`ListRecentMessages`、`ListMessagesAfter`、`ListMessagesFrom`（因此 `LoadContextRows`、压缩的读取范围、摘要的 `through_message_id` / `kept_message_id`、标题的素材、`ask_user` 的 `pendingQuestion` 都看不见它），`ListTranscript`（导出）和搜索的命中也不含它；`agent.BuildContext` 和 `EstimateRow` 再各跳过一次，免得哪条新路径把它漏进请求。**只有 `ListMessages`（显示用）和 `GetInput`（改写用）看得见它**。它不是提问：重新生成的「最后一条提问」（`GetLastInput`、`not_latest`）是最后一条**没被拒绝的** user 行，`DeleteAnswerTo` 删掉那条提问之后的所有行——被拒绝的 user 行也在内（`role <> 'user' OR status = 'blocked'`）。改写可以改它，和改任何提问一样：新措辞写在末尾、重新审核，`DeleteTranscriptFrom` 把它和之后的行删掉；再次被拒绝的处理见「内容审核」的「被拒绝的消息要先改写」。它是对话的终点：**末行是被拒绝的消息时，对话不能往下走**，直到它被改写（同上一节）。新增读转录的查询时想清楚：给模型看的要 `status <> 'blocked'`，给人看的不要。
+- **被审核拒绝的发送是转录里的一行**（`messages.status = 'blocked'`，role `user`，内容是被拒的原文，迁移 `20261025000004_blocked_messages`；写入见下「内容审核」）。它只是被显示、从不发给模型，所以凡是**构造模型看到的东西**的查询都要跳过它：`ListRecentMessages`、`ListMessagesAfter`、`ListMessagesFrom`（因此 `LoadContextRows`、压缩的读取范围、摘要的 `through_message_id` / `kept_message_id`、标题的素材、`ask_user` 的 `pendingQuestion` 都看不见它），`ListTranscript`（导出）和搜索的命中也不含它；`agent.BuildContext` 和 `EstimateRow` 再各跳过一次，免得哪条新路径把它漏进请求。**只有 `ListMessages`（显示用）和 `GetInput`（改写用）看得见它**。它不是提问：重新生成的「最后一条提问」（`GetLastInput`、`not_latest`）是最后一条**没被拒绝的** user 行，`DeleteAnswerTo` 删掉那条提问之后的所有行：条件是 `role <> 'user' OR status = 'blocked' OR origin IS NOT NULL`，所以被拒绝的 user 行和子智能体的报告行（`origin` 非空，见 [sub-agents.md](sub-agents.md)）也算回答，一并删掉。`GetLastInput`、`GetInput`、`ListTranscript`、`ListTranscriptUpTo` 都带 `origin IS NULL`：报告行不是用户的提问，不能被重新生成、改写，也不进导出和引用。改写可以改它，和改任何提问一样：新措辞写在末尾、重新审核，`DeleteTranscriptFrom` 把它和之后的行删掉；再次被拒绝的处理见「内容审核」的「被拒绝的消息要先改写」。它是对话的终点：**末行是被拒绝的消息时，对话不能往下走**，直到它被改写（同上一节）。新增读转录的查询时想清楚：给模型看的要 `status <> 'blocked'`，给人看的不要。
 
 ## 删除对话会取消 run
 
@@ -44,6 +44,15 @@
 ## 搜索
 
 - 搜索：`GET /conversations?search=` 在标题和 user/assistant 消息的 `content` 里做 `ILIKE` 子串匹配（中文没有空格分词，所以不用全文检索），只查调用者自己的非临时对话，分页同列表；靠消息命中的结果带 `match`（消息 id、角色、命中处前后的片段）；被审核拒绝的消息（`blocked`）不参与匹配。前端搜索结果的查询键是 `queryKeys.conversations.search(term)`，刻意不在 `list` 下面——`list` 会持久化到 localStorage，而搜索结果引用了消息内容。
+
+## 引用其他对话
+
+照 OpenWebUI 的 Reference Chats：一条消息可以引用调用者自己的其他对话（`conversationIds`，最多 5 个，`api/references.go`），引用的是对话而不是一份拷贝。
+
+- 发送（和被拒消息的改写）时检查：自己的、`kind = 'chat'` 的（`GetConversation`）、不是当前对话、里面已有问答；否则 400 `reference_unavailable` / `reference_empty` / `too_many_references`，普通消息的改写不能带（`references_not_editable`）。每个引用记成消息 `parts` 里一个媒体类型为 `application/x-openchat-conversation` 的附件零件，`Ref` 是 `conversation:<id>@<当时最后一条可引用消息的时间>`，`Filename` 是当时的标题；`Message.references` 由它得出。
+- 不存文件、不建附件行。每次构建模型请求时由 `attachmentResolver.reference`（`agent/references.go`）现读：`GetConversation`（按 run 的用户）+ `ListTranscriptUpTo`（`role <> 'tool'`、非 `blocked`、`origin IS NULL`、不晚于记下的时间），写成 Markdown（标题、说明行、`## User` / `## Assistant (模型)`、问题带的文件名），上限 `doctext.MaxTextBytes`。之后再往那个对话里说的话不会带进来；对话被删了，模型看到的是「已不可用」的说明。
+- 读出来后和文本文件走同一条路：短的整篇发，超过 `llm.InlineTextBytes` 且模型能调工具时发概览卡，由 `file_read` / `file_search` 按需读（`ListConversationTextFileMessages` 认得这种零件）。
+- 对话的内容不再审核：那是用户自己的对话，提问发出时审过，回答本就是对话历史会发给模型的那类文字。**标题要审**：标题是用户随手改的、改名时不审，而模型会读到它（正文开头和概览卡的名字），所以引用时把标题并进这条消息一起送审（`withReferenceTitles`），模型读到的一律是引用时记下的标题（零件的 `Filename`），之后再改名不影响。
 
 ## 「我的数据」：导出与全部删除
 

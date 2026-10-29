@@ -47,10 +47,15 @@ The server is a Go program with the web app embedded in the binary, and PostgreS
 ### Chat
 
 - **Streaming answers**, which you can stop at any time; what was generated so far is kept.
-- **Web search and page reading.** The model can call both. Search runs on keyless public endpoints (Exa, Parallel, Firecrawl and Keenable in turn, meant for light use) or on Tavily, with a site blocklist.
+- **Web search and page reading.** The model can call both. A search can be limited to a time range (the past day, week, month or year) and to given sites; it runs on keyless public endpoints (Exa, Parallel, Firecrawl and Keenable in turn, meant for light use) or on Tavily, with a site blocklist. Page reading extracts the main content as Markdown, reads a long page in parts, and reads PDF links too.
+- **Writing blocks.** The model writes text you will want to revise into a document, opened in a panel beside the conversation. You can edit it directly or select a passage and ask for a change; every change keeps a version you can go back to, and the document can be downloaded as Markdown.
+- **Sub-agents.** The model can hand independent, context-hungry work (a round of research, a batch of pages to read) to a sub-agent that does it in its own context and returns only a report; it can run in the background. Admin switch, off by default, with its own model setting for sub-agents.
+- **Scheduled tasks.** Have the model do something at a set time (a daily briefing, a weekly review, a reminder), set up on the "Scheduled tasks" page or just by asking in a conversation. Up to 10 running tasks per person. Admin switch, on by default.
+- **Referring to other conversations.** The composer's "+" menu → Reference a conversation brings another conversation into the question you are asking (up to 5 per message).
+- **File library.** The "Library" page lists, searches, downloads and deletes the files you have sent, and the "+" menu can add a library file to a new question.
 - **Generative UI.** The model can lay out answers with cards, metrics, tables, steps and similar components. Admin switch, off by default.
 - **Questions to the user.** When only the user can decide something, the model asks a multiple-choice question and waits for the answer. Admin switch, on by default.
-- **Attachments.** Images (PNG, JPEG, WebP, GIF, up to 5 MB each) and PDFs (up to 10 MB), when the model accepts that kind of input.
+- **Attachments.** Images (PNG, JPEG, WebP, GIF, up to 5 MB each), PDFs (up to 10 MB), text and code files (up to 256 KB), and Word (.docx) and Excel (.xlsx) files (up to 20 MB each, read as text). A message carries at most 10 files and 20 MB in total. Images need a model that accepts images; PDFs, text, Word and Excel are read into text by the server, so any model can use them. A long text file is read by the model in parts, on demand. Each person's files have a storage cap (5 GiB by default).
 - **Editing and regenerating.** Rewriting a question, or having the model answer the last turn again, **replaces** everything that came after it. What was replaced is deleted.
 - **Context window meter.** Shows how much of the model's context window the conversation has used.
 - **Automatic context compression.** When a conversation nears the model's context window, earlier history is summarised by the conversation's own model and the latest question is kept verbatim. The original messages stay visible with a divider between them, and the compression can be undone. A request the model refuses for its length is compressed once and retried. Compression is only ever automatic; there is no manual button. On by default, with an admin switch.
@@ -66,15 +71,16 @@ The server is a Go program with the web app embedded in the binary, and PostgreS
 ### Accounts and sign-up
 
 - **Sign-up control.** Two admin switches, "allow registration" and "new users need approval" (both on by default), give three modes: **closed**, **open** and **approval**. **The first account to register becomes the administrator**, whatever the switches say.
-- A pending or disabled account signing in sees a full-window notice with the administrator to contact.
-- Sign-in and sign-up attempts are rate-limited per IP.
+- A pending account signing in sees a full-window notice with the administrator to contact. A disabled account is not signed out: its session stays, and opening the app shows only the `/disabled` page with the reason and the administrator to contact.
+- **Passkey sign-in.** Users add a passkey in Settings → Account and then sign in with a fingerprint, face or device PIN. Admins switch it and pin the domain in Admin → Authentication.
+- Failed sign-in, sign-up and passkey attempts are rate-limited per IP.
 - Sessions use an HttpOnly cookie, and the database stores only a hash of the token.
 
 ### Spend and safety
 
 - **Per-model spending caps.** A dollar cap per model over a total, monthly or daily period; once reached the model is closed to users (administrators can be exempt). Spend comes from the usage log; a request stopped midway, or one whose provider reported no usage, is charged an estimate and marked as such.
 - **Answers at once.** Each account (3 by default) can have only so many answers being written at the same time; administrators are exempt.
-- **Content moderation.** User input and images are checked before they reach the upstream (OpenAI Moderation or a model of your choice), blocking only high-risk categories. A blocked request writes nothing and goes into the moderation log; repeat offenders are disabled automatically. Off by default.
+- **Content moderation.** User input and images are checked before they reach the upstream (OpenAI Moderation or a model of your choice), blocking only high-risk categories. A blocked request writes nothing and goes into the moderation log (Admin → Moderation log); repeat offenders are disabled automatically. Off by default.
 - **End-user identifiers.** Requests to the official APIs carry a non-reversible identifier of the user, so a provider that finds abuse can tell which user it was rather than blaming the whole account.
 
 ### Admin panel
@@ -82,9 +88,12 @@ The server is a Go program with the web app embedded in the binary, and PostgreS
 - **Dashboard.** Requests, tokens, cost, cache hit rate and the cost the cache saved, errors and latency, channel health, and spend by user.
 - **Usage logs.** Every model request, with filters and cursor pagination.
 - **Channels, models, users.** Add and remove channels, manage models, enable or disable accounts in bulk and approve new users.
-- **File storage.** Attachments go to local disk or any S3-compatible store (AWS S3, MinIO, Cloudflare R2 and others). You switch in the panel, it takes effect immediately without a restart, and existing files stay readable.
+- **File storage.** Attachments go to local disk or any S3-compatible store (AWS S3, MinIO, Cloudflare R2 and others). You switch in the panel, it takes effect immediately without a restart, and existing files stay readable. The default storage cap per person is set here too; a single account can be given its own in Admin → Users.
+- **Web search and image search.** Choose the search service, the number of results and the site blocklist. Image search lets answers find their pictures from a description (Wikimedia Commons, Openverse, Bing Images and Pixabay, asked in order; the pictures found are saved in file storage). Off by default.
+- **Authentication.** The passkey switch, the relying-party domain and the allowed origins.
+- **Moderation log.** The messages content moderation refused, kept for 90 days and visible only to administrators.
 - **Retention.** Set how long deleted conversations, unsent uploads and orphaned files are kept.
-- **System switches.** Memory, generative UI, questions to the user, avatar uploads, the model used for background tasks such as titles, debug logging and more.
+- **System switches.** Personal memory, generative UI, questions to the user, scheduled tasks, sub-agents (with their model and limits), request traces (for debugging; only an admin's own requests), automatic context compression, avatar uploads, the model used for background tasks such as titles, the number of simultaneous answers, debug logging and more. Each channel also has a "send user identifier" switch, and passkeys live on the Authentication page.
 
 ### Deployment
 
@@ -131,8 +140,9 @@ The full guide is **[docs/deployment.en.md](docs/deployment.en.md)**. It covers:
 - first start, becoming the admin, adding channels;
 - updating, backup and restore;
 - moving attachments to S3;
-- running behind another reverse proxy or a CDN, and why per-IP limits depend on forwarded headers;
-- releasing a new version;
+- running behind another reverse proxy or a CDN (buffering and timeouts for the event stream, the `Host` passkeys need, and why per-IP limits depend on forwarded headers);
+- where each admin page's settings live (System, Authentication, File storage and storage caps, Image search, Moderation log);
+- releasing a new version, and a forgotten admin password;
 - troubleshooting.
 
 The short notes next to the deployment files are in [deploy/README.md](deploy/README.md) (Chinese). Using nginx instead of Caddy is in [docs/deploy-caddy.md](docs/deploy-caddy.md) (Chinese).
@@ -168,7 +178,7 @@ Open `http://localhost:5173`. `make help` lists every command.
 | UI | A design system of its own for the chat interface; shadcn/ui for the admin panel |
 | i18n | i18next (Simplified Chinese, English) |
 | File storage | Local disk, or S3-compatible storage |
-| Deployment | One binary with the web app embedded, a distroless Docker image, Caddy for HTTPS |
+| Deployment | One binary with the web app embedded, a Docker image based on Alpine (with poppler for reading PDF text), Caddy for HTTPS |
 
 ## 📄 License
 

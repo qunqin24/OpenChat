@@ -15,7 +15,7 @@ make generate   # 重新生成 sqlc、API 契约、GenUI 目录
 
 单个 Go 测试：`cd apps/server && go test ./internal/auth/ -run TestHashAndVerify -v`。
 
-带库的 Go 测试读 `TEST_DATABASE_URL`（`make test` 默认用 `.env` 里 `DATABASE_URL` 的服务器和账号、库名换成 `openchat_test`；没有就跳过），只把它当作"哪台 Postgres、什么账号、库名前缀"：每个测试包用 `internal/db/dbtest` 在同一台服务器上建并迁移自己的库 `<原库名>_<包名>`，原库本身不碰。所以 `go test ./...` 可以并行，不用 `-p 1`。库跨次运行保留，测试不能假设表是空的，需要独占的数据就像 `TestAdminDashboardFigures` 那样要一个专用库（`dbtest.Pool(t, "api_dashboard")`）。
+带库的 Go 测试读 `TEST_DATABASE_URL`（`make test` 默认取 `.env` 里 `DATABASE_URL` 的服务器和账号、库名换成 `openchat_test`；没有就跳过），只把它当作「哪台 Postgres、什么账号、库名前缀」：每个测试包用 `internal/db/dbtest` 在同一台服务器上建并迁移自己的库 `<原库名>_<包名>`，原库不碰，所以 `go test ./...` 可以并行。库跨次运行保留，测试不能假设表是空的；要独占数据就用专用库（`dbtest.Pool(t, "api_dashboard")`，见 `TestAdminDashboardFigures`）。
 
 前端用 vitest 测 `src/lib` 里的纯逻辑：`pnpm --filter @openchat/web test`（`make test-web`），配置在 `apps/web/vitest.config.ts`，沿用 vite 配置的别名但不加载它的插件。测试夹具在 `src/lib/testing.ts`。其余靠 `tsc --noEmit`、`eslint .`、`vite build` 验证。
 
@@ -41,18 +41,22 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 
 - 路由在 `internal/api/router.go` 手工挂载，每个新端点都要有意识地放进某个保护分组。
 - 归属写进查询（如 `GetConversation` 接收 `user_id`），别人的数据读出来就是不存在；后台接口对非管理员返回 404 而不是 403。
-- 迁移嵌进二进制、启动时执行；`make migration name=...` 新建。新迁移的编号必须排在所有已有迁移之后：goose 遇到「库里已执行过更大的版本、却有一个更小的没执行」会拒绝启动，已升级的服务器起不来，而全新的库（CI）发现不了。`make migration` 取「当前 UTC 时间」和「最新编号 + 1」中较大者；不要手写编号。CI 的 Migration order 任务（`scripts/check-migration-order.sh`）会拦下排在已发布迁移之前的新文件。
+- 迁移嵌进二进制、启动时执行；`make migration name=...` 新建，不要手写编号。新迁移必须排在所有已有迁移之后，否则已升级的服务器上 goose 拒绝启动（全新的库发现不了）；CI 的 Migration order 任务（`scripts/check-migration-order.sh`）会拦下。
 - 对话是一条线，没有分支和版本，被替换的直接删除。会删行的新操作照改写的套路：`lockLive` → 查 busy → 先写后删 → 收集 `storage_key` → 提交后删文件 → 发 `transcript_changed`。
 - 在对话里起 run 的新路径必须：`lockLive`（不是裸 `LockConversation`）、`requireRevised`、`prepareSnapshot`，并经 `createRun`（并发上限，同事务 advisory lock）。
 - 新的软删除对话路径必须在同一事务里 `CancelConversationRuns`，提交后 `runner.Cancel`，并发 `conversation_deleted`。
 - 被审核拒绝的行是 `messages.status = 'blocked'`：凡构造模型看到的内容的查询都要 `status <> 'blocked'`，只有 `ListMessages`（显示）和 `GetInput`（改写）看得见它；`agent.BuildContext`、`EstimateRow` 再各跳一次。
-- 给模型的上下文用 `LoadContextRows` + `BuildRequestContext`；压缩从不改行，摘要的一致性靠 `context_summaries` 的 `ON DELETE CASCADE`；`HistoryLimit` 只是安全上限。
-- 压缩只有 run 自己会做，用户没有手动入口（只能读 `GET`、撤销 `DELETE` `/conversations/{id}/compaction`）；不要加回去。模型因长度拒绝请求（`context_too_long`）时，开着自动压缩的 run 会强制压一次（估算低于门槛也压）并立即重试，每个 run 至多一次（`recoverContextLength`），压不出来或再被拒绝就照旧以 `context_too_long` 结束。
-- 新增模型请求路径：先构造 `llm.Request`（带 `User`），`Begin(Call{InputEstimate: llm.EstimateInput(req)})` → `Reserve` → `Stream` → `End`；`partialStream` 在 `Reserve` 之后才创建；挑模型走 `pickChannel`（用户请求传 `isStaff(ctx)`，服务端任务传 `true`）并过容量检查，渠道按优先级、同级按权重选（`servingOrder`），run 在模型还没输出时失败会自动换渠道（`agent` 的 `failover`），别改回只取第一个；新 kind 要加 `usage_logs_kind` 约束。
+- 给模型的上下文用 `LoadContextRows` + `BuildRequestContext`；压缩从不改行（摘要靠 `context_summaries` 的 `ON DELETE CASCADE` 保持一致），`HistoryLimit` 只是安全上限。
+- 压缩只有 run 自己会做，用户没有手动入口（只留 `GET` 与撤销 `DELETE` `/conversations/{id}/compaction`），不要加回去。模型因长度拒绝（`context_too_long`）时，开着自动压缩的 run 强制压一次并重试，每个 run 至多一次（`recoverContextLength`）。
+- 新增模型请求路径：先构造 `llm.Request`（带 `User`），`Begin(Call{InputEstimate: llm.EstimateInput(req)})` → `Reserve` → `Stream` → `End`；`partialStream` 在 `Reserve` 之后才创建；新 kind 要加 `usage_logs_kind` 约束。
+- 挑模型走 `pickChannel(ctx, modelID, asker)`，容量检查在它里面，别绕开：用户请求传 `askerFrom(ctx)`，服务端任务建 `asker{staff: true, …}`（`admin` 只在替管理员办事时为真，`ignoreCap` 只用于「能不能答」的校验）。渠道按优先级、同级按权重选（`servingOrder`），模型还没输出就失败的 run 自动换渠道（`failover`），别改回只取第一个。
+- 同一次回复里的工具调用并发执行（`agent.Options.ToolConcurrency`，默认 10）：新工具必须能与其他工具同时运行。
 - 容量上限按请求的 `model_id`（不是 `served_model`）、金额全程 `numeric` 在 SQL 里比较，不经 float。
 - 读用户上传文件并发给模型必须走 `agent.attachmentResolver`（SHA-256 收据），别自己 `Read`；本地 `PUT` 用 `Local.PutNew`，写一次。
-- 文本文件一律以 `text/plain` 存（前端按扩展名认，`TEXT_EXTENSIONS`），发给模型时是文字（`llm.FileBlock`），任何模型都收（`modelTakes`），不是 UTF-8 文本就不发；它的字随消息一起审（`attachmentTexts`，同样记 SHA-256 收据）。超过 16 KB（`llm.InlineTextBytes`）的文本文件，在模型能调工具时只发概览卡（`agent.fileCard`：开头、Markdown 标题），模型用 `file_read`/`file_search`（`agent/files.go`）按需读（一次读不完的长行用 `offset` 分段续读，搜索片段围绕命中处）；读取只认本对话非 `blocked` 用户消息里的文件、经 `attachmentResolver.one` 核对收据，不再审。模型不能调工具时照旧整篇发。Word/Excel/PDF 由 `internal/doctext` 读成文字（Word→Markdown、Excel→每表 CSV，表头行 `## Sheet:` 和 `(empty)` 独占一行、像它们的单元格一律加引号，前端 `lib/workbook.ts` 只从原始行认表头、PDF 用 poppler 的 `pdftotext`，带 `[Page n]`），原件保留、文字不另存，按原件 SHA-256 缓存；发送时 `readDocuments` 读出文字送审、把 `TextSize`/`Pages` 记在附件引用上，收据是原件的摘要；PDF 在模型能读且不超过 `llm.NativePDFPages` 页时发原件，否则发文字。
-- 附件行消失的地方先收集 `storage_key`、`DELETE ... RETURNING`、再尽力删文件（`cleanup.go`）。头像放 `avatars/`，不放 `uploads/`（孤儿清扫只看后者）。每人的文件有存储上限（`storage_quota.go`：默认 5 GiB 存在 `storage_quota` 设置，`users.storage_quota_bytes` 为单独上限）；新增让用户存文件的路径要在同一事务里过 `roomFor`（`LockUserStorage` 后再数），上传声明的大小就是它能存的上限（本地 `PUT` 按行里的 `size_bytes` 截断，桶的预签名 URL 把 `Content-Length` 签进去），所以预留的配额盖得住实际大小；发送时仍按实际大小再算一次。存储配置只在后台，没有环境变量。
+- 文本文件一律以 `text/plain` 存（前端按扩展名认，`TEXT_EXTENSIONS`），发给模型时是文字（`llm.FileBlock`，经 `modelTakes`），不是 UTF-8 就不发；它的字随消息一起审并记 SHA-256 收据（`attachmentTexts`）。超过 `llm.InlineTextBytes` 且模型能调工具时只发概览卡（`agent.fileCard`），模型用 `file_read`/`file_search`（`agent/files.go`）按需读：只认本对话非 `blocked` 用户消息里的文件，必须经 `attachmentResolver.one` 核对收据，不再审。
+- Word/Excel/PDF 由 `internal/doctext` 读成文字，原件保留、文字不另存；发送时 `readDocuments` 读出文字送审，收据是原件的摘要；PDF 在模型能读且不超过 `llm.NativePDFPages` 页时发原件，否则发文字。
+- 引用其他对话（`conversationIds`，`api/references.go`、`agent/references.go`）是 `parts` 里的 `llm.ConversationMediaType` 零件，不是文件：构建请求时由 `attachmentResolver` 按 run 的用户现读；消息不再审，标题随这条消息审（`withReferenceTitles`），模型只读引用时记下的标题（零件的 `Filename`）。读附件零件的新代码要认得它（`agent.ReferencedConversation`），别把 `Ref` 当 uuid。
+- 附件行消失的地方先收集 `storage_key`、`DELETE ... RETURNING`、再尽力删文件（`cleanup.go`）。头像放 `avatars/`，不放 `uploads/`（孤儿清扫只看后者）。新增让用户存文件的路径要在同一事务里过 `roomFor`（`LockUserStorage` 后再数；上限见 `storage_quota.go`），按上传声明的大小预留（本地 `PUT` 与预签名 URL 都把它当上限），发送时仍按实际大小再算。存储配置只在后台，没有环境变量。
 - 个人记忆快照在建 run 前取，同对话内字节不变；记忆工具里的用户取自 `agent.ScopeFrom(ctx)`，永不信参数；没有任何管理员接口读得到别人的记忆。
 - 日志行带 ctx（`slog.*Context`）；后台 run 用 `ex.logger()`；`X-Request-Id` 由 `httpx.RequestID` 生成，不采用客户端的。
 - 新增能降级或停用账号的路径走 `LockAdminMembership`。
@@ -62,7 +66,7 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 ## 前端约定
 
 - 服务端数据用 TanStack Query（键在 `lib/query-keys.ts`、`features/admin/use-admin.ts`），流式中间态和 UI 状态用 Zustand；含筛选条件的键加 `placeholderData: (previous) => previous`。会话用 `currentSession(queryClient)`，别用 `ensureQueryData`。
-- 路由守卫挂在无路径布局的 `beforeLoad`（`_authed.tsx`、`admin.tsx`）。不经查询缓存的网络调用遇 401 要 `reportError`；换人要 `queryClient.clear()` + `resetChatStore()` + `forgetQueryCache()`。
+- 路由守卫挂在无路径布局的 `beforeLoad`（`_authed.tsx`、`admin.tsx`）。不经查询缓存的网络调用遇 401 或 403 `account_disabled` 要 `reportError`（`main.tsx` 的 `setErrorListener` 据此离开会话、经 `showIfAccountDisabled` 去 `/disabled`）；换人要 `queryClient.clear()` + `resetChatStore()` + `forgetQueryCache()`。
 - 聊天页只有一个 `ChatView` 实例（`components/chat/ChatPage.tsx`，规则在 `lib/chat-view.ts`）：子路由不渲染组件；首条消息的流程只在服务器答复后才 `navigate`；在该路径上写页面状态要过 `alive`；新增「新对话」入口必须带 `newChatState`。
 - 消息列表从尾部分页：对消息键不要 `invalidateQueries`，用 `refreshNewestMessages`（`transcript_changed` 先截缓存再重取）；交接走 `lib/hand-over.ts`，只有 `refreshConfirmed` 之后才 `settle`。
 - 新增由响应或旧快照驱动、会写 `live` 的路径，必须过 `finished` 检查（`rememberFinished`）；`outbox` 由 `useSendMessage` 的 hook 级 `onError` 撤掉，别用调用级回调。
@@ -114,11 +118,25 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 
 细节：[子智能体](docs/design/sub-agents.md)。
 
+## 联网
+
+`web_search`/`web_fetch` 在 `internal/tools`，只在对话开着联网时提供（`UsesWeb`）。
+
+- `web_fetch` 的地址来自模型输出，只能经 `GuardedClient` 连接（每次拨号都检查目标是公网地址，每一跳重定向同样，不读环境代理）；不要新增绕开它的抓取路径。
+- 屏蔽站点（`Blocklist`）对请求的地址和重定向后的地址各查一次。
+- 读取输出有上限：每次最多 `fetchMaxChars`，用 `offset` 续读；`find` 的段数和总量同样封顶。不要新增一次返回整篇长页面的路径。
+- 搜索的时间范围（`recency`）和限定网站（`sites`）：后端能过滤的交给后端，回来的结果在 `WebSearch.Run` 里再按同样条件过一遍。
+- 写给模型的文字（工具说明、提示词、结果）一律英文；联网提示词是 `api/agent_setup.go` 的 `webGuide`，主 Agent 和子 Agent 共用。
+- 模型用错工具，改提示词或工具描述，不要在服务端改写它的输出。
+
+细节：[联网：搜索与读网页](docs/design/web-tools.md)。
+
 ## 认证
 
 - HttpOnly Cookie 会话，库里只存 token 的 SHA-256；任何「凭 token 认人」的路径都走 `GetSessionUser`，别另写（它还挡 `pending`）。
+- 停用不让人退出登录：会话保留，`Require` 经 `GetDisabledSessionUser` 认出后一律回 403 `account_disabled`（`api/account_disabled.go`）。新增停用账号的路径要记 `users.disabled_reason`/`disabled_note`、别删会话；`/auth/logout` 不在登录分组里。
 - 最后一个启用的管理员不能被降级或停用：改角色/停用在一个事务里先 `LockAdminMembership`，再读、写、数（409 `last_admin`），测试在 `admin_last_admin_pg_test.go`。
-- 第一个账号永远是管理员（`RegisterUser` + `LockRegistration`）；批准单向（`approved: true`）；拒绝 = 停用。删除账号只有管理员在后台显式操作（`DeleteUser`：不能删自己，过 `LockAdminMembership` 和最后一个管理员检查，先 `CancelUserRuns`、给用量行打 `deleted_user` 标签，`DeleteAccount` 级联删并交回文件 key，提交后删文件）。
+- 第一个账号永远是管理员（`RegisterUser` + `LockRegistration`）；批准单向（`approved: true`）；拒绝 = 停用。删除账号只有管理员在后台显式操作（`DeleteUser`）：不能删自己，过 `LockAdminMembership` 和最后一个管理员检查，先 `CancelUserRuns`、给用量行打 `deleted_user` 标签，`DeleteAccount` 交回文件 key，提交后删文件。
 - 通行密钥登录（`api/passkeys.go`）验证通过后走和密码登录同一段：停用/待审批的拒绝、`issueSession`；失败用 `passkeyLimit` 计数；挑战存 `webauthn_challenges`，一次性取用。新的身份验证方式放进后台「身份验证」页的新 Tab。
 - 登录/注册限流用 `takeAttempt(ctx, attemptLimit{...}, ip, subject)`，先占位后验证，绝不按标识单独锁账号；IP 取 `clientIP`，必须部署在会正确设置转发头的代理后（见 `deploy/Caddyfile`）。
 
@@ -140,4 +158,4 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 
 ---
 
-设计文档索引与各章节的完整说明：[docs/design/](docs/design/README.md)。更早的、已部分过时的手册见 [docs/README.md](docs/README.md)。
+设计文档索引与各章节的完整说明：[docs/design/](docs/design/README.md)。代码约定与设计取舍、常见改动的步骤、易错清单、部署和发布说明等见 [docs/README.md](docs/README.md) 的索引；与 `docs/design` 或代码不一致时以后两者为准。

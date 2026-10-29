@@ -9,7 +9,7 @@ OpenCode 补充运行生命周期，Cherry Studio 补充模型兼容与附件处
 
 本目录是源码研究与设计草案，**不代表新内核与同步能力已在 OpenChat 中实现**。
 部分 UI 对齐已经落地，具体差异见 OpenWebUI 专篇的本地对照矩阵。
-当前系统见 [架构说明](../architecture.md) 和 [后端手册](../backend.md)。
+当前系统见 [AGENTS.md](../../AGENTS.md)、[功能设计](../design/README.md) 和 [代码约定](../conventions.md)。
 
 ## 阅读顺序
 
@@ -19,7 +19,7 @@ OpenCode 补充运行生命周期，Cherry Studio 补充模型兼容与附件处
 4. [Cherry Studio 模型接入](cherry-studio.md)：供应商解析、能力映射、内容转换、附件与兼容案例。
 5. [OpenWebUI 体验与流式同步](openwebui-experience-streaming.md)：交互中间态、HTTP/Socket.IO/SSE 分工、多端、快照恢复与停止。
 6. [DeepSeek Harness](deepseek-harness.md)：DeepSeek 官方 harness 的模块化、可替换接口和执行流程对照。
-8. [models.dev 能力目录](models-dev.md)：公开数据字段、reasoning_options、渠道映射、本地覆盖与后台刷新。
+7. [models.dev 能力目录](models-dev.md)：公开数据字段、reasoning_options、渠道映射、本地覆盖与后台刷新。
 
 关注多端或前端实时体验时，先读第 5 篇。
 

@@ -1,12 +1,12 @@
 # 用量、计费与各类上限
 
-用量账本（含估算）、模型容量上限与在飞预留、并发回答上限、模型对普通用户的开放开关、使用日志分页，以及容量上限的前端。规则摘要见 [AGENTS.md](../../AGENTS.md)；下文为完整设计说明（原 AGENTS.md 相应条目，未删减）。
+用量账本（含估算）、模型容量上限与在飞预留、并发回答上限、模型对普通用户的开放开关、使用日志分页，以及容量上限的前端。规则摘要见 [AGENTS.md](../../AGENTS.md)；下文为完整设计说明。
 
-> 文中「后端约定」「前端约定」「内容审核」等指原 AGENTS.md 的章节，现按主题分在本目录各文件，索引见 [README.md](README.md)。
+> 文中「后端约定」「前端约定」「内容审核」等指 AGENTS.md 的章节，细节按主题分在本目录各文件，索引见 [README.md](README.md)。
 
 ## 向普通用户开放（`admin_only`）
 
-- 模型设置里的「向普通用户开放」（`model_overrides.admin_only`）：关掉后非管理员的模型列表里没有它，按 id 发也被拒（`pickChannel` 的 `staff` 参数，用户请求传 `isStaff(ctx)`）；管理员照常用，服务端自己的任务（标题等 `taskModel`、校验任务模型）传 `true`，不受影响。新增挑模型的地方要想清楚传哪个。
+- 模型设置里的「向普通用户开放」（`model_overrides.admin_only`）：关掉后非管理员的模型列表里没有它，按 id 发也被拒（`pickChannel(ctx, modelID, who)` 的 `who` 是 `asker` 结构，`model_capacity.go`，字段 `staff`、`admin`、`ignoreCap`：`staff` 能看到留给管理员的模型，`admin` 让容量上限的管理员豁免生效，`ignoreCap` 只问能不能答、不看还剩多少钱）；用户请求传 `askerFrom(ctx)`（`staff` 与 `admin` 都取 `isStaff(ctx)`），管理员照常用；服务端自己的任务显式写 asker：标题等 `taskModel` 是 `asker{staff: true, admin: 替谁做的那个人是不是管理员}`，审核的模型同样，保存/校验任务模型时是 `asker{staff: true, admin: true, ignoreCap: true}`，都不受「向普通用户开放」影响。新增挑模型的地方要想清楚传哪个。
 
 ## 没有服务商用量的请求也要计费
 
@@ -18,10 +18,10 @@
 
 ## 模型容量上限
 
-- 模型容量上限（`internal/api/model_capacity.go`，列在 `model_overrides`：`capacity` / `capacity_period` / `capacity_admin_exempt` / `capacity_since`）：给单个模型设一个美元上限，周期是 `total` / `monthly` / `daily`。花费是 `usage_logs.cost` 里该模型自周期开始的总和，**按请求的 `model_id` 算，不按 `served_model`**（模型的上架、选择、对话里存的、设置里配的都是请求 id；`served_model` 是服务商回显的字符串，可能是带日期的变体或中转站自己的名字）。所有用户、访客、管理员、`chat` 和 `title` 等各种 kind 的请求都计入。没有价格的模型（元数据没有输入或输出价格）`cost` 是 NULL，总和恒为 0，上限永远不会触发——设置面板会提示。服务商没返回用量不再算「没有价格」：账本会估算（见下一条），估算出的花费照常计入。金额全程是 `numeric`：存成整数微美元（至多 6 位小数）、在 SQL 里和总和比较（`ModelSpends`，一次查询算出一批模型），不要经过 float 比较；达到即触发（`花费 >= 上限`）。
+- 模型容量上限（`internal/api/model_capacity.go`，列在 `model_overrides`：`capacity` / `capacity_period` / `capacity_admin_exempt` / `capacity_since`）：给单个模型设一个美元上限，周期是 `total` / `monthly` / `daily`。花费是 `usage_logs.cost` 里该模型自周期开始的总和，**按请求的 `model_id` 算，不按 `served_model`**（模型的上架、选择、对话里存的、设置里配的都是请求 id；`served_model` 是服务商回显的字符串，可能是带日期的变体或中转站自己的名字）。所有用户、管理员、`chat` 和 `title` 等各种 kind 的请求都计入。没有价格的模型（元数据没有输入或输出价格）`cost` 是 NULL，总和恒为 0，上限永远不会触发——设置面板会提示。服务商没返回用量不再算「没有价格」：账本会估算（见下一条），估算出的花费照常计入。金额全程是 `numeric`：存成整数微美元（至多 6 位小数）、在 SQL 里和总和比较（`ModelSpends`，一次查询算出一批模型），不要经过 float 比较；达到即触发（`花费 >= 上限`）。
   - 周期按服务器本地时区的零点算（日从当天零点、月从 1 日零点，`time.Date` 构造，所以夏令时的 23/25 小时日也对）。时区来自环境变量 `TZ`（部署默认 `Asia/Shanghai`），`cmd/openchat` 引入 `time/tzdata`，因为生产镜像（Alpine）没有装系统时区库，缺了它 Go 会悄悄把 `TZ=Asia/Shanghai` 当成 UTC。`total` 从 `capacity_since` 起算，NULL 表示整个历史；「重新计算」（`POST /admin/models/{id}/capacity/reset`）把它设为现在，使用日志不动。保存设置不会改 `capacity_since`（`SaveModelOverride` 的 `ON CONFLICT` 不更新它）；清掉上限时周期和管理员豁免会被写回默认值（`total`、开），不留看不见的状态。
   - 「恢复默认」（`DELETE .../settings`）删掉整行，所以上限、周期、豁免和起点一并消失；保存时如果什么都没决定（含没有上限）也删行，起点随之丢失。花费记录仍在使用日志里。
-  - 上限对所有人生效，除非该模型的 `capacity_admin_exempt` 开着且请求者是管理员（`asker.admin`；管理员的花费照样计入）。访客不是管理员。后台为某人做的事（标题）按那个人算：管理员的对话在豁免下照常起标题。
+  - 上限对所有人生效，除非该模型的 `capacity_admin_exempt` 开着且请求者是管理员（`asker.admin`；管理员的花费照样计入）。后台为某人做的事（标题）按那个人算：管理员的对话在豁免下照常起标题。
   - 执行点：①起一次运行之前，`chooseRun` → `pickChannel(ctx, modelID, asker)` 返回 `errModelCapacity`（409 `model_capacity_reached`），此时什么都还没写，发送、重新生成、改写、回答 ask_user 都走这条；"随便哪个模型"（空 id）会跳过已满的模型，全满才拒绝。②运行当中，`agent.Options.Capacity`（`api.NewCapacityCheck`）在 `generate` 里**每次模型请求之前**问一次，满了就以 `failWithRow(CodeModelCapacity)` 结束，留下一条带该错误码的空失败助手消息；账本在请求结束时才写，所以光看账本，超出量是检查通过时已在飞的请求，不是整个工具循环；再加上下面的「在飞请求先预留」，同时发起的请求会互相看见。查询出错按失败处理（运行以 `internal` 结束），不放行。③任务模型：配置的任务模型满了就退回对话自己的模型，也满了就跳过标题（`taskModel` 返回 `errModelCapacity`；按需起标题的接口把它原样返回）。④`GET /models` 的 `atCapacity` 按请求者算，满的模型仍然列出来。新增任何会用模型的新路径（比如上下文压缩、内容审核）都要在它的请求前过这几个点之一，用量记一个新 kind 就会自动计入花费。
   - 保存任务模型（`UpdateSystemSettings`）不检查容量（`asker.ignoreCap`），只看它能不能被回答。
   - 索引：`usage_logs_model_idx` 是 `(model_id, created_at DESC) INCLUDE (cost)`，上限的求和是 index-only scan；只有设了上限的模型才查花费，没设的只多一次主键查询。`total` 且从不重新计算的上限要扫该模型全部历史，历史很长就用「重新计算」收窄。
