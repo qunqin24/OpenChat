@@ -313,20 +313,30 @@
 }
 .chat-ui .n-theme-window-composer b { position: absolute; top: 2px; right: 2px; width: 7px; height: 7px; border-radius: 50%; background: var(--w-ink); }
 
-/* Selects that are only text, and fields that are only text. */
-.chat-ui .n-settings-select {
-  width: fit-content;
-  padding: 8px;
+/* A choice that is only text and a chevron, opening the chat's own menu
+   (GeneralTab's language); the menu stands over the dialog. */
+.chat-ui .n-settings-menu-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px 4px 10px;
   border: 0;
-  border-radius: 4px;
+  border-radius: 8px;
   background: transparent;
-  color: inherit;
+  color: var(--n-text);
   font: inherit;
-  font-size: 12px;
-  text-align: right;
+  font-size: 13px;
+  line-height: 20px;
   cursor: pointer;
+  transition: background-color 120ms;
 }
-.chat-ui .n-settings-select:focus-visible { outline: 2px solid color-mix(in oklab, var(--n-text) 40%, transparent); outline-offset: 0; }
+.chat-ui .n-settings-menu-button svg { width: 14px; height: 14px; color: var(--n-text-2); }
+.chat-ui .n-settings-menu-button:hover,
+.chat-ui .n-settings-menu-button[data-state='open'] { background: var(--n-hover); }
+.chat-ui .n-settings-menu-button:focus-visible { outline: 2px solid color-mix(in oklab, var(--n-text) 40%, transparent); outline-offset: 0; }
+.n-menu.n-menu-over-dialog { z-index: 80; min-width: 140px; }
+
+/* Fields that are only text. */
 .chat-ui .n-settings-bare {
   width: 100%;
   min-width: 0;
@@ -708,19 +718,23 @@
 .chat-ui .n-main.is-temporary {
   --n-temp-frame: #0d0d0d;
   --n-temp-band: 40px;
+  isolation: isolate;
   padding: var(--n-temp-band) 8px 8px;
   background: var(--n-temp-frame);
 }
 .dark .chat-ui .n-main.is-temporary { --n-temp-frame: #000; }
+/* The sheet is drawn on its own, behind the chat, filling the frame: the
+   empty screen centres the transcript and the composer at their own heights
+   (.n-main.is-welcome), so they cannot be the sheet themselves. */
+.chat-ui .n-main.is-temporary::before {
+  content: '';
+  position: absolute;
+  inset: var(--n-temp-band) 8px 8px;
+  z-index: -1;
+  border-radius: 16px;
+  background: var(--n-bg);
+}
 .chat-ui .n-main.is-temporary .n-topbar { inset: var(--n-temp-band) 8px auto; }
-.chat-ui .n-main.is-temporary .n-scroll {
-  border-radius: 16px 16px 0 0;
-  background: var(--n-bg);
-}
-.chat-ui .n-main.is-temporary .n-composer-dock {
-  border-radius: 0 0 16px 16px;
-  background: var(--n-bg);
-}
 .chat-ui .n-main.is-temporary .n-composer {
   border-style: dashed;
   border-color: color-mix(in oklab, var(--n-text) 28%, transparent);

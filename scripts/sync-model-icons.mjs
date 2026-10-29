@@ -71,18 +71,22 @@ const wanted = [
 
 /**
  * A handful of the coloured marks paint most of the artwork with the inherited
- * `currentColor` and reserve the brand hue for one path. Inside an `<img>`
- * `currentColor` has nothing to inherit from and resolves to black, so those
- * marks half-disappear on a dark background — and they cannot be inverted like
- * the flat ones without wrecking the hue.
+ * `currentColor` and reserve the brand hue for one path (Kimi's upstream file
+ * painted it white instead, so ours in scripts/model-icons paints it with
+ * `currentColor` like the rest). Inside an `<img>` `currentColor` has nothing
+ * to inherit from and resolves to black, so those marks half-disappear on a
+ * dark background — and they cannot be inverted like the flat ones without
+ * wrecking the hue.
  *
- * Pinning `color` inside the file fixes it. The media query follows the OS
- * rather than the app's theme switch, because an SVG rendered as an image gets
- * no say in the page's classes; a viewer who overrides the theme by hand keeps
- * the OS-side colour for these few marks.
+ * So each is written twice with the ink pinned: `<name>.svg` dark, for the
+ * light theme, and `<name>.dark.svg` light, for the dark one. An SVG inside an
+ * image cannot see the page's theme class, and the OS's dark mode is not the
+ * app's when someone picks a theme by hand; model-icon.tsx shows whichever
+ * file the app's theme wants. Its `INK_ICONS` must name exactly these marks,
+ * which is checked below.
  */
-const INHERITED_COLOUR =
-  '<style>svg{color:#18181b}@media (prefers-color-scheme:dark){svg{color:#fafafa}}</style>'
+const INK = { light: '#18181b', dark: '#fafafa' }
+const pinInk = (svg, colour) => svg.replace('>', `><style>svg{color:${colour}}</style>`)
 
 const missing = []
 const shouldBeColour = []
@@ -121,8 +125,11 @@ for (const name of wanted) {
 
   if (name.endsWith('-color')) {
     if (inherits) {
-      // Insert right after the opening <svg …> tag.
-      svg = svg.replace('>', `>${INHERITED_COLOUR}`)
+      // Inserted right after the opening <svg …> tag, once per theme.
+      const dark = pinInk(svg, INK.dark)
+      writeFileSync(join(outDir, `${name}.dark.svg`), dark)
+      bytes += Buffer.byteLength(dark)
+      svg = pinInk(svg, INK.light)
       pinned.push(name)
     }
   } else if (!inherits) {
@@ -139,7 +146,17 @@ for (const name of wanted) {
 // Keep the directory curated: a mark dropped from the maps should not linger.
 for (const file of readdirSync(outDir)) {
   if (!file.endsWith('.svg')) continue
-  if (!wanted.includes(file.slice(0, -4))) rmSync(join(outDir, file))
+  const name = file.endsWith('.dark.svg') ? file.slice(0, -9) : file.slice(0, -4)
+  const kept = file.endsWith('.dark.svg') ? pinned.includes(name) : wanted.includes(name)
+  if (!kept) rmSync(join(outDir, file))
+}
+
+// The component shows a theme's file only for the marks it lists as ink.
+const inkListed = iconNamesFrom(component, 'INK_ICONS').sort()
+const inkWritten = [...pinned].sort()
+const inkMismatch = inkListed.join() !== inkWritten.join()
+if (inkMismatch) {
+  console.error(`INK_ICONS in model-icon.tsx should be: ${inkWritten.join(', ')} (it lists ${inkListed.join(', ')})`)
 }
 
 if (missing.length > 0) {
@@ -154,7 +171,7 @@ if (flatWithoutCurrentColor.length > 0) {
   )
 }
 if (pinned.length > 0) {
-  console.log(`colour pinned for dark mode: ${pinned.join(', ')}`)
+  console.log(`ink pinned per theme: ${pinned.join(', ')}`)
 }
 
 const kib = (bytes / 1024).toFixed(1)
@@ -168,6 +185,6 @@ console.log(`largest: ${
     .join(', ')
 }`)
 
-if (missing.length > 0 || shouldBeColour.length > 0 || flatWithoutCurrentColor.length > 0) {
+if (missing.length > 0 || shouldBeColour.length > 0 || flatWithoutCurrentColor.length > 0 || inkMismatch) {
   process.exit(1)
 }

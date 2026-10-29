@@ -491,7 +491,7 @@ func TestBlockedMessagesAreKeptWhenOneEarnsTheSanction(t *testing.T) {
 	for i := 2; i <= 3; i++ {
 		rec := h.tryEdit(kept, fmt.Sprintf("BLOCKME %d", i))
 		if i == 3 {
-			if rec.Code != http.StatusUnauthorized {
+			if !bannedByModeration(rec) {
 				t.Fatalf("the sanctioning message: %d %s", rec.Code, rec.Body)
 			}
 			break

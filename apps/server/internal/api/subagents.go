@@ -1417,14 +1417,7 @@ func subagentPrompt(offered []agent.Tool) string {
 	for _, tool := range offered {
 		names[tool.Definition().Name] = true
 	}
-	if names["web_search"] {
-		b.WriteString("\n\nSearch the web with web_search for anything recent, anything that changes, and any fact you " +
-			"are not sure of.")
-	}
-	if names["web_fetch"] {
-		b.WriteString("\n\nRead the pages that matter with web_fetch instead of relying on search excerpts when the " +
-			"details count.")
-	}
+	b.WriteString(webGuide(names))
 	if names[ToolDocument] {
 		b.WriteString("\n\nWith the document tool you can list and read the writing blocks of the conversation you " +
 			"work for, when the task is about one.")

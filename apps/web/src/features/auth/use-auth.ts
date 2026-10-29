@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
+import { authOptionsQueryOptions } from '@/hooks/use-auth-options'
 import { api, unwrap } from '@/lib/api'
 import { putAvatar, squareAvatar } from '@/lib/avatar'
 import { queryKeys } from '@/lib/query-keys'
@@ -101,13 +105,35 @@ export function useRegister() {
   })
 }
 
-export function useLogout() {
+/**
+ * Signing out, at once. The request goes first, with the cookie it ends; the
+ * page does not wait for it. The session is known to be gone, so the sign-in
+ * form does not ask the server again, and everything of the account is
+ * dropped only once the page has left - dropped earlier, the open chat would
+ * fetch it all again on the way out. Waiting on each of those in turn is what
+ * made a sign-out take a while on a server far away. Should the request fail,
+ * the session may still be good: the person is told, and can sign out again.
+ */
+export function useSignOut() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const { t } = useTranslation()
 
-  return useMutation({
-    mutationFn: () => authApi.logout(),
-    onSuccess: () => dropEverything(queryClient),
-  })
+  return async () => {
+    const request = authApi.logout()
+    queryClient.setQueryData(sessionQueryOptions.queryKey, null)
+    void queryClient.prefetchQuery(authOptionsQueryOptions)
+    await navigate({ to: '/login', replace: true })
+    const options = queryClient.getQueryData(authOptionsQueryOptions.queryKey)
+    dropEverything(queryClient)
+    queryClient.setQueryData(sessionQueryOptions.queryKey, null)
+    if (options) queryClient.setQueryData(authOptionsQueryOptions.queryKey, options)
+    try {
+      await request
+    } catch {
+      toast.error(t('auth.logout-failed'))
+    }
+  }
 }
 
 export function useUpdateProfile() {

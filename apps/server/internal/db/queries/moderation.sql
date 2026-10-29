@@ -84,3 +84,16 @@ LIMIT sqlc.arg('row_limit');
 DELETE
 FROM moderation_events
 WHERE id IN (SELECT m.id FROM moderation_events m WHERE m.created_at < sqlc.arg('before') LIMIT 5000);
+
+-- name: ModerationBanSummary :one
+-- What set off an account's ban, for the page that tells the person why: the
+-- strikes counted in the window up to when it was disabled (as
+-- CountUserStrikes counts them), and the categories they were blocked for.
+SELECT count(DISTINCT e.id)::bigint                                       AS strikes,
+       COALESCE(array_agg(DISTINCT c ORDER BY c) FILTER (WHERE c IS NOT NULL), '{}')::text[] AS categories
+FROM moderation_events e
+         LEFT JOIN LATERAL unnest(e.categories) AS c ON true
+WHERE e.user_id = sqlc.arg('user_id')
+  AND e.source NOT IN ('snapshot', 'task_run')
+  AND e.created_at <= sqlc.arg('until')::timestamptz + interval '1 second'
+  AND e.created_at > sqlc.arg('until')::timestamptz - make_interval(hours => sqlc.arg('window_hours')::int);

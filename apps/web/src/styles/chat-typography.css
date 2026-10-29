@@ -12,13 +12,17 @@
 }
 
 .chat-ui {
-  /* Darker than OpenWebUI's ramp, which sets body text at oklch(0.42) and the
-     welcome line at 0.77: on a white page that reads as grey haze, not as
-     de-emphasis. Body text is near-black now and the steps below it are spaced
-     so each one is still clearly legible. */
-  --n-chat-body: oklch(0.26 0 0);
-  --n-chat-heading: oklch(0.18 0 0);
-  --n-chat-strong: oklch(0.15 0 0);
+  /* An answer's text, headings and bold as OpenWebUI draws them: its `prose`
+     colours, Tailwind's slate-tinted gray-700 and gray-900 (read off it,
+     #364153 and #101828). Once darker and neutral here; with the browser's own
+     font smoothing (chat-theme.css) these read as OpenWebUI's do. */
+  --n-chat-body: oklch(0.373 0.034 259.733);
+  --n-chat-heading: oklch(0.21 0.034 264.665);
+  --n-chat-strong: oklch(0.21 0.034 264.665);
+  /* The thinking and tool lines, as OpenWebUI's collapsible titles: its
+     gray-500 (#9b9b9b), a step darker under the pointer (its gray-700). */
+  --n-chat-collapsible: oklch(0.69 0 0);
+  --n-chat-collapsible-hover: oklch(0.42 0 0);
   --n-chat-label: #000;
   --n-chat-muted: oklch(0.5 0 0);
   --n-chat-faint: oklch(0.62 0 0);
@@ -44,9 +48,12 @@
 }
 
 .dark .chat-ui {
-  --n-chat-body: oklch(0.9 0 0);
-  --n-chat-heading: oklch(0.94 0 0);
+  /* `prose-invert`: gray-300 text, white headings and bold. */
+  --n-chat-body: oklch(0.872 0.01 258.338);
+  --n-chat-heading: #fff;
   --n-chat-strong: #fff;
+  --n-chat-collapsible: oklch(0.69 0 0);
+  --n-chat-collapsible-hover: oklch(0.85 0 0);
   --n-chat-label: #fff;
   --n-chat-muted: oklch(0.77 0 0);
   --n-chat-faint: oklch(0.66 0 0);

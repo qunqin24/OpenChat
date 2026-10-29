@@ -51,6 +51,9 @@ func toMessage(row sqlc.Message, attachments []Attachment) Message {
 			}
 		}
 		m.Parts = toMessageParts(parts)
+		if refs := messageReferences(parts); len(refs) > 0 {
+			m.References = &refs
+		}
 	}
 	if row.StopReason != nil {
 		stop := MessageStopReason(*row.StopReason)

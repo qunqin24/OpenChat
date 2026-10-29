@@ -92,7 +92,16 @@ export function usersColumns(t: TFunction<'common'>, currentUserId?: string): Co
       ),
       cell: ({ row }) =>
         row.original.disabled ? (
-          <Badge variant="destructive">{t('admin.users.disabled')}</Badge>
+          <Badge
+            variant="destructive"
+            title={
+              row.original.disabledReason === 'moderation'
+                ? t('admin.users.disabled-by-moderation')
+                : (row.original.disabledNote ?? undefined)
+            }
+          >
+            {t(row.original.disabledReason === 'moderation' ? 'admin.users.banned' : 'admin.users.disabled')}
+          </Badge>
         ) : row.original.pending ? (
           <Badge variant="secondary" className="bg-amber-500/15 text-amber-700 dark:text-amber-400">
             {t('admin.users.pending')}

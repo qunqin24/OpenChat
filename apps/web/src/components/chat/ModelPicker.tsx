@@ -2,7 +2,7 @@ import type { ChatModel } from '@openchat/api-client'
 import { Check, ChevronDown } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { ModelIcon } from '@/components/model-icon'
+import { ModelIcon, ModelIconPreload } from '@/components/model-icon'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +29,8 @@ export function ModelPicker({ models, value, onChange, disabled }: ModelPickerPr
 
   return (
     <DropdownMenu>
+      {/* Every mark the menu will show, loaded before it is first opened. */}
+      <ModelIconPreload models={models} />
       {/* Disabled on the trigger itself, not only on the button: with asChild
           the menu would still open from a disabled child. */}
       <DropdownMenuTrigger asChild disabled={disabled || models.length === 0}>

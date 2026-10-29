@@ -112,8 +112,57 @@ func (q *Queries) DeleteUserSessions(ctx context.Context, userID uuid.UUID) erro
 	return err
 }
 
+const getDisabledSessionUser = `-- name: GetDisabledSessionUser :one
+SELECT users.id, users.email, users.name, users.created_at, users.updated_at, users.password_hash, users.role, users.disabled_at, users.last_seen_at, users.instructions_about, users.instructions_style, users.memory_enabled, users.memory_learn, users.avatar_key, users.pending, users.instructions_about_checked_hash, users.instructions_about_blocked_hash, users.instructions_style_checked_hash, users.instructions_style_blocked_hash, users.time_zone, users.storage_quota_bytes, users.disabled_reason, users.disabled_note, users.disabled_by
+FROM sessions s
+         JOIN users ON users.id = s.user_id
+WHERE s.token_hash = $1
+  AND s.expires_at > now()
+  AND users.disabled_at IS NOT NULL
+  AND NOT users.pending
+`
+
+type GetDisabledSessionUserRow struct {
+	User User `json:"user"`
+}
+
+// A live session whose account has been disabled since: it is kept, so the
+// person is shown why (auth.Middleware) rather than signed out, and can do
+// nothing else with it. Never a pending account's.
+func (q *Queries) GetDisabledSessionUser(ctx context.Context, tokenHash []byte) (GetDisabledSessionUserRow, error) {
+	row := q.db.QueryRow(ctx, getDisabledSessionUser, tokenHash)
+	var i GetDisabledSessionUserRow
+	err := row.Scan(
+		&i.User.ID,
+		&i.User.Email,
+		&i.User.Name,
+		&i.User.CreatedAt,
+		&i.User.UpdatedAt,
+		&i.User.PasswordHash,
+		&i.User.Role,
+		&i.User.DisabledAt,
+		&i.User.LastSeenAt,
+		&i.User.InstructionsAbout,
+		&i.User.InstructionsStyle,
+		&i.User.MemoryEnabled,
+		&i.User.MemoryLearn,
+		&i.User.AvatarKey,
+		&i.User.Pending,
+		&i.User.InstructionsAboutCheckedHash,
+		&i.User.InstructionsAboutBlockedHash,
+		&i.User.InstructionsStyleCheckedHash,
+		&i.User.InstructionsStyleBlockedHash,
+		&i.User.TimeZone,
+		&i.User.StorageQuotaBytes,
+		&i.User.DisabledReason,
+		&i.User.DisabledNote,
+		&i.User.DisabledBy,
+	)
+	return i, err
+}
+
 const getSessionUser = `-- name: GetSessionUser :one
-SELECT users.id, users.email, users.name, users.created_at, users.updated_at, users.password_hash, users.role, users.disabled_at, users.last_seen_at, users.instructions_about, users.instructions_style, users.memory_enabled, users.memory_learn, users.avatar_key, users.pending, users.instructions_about_checked_hash, users.instructions_about_blocked_hash, users.instructions_style_checked_hash, users.instructions_style_blocked_hash, users.time_zone, users.storage_quota_bytes, s.id AS session_id, s.expires_at
+SELECT users.id, users.email, users.name, users.created_at, users.updated_at, users.password_hash, users.role, users.disabled_at, users.last_seen_at, users.instructions_about, users.instructions_style, users.memory_enabled, users.memory_learn, users.avatar_key, users.pending, users.instructions_about_checked_hash, users.instructions_about_blocked_hash, users.instructions_style_checked_hash, users.instructions_style_blocked_hash, users.time_zone, users.storage_quota_bytes, users.disabled_reason, users.disabled_note, users.disabled_by, s.id AS session_id, s.expires_at
 FROM sessions s
          JOIN users ON users.id = s.user_id
 WHERE s.token_hash = $1
@@ -157,6 +206,9 @@ func (q *Queries) GetSessionUser(ctx context.Context, tokenHash []byte) (GetSess
 		&i.User.InstructionsStyleBlockedHash,
 		&i.User.TimeZone,
 		&i.User.StorageQuotaBytes,
+		&i.User.DisabledReason,
+		&i.User.DisabledNote,
+		&i.User.DisabledBy,
 		&i.SessionID,
 		&i.ExpiresAt,
 	)

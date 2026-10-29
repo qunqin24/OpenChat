@@ -51,6 +51,33 @@
     "untitled": "新对话",
     "stopped": "已停止",
     "truncated": "回复达到了长度上限，可能没有说完。",
+    "attach": {
+      "menu": "添加内容",
+      "upload": "上传文件",
+      "screenshot": "截图",
+      "screenshot-name": "截图",
+      "screenshot-failed": "截图没有成功，请再试一次。",
+      "library": "从文件库添加",
+      "conversation": "引用其他对话",
+      "loading": "正在读取「{{name}}」…",
+      "loading-list": "正在读取…",
+      "failed": "没能添加「{{name}}」，请再试一次。",
+      "library-empty": "文件库里还没有文件",
+      "conversations-empty": "还没有其他对话",
+      "search": "搜索对话",
+      "no-match": "没有找到匹配的对话",
+      "referred": "已引用",
+      "too-many": "一条消息最多引用 5 个对话。",
+      "back": "返回",
+      "library-title": "文件库",
+      "library-search": "搜索文件",
+      "no-file-match": "没有找到匹配的文件",
+      "conversations-title": "对话"
+    },
+    "reference": {
+      "kind": "对话",
+      "open": "打开对话「{{title}}」"
+    },
     "retrying": "请求失败，正在重试…",
     "reasoning": {
       "live": "正在思考…",
@@ -89,7 +116,17 @@
       "file-searching": "正在文件中搜索：{{query}}",
       "file-searching-generic": "正在文件中搜索…",
       "file-search": "在文件中搜索「{{query}}」，{{count}} 处",
-      "file-search-in": "在 {{name}} 中搜索「{{query}}」，{{count}} 处"
+      "file-search-in": "在 {{name}} 中搜索「{{query}}」，{{count}} 处",
+      "find": "在 {{host}} 中查找「{{find}}」",
+      "finding": "正在 {{host}} 中查找「{{find}}」",
+      "read-on": "接着读 {{host}}",
+      "reading-on": "正在接着读 {{host}}",
+      "recency": {
+        "day": "最近一天",
+        "week": "最近一周",
+        "month": "最近一个月",
+        "year": "最近一年"
+      }
     },
     "error": {
       "no_model": "这个模型已不可用，请换一个模型再试。",
@@ -144,7 +181,11 @@
       "attachments_not_editable": "只有修改被拦下的消息时才能附带文件。",
       "moderation_unavailable": "内容审核暂时不可用，消息没有发送，请稍后重试。",
       "message_too_large_for_moderation": "这条消息太大，内容审核无法完整检查，没有发送。请缩短文字，或减少、换小图片后再试。",
-      "too_many_runs": "同时进行的回答太多了，请等其中一个完成，或停止一个后再试。"
+      "too_many_runs": "同时进行的回答太多了，请等其中一个完成，或停止一个后再试。",
+      "reference_unavailable": "引用的对话已不存在，或不能引用当前对话。",
+      "reference_empty": "引用的对话里还没有内容。",
+      "too_many_references": "一条消息最多引用 5 个对话。",
+      "references_not_editable": "只有修改被拦下的消息时才能引用对话。"
     },
     "thinking": {
       "title": "思考",
@@ -322,7 +363,7 @@
       "lines": {
         "morning": {"hello": "早上好，{{name}}", "start": "新的一天，从哪儿开始？", "today": "早，{{name}}，今天想做点什么？", "smooth": "早安，愿今天顺顺利利", "caffeine": "咖啡因加载中……", "blanket": "被窝的封印解除了吗？", "bird": "早起的鸟儿有问题问"},
         "noon": {"hello": "中午好，{{name}}", "lunch": "吃过午饭了吗？", "pause": "午间片刻，聊点什么", "menu": "中午吃什么？这题我也能帮", "full": "吃饱了，脑子先别睡"},
-        "afternoon": {"hello": "下午好，{{name}}", "coffee": "来杯咖啡，慢慢聊", "mind": "{{name}}，下午想聊点什么？", "fine": "午后正好，想点什么", "slump": "三点钟的困意，交给我", "tea": "下午茶时间，顺便聊两句", "todo": "{{name}}，今天的待办划掉几项了？"},
+        "afternoon": {"hello": "下午好，{{name}}", "coffee": "来杯咖啡，慢慢聊", "mind": "{{name}}，下午想聊点什么？", "fine": "午后正好，想点什么", "slump": "午后犯困？交给我", "tea": "下午茶时间，顺便聊两句", "todo": "{{name}}，今天的待办划掉几项了？"},
         "evening": {"hello": "晚上好，{{name}}", "rest": "忙完了吗？歇一歇", "day": "{{name}}，今天过得怎么样？", "breeze": "晚风正好，聊点什么", "overtime": "还在加班？我陪你", "fed": "吃饱了才有力气想问题"},
         "night": {"hello": "夜深了，{{name}}", "awake": "还没睡呀？", "here": "夜里也在，慢慢说", "sleep": "{{name}}，早点休息哦", "owl": "夜猫子模式已开启", "ideas": "深夜的想法，往往最有意思", "moon": "{{name}}，月亮都上班了"},
         "monday": {"ease": "周一了，慢慢进入状态", "double": "周一，需要双倍咖啡"},
@@ -414,6 +455,7 @@
   },
   "auth": {
     "logout": "退出登录",
+    "logout-failed": "退出登录没有成功，请再试一次。",
     "show-password": "显示密码",
     "hide-password": "隐藏密码",
     "field": {
@@ -439,6 +481,26 @@
       "check": "再次检查",
       "still": "仍在等待审批",
       "back": "返回登录"
+    },
+    "disabled": {
+      "admin-title": "你的账号已被停用",
+      "admin-subtitle": "请联系管理员",
+      "admin-text": "管理员停用了这个账号，现在不能发消息或使用其他功能。你的对话和文件都还在，恢复后一切照旧。",
+      "moderation-title": "你的账号已被封禁",
+      "moderation-subtitle": "因多次发送违规内容",
+      "moderation-text": "{{hours}} 小时内有 {{count}} 条消息因违反使用规范被拦截，账号已被自动停用。你的对话和文件都还在；如果你认为这是误判，请联系管理员。",
+      "moderation-text-bare": "多条消息因违反使用规范被拦截，账号已被自动停用。你的对话和文件都还在；如果你认为这是误判，请联系管理员。",
+      "reason": "原因",
+      "note": "「{{note}}」",
+      "no-note": "管理员没有填写原因。",
+      "moderation-reason": "多次发送违规内容",
+      "moderation-reason-categories": "多次发送违规内容，涉及：{{categories}}",
+      "admin-at": "停用时间",
+      "moderation-at": "封禁时间",
+      "sign-out": "退出登录",
+      "check": "已经恢复了？重新检查",
+      "checking": "正在检查…",
+      "still": "账号仍然处于停用状态。"
     },
     "banned": {
       "title": "你已被封禁",
@@ -635,10 +697,15 @@
       "subtitle": "管理账号角色与启用状态。",
       "edit": "编辑账号",
       "updated": "已保存",
-      "enabled-hint": "停用后该账号会立即退出登录，可随时重新启用。",
+      "enabled-hint": "停用后对方仍保持登录，但只能看到停用原因，可随时重新启用。",
       "enabled-done": "账号已启用",
       "disabled-done": "账号已停用",
-      "disable-confirm": "将立即结束 {{name}} 的所有登录会话，该账号无法再登录。可随时重新启用。",
+      "disable-note": "停用原因（可选）",
+      "disable-note-placeholder": "例如：账号被多人共用，请联系我说明情况。",
+      "disable-note-hint": "对方打开 OpenChat 时会看到这段话。",
+      "banned": "已封禁",
+      "disabled-by-moderation": "内容审核累计违规，自动封禁",
+      "disable-confirm": "将停用 {{name}} 的账号：对方不会被退出登录，但除了看到停用原因，什么都做不了。可随时重新启用。",
       "create": "新建用户",
       "created": "账号已创建",
       "edit-hint": "修改后立即生效。",

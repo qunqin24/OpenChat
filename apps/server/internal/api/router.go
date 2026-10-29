@@ -24,13 +24,16 @@ import (
 // inherit "public" by being forgotten.
 func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler {
 	r := chi.NewRouter()
+	// A disabled account's session is told why, not signed out (account_disabled.go).
+	mw.OnDisabled(s.failDisabled)
 
 	r.Use(httpx.RequestID)
 	r.Use(buildHeader(webui.BuildID()))
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(httpx.RequestLogger)
-	// No global timeout: CreateMessage streams for as long as the model takes.
+	// No global timeout: the conversation event stream (GET .../events) stays
+	// open for as long as a run takes.
 	r.Use(middleware.Compress(5, "application/json"))
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: cfg.CORSOrigins,
@@ -69,11 +72,14 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 		r.Put("/files/content/*", s.PutFileContent)
 		r.Get("/files/content/*", s.GetFileContent)
 
+		// Signing out needs only the cookie, not a live account: a disabled
+		// account's session, which every other route refuses, can still end.
+		r.Post("/auth/logout", wrapper.Logout)
+
 		// ---- signed in --------------------------------------------------
 		r.Group(func(r chi.Router) {
 			r.Use(mw.Require)
 
-			r.Post("/auth/logout", wrapper.Logout)
 			r.Get("/auth/session", wrapper.GetSession)
 			r.Patch("/auth/me", wrapper.UpdateMe)
 			r.Post("/auth/password", wrapper.ChangePassword)

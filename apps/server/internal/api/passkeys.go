@@ -382,7 +382,7 @@ func (s *Server) PasskeySignIn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if account.DisabledAt.Valid {
-		httpx.Fail(w, r, s.refusedAccount(ctx, errAccountDisabled))
+		httpx.Fail(w, r, s.accountDisabled(ctx, account))
 		return
 	}
 	if account.Pending {

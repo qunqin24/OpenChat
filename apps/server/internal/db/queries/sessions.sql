@@ -16,6 +16,18 @@ WHERE s.token_hash = sqlc.arg('token_hash')
   AND users.disabled_at IS NULL
   AND NOT users.pending;
 
+-- name: GetDisabledSessionUser :one
+-- A live session whose account has been disabled since: it is kept, so the
+-- person is shown why (auth.Middleware) rather than signed out, and can do
+-- nothing else with it. Never a pending account's.
+SELECT sqlc.embed(users)
+FROM sessions s
+         JOIN users ON users.id = s.user_id
+WHERE s.token_hash = sqlc.arg('token_hash')
+  AND s.expires_at > now()
+  AND users.disabled_at IS NOT NULL
+  AND NOT users.pending;
+
 -- name: TouchSession :exec
 UPDATE sessions
 SET last_used_at = now()

@@ -117,7 +117,11 @@ export function LoginPage() {
       subtitle={t('auth.login.subtitle')}
       overlay={
         banned ? (
-          <BannedScreen admin={contact} onBack={leaveOverlay} />
+          <BannedScreen
+            admin={contact}
+            disabled={isAuthFieldError(failure) ? failure.disabled : undefined}
+            onBack={leaveOverlay}
+          />
         ) : pending ? (
           <PendingScreen admin={contact} check={checkAgain} onBack={leaveOverlay} />
         ) : null

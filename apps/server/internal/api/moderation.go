@@ -228,12 +228,12 @@ func (s *Server) moderated(ctx context.Context, who moderationSubject, in modera
 		return false, nil
 	}
 	// The message that reaches the threshold is answered with the sanction
-	// itself, so the page shows it at once rather than on the next attempt: a
-	// disabled account - its sessions are gone - is signed out, which takes its
-	// page to sign-in.
+	// itself, so the page shows it at once rather than on the next attempt:
+	// account_disabled, saying why, which every later request of its session
+	// is answered with too.
 	sanction := s.recordBlocked(ctx, cfg, who, text, hits)
 	if sanction.disabled {
-		return true, httpx.ErrUnauthorized
+		return true, s.accountDisabledByID(ctx, who.userID)
 	}
 	return true, contentBlocked(hits, sanction)
 }
@@ -777,14 +777,11 @@ func (s *Server) recordBlocked(ctx context.Context, cfg moderationConfig, who mo
 		if target.Role == sqlc.UserRoleAdmin {
 			return nil
 		}
-		// The same two steps as an administrator disabling the account
-		// (UpdateUser): the flag, then the sessions, so its open pages are
-		// told by their next request.
-		disabled := true
-		if _, err := q.AdminUpdateUser(ctx, sqlc.AdminUpdateUserParams{ID: who.userID, Disabled: &disabled}); err != nil {
-			return err
-		}
-		if err := q.DeleteUserSessions(ctx, who.userID); err != nil {
+		// As an administrator disabling the account (UpdateUser), with the
+		// reason recorded: its sessions are kept, and its open pages are told
+		// why by their next request.
+		disabled, reason := true, string(DisabledReasonModeration)
+		if _, err := q.AdminUpdateUser(ctx, sqlc.AdminUpdateUserParams{ID: who.userID, Disabled: &disabled, DisabledReason: &reason}); err != nil {
 			return err
 		}
 		sanction = string(ModerationSanctionDisabled)

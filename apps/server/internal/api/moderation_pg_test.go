@@ -558,12 +558,17 @@ func TestModerationStrikesDisableAnAccount(t *testing.T) {
 			t.Fatalf("after %d strikes the account is disabled", i)
 		}
 	}
-	// The third disables the account, and is answered as a request whose
-	// session is gone (401): the page goes to sign-in, which shows the ban.
-	if rec := h.post("BLOCKME 3"); rec.Code != http.StatusUnauthorized {
+	// The third disables the account, and is answered with why
+	// (account_disabled): the session is kept, so the page says so.
+	rec := h.post("BLOCKME 3")
+	if !bannedByModeration(rec) {
 		t.Fatalf("the disabling message: %d %s", rec.Code, rec.Body)
 	}
-	if !disabled() || sessions() != 0 {
+	// What set it off, each blocked message once however many categories it hit.
+	if body, _ := disabledOf(rec); *body.Details.Strikes != 3 || body.Details.Categories == nil || len(*body.Details.Categories) == 0 {
+		t.Errorf("the ban says %+v", body.Details)
+	}
+	if !disabled() || sessions() != 1 {
 		t.Fatalf("after 3 strikes: disabled %v, %d sessions", disabled(), sessions())
 	}
 	events := h.events()
@@ -597,7 +602,7 @@ func TestModerationStrikesDisableAnAccount(t *testing.T) {
 	if rec := h.patchModeration(`{"strikeWindowHours":72}`); rec.Code != http.StatusOK {
 		t.Fatal(rec.Body)
 	}
-	if rec := h.post("BLOCKME in a wider window"); rec.Code != http.StatusUnauthorized {
+	if rec := h.post("BLOCKME in a wider window"); !bannedByModeration(rec) {
 		t.Fatalf("the disabling message: %d %s", rec.Code, rec.Body)
 	}
 	if !disabled() {
@@ -674,10 +679,10 @@ func TestModerationStrikesAreCountedUnderParallelRequests(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			// Blocked, or (the one that reaches the threshold) signed out.
+			// Blocked, or (the one that reaches the threshold) told the account is disabled.
 			rec := httptest.NewRecorder()
 			h.server.CreateMessage(rec, h.request(http.MethodPost, fmt.Sprintf(`{"content":"BLOCKME %d","model":%q}`, i, h.model)), convs[i])
-			if rec.Code != http.StatusUnprocessableEntity && rec.Code != http.StatusUnauthorized {
+			if rec.Code != http.StatusUnprocessableEntity && !bannedByModeration(rec) {
 				t.Errorf("status %d: %s", rec.Code, rec.Body)
 			}
 		}()

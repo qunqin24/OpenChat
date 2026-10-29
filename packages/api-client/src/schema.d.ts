@@ -2448,6 +2448,8 @@ export interface components {
             role: components["schemas"]["Role"];
             /** @description The text parts, concatenated. `parts` is the message. */
             content: string;
+            /** @description The other conversations the message refers to (createMessage's conversationIds). */
+            references?: components["schemas"]["ConversationReference"][];
             parts: components["schemas"]["MessagePart"][];
             status: components["schemas"]["MessageStatus"];
             /** Format: uuid */
@@ -2560,6 +2562,12 @@ export interface components {
              */
             olderCursor?: string | null;
         };
+        ConversationReference: {
+            /** Format: uuid */
+            conversationId: string;
+            /** @description The conversation's title when it was referred to (empty when it had none). */
+            title: string;
+        };
         CreateMessageRequest: {
             content: string;
             /**
@@ -2574,6 +2582,14 @@ export interface components {
             /** @description Chosen by the client; a retry with the same id finds the same run. */
             requestId?: string;
             attachmentIds?: string[];
+            /**
+             * @description Other conversations of yours to refer to, not this one. Each is read
+             *     for the model, up to its last message now, whenever the context is
+             *     built - not copied, not uploaded, not checked again by moderation.
+             *     400 `reference_unavailable` for one that is not yours or is this
+             *     one; `reference_empty` for one with nothing in it.
+             */
+            conversationIds?: string[];
         };
         EditMessageRequest: {
             content: string;
@@ -2586,6 +2602,8 @@ export interface components {
              *     message keeps its own files and takes none.
              */
             attachmentIds?: string[];
+            /** @description As in createMessage, and like attachmentIds only for a refused message. */
+            conversationIds?: string[];
             /** @description Chosen by the client; a retry with the same id finds the same run. */
             requestId?: string;
         };
@@ -3505,6 +3523,32 @@ export interface components {
             admin?: components["schemas"]["AdminContact"];
         };
         /**
+         * @description Who disabled the account: an administrator, or content moderation once
+         *     enough of its messages were blocked.
+         * @enum {string}
+         */
+        DisabledReason: "admin" | "moderation";
+        /**
+         * @description The `details` of a 403 `account_disabled`: what a disabled account is
+         *     told, on signing in and on every request its session still makes (the
+         *     session is kept, not revoked, so the page can say why; nothing else
+         *     answers it). `admin` is whom to ask.
+         */
+        AccountDisabled: {
+            reason: components["schemas"]["DisabledReason"];
+            /** Format: date-time */
+            disabledAt: string;
+            /** @description What the administrator wrote, when they wrote anything. */
+            note?: string;
+            /** @description With `moderation`, how many blocked messages in the window set it off. */
+            strikes?: number;
+            /** @description With `moderation`, the window they were counted in. */
+            windowHours?: number;
+            /** @description With `moderation`, the categories those messages were blocked for. */
+            categories?: string[];
+            admin?: components["schemas"]["AdminContact"];
+        };
+        /**
          * @description The administrator an account that cannot sign in is told to contact:
          *     the longest-standing enabled one. Given only to someone who has just
          *     proved the password of such an account (or registered it), as OpenWebUI
@@ -3530,6 +3574,9 @@ export interface components {
             role: components["schemas"]["UserRole"];
             avatarUrl?: components["schemas"]["AvatarUrl"];
             disabled: boolean;
+            disabledReason?: components["schemas"]["DisabledReason"];
+            /** @description What the administrator wrote when disabling it, shown to the person. */
+            disabledNote?: string;
             /**
              * @description Registered while approval was required and not yet approved. Such
              *     an account cannot sign in. It can also be `disabled` (rejected).
@@ -3791,6 +3838,11 @@ export interface components {
             password?: string;
             role?: components["schemas"]["UserRole"];
             disabled?: boolean;
+            /**
+             * @description With `disabled: true`: why, in words the person is shown when they
+             *     next use the app (an empty string is none). Ignored otherwise.
+             */
+            disabledNote?: string;
             /**
              * @description `true` lets a pending account in; `false` is 400 `invalid_approval`
              *     (there is no way back to pending). Independent of `disabled`.
@@ -4831,6 +4883,8 @@ export interface components {
             userIds: string[];
             role?: components["schemas"]["UserRole"];
             disabled?: boolean;
+            /** @description With `disabled: true`, the note every one of them is shown (as in updateUser). */
+            disabledNote?: string;
             /**
              * @description Only `true` (400 `invalid_approval` otherwise): lets pending
              *     accounts in. Accounts that are not pending are left as they are.

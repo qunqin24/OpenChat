@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { cn } from '@/lib/utils'
 
@@ -236,6 +236,22 @@ function familyRoot(family: string): string {
 }
 
 /**
+ * Coloured marks whose ink is the inherited colour, not a hue of their own
+ * (Kimi's K, Poe's outline): `scripts/sync-model-icons.mjs` writes each with
+ * the ink pinned dark (`<icon>.svg`) and light (`<icon>.dark.svg`), and the
+ * one the app's theme wants is shown. The script checks this list against what
+ * it wrote; a flat `key: 'value'` table so it can read it.
+ */
+const INK_ICONS: Record<string, string> = {
+  cerebras: 'cerebras-color',
+  kimi: 'kimi-color',
+  longcat: 'longcat-color',
+  poe: 'poe-color',
+  yi: 'yi-color',
+}
+const inkIcons = new Set(Object.values(INK_ICONS))
+
+/**
  * Lobe names the coloured artwork `<brand>-color` and the flat artwork
  * `<brand>`. The flat files are a single path painted with `currentColor`,
  * which inside an `<img>` resolves to black — so those, and only those, get
@@ -263,6 +279,34 @@ function resolveIcon(
   if (subject === 'model' && familyIcon) return familyIcon
   if (providerId && PROVIDER_ICONS[providerId]) return PROVIDER_ICONS[providerId]
   return familyIcon
+}
+
+const iconUrl = (icon: string, theme?: 'dark') => `/model-icons/${icon}${theme ? '.dark' : ''}.svg`
+
+/** Marks already asked for, held so the decoded images stay in memory. */
+const preloaded = new Map<string, HTMLImageElement>()
+
+/**
+ * Loads the marks of these models ahead of time, drawing nothing - the model
+ * picker holds one for its list - so its menu shows them at once when it
+ * opens, rather than fetching and decoding each as it appears.
+ */
+export function ModelIconPreload({ models }: { models: { providerId?: string | null; family?: string | null }[] }) {
+  useEffect(() => {
+    for (const model of models) {
+      const icon = resolveIcon(undefined, model.providerId || undefined, model.family || undefined, 'model')
+      if (!icon || preloaded.has(icon)) continue
+      const image = new Image()
+      image.src = iconUrl(icon)
+      preloaded.set(icon, image)
+      if (inkIcons.has(icon)) {
+        const dark = new Image()
+        dark.src = iconUrl(icon, 'dark')
+        preloaded.set(`${icon}.dark`, dark)
+      }
+    }
+  }, [models])
+  return null
 }
 
 type ModelIconProps = {
@@ -302,10 +346,10 @@ export function ModelIcon({ brand, providerId, family, name, subject, className 
   // component gets its own attempt, with no effect to reset anything.
   const [failedIcon, setFailedIcon] = useState<string>()
 
-  const box = cn(
-    'inline-flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-md',
-    className,
-  )
+  // The letter sits on a tile, so it is rounded; a mark is drawn as it is, on
+  // nothing, so nothing of an odd-shaped one is cut off (object-contain keeps
+  // its own proportions inside the box).
+  const box = cn('inline-flex size-8 shrink-0 items-center justify-center', className)
 
   if (!icon || icon === failedIcon) {
     const letter = (name ?? providerId ?? brand ?? '').trim().charAt(0).toUpperCase()
@@ -313,7 +357,7 @@ export function ModelIcon({ brand, providerId, family, name, subject, className 
       <span
         className={cn(
           box,
-          'bg-black/5 text-xs font-semibold text-black/55 dark:bg-white/10 dark:text-white/65',
+          'overflow-hidden rounded-md bg-black/5 text-xs font-semibold text-black/55 dark:bg-white/10 dark:text-white/65',
         )}
         aria-hidden="true"
       >
@@ -322,13 +366,14 @@ export function ModelIcon({ brand, providerId, family, name, subject, className 
     )
   }
 
-  return (
+  const image = (src: string, className?: string) => (
     <img
-      src={`/model-icons/${icon}.svg`}
+      src={src}
       alt=""
       aria-hidden="true"
-      loading="lazy"
-      decoding="async"
+      // Not lazy: a mark is a few hundred bytes, and a lazy image is fetched -
+      // even from cache - only once its box is laid out and on screen, so
+      // every time a menu of models opened, its marks came in a beat late.
       width={32}
       height={32}
       onError={() => setFailedIcon(icon)}
@@ -337,7 +382,18 @@ export function ModelIcon({ brand, providerId, family, name, subject, className 
       // channel picker came out visibly smaller than the letters beside them.
       // The mark now fills whatever box the caller asked for, which is also
       // what the letter below does, so the two states are the same size.
-      className={cn(box, isMonochrome(icon) && 'dark:invert')}
+      className={cn(box, 'object-contain', className, 'rounded-none')}
     />
   )
+
+  // An ink mark comes in a file per theme; the one the app's theme wants shows.
+  if (inkIcons.has(icon)) {
+    return (
+      <>
+        {image(iconUrl(icon), 'dark:hidden')}
+        {image(iconUrl(icon, 'dark'), 'hidden dark:inline-flex')}
+      </>
+    )
+  }
+  return image(iconUrl(icon), isMonochrome(icon) ? 'dark:invert' : undefined)
 }

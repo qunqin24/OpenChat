@@ -54,9 +54,16 @@ const STEP_SOURCES = 6
  * `thinking` is the model at work with no call in flight: streaming its
  * thoughts (`reasoning`), or quiet between a round and its next response
  * (`waiting`), when the line keeps naming the step just done - it is still
- * reading, as far as the reader can tell - rather than claiming thought.
+ * reading, as far as the reader can tell - rather than claiming thought - or
+ * a failed request being tried again (`retrying`), which the line says.
  */
-export function ToolActivity({ items, thinking = false }: { items: ActivityItem[]; thinking?: 'reasoning' | 'waiting' | false }) {
+export function ToolActivity({
+  items,
+  thinking = false,
+}: {
+  items: ActivityItem[]
+  thinking?: 'reasoning' | 'waiting' | 'retrying' | false
+}) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [head, stuck] = useStuck<HTMLButtonElement>(open)
@@ -64,9 +71,12 @@ export function ToolActivity({ items, thinking = false }: { items: ActivityItem[
 
   const active = steps.find((step) => step.status === 'pending' || step.status === 'running')
   const searches = steps.filter((step) => step.call.name === 'web_search').length
-  const fetches = steps.filter((step) => step.call.name === 'web_fetch').length
+  const reads = steps.filter((step) => step.call.name === 'web_fetch')
+  // Pages, not reads: reading on in a long page, or looking for something in
+  // it, is still the one page.
+  const fetches = new Set(reads.map((step) => String(callArguments(step.call).url ?? ''))).size
   const fileLooks = steps.filter((step) => isFileTool(step.call.name)).length
-  const others = steps.length - searches - fetches - fileLooks
+  const others = steps.length - searches - reads.length - fileLooks
   const failed = steps.filter((step) => isFailure(step.status)).length
 
   // Every source the searches turned up, once each, in the order found.
@@ -83,7 +93,9 @@ export function ToolActivity({ items, thinking = false }: { items: ActivityItem[
 
   let title: string
   const lastItem = items[items.length - 1]
-  if (active) {
+  if (thinking === 'retrying') {
+    title = t('chat.retrying')
+  } else if (active) {
     title = stepLabel(t, active, true)
   } else if (thinking === 'waiting' && lastItem?.kind === 'tool') {
     title = stepLabel(t, lastItem, false)
@@ -249,17 +261,33 @@ function stepIcon(name: string) {
 
 type T = TFunction<'common'>
 
+/** The periods a search can be limited to. */
+const RECENCIES = ['day', 'week', 'month', 'year'] as const
+const isRecency = (value: unknown): value is (typeof RECENCIES)[number] => RECENCIES.some((r) => r === value)
+
 function stepLabel(t: T, step: ToolActivityStep, running: boolean): string {
   const args = callArguments(step.call)
   if (step.call.name === 'web_search') {
     const query = typeof args.query === 'string' ? args.query : ''
     if (!query) return t('chat.tool.search-pending')
-    return running ? t('chat.tool.searching', { query }) : query
+    // The period and the sites it was held to, after the words (tools/websearch.go).
+    const limits: string[] = []
+    if (isRecency(args.recency)) limits.push(t(`chat.tool.recency.${args.recency}`))
+    if (Array.isArray(args.sites)) limits.push(...args.sites.filter((site): site is string => typeof site === 'string'))
+    const label = [query, ...limits].join(' · ')
+    return running ? t('chat.tool.searching', { query: label }) : label
   }
   if (step.call.name === 'web_fetch') {
     const url = typeof args.url === 'string' ? args.url : ''
     if (!url) return t('chat.tool.fetch-pending')
-    return running ? t('chat.tool.reading', { host: siteName(url) }) : t('chat.tool.fetch', { host: siteName(url) })
+    const host = siteName(url)
+    // Looking for something in a page, or reading on in a long one (tools/webfetch.go).
+    const find = typeof args.find === 'string' ? args.find.trim() : ''
+    if (find) return running ? t('chat.tool.finding', { host, find }) : t('chat.tool.find', { host, find })
+    if (typeof args.offset === 'number' && args.offset > 0) {
+      return running ? t('chat.tool.reading-on', { host }) : t('chat.tool.read-on', { host })
+    }
+    return running ? t('chat.tool.reading', { host }) : t('chat.tool.fetch', { host })
   }
   if (isFileTool(step.call.name)) return fileStepLabel(t, step, args, running)
   if (step.call.name === 'memory') return t('chat.memory.step')

@@ -2,7 +2,10 @@ package tools
 
 import (
 	"net/url"
+	"strings"
 	"testing"
+
+	"golang.org/x/net/html"
 )
 
 func TestPageImagesLeadFirstAndSkipsNoise(t *testing.T) {
@@ -24,7 +27,8 @@ func TestPageImagesLeadFirstAndSkipsNoise(t *testing.T) {
 </article>
 <footer><img src="/footer.jpg"></footer>
 </body></html>`
-	got := htmlImages(page, base)
+	doc, _ := html.Parse(strings.NewReader(page))
+	got := htmlImages(doc, base)
 	want := []PageImage{
 		{URL: "https://news.example.com/media/lead.jpg"},
 		{URL: "https://cdn.example.com/media/lead.jpg"},

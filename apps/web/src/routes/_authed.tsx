@@ -4,6 +4,7 @@ import ChatShell from '@/components/chat/ChatShell'
 import { currentSession } from '@/features/auth/use-auth'
 import { chatFeaturesQueryOptions, chatModelsQueryOptions } from '@/hooks/use-chat-models'
 import { conversationsQueryOptions } from '@/hooks/use-conversations'
+import { accountDisabledOf, useAccountDisabled } from '@/lib/account-disabled'
 import { adoptQueryCache } from '@/lib/query-persist'
 import { isSettingsTab, type SettingsTab } from '@/lib/settings'
 import { syncTimeZone } from '@/lib/time-zone'
@@ -31,7 +32,16 @@ export const Route = createFileRoute('/_authed')({
     // A session checked within its stale time is reused, so navigating between
     // protected routes costs no request; an older one is asked of the server
     // again, which is how a disabled account or a changed password is noticed.
-    const session = await currentSession(queryClient)
+    let session
+    try {
+      session = await currentSession(queryClient)
+    } catch (error) {
+      // Disabled: the session is kept, and the page says why instead.
+      const disabled = accountDisabledOf(error)
+      if (!disabled) throw error
+      useAccountDisabled.getState().set(disabled)
+      throw redirect({ to: '/disabled', replace: true })
+    }
     // Before anything is drawn: a stored cache that is not this account's goes.
     adoptQueryCache(queryClient, session?.id ?? null)
 

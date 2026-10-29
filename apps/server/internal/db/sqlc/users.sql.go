@@ -15,7 +15,7 @@ const adminCreateUser = `-- name: AdminCreateUser :one
 INSERT INTO users (email, name, password_hash, role, disabled_at)
 VALUES ($1, $2, $3, $4,
         CASE WHEN $5::boolean THEN now() ELSE NULL END)
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes, disabled_reason, disabled_note, disabled_by
 `
 
 type AdminCreateUserParams struct {
@@ -59,6 +59,9 @@ func (q *Queries) AdminCreateUser(ctx context.Context, arg AdminCreateUserParams
 		&i.InstructionsStyleBlockedHash,
 		&i.TimeZone,
 		&i.StorageQuotaBytes,
+		&i.DisabledReason,
+		&i.DisabledNote,
+		&i.DisabledBy,
 	)
 	return i, err
 }
@@ -74,20 +77,43 @@ SET name          = COALESCE($1::text, name),
                         WHEN $5::boolean THEN COALESCE(disabled_at, now())
                         ELSE NULL
                         END,
-    pending       = CASE WHEN $6::boolean IS TRUE THEN false ELSE pending END,
+    disabled_reason = CASE
+                          WHEN $5::boolean IS NULL THEN disabled_reason
+                          WHEN $5::boolean THEN
+                              CASE WHEN disabled_at IS NULL THEN COALESCE($6::text, 'admin')
+                                   ELSE disabled_reason END
+                          ELSE NULL
+                          END,
+    disabled_note = CASE
+                        WHEN $5::boolean IS NULL THEN disabled_note
+                        WHEN $5::boolean THEN
+                            CASE WHEN disabled_at IS NULL THEN $7::text
+                                 ELSE COALESCE($7::text, disabled_note) END
+                        ELSE NULL
+                        END,
+    disabled_by   = CASE
+                        WHEN $5::boolean IS NULL THEN disabled_by
+                        WHEN $5::boolean THEN
+                            CASE WHEN disabled_at IS NULL THEN $8::uuid ELSE disabled_by END
+                        ELSE NULL
+                        END,
+    pending       = CASE WHEN $9::boolean IS TRUE THEN false ELSE pending END,
     updated_at    = now()
-WHERE id = $7
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes
+WHERE id = $10
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes, disabled_reason, disabled_note, disabled_by
 `
 
 type AdminUpdateUserParams struct {
-	Name         *string   `json:"name"`
-	Email        *string   `json:"email"`
-	PasswordHash *string   `json:"password_hash"`
-	Role         *UserRole `json:"role"`
-	Disabled     *bool     `json:"disabled"`
-	Approved     *bool     `json:"approved"`
-	ID           uuid.UUID `json:"id"`
+	Name           *string    `json:"name"`
+	Email          *string    `json:"email"`
+	PasswordHash   *string    `json:"password_hash"`
+	Role           *UserRole  `json:"role"`
+	Disabled       *bool      `json:"disabled"`
+	DisabledReason *string    `json:"disabled_reason"`
+	DisabledNote   *string    `json:"disabled_note"`
+	DisabledBy     *uuid.UUID `json:"disabled_by"`
+	Approved       *bool      `json:"approved"`
+	ID             uuid.UUID  `json:"id"`
 }
 
 // Every editable field in one statement: a partial edit is one round trip and
@@ -99,6 +125,12 @@ type AdminUpdateUserParams struct {
 // `approved` can only let a pending account in (true); there is no way back to
 // pending. It is independent of `disabled`: enabling an account does not
 // approve it, and approving one does not enable it.
+//
+// Disabling records why (`disabled_reason`, 'admin' unless said otherwise),
+// the note shown to the person, and the administrator who did it
+// (`disabled_by`, the one they are told to contact); disabling an account
+// that already is keeps the reason and who, and replaces the note only when
+// one is given. Enabling clears all three.
 func (q *Queries) AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams) (User, error) {
 	row := q.db.QueryRow(ctx, adminUpdateUser,
 		arg.Name,
@@ -106,6 +138,9 @@ func (q *Queries) AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams
 		arg.PasswordHash,
 		arg.Role,
 		arg.Disabled,
+		arg.DisabledReason,
+		arg.DisabledNote,
+		arg.DisabledBy,
 		arg.Approved,
 		arg.ID,
 	)
@@ -132,6 +167,9 @@ func (q *Queries) AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams
 		&i.InstructionsStyleBlockedHash,
 		&i.TimeZone,
 		&i.StorageQuotaBytes,
+		&i.DisabledReason,
+		&i.DisabledNote,
+		&i.DisabledBy,
 	)
 	return i, err
 }
@@ -156,18 +194,41 @@ func (q *Queries) BulkApproveUsers(ctx context.Context, ids []uuid.UUID) (int64,
 
 const bulkSetUserDisabled = `-- name: BulkSetUserDisabled :execrows
 UPDATE users
-SET disabled_at = CASE WHEN $1::boolean THEN now() ELSE NULL END,
-    updated_at  = now()
-WHERE id = ANY ($2::uuid[])
+SET disabled_at     = CASE WHEN $1::boolean THEN COALESCE(disabled_at, now()) ELSE NULL END,
+    disabled_reason = CASE
+                          WHEN NOT $1::boolean THEN NULL
+                          WHEN disabled_at IS NULL THEN 'admin'
+                          ELSE disabled_reason
+                          END,
+    disabled_note   = CASE
+                          WHEN NOT $1::boolean THEN NULL
+                          WHEN disabled_at IS NULL THEN $2::text
+                          ELSE COALESCE($2::text, disabled_note)
+                          END,
+    disabled_by     = CASE
+                          WHEN NOT $1::boolean THEN NULL
+                          WHEN disabled_at IS NULL THEN $3::uuid
+                          ELSE disabled_by
+                          END,
+    updated_at      = now()
+WHERE id = ANY ($4::uuid[])
 `
 
 type BulkSetUserDisabledParams struct {
-	Disabled bool        `json:"disabled"`
-	Ids      []uuid.UUID `json:"ids"`
+	Disabled     bool        `json:"disabled"`
+	DisabledNote *string     `json:"disabled_note"`
+	DisabledBy   *uuid.UUID  `json:"disabled_by"`
+	Ids          []uuid.UUID `json:"ids"`
 }
 
+// As AdminUpdateUser: disabling by an administrator, with one note for all.
 func (q *Queries) BulkSetUserDisabled(ctx context.Context, arg BulkSetUserDisabledParams) (int64, error) {
-	result, err := q.db.Exec(ctx, bulkSetUserDisabled, arg.Disabled, arg.Ids)
+	result, err := q.db.Exec(ctx, bulkSetUserDisabled,
+		arg.Disabled,
+		arg.DisabledNote,
+		arg.DisabledBy,
+		arg.Ids,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -333,7 +394,7 @@ func (q *Queries) GetContactAdmin(ctx context.Context) (GetContactAdminRow, erro
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes, disabled_reason, disabled_note, disabled_by
 FROM users
 WHERE id = $1
 `
@@ -363,12 +424,15 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.InstructionsStyleBlockedHash,
 		&i.TimeZone,
 		&i.StorageQuotaBytes,
+		&i.DisabledReason,
+		&i.DisabledNote,
+		&i.DisabledBy,
 	)
 	return i, err
 }
 
 const getUserByAvatarKey = `-- name: GetUserByAvatarKey :one
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes, disabled_reason, disabled_note, disabled_by
 FROM users
 WHERE avatar_key = $1
 `
@@ -400,12 +464,15 @@ func (q *Queries) GetUserByAvatarKey(ctx context.Context, avatarKey *string) (Us
 		&i.InstructionsStyleBlockedHash,
 		&i.TimeZone,
 		&i.StorageQuotaBytes,
+		&i.DisabledReason,
+		&i.DisabledNote,
+		&i.DisabledBy,
 	)
 	return i, err
 }
 
 const getUserByLogin = `-- name: GetUserByLogin :one
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes, disabled_reason, disabled_note, disabled_by
 FROM users
 WHERE (lower(email) = lower($1::text)
     OR lower(name) = lower($1::text))
@@ -446,6 +513,9 @@ func (q *Queries) GetUserByLogin(ctx context.Context, identifier string) (User, 
 		&i.InstructionsStyleBlockedHash,
 		&i.TimeZone,
 		&i.StorageQuotaBytes,
+		&i.DisabledReason,
+		&i.DisabledNote,
+		&i.DisabledBy,
 	)
 	return i, err
 }
@@ -496,7 +566,7 @@ func (q *Queries) LabelDeletedUserUsage(ctx context.Context, arg LabelDeletedUse
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes, disabled_reason, disabled_note, disabled_by
 FROM users
 WHERE ($1::text IS NULL
     OR email ILIKE '%' || $1::text || '%'
@@ -556,6 +626,9 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.InstructionsStyleBlockedHash,
 			&i.TimeZone,
 			&i.StorageQuotaBytes,
+			&i.DisabledReason,
+			&i.DisabledNote,
+			&i.DisabledBy,
 		); err != nil {
 			return nil, err
 		}
@@ -568,7 +641,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 }
 
 const listUsersByIDs = `-- name: ListUsersByIDs :many
-SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes
+SELECT id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes, disabled_reason, disabled_note, disabled_by
 FROM users
 WHERE id = ANY ($1::uuid[])
 `
@@ -604,6 +677,9 @@ func (q *Queries) ListUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]User, 
 			&i.InstructionsStyleBlockedHash,
 			&i.TimeZone,
 			&i.StorageQuotaBytes,
+			&i.DisabledReason,
+			&i.DisabledNote,
+			&i.DisabledBy,
 		); err != nil {
 			return nil, err
 		}
@@ -651,7 +727,7 @@ SELECT $1::text,
 FROM (SELECT count(*) AS n FROM users) c
 WHERE c.n = 0
    OR $5::boolean
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes, disabled_reason, disabled_note, disabled_by
 `
 
 type RegisterUserParams struct {
@@ -700,6 +776,9 @@ func (q *Queries) RegisterUser(ctx context.Context, arg RegisterUserParams) (Use
 		&i.InstructionsStyleBlockedHash,
 		&i.TimeZone,
 		&i.StorageQuotaBytes,
+		&i.DisabledReason,
+		&i.DisabledNote,
+		&i.DisabledBy,
 	)
 	return i, err
 }
@@ -709,7 +788,7 @@ UPDATE users
 SET avatar_key = $1::text,
     updated_at = now()
 WHERE id = $2
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes, disabled_reason, disabled_note, disabled_by
 `
 
 type SetUserAvatarParams struct {
@@ -745,6 +824,9 @@ func (q *Queries) SetUserAvatar(ctx context.Context, arg SetUserAvatarParams) (U
 		&i.InstructionsStyleBlockedHash,
 		&i.TimeZone,
 		&i.StorageQuotaBytes,
+		&i.DisabledReason,
+		&i.DisabledNote,
+		&i.DisabledBy,
 	)
 	return i, err
 }
@@ -783,7 +865,7 @@ SET name       = COALESCE($1::text, name),
     email      = COALESCE($2::text, email),
     updated_at = now()
 WHERE id = $3
-RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes
+RETURNING id, email, name, created_at, updated_at, password_hash, role, disabled_at, last_seen_at, instructions_about, instructions_style, memory_enabled, memory_learn, avatar_key, pending, instructions_about_checked_hash, instructions_about_blocked_hash, instructions_style_checked_hash, instructions_style_blocked_hash, time_zone, storage_quota_bytes, disabled_reason, disabled_note, disabled_by
 `
 
 type UpdateOwnProfileParams struct {
@@ -820,6 +902,9 @@ func (q *Queries) UpdateOwnProfile(ctx context.Context, arg UpdateOwnProfilePara
 		&i.InstructionsStyleBlockedHash,
 		&i.TimeZone,
 		&i.StorageQuotaBytes,
+		&i.DisabledReason,
+		&i.DisabledNote,
+		&i.DisabledBy,
 	)
 	return i, err
 }

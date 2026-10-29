@@ -267,6 +267,28 @@ describe('fromSnapshot', () => {
   })
 })
 
+describe('what began while the page watched', () => {
+  it('is everything of a run it saw start', () => {
+    const r = run('r1')
+    const a = assistant('a', r.id)
+    const state = applyBatch(idle, batch(r, 2, [started(r), { type: 'generation_started', attempt: 1 }, { type: 'message_appended', message: a }]))
+    expect(state.run).toMatchObject({ fresh: [a.id], freshFrom: 0 })
+  })
+
+  it('is not what the snapshot it joined at held, but is what comes after', () => {
+    const r = run('r1')
+    const a = assistant('a', r.id)
+    const joined = fromSnapshot({ type: 'snapshot', run: r, messages: [user('q'), a], live: { generation: { attempt: 1, parts: [text('so far')] } } })
+    expect(joined.run).toMatchObject({ fresh: [], freshFrom: 1 })
+    // The part in flight goes on; the next response is new.
+    const next = applyBatch(joined, batch(r, 2, [{ type: 'part_started', index: 1, part: text('') }]))
+    expect(next.run?.freshFrom).toBe(1)
+    const b = assistant('b', r.id)
+    const after = applyBatch(next, batch(r, 3, [{ type: 'message_appended', message: b }, { type: 'generation_started', attempt: 1 }]))
+    expect(after.run).toMatchObject({ fresh: [b.id], freshFrom: 0 })
+  })
+})
+
 describe('isRunning', () => {
   it('is false for no state, an idle one and a finished run', () => {
     expect(isRunning(undefined)).toBe(false)

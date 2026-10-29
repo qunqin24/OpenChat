@@ -273,6 +273,38 @@ func (q *Queries) MarkModerationSanction(ctx context.Context, arg MarkModeration
 	return err
 }
 
+const moderationBanSummary = `-- name: ModerationBanSummary :one
+SELECT count(DISTINCT e.id)::bigint                                       AS strikes,
+       COALESCE(array_agg(DISTINCT c ORDER BY c) FILTER (WHERE c IS NOT NULL), '{}')::text[] AS categories
+FROM moderation_events e
+         LEFT JOIN LATERAL unnest(e.categories) AS c ON true
+WHERE e.user_id = $1
+  AND e.source NOT IN ('snapshot', 'task_run')
+  AND e.created_at <= $2::timestamptz + interval '1 second'
+  AND e.created_at > $2::timestamptz - make_interval(hours => $3::int)
+`
+
+type ModerationBanSummaryParams struct {
+	UserID      *uuid.UUID         `json:"user_id"`
+	Until       pgtype.Timestamptz `json:"until"`
+	WindowHours int32              `json:"window_hours"`
+}
+
+type ModerationBanSummaryRow struct {
+	Strikes    int64    `json:"strikes"`
+	Categories []string `json:"categories"`
+}
+
+// What set off an account's ban, for the page that tells the person why: the
+// strikes counted in the window up to when it was disabled (as
+// CountUserStrikes counts them), and the categories they were blocked for.
+func (q *Queries) ModerationBanSummary(ctx context.Context, arg ModerationBanSummaryParams) (ModerationBanSummaryRow, error) {
+	row := q.db.QueryRow(ctx, moderationBanSummary, arg.UserID, arg.Until, arg.WindowHours)
+	var i ModerationBanSummaryRow
+	err := row.Scan(&i.Strikes, &i.Categories)
+	return i, err
+}
+
 const purgeModerationEvents = `-- name: PurgeModerationEvents :execrows
 DELETE
 FROM moderation_events

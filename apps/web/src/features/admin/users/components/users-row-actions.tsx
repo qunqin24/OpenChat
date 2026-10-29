@@ -8,6 +8,7 @@ import { ConfirmDialog } from '@/components/shadcn/confirm-dialog'
 import { Button } from '@/components/shadcn/ui/button'
 import { Input } from '@/components/shadcn/ui/input'
 import { Label } from '@/components/shadcn/ui/label'
+import { Textarea } from '@/components/shadcn/ui/textarea'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,6 +45,8 @@ export function UsersRowActions({ user, isSelf }: UsersRowActionsProps) {
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [typed, setTyped] = useState('')
+  // What the person is told when disabled: optional, shown on their page.
+  const [note, setNote] = useState('')
 
   // Waiting for a decision: not yet disabled (a rejected sign-up is disabled,
   // and from then on is an ordinary disabled account, which can be enabled).
@@ -51,7 +54,11 @@ export function UsersRowActions({ user, isSelf }: UsersRowActionsProps) {
 
   const setDisabled = async (disabled: boolean) => {
     try {
-      await updateUser.mutateAsync({ userId: user.id, disabled })
+      await updateUser.mutateAsync({
+        userId: user.id,
+        disabled,
+        ...(disabled && note.trim() ? { disabledNote: note.trim() } : {}),
+      })
       toast.success(
         t(disabled ? (awaiting ? 'admin.users.reject-done' : 'admin.users.disabled-done') : 'admin.users.enabled-done'),
       )
@@ -123,7 +130,10 @@ export function UsersRowActions({ user, isSelf }: UsersRowActionsProps) {
             <DropdownMenuItem
               variant="destructive"
               disabled={isSelf}
-              onClick={() => setConfirming(true)}
+              onClick={() => {
+                setNote('')
+                setConfirming(true)
+              }}
             >
               {t(awaiting ? 'admin.users.reject' : 'admin.users.disable')}
               <DropdownMenuShortcut>
@@ -165,8 +175,21 @@ export function UsersRowActions({ user, isSelf }: UsersRowActionsProps) {
         destructive
         isLoading={updateUser.isPending}
         handleConfirm={() => void setDisabled(true)}
-        className="sm:max-w-sm"
-      />
+        className="sm:max-w-md"
+      >
+        <div className="grid gap-2">
+          <Label htmlFor={`disable-note-${user.id}`}>{t('admin.users.disable-note')}</Label>
+          <Textarea
+            id={`disable-note-${user.id}`}
+            value={note}
+            maxLength={500}
+            rows={3}
+            placeholder={t('admin.users.disable-note-placeholder')}
+            onChange={(event) => setNote(event.target.value)}
+          />
+          <p className="text-muted-foreground text-xs">{t('admin.users.disable-note-hint')}</p>
+        </div>
+      </ConfirmDialog>
 
       <ConfirmDialog
         open={deleting}

@@ -9,6 +9,7 @@ import { onBuildChange } from '@/lib/build-check'
 import { queryClient, setErrorListener } from '@/lib/query'
 import { persistQueryCache, restoreQueryCache } from '@/lib/query-persist'
 import { preventZoom } from '@/lib/no-zoom'
+import { showIfAccountDisabled } from '@/lib/account-disabled'
 import { leaveIfSessionExpired } from '@/lib/session-expired'
 import { keepToastsInteractive } from '@/lib/toast-layer'
 import { isWebKit } from '@/lib/webkit'
@@ -33,8 +34,12 @@ function App() {
 // Last visit's conversation list and recent chats, shown while they refresh.
 restoreQueryCache(queryClient)
 persistQueryCache(queryClient)
-// A session that ended is noticed by whichever call finds out first.
-setErrorListener((error) => void leaveIfSessionExpired(error, router))
+// A session that ended, or an account disabled, is noticed by whichever call
+// finds out first.
+setErrorListener((error) => {
+  void leaveIfSessionExpired(error, router)
+  void showIfAccountDisabled(error, router)
+})
 // The server now serves a newer front end than this page was loaded from: say
 // so, and let the reader reload when it suits them (lib/build-check.ts). It
 // stays until dismissed or acted on.

@@ -895,6 +895,25 @@
   white-space: pre-line;
 }
 
+/* Why a disabled account is disabled (DisabledReason): a tinted block of
+   small labelled lines, left-aligned in the centred column. */
+.n-account-overlay-reason {
+  width: 100%;
+  max-width: 380px;
+  margin: 20px auto 0;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--auth-err-fill);
+  color: var(--n-text);
+  font-size: 14px;
+  line-height: 22px;
+  text-align: left;
+}
+.n-account-overlay-reason dt { color: var(--n-text-2); font-size: 12px; line-height: 18px; }
+.n-account-overlay-reason dt + dd { margin: 2px 0 0; }
+.n-account-overlay-reason dd + dt { margin-top: 10px; }
+.n-account-overlay-reason dd { overflow-wrap: anywhere; white-space: pre-line; }
+
 /* Whom to ask: initial, name, address. */
 .n-account-overlay-admin {
   display: flex;

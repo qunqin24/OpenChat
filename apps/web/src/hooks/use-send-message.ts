@@ -1,4 +1,4 @@
-import { isOpenChatError, type Attachment, type Message, type ReasoningEffort } from '@openchat/api-client'
+import { isOpenChatError, type Attachment, type ConversationReference, type Message, type ReasoningEffort } from '@openchat/api-client'
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -21,6 +21,10 @@ const SEND_ERRORS = [
   'content_blocked',
   'revise_refused',
   'attachments_not_editable',
+  'references_not_editable',
+  'reference_unavailable',
+  'reference_empty',
+  'too_many_references',
   'moderation_unavailable',
   'message_too_large_for_moderation',
   'too_many_runs',
@@ -112,6 +116,7 @@ export function useSendMessage(conversationId: string) {
       conversationId: target = conversationId,
       content,
       attachmentIds,
+      conversationIds,
       ...choice
     }: RunChoice & {
       /** The conversation to send to, when it is not the page's own yet. */
@@ -119,6 +124,8 @@ export function useSendMessage(conversationId: string) {
       content: string
       /** Uploads (see `useAttachments`) to send with it. */
       attachmentIds?: string[]
+      /** Other conversations it refers to ("+" → 引用其他对话). */
+      conversationIds?: string[]
     }) =>
       unwrap(
         await api.POST('/conversations/{conversationId}/messages', {
@@ -130,6 +137,7 @@ export function useSendMessage(conversationId: string) {
             requestId: crypto.randomUUID(),
             ...choiceBody(choice),
             ...(attachmentIds?.length ? { attachmentIds } : {}),
+            ...(conversationIds?.length ? { conversationIds } : {}),
           },
         }),
       ),
@@ -247,18 +255,24 @@ export function useEditMessage(conversationId: string) {
       messageId,
       content,
       attachments: _attachments,
+      references: _references,
       attachmentIds,
+      conversationIds,
       ...choice
     }: RunChoice & {
       messageId: string
       content: string
       /** The files the bubble shows while the edit is on its way: the question's own, or the composer's. */
       attachments: Attachment[]
+      /** The conversations it shows it refers to, the same way. */
+      references?: ConversationReference[]
       /**
        * Uploads to send with the new wording. Only for the edit of a message
-       * that was refused (it carried none): the composer's files go with it.
+       * that was refused (it carried none): the composer's files go with it,
+       * as do the conversations it refers to (`conversationIds`).
        */
       attachmentIds?: string[]
+      conversationIds?: string[]
     }) =>
       unwrap(
         await api.POST('/conversations/{conversationId}/messages/{messageId}/edit', {
@@ -268,12 +282,13 @@ export function useEditMessage(conversationId: string) {
             requestId: crypto.randomUUID(),
             ...choiceBody(choice),
             ...(attachmentIds?.length ? { attachmentIds } : {}),
+            ...(conversationIds?.length ? { conversationIds } : {}),
           },
         }),
       ),
-    onMutate: ({ messageId, content, attachments }) => {
+    onMutate: ({ messageId, content, attachments, references }) => {
       redo(conversationId, { from: messageId })
-      post(conversationId, { content, attachments })
+      post(conversationId, { content, attachments, references })
     },
     onSuccess: (response, { messageId }) => {
       forget({ from: messageId })

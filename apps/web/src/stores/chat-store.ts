@@ -1,4 +1,4 @@
-import type { Attachment, BatchEvent, Message, Run, SnapshotEvent } from '@openchat/api-client'
+import type { Attachment, BatchEvent, ConversationReference, Message, Run, SnapshotEvent } from '@openchat/api-client'
 import { create } from 'zustand'
 
 import { applyBatch, finishedBy, fromSnapshot, idle, rememberFinished, withSentInput, type ConversationLive } from '@/lib/run-state'
@@ -28,6 +28,8 @@ export interface OutboxItem {
   content: string
   /** The uploads sent with it, as the transcript draws them. */
   attachments: Attachment[]
+  /** The other conversations it refers to, likewise. */
+  references?: ConversationReference[]
 }
 
 interface ChatState {
@@ -174,7 +176,9 @@ export const useChatStore = create<ChatState>()((set) => ({
         ...settled(state, conversationId),
         live: {
           ...state.live,
-          [conversationId]: { run: { run, messages: [input, ...rows], partial: null, retry: null, tools: {}, compacting: false } },
+          [conversationId]: {
+            run: { run, messages: [input, ...rows], partial: null, retry: null, tools: {}, compacting: false, fresh: [], freshFrom: 0 },
+          },
         },
       }
     }),

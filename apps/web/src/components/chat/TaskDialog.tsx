@@ -1,11 +1,12 @@
 import { isOpenChatError, type Task } from '@openchat/api-client'
 import type { TFunction } from 'i18next'
-import { ChevronDown, X } from 'lucide-react'
+import { Check, ChevronDown, X } from 'lucide-react'
 import { Dialog } from 'radix-ui'
-import { useId, useState, type ComponentProps, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useChatModels } from '@/hooks/use-chat-models'
 import { useCreateTask, useUpdateTask } from '@/hooks/use-tasks'
 import { inPast, scheduleOf, taskKinds, weekdayName, weekdayOrder, type TaskForm } from '@/lib/tasks'
@@ -147,11 +148,12 @@ function Editor({ task, initial, onClose }: { task?: Task; initial: TaskForm; on
             <input type="date" className="n-task-input" aria-label={t('tasks.field.date')} value={form.date} onChange={(event) => set('date', event.target.value)} />
           )}
           {form.kind === 'monthly' && (
-            <Select aria-label={t('tasks.field.month-day')} value={form.monthDay} onChange={(event) => set('monthDay', Number(event.target.value))}>
-              {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                <option key={day} value={day}>{t('tasks.field.day', { day })}</option>
-              ))}
-            </Select>
+            <Select
+              label={t('tasks.field.month-day')}
+              value={String(form.monthDay)}
+              options={Array.from({ length: 31 }, (_, i) => ({ value: String(i + 1), label: t('tasks.field.day', { day: i + 1 }) }))}
+              onChange={(value) => set('monthDay', Number(value))}
+            />
           )}
           <input type="time" className="n-task-input" aria-label={t('tasks.field.time')} value={form.time} onChange={(event) => set('time', event.target.value)} />
         </div>
@@ -161,12 +163,15 @@ function Editor({ task, initial, onClose }: { task?: Task; initial: TaskForm; on
         {!task && usable.length > 0 && (
           <>
             <label className="n-task-label" htmlFor={`${id}-model`}>{t('tasks.field.model')}</label>
-            <Select id={`${id}-model`} value={model} onChange={(event) => setModel(event.target.value)}>
-              <option value="">{t('tasks.field.model-default')}</option>
-              {usable.map((option) => (
-                <option key={option.id} value={option.id}>{option.name}</option>
-              ))}
-            </Select>
+            <Select
+              id={`${id}-model`}
+              value={model}
+              options={[
+                { value: '', label: t('tasks.field.model-default') },
+                ...usable.map((option) => ({ value: option.id, label: option.name })),
+              ]}
+              onChange={setModel}
+            />
           </>
         )}
 
@@ -182,15 +187,34 @@ function Editor({ task, initial, onClose }: { task?: Task; initial: TaskForm; on
 }
 
 /**
- * A native select with its own chevron: the browser's arrow sits wherever the
- * browser likes, against the edge, whatever the padding says.
+ * A choice drawn as the dialog's fields are, opening the chat's own menu
+ * rather than the browser's list: the field shows the chosen option and a
+ * chevron, the menu is as wide as the field and marks the chosen one. `id`
+ * lets a <label> name it; `label` names it when there is none.
  */
-function Select(props: ComponentProps<'select'>) {
+function Select({ id, label, value, options, onChange }: {
+  id?: string
+  label?: string
+  value: string
+  options: { value: string; label: string }[]
+  onChange: (value: string) => void
+}) {
+  const chosen = options.find((option) => option.value === value)
   return (
-    <span className="n-task-select">
-      <select className="n-task-input" {...props} />
-      <ChevronDown aria-hidden="true" />
-    </span>
+    <DropdownMenu>
+      <DropdownMenuTrigger id={id} aria-label={label} className="n-task-input n-task-select">
+        <span className="n-task-select-value">{chosen?.label ?? ''}</span>
+        <ChevronDown aria-hidden="true" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="n-menu-over-dialog n-task-select-menu" align="start">
+        {options.map((option) => (
+          <DropdownMenuItem key={option.value} onSelect={() => onChange(option.value)}>
+            <span>{option.label}</span>
+            {option.value === value && <Check className="n-menu-check" aria-hidden="true" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 

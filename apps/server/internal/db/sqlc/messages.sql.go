@@ -430,6 +430,27 @@ func (q *Queries) GetMessage(ctx context.Context, id uuid.UUID) (Message, error)
 	return i, err
 }
 
+const latestReferableMessageAt = `-- name: LatestReferableMessageAt :one
+SELECT created_at
+FROM messages
+WHERE conversation_id = $1
+  AND role <> 'tool'
+  AND status <> 'blocked'
+  AND origin IS NULL
+ORDER BY created_at DESC, id DESC
+LIMIT 1
+`
+
+// When the last question or answer of a conversation was written: what a
+// reference to it takes in (agent/references.go). Refused messages, tool
+// results and sub-agent reports are not the conversation, as for an export.
+func (q *Queries) LatestReferableMessageAt(ctx context.Context, conversationID uuid.UUID) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, latestReferableMessageAt, conversationID)
+	var created_at pgtype.Timestamptz
+	err := row.Scan(&created_at)
+	return created_at, err
+}
+
 const listMessages = `-- name: ListMessages :many
 SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, origin
 FROM messages
@@ -621,6 +642,61 @@ ORDER BY created_at, id
 // of the conversation.
 func (q *Queries) ListTranscript(ctx context.Context, conversationID uuid.UUID) ([]Message, error) {
 	rows, err := q.db.Query(ctx, listTranscript, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Message{}
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConversationID,
+			&i.Role,
+			&i.Content,
+			&i.Status,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Parts,
+			&i.StopReason,
+			&i.Model,
+			&i.Provider,
+			&i.Usage,
+			&i.ErrorCode,
+			&i.RunID,
+			&i.Origin,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTranscriptUpTo = `-- name: ListTranscriptUpTo :many
+SELECT id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, origin
+FROM messages
+WHERE conversation_id = $1
+  AND role <> 'tool'
+  AND status <> 'blocked'
+  AND origin IS NULL
+  AND created_at <= $2::timestamptz
+ORDER BY created_at, id
+`
+
+type ListTranscriptUpToParams struct {
+	ConversationID uuid.UUID          `json:"conversation_id"`
+	UpTo           pgtype.Timestamptz `json:"up_to"`
+}
+
+// A referenced conversation as ListTranscript takes it, up to when it was
+// referenced: what came after is not what the message referred to.
+func (q *Queries) ListTranscriptUpTo(ctx context.Context, arg ListTranscriptUpToParams) ([]Message, error) {
+	rows, err := q.db.Query(ctx, listTranscriptUpTo, arg.ConversationID, arg.UpTo)
 	if err != nil {
 		return nil, err
 	}

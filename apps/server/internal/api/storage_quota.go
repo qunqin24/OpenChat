@@ -21,10 +21,12 @@ import (
 // yet, in a kept conversation or a temporary one - since all of it is stored;
 // an account has the instance's default (settingStorageQuota, 5 GiB unless an
 // administrator changes it) or a quota of its own (users.storage_quota_bytes).
-// An upload past it is refused when it is asked for (CreateUpload), and again
-// when a message claims it with the size it was stored at (admitAttachments):
-// the size an upload announces is only announced. Both count under
-// LockUserStorage, so uploads at once cannot share the room left for one.
+// An upload past it is refused when it is asked for (CreateUpload), with the
+// size it declares - which is also the most it can store (the local PUT stops
+// there, the bucket's signed URL carries it as Content-Length) - and again when
+// a message claims it, with the size it was stored at (admitAttachments). Both
+// count under LockUserStorage, so uploads at once cannot share the room left
+// for one.
 // Lowering a quota deletes nothing; the person makes room in the library.
 
 const (

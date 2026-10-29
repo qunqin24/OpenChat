@@ -1,4 +1,4 @@
-import type { Attachment, RemovedAttachment } from '@openchat/api-client'
+import type { Attachment, ConversationReference, RemovedAttachment } from '@openchat/api-client'
 import { FileX2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -10,6 +10,7 @@ import { downloadFile } from '@/hooks/use-library'
 import { opensInPanel } from '@/lib/attachments'
 import { useFilePanel } from '@/stores/file-panel-store'
 import { useImageViewer, type ViewerImage } from '@/stores/image-viewer-store'
+import { ReferenceChip } from './ConversationChip'
 import { FileBadge } from './FileBadge'
 
 /**
@@ -19,8 +20,19 @@ import { FileBadge } from './FileBadge'
  * that opens it in a new tab. The links are
  * signed and expire, so an image that no longer loads falls back to the chip.
  * Files deleted since (from the library) keep their place as a muted chip.
+ * Then the other conversations it refers to, each a way to that conversation.
  */
-export function MessageAttachments({ conversationId, items, removed = [] }: { conversationId: string; items: Attachment[]; removed?: RemovedAttachment[] }) {
+export function MessageAttachments({
+  conversationId,
+  items,
+  removed = [],
+  references = [],
+}: {
+  conversationId: string
+  items: Attachment[]
+  removed?: RemovedAttachment[]
+  references?: ConversationReference[]
+}) {
   const { t } = useTranslation()
   const pictures = items.filter((item) => item.contentType.startsWith('image/'))
   const gallery: ViewerImage[] = pictures.map((item) => ({
@@ -38,6 +50,7 @@ export function MessageAttachments({ conversationId, items, removed = [] }: { co
         ),
       )}
       {removed.map((item) => <RemovedChip key={item.id} item={item} />)}
+      {references.map((reference) => <ReferenceChip key={reference.conversationId} reference={reference} />)}
     </div>
   )
 }

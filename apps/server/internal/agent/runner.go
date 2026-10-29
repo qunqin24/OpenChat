@@ -85,7 +85,10 @@ type Options struct {
 	// Compression, when set, compresses a request that nears the model's
 	// window before it is made. Nil never compresses on its own.
 	Compression *Compression
-	// ToolConcurrency bounds the calls of one round running at once.
+	// ToolConcurrency bounds the calls of one round running at once. The
+	// prompt asks for independent calls in one round (api/agent_setup.go), so
+	// a round of searches and page reads should mostly run together; the bound
+	// is there for the services they reach.
 	ToolConcurrency int
 	// RequestOptions are passed to every model request.
 	RequestOptions llm.Options
@@ -137,7 +140,7 @@ func (o Options) withDefaults() Options {
 		o.HistoryLimit = 2000
 	}
 	if o.ToolConcurrency <= 0 {
-		o.ToolConcurrency = 4
+		o.ToolConcurrency = 10
 	}
 	return o
 }

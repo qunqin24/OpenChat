@@ -8,7 +8,7 @@ import {
   DropdownMenuSubTrigger, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { UserAvatar } from '@/components/user-avatar'
-import { useLogout, useSession } from '@/features/auth/use-auth'
+import { useSession, useSignOut } from '@/features/auth/use-auth'
 import { supportedLanguages } from '@/lib/i18n'
 import { useSettings } from '@/lib/settings'
 import { useUIStore, type Theme } from '@/stores/ui-store'
@@ -24,7 +24,7 @@ export function SidebarAccount({ collapsed, onNavigate }: { collapsed: boolean; 
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { data: session } = useSession()
-  const logout = useLogout()
+  const signOut = useSignOut()
   const settings = useSettings()
   const theme = useUIStore((s) => s.theme)
   const setTheme = useUIStore((s) => s.setTheme)
@@ -87,10 +87,9 @@ export function SidebarAccount({ collapsed, onNavigate }: { collapsed: boolean; 
             <span>{t('admin.title')}</span>
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem onSelect={async () => {
-          await logout.mutateAsync()
+        <DropdownMenuItem onSelect={() => {
           onNavigate()
-          await navigate({ to: '/login' })
+          void signOut()
         }}>
           <LogOut aria-hidden="true" />
           <span>{t('auth.logout')}</span>

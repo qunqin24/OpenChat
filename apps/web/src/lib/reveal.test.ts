@@ -1,16 +1,27 @@
 import { describe, expect, it } from 'vitest'
 
-import { REVEAL_FRESH_CHARS, REVEAL_MIN_CPS, revealDone, revealed, revealFrom, revealStep, type RevealState } from './reveal'
+import {
+  REVEAL_FINISH_S,
+  REVEAL_FRESH_CHARS,
+  REVEAL_MIN_CPS,
+  REVEAL_WHOLE_S,
+  revealDone,
+  revealed,
+  revealFrom,
+  revealStep,
+  revealWhole,
+  type RevealState,
+} from './reveal'
 
 const FRAME = 1000 / 60
 const start: RevealState = revealDone(0)
 
 /** Runs the reveal for `ms`, with `arrive(t)` the characters held at time t. */
-function run(state: RevealState, arrive: (t: number) => number, ms: number, from = 0) {
+function run(state: RevealState, arrive: (t: number) => number, ms: number, from = 0, streaming = true) {
   const steps: { t: number; shown: number; held: number }[] = []
   for (let t = from; t < from + ms; t += FRAME) {
     const held = arrive(t)
-    state = revealStep(state, held, FRAME)
+    state = revealStep(state, held, FRAME, streaming)
     steps.push({ t, shown: Math.floor(state.shown), held })
   }
   return { state, steps }
@@ -99,6 +110,35 @@ describe('revealStep', () => {
     // The stream stopped at 300 characters; the rest shows within a second.
     const { state } = run(streaming.state, () => 300, 1000, 1800)
     expect(state.shown).toBe(300)
+  })
+
+  it('finishes within a fraction of a second once told the stream is over, typing to the end', () => {
+    // A relay that held the end back: a steady stream, then 1500 characters
+    // in the commit that ends it.
+    const before = run(start, batches(9, 150), 5000)
+    const ended = run(before.state, () => before.steps.at(-1)!.held + 1500, 1000, 5000, false)
+    const done = ended.steps.find((s) => s.shown === s.held)!
+    expect(done.t - 5000).toBeLessThanOrEqual(REVEAL_FINISH_S * 1000 + FRAME)
+    // Still typed, not jumped: the first frame shows only a little of it.
+    expect(ended.steps[0]!.shown - before.steps.at(-1)!.shown).toBeLessThan(150)
+    // And never slower towards the end, the way closing on a gap would.
+    const moved = ended.steps.slice(1, ended.steps.indexOf(done)).map((s, i) => s.shown - ended.steps[i]!.shown)
+    expect(Math.min(...moved.slice(0, -1))).toBeGreaterThanOrEqual(Math.max(...moved) - 1)
+  })
+
+  it('keeps typing between a slow relay’s batches', () => {
+    // 300 characters every second and a half: once it has seen a few, a
+    // batch is typed over the time to the next rather than in a second and
+    // then a stop.
+    const { steps } = run(start, batches(300, 1500), 12_000)
+    expect(Math.max(...gaps(steps.filter((s) => s.t > 4500)))).toBeLessThan(100)
+  })
+
+  it('types out a part that arrived whole, quickly', () => {
+    const { steps } = run(revealWhole(600), () => 600, 1000, 0, false)
+    expect(steps[0]!.shown).toBeLessThan(40)
+    expect(steps.find((s) => s.t >= (REVEAL_WHOLE_S * 1000) / 2)!.shown).toBeLessThan(400)
+    expect(steps.find((s) => s.shown === 600)!.t).toBeLessThanOrEqual(REVEAL_WHOLE_S * 1000 + FRAME)
   })
 })
 

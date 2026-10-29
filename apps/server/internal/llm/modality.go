@@ -31,6 +31,10 @@ const (
 	DocxMediaType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 	XlsxMediaType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 	PDFMediaType  = "application/pdf"
+	// ConversationMediaType marks an attachment part that is another of the
+	// user's conversations, not a file (agent/references.go): read as words,
+	// like a document, and never stored.
+	ConversationMediaType = "application/x-openchat-conversation"
 )
 
 // NativePDFPages is the longest PDF sent whole to a model that reads PDFs:
@@ -46,7 +50,7 @@ func ModalityOf(mediaType string) string {
 		return ModalityImage
 	case mediaType == PDFMediaType:
 		return ModalityPDF
-	case mediaType == DocxMediaType || mediaType == XlsxMediaType:
+	case mediaType == DocxMediaType || mediaType == XlsxMediaType || mediaType == ConversationMediaType:
 		return ModalityDocument
 	case mediaType == TextMediaType:
 		return ModalityText

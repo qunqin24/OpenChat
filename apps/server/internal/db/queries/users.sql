@@ -106,6 +106,12 @@ RETURNING *;
 -- `approved` can only let a pending account in (true); there is no way back to
 -- pending. It is independent of `disabled`: enabling an account does not
 -- approve it, and approving one does not enable it.
+--
+-- Disabling records why (`disabled_reason`, 'admin' unless said otherwise),
+-- the note shown to the person, and the administrator who did it
+-- (`disabled_by`, the one they are told to contact); disabling an account
+-- that already is keeps the reason and who, and replaces the note only when
+-- one is given. Enabling clears all three.
 UPDATE users
 SET name          = COALESCE(sqlc.narg('name')::text, name),
     email         = COALESCE(sqlc.narg('email')::text, email),
@@ -114,6 +120,26 @@ SET name          = COALESCE(sqlc.narg('name')::text, name),
     disabled_at   = CASE
                         WHEN sqlc.narg('disabled')::boolean IS NULL THEN disabled_at
                         WHEN sqlc.narg('disabled')::boolean THEN COALESCE(disabled_at, now())
+                        ELSE NULL
+                        END,
+    disabled_reason = CASE
+                          WHEN sqlc.narg('disabled')::boolean IS NULL THEN disabled_reason
+                          WHEN sqlc.narg('disabled')::boolean THEN
+                              CASE WHEN disabled_at IS NULL THEN COALESCE(sqlc.narg('disabled_reason')::text, 'admin')
+                                   ELSE disabled_reason END
+                          ELSE NULL
+                          END,
+    disabled_note = CASE
+                        WHEN sqlc.narg('disabled')::boolean IS NULL THEN disabled_note
+                        WHEN sqlc.narg('disabled')::boolean THEN
+                            CASE WHEN disabled_at IS NULL THEN sqlc.narg('disabled_note')::text
+                                 ELSE COALESCE(sqlc.narg('disabled_note')::text, disabled_note) END
+                        ELSE NULL
+                        END,
+    disabled_by   = CASE
+                        WHEN sqlc.narg('disabled')::boolean IS NULL THEN disabled_by
+                        WHEN sqlc.narg('disabled')::boolean THEN
+                            CASE WHEN disabled_at IS NULL THEN sqlc.narg('disabled_by')::uuid ELSE disabled_by END
                         ELSE NULL
                         END,
     pending       = CASE WHEN sqlc.narg('approved')::boolean IS TRUE THEN false ELSE pending END,
@@ -159,9 +185,25 @@ SET role       = sqlc.arg('role'),
 WHERE id = ANY (sqlc.arg('ids')::uuid[]);
 
 -- name: BulkSetUserDisabled :execrows
+-- As AdminUpdateUser: disabling by an administrator, with one note for all.
 UPDATE users
-SET disabled_at = CASE WHEN sqlc.arg('disabled')::boolean THEN now() ELSE NULL END,
-    updated_at  = now()
+SET disabled_at     = CASE WHEN sqlc.arg('disabled')::boolean THEN COALESCE(disabled_at, now()) ELSE NULL END,
+    disabled_reason = CASE
+                          WHEN NOT sqlc.arg('disabled')::boolean THEN NULL
+                          WHEN disabled_at IS NULL THEN 'admin'
+                          ELSE disabled_reason
+                          END,
+    disabled_note   = CASE
+                          WHEN NOT sqlc.arg('disabled')::boolean THEN NULL
+                          WHEN disabled_at IS NULL THEN sqlc.narg('disabled_note')::text
+                          ELSE COALESCE(sqlc.narg('disabled_note')::text, disabled_note)
+                          END,
+    disabled_by     = CASE
+                          WHEN NOT sqlc.arg('disabled')::boolean THEN NULL
+                          WHEN disabled_at IS NULL THEN sqlc.narg('disabled_by')::uuid
+                          ELSE disabled_by
+                          END,
+    updated_at      = now()
 WHERE id = ANY (sqlc.arg('ids')::uuid[]);
 
 -- name: BulkApproveUsers :execrows

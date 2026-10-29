@@ -375,6 +375,24 @@ func (e DashboardRange) Valid() bool {
 	}
 }
 
+// Defines values for DisabledReason.
+const (
+	DisabledReasonAdmin      DisabledReason = "admin"
+	DisabledReasonModeration DisabledReason = "moderation"
+)
+
+// Valid indicates whether the value is a known member of the DisabledReason enum.
+func (e DisabledReason) Valid() bool {
+	switch e {
+	case DisabledReasonAdmin:
+		return true
+	case DisabledReasonModeration:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DocumentVersionSource.
 const (
 	DocumentVersionSourceModel DocumentVersionSource = "model"
@@ -1602,6 +1620,35 @@ func (e ListCatalogModelsParamsCapability) Valid() bool {
 	}
 }
 
+// AccountDisabled The `details` of a 403 `account_disabled`: what a disabled account is
+// told, on signing in and on every request its session still makes (the
+// session is kept, not revoked, so the page can say why; nothing else
+// answers it). `admin` is whom to ask.
+type AccountDisabled struct {
+	// Admin The administrator an account that cannot sign in is told to contact:
+	// the longest-standing enabled one. Given only to someone who has just
+	// proved the password of such an account (or registered it), as OpenWebUI
+	// shows its admin on the pending-account screen.
+	Admin *AdminContact `json:"admin,omitempty"`
+
+	// Categories With `moderation`, the categories those messages were blocked for.
+	Categories *[]string `json:"categories,omitempty"`
+	DisabledAt time.Time `json:"disabledAt"`
+
+	// Note What the administrator wrote, when they wrote anything.
+	Note *string `json:"note,omitempty"`
+
+	// Reason Who disabled the account: an administrator, or content moderation once
+	// enough of its messages were blocked.
+	Reason DisabledReason `json:"reason"`
+
+	// Strikes With `moderation`, how many blocked messages in the window set it off.
+	Strikes *int `json:"strikes,omitempty"`
+
+	// WindowHours With `moderation`, the window they were counted in.
+	WindowHours *int `json:"windowHours,omitempty"`
+}
+
 // AdminContact The administrator an account that cannot sign in is told to contact:
 // the longest-standing enabled one. Given only to someone who has just
 // proved the password of such an account (or registered it), as OpenWebUI
@@ -1751,10 +1798,13 @@ type BulkUpdateResult struct {
 type BulkUpdateUsersRequest struct {
 	// Approved Only `true` (400 `invalid_approval` otherwise): lets pending
 	// accounts in. Accounts that are not pending are left as they are.
-	Approved *bool                `json:"approved,omitempty"`
-	Disabled *bool                `json:"disabled,omitempty"`
-	Role     *UserRole            `json:"role,omitempty"`
-	UserIds  []openapi_types.UUID `json:"userIds"`
+	Approved *bool `json:"approved,omitempty"`
+	Disabled *bool `json:"disabled,omitempty"`
+
+	// DisabledNote With `disabled: true`, the note every one of them is shown (as in updateUser).
+	DisabledNote *string              `json:"disabledNote,omitempty"`
+	Role         *UserRole            `json:"role,omitempty"`
+	UserIds      []openapi_types.UUID `json:"userIds"`
 }
 
 // CapacityPeriod What a spending cap counts. `total` is everything since the cap's
@@ -2290,6 +2340,14 @@ type ConversationPage struct {
 	NextCursor *string        `json:"nextCursor,omitempty"`
 }
 
+// ConversationReference defines model for ConversationReference.
+type ConversationReference struct {
+	ConversationId openapi_types.UUID `json:"conversationId"`
+
+	// Title The conversation's title when it was referred to (empty when it had none).
+	Title string `json:"title"`
+}
+
 // ConversationTrace defines model for ConversationTrace.
 type ConversationTrace struct {
 	Requests      []TraceRequest `json:"requests"`
@@ -2344,6 +2402,13 @@ type CreateConversationRequest struct {
 type CreateMessageRequest struct {
 	AttachmentIds *[]openapi_types.UUID `json:"attachmentIds,omitempty"`
 	Content       string                `json:"content"`
+
+	// ConversationIds Other conversations of yours to refer to, not this one. Each is read
+	// for the model, up to its last message now, whenever the context is
+	// built - not copied, not uploaded, not checked again by moderation.
+	// 400 `reference_unavailable` for one that is not yours or is this
+	// one; `reference_empty` for one with nothing in it.
+	ConversationIds *[]openapi_types.UUID `json:"conversationIds,omitempty"`
 
 	// Model The model to answer with, which the conversation also remembers.
 	// Absent: the conversation's model, or the first one available.
@@ -2507,6 +2572,10 @@ type DeletedConversations struct {
 	Deleted int64 `json:"deleted"`
 }
 
+// DisabledReason Who disabled the account: an administrator, or content moderation once
+// enough of its messages were blocked.
+type DisabledReason string
+
 // Document defines model for Document.
 type Document struct {
 	ConversationId openapi_types.UUID `json:"conversationId"`
@@ -2543,7 +2612,10 @@ type EditMessageRequest struct {
 	// message keeps its own files and takes none.
 	AttachmentIds *[]openapi_types.UUID `json:"attachmentIds,omitempty"`
 	Content       string                `json:"content"`
-	Model         *string               `json:"model,omitempty"`
+
+	// ConversationIds As in createMessage, and like attachmentIds only for a refused message.
+	ConversationIds *[]openapi_types.UUID `json:"conversationIds,omitempty"`
+	Model           *string               `json:"model,omitempty"`
 
 	// ReasoningEffort How hard a reasoning model thinks. `auto` sends nothing and leaves the
 	// model at its own default. The other values are the levels providers
@@ -2853,6 +2925,9 @@ type Message struct {
 	// message to a sub-agent, seen only in a sub-agent's transcript.
 	Origin *MessageOrigin `json:"origin,omitempty"`
 	Parts  []MessagePart  `json:"parts"`
+
+	// References The other conversations the message refers to (createMessage's conversationIds).
+	References *[]ConversationReference `json:"references,omitempty"`
 
 	// RemovedAttachments User messages only: the files it was sent with that were deleted
 	// since (`deleteFile`), to show where they were.
@@ -4125,9 +4200,13 @@ type UpdateTaskRequest struct {
 type UpdateUserRequest struct {
 	// Approved `true` lets a pending account in; `false` is 400 `invalid_approval`
 	// (there is no way back to pending). Independent of `disabled`.
-	Approved *bool                `json:"approved,omitempty"`
-	Disabled *bool                `json:"disabled,omitempty"`
-	Email    *openapi_types.Email `json:"email,omitempty"`
+	Approved *bool `json:"approved,omitempty"`
+	Disabled *bool `json:"disabled,omitempty"`
+
+	// DisabledNote With `disabled: true`: why, in words the person is shown when they
+	// next use the app (an empty string is none). Ignored otherwise.
+	DisabledNote *string              `json:"disabledNote,omitempty"`
+	Email        *openapi_types.Email `json:"email,omitempty"`
 
 	// Name A username. `@` is excluded so that a username can never be spelled
 	// like an email address: sign-in accepts either, and if the two could
@@ -4326,13 +4405,20 @@ type User struct {
 	// first letter of its name on a colour derived from its id. No
 	// third-party avatar service is asked — that would tell it who is being
 	// looked at, from every page that shows a name.
-	AvatarUrl  *AvatarUrl          `json:"avatarUrl,omitempty"`
-	CreatedAt  time.Time           `json:"createdAt"`
-	Disabled   bool                `json:"disabled"`
-	Email      openapi_types.Email `json:"email"`
-	Id         openapi_types.UUID  `json:"id"`
-	LastSeenAt *time.Time          `json:"lastSeenAt,omitempty"`
-	Name       string              `json:"name"`
+	AvatarUrl *AvatarUrl `json:"avatarUrl,omitempty"`
+	CreatedAt time.Time  `json:"createdAt"`
+	Disabled  bool       `json:"disabled"`
+
+	// DisabledNote What the administrator wrote when disabling it, shown to the person.
+	DisabledNote *string `json:"disabledNote,omitempty"`
+
+	// DisabledReason Who disabled the account: an administrator, or content moderation once
+	// enough of its messages were blocked.
+	DisabledReason *DisabledReason     `json:"disabledReason,omitempty"`
+	Email          openapi_types.Email `json:"email"`
+	Id             openapi_types.UUID  `json:"id"`
+	LastSeenAt     *time.Time          `json:"lastSeenAt,omitempty"`
+	Name           string              `json:"name"`
 
 	// Pending Registered while approval was required and not yet approved. Such
 	// an account cannot sign in. It can also be `disabled` (rejected).

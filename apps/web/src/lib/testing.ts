@@ -76,7 +76,7 @@ export function summary(through: string, over: Partial<ContextSummary> = {}): Co
 }
 
 export function liveRun(r: Run, messages: Message[], over: Partial<LiveRun> = {}): LiveRun {
-  return { run: r, messages, partial: null, retry: null, tools: {}, compacting: false, ...over }
+  return { run: r, messages, partial: null, retry: null, tools: {}, compacting: false, fresh: [], freshFrom: 0, ...over }
 }
 
 export function batch(r: Run, version: number, events: RunEvent[]): BatchEvent {

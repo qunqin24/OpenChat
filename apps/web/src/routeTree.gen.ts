@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as DisabledRouteImport } from './routes/disabled'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as AuthedChatRouteImport } from './routes/_authed._chat'
@@ -43,6 +44,11 @@ const AuthedRoute = AuthedRouteImport.update({
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DisabledRoute = DisabledRouteImport.update({
+  id: '/disabled',
+  path: '/disabled',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -169,6 +175,7 @@ const AuthedChatChatConversationIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof AuthedChatIndexRoute
   '/admin': typeof AdminRouteWithChildren
+  '/disabled': typeof DisabledRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/library': typeof AuthedLibraryRoute
@@ -194,6 +201,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof AuthedChatIndexRoute
+  '/disabled': typeof DisabledRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/library': typeof AuthedLibraryRoute
@@ -220,6 +228,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authed': typeof AuthedRouteWithChildren
   '/admin': typeof AdminRouteWithChildren
+  '/disabled': typeof DisabledRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/_authed/_chat': typeof AuthedChatRouteWithChildren
@@ -250,6 +259,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/disabled'
     | '/login'
     | '/register'
     | '/library'
@@ -275,6 +285,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/disabled'
     | '/login'
     | '/register'
     | '/library'
@@ -300,6 +311,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_authed'
     | '/admin'
+    | '/disabled'
     | '/login'
     | '/register'
     | '/_authed/_chat'
@@ -329,6 +341,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthedRoute: typeof AuthedRouteWithChildren
   AdminRoute: typeof AdminRouteWithChildren
+  DisabledRoute: typeof DisabledRoute
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
   DevGenuiRoute: typeof DevGenuiRoute
@@ -349,6 +362,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/disabled': {
+      id: '/disabled'
+      path: '/disabled'
+      fullPath: '/disabled'
+      preLoaderRoute: typeof DisabledRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -602,6 +622,7 @@ const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   AuthedRoute: AuthedRouteWithChildren,
   AdminRoute: AdminRouteWithChildren,
+  DisabledRoute: DisabledRoute,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
   DevGenuiRoute: DevGenuiRoute,

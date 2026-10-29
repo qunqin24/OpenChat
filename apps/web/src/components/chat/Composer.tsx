@@ -1,4 +1,5 @@
-import { ArrowUp, Maximize2, MessageSquareQuote, Minimize2, NotebookPen, Plus, Square, X } from 'lucide-react'
+import type { ConversationReference } from '@openchat/api-client'
+import { ArrowUp, Maximize2, MessageSquareQuote, Minimize2, NotebookPen, Square, X } from 'lucide-react'
 import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -6,6 +7,7 @@ import type { PendingAttachment } from '@/hooks/use-attachments'
 import { highlightPassage } from '@/lib/highlight-passage'
 import { isEnter, withCtrl, withShift } from '@/lib/keys'
 import { cn } from '@/lib/utils'
+import { AttachMenu } from './AttachMenu'
 import AttachmentTray from './AttachmentTray'
 import Tooltip, { TooltipGroup } from './Tooltip'
 
@@ -43,6 +45,12 @@ interface ComposerProps {
     items: PendingAttachment[]
     onAdd: (files: File[]) => void
     onRemove: (key: string) => void
+    /** The conversation written in, which the "+" menu does not offer to refer to. */
+    conversationId?: string
+    /** The other conversations the message is to refer to, and the ways to change them. */
+    references: ConversationReference[]
+    onRefer: (reference: ConversationReference) => void
+    onUnrefer: (conversationId: string) => void
     /** Why sending is held back, when a file is still going up or failed. */
     blocked?: string
   }
@@ -195,7 +203,14 @@ export function Composer({
             ))}
           </div>
         )}
-        {attach && <AttachmentTray items={attach.items} onRemove={attach.onRemove} />}
+        {attach && (
+          <AttachmentTray
+            items={attach.items}
+            onRemove={attach.onRemove}
+            references={attach.references}
+            onRemoveReference={attach.onUnrefer}
+          />
+        )}
 
         <div className="n-composer-field">
           <textarea
@@ -220,22 +235,15 @@ export function Composer({
         </div>
 
         <div className="n-composer-bar">
-          {/* A disabled trigger fires no pointer events, so the tooltip would go
-              silent exactly when the reader most needs to know why the button is
-              dead — hence the wrapper span picking the hover up for it. */}
-          <Tooltip label={attach?.hint ?? t('chat.file.none')}>
-            <span className="n-tip-wrap">
-              <button
-                type="button"
-                className="n-icon-btn"
-                disabled={!canUpload}
-                aria-label={t('chat.file.upload')}
-                onClick={() => picker.current?.click()}
-              >
-                <Plus className="h-[18px] w-[18px]" />
-              </button>
-            </span>
-          </Tooltip>
+          <AttachMenu
+            disabled={!canUpload}
+            hint={attach?.hint ?? t('chat.file.none')}
+            conversationId={attach?.conversationId}
+            references={attach?.references ?? []}
+            onPickFiles={() => picker.current?.click()}
+            onAdd={(files) => attach?.onAdd(files)}
+            onRefer={(reference) => attach?.onRefer(reference)}
+          />
           {attach && (
             <input
               ref={picker}

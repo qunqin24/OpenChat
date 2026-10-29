@@ -161,6 +161,11 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, userId opena
 		httpx.Fail(w, r, errInvalidApproval)
 		return
 	}
+	note, noteErr := disabledNote(body.DisabledNote)
+	if noteErr != nil {
+		httpx.Fail(w, r, noteErr)
+		return
+	}
 
 	var name, email, passwordHash *string
 
@@ -246,6 +251,8 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, userId opena
 			PasswordHash: passwordHash,
 			Role:         role,
 			Disabled:     body.Disabled,
+			DisabledNote: note,
+			DisabledBy:   &actor.ID,
 			Approved:     body.Approved,
 		})
 		if err != nil {
@@ -275,15 +282,15 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, userId opena
 		return
 	}
 
-	// Two changes have to cut the person off now rather than whenever their
-	// cookie expires: being disabled, and having their password replaced. The
-	// session lookup already excludes disabled accounts, but a rotated
-	// credential is only meaningful if the sessions it issued go with it.
+	// A replaced password cuts the person off now rather than whenever their
+	// cookie expires: a rotated credential is only meaningful if the sessions
+	// it issued go with it. Being disabled does not: those sessions are kept,
+	// refused everywhere but told why (account_disabled.go).
 	//
 	// An admin who changes their own password is signed out by this too, which
 	// is the point — the browser holding the old session cannot be assumed to
 	// be theirs.
-	if (body.Disabled != nil && *body.Disabled) || passwordHash != nil {
+	if passwordHash != nil {
 		if err := s.q.DeleteUserSessions(r.Context(), userId); err != nil {
 			logWarn(r, "revoke sessions after account change", err)
 		}
@@ -344,6 +351,11 @@ func (s *Server) BulkUpdateUsers(w http.ResponseWriter, r *http.Request) {
 	case countSet(body.Role != nil, body.Disabled != nil, body.Approved != nil) != 1:
 		httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "one_change_required",
 			"give exactly one of role, disabled or approved"))
+		return
+	}
+	note, err := disabledNote(body.DisabledNote)
+	if err != nil {
+		httpx.Fail(w, r, err)
 		return
 	}
 
@@ -409,8 +421,10 @@ func (s *Server) BulkUpdateUsers(w http.ResponseWriter, r *http.Request) {
 			updated, err = q.BulkApproveUsers(r.Context(), targets)
 		default:
 			updated, err = q.BulkSetUserDisabled(r.Context(), sqlc.BulkSetUserDisabledParams{
-				Ids:      targets,
-				Disabled: *body.Disabled,
+				Ids:          targets,
+				Disabled:     *body.Disabled,
+				DisabledNote: note,
+				DisabledBy:   &actor.ID,
 			})
 		}
 		if err != nil {
@@ -433,13 +447,8 @@ func (s *Server) BulkUpdateUsers(w http.ResponseWriter, r *http.Request) {
 			httpx.Fail(w, r, errLastAdmin)
 			return
 		}
-
-		if body.Disabled != nil && *body.Disabled {
-			if err := q.DeleteSessionsForUsers(r.Context(), targets); err != nil {
-				httpx.Fail(w, r, err)
-				return
-			}
-		}
+		// Their sessions are kept: refused everywhere, but told why
+		// (account_disabled.go).
 	}
 
 	if err := tx.Commit(r.Context()); err != nil {

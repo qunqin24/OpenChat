@@ -716,6 +716,9 @@ type User struct {
 	InstructionsStyleBlockedHash *string            `json:"instructions_style_blocked_hash"`
 	TimeZone                     *string            `json:"time_zone"`
 	StorageQuotaBytes            *int64             `json:"storage_quota_bytes"`
+	DisabledReason               *string            `json:"disabled_reason"`
+	DisabledNote                 *string            `json:"disabled_note"`
+	DisabledBy                   *uuid.UUID         `json:"disabled_by"`
 }
 
 type UserMemory struct {

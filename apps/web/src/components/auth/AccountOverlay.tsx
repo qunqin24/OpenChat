@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { IconMark } from '@/assets/custom/icon-mark'
 import type { AdminContact } from '@/features/auth'
+import { categoryKey, type AccountDisabled } from '@/lib/account-disabled'
 import { WaitRipples } from './Ripples'
 
 /**
@@ -22,6 +23,7 @@ function AccountOverlay({
   title,
   subtitle,
   text,
+  children,
   admin,
   status,
   action,
@@ -32,6 +34,8 @@ function AccountOverlay({
   title: string
   subtitle: string
   text: string
+  /** Between the body and the administrator: why, for a disabled account. */
+  children?: ReactNode
   admin?: AdminContact
   /** A line under the body, e.g. the outcome of checking again. */
   status?: ReactNode
@@ -85,6 +89,7 @@ function AccountOverlay({
         <p id="n-account-overlay-text" className="n-account-overlay-text">
           {text}
         </p>
+        {children}
         {admin && <AdminCard admin={admin} />}
         {status && (
           <p className="n-account-overlay-status" role="status">
@@ -136,19 +141,119 @@ function AdminCard({ admin }: { admin: AdminContact }) {
   )
 }
 
-/** Signing in to a disabled account. "Back" returns to an empty form. */
-export function BannedScreen({ admin, onBack }: { admin?: AdminContact; onBack: () => void }) {
+/**
+ * Why an account is disabled: what the administrator wrote (or that they wrote
+ * nothing), or for a moderation ban the categories its messages were blocked
+ * for; and since when.
+ */
+function DisabledReason({ details }: { details: AccountDisabled }) {
+  const { t, i18n } = useTranslation()
+  const moderation = details.reason === 'moderation'
+  const categories = (details.categories ?? []).map((category) =>
+    t(`admin.moderation.category.${categoryKey(category)}` as 'admin.moderation.category.sexual', { defaultValue: category }),
+  )
+  const reason = moderation
+    ? categories.length > 0
+      ? t('auth.disabled.moderation-reason-categories', {
+          categories: new Intl.ListFormat(i18n.language, { style: 'narrow', type: 'conjunction' }).format(categories),
+        })
+      : t('auth.disabled.moderation-reason')
+    : details.note
+      ? t('auth.disabled.note', { note: details.note })
+      : t('auth.disabled.no-note')
+  const at = details.disabledAt ? new Date(details.disabledAt) : null
+  return (
+    <dl className="n-account-overlay-reason">
+      <dt>{t('auth.disabled.reason')}</dt>
+      <dd>{reason}</dd>
+      {at && !Number.isNaN(at.getTime()) && (
+        <>
+          <dt>{t(moderation ? 'auth.disabled.moderation-at' : 'auth.disabled.admin-at')}</dt>
+          <dd>
+            <time dateTime={details.disabledAt}>
+              {at.toLocaleString(i18n.language, { dateStyle: 'long', timeStyle: 'short' })}
+            </time>
+          </dd>
+        </>
+      )}
+    </dl>
+  )
+}
+
+/** The title, subtitle and body for a disabled account, by who disabled it. */
+function useDisabledWords(details: AccountDisabled | undefined) {
   const { t } = useTranslation()
+  if (!details) return { title: t('auth.banned.title'), subtitle: t('auth.banned.subtitle'), text: t('auth.banned.text') }
+  if (details.reason === 'moderation') {
+    return {
+      title: t('auth.disabled.moderation-title'),
+      subtitle: t('auth.disabled.moderation-subtitle'),
+      text:
+        details.strikes && details.windowHours
+          ? t('auth.disabled.moderation-text', { count: details.strikes, hours: details.windowHours })
+          : t('auth.disabled.moderation-text-bare'),
+    }
+  }
+  return { title: t('auth.disabled.admin-title'), subtitle: t('auth.disabled.admin-subtitle'), text: t('auth.disabled.admin-text') }
+}
+
+/** Signing in to a disabled account. "Back" returns to an empty form. */
+export function BannedScreen({
+  admin,
+  disabled,
+  onBack,
+}: {
+  admin?: AdminContact
+  disabled?: AccountDisabled
+  onBack: () => void
+}) {
+  const { t } = useTranslation()
+  const words = useDisabledWords(disabled)
   return (
     <AccountOverlay
       tone="refused"
-      title={t('auth.banned.title')}
-      subtitle={t('auth.banned.subtitle')}
-      text={t('auth.banned.text')}
+      {...words}
       admin={admin}
       action={{ label: t('auth.banned.back'), onClick: onBack }}
       onEscape={onBack}
-    />
+    >
+      {disabled && <DisabledReason details={disabled} />}
+    </AccountOverlay>
+  )
+}
+
+/**
+ * A signed-in account that has been disabled (the /disabled page): the session
+ * is kept, so this says why in place of the app. Signing out ends it; "check
+ * again" goes back in once the account is enabled, or says it still is not.
+ */
+export function DisabledScreen({
+  details,
+  checking,
+  still,
+  onCheck,
+  onSignOut,
+}: {
+  details: AccountDisabled
+  checking: boolean
+  still: boolean
+  onCheck: () => void
+  onSignOut: () => void
+}) {
+  const { t } = useTranslation()
+  const words = useDisabledWords(details)
+  return (
+    <AccountOverlay
+      tone="refused"
+      {...words}
+      admin={details.admin}
+      status={still && !checking ? t('auth.disabled.still') : undefined}
+      action={{ label: t('auth.disabled.sign-out'), onClick: onSignOut }}
+      secondary={{ label: checking ? t('auth.disabled.checking') : t('auth.disabled.check'), onClick: onCheck }}
+      onEscape={() => undefined}
+    >
+      <DisabledReason details={details} />
+    </AccountOverlay>
   )
 }
 

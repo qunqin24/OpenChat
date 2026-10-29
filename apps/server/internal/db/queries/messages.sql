@@ -187,3 +187,28 @@ SELECT EXISTS (
       AND role = 'tool'
       AND position(sqlc.arg('needle')::text IN parts::text) > 0
 ) AS found;
+
+-- name: LatestReferableMessageAt :one
+-- When the last question or answer of a conversation was written: what a
+-- reference to it takes in (agent/references.go). Refused messages, tool
+-- results and sub-agent reports are not the conversation, as for an export.
+SELECT created_at
+FROM messages
+WHERE conversation_id = sqlc.arg('conversation_id')
+  AND role <> 'tool'
+  AND status <> 'blocked'
+  AND origin IS NULL
+ORDER BY created_at DESC, id DESC
+LIMIT 1;
+
+-- name: ListTranscriptUpTo :many
+-- A referenced conversation as ListTranscript takes it, up to when it was
+-- referenced: what came after is not what the message referred to.
+SELECT *
+FROM messages
+WHERE conversation_id = sqlc.arg('conversation_id')
+  AND role <> 'tool'
+  AND status <> 'blocked'
+  AND origin IS NULL
+  AND created_at <= sqlc.arg('up_to')::timestamptz
+ORDER BY created_at, id;

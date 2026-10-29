@@ -56,28 +56,39 @@ type attachmentResolver struct {
 	// tools read.
 	asText bool
 
+	// conversation reads a reference to another conversation as words
+	// (references.go), or says in note why it cannot be read.
+	conversation func(ctx context.Context, ref llm.AttachmentPart) (text, note string)
+
 	// cache keeps what a run has read, so each round of a tool loop does not
-	// fetch the same files again.
-	cache map[uuid.UUID][]byte
+	// fetch the same files again; references keeps the conversations.
+	cache      map[uuid.UUID][]byte
+	references map[string]string
 }
 
 func (a *attachmentResolver) resolve(ctx context.Context, messages []llm.Message) ([]llm.Message, error) {
 	var ids []uuid.UUID
+	found := false
 	for _, msg := range messages {
 		for _, part := range msg.Parts {
 			if ref, ok := part.(llm.AttachmentPart); ok {
+				found = true
 				if id, err := uuid.Parse(ref.Ref); err == nil {
 					ids = append(ids, id)
 				}
 			}
 		}
 	}
-	if len(ids) == 0 {
+	if !found {
 		return messages, nil
 	}
-	rows, err := a.lookup(ctx, ids)
-	if err != nil {
-		return nil, err
+	// A message may carry only references to conversations, which are not files.
+	rows := map[uuid.UUID]sqlc.Attachment{}
+	if len(ids) > 0 {
+		var err error
+		if rows, err = a.lookup(ctx, ids); err != nil {
+			return nil, err
+		}
 	}
 
 	// Newest first: when the files do not all fit, the old ones give way to the
@@ -132,6 +143,9 @@ func (a *attachmentResolver) resolve(ctx context.Context, messages []llm.Message
 // (llm.NativePDFPages), and to its words otherwise - or when asText, for the
 // file tools - except a scanned one, whose words are next to none.
 func (a *attachmentResolver) one(ctx context.Context, ref llm.AttachmentPart, rows map[uuid.UUID]sqlc.Attachment, budget *int64) (resolved llm.AttachmentPart, note string) {
+	if ref.MediaType == llm.ConversationMediaType {
+		return a.reference(ctx, ref, budget)
+	}
 	id, err := uuid.Parse(ref.Ref)
 	row, found := rows[id]
 	if err != nil || !found {
@@ -225,6 +239,32 @@ func (a *attachmentResolver) one(ctx context.Context, ref llm.AttachmentPart, ro
 	return ref, ""
 }
 
+// reference resolves a reference to another conversation to its words, which
+// then go as a text file's do (whole, or as a card).
+func (a *attachmentResolver) reference(ctx context.Context, ref llm.AttachmentPart, budget *int64) (llm.AttachmentPart, string) {
+	if a.conversation == nil {
+		return ref, "conversations cannot be read here"
+	}
+	text, cached := a.references[ref.Ref]
+	if !cached {
+		var note string
+		if text, note = a.conversation(ctx, ref); note != "" {
+			return ref, note
+		}
+		if a.references == nil {
+			a.references = map[string]string{}
+		}
+		a.references[ref.Ref] = text
+	}
+	if int64(len(text)) > *budget {
+		return ref, "too many files to send in one request"
+	}
+	*budget -= int64(len(text))
+	ref.Data = []byte(text)
+	ref.MediaType = llm.TextMediaType
+	return ref, ""
+}
+
 // documentReadBytes bounds a document read for its words: the largest that
 // can be uploaded (api/files.go).
 const documentReadBytes = 20 << 20
@@ -256,6 +296,7 @@ func (ex *execution) withAttachments(ctx context.Context, messages []llm.Message
 	r := ex.r
 	if ex.files == nil {
 		ex.files = &attachmentResolver{
+			conversation: referenceReader(r.q, ex.run.UserID),
 			lookup: func(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]sqlc.Attachment, error) {
 				rows, err := r.q.ListAttachmentsForUser(ctx, sqlc.ListAttachmentsForUserParams{Ids: ids, UserID: &ex.run.UserID})
 				if err != nil {

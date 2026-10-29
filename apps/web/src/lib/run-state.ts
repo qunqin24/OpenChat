@@ -27,6 +27,14 @@ export interface LiveRun {
   tools: Record<string, ToolSlot['status']>
   /** The run is compressing the conversation's context before its next request. */
   compacting: boolean
+  /**
+   * The responses that arrived while this page watched, by id - not in the
+   * snapshot it joined at. One that mounts is new to the reader and is shown
+   * from nothing (`fresh` on `Markdown`), not all at once.
+   */
+  fresh: string[]
+  /** Likewise for `partial`: its parts from this index on began while the page watched. */
+  freshFrom: number
 }
 
 export interface ConversationLive {
@@ -53,6 +61,8 @@ export function fromSnapshot(snapshot: SnapshotEvent): ConversationLive {
       retry: generation?.retry ?? null,
       tools,
       compacting: snapshot.live?.compacting ?? false,
+      fresh: [],
+      freshFrom: generation?.parts.length ?? 0,
     },
   }
 }
@@ -82,7 +92,7 @@ function applyEvent(live: LiveRun | null, event: RunEvent): LiveRun | null {
     const held = live?.run.id === event.run.id ? live.messages.find((m) => m.id === event.message.id) : undefined
     const message =
       held && held.attachments?.length ? { ...event.message, attachments: held.attachments } : event.message
-    return { run: event.run, messages: [message], partial: null, retry: null, tools: {}, compacting: false }
+    return { run: event.run, messages: [message], partial: null, retry: null, tools: {}, compacting: false, fresh: [], freshFrom: 0 }
   }
   // Anything else belongs to a run we are holding; a stray event for one we
   // never saw start is ignored, and the next snapshot sets things straight.
@@ -92,7 +102,7 @@ function applyEvent(live: LiveRun | null, event: RunEvent): LiveRun | null {
     case 'run_finished':
       return { ...live, run: event.run, partial: null, retry: null, compacting: false }
     case 'generation_started':
-      return { ...live, partial: [], retry: null }
+      return { ...live, partial: [], retry: null, freshFrom: 0 }
     case 'part_started':
       return { ...live, partial: setAt(live.partial ?? [], event.index, event.part) }
     case 'part_delta': {
@@ -107,15 +117,15 @@ function applyEvent(live: LiveRun | null, event: RunEvent): LiveRun | null {
       if (live.messages.some((m) => m.id === event.message.id)) return live
       const messages = [...live.messages, event.message]
       // An assistant row is the finished form of the partial.
-      const partial = event.message.role === 'assistant' ? null : live.partial
-      return { ...live, messages, partial }
+      if (event.message.role !== 'assistant') return { ...live, messages }
+      return { ...live, messages, partial: null, fresh: [...live.fresh, event.message.id], freshFrom: 0 }
     }
     case 'tool_started':
       return { ...live, tools: { ...live.tools, [event.callId]: 'running' } }
     case 'tool_finished':
       return { ...live, tools: { ...live.tools, [event.callId]: 'done' } }
     case 'retry_scheduled':
-      return { ...live, partial: null, retry: { at: event.at, errorCode: event.errorCode } }
+      return { ...live, partial: null, retry: { at: event.at, errorCode: event.errorCode }, freshFrom: 0 }
     case 'compaction_started':
       return { ...live, compacting: true }
     case 'compaction_finished':

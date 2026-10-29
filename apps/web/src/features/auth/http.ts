@@ -1,6 +1,7 @@
 import { startAuthentication, WebAuthnError } from '@simplewebauthn/browser'
 
-import { api } from '@/lib/api'
+import { disabledDetails } from '@/lib/account-disabled'
+import { api, unwrap } from '@/lib/api'
 import {
   AuthFieldError,
   type AdminContact,
@@ -71,15 +72,20 @@ function toAuthError(error: unknown): AuthFieldError {
       ? 'auth.error.password-wrong'
       : (SERVER_ERRORS[body.code ?? ''] ?? 'auth.error.unknown')
 
-  return new AuthFieldError(field, key, adminOf(body.details?.admin))
+  const disabled = body.code === 'account_disabled' ? disabledDetails(body.details) : undefined
+  return new AuthFieldError(field, key, adminOf(body.details?.admin), disabled)
 }
 
 export function createHttpAuthApi(): AuthApi {
   return {
     async session() {
-      const { data, error, response } = await api.GET('/auth/session')
+      const result = await api.GET('/auth/session')
+      const { data, error, response } = result
       // 401 is the ordinary "not signed in" answer, not a failure.
       if (response.status === 401) return null
+      // A disabled account's session is kept and says why: thrown as it came,
+      // for the guard to take the page to /disabled (lib/account-disabled.ts).
+      if (response.status === 403 && (error as ServerError | undefined)?.code === 'account_disabled') unwrap(result)
       if (error) throw toAuthError(error)
       return data as SessionUser
     },

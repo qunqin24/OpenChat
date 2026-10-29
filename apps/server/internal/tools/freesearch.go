@@ -218,8 +218,9 @@ func mcpCall(ctx context.Context, client *http.Client, vendor, url, tool string,
 // `---`-separated blocks of `Title:`, `URL:` and `Highlights:` lines.
 func exaSearch(endpoint string) func(context.Context, *http.Client, SearchRequest) ([]SearchResult, error) {
 	return func(ctx context.Context, client *http.Client, req SearchRequest) ([]SearchResult, error) {
+		// The period and the sites go in the objective, which Exa ranks by.
 		text, err := mcpCall(ctx, client, "exa", endpoint, "web_search_exa",
-			map[string]any{"query": req.Query, "numResults": max(req.Limit, 1)})
+			map[string]any{"query": req.Query, "objective": req.inWords(), "numResults": max(req.Limit, 1)})
 		if err != nil {
 			return nil, err
 		}
@@ -235,7 +236,9 @@ func exaSearch(endpoint string) func(context.Context, *http.Client, SearchReques
 					r.Title, inHighlights = strings.TrimSpace(strings.TrimPrefix(trimmed, "Title:")), false
 				case strings.HasPrefix(trimmed, "URL:"):
 					r.URL, inHighlights = strings.TrimSpace(strings.TrimPrefix(trimmed, "URL:")), false
-				case strings.HasPrefix(trimmed, "Published:"), strings.HasPrefix(trimmed, "Author:"):
+				case strings.HasPrefix(trimmed, "Published:"):
+					r.Published, inHighlights = strings.TrimSpace(strings.TrimPrefix(trimmed, "Published:")), false
+				case strings.HasPrefix(trimmed, "Author:"):
 					inHighlights = false
 				case strings.HasPrefix(trimmed, "Highlights:"):
 					inHighlights = true
@@ -261,9 +264,18 @@ func exaSearch(endpoint string) func(context.Context, *http.Client, SearchReques
 // with a JSON document of results and their excerpts.
 func parallelSearch(endpoint string) func(context.Context, *http.Client, SearchRequest) ([]SearchResult, error) {
 	return func(ctx context.Context, client *http.Client, req SearchRequest) ([]SearchResult, error) {
+		// The period goes in the objective; the sites, as site: in the queries,
+		// one query a site.
+		queries := []string{req.Query}
+		if len(req.Sites) > 0 {
+			queries = queries[:0]
+			for _, site := range req.Sites {
+				queries = append(queries, req.Query+" site:"+site)
+			}
+		}
 		text, err := mcpCall(ctx, client, "parallel", endpoint, "web_search", map[string]any{
-			"objective":      req.Query,
-			"search_queries": []string{req.Query},
+			"objective":      req.inWords(),
+			"search_queries": queries,
 			"session_id":     freeSessionID,
 		})
 		if err != nil {
@@ -271,9 +283,10 @@ func parallelSearch(endpoint string) func(context.Context, *http.Client, SearchR
 		}
 		var parsed struct {
 			Results []struct {
-				URL      string   `json:"url"`
-				Title    string   `json:"title"`
-				Excerpts []string `json:"excerpts"`
+				URL         string   `json:"url"`
+				Title       string   `json:"title"`
+				PublishDate string   `json:"publish_date"`
+				Excerpts    []string `json:"excerpts"`
 			} `json:"results"`
 		}
 		if err := json.Unmarshal([]byte(text), &parsed); err != nil {
@@ -282,10 +295,11 @@ func parallelSearch(endpoint string) func(context.Context, *http.Client, SearchR
 		var results []SearchResult
 		for _, r := range parsed.Results {
 			results = append(results, SearchResult{
-				Title:   r.Title,
-				URL:     r.URL,
-				Snippet: strings.Join(r.Excerpts, " "),
-				Content: strings.Join(r.Excerpts, "\n\n"),
+				Title:     r.Title,
+				URL:       r.URL,
+				Snippet:   strings.Join(r.Excerpts, " "),
+				Content:   strings.Join(r.Excerpts, "\n\n"),
+				Published: r.PublishDate,
 			})
 			if req.Limit > 0 && len(results) == req.Limit {
 				break
@@ -299,8 +313,12 @@ func parallelSearch(endpoint string) func(context.Context, *http.Client, SearchR
 // endpoint, called without an Authorization header.
 func firecrawlSearch(base string) func(context.Context, *http.Client, SearchRequest) ([]SearchResult, error) {
 	return func(ctx context.Context, client *http.Client, req SearchRequest) ([]SearchResult, error) {
-		body, err := post(ctx, client, "firecrawl", base+"/v2/search",
-			map[string]any{"query": req.Query, "limit": max(req.Limit, 1)}, nil)
+		payload := map[string]any{"query": req.withSites(), "limit": max(req.Limit, 1)}
+		// Google's time filter, which Firecrawl passes on.
+		if letter, ok := map[string]string{"day": "d", "week": "w", "month": "m", "year": "y"}[req.Recency]; ok {
+			payload["tbs"] = "qdr:" + letter
+		}
+		body, err := post(ctx, client, "firecrawl", base+"/v2/search", payload, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -330,7 +348,7 @@ func firecrawlSearch(base string) func(context.Context, *http.Client, SearchRequ
 func keenableSearch(base string) func(context.Context, *http.Client, SearchRequest) ([]SearchResult, error) {
 	return func(ctx context.Context, client *http.Client, req SearchRequest) ([]SearchResult, error) {
 		body, err := post(ctx, client, "keenable", base+"/v1/search/public",
-			map[string]any{"query": req.Query, "max_results": max(req.Limit, 1)},
+			map[string]any{"query": req.withSites(), "max_results": max(req.Limit, 1)},
 			map[string]string{"X-Keenable-Title": "openchat"})
 		if err != nil {
 			return nil, err

@@ -94,7 +94,7 @@ func TestWebFetchExtractsText(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "Title: The Title\nURL: " + srv.URL + "\n\nHeading\nFirst paragraph.\nSecond."
+	want := "Title: The Title\nURL: " + srv.URL + "\n\n## Heading\n\nFirst paragraph.\n\nSecond."
 	if out.Content != want {
 		t.Fatalf("content:\n%q\nwant\n%q", out.Content, want)
 	}
@@ -179,7 +179,7 @@ func TestWebSearchAppliesSettings(t *testing.T) {
 		Config: SearchConfig{MaxResults: 2, Depth: "advanced", Compression: CompressTruncate,
 			TruncateLength: 300, Blocklist: blocklist},
 	}
-	results, hits, blocked, err := tool.Run(context.Background(), "q", 10)
+	results, hits, blocked, err := tool.Run(context.Background(), Query{Text: "q", Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}

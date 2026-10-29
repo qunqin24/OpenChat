@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next'
 import type { ChatModel, Message, MessagePart } from '@openchat/api-client'
-import { Check, Copy, MessageSquareQuote, NotebookPen, Pencil, RefreshCw } from 'lucide-react'
+import { MessageSquareQuote, NotebookPen } from 'lucide-react'
 import { Collapsible } from 'radix-ui'
 import { isValidElement, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -11,6 +11,7 @@ import { answersOf, ASK_USER, parseQuestions } from '@/lib/ask-user'
 import { copyClipboard } from '@/lib/clipboard'
 import { splitSegments } from '@/lib/genui/segments'
 import { turnText, type Turn } from '@/lib/transcript'
+import { CopiedIcon, CopyIcon, EditIcon, RegenerateIcon } from './ActionIcons'
 import AskUserCard, { PreparingLine } from './AskUserCard'
 import { MEMORY_TOOL, memoryChangeOf } from '@/lib/memory-tool'
 import { TASK_TOOL, taskChangeOf } from '@/lib/task-tool'
@@ -52,7 +53,7 @@ function CopyButton({ content }: { content: string }) {
         window.setTimeout(() => setCopied(false), 1600)
       }}
     >
-      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      {copied ? <CopiedIcon /> : <CopyIcon />}
     </button>
   )
 }
@@ -93,8 +94,13 @@ export function UserMessage({
   const quoted = parseQuotes(message.content)
   const words = quoted ? quoted.request : message.content
   const draft = typed ?? restoredDraft ?? null
-  const files = (message.attachments?.length || message.removedAttachments?.length) ? (
-    <MessageAttachments conversationId={message.conversationId} items={message.attachments ?? []} removed={message.removedAttachments} />
+  const files = (message.attachments?.length || message.removedAttachments?.length || message.references?.length) ? (
+    <MessageAttachments
+      conversationId={message.conversationId}
+      items={message.attachments ?? []}
+      removed={message.removedAttachments}
+      references={message.references}
+    />
   ) : null
   const closeField = () => {
     setTyped(null)
@@ -143,7 +149,7 @@ export function UserMessage({
         <CopyButton content={words} />
         {onEdit && (
           <button type="button" className="n-icon-btn sm" aria-label={t('chat.edit')} onClick={() => setTyped(words)}>
-            <Pencil className="h-3.5 w-3.5" />
+            <EditIcon />
           </button>
         )}
       </div>
@@ -263,14 +269,17 @@ function EditField({
  * An answer's text: Markdown, with any `openchat-ui` blocks in it drawn as
  * components — including one still being written at the end of a stream.
  */
-/** An answer's text: Markdown with any interface blocks drawn where they sit. */
-export function AnswerText({ text, streaming }: { text: string; streaming: boolean }) {
+/**
+ * An answer's text: Markdown with any interface blocks drawn where they sit.
+ * `fresh`: it began while the reader watched (`Markdown`).
+ */
+export function AnswerText({ text, streaming, fresh = false }: { text: string; streaming: boolean; fresh?: boolean }) {
   const segments = splitSegments(text, streaming)
   return segments.map((segment, i) =>
     segment.kind === 'ui' ? (
       <GenUIBlock key={i} source={segment.source} complete={segment.complete} />
     ) : (
-      <Markdown key={i} text={segment.text} streaming={streaming && i === segments.length - 1} />
+      <Markdown key={i} text={segment.text} streaming={streaming && i === segments.length - 1} fresh={fresh} />
     ),
   )
 }
@@ -282,7 +291,7 @@ export function AnswerText({ text, streaming }: { text: string; streaming: boole
  * or close it. Withheld reasoning — the provider sends only an encrypted blob —
  * has nothing to show and is left out.
  */
-function Reasoning({ text, streaming, durationMs }: { text: string; streaming: boolean; durationMs?: number }) {
+function Reasoning({ text, streaming, durationMs, fresh }: { text: string; streaming: boolean; durationMs?: number; fresh: boolean }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(streaming)
   // Follows the stream when it starts and stops; in between, the reader's.
@@ -326,7 +335,9 @@ function Reasoning({ text, streaming, durationMs }: { text: string; streaming: b
             not AnswerText, so an interface block drafted while thinking shows
             as the code it is rather than as a component. */}
         <div className="n-reasoning-body">
-          <Markdown text={text} streaming={streaming} />
+          {/* Fresh only while it streams: the body mounts again each time
+              the reader opens it, and a finished one is not typed again. */}
+          <Markdown text={text} streaming={streaming} fresh={fresh && streaming} />
         </div>
       </Collapsible.Content>
     </Collapsible.Root>
@@ -427,7 +438,8 @@ export function AssistantTurn({
   // Tool calls are collected rather than drawn, and text and reasoning carry
   // what they would fold into: the stretch from the first tool call to the
   // last becomes one activity line (see `blocks` below).
-  const renderParts = (parts: MessagePart[], keyPrefix: string, streaming: boolean): Block[] =>
+  // `fresh(index)`: that part began while the reader watched (`LiveRun.fresh`).
+  const renderParts = (parts: MessagePart[], keyPrefix: string, streaming: boolean, fresh: (index: number) => boolean): Block[] =>
     parts.map((part, index) => {
       const key = `${keyPrefix}:${index}`
       const isLast = index === parts.length - 1
@@ -435,14 +447,14 @@ export function AssistantTurn({
         case 'reasoning':
           return {
             key,
-            node: <Reasoning key={key} text={part.text} durationMs={part.durationMs} streaming={streaming && isLast} />,
+            node: <Reasoning key={key} text={part.text} durationMs={part.durationMs} streaming={streaming && isLast} fresh={fresh(index)} />,
             fold: { kind: 'reasoning', text: part.text, streaming: streaming && isLast },
           }
         case 'text':
           return part.text.trim()
             ? {
                 key,
-                node: <AnswerText key={key} text={part.text} streaming={streaming && isLast} />,
+                node: <AnswerText key={key} text={part.text} streaming={streaming && isLast} fresh={fresh(index)} />,
                 fold: { kind: 'note', text: part.text, streaming: streaming && isLast },
               }
             : null
@@ -528,7 +540,8 @@ export function AssistantTurn({
   // Sub-agents' reports delivered while the reply was being written are not
   // drawn: the launch line and the side panel already say how each stands.
   for (const [position, response] of turn.responses.entries()) {
-    entries.push(...renderParts(response.parts, `r${position}`, false))
+    const arrived = Boolean(live?.fresh.includes(response.id))
+    entries.push(...renderParts(response.parts, `r${position}`, false, () => arrived))
     if (response.stopReason === 'error') {
       entries.push(
         <Notice key={`${response.id}:error`} tone="error">
@@ -557,14 +570,11 @@ export function AssistantTurn({
     }
   }
   const partialKey = `r${turn.responses.length}`
-  if (turn.partial) entries.push(...renderParts(turn.partial, partialKey, running))
-  if (running && live?.retry) {
-    entries.push(
-      <Notice key="retry" tone="quiet">
-        {t('chat.retrying')}
-      </Notice>,
-    )
-  }
+  if (turn.partial) entries.push(...renderParts(turn.partial, partialKey, running, (index) => index >= (live?.freshFrom ?? Infinity)))
+  // A failed request being tried again is said by the line that says the
+  // model is at work - the thinking line, or the activity line once there is
+  // one - not by a notice of its own stacked above it.
+  const retrying = running && Boolean(live?.retry)
 
   // One activity line per reply. Everything from the first tool call to the
   // last — the calls, and whatever the model said or thought between rounds,
@@ -602,7 +612,8 @@ export function AssistantTurn({
     entries.slice(last + 1).every((entry) => entry === null)
   // Streaming thoughts is thinking; quiet between a round and its next
   // response is only waiting, and the line keeps saying what was done last.
-  const thinking = compacting || first < 0 ? false : reasoning ? 'reasoning' : waiting ? 'waiting' : false
+  const thinking =
+    compacting || first < 0 ? false : retrying ? 'retrying' : reasoning ? 'reasoning' : waiting ? 'waiting' : false
   const blocks: ReactNode[] = []
   const after: ReactNode[] = []
   const items: ActivityItem[] = []
@@ -641,7 +652,11 @@ export function AssistantTurn({
       <div className="n-msg-head">{name}</div>
       <div className="n-msg-body">{blocks}</div>
 
-      {compacting ? <CompactingLine /> : waiting && first < 0 && <ThinkingLine />}
+      {compacting ? (
+        <CompactingLine />
+      ) : (
+        (waiting || retrying) && first < 0 && <ThinkingLine label={retrying ? t('chat.retrying') : undefined} />
+      )}
 
       {!running && (text || onRegenerate) && (
         // The last answer keeps its actions in view, as the place to go next.
@@ -649,7 +664,7 @@ export function AssistantTurn({
           {text && <CopyButton content={text} />}
           {onRegenerate && (
             <button type="button" className="n-icon-btn sm" aria-label={t('chat.regenerate')} onClick={onRegenerate}>
-              <RefreshCw className="h-3.5 w-3.5" />
+              <RegenerateIcon />
             </button>
           )}
         </div>

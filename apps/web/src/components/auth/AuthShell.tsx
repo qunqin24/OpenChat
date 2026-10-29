@@ -1,7 +1,9 @@
+import { useRouter } from '@tanstack/react-router'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { IconMark } from '@/assets/custom/icon-mark'
+import { warmSignedInApp } from '@/lib/warm-app'
 import { PanelRipples } from './Ripples'
 
 interface AuthShellProps {
@@ -29,10 +31,13 @@ let entrancePlayed = false
  */
 export function AuthShell({ title, subtitle, icon, overlay, children }: AuthShellProps) {
   const { t } = useTranslation()
+  const router = useRouter()
   const [instant] = useState(() => entrancePlayed)
   useEffect(() => {
     entrancePlayed = true
   }, [])
+  // While the form waits, the chat it leads to is downloaded (lib/warm-app.ts).
+  useEffect(() => warmSignedInApp(router), [router])
 
   return (
     <div className="n-auth n-auth-split" data-instant={instant || undefined}>

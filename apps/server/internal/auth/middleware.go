@@ -14,13 +14,22 @@ import (
 
 // Middleware turns the session cookie into a user on the request context.
 type Middleware struct {
-	q *sqlc.Queries
+	q        *sqlc.Queries
+	disabled func(http.ResponseWriter, *http.Request, sqlc.User)
 }
 
 func NewMiddleware(q *sqlc.Queries) *Middleware { return &Middleware{q: q} }
 
+// OnDisabled sets what answers a live session whose account has been disabled
+// (the API's account_disabled, saying why). Without it such a session is
+// answered as one that is not valid.
+func (m *Middleware) OnDisabled(fn func(http.ResponseWriter, *http.Request, sqlc.User)) {
+	m.disabled = fn
+}
+
 // Require rejects anything without a valid session. A disabled account fails
-// here too, because the session lookup joins on `disabled_at IS NULL`.
+// here too, because the session lookup joins on `disabled_at IS NULL`; its
+// session is kept and answered by OnDisabled, so the person is told why.
 func (m *Middleware) Require(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := TokenFromRequest(r)
@@ -36,6 +45,13 @@ func (m *Middleware) Require(next http.Handler) http.Handler {
 
 		row, err := m.q.GetSessionUser(r.Context(), HashToken(token))
 		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) && m.disabled != nil {
+				if disabled, err := m.q.GetDisabledSessionUser(r.Context(), HashToken(token)); err == nil {
+					slog.DebugContext(r.Context(), "rejected: account disabled", "path", r.URL.Path)
+					m.disabled(w, r, disabled.User)
+					return
+				}
+			}
 			if errors.Is(err, pgx.ErrNoRows) {
 				// Expired, revoked, or the account was disabled. Clear the
 				// cookie so the browser stops sending a token that is dead.

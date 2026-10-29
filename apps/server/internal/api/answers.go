@@ -211,6 +211,10 @@ func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversatio
 		httpx.Fail(w, r, errAttachmentsNotEditable)
 		return
 	}
+	if body.ConversationIds != nil && len(*body.ConversationIds) > 0 && !refusedTarget {
+		httpx.Fail(w, r, errReferencesNotEditable)
+		return
+	}
 	choice, err := s.chooseRun(ctx, conv, body.Model, body.ReasoningEffort, body.WebSearch)
 	if err != nil {
 		httpx.Fail(w, r, err)
@@ -221,10 +225,15 @@ func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversatio
 		httpx.Fail(w, r, err)
 		return
 	}
+	refs, err := s.referenceParts(ctx, user.ID, conversationId, body.ConversationIds)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
 	// The new wording, and any files this edit brings: those of a question that
 	// was sent were checked when it was first sent. As a send is, with the
 	// pictures read once and what was read recorded (attachment_digest.go).
-	in := s.checkedFiles(content, files, digests)
+	in := withReferenceTitles(s.checkedFiles(content, files, digests), refs)
 	if refused, err := s.moderated(ctx, s.accountSubject(ctx, user, conversationId, ModerationSourceEdit), in); err != nil {
 		// The words that were refused replace the refused message they were to
 		// reword, so the transcript shows what was tried last.
@@ -266,7 +275,7 @@ func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversatio
 
 		// The new wording, and the files the question carried: an edit changes
 		// what was asked, not what was attached.
-		parts := inputPartsChecked(content, files, digests)
+		parts := append(inputPartsChecked(content, files, digests), refs...)
 		if old, err := agent.DecodeParts(edited.Parts); err == nil {
 			for _, part := range old {
 				if file, ok := part.(llm.AttachmentPart); ok {

@@ -74,7 +74,12 @@
   flex-direction: row;
   overflow: hidden;
   background: var(--n-bg);
-  -webkit-font-smoothing: antialiased;
+  /* The browser's own smoothing, as OpenWebUI leaves it, overriding the page's
+     `antialiased` (globals.css): on a Mac that setting draws text a hair
+     thinner, and the chat's answers and grey lines read faint beside
+     OpenWebUI's at the same weight. */
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
 }
 /* The page runs under a phone's notch and rounded corners (viewport-fit=cover):
    kept clear of them at the top and sides. The bottom is the composer dock's
@@ -446,6 +451,20 @@
 }
 .chat-ui .n-icon-btn.sm:not(:disabled):hover {
   color: var(--n-text);
+}
+/* The icons under a message (ActionIcons.tsx), after OpenWebUI's: 16px line
+   icons with a 1.5 stroke, on a rounded square rather than a circle. */
+.chat-ui .n-action-icon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.chat-ui .n-actions .n-icon-btn::before {
+  border-radius: 8px;
 }
 .chat-ui .n-scroll-bottom {
   position: absolute;

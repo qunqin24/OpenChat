@@ -1,8 +1,7 @@
-import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { ConfirmDialog } from '@/components/shadcn/confirm-dialog'
-import { useLogout } from '@/features/auth/use-auth'
+import { useSignOut } from '@/features/auth/use-auth'
 
 interface SignOutDialogProps {
   open: boolean
@@ -17,13 +16,7 @@ interface SignOutDialogProps {
  */
 export function SignOutDialog({ open, onOpenChange }: SignOutDialogProps) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
-  const logout = useLogout()
-
-  const handleSignOut = async () => {
-    await logout.mutateAsync()
-    await navigate({ to: '/login', replace: true })
-  }
+  const signOut = useSignOut()
 
   return (
     <ConfirmDialog
@@ -33,7 +26,7 @@ export function SignOutDialog({ open, onOpenChange }: SignOutDialogProps) {
       desc={t('admin.sign-out-confirm')}
       confirmText={t('auth.logout')}
       destructive
-      handleConfirm={() => void handleSignOut()}
+      handleConfirm={() => void signOut()}
       className="sm:max-w-sm"
     />
   )

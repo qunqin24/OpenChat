@@ -1,5 +1,7 @@
 import type { SessionUser as GeneratedSessionUser } from '@openchat/api-client'
 
+import type { AccountDisabled } from '@/lib/account-disabled'
+
 /** The signed-in user, straight from the contract. */
 export type SessionUser = GeneratedSessionUser
 
@@ -105,13 +107,16 @@ export class AuthFieldError extends Error {
   readonly key: AuthErrorKey
   /** On pending_approval and account_disabled: whom to ask, when the server named someone. */
   readonly admin?: AdminContact
+  /** On account_disabled: why, as the server told it (lib/account-disabled.ts). */
+  readonly disabled?: AccountDisabled
 
-  constructor(field: AuthFieldError['field'], key: AuthErrorKey, admin?: AdminContact) {
+  constructor(field: AuthFieldError['field'], key: AuthErrorKey, admin?: AdminContact, disabled?: AccountDisabled) {
     super(key)
     this.name = 'AuthFieldError'
     this.field = field
     this.key = key
     this.admin = admin
+    this.disabled = disabled
   }
 }
 

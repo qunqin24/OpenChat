@@ -6,10 +6,11 @@ import { forgetQueryCache } from '@/lib/query-persist'
 import { resetChatStore } from '@/stores/chat-store'
 
 /**
- * The server no longer knows this browser's session: an administrator disabled
- * the account, the password was changed elsewhere, or the cookie simply ran
- * out. Left alone, the open tab goes on half working - conversations read as
- * empty, sends fail with a generic message, nothing says why.
+ * The server no longer knows this browser's session: the password was changed
+ * elsewhere, or the cookie simply ran out. (A disabled account keeps its
+ * session and is answered 403 `account_disabled`, which lib/account-disabled
+ * handles.) Left alone, the open tab goes on half working - conversations read
+ * as empty, sends fail with a generic message, nothing says why.
  *
  * The sign-in form's own wrong password is also a 401 (`invalid_credentials`)
  * and is the form's to show.

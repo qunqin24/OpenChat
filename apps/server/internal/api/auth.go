@@ -211,7 +211,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	// Only now is the state of the account told: someone who does not know the
 	// password learns nothing about it. A rejected sign-up is disabled, and says so.
 	if user.DisabledAt.Valid {
-		httpx.Fail(w, r, s.refusedAccount(r.Context(), errAccountDisabled))
+		httpx.Fail(w, r, s.accountDisabled(r.Context(), user))
 		return
 	}
 	if user.Pending {

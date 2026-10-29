@@ -164,3 +164,132 @@
     animation: none;
   }
 }
+
+/* The composer's "+" menu (AttachMenu) and its lists of files and conversations:
+   wide enough for a name, the latest dozen without scrolling far. */
+.n-menu.n-attach-menu {
+  width: 220px;
+}
+
+/* "+" turned into one of its lists (AttachMenu), after OpenWebUI's: the same
+   width whatever it shows (narrower than its 280px, our labels being short),
+   rows of the menu's own height, and the view sliding
+   in - a list from the right, the menu back from the left. The list is kept
+   short, the menu it replaces being four rows. */
+.n-menu.n-attach-menu {
+  overflow: hidden;
+}
+
+.n-attach-view {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 2px;
+  animation: n-attach-in 150ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.n-attach-view:not(.n-attach-panel):not(.is-back) {
+  animation: none;
+}
+
+.n-attach-view.is-back {
+  --n-attach-from: -20px;
+}
+
+@keyframes n-attach-in {
+  from {
+    opacity: 0;
+    transform: translateX(var(--n-attach-from, 20px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .n-attach-view { animation: none; }
+}
+
+.n-menu-item > .n-attach-more {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin-left: auto;
+  opacity: 0.5;
+}
+
+.n-attach-search {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  height: 27px;
+  margin: 2px 2px 2px 8px;
+}
+
+.n-attach-search > svg {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+}
+
+.n-attach-search > input {
+  min-width: 0;
+  flex: 1;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+/* The row is the field; the page's focus ring would draw a box inside it. */
+.n-menu .n-attach-search > input:focus-visible {
+  outline: none;
+}
+
+.n-attach-search > input::placeholder {
+  color: currentColor;
+  opacity: 0.45;
+}
+
+.n-attach-search > input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.n-attach-list {
+  display: flex;
+  /* Seven rows, then it scrolls. */
+  max-height: min(203px, calc(var(--radix-dropdown-menu-content-available-height) - 64px));
+  flex-direction: column;
+  gap: 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.n-attach-list > .n-menu-item > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.n-attach-note {
+  padding: 12px 8px;
+  font-size: 12px;
+  opacity: 0.55;
+  text-align: center;
+}
+
+.n-menu-item > .n-attach-chosen {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin-left: auto;
+}
+
+.n-menu-item > .n-attach-file-icon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+}

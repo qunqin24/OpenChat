@@ -107,13 +107,15 @@ FROM messages m
 WHERE m.conversation_id = $1
   AND m.role = 'user'
   AND m.status <> 'blocked'
-  AND EXISTS (
+  AND (EXISTS (
     SELECT 1 FROM attachments a
     WHERE a.message_id = m.id
       AND a.content_type IN ('text/plain', 'application/pdf',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   )
+    -- or another conversation it refers to, read as words too (agent/references.go)
+    OR m.parts @> '[{"type": "attachment", "mediaType": "application/x-openchat-conversation"}]'::jsonb)
 ORDER BY m.created_at, m.id;
 
 -- name: LockUserStorage :exec

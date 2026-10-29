@@ -1,5 +1,7 @@
+import { Check, ChevronDown } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { supportedLanguages } from '@/lib/i18n'
 import { useUIStore, type Theme } from '@/stores/ui-store'
 
@@ -10,8 +12,8 @@ const LANGUAGE_LABELS = { en: 'English', zh: '中文' }
  * Theme and language, which the account menu also keeps as quick toggles.
  * Both are classic rows, a small label on the left and the control on the
  * right: the theme as three small cards, each a drawing of the app in that
- * theme on a backdrop of its light, and the language as a select that is only
- * text. Both apply as soon as they are changed, so the tab has no save button.
+ * theme on a backdrop of its light, and the language as a button that is only
+ * text, opening the chat's own menu (as the account menu's language list). Both apply as soon as they are changed, so the tab has no save button.
  */
 export function GeneralTab() {
   const { t, i18n } = useTranslation()
@@ -51,17 +53,22 @@ export function GeneralTab() {
           </div>
         </div>
         <div className="n-settings-line">
-          <label className="n-settings-small-label" htmlFor="settings-language">{t('settings.general.language')}</label>
-          <select
-            id="settings-language"
-            className="n-settings-select"
-            value={i18n.resolvedLanguage}
-            onChange={(e) => void i18n.changeLanguage(e.target.value)}
-          >
-            {supportedLanguages.map((lang) => (
-              <option key={lang} value={lang}>{LANGUAGE_LABELS[lang]}</option>
-            ))}
-          </select>
+          <span className="n-settings-small-label" id="settings-language">{t('settings.general.language')}</span>
+          <DropdownMenu>
+            <DropdownMenuTrigger className="n-settings-menu-button" aria-labelledby="settings-language settings-language-value">
+              <span id="settings-language-value">{LANGUAGE_LABELS[i18n.resolvedLanguage as keyof typeof LANGUAGE_LABELS]}</span>
+              <ChevronDown aria-hidden="true" />
+            </DropdownMenuTrigger>
+            {/* Over the settings dialog, which stands above the page's menus. */}
+            <DropdownMenuContent className="n-menu-over-dialog" align="end">
+              {supportedLanguages.map((lang) => (
+                <DropdownMenuItem key={lang} onSelect={() => void i18n.changeLanguage(lang)}>
+                  <span>{LANGUAGE_LABELS[lang]}</span>
+                  {i18n.resolvedLanguage === lang && <Check className="n-menu-check" aria-hidden="true" />}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </div>

@@ -33,9 +33,35 @@
   font: inherit;
   /* OpenWebUI's collapsible titles are body size. */
   font-size: 15px;
-  color: var(--n-text-2);
+  color: var(--n-chat-collapsible);
+  transition: color 150ms;
   user-select: none;
   vertical-align: top;
+}
+.chat-ui .n-reasoning-toggle {
+  /* The name's line height: on the body's taller line it hung a few pixels
+     lower than the reply's gap says. */
+  line-height: 22.5px;
+}
+/* The line sits on a line box of the body's taller leading, which left a
+   couple of pixels under it; and closed, the answer follows right under it,
+   as in OpenWebUI, not a block's gap further down. */
+.chat-ui .n-reasoning {
+  line-height: 22.5px;
+}
+.chat-ui .n-reasoning[data-state='closed']:not(:last-child),
+.chat-ui .n-activity:not(.is-open):not(:last-child) {
+  margin-bottom: -8px;
+}
+/* Closed lines one under another - the thinking, a search - a little apart,
+   and the answer a little further. Between OpenWebUI's spacing, at which the
+   lines and the answer read as one block, and the full block gap, at which
+   they drifted apart. */
+.chat-ui :is(.n-reasoning[data-state='closed'], .n-activity:not(.is-open)) + :is(.n-reasoning, .n-activity) {
+  margin-top: 6px;
+}
+.chat-ui :is(.n-reasoning[data-state='closed'], .n-activity:not(.is-open)) + :not(.n-reasoning, .n-activity) {
+  margin-top: 8px;
 }
 .chat-ui .n-reasoning-toggle::after {
   content: '›';
@@ -140,14 +166,21 @@
   max-width: 100%;
   margin-inline-start: -6px;
   padding: 4px 6px;
+  /* The padding is for the hover fill only: taken back, the line takes its
+     text's height, as the reasoning line does, and sits on its line's top. */
+  margin-block: -4px;
+  vertical-align: top;
   border-radius: 8px;
-  color: var(--n-text-2);
+  color: var(--n-chat-collapsible);
   text-align: start;
   transition: background-color 150ms ease, color 150ms ease;
 }
 .chat-ui .n-activity-head:hover {
   background: var(--n-hover);
-  color: var(--n-text);
+  color: var(--n-chat-collapsible-hover);
+}
+.chat-ui .n-reasoning-toggle:hover {
+  color: var(--n-chat-collapsible-hover);
 }
 /* Open, the line stays at the top of the transcript while its steps scroll
    under it, so a long search can be closed from wherever the reader is. Sticky
@@ -180,6 +213,20 @@
   inset: -1px -100vmax -20px;
   background: linear-gradient(to bottom, var(--n-bg) calc(100% - 20px), transparent 100%);
   pointer-events: none;
+}
+/* The band hangs below the pinned header; once the steps have scrolled past
+   and the header is about to let go, it hung past the section too and washed
+   out the answer's first line. The open section clips it at its own bottom -
+   vertically only, so it still reaches the column's edges - with 4px of room
+   either way (padding, taken back) for the header's hover fill, which reaches
+   past its line by as much. Clip, not hidden: no scroll container, so the
+   header still pins to the transcript. */
+.chat-ui .n-activity.is-open,
+.chat-ui .n-reasoning[data-state='open'] {
+  overflow-x: visible;
+  overflow-y: clip;
+  padding-block: 4px;
+  margin-block: -4px;
 }
 /* In the sub-agent panel there is no top bar for a pinned header to join, and
    a sticky box stops below its scroller's top padding, leaving a strip of text

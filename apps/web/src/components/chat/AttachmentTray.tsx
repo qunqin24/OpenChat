@@ -1,3 +1,4 @@
+import type { ConversationReference } from '@openchat/api-client'
 import { TriangleAlert, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -5,6 +6,7 @@ import type { PendingAttachment } from '@/hooks/use-attachments'
 import { useFileSummary } from '@/hooks/use-file-summary'
 import { documentTypeOf, formatSize, TEXT_TYPE, type FileKind } from '@/lib/attachments'
 import { cn } from '@/lib/utils'
+import { ReferenceCard } from './ConversationChip'
 import { FileBadge } from './FileBadge'
 import Tooltip from './Tooltip'
 
@@ -17,22 +19,34 @@ const typeOf = (item: PendingAttachment) => (item.kind === 'document' ? document
 /**
  * The files waiting to go with the message, above the text box: a thumbnail
  * for an image, a chip with the name for a PDF. Each shows its upload while it
- * goes up, says what went wrong if it did, and can be taken back out.
+ * goes up, says what went wrong if it did, and can be taken back out. After
+ * them, the other conversations the message is to refer to.
  */
 export function AttachmentTray({
   items,
   onRemove,
+  references = [],
+  onRemoveReference,
 }: {
   items: PendingAttachment[]
   onRemove: (key: string) => void
+  references?: ConversationReference[]
+  onRemoveReference?: (conversationId: string) => void
 }) {
   const { t } = useTranslation()
-  if (items.length === 0) return null
+  if (items.length === 0 && references.length === 0) return null
 
   return (
     <ul className="n-attach-tray" aria-label={t('chat.file.attached')}>
       {items.map((item) => (
         <AttachmentCard key={item.key} item={item} onRemove={() => onRemove(item.key)} />
+      ))}
+      {references.map((reference) => (
+        <ReferenceCard
+          key={reference.conversationId}
+          reference={reference}
+          onRemove={() => onRemoveReference?.(reference.conversationId)}
+        />
       ))}
     </ul>
   )

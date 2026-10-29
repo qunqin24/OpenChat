@@ -146,6 +146,42 @@ func personalPrompt(ctx context.Context, notes *memory.Store, offered []agent.To
 	return snap.Prompt(on, withIDs)
 }
 
+// webGuide is how to search and read the web, for a prompt offering the web
+// tools (names): when to search and when not to, how to put a search, what to
+// trust and how to read. A sub-agent is given the same: most of what it is
+// handed is research. Drawn from what models did wrong without it - one
+// search per turn, the user's wording as the query, an old page taken for
+// the news, a gap filled from memory - and from how ChatGPT says it searches.
+func webGuide(names map[string]bool) string {
+	var b strings.Builder
+	if names["web_search"] {
+		b.WriteString("\n\n## Searching the web\n" +
+			"Search with web_search whenever the answer depends on something that changes or that you may not " +
+			"know: news, prices, releases and versions, schedules, rules and laws, who holds a role now, product " +
+			"details, anything recent, and any fact you are not sure of. Do not search for what needs no outside " +
+			"facts: writing, rewriting, translating, working on what is in front of you, or explaining settled " +
+			"knowledge.\n" +
+			"- A question with several parts is several searches, one for each part, made together in one response.\n" +
+			"- Write a query the way a page about it would be written, not as the question was asked. Search in " +
+			"English for technical, scientific and international topics, and in the local language for local ones.\n" +
+			"- For news and anything else that changes, set recency, or put the year in the query. To search " +
+			"official documentation or a source the user named, set sites.\n" +
+			"- Prefer primary sources - the official site, the documentation, the paper, the original " +
+			"announcement - over pages that repeat them. Look at the date of what you rely on; when the newest " +
+			"you found is old, say so.\n" +
+			"- Confirm an important fact in two independent sources when you can. When sources disagree, say so " +
+			"rather than choosing one silently.\n" +
+			"- When a search finds nothing useful, rephrase it or come at it from another side. Never fill the gap " +
+			"from memory as though it had been found.")
+	}
+	if names["web_fetch"] {
+		b.WriteString("\n\nRead a web page or a PDF with web_fetch. Read the pages that matter instead of relying on " +
+			"search excerpts when the details count. A long page comes in parts: read on with the offset a result " +
+			"gives, or, when you need one thing from it, use find to go straight to the passages about it.")
+	}
+	return b.String()
+}
+
 func basePrompt(offered []agent.Tool) string {
 	var b strings.Builder
 	b.WriteString("You are OpenChat, a helpful assistant. " +
@@ -194,14 +230,19 @@ func basePrompt(offered []agent.Tool) string {
 	for _, tool := range offered {
 		names[tool.Definition().Name] = true
 	}
-	if names["web_search"] {
-		b.WriteString("\n\nYou can search the web with web_search. Use it for anything recent, anything that " +
-			"changes, and any fact you are not sure of, rather than answering from memory.")
+	if len(offered) > 0 {
+		// The calls of one response run at once (agent.Options.ToolConcurrency),
+		// and every round costs the whole conversation sent again; smaller
+		// models tended to call one tool per round unless told (after
+		// OpenCode's "Tool Use - Parallelism").
+		b.WriteString("\n\n## Tool calls\n" +
+			"You can call several tools in one response, and they run at the same time. Whenever calls do not " +
+			"depend on each other - several searches, several pages to read, several places to look in a file - " +
+			"make them together in a single response rather than one per turn. When a call needs another's " +
+			"result, make them one after the other; never guess or use a placeholder for a value you do not " +
+			"have yet.")
 	}
-	if names["web_fetch"] {
-		b.WriteString("\n\nYou can read a web page with web_fetch. Read the pages that matter instead of " +
-			"relying on search excerpts when the details count.")
-	}
+	b.WriteString(webGuide(names))
 	if names[agent.ToolFileRead] {
 		b.WriteString("\n\n## Long files\n" +
 			"A long text file the user attached appears as a <file ... partial=\"true\"> card showing only its first " +
@@ -252,7 +293,11 @@ func basePrompt(offered []agent.Tool) string {
 		// rewriting one note to track the latest topics, which read to the user
 		// as being watched. Now a note needs either the user asking for it or a
 		// lasting fact the user stated about themselves; what they ask about is
-		// not a fact about them, and when in doubt nothing is saved.
+		// not a fact about them, and when in doubt nothing is saved. A taste the
+		// user states is such a fact: worded only as "would change your answers
+		// elsewhere", models left likes and habits out. And a note is the tool
+		// call, not the words: a model once said it would keep one and called
+		// nothing.
 		b.WriteString("\n\n## Memory\n" +
 			"You are stateless: nothing from this conversation reaches the next one unless you save it with the " +
 			"memory tool. Saved notes are given to you at the start of every later conversation, in the memory " +
@@ -260,8 +305,8 @@ func basePrompt(offered []agent.Tool) string {
 			"Save a note only when:\n" +
 			"- the user asks you to remember something, or to forget or correct a note; or\n" +
 			"- the user states plainly a lasting fact about themselves - who they are, their work, where they live, " +
-			"a standing preference about how you should answer - that would clearly change your answers in " +
-			"conversations about other things.\n" +
+			"their likes, dislikes and habits, a standing preference about how you should answer. What " +
+			"they say of themselves counts; what they ask about does not.\n" +
 			"Do not infer anything from what the user asks about: a question, or a series of questions, on a topic " +
 			"is not an interest to record, nor is the user saying they have lately been following, reading about or " +
 			"curious about something; a note must never summarise or track what the user has been discussing. " +
@@ -275,6 +320,9 @@ func basePrompt(offered []agent.Tool) string {
 			"dates. A new fact gets a note of its own: never append it to an existing note or merge notes into a " +
 			"longer one. Change an existing note only when the user corrects it or that fact itself has changed; " +
 			"delete a note that is out of date or that the user says is wrong.\n" +
+			"A note exists only once the memory tool has saved it: when you decide to keep something, call the tool " +
+			"in that same reply, and never say you will remember, have noted or are keeping something without " +
+			"having called it.\n" +
 			"Do not tell the user you saved something, and do not recite their notes unless they ask; the " +
 			"interface already shows what was saved.")
 	}

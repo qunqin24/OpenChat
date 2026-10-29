@@ -141,7 +141,11 @@ export function RegisterPage() {
       overlay={
         waiting &&
         (refused === 'auth.error.account-disabled' ? (
-          <BannedScreen admin={contact} onBack={toLogin} />
+          <BannedScreen
+            admin={contact}
+            disabled={isAuthFieldError(login.error) ? login.error.disabled : undefined}
+            onBack={toLogin}
+          />
         ) : (
           <PendingScreen admin={contact} check={checkAgain} onBack={toLogin} />
         ))

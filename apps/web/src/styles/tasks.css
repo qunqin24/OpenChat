@@ -277,28 +277,36 @@
 }
 
 .chat-ui .n-task-select {
-  position: relative;
-  display: block;
+  display: flex;
   flex: 1;
+  align-items: center;
+  gap: 8px;
+  padding-right: 8px;
+  text-align: left;
+  cursor: pointer;
 }
 
-.chat-ui .n-task-select > select {
-  appearance: none;
-  padding-right: 32px;
-  cursor: pointer;
+.chat-ui .n-task-select-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* The chevron's drawn edge 12px in, as the field's text is: the icon has 4px
    of empty box around its stroke at this size. */
 .chat-ui .n-task-select > svg {
-  position: absolute;
-  top: 50%;
-  right: 8px;
+  flex: none;
   width: 16px;
   height: 16px;
   color: var(--n-text-2);
-  pointer-events: none;
-  transform: translateY(-50%);
+}
+
+/* The menu (a portal on <body>, over the dialog) is as wide as its field. */
+.n-menu.n-task-select-menu {
+  width: var(--radix-dropdown-menu-trigger-width);
+  max-height: min(18rem, var(--radix-dropdown-menu-content-available-height));
 }
 
 .chat-ui .n-task-area {

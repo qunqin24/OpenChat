@@ -263,7 +263,7 @@ func (s *Server) TestWebSearch(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	search := tools.WebSearch{Searcher: searcher, Config: config.searchConfig()}
 	started := time.Now()
-	results, hits, blocked, err := search.Run(ctx, query, 0)
+	results, hits, blocked, err := search.Run(ctx, tools.Query{Text: query})
 	result := WebSearchTestResult{
 		LatencyMs: time.Since(started).Milliseconds(),
 		Results:   make([]WebSearchTestHit, 0, len(hits)),

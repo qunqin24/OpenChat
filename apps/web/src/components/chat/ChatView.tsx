@@ -5,7 +5,7 @@ import { Fragment, useCallback, useEffect, useEffectEvent, useLayoutEffect, useM
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { type Message, type ReasoningEffort } from '@openchat/api-client'
+import { type ConversationReference, type Message, type ReasoningEffort } from '@openchat/api-client'
 import {
   chatModelsQueryOptions,
   useChatFeatures,
@@ -173,6 +173,17 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
   const accepts = useMemo(() => acceptsOf(modelById.get(modelId)), [modelById, modelId])
   const anyModelTakesFiles = available.some((m) => acceptsOf(m).image || acceptsOf(m).pdf)
   const attachments = useAttachments(accepts)
+  // Other conversations the message is to refer to ("+" → 引用其他对话): not
+  // files, so nothing goes up; the server reads them when the model is asked.
+  const [references, setReferences] = useState<ConversationReference[]>([])
+  const refer = useCallback((reference: ConversationReference) => {
+    setReferences((current) =>
+      current.some((r) => r.conversationId === reference.conversationId) ? current : [...current, reference],
+    )
+  }, [])
+  const unrefer = useCallback((id: string) => {
+    setReferences((current) => current.filter((r) => r.conversationId !== id))
+  }, [])
   const uploadHint = accepts.text
     ? accepts.image
       ? accepts.pdf
@@ -348,6 +359,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
         messageId: message.id,
         content,
         attachments: message.attachments ?? [],
+        references: message.references,
         model: modelId || undefined,
         reasoningEffort: canThink ? effort : undefined,
         webSearch: canSearch ? webSearch : undefined,
@@ -668,7 +680,13 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     // new chat would otherwise be created only to be refused).
     if (await capacityRefused()) return
     const attachmentIds = attachments.ids
+    const referred = references
+    const conversationIds = referred.map((r) => r.conversationId)
+    // Back in the box with the words when the send fails, unless others were
+    // chosen meanwhile.
+    const referBack = () => setReferences((current) => (current.length > 0 ? current : referred))
     setInput('')
+    setReferences([])
     // Out of the box at once, as the text is: the message shows them now. Back
     // in the box if the send fails.
     const taken = attachments.take()
@@ -685,6 +703,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
           size: file.size,
           url: file.preview ?? '',
         })),
+      references: referred,
     }
     parked.current = true
 
@@ -697,7 +716,9 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
           messageId: revising.id,
           content,
           attachments: item.attachments,
+          references: referred,
           attachmentIds,
+          conversationIds,
           model: modelId || undefined,
           reasoningEffort: canThink ? effort : undefined,
           webSearch: canSearch ? webSearch : undefined,
@@ -708,6 +729,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
           onError: () => {
             setInput((current) => current || content)
             attachments.restore(taken)
+            referBack()
           },
         },
       )
@@ -723,6 +745,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
           reasoningEffort: canThink ? effort : undefined,
           webSearch: canSearch ? webSearch : undefined,
           attachmentIds,
+          conversationIds,
         },
         {
           // A refused message comes back as it was written, files and all.
@@ -731,6 +754,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
             unpost(conversationId)
             setInput((current) => current || content)
             attachments.restore(taken)
+            referBack()
           },
         },
       )
@@ -758,6 +782,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
       if (!alive.current) return
       setInput((current) => current || content)
       attachments.restore(taken)
+      referBack()
       toast.error(t('chat.send-error.generic'))
       return
     }
@@ -780,6 +805,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
         reasoningEffort: canThink ? effort : undefined,
         webSearch: canSearch ? webSearch : undefined,
         attachmentIds,
+        conversationIds,
       })
     } catch (error) {
       // What went wrong has been said (the mutation's own error handler).
@@ -798,6 +824,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
       const usable = returnableFiles(error, taken)
       attachments.release(taken.filter((file) => !usable.includes(file)))
       attachments.restore(usable)
+      referBack()
       setInput((current) => current || content)
       if (wroteNothing) onRemoved(madeId)
       else await navigate({ to: '/chat/$conversationId', params: { conversationId: madeId }, replace: true })
@@ -824,6 +851,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     onRemoved,
     post,
     quotes,
+    references,
     revising,
     sendMessage,
     setQuote,
@@ -934,6 +962,10 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
         items: attachments.items,
         onAdd: attachments.add,
         onRemove: attachments.remove,
+        conversationId,
+        references,
+        onRefer: refer,
+        onUnrefer: unrefer,
         blocked: attachments.uploading
           ? t('chat.file.wait')
           : attachments.failed
@@ -1089,6 +1121,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
                       status: 'complete',
                       createdAt: '',
                       attachments: outgoing.attachments,
+                      references: outgoing.references,
                     }}
                   />
                   <PendingReply modelId={modelId} model={modelById.get(modelId)} />

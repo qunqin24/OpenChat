@@ -265,6 +265,7 @@ func (r *Runner) fileLines(ctx context.Context, scope Scope, file llm.Attachment
 		return kept.([]string), nil
 	}
 	resolver := &attachmentResolver{
+		conversation: referenceReader(r.q, scope.UserID),
 		lookup: func(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]sqlc.Attachment, error) {
 			rows, err := r.q.ListAttachmentsForUser(ctx, sqlc.ListAttachmentsForUserParams{Ids: ids, UserID: &scope.UserID})
 			if err != nil {
@@ -283,13 +284,16 @@ func (r *Runner) fileLines(ctx context.Context, scope Scope, file llm.Attachment
 	if r.opts.Blobs != nil {
 		resolver.read = r.opts.Blobs.Read
 	}
-	id, err := uuid.Parse(file.Ref)
-	if err != nil {
-		return nil, Errorf("the file %s is no longer available", file.Filename)
-	}
-	rows, err := resolver.lookup(ctx, []uuid.UUID{id})
-	if err != nil {
-		return nil, err
+	// A referenced conversation is no stored file: it is read, not looked up.
+	var rows map[uuid.UUID]sqlc.Attachment
+	if file.MediaType != llm.ConversationMediaType {
+		id, err := uuid.Parse(file.Ref)
+		if err != nil {
+			return nil, Errorf("the file %s is no longer available", file.Filename)
+		}
+		if rows, err = resolver.lookup(ctx, []uuid.UUID{id}); err != nil {
+			return nil, err
+		}
 	}
 	resolved, note := resolver.one(ctx, file, rows, &resolver.budget)
 	if note != "" {
@@ -611,11 +615,14 @@ func fileCard(file llm.AttachmentPart, text string) string {
 	var b strings.Builder
 	b.WriteString("This file is too long to include whole: only its beginning is shown. Read any part of it with " +
 		"file_read and find passages with file_search before answering about what is not shown here.")
-	switch llm.ModalityOf(file.MediaType) {
-	case llm.ModalityPDF:
+	switch {
+	case file.MediaType == llm.ConversationMediaType:
+		b.WriteString(" It is another of the user's conversations, which they referred to: what was asked and " +
+			"answered in it, each message under a heading naming who said it.")
+	case llm.ModalityOf(file.MediaType) == llm.ModalityPDF:
 		fmt.Fprintf(&b, " It is the text of a %d-page PDF: each page starts with a line like [Page 3]; tables, "+
 			"charts and pictures are not in it.", file.Pages)
-	case llm.ModalityDocument:
+	case llm.ModalityOf(file.MediaType) == llm.ModalityDocument:
 		b.WriteString(" It is the text read out of the document: pictures are not in it.")
 	}
 	b.WriteString("\n\n")

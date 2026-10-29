@@ -33,6 +33,12 @@ type Querier interface {
 	// `approved` can only let a pending account in (true); there is no way back to
 	// pending. It is independent of `disabled`: enabling an account does not
 	// approve it, and approving one does not enable it.
+	//
+	// Disabling records why (`disabled_reason`, 'admin' unless said otherwise),
+	// the note shown to the person, and the administrator who did it
+	// (`disabled_by`, the one they are told to contact); disabling an account
+	// that already is keeps the reason and who, and replaces the note only when
+	// one is given. Enabling clears all three.
 	AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams) (User, error)
 	// A due task's turn is taken: when it runs next (NULL: a one-off that has now
 	// had its turn). The run it starts, or why none, is recorded after.
@@ -57,6 +63,7 @@ type Querier interface {
 	// Only accounts that are waiting count, so the number reported is the number
 	// let in.
 	BulkApproveUsers(ctx context.Context, ids []uuid.UUID) (int64, error)
+	// As AdminUpdateUser: disabling by an administrator, with one note for all.
 	BulkSetUserDisabled(ctx context.Context, arg BulkSetUserDisabledParams) (int64, error)
 	BulkUpdateUserRole(ctx context.Context, arg BulkUpdateUserRoleParams) (int64, error)
 	// Stop pressed for every run these conversations have going, as the stop
@@ -297,6 +304,10 @@ type Querier interface {
 	// window before, the one the figures are compared with. Worked out here, in
 	// the database's time zone, so the buckets of the trend line up with it.
 	GetDashboardWindow(ctx context.Context, arg GetDashboardWindowParams) (GetDashboardWindowRow, error)
+	// A live session whose account has been disabled since: it is kept, so the
+	// person is shown why (auth.Middleware) rather than signed out, and can do
+	// nothing else with it. Never a pending account's.
+	GetDisabledSessionUser(ctx context.Context, tokenHash []byte) (GetDisabledSessionUserRow, error)
 	GetDocument(ctx context.Context, arg GetDocumentParams) (Document, error)
 	GetDocumentVersion(ctx context.Context, arg GetDocumentVersionParams) (DocumentVersion, error)
 	// The pictures answers describe, as a search service found them (api/images.go).
@@ -426,6 +437,10 @@ type Querier interface {
 	// The last version a model wrote: what it last knew of the text, unless it
 	// has read the document since.
 	LatestModelDocumentVersion(ctx context.Context, documentID uuid.UUID) (DocumentVersion, error)
+	// When the last question or answer of a conversation was written: what a
+	// reference to it takes in (agent/references.go). Refused messages, tool
+	// results and sub-agent reports are not the conversation, as for an export.
+	LatestReferableMessageAt(ctx context.Context, conversationID uuid.UUID) (pgtype.Timestamptz, error)
 	ListAttachmentsByMessages(ctx context.Context, messageIds []uuid.UUID) ([]Attachment, error)
 	// Attachments by id, within one user's scope: what the context builder resolves
 	// a reference through, so a reference to someone else's file reads as missing.
@@ -596,6 +611,9 @@ type Querier interface {
 	// the messages moderation refused: they were never sent, and are not a record
 	// of the conversation.
 	ListTranscript(ctx context.Context, conversationID uuid.UUID) ([]Message, error)
+	// A referenced conversation as ListTranscript takes it, up to when it was
+	// referenced: what came after is not what the message referred to.
+	ListTranscriptUpTo(ctx context.Context, arg ListTranscriptUpToParams) ([]Message, error)
 	// Newest first, by keyset on (created_at, id): the order of usage_logs_created_idx,
 	// so a page deep into a ledger of millions of rows costs what the first one
 	// does, and a row written meanwhile cannot shift the pages. The total is the
@@ -703,6 +721,10 @@ type Querier interface {
 	// same sum as ModelSpends and the same index-only scan, with the held amount
 	// added in numeric: never through a float.
 	ModelWouldReach(ctx context.Context, arg ModelWouldReachParams) (bool, error)
+	// What set off an account's ban, for the page that tells the person why: the
+	// strikes counted in the window up to when it was disabled (as
+	// CountUserStrikes counts them), and the categories they were blocked for.
+	ModerationBanSummary(ctx context.Context, arg ModerationBanSummaryParams) (ModerationBanSummaryRow, error)
 	// Hands the files of one message to another: an edited question's files go to
 	// the question that replaces it.
 	MoveAttachments(ctx context.Context, arg MoveAttachmentsParams) error

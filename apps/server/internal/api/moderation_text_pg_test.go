@@ -221,7 +221,7 @@ func TestModerationCountsStrikesOnRefusedSaves(t *testing.T) {
 		t.Errorf("the warning is %v", warned.Details)
 	}
 	// A refused message and a refused memory add to the same count.
-	if rec := h.saveMemory("BLOCKME too"); rec.Code != http.StatusUnauthorized {
+	if rec := h.saveMemory("BLOCKME too"); !bannedByModeration(rec) {
 		t.Fatalf("the save that reaches the limit: %d %s", rec.Code, rec.Body)
 	}
 	if h.count(`SELECT count(*) FROM users WHERE id = $1 AND disabled_at IS NOT NULL`, h.user.ID) != 1 {
@@ -519,7 +519,7 @@ func TestModerationSnapshotRefusalIsNotAStrike(t *testing.T) {
 		t.Error("nothing was logged")
 	}
 	// The same words sent now are a strike all the same.
-	if rec := h.post("BLOCKME now"); rec.Code != http.StatusUnauthorized {
+	if rec := h.post("BLOCKME now"); !bannedByModeration(rec) {
 		t.Fatalf("a refused message at strikes=1: %d %s", rec.Code, rec.Body)
 	}
 }

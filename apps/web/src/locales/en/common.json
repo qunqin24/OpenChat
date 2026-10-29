@@ -51,6 +51,33 @@
     "untitled": "New chat",
     "stopped": "Stopped",
     "truncated": "The reply hit its length limit and may be incomplete.",
+    "attach": {
+      "menu": "Add",
+      "upload": "Upload files",
+      "screenshot": "Screenshot",
+      "screenshot-name": "Screenshot",
+      "screenshot-failed": "The screenshot didn't work. Try again.",
+      "library": "Add from library",
+      "conversation": "Reference a conversation",
+      "loading": "Reading “{{name}}”…",
+      "loading-list": "Loading…",
+      "failed": "Couldn't add “{{name}}”. Try again.",
+      "library-empty": "No files in your library yet",
+      "conversations-empty": "No other conversations yet",
+      "search": "Search conversations",
+      "no-match": "No matching conversations",
+      "referred": "Referenced",
+      "too-many": "A message can reference up to 5 conversations.",
+      "back": "Back",
+      "library-title": "Library",
+      "library-search": "Search files",
+      "no-file-match": "No matching files",
+      "conversations-title": "Conversations"
+    },
+    "reference": {
+      "kind": "Chat",
+      "open": "Open the conversation “{{title}}”"
+    },
     "retrying": "The request failed; retrying…",
     "reasoning": {
       "live": "Thinking…",
@@ -89,7 +116,17 @@
       "file-searching": "Searching the files: {{query}}",
       "file-searching-generic": "Searching the files…",
       "file-search": "Searched the files for “{{query}}”: {{count}} found",
-      "file-search-in": "Searched {{name}} for “{{query}}”: {{count}} found"
+      "file-search-in": "Searched {{name}} for “{{query}}”: {{count}} found",
+      "find": "Looked for “{{find}}” on {{host}}",
+      "finding": "Looking for “{{find}}” on {{host}}",
+      "read-on": "Read on in {{host}}",
+      "reading-on": "Reading on in {{host}}",
+      "recency": {
+        "day": "past day",
+        "week": "past week",
+        "month": "past month",
+        "year": "past year"
+      }
     },
     "error": {
       "no_model": "This model is no longer available. Pick another and try again.",
@@ -144,7 +181,11 @@
       "attachments_not_editable": "Files can only be added when revising a refused message.",
       "moderation_unavailable": "Content moderation is unavailable right now, so the message was not sent. Try again in a moment.",
       "message_too_large_for_moderation": "This message is too large to be checked by content moderation, so it was not sent. Shorten the text or attach fewer or smaller images.",
-      "too_many_runs": "Too many answers are being written at once. Wait for one to finish, or stop one, and try again."
+      "too_many_runs": "Too many answers are being written at once. Wait for one to finish, or stop one, and try again.",
+      "reference_unavailable": "The referenced conversation is gone, or it's this one.",
+      "reference_empty": "The referenced conversation has nothing in it yet.",
+      "too_many_references": "A message can reference up to 5 conversations.",
+      "references_not_editable": "Conversations can only be referenced when revising a refused message."
     },
     "thinking": {
       "title": "Thinking",
@@ -322,7 +363,7 @@
       "lines": {
         "morning": {"hello": "Good morning, {{name}}", "start": "Where shall we start today?", "today": "Morning, {{name}}. What's on today?", "smooth": "Here's to a smooth day", "caffeine": "Caffeine loading…", "blanket": "Escaped the blanket yet?", "bird": "The early bird gets the answers"},
         "noon": {"hello": "Good afternoon, {{name}}", "lunch": "Had lunch yet?", "pause": "A midday pause — what's up?", "menu": "What's for lunch? I can help with that too", "full": "Full of lunch, brain still awake?"},
-        "afternoon": {"hello": "Good afternoon, {{name}}", "coffee": "Coffee and a chat?", "mind": "What's on your mind, {{name}}?", "fine": "A fine afternoon to think", "slump": "The 3 p.m. slump? Hand it over", "tea": "Tea time, with a chat on the side", "todo": "{{name}}, how many to-dos down?"},
+        "afternoon": {"hello": "Good afternoon, {{name}}", "coffee": "Coffee and a chat?", "mind": "What's on your mind, {{name}}?", "fine": "A fine afternoon to think", "slump": "Afternoon slump? Hand it over", "tea": "Tea time, with a chat on the side", "todo": "{{name}}, how many to-dos down?"},
         "evening": {"hello": "Good evening, {{name}}", "rest": "Done for the day? Take a breather", "day": "How was your day, {{name}}?", "breeze": "A quiet evening — what's up?", "overtime": "Working late? I'm here", "fed": "Fed and ready to think?"},
         "night": {"hello": "Up late, {{name}}", "awake": "Still awake?", "here": "Here through the night", "sleep": "Don't stay up too late, {{name}}", "owl": "Night owl mode: on", "ideas": "Late-night ideas are the best ones", "moon": "The moon's on shift too, {{name}}"},
         "monday": {"ease": "Monday again — ease into it", "double": "Monday calls for double coffee"},
@@ -414,6 +455,7 @@
   },
   "auth": {
     "logout": "Sign out",
+    "logout-failed": "Signing out didn't go through. Try again.",
     "show-password": "Show password",
     "hide-password": "Hide password",
     "field": {
@@ -439,6 +481,26 @@
       "check": "Check again",
       "still": "Still waiting for approval",
       "back": "Back to sign in"
+    },
+    "disabled": {
+      "admin-title": "Your account has been disabled",
+      "admin-subtitle": "Contact an administrator",
+      "admin-text": "An administrator disabled this account, so you can't send messages or use anything else for now. Your conversations and files are still here, and everything is as it was once it's enabled again.",
+      "moderation-title": "Your account has been suspended",
+      "moderation-subtitle": "For repeatedly sending content that breaks the rules",
+      "moderation-text": "{{count}} of your messages in {{hours}} hours were blocked for breaking the usage rules, so the account was disabled automatically. Your conversations and files are still here; if you think this is a mistake, contact an administrator.",
+      "moderation-text-bare": "Several of your messages were blocked for breaking the usage rules, so the account was disabled automatically. Your conversations and files are still here; if you think this is a mistake, contact an administrator.",
+      "reason": "Reason",
+      "note": "“{{note}}”",
+      "no-note": "The administrator gave no reason.",
+      "moderation-reason": "Repeatedly sending content that breaks the rules",
+      "moderation-reason-categories": "Repeatedly sending content that breaks the rules: {{categories}}",
+      "admin-at": "Disabled",
+      "moderation-at": "Suspended",
+      "sign-out": "Sign out",
+      "check": "Enabled again? Check",
+      "checking": "Checking…",
+      "still": "The account is still disabled."
     },
     "banned": {
       "title": "You've been banned",
@@ -635,10 +697,15 @@
       "subtitle": "Manage account roles and access.",
       "edit": "Edit account",
       "updated": "Saved",
-      "enabled-hint": "A disabled account is signed out at once, and can be enabled again later.",
+      "enabled-hint": "A disabled account stays signed in but can only see why it was disabled. It can be enabled again later.",
       "enabled-done": "Account enabled",
       "disabled-done": "Account disabled",
-      "disable-confirm": "This ends every session {{name}} has open and blocks sign-in. You can enable the account again at any time.",
+      "disable-note": "Reason (optional)",
+      "disable-note-placeholder": "For example: the account is being shared; please get in touch.",
+      "disable-note-hint": "They see this when they next open OpenChat.",
+      "banned": "Suspended",
+      "disabled-by-moderation": "Suspended automatically by content moderation",
+      "disable-confirm": "{{name}} will be disabled: they stay signed in but can do nothing except see why. You can enable the account again at any time.",
       "create": "Add user",
       "created": "Account created",
       "edit-hint": "Changes take effect immediately.",

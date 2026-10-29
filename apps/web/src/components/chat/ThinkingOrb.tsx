@@ -44,13 +44,14 @@ export function CompactingLine() {
  * as the reasoning toggle, so the line carries on into it unchanged when the
  * model starts to think.
  */
-export function ThinkingLine() {
+/** The model at work; `label` says what instead (a failed request tried again). */
+export function ThinkingLine({ label }: { label?: string }) {
   const { t } = useTranslation()
   return (
     <div className="n-thinking" role="status">
       <ThinkingOrb />
       <span className="n-reasoning-live" data-motion="essential">
-        {t('chat.reasoning.live')}
+        {label ?? t('chat.reasoning.live')}
       </span>
     </div>
   )
