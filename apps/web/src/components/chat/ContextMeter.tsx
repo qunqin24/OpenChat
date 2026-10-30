@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
+import { Popover } from 'radix-ui'
 import { useTranslation } from 'react-i18next'
 
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useCompaction } from '@/hooks/use-compaction'
 import { api, unwrap } from '@/lib/api'
 import { queryKeys } from '@openchat/chat-core/query-keys'
@@ -31,7 +31,8 @@ interface ContextMeterProps {
  * Nothing shows until something has been answered, or for a model whose window
  * is unknown.
  *
- * It opens to the same figures and notes. Compressing is only ever a run's
+ * It opens to the same figures and notes, drawn like its tooltip (the dark
+ * chip with an arrow) rather than as a menu. Compressing is only ever a run's
  * doing, so there is nothing to press: once a run has written a summary, the
  * server estimates the compressed context until the next request reports what
  * it took (`estimated`), so the ring drops as soon as the summary is written.
@@ -50,13 +51,11 @@ export default function ContextMeter({ conversationId, limit }: ContextMeterProp
   const share = Math.min(used / limit, 1)
   const percent = Math.round(share * 100)
   const level = share >= 0.95 ? 'is-full' : share >= 0.8 ? 'is-high' : undefined
+  const hint = t('chat.context.hint', { percent, left: 100 - percent, used: compact(used), limit: compact(limit) })
   return (
-    <DropdownMenu>
-      <Tooltip
-        label={t('chat.context.label')}
-        hint={t('chat.context.hint', { percent, left: 100 - percent, used: compact(used), limit: compact(limit) })}
-      >
-        <DropdownMenuTrigger asChild>
+    <Popover.Root>
+      <Tooltip label={t('chat.context.label')} hint={hint}>
+        <Popover.Trigger asChild>
           <button
             type="button"
             className={cn('n-context-meter', level)}
@@ -74,18 +73,17 @@ export default function ContextMeter({ conversationId, limit }: ContextMeterProp
               />
             </svg>
           </button>
-        </DropdownMenuTrigger>
+        </Popover.Trigger>
       </Tooltip>
-      <DropdownMenuContent className="n-context-menu" align="end" side="top">
-        <div className="n-context-info">
-          <span className="n-context-title">{t('chat.context.label')}</span>
-          <span className="n-context-figures">
-            {t('chat.context.hint', { percent, left: 100 - percent, used: compact(used), limit: compact(limit) })}
-          </span>
-          {usage.data?.estimated && <span className="n-context-note">{t('chat.context.estimated')}</span>}
-          {summary && <span className="n-context-note">{t('chat.context.compacted')}</span>}
-        </div>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      <Popover.Portal>
+        <Popover.Content className="n-tip" side="top" sideOffset={8} collisionPadding={10}>
+          <span className="n-tip-label">{t('chat.context.label')}</span>
+          <span className="n-tip-hint">{hint}</span>
+          {usage.data?.estimated && <span className="n-tip-hint n-context-note">{t('chat.context.estimated')}</span>}
+          {summary && <span className="n-tip-hint n-context-note">{t('chat.context.compacted')}</span>}
+          <Popover.Arrow className="n-tip-arrow" width={11} height={5} />
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   )
 }

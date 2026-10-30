@@ -563,8 +563,6 @@
    in chat-table.css; the copy button floats over its top right on hover. */
 .chat-ui .n-md-table {
   position: relative;
-  /* Hugs the table, so the copy button sits on its corner, not the column's. */
-  width: fit-content;
   max-width: 100%;
   margin: 12px 0;
 }

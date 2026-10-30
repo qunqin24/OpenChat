@@ -1,19 +1,22 @@
 /**
- * Tables in answers — Markdown tables (MarkdownTable.tsx) and interface tables
- * (the Table component in genui) — drawn one way: a tinted, rounded frame that
+ * Tables in answers.
+ *
+ * Interface tables (the Table component in genui): a tinted, rounded frame that
  * holds the header, and the body inset in it as a card-coloured block whose top
  * corners are rounded, so the tint shows around them.
  *
- * Each rule names both tables in a selector list rather than an `:is()`, so each
- * selector keeps its own specificity. The Markdown table gets all of its table
- * styling from this sheet; the base layer (chat-theme.css) has no table rules.
+ * Markdown tables (MarkdownTable.tsx), at the end: open, as Open WebUI draws
+ * them - no frame, no fill, no column rules; the labels over a hairline, rows
+ * parted by a fainter one, the column's width taken.
+ *
+ * The Markdown table gets all of its table styling from this sheet; the base
+ * layer (chat-theme.css) has no table rules.
  *
  * The frame's edge is an inset outline, not a border, so the body's cells
  * reach the frame's edges and the frame's rounding clips them cleanly.
  */
 
-.chat-ui .n-ui-table-wrap,
-.chat-ui .n-md-table-scroll {
+.chat-ui .n-ui-table-wrap {
   /* Sized to the table, not stretched across the column: short tables stay
      compact, a wide one still scrolls inside it. */
   width: fit-content;
@@ -42,8 +45,7 @@
   line-height: 20px;
 }
 
-.chat-ui .n-ui-table,
-.chat-ui .n-markdown .markdown-body table {
+.chat-ui .n-ui-table {
   display: table;
   width: auto;
   max-width: none;
@@ -58,8 +60,7 @@
   line-height: 21px;
 }
 
-.chat-ui .n-ui-table th,
-.chat-ui .n-markdown .markdown-body table th {
+.chat-ui .n-ui-table th {
   padding: 7px 14px;
   border: 0;
   background: transparent;
@@ -71,8 +72,7 @@
   white-space: nowrap;
 }
 
-.chat-ui .n-ui-table td,
-.chat-ui .n-markdown .markdown-body table td {
+.chat-ui .n-ui-table td {
   min-width: 4em;
   padding: 7px 14px;
   border: 0;
@@ -86,41 +86,88 @@
   transition: background-color 120ms ease;
 }
 
-.chat-ui .n-ui-table :is(th, td):not(:last-child),
-.chat-ui .n-markdown .markdown-body table :is(th, td):not(:last-child) {
+.chat-ui .n-ui-table :is(th, td):not(:last-child) {
   border-right: 1px solid var(--n-table-rule);
 }
 
 /* Rows are see-through so the frame's tint shows past the body's rounded top
    corners; the cells carry the body colour. */
-.chat-ui .n-ui-table tbody tr,
+.chat-ui .n-ui-table tbody tr {
+  border: 0;
+  background: transparent;
+}
+
+.chat-ui .n-ui-table tbody tr:hover td {
+  background: var(--n-table-hover);
+}
+
+/* The body's top edge, which curves down at each end into the frame. */
+.chat-ui .n-ui-table tbody tr:first-child td {
+  border-top-color: var(--n-line);
+}
+.chat-ui .n-ui-table tbody tr:first-child td:first-child {
+  border-top-left-radius: 10px;
+}
+.chat-ui .n-ui-table tbody tr:first-child td:last-child {
+  border-top-right-radius: 10px;
+}
+
+/* ---------------------------------------------------------- Markdown tables */
+.chat-ui .n-md-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--n-line) transparent;
+}
+
+.chat-ui .n-markdown .markdown-body table {
+  display: table;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  border-collapse: collapse;
+  border-spacing: 0;
+  background: transparent;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* The labels start at the left whatever the column's alignment, as Open
+   WebUI's do; the cells below keep it (remark's align attribute). */
+.chat-ui .n-markdown .markdown-body table th {
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--n-line);
+  background: transparent;
+  color: var(--n-chat-strong);
+  font-size: inherit;
+  font-weight: 600;
+  line-height: inherit;
+  text-align: start;
+  white-space: nowrap;
+}
+
+.chat-ui .n-markdown .markdown-body table td {
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--n-table-rule);
+  background: transparent;
+  color: var(--n-chat-strong);
+  font-size: inherit;
+  line-height: inherit;
+  vertical-align: top;
+  white-space: normal;
+}
+
 .chat-ui .n-markdown .markdown-body table tbody tr,
 .chat-ui .n-markdown .markdown-body table tbody tr:nth-child(2n) {
   border: 0;
   background: transparent;
 }
 
-.chat-ui .n-ui-table tbody tr:hover td,
-.chat-ui .n-markdown .markdown-body table tbody tr:hover td {
-  background: var(--n-table-hover);
-}
-
-/* The body's top edge, which curves down at each end into the frame. */
-.chat-ui .n-ui-table tbody tr:first-child td,
-.chat-ui .n-markdown .markdown-body table tbody tr:first-child td {
-  border-top-color: var(--n-line);
-}
-.chat-ui .n-ui-table tbody tr:first-child td:first-child,
-.chat-ui .n-markdown .markdown-body table tbody tr:first-child td:first-child {
-  border-top-left-radius: 10px;
-}
-.chat-ui .n-ui-table tbody tr:first-child td:last-child,
-.chat-ui .n-markdown .markdown-body table tbody tr:first-child td:last-child {
-  border-top-right-radius: 10px;
-}
-
-/* Room for the copy button, which floats over the last column's label now
-   that the table is only as wide as its content. */
-.chat-ui .n-markdown .markdown-body table th:last-child {
-  padding-right: 40px;
+.chat-ui .n-markdown .markdown-body table tbody tr:last-child td {
+  border-bottom: 0;
 }

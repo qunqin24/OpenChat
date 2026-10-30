@@ -376,28 +376,10 @@
 .chat-ui .n-context-meter.is-high { color: #d97706; }
 .chat-ui .n-context-meter.is-full { color: var(--n-err); }
 
-/* The meter's menu: the figures and notes. It is
-   portalled out of .chat-ui, so it is written against the menu's own tokens. */
-.n-context-menu {
-  min-width: 220px;
-}
-.n-context-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 6px 8px 8px;
-  line-height: 18px;
-}
-.n-context-title {
-  font-weight: 500;
-}
-.n-context-figures {
-  white-space: pre-line;
-  opacity: 0.65;
-}
+/* The meter's figures and notes when clicked: the tooltip's chip
+   (.n-tip, chat-theme.css), the notes set a little apart. */
 .n-context-note {
   margin-top: 4px;
-  opacity: 0.65;
 }
 
 /* ---- a new chat: greeting and composer in the middle ---------------------- */

@@ -50,10 +50,15 @@
   transform: scale(0.82);
 }
 
+/* A quarter turn puts each petal where the next one was, so for the loop to
+   join up the breath must have moved on by one petal too: the turn lasts
+   2¼ breaths (3.6s against 1.6s, staggered 0.4s). At 3.2s - two whole
+   breaths - every petal came back to its own breath in its neighbour's place,
+   and all four jumped in size at the seam. */
 .chat-ui .n-subagent-avatar.is-running .n-subagent-bloom {
   transform-box: view-box;
   transform-origin: 12px 12px;
-  animation: n-subagent-turn 3.2s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  animation: n-subagent-turn 3.6s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }
 
 .chat-ui .n-subagent-avatar.is-running .n-subagent-petal {
