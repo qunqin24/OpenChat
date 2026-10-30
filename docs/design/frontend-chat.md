@@ -74,6 +74,8 @@ WebKit（Safari，以及 iPhone 上的所有浏览器）照 Open WebUI 整个跳
 
 `mermaid` 代码块画成图，和 `html` 块的预览一样是 Streamdown 的自定义 renderer（`markdown-components.ts`）。不用 `@streamdown/mermaid`：它的外框是这个构建不生成的 Tailwind 类和聊天里没有的 shadcn 令牌，画出来是黑边框。Mermaid 很大，第一次遇到图表才动态加载；全局配置，所以渲染排队一个一个来。`securityLevel: 'strict'`（不执行脚本、标签里不放 HTML、输出经它净化），浅色用 `neutral`、深色用 `dark`，主题切换时重画（`hooks/use-dark.ts`）。还在输出、或语法错误时显示源码（错误时下面一行说明），画好后可在图和代码间切换。系统提示词只告诉模型这种代码块会画成图，用不用由它判断。
 
+`mermaid.render` 必须传第三个参数 `drawingStage()`（一个 `position: fixed`、`visibility: hidden` 的容器）：不传时 Mermaid 在 `<body>` 末尾建临时节点排版，跨好几个 await 才删；`html`/`body`/`#root` 一屏高又不裁切，整页因此多出一张图的高度，窗口会冒出一条很长的滚动条（v1.4.0，展开含图表的思考时最明显）。
+
 ## 智能 UI 的空块
 
 模型偶尔开了一个 `openchat-ui` 块又马上关上（多半是要写表格，而表格规定写在块外），以前显示成「这个界面无法显示」加一个空灰框；`splitSegments` 现在丢掉已结束的空块，还在输出的保留占位。

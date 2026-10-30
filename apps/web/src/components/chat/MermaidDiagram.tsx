@@ -12,6 +12,26 @@ let loading: Promise<Mermaid> | undefined
 const loadMermaid = () => (loading ??= import('mermaid').then((module) => module.default))
 
 /**
+ * Where Mermaid lays a diagram out while drawing it. Left to itself it does
+ * that in a node at the end of <body>, kept there across the awaits of a
+ * render: the page, a screen tall and not clipped, grew by the diagram's
+ * height meanwhile, and the window showed a scrollbar of its own for a moment
+ * each time one was drawn - opening a thought with a diagram in it, say.
+ * Fixed and hidden, it is laid out (Mermaid measures its text) but neither
+ * seen nor part of any scrolling.
+ */
+let stage: HTMLElement | undefined
+function drawingStage(): HTMLElement {
+  if (!stage?.isConnected) {
+    stage = document.createElement('div')
+    stage.setAttribute('aria-hidden', 'true')
+    stage.style.cssText = 'position: fixed; top: 0; left: 0; visibility: hidden; pointer-events: none; z-index: -1;'
+    document.body.append(stage)
+  }
+  return stage
+}
+
+/**
  * One render at a time: Mermaid keeps its configuration globally, so two
  * diagrams drawn at once in different themes could take each other's.
  */
@@ -30,7 +50,7 @@ function draw(id: string, code: string, dark: boolean): Promise<string> {
       fontFamily: 'inherit',
     })
     await mermaid.parse(code)
-    return (await mermaid.render(id, code)).svg
+    return (await mermaid.render(id, code, drawingStage())).svg
   })
   queue = next.catch(() => undefined)
   return next
