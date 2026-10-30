@@ -15,7 +15,7 @@ export const resources = {
 export type Language = keyof typeof resources
 
 /** The device's first language we have, else English. */
-function deviceLanguage(): Language {
+export function deviceLanguage(): Language {
   for (const locale of getLocales()) {
     if (locale.languageCode && locale.languageCode in resources) return locale.languageCode as Language
   }

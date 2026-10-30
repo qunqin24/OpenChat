@@ -100,6 +100,22 @@ describe('followConversation', () => {
     expect(unauthorized).toHaveBeenCalledWith(signedOut)
   })
 
+  it('says once that the account was disabled, and does not reconnect', async () => {
+    const disabled = new OpenChatError(403, { code: 'account_disabled', message: '', details: { reason: 'admin', disabledAt: '' } })
+    const unauthorized = vi.fn()
+    let connections = 0
+    await setup({
+      events: async function* () {
+        connections++
+        yield* []
+        throw disabled
+      },
+      unauthorized,
+    }).done
+    expect(unauthorized).toHaveBeenCalledExactlyOnceWith(disabled)
+    expect(connections).toBe(1)
+  })
+
   it('reconnects after a dropped connection, from a fresh snapshot', async () => {
     let connections = 0
     const { controller, done } = setup({

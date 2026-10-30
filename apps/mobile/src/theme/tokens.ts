@@ -21,6 +21,13 @@ export const light = {
   code: '#f6f6f6',
   link: '#1a1a1a',
   overlay: 'rgba(0,0,0,0.35)',
+  /** A chart's series, in order (the web's --n-chart-1…10). */
+  chart: ['#4f9bfa', '#6cc57f', '#ee8b57', '#f2c94c', '#a78bfa', '#f472b6', '#2dd4bf', '#94a3b8', '#a3e635', '#fb7185'],
+  /** A sub-agent's colour, fixed by its id (chat-core `colorOf`; the web's --n-agent-1…8). */
+  agents: ['#3d6df2', '#e5484d', '#12a58a', '#8e4ef0', '#e08a1e', '#d6409f', '#0b93c4', '#6a9a1f'],
+  info: '#2563eb',
+  success: '#16a34a',
+  warning: '#b45309',
 }
 
 export type Colors = typeof light
@@ -44,4 +51,9 @@ export const dark: Colors = {
   code: '#1e1e1e',
   link: '#f5f5f5',
   overlay: 'rgba(0,0,0,0.55)',
+  chart: ['#60a5fa', '#74d68a', '#f59e6b', '#f5d061', '#b69cff', '#f78bc6', '#3ee0c9', '#a8b4c4', '#b5ec4f', '#fd8a9b'],
+  agents: ['#6b8ff7', '#f06a6e', '#2cc4a5', '#a77bf5', '#f0a443', '#e56bb7', '#39b2e0', '#8fbf3f'],
+  info: '#60a5fa',
+  success: '#4ade80',
+  warning: '#fbbf24',
 }

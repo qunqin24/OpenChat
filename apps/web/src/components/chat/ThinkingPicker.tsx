@@ -1,5 +1,5 @@
 import type { ReasoningEffort } from '@openchat/api-client'
-import { Brain, Check, ChevronDown, CircleOff, Sparkles } from 'lucide-react'
+import { Check, ChevronDown, CircleOff, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { ThinkingIcon } from './ThinkingIcon'
 
 /** Rising bars, as many as the model has thinking levels, filled up to this one. */
 function Meter({ level, of }: { level: number; of: number }) {
@@ -59,7 +60,7 @@ export function ThinkingPicker({ levels, value: stored, onChange, disabled }: Th
           aria-label={t('chat.thinking.current', { level: label })}
           title={t('chat.thinking.current', { level: label })}
         >
-          <Brain aria-hidden="true" />
+          <ThinkingIcon aria-hidden="true" />
           <span>{t('chat.thinking.title')}</span>
           {value !== 'auto' && value !== 'none' && <Meter level={position(value)} of={scale.length} />}
           <ChevronDown aria-hidden="true" />

@@ -20,6 +20,8 @@ WORKDIR /repo
 
 # Manifests first: the dependency layer is rebuilt only when they change.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# pnpm checks the patches the workspace lists (patchedDependencies), even ones for the app.
+COPY patches patches
 COPY apps/web/package.json apps/web/
 COPY packages/api-client/package.json packages/api-client/
 COPY packages/chat-core/package.json packages/chat-core/

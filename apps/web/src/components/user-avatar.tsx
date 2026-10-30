@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+import { avatarColor, avatarInitial } from '@openchat/chat-core/avatar'
 import { cn } from '@/lib/utils'
 
 /**
@@ -35,7 +36,7 @@ export function UserAvatar({
   src?: string | null
   className?: string
 }) {
-  const letter = initialOf(name, email)
+  const letter = avatarInitial(name, email)
   // The address that failed, not a flag: a new one (the picture was replaced)
   // gets its own try.
   const [failed, setFailed] = useState<string>()
@@ -47,7 +48,7 @@ export function UserAvatar({
         'inline-flex shrink-0 select-none items-center justify-center overflow-hidden rounded-full font-medium text-white',
         className,
       )}
-      style={{ backgroundColor: colorOf(id || email || name || '') }}
+      style={{ backgroundColor: avatarColor(id || email || name || '') }}
     >
       {picture ? (
         <img
@@ -62,48 +63,6 @@ export function UserAvatar({
       )}
     </span>
   )
-}
-
-/**
- * Google's account colours, in spirit: one hue per account, none too light for
- * white text or too dark to tell from a dark page.
- */
-const PALETTE = [
-  '#1E88E5', // blue
-  '#E53935', // red
-  '#43A047', // green
-  '#FB8C00', // orange
-  '#8E24AA', // purple
-  '#00ACC1', // cyan
-  '#F4511E', // deep orange
-  '#3949AB', // indigo
-  '#D81B60', // pink
-  '#00897B', // teal
-  '#7CB342', // light green
-  '#5E35B1', // deep purple
-  '#6D4C41', // brown
-  '#546E7A', // blue grey
-]
-
-/** FNV-1a: a small, well-spread hash, so similar ids land on different colours. */
-function colorOf(seed: string): string {
-  let hash = 0x811c9dc5
-  for (let i = 0; i < seed.length; i++) {
-    hash ^= seed.charCodeAt(i)
-    hash = Math.imul(hash, 0x01000193)
-  }
-  return PALETTE[(hash >>> 0) % PALETTE.length]!
-}
-
-/**
- * The first letter of the name — a whole character, so 张 stays 张 and an
- * emoji is not cut in half — or of the address's local part when there is no
- * name.
- */
-function initialOf(name?: string, email?: string): string {
-  const source = (name ?? '').trim() || (email ?? '').split('@')[0]?.trim() || ''
-  const first = [...source][0]
-  return first ? first.toLocaleUpperCase() : '?'
 }
 
 export default UserAvatar

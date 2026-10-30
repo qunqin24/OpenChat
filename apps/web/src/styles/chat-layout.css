@@ -267,9 +267,7 @@
   :root:not([data-webkit]) .chat-ui .n-chat-fade > :is(.n-msg-user, .n-msg-assistant) {
     contain-intrinsic-size: auto 200px;
   }
-  /* A reply with reasoning or a search open is exempt: containment would make
-     it a stacking context, sinking its stuck header under the top bar's fade. */
-  :root:not([data-webkit]) .chat-ui .n-chat-fade > :is(.n-msg-user, .n-msg-assistant):not(:nth-last-child(-n + 2)):not(:has(.n-reasoning-toggle[data-state='open'], .n-activity.is-open)) {
+  :root:not([data-webkit]) .chat-ui .n-chat-fade > :is(.n-msg-user, .n-msg-assistant):not(:nth-last-child(-n + 2)) {
     content-visibility: auto;
     /* Containment clips painting to the message's box, and blocks as wide as
        the column (a Grid of cards, a table) drew their shadows past its right
@@ -528,4 +526,116 @@
     overflow-x: auto;
     scrollbar-width: none;
   }
+}
+
+/* The conversation at a glance (TurnNavigator): a short line for each thing
+   the user said, in the transcript's right margin and centred on it, the one
+   being read darker. Lines, not dots or numbers: they read as the
+   transcript's shape, quiet beside the text. At rest they are all short;
+   they draw out only as the pointer comes near (the padding to the left is
+   that nearness), the one being read the longest. */
+.chat-ui .n-outline {
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  padding: 12px 0 12px 32px;
+  /* Over the transcript, under the top bar (10). */
+  z-index: 5;
+  transform: translateY(-50%);
+}
+.chat-ui .n-outline-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  /* A long conversation scrolls its lines, with no scrollbar of its own. */
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.chat-ui .n-outline-rail::-webkit-scrollbar {
+  display: none;
+}
+/* Each line is a button the height of its slot, so the gaps are pointable too. */
+.chat-ui .n-outline-tick {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  width: 36px;
+  height: 16px;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.chat-ui .n-outline-tick span {
+  width: 10px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--n-text-3);
+  opacity: 0.55;
+  transition: width 180ms cubic-bezier(0.23, 1, 0.32, 1), opacity 150ms ease, background-color 150ms ease;
+}
+.chat-ui .n-outline-tick.is-current span {
+  background: var(--n-text);
+  opacity: 1;
+}
+.chat-ui .n-outline:is(:hover, :focus-within) .n-outline-tick span {
+  width: 18px;
+}
+.chat-ui .n-outline:is(:hover, :focus-within) .n-outline-tick.is-current span {
+  width: 26px;
+}
+.chat-ui .n-outline-tick:hover span,
+.chat-ui .n-outline-tick:focus-visible span {
+  opacity: 1;
+}
+.chat-ui .n-outline-tick:focus-visible {
+  outline: none;
+}
+/* What a line stands for, beside it on the left: the question, and the start of its answer. */
+.chat-ui .n-outline-card {
+  position: absolute;
+  /* Beside the lines, not beyond the room the pointer comes near through. */
+  right: calc(100% - 28px);
+  width: 300px;
+  padding: 12px 16px 14px;
+  border-radius: 16px;
+  background: var(--n-card);
+  box-shadow: var(--n-shadow-card-hover), 0 12px 32px -8px rgba(0, 0, 0, 0.14);
+  transform: translateY(-50%);
+  pointer-events: none;
+  animation: n-outline-card-in 120ms ease-out;
+}
+@keyframes n-outline-card-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-ui .n-outline-card {
+    animation: none;
+  }
+  .chat-ui .n-outline-tick span {
+    transition: none;
+  }
+}
+.chat-ui .n-outline-question {
+  overflow: hidden;
+  color: var(--n-text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-ui .n-outline-answer {
+  display: -webkit-box;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--n-text-2);
+  font-size: 13px;
+  line-height: 20px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }

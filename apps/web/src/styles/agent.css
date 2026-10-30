@@ -1,5 +1,5 @@
 /**
- * The agent's reply parts: reasoning, tool steps, notices, and the model
+ * The agent's reply parts: the process (thinking and tool steps), notices, and the model
  * picker. Built on the chat surface's `--n-*` tokens, so it follows the theme
  * without a palette of its own.
  */
@@ -20,77 +20,38 @@
   justify-content: center;
 }
 
-/* ---- reasoning ---------------------------------------------------------- */
+/* ---- the process: spacing, opening, the live label ---------------------- */
 
-.chat-ui .n-reasoning-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  font: inherit;
-  /* OpenWebUI's collapsible titles are body size. */
-  font-size: 15px;
-  color: var(--n-chat-collapsible);
-  transition: color 150ms;
-  user-select: none;
-  vertical-align: top;
-}
-.chat-ui .n-reasoning-toggle {
-  /* The name's line height: on the body's taller line it hung a few pixels
-     lower than the reply's gap says. */
-  line-height: 22.5px;
-}
-/* The line sits on a line box of the body's taller leading, which left a
-   couple of pixels under it; and closed, the answer follows right under it,
-   as in OpenWebUI, not a block's gap further down. */
-.chat-ui .n-reasoning {
-  line-height: 22.5px;
-}
-.chat-ui .n-reasoning[data-state='closed']:not(:last-child),
+/* Closed, the answer follows right under the process's line, as in
+   OpenWebUI, not a block's gap further down: a little apart, between
+   OpenWebUI's spacing, at which the line and the answer read as one block,
+   and the full block gap, at which they drifted apart. */
 .chat-ui .n-activity:not(.is-open):not(:last-child) {
   margin-bottom: -8px;
 }
-/* Closed lines one under another - the thinking, a search - a little apart,
-   and the answer a little further. Between OpenWebUI's spacing, at which the
-   lines and the answer read as one block, and the full block gap, at which
-   they drifted apart. */
-.chat-ui :is(.n-reasoning[data-state='closed'], .n-activity:not(.is-open)) + :is(.n-reasoning, .n-activity) {
+.chat-ui .n-activity:not(.is-open) + .n-activity {
   margin-top: 6px;
 }
-.chat-ui :is(.n-reasoning[data-state='closed'], .n-activity:not(.is-open)) + :not(.n-reasoning, .n-activity) {
+.chat-ui .n-activity:not(.is-open) + :not(.n-activity) {
   margin-top: 8px;
 }
-.chat-ui .n-reasoning-toggle::after {
-  content: '›';
-  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.chat-ui .n-reasoning-toggle[data-state='open'] {
-  /* Room above and below once it is stuck, taken back so nothing moves —
-     which holds only aligned to the top of its line (see vertical-align
-     below): on the baseline, the padding pushed the label 4px down the moment
-     the first thought opened it. */
-  padding-block: 4px;
-  margin-block: -4px;
-}
-.chat-ui .n-reasoning-toggle[data-state='open']::after {
-  transform: rotate(90deg);
-}
-/* The reasoning and the tool activity open and close the same small way: the
+/* The process opens and closes the small way: the
    height Radix measured, with a light fade, 200ms on quintOut both ways. The
    fade is what keeps a long section from smearing as its height sweeps: the
    text is gone before the box has much shrunk. Off under reduced motion. */
-.chat-ui .n-reasoning-content,
 .chat-ui .n-activity-content {
   overflow: hidden;
 }
-.chat-ui .n-reasoning-content[data-state='open'],
 .chat-ui .n-activity-content[data-state='open'] {
   animation: n-section-open 200ms cubic-bezier(0.23, 1, 0.32, 1);
 }
-.chat-ui .n-reasoning-content[data-state='closed'],
+/* Open, it clips only top and bottom, for the height sweeping open, with room
+   at the top (the steps' padding): a line inside has a hover fill that
+   reaches past it on every side, and hidden cut it off at the left. */
+.chat-ui .n-activity-content[data-state='open'] {
+  overflow-x: visible;
+  overflow-y: clip;
+}
 .chat-ui .n-activity-content[data-state='closed'] {
   /* Held at its end (forwards) until Radix hides it: otherwise, between the
      animation's last frame and the hidden attribute, the whole section
@@ -106,21 +67,9 @@
   to { height: 0; opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .chat-ui .n-reasoning-content[data-state],
   .chat-ui .n-activity-content[data-state] {
     animation: none;
   }
-}
-.chat-ui .n-reasoning-body {
-  margin-top: 6px;
-  padding-left: 12px;
-  border-left: 2px solid var(--n-line);
-}
-/* The reasoning reads as body text, a size down from the answer's. */
-.chat-ui .n-reasoning-body .n-markdown {
-  color: var(--n-chat-body);
-  font-size: 14px;
-  line-height: 1.7;
 }
 /* While thinking, the label shimmers: a band of light sweeps across the
    letters, the text itself filled with a gradient that slides. Colour only,
@@ -179,68 +128,6 @@
   background: var(--n-hover);
   color: var(--n-chat-collapsible-hover);
 }
-.chat-ui .n-reasoning-toggle:hover {
-  color: var(--n-chat-collapsible-hover);
-}
-/* Open, the line stays at the top of the transcript while its steps scroll
-   under it, so a long search can be closed from wherever the reader is. Sticky
-   within the activity, so it lets go once the steps have scrolled past. Open
-   reasoning does the same with its toggle. Both stick right under the floating
-   top bar, drawn over its fade. */
-.chat-ui .n-reasoning-toggle[data-state='open'],
-.chat-ui .n-activity.is-open .n-activity-head {
-  position: sticky;
-  /* 0, not the bar's height: the transcript's top padding (room for the
-     floating bar) already offsets where a sticky box stops. */
-  top: 0;
-  /* Above the top bar (z-index 10) and so above its fade, which would
-     otherwise wash the label out; it sits below the bar, so the bar's own
-     title is never covered. */
-  z-index: 11;
-  isolation: isolate;
-}
-/* Pinned (data-stuck, from useStuck), the header joins the top bar: the bar
-   turns solid and the header continues it, page colour out to the column's
-   edges, so the two read as one header with the transcript fading in beneath
-   it — not as a band floating over text that still shows above it. Only while
-   pinned: in the flow, the fade would fog the text below it. */
-.chat-ui .n-reasoning-toggle[data-stuck]::before,
-.chat-ui .n-activity-head[data-stuck]::before {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  /* 1px up, so no hairline of text shows at the seam with the bar. */
-  inset: -1px -100vmax -20px;
-  background: linear-gradient(to bottom, var(--n-bg) calc(100% - 20px), transparent 100%);
-  pointer-events: none;
-}
-/* The band hangs below the pinned header; once the steps have scrolled past
-   and the header is about to let go, it hung past the section too and washed
-   out the answer's first line. The open section clips it at its own bottom -
-   vertically only, so it still reaches the column's edges - with 4px of room
-   either way (padding, taken back) for the header's hover fill, which reaches
-   past its line by as much. Clip, not hidden: no scroll container, so the
-   header still pins to the transcript. */
-.chat-ui .n-activity.is-open,
-.chat-ui .n-reasoning[data-state='open'] {
-  overflow-x: visible;
-  overflow-y: clip;
-  padding-block: 4px;
-  margin-block: -4px;
-}
-/* In the sub-agent panel there is no top bar for a pinned header to join, and
-   a sticky box stops below its scroller's top padding, leaving a strip of text
-   showing above it: there it pins flush with the scroller's top edge instead
-   (the transcript's top padding, n-subagent-transcript). */
-.chat-ui .n-subagent-transcript .n-reasoning-toggle[data-state='open'],
-.chat-ui .n-subagent-transcript .n-activity.is-open .n-activity-head {
-  top: -8px;
-}
-/* The chat's own headers only: one pinned in the sub-agent panel has no bar to join. */
-.chat-ui .n-main:has(.n-scroll [data-stuck]) .n-topbar::before {
-  inset: 0;
-  background: var(--n-bg);
-}
 .chat-ui .n-activity-icon {
   display: inline-flex;
   width: 16px;
@@ -267,7 +154,7 @@
   white-space: nowrap;
 }
 /* While working, the line is the live status: it shimmers gently. */
-.chat-ui .n-activity.is-active .n-activity-title {
+.chat-ui .n-activity.is-active > .n-activity-head .n-activity-title {
   animation: n-agent-pulse 1.6s ease-in-out infinite;
 }
 .chat-ui .n-activity-failed {
@@ -279,7 +166,7 @@
   color: var(--n-text-3);
   transition: transform 150ms ease;
 }
-.chat-ui .n-activity.is-open .n-activity-chevron {
+.chat-ui .n-activity.is-open > .n-activity-head .n-activity-chevron {
   transform: rotate(90deg);
 }
 
@@ -326,10 +213,17 @@
   font-size: 12px;
 }
 
+/* Opened, what happened lies flush with the answer, as ChatGPT lays it out:
+   no rule down its side, which made the words said on the way read as part
+   of the thinking. */
 .chat-ui .n-activity-steps {
-  margin: 4px 0 2px 1px;
-  padding: 0 0 0 14px;
-  border-inline-start: 1px solid var(--n-line);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* More room under it than between its lines: the answer starts there.
+     Padding, not margin, so the room is inside the clipped section. */
+  margin: 0;
+  padding: 8px 0 16px;
   list-style: none;
   animation: n-activity-in 180ms ease-out;
 }
@@ -339,24 +233,59 @@
     transform: translateY(-2px);
   }
 }
-/* What the model said between rounds, in the body colour: it is the account of
-   how the search went, worth reading, not a footnote. Its thinking is a step quieter. */
-.chat-ui .n-activity-note {
-  padding: 5px 0 5px 22px;
-  color: var(--n-chat-body);
-  font-size: 14px;
-  line-height: 22px;
-  white-space: pre-wrap;
+/* A run of thinking and steps between the words said on the way, folded into
+   a line of its own inside the process, the same size as the process's line:
+   both are lines to open, as in ChatGPT. */
+.chat-ui .n-activity-run .n-activity-steps {
+  padding-bottom: 4px;
+}
+/* What the model said on its way is shown as it said it, as the answer is: it
+   was said to the reader. Its thinking is a step quieter and a size down, so
+   the two are never taken for each other. */
+.chat-ui .n-activity-note .n-markdown {
+  color: inherit;
 }
 .chat-ui .n-activity-note.is-reasoning {
-  /* Quieter than what the model said, but read, not skimmed past: the same
-     muted ink as the reasoning outside a search, upright. */
+  /* Quieter than what the model said, but read, not skimmed past. */
   color: var(--n-chat-muted);
+}
+.chat-ui .n-activity-note.is-reasoning .n-markdown {
+  font-size: 14px;
+  line-height: 1.7;
+}
+/* While the model works, a thought shows its last lines only (Thought): a
+   window kept at its newest line, faded at the top where it is cut. Hidden,
+   not scrolled: it is moved to its end with every token, and a reader
+   scrolling in it was pulled back each time. */
+.chat-ui .n-activity-thought.is-peek {
+  max-height: min(30vh, 240px);
+  overflow: hidden;
+}
+/* Done, a long thought is a box of its own height that scrolls (Thought,
+   THOUGHT_BOX); short ones show whole. Faded at each edge with more beyond it:
+   above (data-cut) when scrolled down or peeking, below (data-more) while there
+   is more to scroll to. The mask stays on the box as its text scrolls. */
+.chat-ui .n-activity-thought[data-long] {
+  max-height: 240px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.chat-ui .n-activity-thought {
+  --n-thought-above: 0px;
+  --n-thought-below: 0px;
+}
+.chat-ui .n-activity-thought[data-cut] {
+  --n-thought-above: 56px;
+}
+.chat-ui .n-activity-thought[data-more] {
+  --n-thought-below: 40px;
+}
+.chat-ui .n-activity-thought:is([data-cut], [data-more]) {
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--n-thought-above), #000 calc(100% - var(--n-thought-below)), transparent);
 }
 .chat-ui .n-activity-step {
   display: flex;
   gap: 8px;
-  padding: 5px 0;
 }
 .chat-ui .n-activity-step-icon {
   display: inline-flex;
@@ -742,9 +671,6 @@
    column's gap set it 4px lower than the toggle that replaces it. */
 .chat-ui .n-msg-body:empty + .n-thinking {
   margin-top: -4px;
-}
-.chat-ui .n-reasoning-toggle .n-orb {
-  margin-inline-end: 2px;
 }
 
 /* ---- a message content moderation refused (RefusalCard) ------------------ */

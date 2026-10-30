@@ -1,19 +1,7 @@
 import { useLayoutEffect, useRef, type RefObject } from 'react'
 
 import { prefersReducedMotion } from '@/lib/motion'
-
-/** How long a batch of text takes to fade in, in ms. */
-export const ARRIVAL_FADE_MS = 600
-
-/** A batch of text that arrived at once: its place in the box's text, and when. */
-interface Batch {
-  start: number
-  end: number
-  born: number
-}
-
-/** ease-in-out, as the opacity of what lies over the text. */
-const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2)
+import { coverOpacity, nextArrivals, noArrivals, type ArrivalBatch as Batch, type ArrivalState } from '@openchat/chat-core/arrival'
 
 /**
  * Text fades in a batch at a time, as it arrives: whatever one render adds is
@@ -38,8 +26,8 @@ const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 
  * tab, and reduced motion get no fade.
  */
 export function useArrivalFade(content: RefObject<HTMLElement | null>, layer: RefObject<HTMLElement | null>, fresh = false) {
-  const shown = useRef<number | null>(null)
-  const batches = useRef<Batch[]>([])
+  // What counts as a batch, and how its covers fade, are shared with the app (chat-core/arrival.ts).
+  const arrivals = useRef<ArrivalState>(noArrivals)
   const covers = useRef<{ el: HTMLElement; born: number }[]>([])
   const frame = useRef(0)
 
@@ -48,31 +36,26 @@ export function useArrivalFade(content: RefObject<HTMLElement | null>, layer: Re
     const over = layer.current
     if (!root || !over) return
     const length = root.textContent?.length ?? 0
-    const now = performance.now()
-    if (shown.current === null) shown.current = fresh ? 0 : length
-    if (length > shown.current) {
-      if (!prefersReducedMotion() && !document.hidden) batches.current.push({ start: shown.current, end: length, born: now })
-    } else if (length < shown.current) {
-      batches.current = []
-    }
-    shown.current = length
-    batches.current = batches.current.filter((batch) => now - batch.born < ARRIVAL_FADE_MS)
-    covers.current = place(root, over, batches.current)
+    arrivals.current = nextArrivals(arrivals.current, length, performance.now(), {
+      fresh,
+      fading: !prefersReducedMotion() && !document.hidden,
+    })
+    covers.current = place(root, over, arrivals.current.batches)
     if (covers.current.length > 0 && !frame.current) {
       const tick = () => {
         const at = performance.now()
         let live = false
         for (const cover of covers.current) {
-          const t = Math.min(1, (at - cover.born) / ARRIVAL_FADE_MS)
-          cover.el.style.opacity = String(1 - easeInOut(t))
-          if (t < 1) live = true
+          const opacity = coverOpacity(cover.born, at)
+          cover.el.style.opacity = String(opacity)
+          if (opacity > 0) live = true
         }
         if (live) {
           frame.current = requestAnimationFrame(tick)
           return
         }
         frame.current = 0
-        batches.current = []
+        arrivals.current = { ...arrivals.current, batches: [] }
         over.replaceChildren()
         covers.current = []
       }

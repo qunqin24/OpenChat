@@ -1,0 +1,29 @@
+diff --git a/android/src/main/java/expo/modules/shareintent/ExpoShareIntentModule.kt b/android/src/main/java/expo/modules/shareintent/ExpoShareIntentModule.kt
+index ff5b1001e7bb3443482727cec48c22579465c73b..2a5ade178b75793b1961254e57ba0748dbb79a0a 100644
+--- a/android/src/main/java/expo/modules/shareintent/ExpoShareIntentModule.kt
++++ b/android/src/main/java/expo/modules/shareintent/ExpoShareIntentModule.kt
+@@ -142,14 +142,22 @@ class ExpoShareIntentModule : Module() {
+                 if (intent.action == Intent.ACTION_SEND) {
+                     val uri = intent.parcelable<Uri>(Intent.EXTRA_STREAM);
+                     if (uri != null) {
+-                        notifyShareIntent(mapOf( "files" to arrayOf(getFileInfo(uri), "type" to "file")))
++                        // OpenChat: a file the sharing app will not let us read (an empty
++                        // cursor, a denied stream) is reported, not a crash of the app.
++                        val info = runCatching { getFileInfo(uri) }.getOrNull()
++                        if (info != null) {
++                            notifyShareIntent(mapOf( "files" to arrayOf(info, "type" to "file")))
++                        } else {
++                            notifyError("cannot read the shared file: $uri")
++                        }
+                     } else {
+                         notifyError("empty uri for file sharing: " + intent.action)
+                     }
+                 } else if (intent.action == Intent.ACTION_SEND_MULTIPLE) {
+                     val uris = intent.parcelableArrayList<Uri>(Intent.EXTRA_STREAM)
+                     if (uris != null) {
+-                        notifyShareIntent(mapOf( "files" to uris.map { getFileInfo(it) }, "type" to "file"))
++                        // OpenChat: the files that cannot be read are left out (see above).
++                        notifyShareIntent(mapOf( "files" to uris.mapNotNull { runCatching { getFileInfo(it) }.getOrNull() }, "type" to "file"))
+                     } else {
+                         notifyError("empty uris array for file sharing: " + intent.action)
+                     }

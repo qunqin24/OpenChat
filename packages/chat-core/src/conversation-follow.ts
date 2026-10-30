@@ -4,6 +4,7 @@ import type { StoreApi } from 'zustand'
 
 import type { ChatState } from './chat-store'
 import { refreshConfirmed, refreshThenSettle } from './hand-over'
+import { accountDisabledOf } from './account-disabled'
 import { CAPACITY_CODE } from './model-capacity'
 import { queryKeys } from './query-keys'
 import { spliceNewest, truncateTranscript, type TranscriptPages } from './transcript-pages'
@@ -45,7 +46,10 @@ export interface FollowOptions {
   fetchNewest: () => Promise<MessagePage>
   /** The conversation is gone (deleted elsewhere, or never existed): show a new chat. */
   leave: () => void
-  /** The session ended: say so once (the app signs out) and stop. */
+  /**
+   * The session ended, or the account was disabled (403 `account_disabled`):
+   * say so once - the app signs out, or shows why it was disabled - and stop.
+   */
   unauthorized: (error: unknown) => void
   wait: (ms: number) => Promise<void>
 }
@@ -232,9 +236,10 @@ export async function followConversation(options: FollowOptions): Promise<void> 
         options.leave()
         return
       }
-      // The session ended (or never was): reconnecting would be refused the
-      // same way for ever. Say so once and stop.
-      if (isOpenChatError(error) && error.status === 401) {
+      // The session ended (or never was), or the account was disabled:
+      // reconnecting would be refused the same way for ever, and nothing else
+      // may ask the server again to hear why. Say so once and stop.
+      if ((isOpenChatError(error) && error.status === 401) || accountDisabledOf(error)) {
         options.unauthorized(error)
         return
       }

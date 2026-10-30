@@ -9,13 +9,16 @@ import { parseQuotes } from '@openchat/chat-core/document-selection'
 
 import { Button } from '@/components/Button'
 import { useColors } from '@/theme'
+import { MessageAttachments } from './MessageAttachments'
 
 interface Props {
-  message: Pick<Message, 'content'> & Partial<Pick<Message, 'id' | 'attachments' | 'references'>>
+  message: Pick<Message, 'content'> & Partial<Pick<Message, 'id' | 'attachments' | 'removedAttachments' | 'references'>>
   /** Rewords the question; absent while that cannot be done (a run going, a message on its way). */
   onEdit?: (content: string) => void
   /** Refused by moderation: marked, and reworded in the composer instead. */
   refused?: boolean
+  /** The field opened: the list brings it into view above the keyboard. */
+  onEditStart?: () => void
 }
 
 /**
@@ -23,7 +26,7 @@ interface Props {
  * block it asks about comes wrapped in `<document-selection>`: shown as the
  * request, the passage quoted above it. Copy and edit sit under it.
  */
-export function UserBubble({ message, onEdit, refused }: Props) {
+export function UserBubble({ message, onEdit, refused, onEditStart }: Props) {
   const { t } = useTranslation()
   const colors = useColors()
   const [editing, setEditing] = useState(false)
@@ -68,16 +71,12 @@ export function UserBubble({ message, onEdit, refused }: Props) {
           {quote.passage}
         </Text>
       ))}
+      <MessageAttachments items={message.attachments ?? []} removed={message.removedAttachments} references={message.references} />
       <View style={[styles.bubble, { backgroundColor: refused ? colors.errFill : colors.bubble }]}>
         <Text style={[styles.text, { color: colors.text }]} selectable>
           {request}
         </Text>
       </View>
-      {message.references?.length ? (
-        <Text style={[styles.meta, { color: colors.text3 }]} numberOfLines={1}>
-          {message.references.map((r) => r.title).join(' · ')}
-        </Text>
-      ) : null}
       {!refused ? (
         <View style={styles.actions}>
           <Pressable
@@ -101,6 +100,7 @@ export function UserBubble({ message, onEdit, refused }: Props) {
               onPress={() => {
                 setDraft(request)
                 setEditing(true)
+                onEditStart?.()
               }}
             >
               <Pencil size={16} color={colors.text3} />
@@ -117,7 +117,6 @@ const styles = StyleSheet.create({
   bubble: { maxWidth: '85%', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10 },
   text: { fontSize: 16, lineHeight: 24 },
   quote: { maxWidth: '85%', fontSize: 13, lineHeight: 19, borderLeftWidth: 2, paddingLeft: 8 },
-  meta: { fontSize: 12, maxWidth: '85%' },
   actions: { flexDirection: 'row', gap: 2 },
   action: { padding: 6 },
   editor: { borderRadius: 20, padding: 12, gap: 10 },

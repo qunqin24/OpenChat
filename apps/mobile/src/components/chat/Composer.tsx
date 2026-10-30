@@ -1,11 +1,12 @@
-import type { ChatModel, ReasoningEffort } from '@openchat/api-client'
-import { ArrowUp, Brain, Check, ChevronDown, Globe, Square } from 'lucide-react-native'
-import { useState } from 'react'
+import type { ReasoningEffort } from '@openchat/api-client'
+import * as Haptics from 'expo-haptics'
+import { ArrowUp, Plus, Square } from 'lucide-react-native'
+import { useEffect, useRef, useState, type ComponentRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 
-import { Sheet, SheetOption } from '@/components/Sheet'
 import { useColors } from '@/theme'
+import { ThinkingIcon } from './ThinkingIcon'
 
 interface Props {
   value: string
@@ -16,131 +17,132 @@ interface Props {
   busy: boolean
   /** The conversation ends on a refused message: this is its editor. */
   revising: boolean
-  models: ChatModel[]
-  modelId: string
-  onPickModel: (id: string) => void
   thinkingLevels: ReasoningEffort[]
   effort: ReasoningEffort
-  onPickEffort: (effort: ReasoningEffort) => void
-  canSearch: boolean
-  webSearch: boolean
-  onToggleWebSearch: () => void
+  /** Opens the effort slider (EffortSlider), which the chat page draws over itself. */
+  onOpenEffort: () => void
+  /** Opens what can go with the message (AttachMenu). */
+  onAttach: () => void
+  /** The files and conversations going with it, above the box. */
+  tray?: React.ReactNode
+  /** Whether the tray holds anything: the box stays open while it does. */
+  hasTray: boolean
 }
 
 /**
- * The message box and what the next run is asked with: the model, how hard it
- * thinks, and whether it may go on the web (the web's Composer and its
- * pickers). The send button stops a run while one is going.
+ * The message box and how hard the model thinks for the next run (the web's
+ * Composer; the model is picked in the chat's header, ModelPicker, and web
+ * search is switched in the + menu, AttachMenu). The send button stops a run
+ * while one is going.
  */
 export function Composer(props: Props) {
   const { t } = useTranslation()
   const colors = useColors()
-  const [picking, setPicking] = useState<'model' | 'effort' | null>(null)
-  const model = props.models.find((m) => m.id === props.modelId)
   const canSend = props.value.trim().length > 0 && !props.busy
   const stopping = Boolean(props.onStop)
+  const [focused, setFocused] = useState(false)
+  const input = useRef<ComponentRef<typeof TextInput>>(null)
+  // Android keeps the focus when back lowers the keyboard; the box is done with
+  // when the keyboard is, so it lets go and folds up.
+  useEffect(() => {
+    const subscription = Keyboard.addListener('keyboardDidHide', () => input.current?.blur())
+    return () => subscription.remove()
+  }, [])
+  // At rest a single line - +, the prompt, send - as chat apps on phones have
+  // it; the settings for the next message come out while it is being written.
+  const open = focused || props.value.trim().length > 0 || props.revising || props.hasTray
+
+  const plus = (
+    <Pressable
+      onPress={props.onAttach}
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityLabel={t('chat.attach.menu')}
+      style={[styles.round, { backgroundColor: colors.bubble }]}
+    >
+      <Plus size={22} color={colors.text} strokeWidth={1.75} />
+    </Pressable>
+  )
+  const send = (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={stopping ? t('chat.stop') : t('chat.send')}
+      disabled={!stopping && !canSend}
+      onPress={() => {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+        if (stopping) props.onStop?.()
+        else props.onSend()
+      }}
+      // Quiet while there is nothing to send; ink once there is, or while it stops a run.
+      style={[styles.round, { backgroundColor: stopping || canSend ? colors.accent : colors.bubble }]}
+    >
+      {stopping ? (
+        <Square size={14} color={colors.accentFg} fill={colors.accentFg} />
+      ) : (
+        <ArrowUp size={20} color={canSend ? colors.accentFg : colors.text3} strokeWidth={2.25} />
+      )}
+    </Pressable>
+  )
 
   return (
-    <View style={[styles.box, { backgroundColor: colors.bubble }]}>
+    // White, edged and lifted off the page, as a field to tap rather than a grey slab.
+    <View style={[styles.box, !open && styles.pill, { backgroundColor: colors.card, borderColor: colors.line }]}>
       {props.revising ? <Text style={[styles.revise, { color: colors.errInk }]}>{t('chat.revise.label')}</Text> : null}
-      <TextInput
-        style={[styles.input, { color: colors.text }]}
-        placeholder={t('chat.placeholder')}
-        placeholderTextColor={colors.text3}
-        value={props.value}
-        onChangeText={props.onChange}
-        multiline
-      />
-      <View style={styles.row}>
-        <Chip onPress={() => setPicking('model')} label={model?.name ?? (props.modelId || t('chat.model.pick'))} chevron />
-        {props.thinkingLevels.length > 0 ? (
-          <Chip
-            onPress={() => setPicking('effort')}
-            icon={<Brain size={15} color={colors.text2} />}
-            label={t(`chat.thinking.${props.effort}`)}
-          />
-        ) : null}
-        {props.canSearch ? (
-          <Chip
-            onPress={props.onToggleWebSearch}
-            icon={<Globe size={15} color={props.webSearch ? colors.accentFg : colors.text2} />}
-            label={t('chat.web-search.label')}
-            active={props.webSearch}
-          />
-        ) : null}
-        <View style={styles.spacer} />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={stopping ? t('chat.stop') : t('chat.send')}
-          disabled={!stopping && !canSend}
-          onPress={stopping ? props.onStop : props.onSend}
-          style={[styles.send, { backgroundColor: colors.accent }, !stopping && !canSend && styles.dim]}
-        >
-          {stopping ? <Square size={14} color={colors.accentFg} fill={colors.accentFg} /> : <ArrowUp size={20} color={colors.accentFg} />}
-        </Pressable>
+      {props.tray}
+      {/* The input keeps its place in the tree in both shapes, so growing on focus does not lose the focus. */}
+      <View style={open ? null : styles.line}>
+        {open ? null : plus}
+        <TextInput
+          ref={input}
+          style={[styles.input, !open && styles.inputLine, { color: colors.text }]}
+          placeholder={t('chat.placeholder')}
+          placeholderTextColor={colors.text2}
+          value={props.value}
+          onChangeText={props.onChange}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          multiline
+        />
+        {open ? null : send}
       </View>
-
-      <Sheet open={picking === 'model'} onClose={() => setPicking(null)} title={t('chat.model.pick')}>
-        {props.models.length === 0 ? <SheetOption label={t('chat.model.none')} disabled onPress={() => undefined} /> : null}
-        {props.models.map((m) => (
-          <SheetOption
-            key={m.id}
-            label={m.name}
-            detail={m.atCapacity ? t('chat.model.at-capacity') : undefined}
-            disabled={m.atCapacity}
-            selected={m.id === props.modelId}
-            right={m.id === props.modelId ? <Check size={18} color={colors.text} /> : null}
-            onPress={() => {
-              props.onPickModel(m.id)
-              setPicking(null)
-            }}
-          />
-        ))}
-      </Sheet>
-      <Sheet open={picking === 'effort'} onClose={() => setPicking(null)} title={t('chat.thinking.heading')}>
-        {(['auto', ...props.thinkingLevels] as ReasoningEffort[]).map((level) => (
-          <SheetOption
-            key={level}
-            label={t(`chat.thinking.${level}`)}
-            selected={level === props.effort}
-            right={level === props.effort ? <Check size={18} color={colors.text} /> : null}
-            onPress={() => {
-              props.onPickEffort(level)
-              setPicking(null)
-            }}
-          />
-        ))}
-      </Sheet>
+      {open ? (
+        <View style={styles.row}>
+          {plus}
+          <View style={styles.spacer} />
+          {/* Beside send and the same size; the level itself is named on the slider it opens. */}
+          {props.thinkingLevels.length > 0 ? (
+            <Pressable
+              onPress={props.onOpenEffort}
+              accessibilityRole="button"
+              accessibilityLabel={t('chat.thinking.current', { level: t(`chat.thinking.${props.effort}`) })}
+              style={[styles.round, { backgroundColor: colors.bubble }]}
+            >
+              <ThinkingIcon size={22} color={colors.text} strokeWidth={1.75} />
+            </Pressable>
+          ) : null}
+          {send}
+        </View>
+      ) : null}
     </View>
   )
 }
 
-function Chip({ label, icon, chevron, active, onPress }: { label: string; icon?: React.ReactNode; chevron?: boolean; active?: boolean; onPress: () => void }) {
-  const colors = useColors()
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      style={[styles.chip, { backgroundColor: active ? colors.accent : colors.field }]}
-    >
-      {icon}
-      <Text style={[styles.chipText, { color: active ? colors.accentFg : colors.text2 }]} numberOfLines={1}>
-        {label}
-      </Text>
-      {chevron ? <ChevronDown size={14} color={colors.text3} /> : null}
-    </Pressable>
-  )
-}
-
 const styles = StyleSheet.create({
-  box: { borderRadius: 24, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, gap: 8 },
+  box: {
+    borderRadius: 28,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 8,
+    gap: 8,
+    boxShadow: '0 6px 20px rgba(0, 0, 0, 0.06)',
+  },
+  pill: { borderRadius: 32, paddingHorizontal: 8, paddingTop: 8, paddingBottom: 8 },
+  line: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   revise: { fontSize: 12, lineHeight: 17 },
   input: { fontSize: 16, lineHeight: 22, maxHeight: 160, minHeight: 24, paddingVertical: 4, textAlignVertical: 'top' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  inputLine: { flex: 1, maxHeight: 44 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: -6 },
   spacer: { flex: 1 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 32, paddingHorizontal: 10, borderRadius: 16, maxWidth: 150 },
-  chipText: { fontSize: 13, flexShrink: 1 },
-  send: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  dim: { opacity: 0.3 },
+  round: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
 })

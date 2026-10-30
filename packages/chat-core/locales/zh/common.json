@@ -82,6 +82,7 @@
     "reasoning": {
       "live": "正在思考…",
       "done": "思考过程",
+      "thought": "已思考",
       "took_one": "已思考 {{count}} 秒",
       "took_other": "已思考 {{count}} 秒"
     },
@@ -259,6 +260,7 @@
     },
     "more": "更多",
     "scroll-bottom": "回到底部",
+    "outline": "对话导航",
     "sidebar": {
       "open": "展开侧边栏",
       "close": "收起侧边栏",
@@ -2098,9 +2100,44 @@
     }
   },
   "mobile": {
-    "signed-in-as": "已登录为 {{name}}",
     "network": "连不上服务器，请检查网络后再试。",
-    "home-placeholder": "聊天功能即将到来。",
-    "retry": "重试"
+    "retry": "重试",
+    "attach-photos": "照片",
+    "attach-camera": "拍照",
+    "attach-files": "本地文件",
+    "quote-not-unique": "这段文字在文档里出现了不止一次，请多选一些上下文。",
+    "document-edit": "编辑",
+    "document-done": "完成",
+    "update": {
+      "title": "有新版本 {{version}}",
+      "current": "当前版本 {{version}}",
+      "notes": "更新内容",
+      "later": "稍后",
+      "skip": "跳过这个版本",
+      "install": "下载并安装",
+      "downloading": "正在下载 {{percent}}%",
+      "failed": "更新没有成功，请稍后再试。",
+      "latest": "已是最新版本",
+      "check": "检查更新",
+      "checking": "正在检查…",
+      "permission": "需要允许 OpenChat 安装应用，才能完成更新。"
+    },
+    "settings": {
+      "about": "关于",
+      "version": "版本",
+      "server": "服务器"
+    },
+    "attach-library-hint": "从之前发过的文件里选",
+    "attach-conversation-hint": "让模型读一读另一个对话",
+    "attach-web-hint": "需要时搜索并阅读网页",
+    "web-on": "已开启联网，点按关闭",
+    "code-more": "展开其余 {{count}} 行",
+    "code-less": "收起",
+    "table": "表格",
+    "table-size": "{{columns}} 列 · {{rows}} 行",
+    "copied": "已复制",
+    "search-found": "搜索到 {{count}} 个网页",
+    "search-results": "搜索结果",
+    "browsed": "已浏览 {{host}}"
   }
 }

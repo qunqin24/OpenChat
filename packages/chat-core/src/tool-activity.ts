@@ -3,9 +3,9 @@ import type { TFunction } from 'i18next'
 
 import { isHttpUrl, siteName } from './urls'
 
-// A reply's tool calls as the activity line tells them (the web's
-// ToolActivity.tsx, the app's ToolActivity): what each step is called, and the
-// one line that sums them up. Pure, so both apps say the same thing.
+// A reply's process as its line tells it (the web's ToolActivity.tsx, the
+// app's ActivityLine; what the process is, reply-process.ts): what each step
+// is called, and the one line that sums it up. Pure, so both apps say the same thing.
 
 export type ToolStatus = 'pending' | 'running' | ToolResultPart['status']
 
@@ -15,16 +15,47 @@ export interface ToolActivityStep {
   status: ToolStatus
 }
 
-/** What the model said or thought between tool rounds. */
+/** What the model thought, or said on its way, in the process. */
 export interface ActivityNote {
   kind: 'note' | 'reasoning'
   text: string
-  /** Still being written: revealed as an answer's text is (PlainReveal). */
+  /** Still being written: shown as an answer's text is, each batch fading in. */
   streaming?: boolean
+  /** Began while the reader watched, so its text fades in as it arrives. */
+  fresh?: boolean
+  /** How long the model thought, for reasoning: the line sums it up ahead of the steps. */
+  durationMs?: number
 }
 
 /** One entry of the activity, in the order it happened. */
 export type ActivityItem = ({ kind: 'tool' } & ToolActivityStep | ActivityNote) & { key: string }
+
+/**
+ * The open process as ChatGPT lays it out: what the model said on its way,
+ * shown as it said it, and between those words each run of thinking and steps
+ * folded into a line of its own (`run`), opened on demand.
+ */
+export type ActivitySegment = { kind: 'note'; item: ActivityNote & { key: string } } | { kind: 'run'; key: string; items: ActivityItem[] }
+
+/**
+ * The items parted at what the model said. Null when it said nothing on its
+ * way: then the process is one run, and a line of its own inside the fold
+ * would only say again what the fold's line says.
+ */
+export function activitySegments(items: ActivityItem[]): ActivitySegment[] | null {
+  if (!items.some((item) => item.kind === 'note')) return null
+  const segments: ActivitySegment[] = []
+  for (const item of items) {
+    if (item.kind === 'note') {
+      segments.push({ kind: 'note', item })
+      continue
+    }
+    const last = segments[segments.length - 1]
+    if (last?.kind === 'run') last.items.push(item)
+    else segments.push({ kind: 'run', key: item.key, items: [item] })
+  }
+  return segments
+}
 
 export interface SearchHit {
   title: string
@@ -151,6 +182,22 @@ export function callArguments(call: ToolCallPart): Record<string, unknown> {
   }
 }
 
+/**
+ * A search result's excerpt as text to read: the services hand back page text
+ * as they scraped it, Markdown links and images, bare addresses, headings and
+ * runs of blank lines among it, which read as noise in a list of results.
+ */
+export function plainSnippet(snippet: string): string {
+  return snippet
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/[#*_`>|]+/g, ' ')
+    .replace(/\s*(\.{3}|…)\s*$/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 export function searchHits(result?: ToolResultPart): SearchHit[] {
   const results = (result?.details as { results?: unknown } | undefined)?.results
   if (!Array.isArray(results)) return []
@@ -170,16 +217,29 @@ export interface ActivityHead {
   /** Every source the searches turned up, once per site, in the order found. */
   sources: SearchHit[]
   steps: (ActivityItem & { kind: 'tool' })[]
+  /**
+   * Says only how long the model thought (`brief`, when it thought): the
+   * searches and their sources are for the lines inside to say.
+   */
+  thoughtOnly: boolean
 }
 
 /**
  * The line while the model works names what it is doing; once it is done, it
- * sums the steps up - "searched 4 times, read 1 page". `thinking` is the model
+ * sums the process up - "thought for 16 seconds, searched 4 times, read 1
+ * page", or only how long it thought when it called no tool. The process's
+ * own line is `brief`, as ChatGPT's "thought for 20s": once done it says only
+ * how long the model thought, when it thought at all. `thinking` is the model
  * at work with no call in flight: streaming its thoughts (`reasoning`), quiet
  * between a round and its next response (`waiting`, when the line keeps naming
  * the step just done), or a failed request being tried again (`retrying`).
  */
-export function activityHead(t: T, items: ActivityItem[], thinking: 'reasoning' | 'waiting' | 'retrying' | false): ActivityHead {
+export function activityHead(
+  t: T,
+  items: ActivityItem[],
+  thinking: 'reasoning' | 'waiting' | 'retrying' | false,
+  brief = false,
+): ActivityHead {
   const steps = items.filter((item): item is ActivityItem & { kind: 'tool' } => item.kind === 'tool')
   const active = steps.find((step) => step.status === 'pending' || step.status === 'running')
   const searches = steps.filter((step) => step.call.name === 'web_search').length
@@ -202,6 +262,10 @@ export function activityHead(t: T, items: ActivityItem[], thinking: 'reasoning' 
     }
   }
 
+  const thoughts = items.filter((item): item is ActivityNote & { key: string } => item.kind === 'reasoning')
+  const thoughtMs = thoughts.reduce((sum, item) => sum + (item.durationMs ?? 0), 0)
+  const thoughtOnly = brief && thoughts.length > 0
+
   let title: string
   const lastItem = items[items.length - 1]
   if (thinking === 'retrying') {
@@ -212,16 +276,26 @@ export function activityHead(t: T, items: ActivityItem[], thinking: 'reasoning' 
     title = stepLabel(t, lastItem, false)
   } else if (thinking) {
     title = t('chat.reasoning.live')
+  } else if (thoughtOnly) {
+    title = thoughtMs > 0 ? t('chat.reasoning.took', { count: Math.max(1, Math.round(thoughtMs / 1000)) }) : t('chat.reasoning.thought')
   } else {
+    const thought =
+      thoughts.length === 0
+        ? false
+        : thoughtMs > 0
+          ? t('chat.reasoning.took', { count: Math.max(1, Math.round(thoughtMs / 1000)) })
+          : steps.length > 0
+            ? t('chat.reasoning.thought')
+            : t('chat.reasoning.done')
     const parts = [
+      thought,
       searches > 0 && t('chat.tool.searched', { count: searches }),
       fetches > 0 && t('chat.tool.read', { count: fetches }),
       fileLooks > 0 && t('chat.tool.files', { count: fileLooks }),
       others > 0 && t('chat.tool.used', { count: others }),
-    ].filter(Boolean)
-    const joined = parts.join(t('chat.tool.and'))
-    // English starts lower case after the first clause; the line itself does not.
-    title = joined.charAt(0).toUpperCase() + joined.slice(1)
+    ].filter((part): part is string => Boolean(part))
+    // English clauses start lower case after the first; the line itself does not.
+    title = parts.map((part, i) => (i === 0 ? part.charAt(0).toUpperCase() : part.charAt(0).toLowerCase()) + part.slice(1)).join(t('chat.tool.and'))
   }
-  return { title, active, failed, sources, steps }
+  return { title, active, failed, sources, steps, thoughtOnly }
 }

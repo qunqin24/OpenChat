@@ -36,6 +36,7 @@ import { isRunning } from '@openchat/chat-core/run-state'
 import { composerMode, reviseDraft } from '@openchat/chat-core/revise'
 import { returnableFiles, startWroteNothing } from '@openchat/chat-core/start-failure'
 import { buildTurns, pendingQuestion, regenerable } from '@openchat/chat-core/transcript'
+import { turnOutline } from '@openchat/chat-core/outline'
 import { parseQuestions, type AskAnswer } from '@openchat/chat-core/ask-user'
 import { useChatStore } from '@/stores/chat-store'
 import AskUserDock from './AskUserDock'
@@ -45,6 +46,7 @@ import ContextMeter from './ContextMeter'
 import { DropOverlay } from './DropOverlay'
 import { ChoicesContext, type ChoicesActions } from './genui/choices-context'
 import { AssistantTurn, PendingReply, RefusedReply, UserMessage } from './MessageItem'
+import { TurnNavigator } from './TurnNavigator'
 import ModelPicker from './ModelPicker'
 import ThinkingPicker from './ThinkingPicker'
 import WebSearchToggle from './WebSearchToggle'
@@ -276,6 +278,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
   const [topKey, setTopKey] = useState<string>()
   const topIndex = topKey ? turns.findIndex((turn) => turn.key === topKey) : -1
   const start = Math.max(floor, topIndex >= 0 ? topIndex : turns.length - TURN_STEP)
+  const outline = useMemo(() => turnOutline(turns.slice(start)), [turns, start])
   const anchor = useRef<{ el: HTMLElement; top: number } | null>(null)
 
   // While the conversation ends on a message moderation refused, it does not go
@@ -1062,6 +1065,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
                   {turn.kind === 'user' ? (
                     <UserMessage
                       message={turn.message}
+                      anchor={turn.key}
                       time={
                         gaps.has(turn.key)
                           ? gapLabel(gaps.get(turn.key)!, Math.max(openedAt, gaps.get(turn.key)!), i18n.resolvedLanguage ?? 'zh', {
@@ -1130,6 +1134,8 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
           </ImageSource.Provider>
         )}
       </div>
+
+      {conversationId && !isEmpty && !tracing && !beside && <TurnNavigator entries={outline} scrollRef={scrollRef} />}
 
       <div ref={dock} className="n-composer-dock">
         <div className="n-column relative">

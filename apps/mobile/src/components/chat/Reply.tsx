@@ -1,22 +1,30 @@
 import type { ChatModel, MessagePart } from '@openchat/api-client'
 import * as Clipboard from 'expo-clipboard'
-import { Brain, Check, ChevronDown, ChevronRight, Copy, MessageCircleQuestion, RotateCcw } from 'lucide-react-native'
+import { router } from 'expo-router'
+import { AlarmClock, Brain, Check, Copy, MessageCircleQuestion, RotateCcw } from 'lucide-react-native'
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 
 import { answersOf, ASK_USER, parseQuestions } from '@openchat/chat-core/ask-user'
 import { splitSegments } from '@openchat/chat-core/genui/segments'
+import { DOCUMENT_TOOL, documentChangeOf, documentOpOf } from '@openchat/chat-core/document-tool'
 import { MEMORY_TOOL, memoryChangeOf } from '@openchat/chat-core/memory-tool'
 import type { Refusal } from '@openchat/chat-core/moderation-refusal'
+import { launchesOf, SUBAGENT_TOOL } from '@openchat/chat-core/subagents'
+import { TASK_TOOL, taskChangeOf } from '@openchat/chat-core/task-tool'
+import { describeSchedule } from '@openchat/chat-core/tasks'
+import { processSpan, processThinking, type ReplyEntryKind } from '@openchat/chat-core/reply-process'
 import type { ActivityItem, ActivityNote, ToolActivityStep, ToolStatus } from '@openchat/chat-core/tool-activity'
 import { turnText, type AssistantTurn } from '@openchat/chat-core/transcript'
 
 import { useColors } from '@/theme'
 import { ActivityLine } from './Activity'
-import { GenUIBlock } from './GenUIBlock'
+import { DocumentCard } from './DocumentCard'
+import { GenUIBlock } from './genui/GenUIBlock'
 import { Markdown } from './Markdown'
 import { Pulse } from './Pulse'
+import { SubagentLaunchLine } from './SubagentLines'
 
 /** Run failures with their own wording (`chat.error.*`). */
 const ERROR_CODES = [
@@ -40,40 +48,6 @@ export function AnswerText({ text, streaming, fresh = false }: { text: string; s
     ) : (
       <Markdown key={i} text={segment.text} streaming={streaming && i === segments.length - 1} fresh={fresh} />
     ),
-  )
-}
-
-/**
- * The model's reasoning: open while it is written, folded into how long it
- * took once it is done; either way the reader can open or close it.
- */
-function Reasoning({ text, streaming, durationMs, fresh }: { text: string; streaming: boolean; durationMs?: number; fresh: boolean }) {
-  const { t } = useTranslation()
-  const colors = useColors()
-  const [open, setOpen] = useState(streaming)
-  const [wasStreaming, setWasStreaming] = useState(streaming)
-  if (streaming !== wasStreaming) {
-    setWasStreaming(streaming)
-    setOpen(streaming)
-  }
-  if (!text && !streaming) return null
-  const seconds = durationMs === undefined ? null : Math.max(1, Math.round(durationMs / 1000))
-  const Chevron = open ? ChevronDown : ChevronRight
-  return (
-    <View>
-      <Pressable style={styles.foldHead} onPress={() => setOpen(!open)} accessibilityRole="button" accessibilityState={{ expanded: open }}>
-        {streaming ? <Pulse /> : <Brain size={15} color={colors.text3} />}
-        <Text style={[styles.foldTitle, { color: colors.text2 }]}>
-          {streaming ? t('chat.reasoning.live') : seconds === null ? t('chat.reasoning.done') : t('chat.reasoning.took', { count: seconds })}
-        </Text>
-        {text ? <Chevron size={15} color={colors.text3} /> : null}
-      </Pressable>
-      {open && text ? (
-        <View style={[styles.reasoningBody, { borderLeftColor: colors.line }]}>
-          <Markdown text={text} streaming={streaming} fresh={fresh && streaming} />
-        </View>
-      ) : null}
-    </View>
   )
 }
 
@@ -116,6 +90,14 @@ type Block = { key: string; node: ReactNode } | ToolBlock | FoldBlock | null
 const isToolBlock = (block: Block): block is ToolBlock => block !== null && 'step' in block
 const isFoldBlock = (block: Block): block is FoldBlock => block !== null && 'fold' in block
 
+/** What an entry is to the process (reply-process.ts). */
+function entryKind(entry: Block): ReplyEntryKind | null {
+  if (entry === null) return null
+  if (isToolBlock(entry)) return 'tool'
+  if (isFoldBlock(entry)) return entry.fold.kind === 'reasoning' ? 'reasoning' : 'text'
+  return 'other'
+}
+
 interface ReplyProps {
   turn: AssistantTurn
   model?: ChatModel
@@ -137,10 +119,11 @@ interface ReplyProps {
  * its reveal - across the hand-over from the live run to the message list.
  */
 export function Reply({ turn, model, modelId, onRegenerate, askingCallId, onOpenQuestion }: ReplyProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const colors = useColors()
   const live = turn.live
   const running = live?.run.status === 'running'
+  const conversationId = live?.run.conversationId ?? turn.responses[0]?.conversationId ?? turn.reports[0]?.message.conversationId
 
   const toolStatus = (callId: string): ToolStatus => {
     const result = turn.results[callId]
@@ -154,18 +137,21 @@ export function Reply({ turn, model, modelId, onRegenerate, askingCallId, onOpen
       const key = `${prefix}:${index}`
       const isLast = index === parts.length - 1
       switch (part.type) {
-        case 'reasoning':
-          return {
-            key,
-            node: <Reasoning key={key} text={part.text} durationMs={part.durationMs} streaming={streaming && isLast} fresh={fresh(index)} />,
-            fold: { kind: 'reasoning', text: part.text, streaming: streaming && isLast },
-          }
+        case 'reasoning': {
+          // Withheld reasoning - the provider sends only an encrypted blob -
+          // has nothing to show and is left out.
+          if (!part.text.trim() && !(streaming && isLast)) return null
+          const fold: ActivityNote = { kind: 'reasoning', text: part.text, streaming: streaming && isLast, fresh: fresh(index), durationMs: part.durationMs }
+          // Drawn in the process's fold; one outside it (thinking after the
+          // answer's words) is a fold of its own.
+          return { key, node: <ActivityLine key={key} items={[{ ...fold, key }]} thinking={fold.streaming ? 'reasoning' : false} />, fold }
+        }
         case 'text':
           return part.text.trim()
             ? {
                 key,
                 node: <AnswerText key={key} text={part.text} streaming={streaming && isLast} fresh={fresh(index)} />,
-                fold: { kind: 'note', text: part.text, streaming: streaming && isLast },
+                fold: { kind: 'note', text: part.text, streaming: streaming && isLast, fresh: fresh(index) },
               }
             : null
         case 'tool_call': {
@@ -189,10 +175,44 @@ export function Reply({ turn, model, modelId, onRegenerate, askingCallId, onOpen
               ),
             }
           }
+          if (part.name === DOCUMENT_TOOL) {
+            // A document written or changed is part of the reply itself; one
+            // being written shows as that; reading or listing is a step.
+            const result = turn.results[part.id]
+            const change = documentChangeOf(result)
+            const op = documentOpOf(part)
+            const pending = !result && (streaming || running)
+            if (change || (pending && (op === 'create' || op === 'update'))) return { key, node: <DocumentCard key={key} change={change} call={part} /> }
+            // Until its arguments say what it does, neither a card nor a step.
+            if (pending && op === undefined) return null
+          }
           if (part.name === MEMORY_TOOL) {
             const change = memoryChangeOf(turn.results[part.id])
             if (change) return { key, node: <QuietLine key={key} text={t(`chat.memory.${change.op}`)} icon={<Brain size={14} color={colors.text3} />} /> }
             if (!turn.results[part.id] && (streaming || running)) return null
+          }
+          if (part.name === SUBAGENT_TOOL) {
+            // The sub-agents a response launched are one line of the reply,
+            // drawn where the first of them is; one that could not be
+            // launched is a failed step of the activity instead.
+            const launches = launchesOf(parts, turn.results)
+            if (!launches.find((l) => l.callId === part.id)?.failed) {
+              const shown = launches.filter((l) => !l.failed)
+              if (shown[0]?.callId !== part.id || !conversationId) return null
+              return { key, node: <SubagentLaunchLine key={key} conversationId={conversationId} launches={shown} streaming={streaming && isLast} /> }
+            }
+          }
+          if (part.name === TASK_TOOL) {
+            // A task scheduled or changed is a line of the reply, like a note
+            // kept; a list, or a call that failed, is a step.
+            const change = taskChangeOf(turn.results[part.id])
+            if (change) {
+              const what = change.task ? ` · ${change.task.title} · ${describeSchedule(change.task.schedule, t, i18n.language)}` : ''
+              return {
+                key,
+                node: <QuietLine key={key} text={`${t(`tasks.chip.${change.op}`)}${what}`} icon={<AlarmClock size={14} color={colors.text3} />} onPress={() => router.navigate('/tasks')} />,
+              }
+            }
           }
           return { key, step: { call: part, result: turn.results[part.id], status: toolStatus(part.id) } }
         }
@@ -226,45 +246,43 @@ export function Reply({ turn, model, modelId, onRegenerate, askingCallId, onOpen
   if (turn.partial) entries.push(...renderParts(turn.partial, partialKey, running, (index) => index >= (live?.freshFrom ?? Infinity)))
   const retrying = running && Boolean(live?.retry)
 
-  // One activity line per reply: everything from the first tool call to the
-  // last, and the thinking right after it, folds in.
-  const first = entries.findIndex(isToolBlock)
-  let last = entries.length - 1 - [...entries].reverse().findIndex(isToolBlock)
-  if (first >= 0) {
-    for (let i = last + 1; i < entries.length; i++) {
-      const entry = entries[i]
-      if (entry === null || entry === undefined) continue
-      if (!isFoldBlock(entry) || entry.fold.kind !== 'reasoning') break
-      last = i
-    }
-  }
+  // The process and the answer (reply-process.ts), as the web's
+  // AssistantTurn has them: everything before the answer - the thinking, the
+  // words said on the way, the calls - is one fold laid out as it happened,
+  // open while the model works and folded away once the answer starts (as
+  // ChatGPT has it). Anything else inside that stretch is shown just after it.
+  const kinds = entries.map(entryKind)
+  const span = processSpan(kinds)
   const toolRunning = Object.values(live?.tools ?? {}).includes('running')
-  const waiting = running && !toolRunning && (!turn.partial || turn.partial.length === 0)
-  const tail = first >= 0 ? entries[last] : null
+  const partialEmpty = !turn.partial || turn.partial.length === 0
+  const waiting = running && !toolRunning && partialEmpty
   const compacting = running && Boolean(live?.compacting)
-  const reasoning =
-    running &&
-    isFoldBlock(tail ?? null) &&
-    (tail as FoldBlock).fold.kind === 'reasoning' &&
-    (tail as FoldBlock).key.startsWith(`${partialKey}:`) &&
-    entries.slice(last + 1).every((entry) => entry === null)
-  const thinking = compacting || first < 0 ? false : retrying ? 'retrying' : reasoning ? 'reasoning' : waiting ? 'waiting' : false
-
+  const tail = span ? (entries[span.end] ?? null) : null
+  const thinking = span
+    ? processThinking(kinds, span, {
+        running,
+        compacting,
+        retrying,
+        toolRunning,
+        partialEmpty,
+        thoughtStreaming: isFoldBlock(tail) && tail.fold.kind === 'reasoning' && tail.key.startsWith(`${partialKey}:`),
+      })
+    : false
   const blocks: ReactNode[] = []
   const after: ReactNode[] = []
   const items: ActivityItem[] = []
   entries.forEach((entry, i) => {
-    const inside = first >= 0 && i >= first && i <= last
+    const inside = span !== null && i >= span.start && i <= span.end
     if (inside && isToolBlock(entry)) {
       items.push({ kind: 'tool', key: entry.key, ...entry.step })
     } else if (inside && isFoldBlock(entry)) {
       if (entry.fold.text.trim()) items.push({ ...entry.fold, key: entry.key })
     } else if (inside) {
-      if (entry !== null) after.push((entry as { node: ReactNode }).node)
+      if (entry !== null && !isToolBlock(entry)) after.push(entry.node)
     } else if (entry !== null && !isToolBlock(entry)) {
       blocks.push(entry.node)
     }
-    if (i === last && first >= 0) blocks.push(<ActivityLine key="activity" items={items} thinking={thinking} />, ...after)
+    if (span !== null && i === span.end) blocks.push(<ActivityLine key="activity" items={items} thinking={thinking} />, ...after)
   })
 
   const text = turnText(turn)
@@ -274,7 +292,7 @@ export function Reply({ turn, model, modelId, onRegenerate, askingCallId, onOpen
       <View style={styles.body}>{blocks}</View>
       {compacting ? (
         <QuietLine text={t('chat.compaction.running')} pulse />
-      ) : (waiting || retrying) && first < 0 ? (
+      ) : (waiting || retrying) && span === null ? (
         <QuietLine text={retrying ? t('chat.retrying') : ''} pulse />
       ) : null}
       {!running && (text || onRegenerate) ? (
@@ -292,13 +310,13 @@ export function Reply({ turn, model, modelId, onRegenerate, askingCallId, onOpen
 }
 
 /** A quiet line in a reply: a note kept, a question being prepared, the model working. */
-function QuietLine({ text, pulse, icon }: { text: string; pulse?: boolean; icon?: ReactNode }) {
+function QuietLine({ text, pulse, icon, onPress }: { text: string; pulse?: boolean; icon?: ReactNode; onPress?: () => void }) {
   const colors = useColors()
   return (
-    <View style={styles.quiet}>
+    <Pressable style={styles.quiet} disabled={!onPress} onPress={onPress}>
       {pulse ? <Pulse /> : icon}
       {text ? <Text style={[styles.quietText, { color: colors.text2 }]}>{text}</Text> : null}
-    </View>
+    </Pressable>
   )
 }
 
@@ -365,6 +383,7 @@ const styles = StyleSheet.create({
   foldHead: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 28 },
   foldTitle: { fontSize: 14, lineHeight: 20 },
   reasoningBody: { marginTop: 6, marginLeft: 4, paddingLeft: 12, borderLeftWidth: 1, opacity: 0.75 },
+  processBody: { marginTop: 8, marginLeft: 7, paddingLeft: 14, borderLeftWidth: StyleSheet.hairlineWidth, gap: 12 },
   notice: { fontSize: 14, lineHeight: 21 },
   actions: { flexDirection: 'row', gap: 4, marginLeft: -6 },
   action: { padding: 6 },

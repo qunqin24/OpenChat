@@ -343,6 +343,8 @@ git tag v1.0.0 && git push origin v1.0.0
 
 打标签前，先让 `main` 上的 CI 全绿（`make check` 在本地跑的就是同一套）。
 
+Android App 单独发版，用自己的标签 `android-v1.2.3`（工作流 `android-release.yml`），不随服务端的 `v*` 标签走；见 [手机 App 的发布与更新](mobile.md#发布与更新)。服务端的 Release 才是 GitHub 上的「最新」，服务器检查自己的更新只看它。
+
 > **第一次发布之后检查镜像的可见性。** 新建的 GitHub 容器包默认可能是私有的。如果别人 `docker pull` 时被拒绝，到仓库页面右侧的 Packages 里打开 `openchat`，在 Package settings 里把可见性改为 Public。
 
 ## 忘记管理员密码

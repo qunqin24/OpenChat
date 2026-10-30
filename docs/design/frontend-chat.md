@@ -8,7 +8,7 @@
 
 - 服务端数据用 TanStack Query（键在 `chat-core/src/query-keys.ts`、`features/admin/use-admin.ts`）；流式中间态和 UI 状态用 Zustand。流结束后让查询失效，重新拉取。查询键含筛选条件时加 `placeholderData: (previous) => previous`。
 - 路由守卫挂在无路径布局的 `beforeLoad`：`_authed.tsx` 要求登录，`admin.tsx` 要求管理员。会话用 `currentSession(queryClient)`（`features/auth/use-auth.ts`）取：5 分钟内查过的直接用，更老的重新问服务端（别用 `ensureQueryData`，它不管多旧都返回缓存，被停用的账号会一直半死不活）；重新问失败（断网）时退回上次的答案。
-- 会话在页面开着时失效靠请求的错误码发现。改了密码或 cookie 过期是 401；账号被停用**不是**：会话保留，每个请求都回 403 `account_disabled`（见 [auth.md](auth.md#停用账号)），下一条分开说。401 这条路：`lib/query.ts` 的 `QueryCache`/`MutationCache` 把每个失败交给 `setErrorListener` 登记的监听者（`main.tsx` 里是 `leaveIfSessionExpired`，`lib/session-expired.ts`），不走缓存的调用（事件流）自己调 `reportError`。401（`invalid_credentials` 除外——那是登录表单自己的错，而且认证接口抛的是 `AuthFieldError`）且页面此前认为已登录，就清缓存、清 chat store、清本地存的缓存，`replace` 到 `/login?redirect=…`；已在 `/login`、`/register` 不动。事件流收到 401 就停止重连（重连永远是 401）。新写的不经查询缓存的网络调用，遇到 401 也要 `reportError`。
+- 会话在页面开着时失效靠请求的错误码发现。改了密码或 cookie 过期是 401；账号被停用**不是**：会话保留，每个请求都回 403 `account_disabled`（见 [auth.md](auth.md#停用账号)），下一条分开说。401 这条路：`lib/query.ts` 的 `QueryCache`/`MutationCache` 把每个失败交给 `setErrorListener` 登记的监听者（`main.tsx` 里是 `leaveIfSessionExpired`，`lib/session-expired.ts`），不走缓存的调用（事件流）自己调 `reportError`。401（`invalid_credentials` 除外——那是登录表单自己的错，而且认证接口抛的是 `AuthFieldError`）且页面此前认为已登录，就清缓存、清 chat store、清本地存的缓存，`replace` 到 `/login?redirect=…`；已在 `/login`、`/register` 不动。事件流收到 401 或 403 `account_disabled` 就 `reportError` 一次并停止重连（重连永远是同样的拒绝，而别的查询未必会再请求一次、让页面去 `/disabled`；`chat-core/conversation-follow.ts`）。新写的不经查询缓存的网络调用，遇到 401 也要 `reportError`。
 - **被停用的页面**：`main.tsx` 的 `setErrorListener` 同时调 `leaveIfSessionExpired` 和 `showIfAccountDisabled`（`lib/account-disabled.ts`）。后者在错误是 403 `account_disabled` 时把详情记进 `useAccountDisabled` store，并 `replace` 到 `/disabled`（已在 `/disabled`、`/login`、`/register` 不动）；`_authed.tsx` 的守卫重新问会话时遇到同样的 403 也跳过去。`/disabled` 是 `routes/disabled.tsx`，在登录布局之外：`beforeLoad` 里 store 没有详情（刷新页面、直接打开）就问一次 `/auth/session`——仍是 403 就记下详情留在这页，成功了说明已重新启用、回首页，别的错误去 `/login`。页面是 `components/auth/DisabledPage.tsx`（样子是 `AccountOverlay.tsx` 里的 `DisabledScreen`，和登录页的覆盖层同一块）：说明原因；「重新检查」再问一次 `/auth/session`，恢复了就清详情、让查询重取、回首页，还停用着就提示仍被停用；「退出登录」才真的退出（`useSignOut`）。
 - 换人要清干净：登录、注册成功和退出都 `queryClient.clear()` + `resetChatStore()` + `forgetQueryCache()`；`adoptQueryCache` 发现缓存属于别人（本页内存里的或上次存的）时，除会话外的查询全部移除（记忆、个性化、后台的也算）并重置 chat store。
 
@@ -36,7 +36,7 @@
 
 ## 流式文字的显现与滚动
 
-- 流式文字的显现（`components/chat/arrival-fade.ts` 的 `useArrivalFade`，`MarkdownText.tsx` 的 `Markdown`/`PlainReveal` 用它）：文字**一到就显示，不控节奏**，同一次渲染新增的字算一批，整批在 0.6 秒内一起淡入（`ARRIVAL_FADE_MS`，ease-in-out），观感取自 flowtoken 演示页（diff 模式、0.6s fadeIn）。实现不碰 React 渲染出的文字：`.n-markdown` 里和 `.markdown-body` 并列一个 `.n-arrival` 层，每次渲染后按 `.markdown-body` 的 `textContent` 长度认出新增的字（Markdown 变长时前面的字位置不变，新字就是最后那些），只从末尾往回走到最早一批的起点，对每批每个文本节点取 `Range.getClientRects()`，每行盖一块该文本所在表面颜色（`surfaceOf`，代码块、表格各用自己的底色）的浮层，rAF 把透明度从 1 降到 0：在纯色表面上这就等于文字自己淡入。元素数只取决于最近 0.6 秒到了几批几行（实测流式时 5~9 个，结束后为 0），和回答多长无关。公式、图表的代码到齐后被画出来时 `textContent` 也会变长，同样当一批淡入。挂载时已有的文字直接显示，`fresh`（读者看着开始的零件，`LiveRun.fresh`/`freshFrom` 记下）则首批也淡入；文字变短（被替换）、标签页隐藏、`prefers-reduced-motion` 时不淡入。v1.1.0 之后到这次改动之前，网页用 `useReveal` 显示已收到文字的前缀、逐帧多显示一点（节奏是 `chat-core/src/reveal.ts`，现在只有移动端用，见 [mobile.md](../mobile.md)），末尾盖一段 2.5em 的渐变遮罩（`placeTail`）；对比了 flowtoken、lobehub/streamdown（逐字 180ms 淡入、强制控节奏）、smooth-stream-text（逐词模糊、带节奏）后改成现在这样，lobe 的 `<Streamdown>` 关不掉节奏，做不出整批淡入，所以没换渲染器。**不要给每个字或词建元素**：v1.1.0 用 Streamdown 的 `animated` 给每个字包一个带淡入动画的 span，长思维链展开时有上万个节点和动画，主线程占用随时间涨到一个核的 90%，线上弱电脑直接卡死；它按空格分词时中文整段是一个 span，同一句里新到的字根本不淡入。flowtoken 本身也是每批一个 span、永不回收，同样会越写越多。回复的零件在「流式 partial → 存好的回复 → 交给消息列表」之间是**同一个元素**（`AssistantTurn` 里按位置起 key：第几个回复 `r<n>`、第几个零件，不按消息 id），最后一批才能淡完、不会重新挂载——别改回去。思维链折叠时内容不渲染（Radix Collapsible）。性能回归用无头 Chromium 测（`Performance.getMetrics` 的 `TaskDuration`），浏览器面板在后台时 rAF 被节流，测不准。
+- 流式文字的显现（`components/chat/arrival-fade.ts` 的 `useArrivalFade`，`MarkdownText.tsx` 的 `Markdown`/`PlainReveal` 用它）：文字**一到就显示，不控节奏**，同一次渲染新增的字算一批，整批在 0.6 秒内一起淡入（`ARRIVAL_FADE_MS`，ease-in-out；什么算一批、浮层怎么淡，在 `chat-core/src/arrival.ts`，App 也用，见 [mobile.md](../mobile.md)），观感取自 flowtoken 演示页（diff 模式、0.6s fadeIn）。实现不碰 React 渲染出的文字：`.n-markdown` 里和 `.markdown-body` 并列一个 `.n-arrival` 层，每次渲染后按 `.markdown-body` 的 `textContent` 长度认出新增的字（Markdown 变长时前面的字位置不变，新字就是最后那些），只从末尾往回走到最早一批的起点，对每批每个文本节点取 `Range.getClientRects()`，每行盖一块该文本所在表面颜色（`surfaceOf`，代码块、表格各用自己的底色）的浮层，rAF 把透明度从 1 降到 0：在纯色表面上这就等于文字自己淡入。元素数只取决于最近 0.6 秒到了几批几行（实测流式时 5~9 个，结束后为 0），和回答多长无关。公式、图表的代码到齐后被画出来时 `textContent` 也会变长，同样当一批淡入。挂载时已有的文字直接显示，`fresh`（读者看着开始的零件，`LiveRun.fresh`/`freshFrom` 记下）则首批也淡入；文字变短（被替换）、标签页隐藏、`prefers-reduced-motion` 时不淡入。v1.1.0 之后到这次改动之前，网页用 `useReveal` 显示已收到文字的前缀、逐帧多显示一点（节奏是当时的 `reveal.ts`，App 起初也照搬，后来同样换成整批淡入，`reveal.ts` 已删），末尾盖一段 2.5em 的渐变遮罩（`placeTail`）；对比了 flowtoken、lobehub/streamdown（逐字 180ms 淡入、强制控节奏）、smooth-stream-text（逐词模糊、带节奏）后改成现在这样，lobe 的 `<Streamdown>` 关不掉节奏，做不出整批淡入，所以没换渲染器。**不要给每个字或词建元素**：v1.1.0 用 Streamdown 的 `animated` 给每个字包一个带淡入动画的 span，长思维链展开时有上万个节点和动画，主线程占用随时间涨到一个核的 90%，线上弱电脑直接卡死；它按空格分词时中文整段是一个 span，同一句里新到的字根本不淡入。flowtoken 本身也是每批一个 span、永不回收，同样会越写越多。回复的零件在「流式 partial → 存好的回复 → 交给消息列表」之间是**同一个元素**（`AssistantTurn` 里按位置起 key：第几个回复 `r<n>`、第几个零件，不按消息 id），最后一批才能淡完、不会重新挂载——别改回去。思维链折叠时内容不渲染（Radix Collapsible）。性能回归用无头 Chromium 测（`Performance.getMetrics` 的 `TaskDuration`），浏览器面板在后台时 rAF 被节流，测不准。
 - 脚本触发的滚动（`scrollTo`/`scrollBy` 的 `behavior`）用 `lib/motion.ts` 的 `smoothScrollBehavior()`，CSS 的 reduced-motion 管不到它。工具结果里来的链接（`ToolActivity`）只允许 `isHttpUrl`（`chat-core/src/urls.ts`）通过，和 GenUI 的链接一样。
 
 ## 表格与后台
@@ -119,7 +119,26 @@ WebKit（Safari，以及 iPhone 上的所有浏览器）照 Open WebUI 整个跳
 
 ## 重试提示
 
+回复照 ChatGPT 分成「过程」和「答案」。答案之前的所有东西（思考、模型路上说的话、工具调用）是一个折叠块，答案在它下面。哪一段算过程由 chat-core 的 `reply-process.ts`（`processSpan`）决定：从第一个思考、文字或调用开始，到最后一个工具调用和紧跟它的思考为止；没有调用时，就是第一段文字之前的思考。网页 `MessageItem` 和 App `Reply.tsx` 都调它，别再各写一份。分组只在前端做，服务端照常按顺序存零件；成熟的开源项目（Open WebUI、LobeChat、LibreChat、Cherry Studio）也都是这样。
+
+- **折叠块的标题**：画在网页 `ToolActivity`、App `ActivityLine`。完成后只写「已思考 N 秒」（N 是思考零件 `durationMs` 之和，没有计时就写「已思考」），搜索次数、来源图标、失败数都不放在这一行。整段过程没有思考时，才写「搜索了 N 次」并带图标。工作时写当前在做的事。
+- **展开后**：内容和答案齐平，左边没有竖线，因为竖线会让过渡句看着像思维链。
+  - 模型路上说的话照原样显示，和答案一样大、一样颜色，也和答案一样经 `AnswerText`（`components/chat/AnswerText.tsx`）画：里面的 `openchat-ui` 块照样画成组件，不能用普通 `Markdown`，否则第一次调用工具前写的智能 UI 收进过程后会变回源码。
+  - 过渡句之间的每段思考和工具调用各收成一行，嵌套的 `ToolActivity`/`ActivityLine` 带 `nested`，比如「已思考 6 秒，搜索了 3 次 ›」，点开才是思考原文和每一步。分段由 chat-core 的 `activitySegments` 决定。
+  - 模型一句话没说时只有一段，就直接平铺思考和步骤，不再多一行重复外层的标题。
+  - 思考淡一号、小一号。
+- **开合**：模型工作时（run 在跑、过程之后还没有内容）自动展开，答案一开始就自动收起；翻看旧对话时默认收起。里面的分段只有最后一段跟着工作状态开合。
+- **思考的窗口**：工作时思考只露最后几行，网页 `Thought` 的 `is-peek` 最高 240px，App 是 220；窗口停在最新一行，顶上渐隐，不能单独滚动（网页嵌套滚动框会抢走页面的滚轮）。完成后长的思考（超过 240px 再多 48px 以上，`data-long`）是一个 240px 高、能自己滚动的框，上下有更多内容的一边渐隐（`data-cut`/`data-more`），滚到头时滚轮交还页面；短的直接全文。工作中的窗口不能滚，因为每个 token 都把它拉回末尾。
+- **不吸顶**：展开后标题跟着内容一起滚走，不吸在顶部。试过吸顶（外层、内层叠着吸，吸住时顶栏变实色），快速滑动、段尾松开、内外层交接时都会出现重叠或露底，已整个去掉（连同 `useStuck`），别再加回来。
+  - 展开区只在竖直方向裁切（`overflow-x: visible; overflow-y: clip`，为了展开时高度的动画），横向也裁的话，会切掉标题悬停时伸出去的灰底；上面的空白用 `padding` 留在裁切范围内，不用 margin。
+  - `.is-open`、`.is-active` 的选择器只作用于自己的标题（`> .n-activity-head`），否则外层展开会让内层收起的标题箭头也朝下。
+- **过程之外的思考**：答案文字之后又出现的思考，自己成一个只含它的折叠块。
+
 模型请求失败、正在自动重试时（`live.retry`，来自事件 `retry_scheduled`），重试说在「模型在干活」的那一行里，不在上面另堆一条提示：回复还没有工具活动行时是思考行（`MessageItem` 给 `ThinkingLine` 传 `label`，「请求失败，正在重试…」，`chat.retrying`），有了活动行就由活动行的 `retrying` 状态说。
+
+## 对话导航（`components/chat/TurnNavigator.tsx`）
+
+转录右边、竖直居中的一排短横线，一条代表用户说的一句话，正在读的那条更深；平时都是短线，鼠标靠近（左边留 32px 的感应区）才拉长，正在读的那条最长（问题越过顶部下方 96px 那条线就算在读，滚到底时算最后一条）。悬停或聚焦时左边出卡片：问题一行、回答开头三行；点击滚到那条问题。条目由 chat-core 的 `turnOutline`（`outline.ts`，引用段落的请求只取文字、只有文件时显示文件名，回答经 `plainText` 粗略去掉 Markdown）从已画出的 turns 得出；用户消息带 `data-turn`（`UserMessage` 的 `anchor`）供定位。少于两条、右侧空白不足 88px（连感应区都放得下，不压正文）、旁边开着面板、追踪视图时不显示。Open WebUI 没有这个，参照的是 ChatGPT（它放左边，我们放右边）。
 
 ## 登录页预取（`lib/warm-app.ts`）
 

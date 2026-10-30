@@ -4,8 +4,9 @@ import type { ConfigContext, ExpoConfig } from 'expo/config'
  * The app's build-time settings. A fork rebuilds with its own server, package
  * and releases repository by setting the environment, not by editing this:
  *
- * - APP_VERSION: the release, from the git tag without its "v" (1.4.0,
- *   1.4.0-rc.1); the Android versionCode follows from it and always grows.
+ * - APP_VERSION: the app's release, from its git tag without "android-v"
+ *   (android-v1.4.0 → 1.4.0, android-v1.4.0-rc.1 → 1.4.0-rc.1); the Android
+ *   versionCode follows from it and always grows.
  * - APP_VARIANT=development: a separate package (".dev") that may use plain
  *   http, for a development server on the emulator's host (10.0.2.2).
  * - APP_ID: the Android package (default org.qunqin.openchat).
@@ -42,14 +43,27 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       backgroundImage: './assets/android-icon-background.png',
       monochromeImage: './assets/android-icon-monochrome.png',
     },
+    // Handing a downloaded update to the system installer (see src/lib/update.ts).
+    permissions: ['android.permission.REQUEST_INSTALL_PACKAGES'],
     predictiveBackGestureEnabled: false,
   },
   ios: { bundleIdentifier: appId, supportsTablet: false },
   plugins: [
+    // Signs the release APK with our own key when the release workflow gives it.
+    './plugins/with-release-signing',
     'expo-router',
     'expo-status-bar',
     'expo-secure-store',
     'expo-localization',
+    // Photos come through the system's picker (no media permission); the
+    // camera asks for its own.
+    ['expo-image-picker', { photosPermission: false, cameraPermission: 'OpenChat uses the camera to take a photo for your message.', microphonePermission: false }],
+    // Sharing text, a picture or a file from another app into a new chat. The
+    // iOS share extension comes with the iOS app.
+    [
+      'expo-share-intent',
+      { androidIntentFilters: ['text/*', 'image/*', '*/*'], androidMultiIntentFilters: ['image/*', '*/*'], disableIOS: true },
+    ],
     ['expo-splash-screen', { backgroundColor: '#ffffff', dark: { backgroundColor: '#161616' }, image: './assets/splash-icon.png', imageWidth: 96 }],
     [
       'expo-build-properties',

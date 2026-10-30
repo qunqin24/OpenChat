@@ -364,7 +364,7 @@ func (r *Runner) execute(ctx context.Context, runID uuid.UUID) {
 	if ex == nil {
 		return // already terminal
 	}
-	ctx = WithScope(ctx, Scope{RunID: runID, UserID: ex.run.UserID, ConversationID: ex.run.ConversationID, Parent: ex.parent, State: &RunState{}})
+	ctx = WithScope(ctx, Scope{RunID: runID, UserID: ex.run.UserID, ConversationID: ex.run.ConversationID, Parent: ex.parent, State: &RunState{}, FromApp: ex.run.FromApp})
 	// A panic in a provider adapter, the summariser or anything else on this
 	// goroutine would otherwise take the whole process down — and, the run
 	// still `running`, take it down again on every restart that resumes it.

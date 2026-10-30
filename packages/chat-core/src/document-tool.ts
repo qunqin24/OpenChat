@@ -24,6 +24,17 @@ export function documentChangeOf(result: ToolResultPart | undefined): DocumentCh
   }
 }
 
+/**
+ * What a call does (`create`, `update`, `read`, `list`), as soon as its
+ * arguments say: parsed, or read from them while they stream. Undefined until
+ * then - not taken for a write, or a read showed the writing card for a moment.
+ */
+export function documentOpOf(call: ToolCallPart): string | undefined {
+  const args = call.arguments as { op?: unknown } | undefined
+  if (typeof args?.op === 'string') return args.op
+  return /"op"\s*:\s*"([a-z]+)"/.exec(call.rawArguments ?? '')?.[1]
+}
+
 /** The title a create call is writing, as far as its arguments have streamed. */
 export function pendingTitle(call: ToolCallPart): string {
   const args = call.arguments as { title?: unknown } | undefined
@@ -85,9 +96,8 @@ export function streamingText(call: ToolCallPart): string {
  */
 export function pendingEditOf(call: ToolCallPart): PendingEdit | null {
   const raw = call.rawArguments ?? ''
-  const args = call.arguments as { op?: unknown; id?: unknown; content?: unknown; edits?: { find?: unknown }[] } | undefined
-  const op = typeof args?.op === 'string' ? args.op : /"op"\s*:\s*"([a-z]+)"/.exec(raw)?.[1]
-  if (op !== 'update') return null
+  const args = call.arguments as { id?: unknown; content?: unknown; edits?: { find?: unknown }[] } | undefined
+  if (documentOpOf(call) !== 'update') return null
   const id = typeof args?.id === 'string' ? args.id : /"id"\s*:\s*"([0-9a-f-]{36})"/.exec(raw)?.[1]
   if (!id) return null
   const finds = Array.isArray(args?.edits)

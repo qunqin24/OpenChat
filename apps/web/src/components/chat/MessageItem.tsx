@@ -1,38 +1,35 @@
 import type { TFunction } from 'i18next'
 import type { ChatModel, Message, MessagePart } from '@openchat/api-client'
 import { MessageSquareQuote, NotebookPen } from 'lucide-react'
-import { Collapsible } from 'radix-ui'
 import { isValidElement, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { ModelIcon } from '@/components/model-icon'
-import { keepHeaderInPlace, useStuck } from '@/hooks/use-stuck'
 import { answersOf, ASK_USER, parseQuestions } from '@openchat/chat-core/ask-user'
 import { copyClipboard } from '@/lib/clipboard'
-import { splitSegments } from '@openchat/chat-core/genui/segments'
 import { turnText, type Turn } from '@openchat/chat-core/transcript'
 import { CopiedIcon, CopyIcon, EditIcon, RegenerateIcon } from './ActionIcons'
 import AskUserCard, { PreparingLine } from './AskUserCard'
 import { MEMORY_TOOL, memoryChangeOf } from '@openchat/chat-core/memory-tool'
 import { TASK_TOOL, taskChangeOf } from '@openchat/chat-core/task-tool'
-import { DOCUMENT_TOOL, documentChangeOf } from '@openchat/chat-core/document-tool'
+import { DOCUMENT_TOOL, documentChangeOf, documentOpOf } from '@openchat/chat-core/document-tool'
 import { launchesOf, SUBAGENT_TOOL } from '@openchat/chat-core/subagents'
 import { SubagentLaunchLine } from './SubagentLines'
 import { parseQuotes, quoteMessage } from '@openchat/chat-core/document-selection'
 import { highlightPassage } from '@/lib/highlight-passage'
 import { cn } from '@/lib/utils'
-import GenUIBlock from './genui/GenUIBlock'
 import MemoryChip from './MemoryChip'
 import TaskChip from './TaskChip'
 import DocumentCard from './DocumentCard'
 import MessageAttachments from './MessageAttachments'
-import { Markdown } from './MarkdownText'
+import { AnswerText } from './AnswerText'
 import CompactionDivider from './CompactionDivider'
-import { CompactingLine, ThinkingLine, ThinkingOrb } from './ThinkingOrb'
+import { CompactingLine, ThinkingLine } from './ThinkingOrb'
 import type { Refusal } from '@openchat/chat-core/moderation-refusal'
 import RefusalCard from './RefusalCard'
 import ToolActivity from './ToolActivity'
 import type { ActivityItem, ActivityNote, ToolActivityStep, ToolStatus } from '@openchat/chat-core/tool-activity'
+import { processSpan, processThinking, type ReplyEntryKind } from '@openchat/chat-core/reply-process'
 
 function CopyButton({ content }: { content: string }) {
   const { t } = useTranslation()
@@ -65,9 +62,12 @@ export function UserMessage({
   restoredDraft,
   onDraftDone,
   time,
+  anchor,
 }: {
   message: Message
   onEdit?: (content: string) => void
+  /** Its turn's key, marked on it for the navigator beside the transcript (TurnNavigator). */
+  anchor?: string
   /**
    * When it was sent, shown above it because it came after a pause
    * (lib/time-gap.ts): "今天 10:44".
@@ -105,7 +105,7 @@ export function UserMessage({
 
   if (draft !== null) {
     return (
-      <div className="n-msg-user is-editing">
+      <div className="n-msg-user is-editing" data-turn={anchor}>
         {files}
         <EditField
           value={draft}
@@ -124,7 +124,7 @@ export function UserMessage({
   }
 
   return (
-    <div className="n-msg-user">
+    <div className="n-msg-user" data-turn={anchor}>
       {time && <div className="n-msg-time">{time}</div>}
       {files}
       {quoted && (
@@ -261,85 +261,6 @@ function EditField({
   )
 }
 
-/**
- * An answer's text: Markdown, with any `openchat-ui` blocks in it drawn as
- * components — including one still being written at the end of a stream.
- */
-/**
- * An answer's text: Markdown with any interface blocks drawn where they sit.
- * `fresh`: it began while the reader watched (`Markdown`).
- */
-export function AnswerText({ text, streaming, fresh = false }: { text: string; streaming: boolean; fresh?: boolean }) {
-  const segments = splitSegments(text, streaming)
-  return segments.map((segment, i) =>
-    segment.kind === 'ui' ? (
-      <GenUIBlock key={i} source={segment.source} complete={segment.complete} />
-    ) : (
-      <Markdown key={i} text={segment.text} streaming={streaming && i === segments.length - 1} fresh={fresh} />
-    ),
-  )
-}
-
-/**
- * The model's reasoning. Open while it is being written, so the reader can
- * watch the model think; folded away the moment it is done, into how long it
- * took, because the answer is what comes next. Either way the reader can open
- * or close it. Withheld reasoning — the provider sends only an encrypted blob —
- * has nothing to show and is left out.
- */
-function Reasoning({ text, streaming, durationMs, fresh }: { text: string; streaming: boolean; durationMs?: number; fresh: boolean }) {
-  const { t } = useTranslation()
-  const [open, setOpen] = useState(streaming)
-  // Follows the stream when it starts and stops; in between, the reader's.
-  const [wasStreaming, setWasStreaming] = useState(streaming)
-  if (streaming !== wasStreaming) {
-    setWasStreaming(streaming)
-    setOpen(streaming)
-  }
-  const [toggle, stuck] = useStuck<HTMLButtonElement>(open && Boolean(text))
-  if (!text && !streaming) return null
-
-  const seconds = durationMs === undefined ? null : Math.max(1, Math.round(durationMs / 1000))
-  return (
-    // A Radix collapsible rather than <details>, so the body can animate
-    // open and closed: <details> drops its content the instant it closes.
-    <Collapsible.Root
-      className="n-reasoning"
-      open={open && Boolean(text)}
-      onOpenChange={(next) => {
-        // Closed from where it is pinned: stay at the toggle, not below the answer.
-        if (!next) keepHeaderInPlace(toggle.current)
-        setOpen(next)
-      }}
-    >
-      <Collapsible.Trigger ref={toggle} className="n-reasoning-toggle" data-stuck={stuck || undefined}>
-        {streaming ? (
-          <>
-            <ThinkingOrb />
-            <span className="n-reasoning-live" data-motion="essential">
-              {t('chat.reasoning.live')}
-            </span>
-          </>
-        ) : seconds === null ? (
-          t('chat.reasoning.done')
-        ) : (
-          t('chat.reasoning.took', { count: seconds })
-        )}
-      </Collapsible.Trigger>
-      <Collapsible.Content className="n-reasoning-content">
-        {/* Markdown, as models write their reasoning in it; plain Markdown and
-            not AnswerText, so an interface block drafted while thinking shows
-            as the code it is rather than as a component. */}
-        <div className="n-reasoning-body">
-          {/* Fresh only while it streams: the body mounts again each time
-              the reader opens it, and a finished one is not typed again. */}
-          <Markdown text={text} streaming={streaming} fresh={fresh && streaming} />
-        </div>
-      </Collapsible.Content>
-    </Collapsible.Root>
-  )
-}
-
 function Notice({ tone, children }: { tone: 'error' | 'quiet'; children: ReactNode }) {
   return (
     <p className={tone === 'error' ? 'n-notice is-error' : 'n-notice'} role={tone === 'error' ? 'alert' : undefined}>
@@ -432,26 +353,29 @@ export function AssistantTurn({
   }
 
   // Tool calls are collected rather than drawn, and text and reasoning carry
-  // what they would fold into: the stretch from the first tool call to the
-  // last becomes one activity line (see `blocks` below).
+  // what they would fold into: everything before the answer becomes one fold
+  // (see `blocks` below).
   // `fresh(index)`: that part began while the reader watched (`LiveRun.fresh`).
   const renderParts = (parts: MessagePart[], keyPrefix: string, streaming: boolean, fresh: (index: number) => boolean): Block[] =>
     parts.map((part, index) => {
       const key = `${keyPrefix}:${index}`
       const isLast = index === parts.length - 1
       switch (part.type) {
-        case 'reasoning':
-          return {
-            key,
-            node: <Reasoning key={key} text={part.text} durationMs={part.durationMs} streaming={streaming && isLast} fresh={fresh(index)} />,
-            fold: { kind: 'reasoning', text: part.text, streaming: streaming && isLast },
-          }
+        case 'reasoning': {
+          // Withheld reasoning - the provider sends only an encrypted blob -
+          // has nothing to show and is left out.
+          if (!part.text.trim() && !(streaming && isLast)) return null
+          const fold: ActivityNote = { kind: 'reasoning', text: part.text, streaming: streaming && isLast, fresh: fresh(index), durationMs: part.durationMs }
+          // Drawn in the process's fold; one outside it (thinking after the
+          // answer's words) is a fold of its own.
+          return { key, node: <ToolActivity key={key} items={[{ ...fold, key }]} thinking={fold.streaming ? 'reasoning' : false} />, fold }
+        }
         case 'text':
           return part.text.trim()
             ? {
                 key,
                 node: <AnswerText key={key} text={part.text} streaming={streaming && isLast} fresh={fresh(index)} />,
-                fold: { kind: 'note', text: part.text, streaming: streaming && isLast },
+                fold: { kind: 'note', text: part.text, streaming: streaming && isLast, fresh: fresh(index) },
               }
             : null
         case 'tool_call': {
@@ -498,9 +422,11 @@ export function AssistantTurn({
             // being written shows as that; reading or listing is a step.
             const result = turn.results[part.id]
             const change = documentChangeOf(result)
-            const args = (part.arguments ?? {}) as { op?: unknown }
-            const writing = !result && (streaming || running) && (args.op === undefined || args.op === 'create' || args.op === 'update')
-            if (change || writing) return <DocumentCard key={key} change={change} call={part} />
+            const op = documentOpOf(part)
+            const pending = !result && (streaming || running)
+            if (change || (pending && (op === 'create' || op === 'update'))) return <DocumentCard key={key} change={change} call={part} />
+            // Until its arguments say what it does, neither a card nor a step.
+            if (pending && op === undefined) return null
           }
           if (part.name === SUBAGENT_TOOL) {
             // The sub-agents a response launched are one line of the reply,
@@ -572,49 +498,35 @@ export function AssistantTurn({
   // one - not by a notice of its own stacked above it.
   const retrying = running && Boolean(live?.retry)
 
-  // One activity line per reply. Everything from the first tool call to the
-  // last — the calls, and whatever the model said or thought between rounds,
-  // which is narration of the search rather than the answer — folds into it,
-  // in order. What comes before stays as written; what comes after is the
-  // answer. A notice inside that stretch is shown just after the line.
-  const first = entries.findIndex(isToolBlock)
-  let last = entries.length - 1 - [...entries].reverse().findIndex(isToolBlock)
-  // Thinking after the last call is still part of the search — the model
-  // weighing what it found, and often deciding to look again — so it folds in
-  // too. Only the answer's text comes after the line.
-  if (first >= 0) {
-    for (let i = last + 1; i < entries.length; i++) {
-      const entry = entries[i]
-      if (entry === null) continue
-      if (!isFoldBlock(entry) || entry.fold.kind !== 'reasoning') break
-      last = i
-    }
-  }
+  // The process and the answer (reply-process.ts): everything before the
+  // answer - the thinking, the words said on the way, the calls - is one fold
+  // laid out as it happened, open while the model works and folded away once
+  // the answer starts (as ChatGPT has it). Anything else inside that stretch -
+  // a notice, a card - is shown just after the fold.
+  const kinds = entries.map(entryKind)
+  const span = processSpan(kinds)
   // Working, with nothing on screen moving: before the first token, and
   // between a tool round and the next response.
   const toolRunning = Object.values(live?.tools ?? {}).includes('running')
-  const waiting = running && !toolRunning && (!turn.partial || turn.partial.length === 0)
-  // The model is thinking inside the line right now — streaming its thoughts,
-  // or quiet between a round and its next response — and the line says so,
-  // rather than reading as a search that is over with a stray caret below it.
-  const tail = first >= 0 ? entries[last] : null
+  const partialEmpty = !turn.partial || turn.partial.length === 0
+  const waiting = running && !toolRunning && partialEmpty
   const compacting = running && Boolean(live?.compacting)
-  const reasoning =
-    running &&
-    isFoldBlock(tail) &&
-    tail.fold.kind === 'reasoning' &&
-    tail.key.startsWith(`${partialKey}:`) &&
-    // Still the newest thing written: once the answer starts, it is over.
-    entries.slice(last + 1).every((entry) => entry === null)
-  // Streaming thoughts is thinking; quiet between a round and its next
-  // response is only waiting, and the line keeps saying what was done last.
-  const thinking =
-    compacting || first < 0 ? false : retrying ? 'retrying' : reasoning ? 'reasoning' : waiting ? 'waiting' : false
+  const tail = span ? entries[span.end] : null
+  const thinking = span
+    ? processThinking(kinds, span, {
+        running,
+        compacting,
+        retrying,
+        toolRunning,
+        partialEmpty,
+        thoughtStreaming: isFoldBlock(tail) && tail.fold.kind === 'reasoning' && tail.key.startsWith(`${partialKey}:`),
+      })
+    : false
   const blocks: ReactNode[] = []
   const after: ReactNode[] = []
   const items: ActivityItem[] = []
   entries.forEach((entry, i) => {
-    const inside = first >= 0 && i >= first && i <= last
+    const inside = span !== null && i >= span.start && i <= span.end
     if (inside && isToolBlock(entry)) {
       items.push({ kind: 'tool', key: entry.key, ...entry.step })
     } else if (inside && isFoldBlock(entry)) {
@@ -625,7 +537,7 @@ export function AssistantTurn({
       const node = isFoldBlock(entry) ? entry.node : entry
       if (node !== null && !isToolBlock(node)) blocks.push(node)
     }
-    if (i === last) blocks.push(<ToolActivity key="activity" items={items} thinking={thinking} />, ...after)
+    if (span !== null && i === span.end) blocks.push(<ToolActivity key="activity" items={items} thinking={thinking} />, ...after)
   })
 
   const text = turnText(turn)
@@ -651,7 +563,7 @@ export function AssistantTurn({
       {compacting ? (
         <CompactingLine />
       ) : (
-        (waiting || retrying) && first < 0 && <ThinkingLine label={retrying ? t('chat.retrying') : undefined} />
+        (waiting || retrying) && span === null && <ThinkingLine label={retrying ? t('chat.retrying') : undefined} />
       )}
 
       {!running && (text || onRegenerate) && (
@@ -677,6 +589,14 @@ type Block = ReactNode | ToolBlock | FoldBlock
 
 function isToolBlock(block: Block): block is ToolBlock {
   return typeof block === 'object' && block !== null && 'step' in block && !isValidElement(block)
+}
+
+/** What an entry is to the process (reply-process.ts). */
+function entryKind(entry: Block): ReplyEntryKind | null {
+  if (entry === null || entry === undefined) return null
+  if (isToolBlock(entry)) return 'tool'
+  if (isFoldBlock(entry)) return entry.fold.kind === 'reasoning' ? 'reasoning' : 'text'
+  return 'other'
 }
 
 function isFoldBlock(block: Block): block is FoldBlock {

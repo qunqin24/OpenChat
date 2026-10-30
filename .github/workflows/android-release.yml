@@ -1,0 +1,139 @@
+name: Android release
+
+# The Android app (apps/mobile) is released apart from the server, on tags of
+# its own:
+#
+#   git tag android-v1.0.0 && git push origin android-v1.0.0
+#
+# builds the APK signed with the release key and creates the GitHub release
+# "Android v1.0.0" with openchat-android-v1.0.0.apk and its .sha256 - the file
+# name the app's updater looks for (packages/chat-core/src/app-releases.ts).
+# Its notes are docs/releases/android-v1.0.0.md when that file exists,
+# otherwise the commits since the app's previous release.
+#
+# These releases are never marked "latest": GitHub's latest release stays the
+# server's, which is what a running server checks for its own updates. The app
+# reads the list of releases and picks its own.
+#
+# The key comes from four repository secrets (see docs/mobile.md):
+# ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and
+# ANDROID_KEY_PASSWORD.
+on:
+  push:
+    # android-v1.2.3 and android-v1.2.3-rc.1.
+    tags: ["android-v[0-9]+.[0-9]+.[0-9]+*"]
+
+permissions:
+  contents: write # the release
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    name: Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      TAG: ${{ github.ref_name }}
+      # The Expo CLI would otherwise ask questions and send telemetry.
+      CI: "1"
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Every tag, to find the app's release before this one.
+          fetch-depth: 0
+
+      # android-v1.2.3 → v1.2.3 (the APK's name) and 1.2.3 (the app's version,
+      # from which app.config.ts derives the Android versionCode).
+      - name: Read the version
+        run: |
+          version="${TAG#android-}"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "APP_VERSION=${version#v}" >> "$GITHUB_ENV"
+          echo "APK=openchat-android-$version.apk" >> "$GITHUB_ENV"
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # The key is a secret holding the .jks file in base64. Without it the
+      # build would quietly be signed with the debug key, and no installed app
+      # could be updated by the result, so stop here instead.
+      - name: Decode the keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::The secret ANDROID_KEYSTORE_BASE64 is not set; see docs/mobile.md."
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/openchat-release.jks"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/openchat-release.jks" >> "$GITHUB_ENV"
+
+      - run: pnpm install --frozen-lockfile
+
+      # The signing plugin and Gradle both read the key from the environment.
+      - name: Generate the Android project
+        working-directory: apps/mobile
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: npx expo prebuild -p android --clean
+
+      # Only arm64: the phones the app is for, and a third of the build time.
+      - name: Build the APK
+        working-directory: apps/mobile/android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
+
+      - name: Name the APK and check its signature
+        run: |
+          mkdir dist
+          cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk "dist/$APK"
+          (cd dist && sha256sum "$APK" > "$APK.sha256")
+          # The signing certificate's fingerprint is what the admin's
+          # passkey settings need for the Android app.
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -n 1)"
+          "$apksigner" verify --print-certs "dist/$APK" | tee certs.txt
+          if grep -qi "Android Debug" certs.txt; then
+            echo "::error::The APK is signed with the debug key."
+            exit 1
+          fi
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prerelease=""
+          case "$TAG" in *-*-*) prerelease="--prerelease" ;; esac
+          # The app's tag before this one - for a release, the release before
+          # it, past its own candidates; GitHub would otherwise start the list
+          # of changes at the newest release, which may be the server's.
+          pattern='^android-v[0-9]'
+          [ -z "$prerelease" ] && pattern='^android-v[0-9][^-]*$'
+          previous="$(git -c versionsort.suffix=- tag --list --sort=v:refname | grep -E "$pattern|^$TAG\$" | awk -v tag="$TAG" '$0 == tag { print last; exit } { last = $0 }')"
+          since=""
+          if [ -n "$previous" ]; then since="--notes-start-tag $previous"; fi
+          title="Android $VERSION"
+          if [ -f "docs/releases/$TAG.md" ]; then
+            gh release create "$TAG" --title "$title" --notes-file "docs/releases/$TAG.md" --latest=false $prerelease "dist/$APK" "dist/$APK.sha256"
+          else
+            notes="$(printf 'Install %s below on Android; the app updates itself from these releases afterwards.\n' "$APK")"
+            gh release create "$TAG" --title "$title" --generate-notes $since --notes "$notes" --latest=false $prerelease "dist/$APK" "dist/$APK.sha256"
+          fi

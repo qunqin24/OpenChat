@@ -13,6 +13,7 @@ import (
 type (
 	userKey    struct{}
 	sessionKey struct{}
+	appKey     struct{}
 )
 
 // WithUser returns a context carrying the authenticated user.
@@ -49,4 +50,18 @@ func WithSessionID(ctx context.Context, id uuid.UUID) context.Context {
 func SessionIDFrom(ctx context.Context) (uuid.UUID, bool) {
 	id, ok := ctx.Value(sessionKey{}).(uuid.UUID)
 	return id, ok
+}
+
+// WithFromApp returns a context that says whether the request came from the
+// phone app: it was signed in with a bearer token, which only the app is given
+// (a browser holds a cookie).
+func WithFromApp(ctx context.Context, fromApp bool) context.Context {
+	return context.WithValue(ctx, appKey{}, fromApp)
+}
+
+// FromApp reports whether the request came from the phone app. False for a
+// browser, and for work the server does on its own.
+func FromApp(ctx context.Context) bool {
+	fromApp, _ := ctx.Value(appKey{}).(bool)
+	return fromApp
 }

@@ -1,4 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
+import { ShareIntentProvider } from 'expo-share-intent'
 import { isOpenChatError } from '@openchat/api-client'
 import { Stack } from 'expo-router'
 import * as SplashScreen from 'expo-splash-screen'
@@ -13,7 +14,10 @@ import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/Button'
 import { Toaster } from '@/components/Toaster'
+import { UpdatePrompt } from '@/components/UpdatePrompt'
 import { setUnauthorizedListener } from '@/lib/api'
+// Applies the saved theme and language as soon as they are read back.
+import '@/lib/appearance'
 import i18n from '@/lib/i18n'
 import { queryClient, setErrorListener } from '@/lib/query'
 import { sessionEnded, showIfAccountDisabled, useSession } from '@/lib/session'
@@ -31,6 +35,8 @@ setErrorListener((error) => {
 
 export default function RootLayout() {
   return (
+    // First, as expo-share-intent asks: it reads the share the app was opened with.
+    <ShareIntentProvider>
     <GestureHandlerRootView style={styles.fill}>
       <SafeAreaProvider>
         <KeyboardProvider>
@@ -42,6 +48,7 @@ export default function RootLayout() {
         </KeyboardProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
+    </ShareIntentProvider>
   )
 }
 
@@ -78,6 +85,7 @@ function Screens() {
           <Stack.Screen name="disabled" />
         </Stack.Protected>
       </Stack>
+      <UpdatePrompt />
       <Toaster />
     </>
   )

@@ -82,6 +82,7 @@
     "reasoning": {
       "live": "Thinking…",
       "done": "Reasoning",
+      "thought": "Thought",
       "took_one": "Thought for {{count}} second",
       "took_other": "Thought for {{count}} seconds"
     },
@@ -259,6 +260,7 @@
     },
     "more": "More",
     "scroll-bottom": "Scroll to bottom",
+    "outline": "Conversation outline",
     "sidebar": {
       "open": "Open sidebar",
       "close": "Close sidebar",
@@ -2098,9 +2100,44 @@
     }
   },
   "mobile": {
-    "signed-in-as": "Signed in as {{name}}",
     "network": "Cannot reach the server. Check your connection and try again.",
-    "home-placeholder": "Chat is coming next.",
-    "retry": "Try again"
+    "retry": "Try again",
+    "attach-photos": "Photos",
+    "attach-camera": "Take photo",
+    "attach-files": "Files",
+    "quote-not-unique": "That passage appears more than once in the document. Select a little more around it.",
+    "document-edit": "Edit",
+    "document-done": "Done",
+    "update": {
+      "title": "Version {{version}} is available",
+      "current": "You have {{version}}",
+      "notes": "What's new",
+      "later": "Later",
+      "skip": "Skip this version",
+      "install": "Download and install",
+      "downloading": "Downloading {{percent}}%",
+      "failed": "The update did not go through. Try again later.",
+      "latest": "You have the latest version",
+      "check": "Check for updates",
+      "checking": "Checking…",
+      "permission": "Allow OpenChat to install apps to finish the update."
+    },
+    "settings": {
+      "about": "About",
+      "version": "Version",
+      "server": "Server"
+    },
+    "attach-library-hint": "Pick from files you sent before",
+    "attach-conversation-hint": "Let the model read another conversation",
+    "attach-web-hint": "Search and read the web when it helps",
+    "web-on": "Web search is on. Tap to turn it off",
+    "code-more": "Show {{count}} more lines",
+    "code-less": "Show less",
+    "table": "Table",
+    "table-size": "{{columns}} columns · {{rows}} rows",
+    "copied": "Copied",
+    "search-found": "Found {{count}} pages",
+    "search-results": "Search results",
+    "browsed": "Read {{host}}"
   }
 }

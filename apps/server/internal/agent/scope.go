@@ -21,6 +21,9 @@ type Scope struct {
 	Parent *uuid.UUID
 	// State is the run's own, shared by its tool calls and its turn note.
 	State *RunState
+	// FromApp: the run was started from the phone app, and its answer is read
+	// on a narrow screen.
+	FromApp bool
 }
 
 // Subagent reports whether the scope is a sub-agent's run.

@@ -610,6 +610,7 @@ type Run struct {
 	ReasoningEffort *string            `json:"reasoning_effort"`
 	WebSearch       bool               `json:"web_search"`
 	Continues       *uuid.UUID         `json:"continues"`
+	FromApp         bool               `json:"from_app"`
 }
 
 type ScheduledTask struct {

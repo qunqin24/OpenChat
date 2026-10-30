@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import { blocksTouched, changedPassages, documentChangeOf, streamingText, pendingEditOf, pendingTitle } from './document-tool'
+import type { ToolCallPart } from '@openchat/api-client'
+
+import { blocksTouched, changedPassages, documentChangeOf, documentOpOf, streamingText, pendingEditOf, pendingTitle } from './document-tool'
 
 describe('documentChangeOf', () => {
   it('reads a create or an update, and nothing else', () => {
@@ -66,5 +68,20 @@ describe('streamingText', () => {
     const raw = '{"op":"update","id":"x","edits":[{"find":"old","replace":"new one"},{"find":"b","replace":"and the'
     expect(streamingText(call(raw))).toBe('new one\n\nand the')
     expect(streamingText({ ...call(''), arguments: { op: 'update', edits: [{ find: 'a', replace: 'b' }] } })).toBe('b')
+  })
+})
+
+describe('documentOpOf', () => {
+  const call = (over: Partial<ToolCallPart>): ToolCallPart => ({ type: 'tool_call', id: 'c', name: 'document', ...over }) as ToolCallPart
+
+  it('says what a call does once its arguments say, parsed or still streaming', () => {
+    expect(documentOpOf(call({ arguments: { op: 'read', id: 'x' } }))).toBe('read')
+    expect(documentOpOf(call({ rawArguments: '{"id":"x","op":"upd' }))).toBeUndefined()
+    expect(documentOpOf(call({ rawArguments: '{"id":"x","op":"read"' }))).toBe('read')
+  })
+
+  it('does not know before then: not a write', () => {
+    expect(documentOpOf(call({ rawArguments: '{"id":"x"' }))).toBeUndefined()
+    expect(documentOpOf(call({}))).toBeUndefined()
   })
 })

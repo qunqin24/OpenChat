@@ -243,6 +243,9 @@ type runChoice struct {
 	// continues is set when the run answers a question the model asked: the
 	// first run of the answer it carries on (see ask_user.go).
 	continues *uuid.UUID
+	// fromApp: the request came from the phone app, so the answer is laid out
+	// for a narrow screen (phoneGuide).
+	fromApp bool
 }
 
 // chooseRun settles a run's model, effort and web access from what the request
@@ -295,6 +298,7 @@ func (s *Server) chooseRun(ctx context.Context, conv sqlc.Conversation, model *s
 	if askedWeb != nil {
 		c.webSearch = *askedWeb
 	}
+	c.fromApp = auth.FromApp(ctx)
 	return c, nil
 }
 
@@ -319,6 +323,7 @@ func createRun(ctx context.Context, q *sqlc.Queries, conv sqlc.Conversation, use
 		ReasoningEffort: c.runEffort,
 		WebSearch:       c.webSearch,
 		Continues:       c.continues,
+		FromApp:         c.fromApp,
 	}
 	if requestID != "" {
 		params.RequestID = &requestID

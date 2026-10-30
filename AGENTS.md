@@ -50,6 +50,7 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 - 压缩只有 run 自己会做，用户没有手动入口（只留 `GET` 与撤销 `DELETE` `/conversations/{id}/compaction`），不要加回去。模型因长度拒绝（`context_too_long`）时，开着自动压缩的 run 强制压一次并重试，每个 run 至多一次（`recoverContextLength`）。
 - 新增模型请求路径：先构造 `llm.Request`（带 `User`），`Begin(Call{InputEstimate: llm.EstimateInput(req)})` → `Reserve` → `Stream` → `End`；`partialStream` 在 `Reserve` 之后才创建；新 kind 要加 `usage_logs_kind` 约束。
 - 挑模型走 `pickChannel(ctx, modelID, asker)`，容量检查在它里面，别绕开：用户请求传 `askerFrom(ctx)`，服务端任务建 `asker{staff: true, …}`（`admin` 只在替管理员办事时为真，`ignoreCap` 只用于「能不能答」的校验）。渠道按优先级、同级按权重选（`servingOrder`），模型还没输出就失败的 run 自动换渠道（`failover`），别改回只取第一个。
+- 从 App（bearer token）发起的 run 记 `runs.from_app`（`chooseRun` 读 `auth.FromApp`），系统提示词因此多一节 `phoneGuide`；新的起 run 路径经 `chooseRun` 自然带上，服务端自己起的不带。
 - 同一次回复里的工具调用并发执行（`agent.Options.ToolConcurrency`，默认 10）：新工具必须能与其他工具同时运行。
 - 容量上限按请求的 `model_id`（不是 `served_model`）、金额全程 `numeric` 在 SQL 里比较，不经 float。
 - 读用户上传文件并发给模型必须走 `agent.attachmentResolver`（SHA-256 收据），别自己 `Read`；本地 `PUT` 用 `Local.PutNew`，写一次。
@@ -70,7 +71,7 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 - 聊天页只有一个 `ChatView` 实例（`components/chat/ChatPage.tsx`，规则在 `chat-core/src/chat-view.ts`）：子路由不渲染组件；首条消息的流程只在服务器答复后才 `navigate`；在该路径上写页面状态要过 `alive`；新增「新对话」入口必须带 `newChatState`。
 - 消息列表从尾部分页：对消息键不要 `invalidateQueries`，用 `refreshNewestMessages`（`transcript_changed` 先截缓存再重取）；交接走 `chat-core/src/hand-over.ts`，只有 `refreshConfirmed` 之后才 `settle`。跟随事件流的循环只有一份：`chat-core/src/conversation-follow.ts`（`followConversation`），网页和 App 各自只传连接方式和「对话没了去哪」；发送前后的缓存动作在 `chat-core/src/send.ts`。
 - 新增由响应或旧快照驱动、会写 `live` 的路径，必须过 `finished` 检查（`rememberFinished`）；`outbox` 由 `useSendMessage` 的 hook 级 `onError` 撤掉，别用调用级回调。
-- 网页的流式文字一到就显示，每批整体 0.6 秒淡入（`useArrivalFade`，`arrival-fade.ts`）：淡入靠盖在文字上的浮层，不碰 React 渲染的文字，**不要给每个字或词建元素或动画**（v1.1.0 用 Streamdown 的 `animated` 这样做，长思维链把 CPU 拖到 90%）；移动端仍按 `chat-core/src/reveal.ts` 的节奏显示前缀。回复零件的 key 按位置 `r<n>` 起，不按消息 id，别改回去（淡入依赖同一元素）。
+- 流式文字一到就显示，每批整体 0.6 秒淡入（批次和淡入曲线在 `chat-core/src/arrival.ts`；网页 `useArrivalFade`/`arrival-fade.ts` 按 `Range` 每行盖浮层，App `FadingText`/`ArrivalFade.tsx` 按 `onTextLayout` 的行盖）：淡入靠盖在文字上的浮层，不碰 React 渲染的文字，**不要给每个字或词建元素或动画**（v1.1.0 用 Streamdown 的 `animated` 这样做，长思维链把 CPU 拖到 90%）。回复零件的 key 按位置 `r<n>` 起，不按消息 id，别改回去（淡入依赖同一元素）。
 - 删除对话的新路径要发/处理 `conversation_deleted`，并走 `lib/conversation-sync.ts` 的 BroadcastChannel（`announceDeleted`）。
 - 标题一律经 `displayTitle`/`useDisplayTitle`，不要直接渲染 `conversation.title`；搜索结果键 `queryKeys.conversations.search(term)` 不放在 `list` 下；记忆、摘要查询不落本地缓存。
 - 手机上禁止缩放（viewport、`lib/no-zoom.ts`、`html` 的 `touch-action`）、安全区由根元素/输入框/侧栏各自让开；`content-visibility` 在 WebKit 上不用（`data-webkit`，有消息变空白的 bug）。

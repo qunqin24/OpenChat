@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { AnswerText } from '@/components/chat/MessageItem'
+import { AnswerText } from '@/components/chat/AnswerText'
 
 /** A stand-in picture: a gradient, drawn in place, since this page has no sources. */
 const SAMPLE = `**东京三日游（Tokyo）**的节奏**轻松**，以步行和地铁为主，适合第一次去。先看几个关键数字：
