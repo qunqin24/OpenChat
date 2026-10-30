@@ -12,6 +12,13 @@ interface Batch {
   born: number
 }
 
+/**
+ * The most characters one batch fades. A bigger one - a relay's whole answer,
+ * a page opened on a finished reply - is shown as it is: there is nothing
+ * left to watch arrive, and covering it would measure every line of it.
+ */
+const MAX_BATCH_CHARS = 4000
+
 /** ease-in-out, as the opacity of what lies over the text. */
 const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2)
 
@@ -29,16 +36,22 @@ const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 
  * Streamdown `animated`, which took long reasoning to 90% of a core), and
  * React keeps the text it rendered.
  *
- * Where a batch is is counted in characters of `content`'s text, after every
- * render: what was there stays where it was as Markdown grows, so the new
- * characters are the last ones (a formula or diagram drawn once its code
- * arrives grows the text too, and fades in the same way). What the box holds
- * when it mounts is shown as it is unless
- * `fresh` (it arrived after the reader was watching). Text cut short, a hidden
- * tab, and reduced motion get no fade.
+ * Where a batch is is counted in characters of `content`'s text: what was
+ * there stays where it was as Markdown grows, so the new characters are the
+ * last ones. Only a render with new `text` makes a batch. The rendered text
+ * also grows on its own - a diagram or formula drawn after its source, code
+ * highlighted - and that is taken in silently: a diagram drawn while the
+ * reader scrolled once became one batch of hundreds of labels, measured with
+ * a style recalculation per label, and froze the page for seconds (v1.3.1).
+ * Text inside a diagram or a formula is never covered, for the same reason.
+ *
+ * What the box holds when it mounts is shown as it is unless `fresh` (it
+ * arrived after the reader was watching). Text cut short, a batch over
+ * MAX_BATCH_CHARS, a hidden tab and reduced motion get no fade.
  */
-export function useArrivalFade(content: RefObject<HTMLElement | null>, layer: RefObject<HTMLElement | null>, fresh = false) {
+export function useArrivalFade(content: RefObject<HTMLElement | null>, layer: RefObject<HTMLElement | null>, text: string, fresh = false) {
   const shown = useRef<number | null>(null)
+  const seen = useRef<string | null>(null)
   const batches = useRef<Batch[]>([])
   const covers = useRef<{ el: HTMLElement; born: number }[]>([])
   const frame = useRef(0)
@@ -50,8 +63,11 @@ export function useArrivalFade(content: RefObject<HTMLElement | null>, layer: Re
     const length = root.textContent?.length ?? 0
     const now = performance.now()
     if (shown.current === null) shown.current = fresh ? 0 : length
+    const arrived = text !== seen.current
+    seen.current = text
     if (length > shown.current) {
-      if (!prefersReducedMotion() && !document.hidden) batches.current.push({ start: shown.current, end: length, born: now })
+      const fading = arrived && length - shown.current <= MAX_BATCH_CHARS && !prefersReducedMotion() && !document.hidden
+      if (fading) batches.current.push({ start: shown.current, end: length, born: now })
     } else if (length < shown.current) {
       batches.current = []
     }
@@ -92,64 +108,78 @@ export function useArrivalFade(content: RefObject<HTMLElement | null>, layer: Re
 /**
  * Puts a cover over every line of every batch, reusing the layer's elements.
  * Walks the text from its end, only as far back as the oldest batch begins.
+ *
+ * Everything is measured before anything is written: a cover added between
+ * two measurements makes the next one recalculate the page's style.
  */
 function place(root: HTMLElement, layer: HTMLElement, batches: Batch[]): { el: HTMLElement; born: number }[] {
-  const placed: { el: HTMLElement; born: number }[] = []
-  if (batches.length > 0) {
-    const from = Math.min(...batches.map((batch) => batch.start))
-    const origin = layer.getBoundingClientRect()
-    const surfaces = new Map<Element, string>()
-    const pool = [...layer.children] as HTMLElement[]
-    let end = root.textContent?.length ?? 0
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
-    const nodes: { node: Text; start: number }[] = []
-    // Elements are skipped, not rejected, so this is the last text node at any depth.
-    let node = walker.lastChild() as Text | null
-    while (node && end > from) {
-      end -= node.length
-      nodes.push({ node, start: end })
-      node = walker.previousNode() as Text | null
-    }
-    for (const batch of batches) {
-      for (const { node: text, start } of nodes) {
-        const a = Math.max(batch.start, start) - start
-        const b = Math.min(batch.end, start + text.length) - start
-        if (a >= b || !text.data.slice(a, b).trim()) continue
-        const parent = text.parentElement
-        if (!parent) continue
-        let surface = surfaces.get(parent)
-        if (surface === undefined) {
-          surface = surfaceOf(parent)
-          surfaces.set(parent, surface)
-        }
-        const range = document.createRange()
-        range.setStart(text, a)
-        range.setEnd(text, b)
-        for (const rect of range.getClientRects()) {
-          if (rect.width === 0 || rect.height === 0) continue
-          const el = pool.pop() ?? layer.appendChild(document.createElement('span'))
-          const left = Math.floor(rect.left - origin.left)
-          const top = Math.floor(rect.top - origin.top)
-          el.style.transform = `translate(${left}px, ${top}px)`
-          el.style.width = `${Math.ceil(rect.right - origin.left) - left}px`
-          el.style.height = `${Math.ceil(rect.bottom - origin.top) - top}px`
-          el.style.background = surface
-          placed.push({ el, born: batch.born })
-        }
+  if (batches.length === 0) {
+    layer.replaceChildren()
+    return []
+  }
+  const from = Math.min(...batches.map((batch) => batch.start))
+  const origin = layer.getBoundingClientRect()
+  const surfaces = new Map<Element, string>()
+  let end = root.textContent?.length ?? 0
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  const nodes: { node: Text; start: number }[] = []
+  // Elements are skipped, not rejected, so this is the last text node at any depth.
+  let node = walker.lastChild() as Text | null
+  while (node && end > from) {
+    end -= node.length
+    nodes.push({ node, start: end })
+    node = walker.previousNode() as Text | null
+  }
+  const boxes: { left: number; top: number; width: number; height: number; surface: string; born: number }[] = []
+  for (const batch of batches) {
+    for (const { node: text, start } of nodes) {
+      const a = Math.max(batch.start, start) - start
+      const b = Math.min(batch.end, start + text.length) - start
+      if (a >= b || !text.data.slice(a, b).trim()) continue
+      const parent = text.parentElement
+      if (!parent || parent.closest('svg, .katex')) continue
+      const surface = surfaceOf(parent, surfaces)
+      const range = document.createRange()
+      range.setStart(text, a)
+      range.setEnd(text, b)
+      for (const rect of range.getClientRects()) {
+        if (rect.width === 0 || rect.height === 0) continue
+        const left = Math.floor(rect.left - origin.left)
+        const top = Math.floor(rect.top - origin.top)
+        boxes.push({ left, top, width: Math.ceil(rect.right - origin.left) - left, height: Math.ceil(rect.bottom - origin.top) - top, surface, born: batch.born })
       }
     }
-    for (const spare of pool) spare.remove()
-  } else {
-    layer.replaceChildren()
   }
+  const pool = [...layer.children] as HTMLElement[]
+  const placed = boxes.map((box) => {
+    const el = pool.pop() ?? layer.appendChild(document.createElement('span'))
+    el.style.transform = `translate(${box.left}px, ${box.top}px)`
+    el.style.width = `${box.width}px`
+    el.style.height = `${box.height}px`
+    el.style.background = box.surface
+    return { el, born: box.born }
+  })
+  for (const spare of pool) spare.remove()
   return placed
 }
 
-/** The colour behind `element`: its own background, or the nearest one above it. */
-function surfaceOf(element: Element): string {
+/** The colour behind `element`: its own background, or the nearest one above it. Remembered per element. */
+function surfaceOf(element: Element, known: Map<Element, string>): string {
+  const path: Element[] = []
+  let color = 'var(--n-bg)'
   for (let at: Element | null = element; at; at = at.parentElement) {
-    const color = getComputedStyle(at).backgroundColor
-    if (color && color !== 'transparent' && !/rgba\(.*,\s*0\)$/.test(color)) return color
+    const remembered = known.get(at)
+    if (remembered !== undefined) {
+      color = remembered
+      break
+    }
+    path.push(at)
+    const own = getComputedStyle(at).backgroundColor
+    if (own && own !== 'transparent' && !/rgba\(.*,\s*0\)$/.test(own)) {
+      color = own
+      break
+    }
   }
-  return 'var(--n-bg)'
+  for (const at of path) known.set(at, color)
+  return color
 }
