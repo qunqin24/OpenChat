@@ -1,5 +1,6 @@
 /**
- * The pace at which streamed text is shown.
+ * The pace at which streamed text is shown, in the app (the web shows each
+ * batch as it arrives and fades it in: arrival-fade.ts).
  *
  * An answer reaches the page in bursts - the server commits what the model
  * wrote every 150 ms, and a slow commit, a proxy or relay that holds the stream
@@ -98,7 +99,7 @@ export interface RevealState {
  * characters from its end at most. Enough for the first batch of a new part to
  * be typed rather than appear; little enough that a page opened part-way
  * through a long answer only retypes its last line or two. A part the reader
- * watched begin starts from nothing (`fresh` in MarkdownText.tsx).
+ * watched begin starts from nothing (`fresh` in the app's hooks/reveal.ts).
  */
 export const REVEAL_FRESH_CHARS = 160
 export const revealFrom = (length: number) => Math.max(0, length - REVEAL_FRESH_CHARS)

@@ -1,197 +1,47 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
 import { Streamdown } from 'streamdown'
 
-import { prefersReducedMotion } from '@/lib/motion'
-import { revealDone, revealed, revealFrom, revealStep, revealWhole, type RevealState } from '@openchat/chat-core/reveal'
+import { useArrivalFade } from './arrival-fade'
 import { markdownComponents, markdownLinkSafety, prepareMarkdown, useMarkdownPlugins } from './markdown-components'
 
 /**
  * Markdown as the chat draws it: an answer's text, the reasoning, a
- * conversation's summary. `fresh`: the part began while the reader watched
- * (see `useReveal`).
+ * conversation's summary. Text is shown as it arrives, each batch fading in
+ * together (`useArrivalFade`); `fresh`: the part began while the reader
+ * watched, so even its first batch fades in.
  */
 export function Markdown({ text, streaming = false, fresh = false }: { text: string; streaming?: boolean; fresh?: boolean }) {
-  const shown = useReveal(text, streaming, fresh)
-  const behind = shown.length < text.length
-  const revealing = streaming || behind
-  const plugins = useMarkdownPlugins(shown)
-  const box = useRef<HTMLDivElement>(null)
-  const tail = useRef<HTMLSpanElement>(null)
-  // After every render: the fade sits on the newest characters while any are
-  // still being revealed.
-  useLayoutEffect(() => placeTail(box.current, tail.current, behind))
+  const plugins = useMarkdownPlugins(text)
+  const content = useRef<HTMLDivElement>(null)
+  const layer = useRef<HTMLSpanElement>(null)
+  useArrivalFade(content, layer, fresh)
   return (
-    <div className="n-markdown" ref={box}>
+    <div className="n-markdown">
       {/* The local typography layer styles the actual Streamdown output;
           markdown-body keeps the ported table selectors working. */}
-      <div className="markdown-body">
-        <Streamdown className="n-prose" parseIncompleteMarkdown={revealing} isAnimating={revealing} components={markdownComponents} plugins={plugins} linkSafety={markdownLinkSafety}>
-          {prepareMarkdown(shown)}
+      <div className="markdown-body" ref={content}>
+        <Streamdown className="n-prose" parseIncompleteMarkdown={streaming} isAnimating={streaming} components={markdownComponents} plugins={plugins} linkSafety={markdownLinkSafety}>
+          {prepareMarkdown(text)}
         </Streamdown>
       </div>
-      <span ref={tail} className="n-reveal-tail" aria-hidden="true" />
+      <span ref={layer} className="n-arrival" aria-hidden="true" />
     </div>
   )
 }
 
 /**
- * Plain text revealed the way an answer's Markdown is - the pace and the fade
- * over the newest characters - for what is not drawn as Markdown: the model's
- * thinking and notes inside the activity line.
+ * Plain text shown the way an answer's Markdown is - each batch fading in as
+ * it arrives - for what is not drawn as Markdown: the model's thinking and
+ * notes inside the activity line.
  */
-export function PlainReveal({ text, streaming }: { text: string; streaming: boolean }) {
-  const shown = useReveal(text, streaming)
-  const behind = shown.length < text.length
-  const box = useRef<HTMLSpanElement>(null)
-  const tail = useRef<HTMLSpanElement>(null)
-  useLayoutEffect(() => placeTail(box.current, tail.current, behind))
+export function PlainReveal({ text }: { text: string; streaming?: boolean }) {
+  const content = useRef<HTMLSpanElement>(null)
+  const layer = useRef<HTMLSpanElement>(null)
+  useArrivalFade(content, layer)
   return (
-    <span className="n-reveal-plain" ref={box}>
-      <span>{shown}</span>
-      <span ref={tail} className="n-reveal-tail" aria-hidden="true" />
+    <span className="n-reveal-plain">
+      <span ref={content}>{text}</span>
+      <span ref={layer} className="n-arrival" aria-hidden="true" />
     </span>
   )
-}
-
-/** How far back from the newest character the fade reaches, in em. */
-const TAIL_EM = 2.5
-
-/**
- * The newest characters fade in: a short gradient from clear to the page's
- * colour lies over the end of the last line, so the character just shown is
- * mostly hidden and each one before it a little less, and as the reveal moves
- * on every character comes out from under it. One element, placed once a
- * render - the cost does not grow with the answer, unlike a fading element per
- * character (v1.1.0, which took long reasoning to 90% of a core). Text inside a
- * code block, table, diagram or interface block has a surface of its own and
- * gets no fade.
- */
-function placeTail(box: HTMLElement | null, tail: HTMLElement | null, on: boolean) {
-  if (!box || !tail) return
-  const hide = () => {
-    tail.style.opacity = '0'
-  }
-  if (!on) return hide()
-  const node = lastText(box.firstElementChild)
-  const parent = node?.parentElement
-  if (!node || !parent || parent.closest('pre, table, .n-ui, .n-mermaid, [data-streamdown="code-block"]')) return hide()
-  const end = node.data.trimEnd().length
-  const range = document.createRange()
-  range.setStart(node, Math.max(0, end - 1))
-  range.setEnd(node, end)
-  const rects = range.getClientRects()
-  const rect = rects[rects.length - 1]
-  if (!rect || rect.height === 0) return hide()
-  const origin = box.getBoundingClientRect()
-  const width = TAIL_EM * parseFloat(getComputedStyle(parent).fontSize)
-  const left = Math.max(0, rect.right - origin.left - width)
-  tail.style.width = `${rect.right - origin.left - left}px`
-  tail.style.height = `${rect.height}px`
-  tail.style.transform = `translate(${left}px, ${rect.top - origin.top}px)`
-  tail.style.setProperty('--n-tail-bg', surfaceOf(parent))
-  tail.style.opacity = '1'
-}
-
-/** The last text node under `root` with anything but whitespace in it. */
-function lastText(root: Node | null): Text | null {
-  let node: Node | null = root?.lastChild ?? null
-  while (node) {
-    if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim()) return node as Text
-    if (node.nodeType === Node.ELEMENT_NODE && node.lastChild) {
-      node = node.lastChild
-      continue
-    }
-    while (node && node !== root && !node.previousSibling) node = node.parentNode
-    if (!node || node === root) return null
-    node = node.previousSibling
-  }
-  return null
-}
-
-/** The colour behind `element`: its own background, or the nearest one above it. */
-function surfaceOf(element: Element): string {
-  for (let at: Element | null = element; at; at = at.parentElement) {
-    const color = getComputedStyle(at).backgroundColor
-    if (color && color !== 'transparent' && !/rgba\(.*,\s*0\)$/.test(color)) return color
-  }
-  return 'var(--n-bg)'
-}
-
-/**
- * The least time between two renders of a reveal, in ms: about 30 a second.
- * Each render parses the text shown as Markdown, which costs more the longer
- * it is; every frame (60 a second or more) made a long reasoning cost a
- * quarter of a core, for no step a reader could tell apart.
- */
-const REVEAL_FRAME_MS = 32
-
-/**
- * The part of `text` to show (lib/reveal.ts). What the element holds when it
- * mounts is shown at once - a page opened, or reloaded, part-way through an
- * answer does not type out what was already there - except, while it streams,
- * its last few lines (`revealFrom`). A part the reader watched begin (`fresh`:
- * it arrived after the reply was on screen) is shown from nothing instead: its
- * first batch, however long - a relay's paragraph - is typed rather than
- * appearing, and one that arrived whole (an answer the model finished between
- * two commits) comes out quickly as typing too (`revealWhole`). What is added
- * after is revealed at a pace, including after the stream has ended, where it
- * finishes quickly: the element is the same one across the hand-over (the part
- * keys in `AssistantTurn`), so the end of an answer finishes typing rather
- * than jumping in. Text that is not a continuation (replaced, shortened) is
- * shown as it is. A hidden tab, and a reader who asked for reduced motion, get
- * the text as it is.
- */
-function useReveal(text: string, streaming: boolean, fresh = false): string {
-  const [shown, setShown] = useState(() => (fresh ? 0 : streaming ? revealFrom(text.length) : text.length))
-  // The text as last rendered, to tell a continuation from a replacement.
-  const [held, setHeld] = useState(text)
-  if (held !== text) {
-    setHeld(text)
-    if (!text.startsWith(revealed(held, shown))) setShown(text.length)
-  }
-  // What the frame loop reads: the latest text, whether more may come, and
-  // where the reveal stands. The loop's position is fractional and runs ahead
-  // of the rendered whole characters; a render moves it only forward (text
-  // shown at once) or back to the text's end (text cut short).
-  const target = useRef(text)
-  const more = useRef(streaming)
-  const state = useRef<RevealState>(fresh && !streaming ? revealWhole(text.length) : { ...revealDone(text.length), shown })
-  useLayoutEffect(() => {
-    target.current = text
-    more.current = streaming
-    state.current.shown = Math.min(Math.max(state.current.shown, shown), text.length)
-  }, [text, shown, streaming])
-  const behind = shown < text.length
-
-  useEffect(() => {
-    // Caught up: the arrival rate is kept, for the pace of what comes next.
-    if (!behind) {
-      state.current = revealDone(target.current.length, state.current.rate, state.current.batch)
-      return
-    }
-    if (prefersReducedMotion() || document.hidden) {
-      state.current = revealDone(target.current.length)
-      setShown(target.current.length)
-      return
-    }
-    let frame = 0
-    let last = performance.now()
-    let drawn = last
-    const tick = (now: number) => {
-      const next = revealStep(state.current, target.current.length, now - last, more.current)
-      last = now
-      state.current = next
-      const done = next.shown >= target.current.length
-      if (done || now - drawn >= REVEAL_FRAME_MS || document.hidden) {
-        drawn = now
-        // Whole characters: a render only when one more can be shown.
-        setShown(document.hidden ? target.current.length : Math.floor(next.shown))
-      }
-      if (!done && !document.hidden) frame = requestAnimationFrame(tick)
-    }
-    frame = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(frame)
-  }, [behind])
-
-  return revealed(text, shown)
 }

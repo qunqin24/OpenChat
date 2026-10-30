@@ -19,7 +19,7 @@ Expo（React Native）写的原生 App，先做 Android，以后 iOS 用同一�
 - 共用逻辑在 `packages/chat-core`（不依赖 React 和 DOM），网页版和 App 都从那里引用，不复制。聊天这块共用的有：事件跟随循环（`conversation-follow.ts`）、发送的缓存动作和错误文案（`send.ts`）、工具步骤的文案（`tool-activity.ts`）、页面规则（`chat-view.ts`）、转录（`transcript.ts`、`run-state.ts`）、逐字显现的节奏（`reveal.ts`）。
 - 聊天页（`src/app/(app)/index.tsx` + `components/chat/ChatView.tsx`）：只有一个，地址是 `?id=`（对话）和 `?n=`（要新对话），按 `chat-view.ts` 决定重开还是保留；转录是倒置的 `FlatList`，停在底部时自然跟随，往上翻时才用 `maintainVisibleContentPosition` 稳住位置。
 - 事件流（`hooks/events.ts`）用 `expo/fetch`（RN 自带的 fetch 不能边收边读），带 Bearer 和 `Accept-Encoding: identity`；App 退到后台就断开，回到前台重连（从新快照开始）。
-- Markdown（`components/chat/Markdown.tsx`）：`marked` 的词法分析出块，每块按源文本 memo，流式时只有最后一块重画；逐字显现照搬网页的 `useReveal`（`hooks/reveal.ts`），只显现前缀，不给每个字建元素。帧循环自己读 `performance.now()`（RN 的帧时间戳在后台回来后和它不是一个时钟），追上后若同一次渲染里又来了字要重新启动循环，否则会停在半截。
+- Markdown（`components/chat/Markdown.tsx`）：`marked` 的词法分析出块，每块按源文本 memo，流式时只有最后一块重画；逐字显现用 `hooks/reveal.ts`（节奏是 `chat-core/src/reveal.ts`；网页以前也这样，现在改成整批淡入，见 frontend-chat.md），只显现前缀，不给每个字建元素。帧循环自己读 `performance.now()`（RN 的帧时间戳在后台回来后和它不是一个时钟），追上后若同一次渲染里又来了字要重新启动循环，否则会停在半截。
 
 ## 本地运行
 

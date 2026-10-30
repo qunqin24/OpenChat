@@ -620,9 +620,8 @@
   font-size: 12.5px;
 }
 
-/* The fade over the newest characters of a reply being revealed
-   (MarkdownText.tsx, placeTail): placed by script each render, gone once the
-   reveal has caught up. */
+/* The covers over text that has just arrived (arrival-fade.ts): one per line
+   of each batch still fading in, placed and faded by script, gone after. */
 .chat-ui .n-markdown,
 .chat-ui .n-reveal-plain {
   position: relative;
@@ -630,14 +629,13 @@
 .chat-ui .n-reveal-plain {
   display: block;
 }
-.chat-ui .n-reveal-tail {
+.chat-ui .n-arrival {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.chat-ui .n-arrival > span {
   position: absolute;
   top: 0;
   left: 0;
-  width: 0;
-  height: 0;
-  background: linear-gradient(to right, transparent, color-mix(in srgb, var(--n-tail-bg, var(--n-bg)) 88%, transparent));
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 160ms ease-out;
 }

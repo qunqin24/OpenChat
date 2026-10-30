@@ -439,11 +439,10 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
   // Whenever the column or the screen changes size: a reader parked at the end
   // is kept there, and one who is now at the end is parked again.
   //
-  // Kept there: the text of a reply grows every frame as it is revealed
-  // (Markdown's useReveal), not only when a batch arrives, and goes on growing
-  // after the stream has ended - following only on new tokens left the view
-  // trailing by a few lines while it streamed and the last lines of every
-  // answer below the screen once it was done.
+  // Kept there: a reply grows not only when a batch arrives - a formula, a
+  // diagram or highlighted code is drawn after its text, a section opens -
+  // and following only on new tokens left the view trailing by a few lines
+  // and the last lines of an answer below the screen.
   //
   // Parked again: the transcript can stop overflowing without a scroll (a
   // section the reader opened, scrolled through and folded away again leaves it
