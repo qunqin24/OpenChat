@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { ARRIVAL_FADE_MS, coverOpacity, nextArrivals, noArrivals } from './arrival'
+import { ARRIVAL_FADE_MS, MAX_BATCH_CHARS, coverOpacity, nextArrivals, noArrivals } from './arrival'
 
 describe('nextArrivals', () => {
+  it('takes in silently text that grew with no new text arriving, or by more than a batch fades', () => {
+    const state = nextArrivals(noArrivals, 10, 0)
+    expect(nextArrivals(state, 400, 50, { arrived: false })).toEqual({ shown: 400, batches: [] })
+    expect(nextArrivals(state, 10 + MAX_BATCH_CHARS + 1, 50)).toEqual({ shown: 10 + MAX_BATCH_CHARS + 1, batches: [] })
+  })
+
   it('shows what is there at first as it is', () => {
     expect(nextArrivals(noArrivals, 120, 0)).toEqual({ shown: 120, batches: [] })
   })

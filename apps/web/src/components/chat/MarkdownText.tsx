@@ -14,7 +14,7 @@ export function Markdown({ text, streaming = false, fresh = false }: { text: str
   const plugins = useMarkdownPlugins(text)
   const content = useRef<HTMLDivElement>(null)
   const layer = useRef<HTMLSpanElement>(null)
-  useArrivalFade(content, layer, fresh)
+  useArrivalFade(content, layer, text, fresh)
   return (
     <div className="n-markdown">
       {/* The local typography layer styles the actual Streamdown output;
@@ -37,7 +37,7 @@ export function Markdown({ text, streaming = false, fresh = false }: { text: str
 export function PlainReveal({ text }: { text: string; streaming?: boolean }) {
   const content = useRef<HTMLSpanElement>(null)
   const layer = useRef<HTMLSpanElement>(null)
-  useArrivalFade(content, layer)
+  useArrivalFade(content, layer, text)
   return (
     <span className="n-reveal-plain">
       <span ref={content}>{text}</span>

@@ -14,6 +14,13 @@ export interface ArrivalBatch {
   born: number
 }
 
+/**
+ * The most characters one batch fades. A bigger one - a relay's whole answer,
+ * a page opened on a finished reply - is shown as it is: there is nothing
+ * left to watch arrive, and covering it would measure every line of it.
+ */
+export const MAX_BATCH_CHARS = 4000
+
 /** ease-in-out, as the opacity of what lies over the text. */
 export const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2)
 
@@ -35,14 +42,22 @@ export const noArrivals: ArrivalState = { shown: null, batches: [] }
  * text holds when it first renders is shown as it is, unless `fresh` (it
  * arrived after the reader was watching), when it fades in too. Text that grew
  * adds a batch - unless `fading` is false (reduced motion, an app in the
- * background), when it is just shown. Text cut short drops every batch: what
- * is left was there already. Batches past their fade are let go.
+ * background), it grew by more than MAX_BATCH_CHARS, or no new text `arrived`
+ * (a diagram drawn after its source grows the rendered text on its own: the
+ * web once covered its hundreds of labels as one batch and froze the page),
+ * when it is just shown. Text cut short drops every batch: what is left was
+ * there already. Batches past their fade are let go.
  */
-export function nextArrivals(state: ArrivalState, length: number, now: number, { fresh = false, fading = true } = {}): ArrivalState {
+export function nextArrivals(
+  state: ArrivalState,
+  length: number,
+  now: number,
+  { fresh = false, fading = true, arrived = true } = {},
+): ArrivalState {
   const shown = state.shown ?? (fresh ? 0 : length)
   let batches = state.batches
   if (length > shown) {
-    if (fading) batches = [...batches, { start: shown, end: length, born: now }]
+    if (fading && arrived && length - shown <= MAX_BATCH_CHARS) batches = [...batches, { start: shown, end: length, born: now }]
   } else if (length < shown) {
     batches = []
   }
