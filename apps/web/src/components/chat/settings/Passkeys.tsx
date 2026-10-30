@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 
 import { useAuthOptions } from '@/hooks/use-auth-options'
 import { useAddPasskey, useDeletePasskey, usePasskeys, useRenamePasskey, type Passkey } from '@/hooks/use-passkeys'
-import { formatRelative } from '@/lib/grouping'
+import { formatRelative } from '@openchat/chat-core/grouping'
 
 /**
  * The account's passkeys: add one with the browser's prompt, rename one, remove

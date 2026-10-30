@@ -144,7 +144,7 @@ code 用 snake_case。前端要给用户看的 code 要在 `features/auth/http.t
 前端：
 
 - [ ] 新字符串进了 `zh` 和 `en` 两个 locale 文件
-- [ ] 带过滤条件的 query 有 `placeholderData: (previous) => previous`，key 登记进 `lib/query-keys.ts` 或 `adminKeys`
+- [ ] 带过滤条件的 query 有 `placeholderData: (previous) => previous`，key 登记进 `chat-core/src/query-keys.ts` 或 `adminKeys`
 - [ ] 没有把服务端 `error.message` 直接渲染到界面
 - [ ] 改动属于哪套设计系统，样式写在对应作用域里；portal 里的覆盖同时写了 `[data-slot]` 和 `[data-slot] *`
 - [ ] `tsc --noEmit`、`eslint`、`pnpm --filter @openchat/web test` 通过

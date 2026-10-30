@@ -2,7 +2,7 @@ import type { CreateTaskRequest, Task, TaskList, UpdateTaskRequest } from '@open
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/lib/api'
-import { queryKeys } from '@/lib/query-keys'
+import { queryKeys } from '@openchat/chat-core/query-keys'
 
 /** The person's scheduled tasks. Asked again now and then: the scheduler moves them on. */
 export function useTasks(enabled = true) {

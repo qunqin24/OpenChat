@@ -5,8 +5,8 @@ import { useEffect, useMemo, useRef } from 'react'
 
 import { api, unwrap } from '@/lib/api'
 import { announceDeleted } from '@/lib/conversation-sync'
-import { queryKeys } from '@/lib/query-keys'
-import { emptyTranscript, type TranscriptPages } from '@/lib/transcript-pages'
+import { queryKeys } from '@openchat/chat-core/query-keys'
+import { emptyTranscript, type TranscriptPages } from '@openchat/chat-core/transcript-pages'
 
 /** The conversation list, newest first, a page at a time. Shared with the route loader. */
 export const conversationsQueryOptions = infiniteQueryOptions({

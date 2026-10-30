@@ -1,5 +1,4 @@
-import { createApiClient, OpenChatError } from '@openchat/api-client'
-import type { ApiError } from '@openchat/api-client'
+import { createApiClient } from '@openchat/api-client'
 
 import { API_BASE_URL } from './api-base'
 import { noteBuild } from './build-check'
@@ -19,21 +18,5 @@ export const appFetch: typeof globalThis.fetch = async (input, init) => {
  */
 export const api = createApiClient({ baseUrl: API_BASE_URL, credentials: 'include', fetch: appFetch })
 
-/**
- * openapi-fetch returns `{ data, error }` instead of throwing. TanStack Query
- * wants thrown errors, so every call goes through here.
- */
-export function unwrap<T>(result: {
-  data?: T
-  error?: unknown
-  response: Response
-}): T {
-  if (result.error !== undefined) {
-    throw new OpenChatError(
-      result.response.status,
-      result.error as ApiError,
-      result.response.headers.get('X-Request-Id') ?? undefined,
-    )
-  }
-  return result.data as T
-}
+// The one unwrap, shared with the mobile app.
+export { unwrap } from '@openchat/api-client'

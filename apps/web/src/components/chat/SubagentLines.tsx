@@ -2,7 +2,7 @@ import { ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { useDuration, useSubagentAction, useSubagents } from '@/hooks/use-subagents'
-import { joinNames, launchProgress, type Launch, type ReportNotice, type ReportState } from '@/lib/subagents'
+import { joinNames, launchProgress, type Launch, type ReportNotice, type ReportState } from '@openchat/chat-core/subagents'
 import { useSubagentPanel } from '@/stores/subagent-panel-store'
 import { SubagentAvatar, SubagentAvatars, type MarkState } from './SubagentAvatar'
 

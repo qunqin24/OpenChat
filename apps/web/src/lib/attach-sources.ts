@@ -1,6 +1,6 @@
 import type { LibraryFile } from '@openchat/api-client'
 
-import { MAX_IMAGE_BYTES } from '@/lib/attachments'
+import { MAX_IMAGE_BYTES } from '@openchat/chat-core/attachments'
 
 /**
  * The composer's other ways to attach files (its "+" menu), each ending in a File

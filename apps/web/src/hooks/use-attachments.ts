@@ -3,17 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import {
-  MAX_FILES,
-  MAX_TOTAL_BYTES,
-  kindOf,
-  type FileKind,
-  mediaTypeOf,
-  rejectionOf,
-  type Accepts,
-  type RejectReason,
-} from '@/lib/attachments'
-import { queryKeys } from '@/lib/query-keys'
+import { MAX_FILES, MAX_TOTAL_BYTES, kindOf, type FileKind, mediaTypeOf, rejectionOf, type Accepts, type RejectReason } from '@openchat/chat-core/attachments'
+import { queryKeys } from '@openchat/chat-core/query-keys'
 import { UploadFailed, uploadFile, type UploadError } from '@/lib/upload'
 
 /** A file on its way into the next message. */

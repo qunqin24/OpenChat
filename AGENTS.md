@@ -17,7 +17,7 @@ make generate   # 重新生成 sqlc、API 契约、GenUI 目录
 
 带库的 Go 测试读 `TEST_DATABASE_URL`（`make test` 默认取 `.env` 里 `DATABASE_URL` 的服务器和账号、库名换成 `openchat_test`；没有就跳过），只把它当作「哪台 Postgres、什么账号、库名前缀」：每个测试包用 `internal/db/dbtest` 在同一台服务器上建并迁移自己的库 `<原库名>_<包名>`，原库不碰，所以 `go test ./...` 可以并行。库跨次运行保留，测试不能假设表是空的；要独占数据就用专用库（`dbtest.Pool(t, "api_dashboard")`，见 `TestAdminDashboardFigures`）。
 
-前端用 vitest 测 `src/lib` 里的纯逻辑：`pnpm --filter @openchat/web test`（`make test-web`），配置在 `apps/web/vitest.config.ts`，沿用 vite 配置的别名但不加载它的插件。测试夹具在 `src/lib/testing.ts`。其余靠 `tsc --noEmit`、`eslint .`、`vite build` 验证。
+前端用 vitest 测纯逻辑：网页版和 App 共用的在 `packages/chat-core`（`pnpm --filter @openchat/chat-core test`，夹具在 `chat-core/src/testing.ts`，语言文件也在这里），网页版自己的在 `apps/web/src/lib`（`pnpm --filter @openchat/web test`）；`make test-web` 都跑。chat-core 不能依赖 React 或浏览器全局对象（它的 ESLint 拦着），需要的部分留在各自的 App 里（如 `useDisplayTitle`、`newChatState`、store 的 `create`）。其余靠 `tsc --noEmit`、`eslint .`、`vite build` 验证。
 
 ## 生成的代码
 
@@ -65,12 +65,12 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 
 ## 前端约定
 
-- 服务端数据用 TanStack Query（键在 `lib/query-keys.ts`、`features/admin/use-admin.ts`），流式中间态和 UI 状态用 Zustand；含筛选条件的键加 `placeholderData: (previous) => previous`。会话用 `currentSession(queryClient)`，别用 `ensureQueryData`。
+- 服务端数据用 TanStack Query（键在 `chat-core/src/query-keys.ts`、`features/admin/use-admin.ts`），流式中间态和 UI 状态用 Zustand；含筛选条件的键加 `placeholderData: (previous) => previous`。会话用 `currentSession(queryClient)`，别用 `ensureQueryData`。
 - 路由守卫挂在无路径布局的 `beforeLoad`（`_authed.tsx`、`admin.tsx`）。不经查询缓存的网络调用遇 401 或 403 `account_disabled` 要 `reportError`（`main.tsx` 的 `setErrorListener` 据此离开会话、经 `showIfAccountDisabled` 去 `/disabled`）；换人要 `queryClient.clear()` + `resetChatStore()` + `forgetQueryCache()`。
-- 聊天页只有一个 `ChatView` 实例（`components/chat/ChatPage.tsx`，规则在 `lib/chat-view.ts`）：子路由不渲染组件；首条消息的流程只在服务器答复后才 `navigate`；在该路径上写页面状态要过 `alive`；新增「新对话」入口必须带 `newChatState`。
-- 消息列表从尾部分页：对消息键不要 `invalidateQueries`，用 `refreshNewestMessages`（`transcript_changed` 先截缓存再重取）；交接走 `lib/hand-over.ts`，只有 `refreshConfirmed` 之后才 `settle`。
+- 聊天页只有一个 `ChatView` 实例（`components/chat/ChatPage.tsx`，规则在 `chat-core/src/chat-view.ts`）：子路由不渲染组件；首条消息的流程只在服务器答复后才 `navigate`；在该路径上写页面状态要过 `alive`；新增「新对话」入口必须带 `newChatState`。
+- 消息列表从尾部分页：对消息键不要 `invalidateQueries`，用 `refreshNewestMessages`（`transcript_changed` 先截缓存再重取）；交接走 `chat-core/src/hand-over.ts`，只有 `refreshConfirmed` 之后才 `settle`。跟随事件流的循环只有一份：`chat-core/src/conversation-follow.ts`（`followConversation`），网页和 App 各自只传连接方式和「对话没了去哪」；发送前后的缓存动作在 `chat-core/src/send.ts`。
 - 新增由响应或旧快照驱动、会写 `live` 的路径，必须过 `finished` 检查（`rememberFinished`）；`outbox` 由 `useSendMessage` 的 hook 级 `onError` 撤掉，别用调用级回调。
-- 流式文字用 `useReveal`（`MarkdownText.tsx`，节奏在 `lib/reveal.ts`）逐步显示前缀，**不要给每个字建元素或动画**（v1.1.0 这样做，长思维链把 CPU 拖到 90%）；回复零件的 key 按位置 `r<n>` 起，不按消息 id，别改回去（显现依赖同一元素）。
+- 流式文字用 `useReveal`（`MarkdownText.tsx`，节奏在 `chat-core/src/reveal.ts`）逐步显示前缀，**不要给每个字建元素或动画**（v1.1.0 这样做，长思维链把 CPU 拖到 90%）；回复零件的 key 按位置 `r<n>` 起，不按消息 id，别改回去（显现依赖同一元素）。
 - 删除对话的新路径要发/处理 `conversation_deleted`，并走 `lib/conversation-sync.ts` 的 BroadcastChannel（`announceDeleted`）。
 - 标题一律经 `displayTitle`/`useDisplayTitle`，不要直接渲染 `conversation.title`；搜索结果键 `queryKeys.conversations.search(term)` 不放在 `list` 下；记忆、摘要查询不落本地缓存。
 - 手机上禁止缩放（viewport、`lib/no-zoom.ts`、`html` 的 `touch-action`）、安全区由根元素/输入框/侧栏各自让开；`content-visibility` 在 WebKit 上不用（`data-webkit`，有消息变空白的 bug）。
@@ -99,7 +99,7 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 - 文档和模型的版本挂在 run 上（`ON DELETE CASCADE`），回答被改写/重新生成时一起消失；用户的版本不挂 run。
 - 模型修改用定点替换，`find` 必须恰好出现一次；写入前锁文档并核对版本，用户保存也带 `baseVersion`（409 `version_conflict`）。
 - 用户写的版本在模型读取时才审（来源 `document`，算违规），模型写的直接记为已检查。
-- 选中文字「提出修改请求」发出的消息以 `<document-selection id title>` 包着原文开头（`lib/document-selection.ts`），显示、编辑、复制都要先拆开；格式改了要同步系统提示词。
+- 选中文字「提出修改请求」发出的消息以 `<document-selection id title>` 包着原文开头（`chat-core/src/document-selection.ts`），显示、编辑、复制都要先拆开；格式改了要同步系统提示词。
 - 用户的改动经轮次说明（`DocumentNote`，`agent.TurnNote`，每个 run 算一次、挂在输入消息末尾、不入库）告诉模型；整篇重写（`content`）遇到这个 run 没看过的用户版本要拒绝并附改动，「看过」记在 `Scope.State`。新增让模型读到用户文档文本的路径照样先过 `documentText`。
 - 修改中的段落标记按卡片实例（`useId`）登记在 `document-activity-store`，不要改回按工具调用 id；面板里的弹出层画在浮条内，不用 portal。
 
@@ -133,7 +133,7 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 
 ## 认证
 
-- HttpOnly Cookie 会话，库里只存 token 的 SHA-256；任何「凭 token 认人」的路径都走 `GetSessionUser`，别另写（它还挡 `pending`）。
+- HttpOnly Cookie 或 `Authorization: Bearer`（只有带 `X-OpenChat-Client: app` 且不带 `Origin` 的登录才在响应体里给 token，`SignInResult`），库里只存 token 的 SHA-256；任何「凭 token 认人」的路径都走 `auth.TokenFromRequest` + `GetSessionUser`，别另写（它还挡 `pending`）。App 的会话由 `GET /auth/session` 续期（`RenewSession`）；Android 通行密钥的来源和 `assetlinks.json` 都由后台登记的 App 得出（`android_passkeys.go`）。
 - 停用不让人退出登录：会话保留，`Require` 经 `GetDisabledSessionUser` 认出后一律回 403 `account_disabled`（`api/account_disabled.go`）。新增停用账号的路径要记 `users.disabled_reason`/`disabled_note`、别删会话；`/auth/logout` 不在登录分组里。
 - 最后一个启用的管理员不能被降级或停用：改角色/停用在一个事务里先 `LockAdminMembership`，再读、写、数（409 `last_admin`），测试在 `admin_last_admin_pg_test.go`。
 - 第一个账号永远是管理员（`RegisterUser` + `LockRegistration`）；批准单向（`approved: true`）；拒绝 = 停用。删除账号只有管理员在后台显式操作（`DeleteUser`）：不能删自己，过 `LockAdminMembership` 和最后一个管理员检查，先 `CancelUserRuns`、给用量行打 `deleted_user` 标签，`DeleteAccount` 交回文件 key，提交后删文件。
@@ -152,7 +152,7 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 - 处罚在 `recordBlocked`：一个事务里先主体锁 `LockModerationSubject`、再 `LockAdminMembership`；管理员只记录不停用；`moderation_events.user_id` 可以为空（账号删除后 `ON DELETE SET NULL`），不要加非空约束。
 - 自定义指令和手写记忆保存时和取快照时都要审；「审核过」只看哈希，不看 `source`。
 - 上游请求都带用户标识 `llm.Request.User`（`end_user.go`）；新写会用模型的路径也要带。
-- 前端：被拒绝走 `useSendError`，输入框随即是被拒绝消息的编辑器（`composerMode`，`lib/revise.ts`）；新增起 run 的入口要处理末行被拒绝的情形。
+- 前端：被拒绝走 `useSendError`，输入框随即是被拒绝消息的编辑器（`composerMode`，`chat-core/src/revise.ts`）；新增起 run 的入口要处理末行被拒绝的情形。
 
 细节：[内容审核](docs/design/moderation.md)。
 

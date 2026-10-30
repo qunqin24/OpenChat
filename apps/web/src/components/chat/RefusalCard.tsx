@@ -1,7 +1,7 @@
 import { ShieldAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import type { Refusal } from '@/lib/moderation-refusal'
+import type { Refusal } from '@openchat/chat-core/moderation-refusal'
 
 /**
  * A message content moderation refused, shown where it would have gone: what

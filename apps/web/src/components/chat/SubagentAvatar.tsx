@@ -1,6 +1,6 @@
 import { useId } from 'react'
 
-import { colorOf } from '@/lib/subagents'
+import { colorOf } from '@openchat/chat-core/subagents'
 import { cn } from '@/lib/utils'
 
 /** One petal, pointing up; the other three are it turned about the centre. */

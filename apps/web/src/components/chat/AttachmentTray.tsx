@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import type { PendingAttachment } from '@/hooks/use-attachments'
 import { useFileSummary } from '@/hooks/use-file-summary'
-import { documentTypeOf, formatSize, TEXT_TYPE, type FileKind } from '@/lib/attachments'
+import { documentTypeOf, formatSize, TEXT_TYPE, type FileKind } from '@openchat/chat-core/attachments'
 import { cn } from '@/lib/utils'
 import { ReferenceCard } from './ConversationChip'
 import { FileBadge } from './FileBadge'

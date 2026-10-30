@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 
 import { useChatModels } from '@/hooks/use-chat-models'
 import { api, unwrap } from '@/lib/api'
-import { queryKeys } from '@/lib/query-keys'
+import { queryKeys } from '@openchat/chat-core/query-keys'
 import { cn } from '@/lib/utils'
 import { adminKeys } from '@/features/admin/use-admin'
 import { Label } from '@/components/shadcn/ui/label'

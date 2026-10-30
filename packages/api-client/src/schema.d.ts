@@ -3423,6 +3423,20 @@ export interface components {
             timeZone?: string;
         };
         /**
+         * @description The signed-in account, as `SessionUser`; for a sign-in made with
+         *     `X-OpenChat-Client: app`, also the session token and when it lapses
+         *     unless renewed. A browser's sign-in never carries them.
+         */
+        SignInResult: components["schemas"]["SessionUser"] & {
+            /** @description The session token, to send as `Authorization: Bearer <token>`. Only for an app. */
+            token?: string;
+            /**
+             * Format: date-time
+             * @description When the session lapses unless `getSession` renews it. Only for an app.
+             */
+            expiresAt?: string;
+        };
+        /**
          * Format: uri
          * @description A signed read URL of the account's uploaded picture (`updateMyAvatar`),
          *     valid for an hour; the same URL is issued for as long as it has more
@@ -3490,6 +3504,15 @@ export interface components {
             effectiveRpId: string;
             /** @description The origins in force for this request. */
             effectiveOrigins: string[];
+            /**
+             * @description Android apps that may sign in with this site's passkeys. Each is
+             *     listed in `/.well-known/assetlinks.json` (which Android checks on
+             *     the RP ID's host, so the RP ID should be pinned to this site's
+             *     domain) and its answers are accepted from its signing key's origin.
+             */
+            androidApps: components["schemas"]["AndroidApp"][];
+            /** @description The `android:apk-key-hash:` origins the Android apps' answers come from. */
+            androidOrigins: string[];
             /** @description Passkeys registered across all accounts. */
             registered: number;
         };
@@ -3500,6 +3523,13 @@ export interface components {
             origins?: string[];
             /** @enum {string} */
             userVerification?: "required" | "preferred";
+            androidApps?: components["schemas"]["AndroidApp"][];
+        };
+        AndroidApp: {
+            /** @description The app's package name, such as org.qunqin.openchat. */
+            packageName: string;
+            /** @description SHA-256 fingerprints of the certificates the app is signed with (`keytool -list -v`), as hex with or without colons. */
+            fingerprints: string[];
         };
         AuthOptions: {
             /** @description Whether accounts may sign in with a passkey (`beginPasskeySignIn`). */
@@ -4930,6 +4960,13 @@ export interface components {
         };
     };
     parameters: {
+        /**
+         * @description `app` from a native app: the sign-in sets no cookie and returns the
+         *     session token in the body (`SignInResult.token`) instead. Refused
+         *     (400 `app_client_from_browser`) on a request a browser made - one with
+         *     an `Origin` - so no web page can be handed a token it could read.
+         */
+        OpenChatClient: "app";
         ConversationId: string;
         SubagentId: string;
         TaskId: string;
@@ -4987,7 +5024,15 @@ export interface operations {
     register: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description `app` from a native app: the sign-in sets no cookie and returns the
+                 *     session token in the body (`SignInResult.token`) instead. Refused
+                 *     (400 `app_client_from_browser`) on a request a browser made - one with
+                 *     an `Origin` - so no web page can be handed a token it could read.
+                 */
+                "X-OpenChat-Client"?: components["parameters"]["OpenChatClient"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -4997,14 +5042,14 @@ export interface operations {
             };
         };
         responses: {
-            /** @description created, session cookie set */
+            /** @description created, session cookie set (or, for an app, the token in the body) */
             201: {
                 headers: {
                     "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SessionUser"];
+                    "application/json": components["schemas"]["SignInResult"];
                 };
             };
             /** @description created and waiting for an administrator's approval; no session */
@@ -5023,7 +5068,15 @@ export interface operations {
     login: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description `app` from a native app: the sign-in sets no cookie and returns the
+                 *     session token in the body (`SignInResult.token`) instead. Refused
+                 *     (400 `app_client_from_browser`) on a request a browser made - one with
+                 *     an `Origin` - so no web page can be handed a token it could read.
+                 */
+                "X-OpenChat-Client"?: components["parameters"]["OpenChatClient"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -5033,14 +5086,14 @@ export interface operations {
             };
         };
         responses: {
-            /** @description signed in, session cookie set */
+            /** @description signed in, session cookie set (or, for an app, the token in the body) */
             200: {
                 headers: {
                     "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SessionUser"];
+                    "application/json": components["schemas"]["SignInResult"];
                 };
             };
             429: components["responses"]["RateLimited"];
@@ -5056,7 +5109,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description signed out */
+            /** @description signed out (the session deleted */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -5145,7 +5198,15 @@ export interface operations {
     passkeySignIn: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description `app` from a native app: the sign-in sets no cookie and returns the
+                 *     session token in the body (`SignInResult.token`) instead. Refused
+                 *     (400 `app_client_from_browser`) on a request a browser made - one with
+                 *     an `Origin` - so no web page can be handed a token it could read.
+                 */
+                "X-OpenChat-Client"?: components["parameters"]["OpenChatClient"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -5155,13 +5216,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description signed in, session cookie set */
+            /** @description signed in, session cookie set (or, for an app, the token in the body) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SessionUser"];
+                    "application/json": components["schemas"]["SignInResult"];
                 };
             };
             default: components["responses"]["Error"];

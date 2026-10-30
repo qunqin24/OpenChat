@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-import { MAX_QUOTES, type DocumentQuote } from '@/lib/document-selection'
+import { MAX_QUOTES, type DocumentQuote } from '@openchat/chat-core/document-selection'
 
 export type ComposerQuote = DocumentQuote & { conversationId: string }
 

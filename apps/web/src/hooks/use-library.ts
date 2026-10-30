@@ -2,9 +2,9 @@ import type { LibraryFile } from '@openchat/api-client'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/lib/api'
-import { markRemoved, withoutFile, type LibraryFilter, type LibraryPages } from '@/lib/library'
-import { queryKeys } from '@/lib/query-keys'
-import type { TranscriptPages } from '@/lib/transcript-pages'
+import { markRemoved, withoutFile, type LibraryFilter, type LibraryPages } from '@openchat/chat-core/library'
+import { queryKeys } from '@openchat/chat-core/query-keys'
+import type { TranscriptPages } from '@openchat/chat-core/transcript-pages'
 
 /**
  * The person's sent files, newest first, a page at a time. Fetched afresh on

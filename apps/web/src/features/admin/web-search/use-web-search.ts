@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/lib/api'
 import { adminKeys } from '@/features/admin/use-admin'
-import { queryKeys } from '@/lib/query-keys'
+import { queryKeys } from '@openchat/chat-core/query-keys'
 
 type Schemas = components['schemas']
 

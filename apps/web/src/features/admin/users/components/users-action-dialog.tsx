@@ -36,8 +36,8 @@ import {
 } from '@/components/shadcn/ui/select'
 import { Switch } from '@/components/shadcn/ui/switch'
 import { useCreateUser, useUpdateUser } from '@/features/admin/use-admin'
-import { MIN_PASSWORD_LENGTH } from '@/components/auth/validation'
-import { formatSize } from '@/lib/attachments'
+import { MIN_PASSWORD_LENGTH } from '@openchat/chat-core/auth-validation'
+import { formatSize } from '@openchat/chat-core/attachments'
 
 const GIB = 1024 ** 3
 

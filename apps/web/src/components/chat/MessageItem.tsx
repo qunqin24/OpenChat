@@ -7,18 +7,18 @@ import { useTranslation } from 'react-i18next'
 
 import { ModelIcon } from '@/components/model-icon'
 import { keepHeaderInPlace, useStuck } from '@/hooks/use-stuck'
-import { answersOf, ASK_USER, parseQuestions } from '@/lib/ask-user'
+import { answersOf, ASK_USER, parseQuestions } from '@openchat/chat-core/ask-user'
 import { copyClipboard } from '@/lib/clipboard'
-import { splitSegments } from '@/lib/genui/segments'
-import { turnText, type Turn } from '@/lib/transcript'
+import { splitSegments } from '@openchat/chat-core/genui/segments'
+import { turnText, type Turn } from '@openchat/chat-core/transcript'
 import { CopiedIcon, CopyIcon, EditIcon, RegenerateIcon } from './ActionIcons'
 import AskUserCard, { PreparingLine } from './AskUserCard'
-import { MEMORY_TOOL, memoryChangeOf } from '@/lib/memory-tool'
-import { TASK_TOOL, taskChangeOf } from '@/lib/task-tool'
-import { DOCUMENT_TOOL, documentChangeOf } from '@/lib/document-tool'
-import { launchesOf, SUBAGENT_TOOL } from '@/lib/subagents'
+import { MEMORY_TOOL, memoryChangeOf } from '@openchat/chat-core/memory-tool'
+import { TASK_TOOL, taskChangeOf } from '@openchat/chat-core/task-tool'
+import { DOCUMENT_TOOL, documentChangeOf } from '@openchat/chat-core/document-tool'
+import { launchesOf, SUBAGENT_TOOL } from '@openchat/chat-core/subagents'
 import { SubagentLaunchLine } from './SubagentLines'
-import { parseQuotes, quoteMessage } from '@/lib/document-selection'
+import { parseQuotes, quoteMessage } from '@openchat/chat-core/document-selection'
 import { highlightPassage } from '@/lib/highlight-passage'
 import { cn } from '@/lib/utils'
 import GenUIBlock from './genui/GenUIBlock'
@@ -29,14 +29,10 @@ import MessageAttachments from './MessageAttachments'
 import { Markdown } from './MarkdownText'
 import CompactionDivider from './CompactionDivider'
 import { CompactingLine, ThinkingLine, ThinkingOrb } from './ThinkingOrb'
-import type { Refusal } from '@/lib/moderation-refusal'
+import type { Refusal } from '@openchat/chat-core/moderation-refusal'
 import RefusalCard from './RefusalCard'
-import ToolActivity, {
-  type ActivityItem,
-  type ActivityNote,
-  type ToolActivityStep,
-  type ToolStatus,
-} from './ToolActivity'
+import ToolActivity from './ToolActivity'
+import type { ActivityItem, ActivityNote, ToolActivityStep, ToolStatus } from '@openchat/chat-core/tool-activity'
 
 function CopyButton({ content }: { content: string }) {
   const { t } = useTranslation()

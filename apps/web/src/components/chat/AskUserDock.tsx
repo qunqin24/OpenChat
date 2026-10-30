@@ -2,7 +2,7 @@ import { Check, ChevronLeft, MessageCircleQuestion, Pencil, X } from 'lucide-rea
 import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { AskAnswer, AskQuestion } from '@/lib/ask-user'
+import type { AskAnswer, AskQuestion } from '@openchat/chat-core/ask-user'
 import { cn } from '@/lib/utils'
 
 interface AskUserDockProps {

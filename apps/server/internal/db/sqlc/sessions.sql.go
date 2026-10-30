@@ -215,6 +215,30 @@ func (q *Queries) GetSessionUser(ctx context.Context, tokenHash []byte) (GetSess
 	return i, err
 }
 
+const renewSession = `-- name: RenewSession :exec
+UPDATE sessions
+SET expires_at   = now() + $1::interval,
+    last_used_at = now()
+WHERE id = $2
+  AND expires_at < now() + $3::interval
+`
+
+type RenewSessionParams struct {
+	Ttl        pgtype.Interval `json:"ttl"`
+	ID         uuid.UUID       `json:"id"`
+	RenewBelow pgtype.Interval `json:"renew_below"`
+}
+
+// An app's session (a bearer token) is renewed when it asks who it is
+// (getSession) and has less than renew_below left: back to ttl from now. So
+// an app opened at least once a month stays signed in, while each session
+// is written at most a couple of times a month. A browser's cookie carries
+// its own expiry and is not renewed.
+func (q *Queries) RenewSession(ctx context.Context, arg RenewSessionParams) error {
+	_, err := q.db.Exec(ctx, renewSession, arg.Ttl, arg.ID, arg.RenewBelow)
+	return err
+}
+
 const touchSession = `-- name: TouchSession :exec
 UPDATE sessions
 SET last_used_at = now()

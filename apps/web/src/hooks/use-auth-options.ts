@@ -1,7 +1,7 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/lib/api'
-import { queryKeys } from '@/lib/query-keys'
+import { queryKeys } from '@openchat/chat-core/query-keys'
 
 /**
  * What the sign-in pages offer, as the administrator has set it: whether to

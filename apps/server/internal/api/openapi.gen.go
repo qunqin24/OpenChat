@@ -1596,6 +1596,21 @@ func (e WireApi) Valid() bool {
 	}
 }
 
+// Defines values for OpenChatClient.
+const (
+	OpenChatClientApp OpenChatClient = "app"
+)
+
+// Valid indicates whether the value is a known member of the OpenChatClient enum.
+func (e OpenChatClient) Valid() bool {
+	switch e {
+	case OpenChatClientApp:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListCatalogModelsParamsCapability.
 const (
 	ListCatalogModelsParamsCapabilityAttachment       ListCatalogModelsParamsCapability = "attachment"
@@ -1614,6 +1629,51 @@ func (e ListCatalogModelsParamsCapability) Valid() bool {
 	case ListCatalogModelsParamsCapabilityStructuredOutput:
 		return true
 	case ListCatalogModelsParamsCapabilityToolCall:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for LoginParamsXOpenChatClient.
+const (
+	LoginParamsXOpenChatClientApp LoginParamsXOpenChatClient = "app"
+)
+
+// Valid indicates whether the value is a known member of the LoginParamsXOpenChatClient enum.
+func (e LoginParamsXOpenChatClient) Valid() bool {
+	switch e {
+	case LoginParamsXOpenChatClientApp:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PasskeySignInParamsXOpenChatClient.
+const (
+	PasskeySignInParamsXOpenChatClientApp PasskeySignInParamsXOpenChatClient = "app"
+)
+
+// Valid indicates whether the value is a known member of the PasskeySignInParamsXOpenChatClient enum.
+func (e PasskeySignInParamsXOpenChatClient) Valid() bool {
+	switch e {
+	case PasskeySignInParamsXOpenChatClientApp:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RegisterParamsXOpenChatClient.
+const (
+	RegisterParamsXOpenChatClientApp RegisterParamsXOpenChatClient = "app"
+)
+
+// Valid indicates whether the value is a known member of the RegisterParamsXOpenChatClient enum.
+func (e RegisterParamsXOpenChatClient) Valid() bool {
+	switch e {
+	case RegisterParamsXOpenChatClientApp:
 		return true
 	default:
 		return false
@@ -1688,6 +1748,15 @@ type AdminDashboard struct {
 
 // AdminDashboardBucket What one trend point spans.
 type AdminDashboardBucket string
+
+// AndroidApp defines model for AndroidApp.
+type AndroidApp struct {
+	// Fingerprints SHA-256 fingerprints of the certificates the app is signed with (`keytool -list -v`), as hex with or without colons.
+	Fingerprints []string `json:"fingerprints"`
+
+	// PackageName The app's package name, such as org.qunqin.openchat.
+	PackageName string `json:"packageName"`
+}
 
 // AnswerQuestionRequest defines model for AnswerQuestionRequest.
 type AnswerQuestionRequest struct {
@@ -3278,6 +3347,15 @@ type PasskeyOptions struct {
 
 // PasskeySettings defines model for PasskeySettings.
 type PasskeySettings struct {
+	// AndroidApps Android apps that may sign in with this site's passkeys. Each is
+	// listed in `/.well-known/assetlinks.json` (which Android checks on
+	// the RP ID's host, so the RP ID should be pinned to this site's
+	// domain) and its answers are accepted from its signing key's origin.
+	AndroidApps []AndroidApp `json:"androidApps"`
+
+	// AndroidOrigins The `android:apk-key-hash:` origins the Android apps' answers come from.
+	AndroidOrigins []string `json:"androidOrigins"`
+
 	// EffectiveOrigins The origins in force for this request.
 	EffectiveOrigins []string `json:"effectiveOrigins"`
 
@@ -3506,6 +3584,33 @@ type SessionUser struct {
 
 	// TimeZone The time zone the browser last reported (`updateMe`), for times a model schedules.
 	TimeZone *string `json:"timeZone,omitempty"`
+}
+
+// SignInResult The signed-in account, as `SessionUser`; for a sign-in made with
+// `X-OpenChat-Client: app`, also the session token and when it lapses
+// unless renewed. A browser's sign-in never carries them.
+type SignInResult struct {
+	// AvatarUrl A signed read URL of the account's uploaded picture (`updateMyAvatar`),
+	// valid for an hour; the same URL is issued for as long as it has more
+	// than half of that left, so a page that asks again keeps its picture.
+	// Absent when the account has none: every client then draws it as the
+	// first letter of its name on a colour derived from its id. No
+	// third-party avatar service is asked — that would tell it who is being
+	// looked at, from every page that shows a name.
+	AvatarUrl *AvatarUrl          `json:"avatarUrl,omitempty"`
+	Email     openapi_types.Email `json:"email"`
+
+	// ExpiresAt When the session lapses unless `getSession` renews it. Only for an app.
+	ExpiresAt *time.Time         `json:"expiresAt,omitempty"`
+	Id        openapi_types.UUID `json:"id"`
+	Name      string             `json:"name"`
+	Role      UserRole           `json:"role"`
+
+	// TimeZone The time zone the browser last reported (`updateMe`), for times a model schedules.
+	TimeZone *string `json:"timeZone,omitempty"`
+
+	// Token The session token, to send as `Authorization: Bearer <token>`. Only for an app.
+	Token *string `json:"token,omitempty"`
 }
 
 // SnapshotEvent Replaces everything a client holds about runs in flight.
@@ -4089,6 +4194,7 @@ type UpdateModerationSettingsRequest struct {
 
 // UpdatePasskeySettingsRequest Only the fields present are changed.
 type UpdatePasskeySettingsRequest struct {
+	AndroidApps      *[]AndroidApp                                 `json:"androidApps,omitempty"`
 	Enabled          *bool                                         `json:"enabled,omitempty"`
 	Origins          *[]string                                     `json:"origins,omitempty"`
 	RpId             *string                                       `json:"rpId,omitempty"`
@@ -4584,6 +4690,9 @@ type FileId = openapi_types.UUID
 // Limit defines model for Limit.
 type Limit = int
 
+// OpenChatClient defines model for OpenChatClient.
+type OpenChatClient string
+
 // SubagentId defines model for SubagentId.
 type SubagentId = openapi_types.UUID
 
@@ -4667,6 +4776,42 @@ type ListUsersParams struct {
 	// even if it is also waiting for approval (a rejected sign-up).
 	Status *[]UserStatus `form:"status,omitempty" json:"status,omitempty"`
 }
+
+// LoginParams defines parameters for Login.
+type LoginParams struct {
+	// XOpenChatClient `app` from a native app: the sign-in sets no cookie and returns the
+	// session token in the body (`SignInResult.token`) instead. Refused
+	// (400 `app_client_from_browser`) on a request a browser made - one with
+	// an `Origin` - so no web page can be handed a token it could read.
+	XOpenChatClient *LoginParamsXOpenChatClient `json:"X-OpenChat-Client,omitempty"`
+}
+
+// LoginParamsXOpenChatClient defines parameters for Login.
+type LoginParamsXOpenChatClient string
+
+// PasskeySignInParams defines parameters for PasskeySignIn.
+type PasskeySignInParams struct {
+	// XOpenChatClient `app` from a native app: the sign-in sets no cookie and returns the
+	// session token in the body (`SignInResult.token`) instead. Refused
+	// (400 `app_client_from_browser`) on a request a browser made - one with
+	// an `Origin` - so no web page can be handed a token it could read.
+	XOpenChatClient *PasskeySignInParamsXOpenChatClient `json:"X-OpenChat-Client,omitempty"`
+}
+
+// PasskeySignInParamsXOpenChatClient defines parameters for PasskeySignIn.
+type PasskeySignInParamsXOpenChatClient string
+
+// RegisterParams defines parameters for Register.
+type RegisterParams struct {
+	// XOpenChatClient `app` from a native app: the sign-in sets no cookie and returns the
+	// session token in the body (`SignInResult.token`) instead. Refused
+	// (400 `app_client_from_browser`) on a request a browser made - one with
+	// an `Origin` - so no web page can be handed a token it could read.
+	XOpenChatClient *RegisterParamsXOpenChatClient `json:"X-OpenChat-Client,omitempty"`
+}
+
+// RegisterParamsXOpenChatClient defines parameters for Register.
+type RegisterParamsXOpenChatClient string
 
 // ListConversationsParams defines parameters for ListConversations.
 type ListConversationsParams struct {
@@ -5902,7 +6047,7 @@ type ServerInterface interface {
 	TestWebSearch(w http.ResponseWriter, r *http.Request)
 	// Login Start a session
 	// (POST /auth/login)
-	Login(w http.ResponseWriter, r *http.Request)
+	Login(w http.ResponseWriter, r *http.Request, params LoginParams)
 	// Logout End the current session
 	// (POST /auth/logout)
 	Logout(w http.ResponseWriter, r *http.Request)
@@ -5914,7 +6059,7 @@ type ServerInterface interface {
 	GetAuthOptions(w http.ResponseWriter, r *http.Request)
 	// PasskeySignIn Sign in with a passkey
 	// (POST /auth/passkey)
-	PasskeySignIn(w http.ResponseWriter, r *http.Request)
+	PasskeySignIn(w http.ResponseWriter, r *http.Request, params PasskeySignInParams)
 	// BeginPasskeySignIn Begin signing in with a passkey
 	// (POST /auth/passkey/options)
 	BeginPasskeySignIn(w http.ResponseWriter, r *http.Request)
@@ -5938,7 +6083,7 @@ type ServerInterface interface {
 	ChangePassword(w http.ResponseWriter, r *http.Request)
 	// Register Create an account
 	// (POST /auth/register)
-	Register(w http.ResponseWriter, r *http.Request)
+	Register(w http.ResponseWriter, r *http.Request, params RegisterParams)
 	// GetSession Who the current session belongs to
 	// (GET /auth/session)
 	GetSession(w http.ResponseWriter, r *http.Request)
@@ -6403,7 +6548,7 @@ func (_ Unimplemented) TestWebSearch(w http.ResponseWriter, r *http.Request) {
 
 // Login Start a session
 // (POST /auth/login)
-func (_ Unimplemented) Login(w http.ResponseWriter, r *http.Request) {
+func (_ Unimplemented) Login(w http.ResponseWriter, r *http.Request, params LoginParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -6427,7 +6572,7 @@ func (_ Unimplemented) GetAuthOptions(w http.ResponseWriter, r *http.Request) {
 
 // PasskeySignIn Sign in with a passkey
 // (POST /auth/passkey)
-func (_ Unimplemented) PasskeySignIn(w http.ResponseWriter, r *http.Request) {
+func (_ Unimplemented) PasskeySignIn(w http.ResponseWriter, r *http.Request, params PasskeySignInParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -6475,7 +6620,7 @@ func (_ Unimplemented) ChangePassword(w http.ResponseWriter, r *http.Request) {
 
 // Register Create an account
 // (POST /auth/register)
-func (_ Unimplemented) Register(w http.ResponseWriter, r *http.Request) {
+func (_ Unimplemented) Register(w http.ResponseWriter, r *http.Request, params RegisterParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8001,8 +8146,35 @@ func (siw *ServerInterfaceWrapper) TestWebSearch(w http.ResponseWriter, r *http.
 // Login operation middleware
 func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params LoginParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-OpenChat-Client" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-OpenChat-Client")]; found {
+		var XOpenChatClient LoginParamsXOpenChatClient
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-OpenChat-Client", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-OpenChat-Client", valueList[0], &XOpenChatClient, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-OpenChat-Client", Err: err})
+			return
+		}
+
+		params.XOpenChatClient = &XOpenChatClient
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.Login(w, r)
+		siw.Handler.Login(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8057,8 +8229,35 @@ func (siw *ServerInterfaceWrapper) GetAuthOptions(w http.ResponseWriter, r *http
 // PasskeySignIn operation middleware
 func (siw *ServerInterfaceWrapper) PasskeySignIn(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PasskeySignInParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-OpenChat-Client" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-OpenChat-Client")]; found {
+		var XOpenChatClient PasskeySignInParamsXOpenChatClient
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-OpenChat-Client", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-OpenChat-Client", valueList[0], &XOpenChatClient, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-OpenChat-Client", Err: err})
+			return
+		}
+
+		params.XOpenChatClient = &XOpenChatClient
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.PasskeySignIn(w, r)
+		siw.Handler.PasskeySignIn(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8193,8 +8392,35 @@ func (siw *ServerInterfaceWrapper) ChangePassword(w http.ResponseWriter, r *http
 // Register operation middleware
 func (siw *ServerInterfaceWrapper) Register(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RegisterParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-OpenChat-Client" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-OpenChat-Client")]; found {
+		var XOpenChatClient RegisterParamsXOpenChatClient
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-OpenChat-Client", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-OpenChat-Client", valueList[0], &XOpenChatClient, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-OpenChat-Client", Err: err})
+			return
+		}
+
+		params.XOpenChatClient = &XOpenChatClient
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.Register(w, r)
+		siw.Handler.Register(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {

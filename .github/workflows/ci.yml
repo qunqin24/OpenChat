@@ -98,5 +98,9 @@ jobs:
         run: git diff --exit-code packages/api-client/src/schema.d.ts packages/api-client/src/genui-catalog.gen.json apps/server/internal/genui/catalog.gen.json
       - run: pnpm -r typecheck
       - run: pnpm --filter @openchat/web lint
+      - run: pnpm --filter @openchat/chat-core lint
+      - run: pnpm --filter @openchat/mobile lint
+      - run: pnpm --filter @openchat/chat-core test
+      - run: pnpm --filter @openchat/api-client test
       - run: pnpm --filter @openchat/web test
       - run: pnpm --filter @openchat/web build

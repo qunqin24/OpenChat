@@ -1,5 +1,12 @@
 import type { ChatModel } from '@openchat/api-client'
 
+/** What is read of a file: a browser's File, or a picked file in the app. */
+export interface FileLike {
+  name: string
+  type: string
+  size: number
+}
+
 /**
  * What can be attached. These mirror the server's limits (internal/api/files.go
  * and internal/agent/attachments.go) so a file is turned away here, with the
@@ -85,7 +92,7 @@ export function acceptAttribute(accepts: Accepts): string {
 }
 
 /** Whether a file is one of the text files that can be attached, by its name. */
-function isTextFile(file: File): boolean {
+function isTextFile(file: FileLike): boolean {
   const name = file.name.toLowerCase()
   const extension = name.includes('.') ? name.split('.').pop() : undefined
   if (TEXT_NAMES.includes(name)) return true
@@ -95,7 +102,7 @@ function isTextFile(file: File): boolean {
 }
 
 /** The media type of a file, from the browser or else its extension. */
-export function mediaTypeOf(file: File): string {
+export function mediaTypeOf(file: FileLike): string {
   if (isTextFile(file)) return TEXT_TYPE
   const lower = file.name.toLowerCase()
   if (lower.endsWith('.docx')) return DOCX_TYPE
@@ -124,7 +131,7 @@ export type RejectReason = 'type' | 'model-image' | 'model-pdf' | 'size-image' |
 
 const MAX_BYTES: Record<FileKind, number> = { image: MAX_IMAGE_BYTES, pdf: MAX_PDF_BYTES, text: MAX_TEXT_BYTES, document: MAX_DOCUMENT_BYTES }
 
-export function rejectionOf(file: File, accepts: Accepts): RejectReason | null {
+export function rejectionOf(file: FileLike, accepts: Accepts): RejectReason | null {
   const kind = kindOf(mediaTypeOf(file))
   if (!kind || ((kind === 'text' || kind === 'document') && !accepts.text)) return 'type'
   if (kind === 'image' && !accepts.image) return 'model-image'

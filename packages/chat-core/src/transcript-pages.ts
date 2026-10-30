@@ -1,4 +1,4 @@
-import type { InfiniteData } from '@tanstack/react-query'
+import type { InfiniteData } from '@tanstack/query-core'
 import type { Message, MessagePage } from '@openchat/api-client'
 
 /**
@@ -86,4 +86,18 @@ export function appendRow(held: TranscriptPages | undefined, row: Message): Tran
   if (held.pages.some((page) => page.items.some((m) => m.id === row.id))) return held
   const [newest, ...older] = held.pages
   return { ...held, pages: [{ ...newest!, items: [...newest!.items, row] }, ...older] }
+}
+
+/** Every loaded row in reading order. The pages overlap only after a splice, hence the id check. */
+export function transcriptItems(data: TranscriptPages): { items: Message[] } {
+  const seen = new Set<string>()
+  const items: Message[] = []
+  for (const page of [...data.pages].reverse()) {
+    for (const message of page.items) {
+      if (seen.has(message.id)) continue
+      seen.add(message.id)
+      items.push(message)
+    }
+  }
+  return { items }
 }

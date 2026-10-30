@@ -1,5 +1,8 @@
 import createClient from 'openapi-fetch'
 
+import { OpenChatError } from './errors'
+import type { ApiError } from './types'
+
 import type { paths } from './schema'
 
 export * from './errors'
@@ -29,3 +32,19 @@ export function createApiClient(options: ClientOptions) {
 }
 
 export type ApiClient = ReturnType<typeof createApiClient>
+
+/**
+ * openapi-fetch returns `{ data, error }` instead of throwing. TanStack Query
+ * wants thrown errors, so every call goes through here: the error as an
+ * OpenChatError carrying the request id the server logged it under.
+ */
+export function unwrap<T>(result: { data?: T; error?: unknown; response: Response }): T {
+  if (result.error !== undefined) {
+    throw new OpenChatError(
+      result.response.status,
+      result.error as ApiError,
+      result.response.headers.get('X-Request-Id') ?? undefined,
+    )
+  }
+  return result.data as T
+}

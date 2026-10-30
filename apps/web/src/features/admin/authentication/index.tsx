@@ -73,6 +73,7 @@ function PasskeysTab() {
     <div className="space-y-10 pb-12">
       <EnabledSwitch settings={data} />
       <RelyingPartyForm key={`${data.rpId}|${data.origins.join(',')}|${data.userVerification}`} settings={data} />
+      <AndroidAppsForm key={androidLines(data).join('|')} settings={data} />
     </div>
   )
 }
@@ -228,6 +229,108 @@ function RelyingPartyForm({ settings }: { settings: PasskeySettings }) {
             </FormItem>
           )}
         />
+        <Button type="submit" disabled={update.isPending || !form.formState.isDirty}>
+          {t('admin.authentication.save')}
+        </Button>
+      </form>
+    </Form>
+  )
+}
+
+/** The apps as the form writes them: one line per signing key, "package fingerprint". */
+function androidLines(settings: PasskeySettings): string[] {
+  return settings.androidApps.flatMap((app) => app.fingerprints.map((fingerprint) => `${app.packageName} ${fingerprint}`))
+}
+
+const PACKAGE_NAME = /^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/
+const FINGERPRINT = /^([0-9a-fA-F]{2}:?){31}[0-9a-fA-F]{2}$/
+
+/**
+ * The Android app's passkeys: the apps (package name and the SHA-256 of each
+ * certificate they are signed with) that may sign in with this site's
+ * passkeys. One line per key, so the release build and a debug build of the
+ * same or another package each get a line; they go into assetlinks.json and
+ * the origins an app's answer may carry. Android checks assetlinks.json on
+ * the RP ID's host, hence the hint to pin it.
+ */
+function AndroidAppsForm({ settings }: { settings: PasskeySettings }) {
+  const { t } = useTranslation()
+  const update = useUpdatePasskeySettings()
+
+  const schema = z.object({
+    apps: z.string().refine(
+      (value) =>
+        value
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .every((line) => {
+            const [name, fingerprint, ...rest] = line.split(/\s+/)
+            return rest.length === 0 && PACKAGE_NAME.test(name ?? '') && FINGERPRINT.test(fingerprint ?? '')
+          }),
+      { message: t('admin.authentication.passkeys.android-invalid') },
+    ),
+  })
+  type Values = z.infer<typeof schema>
+
+  const form = useForm<Values>({ resolver: zodResolver(schema), defaultValues: { apps: androidLines(settings).join('\n') } })
+
+  const submit = (values: Values) => {
+    const byPackage = new Map<string, string[]>()
+    for (const line of values.apps.split('\n').map((l) => l.trim()).filter(Boolean)) {
+      const [name, fingerprint] = line.split(/\s+/) as [string, string]
+      byPackage.set(name, [...(byPackage.get(name) ?? []), fingerprint])
+    }
+    update.mutate(
+      { androidApps: [...byPackage].map(([packageName, fingerprints]) => ({ packageName, fingerprints })) },
+      {
+        onSuccess: () => toast.success(t('admin.authentication.saved')),
+        onError: (error) => {
+          if (error instanceof OpenChatError && (error.code === 'invalid_package_name' || error.code === 'invalid_fingerprint')) {
+            form.setError('apps', { message: t('admin.authentication.passkeys.android-invalid') })
+            return
+          }
+          toast.error(t('admin.authentication.save-failed'))
+        },
+      },
+    )
+  }
+
+  return (
+    <Form {...form}>
+      <form className="space-y-6" onSubmit={form.handleSubmit(submit)}>
+        <div>
+          <h3 className="text-lg font-medium">{t('admin.authentication.passkeys.android')}</h3>
+          <p className="text-muted-foreground text-sm">{t('admin.authentication.passkeys.android-hint')}</p>
+        </div>
+        <FormField
+          control={form.control}
+          name="apps"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t('admin.authentication.passkeys.android-apps')}</FormLabel>
+              <FormControl>
+                <Textarea {...field} rows={3} placeholder="org.qunqin.openchat AB:CD:…" spellCheck={false} className="font-mono text-sm" />
+              </FormControl>
+              <FormDescription>
+                {settings.rpId
+                  ? t('admin.authentication.passkeys.android-apps-hint')
+                  : t('admin.authentication.passkeys.android-pin-rp', { current: settings.effectiveRpId })}
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        {settings.androidOrigins.length > 0 && (
+          <div className="space-y-1">
+            <Label>{t('admin.authentication.passkeys.android-origins')}</Label>
+            <ul className="text-muted-foreground font-mono text-xs break-all">
+              {settings.androidOrigins.map((origin) => (
+                <li key={origin}>{origin}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         <Button type="submit" disabled={update.isPending || !form.formState.isDirty}>
           {t('admin.authentication.save')}
         </Button>

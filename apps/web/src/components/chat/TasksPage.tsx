@@ -18,7 +18,7 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useChatFeatures } from '@/hooks/use-chat-models'
 import { useDeleteTask, useRunTask, useTasks, useUpdateTask } from '@/hooks/use-tasks'
-import { describeSchedule, emptyForm, formatWhen, formOf, taskIdeas, type TaskForm } from '@/lib/tasks'
+import { describeSchedule, emptyForm, formatWhen, formOf, taskIdeas, type TaskForm } from '@openchat/chat-core/tasks'
 import { cn } from '@/lib/utils'
 import { SidebarToggle } from './ChatShell'
 import TaskDialog from './TaskDialog'

@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { formatLogTime, knownErrorCode } from '@/features/admin/usage-logs/format'
-import { formatRelative } from '@/lib/grouping'
+import { formatRelative } from '@openchat/chat-core/grouping'
 import { Empty } from './empty'
 
 /** The page has room for this many; the server sends a few more than fit. */

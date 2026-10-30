@@ -1,4 +1,4 @@
-import { badgeText, fileLook } from '@/lib/file-look'
+import { badgeText, fileLook } from '@openchat/chat-core/file-look'
 import { cn } from '@/lib/utils'
 
 /**

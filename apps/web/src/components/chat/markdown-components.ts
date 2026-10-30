@@ -2,7 +2,7 @@ import { cjk } from '@streamdown/cjk'
 import { useEffect, useSyncExternalStore } from 'react'
 import type { Components, LinkSafetyConfig, PluginConfig } from 'streamdown'
 
-import { promoteInlineMath } from '@/lib/inline-math'
+import { promoteInlineMath } from '@openchat/chat-core/inline-math'
 import { HtmlPreview } from './HtmlPreview'
 import { MarkdownLink } from './MarkdownLink'
 import { MarkdownTable } from './MarkdownTable'

@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 
-import { memoryErrorCode } from '@/lib/memory-errors'
-import { saveRefusalOf } from '@/lib/moderation-refusal'
+import { memoryErrorCode } from '@openchat/chat-core/memory-errors'
+import { saveRefusalOf } from '@openchat/chat-core/moderation-refusal'
 
 /**
  * The words for a save that content moderation turned away, or null when that is

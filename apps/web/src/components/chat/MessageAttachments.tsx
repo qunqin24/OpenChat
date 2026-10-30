@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 
 import { useFileSummary } from '@/hooks/use-file-summary'
 import { downloadFile } from '@/hooks/use-library'
-import { opensInPanel } from '@/lib/attachments'
+import { opensInPanel } from '@openchat/chat-core/attachments'
 import { useFilePanel } from '@/stores/file-panel-store'
 import { useImageViewer, type ViewerImage } from '@/stores/image-viewer-store'
 import { ReferenceChip } from './ConversationChip'

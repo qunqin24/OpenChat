@@ -2,7 +2,7 @@ import { OpenChatError, type components } from '@openchat/api-client'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/lib/api'
-import { queryKeys } from '@/lib/query-keys'
+import { queryKeys } from '@openchat/chat-core/query-keys'
 import { catalogKeys } from '@/features/admin/models/use-catalog'
 import { adminKeys } from '@/features/admin/use-admin'
 

@@ -1,7 +1,7 @@
 import { isOpenChatError } from '@openchat/api-client'
 
 import { queryClient } from '@/lib/query'
-import { queryKeys } from '@/lib/query-keys'
+import { queryKeys } from '@openchat/chat-core/query-keys'
 import { forgetQueryCache } from '@/lib/query-persist'
 import { resetChatStore } from '@/stores/chat-store'
 

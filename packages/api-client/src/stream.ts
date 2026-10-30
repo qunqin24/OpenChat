@@ -14,6 +14,11 @@ export interface ConversationEventsOptions {
    * `StreamIdleError`. The server sends a keep-alive every 5 seconds.
    */
   idleTimeout?: number
+  /**
+   * The fetch to use: the global one by default. React Native's cannot read
+   * a body as it arrives, so the app passes Expo's (`expo/fetch`), which can.
+   */
+  fetch?: typeof globalThis.fetch
 }
 
 /**
@@ -44,11 +49,11 @@ export class StreamIdleError extends Error {
 export async function* streamConversationEvents(
   options: ConversationEventsOptions,
 ): AsyncGenerator<ConversationEvent, void, undefined> {
-  const { baseUrl, conversationId, signal, headers, credentials, idleTimeout = 15_000 } = options
+  const { baseUrl, conversationId, signal, headers, credentials, idleTimeout = 15_000, fetch = globalThis.fetch } = options
   yield* readFrames<ConversationEvent>(
     `${baseUrl.replace(/\/$/, '')}/conversations/${conversationId}/events`,
     { headers: { Accept: 'text/event-stream', ...headers }, credentials },
-    { signal, idleTimeout },
+    { signal, idleTimeout, fetch },
   )
 }
 
@@ -56,7 +61,7 @@ export async function* streamConversationEvents(
 async function* readFrames<T>(
   url: string,
   init: RequestInit,
-  { signal, idleTimeout }: { signal?: AbortSignal; idleTimeout: number },
+  { signal, idleTimeout, fetch }: { signal?: AbortSignal; idleTimeout: number; fetch: typeof globalThis.fetch },
 ): AsyncGenerator<T, void, undefined> {
   // Our own controller, so the watchdog can end a connection the caller did
   // not; the caller's signal still ends it too.
@@ -95,12 +100,16 @@ async function* readFrames<T>(
     })
   }
 
-  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+  // Bytes read and decoded by hand rather than through TextDecoderStream,
+  // which React Native's Hermes lacks; `stream: true` keeps a character split
+  // across two chunks whole.
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
   let buffer = ''
 
   try {
     while (true) {
-      let chunk: ReadableStreamReadResult<string>
+      let chunk: ReadableStreamReadResult<Uint8Array>
       try {
         chunk = await reader.read()
       } catch (error) {
@@ -110,7 +119,7 @@ async function* readFrames<T>(
       if (done) break
       watch()
 
-      buffer += value
+      buffer += decoder.decode(value, { stream: true })
       let boundary = buffer.indexOf('\n\n')
       while (boundary !== -1) {
         const frame = buffer.slice(0, boundary)

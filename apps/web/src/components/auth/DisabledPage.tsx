@@ -3,7 +3,8 @@ import { useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 
 import { sessionQueryOptions, useSignOut } from '@/features/auth/use-auth'
-import { accountDisabledOf, useAccountDisabled } from '@/lib/account-disabled'
+import { accountDisabledOf } from '@openchat/chat-core/account-disabled'
+import { useAccountDisabled } from '@/lib/account-disabled'
 import { api, unwrap } from '@/lib/api'
 import { DisabledScreen } from './AccountOverlay'
 

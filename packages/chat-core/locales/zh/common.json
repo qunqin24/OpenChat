@@ -529,6 +529,7 @@
     "error": {
       "invalid-passkey": "这个通行密钥无法登录，请换一个或使用密码。",
       "passkey-unsupported": "这个浏览器不支持通行密钥。",
+      "device-passkey-unsupported": "这台设备不支持通行密钥。",
       "invalid-credentials": "账号或密码不正确",
       "email-taken": "该邮箱已被注册",
       "email-required": "请填写邮箱",
@@ -576,7 +577,14 @@
         "verification": "用户验证",
         "verification-preferred": "尽量验证（推荐）",
         "verification-required": "必须验证",
-        "verification-hint": "「必须验证」要求每次都用指纹、面容或设备密码确认是本人；不支持的安全密钥将无法使用。"
+        "verification-hint": "「必须验证」要求每次都用指纹、面容或设备密码确认是本人；不支持的安全密钥将无法使用。",
+        "android": "Android 应用",
+        "android-hint": "允许 OpenChat 的 Android App 用这个站点的通行密钥登录。每行一个签名证书：包名和它的 SHA-256 指纹（keytool -list -v 显示的那串），正式版和调试版各一行。它们会出现在 /.well-known/assetlinks.json 里。",
+        "android-apps": "应用与证书指纹",
+        "android-apps-hint": "Android 会在依赖方 ID 的域名上读取 assetlinks.json，确认 App 可以使用这个站点的通行密钥。",
+        "android-pin-rp": "建议先在上方把依赖方 ID 固定为站点域名（现在用的是 {{current}}）：Android 会在这个域名上读取 assetlinks.json。",
+        "android-origins": "App 的来源",
+        "android-invalid": "每行写一个包名和一个指纹，用空格分开，例如 org.example.openchat AB:CD:…（32 字节的十六进制）"
       }
     },
     "title": "管理后台",
@@ -2088,5 +2096,11 @@
       "busy": "它已经在运行了。",
       "generic": "操作没有成功，请重试。"
     }
+  },
+  "mobile": {
+    "signed-in-as": "已登录为 {{name}}",
+    "network": "连不上服务器，请检查网络后再试。",
+    "home-placeholder": "聊天功能即将到来。",
+    "retry": "重试"
   }
 }

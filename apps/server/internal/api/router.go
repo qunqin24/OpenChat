@@ -231,6 +231,12 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 	// Unversioned probe for load balancers and container health checks.
 	r.Get("/healthz", s.GetHealth)
 
+	// The Android app's Digital Asset Links: which apps may use this site's
+	// passkeys. Public on purpose - Android fetches it with no session, at
+	// this exact path on the RP ID's host - and outside /api/v1 and the
+	// contract, like /healthz (android_passkeys.go).
+	r.Get("/.well-known/assetlinks.json", s.AssetLinks)
+
 	// ---- the web app --------------------------------------------------------
 	// The catch-all, and deliberately last: it is what answers when nothing
 	// above matched, so every API route has already had its say. It serves the

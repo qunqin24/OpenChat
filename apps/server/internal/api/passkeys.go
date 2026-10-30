@@ -59,6 +59,8 @@ type passkeyConfig struct {
 	RPID             string   `json:"rpId"`
 	Origins          []string `json:"origins"`
 	UserVerification string   `json:"userVerification"`
+	// AndroidApps may use this site's passkeys too (android_passkeys.go).
+	AndroidApps []androidApp `json:"androidApps,omitempty"`
 }
 
 // loadPasskeys is the settings: on, the page's own domain, verification
@@ -159,6 +161,9 @@ func (c passkeyConfig) webAuthn(r *http.Request, trusted []string) (*webauthn.We
 		RPID:          rpID,
 		RPDisplayName: "OpenChat",
 		RPOrigins:     origins,
+		// The listed Android apps' answers, which name their signing key
+		// rather than a page (android_passkeys.go).
+		RPOpaqueOrigins: c.androidOrigins(),
 		AuthenticatorSelection: protocol.AuthenticatorSelection{
 			ResidentKey:      protocol.ResidentKeyRequirementRequired,
 			UserVerification: c.verification(),
@@ -290,8 +295,13 @@ func (s *Server) writeOptions(w http.ResponseWriter, r *http.Request, kind strin
 }
 
 // PasskeySignIn checks the browser's answer and signs its account in.
-func (s *Server) PasskeySignIn(w http.ResponseWriter, r *http.Request) {
+func (s *Server) PasskeySignIn(w http.ResponseWriter, r *http.Request, params PasskeySignInParams) {
 	ctx := r.Context()
+	app, err := appClient(r, (*string)(params.XOpenChatClient))
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
 	config, err := s.passkeysOn(ctx)
 	if err != nil {
 		httpx.Fail(w, r, err)
@@ -389,11 +399,12 @@ func (s *Server) PasskeySignIn(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, s.refusedAccount(ctx, errPendingApproval))
 		return
 	}
-	if err := s.issueSession(w, r, account.ID); err != nil {
+	signedIn, err := s.issueSession(w, r, account.ID, app)
+	if err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
-	httpx.JSON(w, http.StatusOK, s.sessionUser(ctx, account))
+	httpx.JSON(w, http.StatusOK, s.signInResult(ctx, account, signedIn, app))
 }
 
 // ------------------------------------------------------------- your passkeys
@@ -594,6 +605,10 @@ func (s *Server) passkeySettings(r *http.Request, config passkeyConfig) (Passkey
 		Enabled: config.Enabled, RpId: config.RPID, Origins: config.Origins,
 		UserVerification: PasskeySettingsUserVerification(config.UserVerification),
 		EffectiveRpId:    rpID, EffectiveOrigins: origins, Registered: int(count),
+		AndroidApps: []AndroidApp{}, AndroidOrigins: config.androidOrigins(),
+	}
+	for _, app := range config.AndroidApps {
+		out.AndroidApps = append(out.AndroidApps, AndroidApp{PackageName: app.PackageName, Fingerprints: app.Fingerprints})
 	}
 	if out.Origins == nil {
 		out.Origins = []string{}
@@ -660,13 +675,22 @@ func (s *Server) UpdatePasskeySettings(w http.ResponseWriter, r *http.Request) {
 	if body.UserVerification != nil {
 		config.UserVerification = string(*body.UserVerification)
 	}
+	if body.AndroidApps != nil {
+		apps, err := androidApps(*body.AndroidApps)
+		if err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+		config.AndroidApps = apps
+	}
 	value, _ := json.Marshal(config)
 	if err := s.q.SetSetting(ctx, sqlc.SetSettingParams{Key: settingPasskeys, Value: value}); err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
 	slog.InfoContext(ctx, "passkey settings changed", "enabled", config.Enabled, "rp_id", config.RPID,
-		"origins", config.Origins, "user_verification", config.UserVerification, "actor", auth.MustUser(ctx).Email)
+		"origins", config.Origins, "user_verification", config.UserVerification,
+		"android_apps", len(config.AndroidApps), "actor", auth.MustUser(ctx).Email)
 	out, err := s.passkeySettings(r, config)
 	if err != nil {
 		httpx.Fail(w, r, err)

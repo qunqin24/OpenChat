@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-import type { TaskIdeaKey } from '@/lib/tasks'
+import type { TaskIdeaKey } from '@openchat/chat-core/tasks'
 
 /**
  * The drawings beside the scheduled-task ideas (TasksPage), made for them in the

@@ -1,0 +1,32 @@
+{
+  "name": "@openchat/chat-core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The chat client's logic, shared by the web app and the mobile app: pure functions, types and store creators, no React, no DOM.",
+  "exports": {
+    "./*": "./src/*.ts",
+    "./genui/*": "./src/genui/*.ts",
+    "./locales/*": "./locales/*"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@openchat/api-client": "workspace:*"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@tanstack/query-core": "^5.102.8",
+    "@types/node": "^22.20.2",
+    "eslint": "^10.10.0",
+    "globals": "^17.12.0",
+    "i18next": "^26.4.2",
+    "typescript": "5.9.3",
+    "typescript-eslint": "^8.70.0",
+    "vitest": "^5.0.3",
+    "zustand": "^5.0.15"
+  }
+}

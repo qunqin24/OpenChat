@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useConversationDocuments } from '@/hooks/use-documents'
-import { formatRelative } from '@/lib/grouping'
+import { formatRelative } from '@openchat/chat-core/grouping'
 import { useDocumentPanel } from '@/stores/document-panel-store'
 
 /**

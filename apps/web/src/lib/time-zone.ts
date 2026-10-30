@@ -3,8 +3,8 @@ import type { QueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from './api'
 import { reportError } from './query'
-import { queryKeys } from './query-keys'
-import { browserTimeZone } from './tasks'
+import { queryKeys } from '@openchat/chat-core/query-keys'
+import { browserTimeZone } from '@openchat/chat-core/tasks'
 
 let sent: string | undefined
 

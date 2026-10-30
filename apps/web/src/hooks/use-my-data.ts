@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { api, API_BASE_URL, appFetch, unwrap } from '@/lib/api'
 import { announceDeleted, forgetDeleted } from '@/lib/conversation-sync'
-import { queryKeys } from '@/lib/query-keys'
+import { queryKeys } from '@openchat/chat-core/query-keys'
 
 /**
  * The person's own data as a whole: take it out, or delete it. Both are

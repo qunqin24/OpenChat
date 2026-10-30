@@ -2,8 +2,8 @@ import { Link } from '@tanstack/react-router'
 import { AlarmClock, ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import type { TaskChange } from '@/lib/task-tool'
-import { describeSchedule } from '@/lib/tasks'
+import type { TaskChange } from '@openchat/chat-core/task-tool'
+import { describeSchedule } from '@openchat/chat-core/tasks'
 
 /**
  * What the model just did to the person's scheduled tasks, in one line of its

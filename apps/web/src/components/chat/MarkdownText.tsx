@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Streamdown } from 'streamdown'
 
 import { prefersReducedMotion } from '@/lib/motion'
-import { revealDone, revealed, revealFrom, revealStep, revealWhole, type RevealState } from '@/lib/reveal'
+import { revealDone, revealed, revealFrom, revealStep, revealWhole, type RevealState } from '@openchat/chat-core/reveal'
 import { markdownComponents, markdownLinkSafety, prepareMarkdown, useMarkdownPlugins } from './markdown-components'
 
 /**

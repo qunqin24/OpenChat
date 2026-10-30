@@ -1,4 +1,4 @@
-import { findPassage } from './find-passage'
+import { findPassage } from '@openchat/chat-core/find-passage'
 import { smoothScrollBehavior } from './motion'
 
 /** The name the highlight is drawn under (::highlight(n-quote) in agent.css). */

@@ -1,4 +1,4 @@
-import type { InfiniteData } from '@tanstack/react-query'
+import type { InfiniteData } from '@tanstack/query-core'
 import type { LibraryFilePage, LibraryFileType } from '@openchat/api-client'
 
 import type { TranscriptPages } from './transcript-pages'

@@ -10,7 +10,7 @@ import {
 import { toast } from 'sonner'
 
 import { useGenerateTitle, usePinConversation, useRenameConversation } from '@/hooks/use-conversations'
-import { formatRelative } from '@/lib/grouping'
+import { formatRelative } from '@openchat/chat-core/grouping'
 import { useDisplayTitle } from '@/lib/titles'
 import { cn } from '@/lib/utils'
 import { ThinkingOrb } from './ThinkingOrb'

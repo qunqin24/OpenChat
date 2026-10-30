@@ -4,9 +4,9 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import { useTranslation } from 'react-i18next'
 import { Streamdown } from 'streamdown'
 
-import { parseBlock } from '@/lib/genui/parse'
-import { resolveBlock, type Cell, type UINode } from '@/lib/genui/resolve'
-import { siteName } from '@/lib/urls'
+import { parseBlock } from '@openchat/chat-core/genui/parse'
+import { resolveBlock, type Cell, type UINode } from '@openchat/chat-core/genui/resolve'
+import { siteName } from '@openchat/chat-core/urls'
 import { cn } from '@/lib/utils'
 import { markdownComponents, markdownLinkSafety, prepareMarkdown, useMarkdownPlugins } from '../markdown-components'
 import { Chart, type ChartSeries } from './Chart'

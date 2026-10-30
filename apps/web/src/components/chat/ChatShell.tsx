@@ -18,8 +18,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useDeleteConversation } from '@/hooks/use-conversations'
-import { queryKeys } from '@/lib/query-keys'
-import { displayTitle } from '@/lib/titles'
+import { queryKeys } from '@openchat/chat-core/query-keys'
+import { displayTitle } from '@openchat/chat-core/titles'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useUIStore } from '@/stores/ui-store'
 import Sidebar from './Sidebar'

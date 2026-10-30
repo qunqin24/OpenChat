@@ -1,234 +1,42 @@
-import { isOpenChatError, streamConversationEvents } from '@openchat/api-client'
+import { streamConversationEvents } from '@openchat/api-client'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useEffectEvent } from 'react'
 
-import { setCompaction } from '@/hooks/use-compaction'
-import { refreshNewestMessages } from '@/hooks/use-messages'
+import { fetchNewestPage } from '@/hooks/use-messages'
 import { API_BASE_URL } from '@/lib/api'
-import { refreshConfirmed, refreshThenSettle } from '@/lib/hand-over'
-import { CAPACITY_CODE } from '@/lib/model-capacity'
 import { reportError } from '@/lib/query'
-import { queryKeys } from '@/lib/query-keys'
-import { truncateTranscript, type TranscriptPages } from '@/lib/transcript-pages'
+import { followConversation } from '@openchat/chat-core/conversation-follow'
 import { useChatStore } from '@/stores/chat-store'
 
-/** Reconnect delays, in ms: quick at first, then backing off to a ceiling. */
-const RECONNECT_DELAYS = [500, 1000, 2000, 5000, 10000, 15000]
-
 /**
- * Follows a conversation's runs for as long as the screen is open.
- *
- * Opening the page attaches to whatever is in flight — a run started in
- * another tab, or one that kept going while this page was closed — and a
- * dropped connection reattaches from a fresh snapshot. A run that finishes
- * hands over to Query: the newest page of the message list is refetched (the
- * older pages the reader has opened are immutable and stay), and only then is
- * the live copy dropped, so the answer never disappears in between.
- *
- * Rows deleted by a redo - a question edited, an answer regenerated, here or in
- * another tab - are announced as `transcript_changed`, in the batch that starts
- * the run that follows. The newest page is fetched again then too, so the
- * transcript here drops what is gone; and the rows the event or this tab's own
- * redo names are out of the cache before the batch is applied, so they are not
- * drawn beside the run that replaces them in between.
- *
- * The conversation's compressed context rides on the same stream: a run
- * announces the summary it made (`compaction_finished`), a person taking it back
- * is announced outside any run (`compaction_changed`),
- * and rows that were deleted may have taken the summary with them, so it is
- * read again with the transcript (`transcript_changed`).
- *
- * A conversation the server says does not exist — deleted from another tab or
- * device while this page was open — is not a dropped connection: there is
- * nothing to reattach to, so following stops and the page goes to a new chat.
+ * Follows a conversation's runs for as long as the screen is open: the loop
+ * and its rules are `chat-core/conversation-follow.ts`, shared with the mobile
+ * app; this connects it with the browser's cookie and, when the conversation
+ * is gone, takes the page to a new chat.
  */
 export function useConversationEvents(conversationId: string | undefined) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
 
   // Read at the time it runs, so a new `navigate` does not restart the stream.
-  const leave = useEffectEvent(() => {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all })
-    void navigate({ to: '/', replace: true })
-  })
+  const leave = useEffectEvent(() => void navigate({ to: '/', replace: true }))
 
   useEffect(() => {
     if (!conversationId) return
     const controller = new AbortController()
-    const { applySnapshot, applyBatch, settle } = useChatStore.getState()
-
-    // Brings the message list up to date: its newest page only, spliced onto
-    // the older ones already held. If that fails, the plain refetch of every
-    // page is the fallback. True only when one of them actually worked - the
-    // fallback invalidating a query whose refetch then fails is not a refresh.
-    const refreshMessages = () =>
-      refreshConfirmed({
-        refreshNewest: () => refreshNewestMessages(queryClient, conversationId),
-        refetchAll: () =>
-          queryClient.refetchQueries({ queryKey: queryKeys.messages.list(conversationId) }, { throwOnError: true }),
-      })
-
-    // Refreshes the list and, only once that is confirmed, lets the live copy
-    // of `runId` go (see lib/hand-over.ts). A refresh that fails leaves the
-    // answer on screen and is tried again; a later success settles it.
-    const catchUp = (runId?: string, settleRun: (id: string) => void = (id) => settle(conversationId, id)) =>
-      refreshThenSettle({
-        refresh: refreshMessages,
-        settle: settleRun,
-        runId,
-        wait: (ms) => new Promise((resolve) => window.setTimeout(resolve, ms)),
-        cancelled: () => controller.signal.aborted,
-      })
-
-    // Hands a finished run over to the query cache.
-    const handOver = (runId: string) => {
-      void catchUp(runId)
-      // The conversation's position in the sidebar and its model may have moved.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all })
-      // The model may have kept a note about the person while it ran.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.memory.all })
-      // And the run may have compressed the conversation, which a page that
-      // joined it half way did not see happen.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.compaction(conversationId) })
-    }
-
-    const follow = async () => {
-      let attempt = 0
-      while (!controller.signal.aborted) {
-        try {
-          for await (const event of streamConversationEvents({
-            baseUrl: API_BASE_URL,
-            conversationId,
-            credentials: 'include',
-            signal: controller.signal,
-          })) {
-            attempt = 0
-            if (event.type === 'snapshot') {
-              const held = useChatStore.getState().live[conversationId]?.run
-              if (held && !event.run) {
-                // The run we were showing ended while we were away: its rows are
-                // only in the message list now. It stays on screen until the
-                // list holds them; then the snapshot (nothing running) replaces
-                // it - unless another run has taken its place meanwhile.
-                const replace = (id: string) => {
-                  if (useChatStore.getState().live[conversationId]?.run?.run.id === id) applySnapshot(conversationId, event)
-                }
-                void catchUp(held.run.id, replace).then((done) => {
-                  // Still showing a run the server says is over, and the list
-                  // cannot be read: better a gap than a Stop button that never goes.
-                  if (!done && held.run.status === 'running') replace(held.run.id)
-                })
-                continue
-              }
-              applySnapshot(conversationId, event)
-              // Another run than the one held: the one held finished while we
-              // were away, and its rows are only in the list now. Or the same
-              // run, over, after a hand-over that never succeeded.
-              if (held && event.run) {
-                if (held.run.id !== event.run.id) void catchUp()
-                else if (event.run.status !== 'running') void catchUp(event.run.id)
-              }
-              continue
-            }
-            const changed = event.events.find((e) => e.type === 'transcript_changed')
-            if (changed) {
-              // What is gone: what the event says (an edited question and what
-              // followed it), or the redo this tab asked for. Read before the
-              // batch is applied: the run starting ends the redo.
-              const redo = changed.from ? { from: changed.from } : useChatStore.getState().replacing[conversationId]
-              if (redo) {
-                queryClient.setQueryData<TranscriptPages>(queryKeys.messages.list(conversationId), (held) =>
-                  truncateTranscript(held, redo),
-                )
-              }
-            }
-            applyBatch(conversationId, event)
-            for (const runEvent of event.events) {
-              // Deleted, here or in another tab or on another device: there is
-              // nothing left to show, and reconnecting would only be refused.
-              if (runEvent.type === 'conversation_deleted') {
-                controller.abort()
-                leave()
-                return
-              }
-              if (runEvent.type === 'run_finished') {
-                handOver(runEvent.run.id)
-                // Stopped because the model reached its cap: the picker is
-                // behind, and should show the model as unavailable.
-                if (runEvent.run.errorCode === CAPACITY_CODE) {
-                  void queryClient.invalidateQueries({ queryKey: queryKeys.models.all })
-                }
-                // The composer's meter reads the request that run just made.
-                void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.context(conversationId) })
-              }
-              if (runEvent.type === 'run_started') {
-                // Started elsewhere, or by us: either way the sidebar order moved.
-                void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.list() })
-                // And the sidebar marks it as working until it is done.
-                void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.running() })
-              }
-              // Titled after its first answer. The batch carries the finished
-              // run's last version, so the run state above has already seen
-              // past it; the title is applied here, outside it.
-              if (runEvent.type === 'title_changed') {
-                void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all })
-              }
-              // The summary a run made is the conversation's now; a failed
-              // compression (no summary) changes nothing but the status line.
-              if (runEvent.type === 'compaction_finished' && runEvent.summary) {
-                setCompaction(queryClient, conversationId, runEvent.summary)
-              }
-              // A sub-agent started, took a step or ended; or a report of one was
-              // delivered, which changes how it stands.
-              if (
-                runEvent.type === 'subagents_changed' ||
-                (runEvent.type === 'message_appended' && runEvent.message.origin === 'subagent') ||
-                (runEvent.type === 'run_started' && runEvent.message.origin === 'subagent')
-              ) {
-                void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.subagents(conversationId) })
-              }
-              // Taken back by a person, here or in another tab.
-              if (runEvent.type === 'compaction_changed') {
-                setCompaction(queryClient, conversationId, runEvent.summary)
-                void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.context(conversationId) })
-              }
-              // Rows were deleted - a question edited or an answer regenerated,
-              // here or in another tab. The newest page is what changed, so
-              // that is what is fetched (and spliced onto the older pages that
-              // still hold): never the whole key, which would download every
-              // page the reader had opened again.
-              if (runEvent.type === 'transcript_changed') {
-                // A summary that ended at a deleted row went with it.
-                void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.compaction(conversationId) })
-                // A finished run still held live would put its own rows back over
-                // the transcript now (settle leaves a running one be).
-                void catchUp(useChatStore.getState().live[conversationId]?.run?.run.id)
-              }
-            }
-          }
-        } catch (error) {
-          if (controller.signal.aborted) return
-          if (isOpenChatError(error) && error.status === 404) {
-            leave()
-            return
-          }
-          // The session ended (or never was): reconnecting would be refused the
-          // same way for ever. Say so once - that takes the page to sign-in -
-          // and stop.
-          if (isOpenChatError(error) && error.status === 401) {
-            reportError(error)
-            return
-          }
-        }
-        if (controller.signal.aborted) return
-        const delay = RECONNECT_DELAYS[Math.min(attempt, RECONNECT_DELAYS.length - 1)]
-        attempt++
-        await new Promise((resolve) => window.setTimeout(resolve, delay))
-      }
-    }
-
-    void follow()
+    void followConversation({
+      conversationId,
+      controller,
+      events: (signal) =>
+        streamConversationEvents({ baseUrl: API_BASE_URL, conversationId, credentials: 'include', signal }),
+      queryClient,
+      store: useChatStore,
+      fetchNewest: () => fetchNewestPage(conversationId),
+      leave,
+      unauthorized: reportError,
+      wait: (ms) => new Promise((resolve) => window.setTimeout(resolve, ms)),
+    })
     return () => controller.abort()
   }, [conversationId, queryClient])
 }

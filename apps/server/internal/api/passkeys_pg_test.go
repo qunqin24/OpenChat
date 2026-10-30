@@ -3,9 +3,12 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/descope/virtualwebauthn"
@@ -26,7 +29,9 @@ func TestPasskeys(t *testing.T) {
 	q := sqlc.New(pool)
 	server := &Server{pool: pool, q: q, cfg: &config.Config{}}
 	_, _ = pool.Exec(ctx, `DELETE FROM app_settings WHERE key = $1`, settingPasskeys)
-	t.Cleanup(func() { _, _ = pool.Exec(context.Background(), `DELETE FROM app_settings WHERE key = $1`, settingPasskeys) })
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), `DELETE FROM app_settings WHERE key = $1`, settingPasskeys)
+	})
 
 	tag := uuid.NewString()
 	newUser := func(name string) sqlc.User {
@@ -113,7 +118,7 @@ func TestPasskeys(t *testing.T) {
 		}
 		site := rp
 		site.Origin = from
-		return call(nil, answer(begun.ChallengeId, virtualwebauthn.CreateAssertionResponse(site, device, key, *assertion)), server.PasskeySignIn)
+		return call(nil, answer(begun.ChallengeId, virtualwebauthn.CreateAssertionResponse(site, device, key, *assertion)), browserPasskeySignIn(server))
 	}
 
 	// Sign-in: a session for alice, and the passkey's last use noted.
@@ -133,6 +138,27 @@ func TestPasskeys(t *testing.T) {
 	// An answer made for another origin does not sign in.
 	if rec := signIn("https://evil.example.test"); rec.Code != http.StatusUnauthorized {
 		t.Errorf("other origin: %d %s", rec.Code, rec.Body)
+	}
+
+	// The Android app: its answer names its signing key, not a page. Refused
+	// until the app is listed, accepted once it is.
+	fingerprint := strings.Repeat("AB", 32)
+	raw, _ := hex.DecodeString(fingerprint)
+	appOrigin := "android:apk-key-hash:" + base64.RawURLEncoding.EncodeToString(raw)
+	if rec := signIn(appOrigin); rec.Code != http.StatusUnauthorized {
+		t.Errorf("an unlisted app: %d %s", rec.Code, rec.Body)
+	}
+	apps := []AndroidApp{{PackageName: "org.example.openchat", Fingerprints: []string{fingerprint}}}
+	if rec := call(&alice, UpdatePasskeySettingsRequest{AndroidApps: &apps}, server.UpdatePasskeySettings); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), appOrigin) {
+		t.Fatalf("list the app: %d %s", rec.Code, rec.Body)
+	}
+	if rec := signIn(appOrigin); rec.Code != http.StatusOK {
+		t.Errorf("a listed app: %d %s", rec.Code, rec.Body)
+	}
+	links := httptest.NewRecorder()
+	server.AssetLinks(links, httptest.NewRequest(http.MethodGet, "/.well-known/assetlinks.json", nil))
+	if !strings.Contains(links.Body.String(), `"package_name":"org.example.openchat"`) || !strings.Contains(links.Body.String(), "get_login_creds") {
+		t.Errorf("assetlinks: %s", links.Body)
 	}
 
 	// A disabled account is told so, and gets no session.
@@ -190,7 +216,9 @@ func TestPasskeySiblingSubdomainIsRefused(t *testing.T) {
 	if err := q.SetSetting(ctx, sqlc.SetSettingParams{Key: settingPasskeys, Value: settings}); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _, _ = pool.Exec(context.Background(), `DELETE FROM app_settings WHERE key = $1`, settingPasskeys) })
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), `DELETE FROM app_settings WHERE key = $1`, settingPasskeys)
+	})
 
 	tag := uuid.NewString()
 	var alice sqlc.User
@@ -248,12 +276,19 @@ func TestPasskeySiblingSubdomainIsRefused(t *testing.T) {
 		}
 		site := rp
 		site.Origin = origin
-		return call(origin, nil, answerOf(begun.ChallengeId, virtualwebauthn.CreateAssertionResponse(site, device, key, *assertion)), server.PasskeySignIn).Code
+		return call(origin, nil, answerOf(begun.ChallengeId, virtualwebauthn.CreateAssertionResponse(site, device, key, *assertion)), browserPasskeySignIn(server)).Code
 	}
 	if code := signIn(evil); code != http.StatusUnauthorized {
 		t.Errorf("relayed from a sibling subdomain: %d, want 401", code)
 	}
 	if code := signIn(app); code != http.StatusOK {
 		t.Errorf("from the app itself: %d, want 200", code)
+	}
+}
+
+// browserPasskeySignIn is a browser's passkey sign-in: no app header.
+func browserPasskeySignIn(server *Server) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		server.PasskeySignIn(w, r, PasskeySignInParams{})
 	}
 }

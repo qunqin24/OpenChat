@@ -10,7 +10,7 @@
 - 发消息返回 SSE；助手消息在第一个 token 前就写库，取消算 `complete`，provider 报错才算 `failed`。
 - 改写和重新生成发出的 `run_started` 批次里同时带 `transcript_changed`（改写时带 `from`，即被改的提问的 id）：行被删了，开着同一对话的其他标签页据此立刻丢掉这些行并重取最新一页。凡是会删「当前显示的对话记录」的行的新操作，都要发这个事件，否则别的标签页会一直显示已经不存在的记录。存下被拒绝的发送（`blocked` 行）也发它（单独成批、没有 `from`、没有 run）：那是新增了一行而没有 run，别的标签页收到后照旧 `refreshNewestMessages`。
 
-## 日期与隔了一段时间的提示（`agent.BuildContextIn`，前端 `lib/time-gap.ts`）
+## 日期与隔了一段时间的提示（`agent.BuildContextIn`，前端 `chat-core/src/time-gap.ts`）
 
 日期不写进系统提示词（每天变会让提示词缓存和回放的思考块失效），而是写在用户消息开头：一天里第一条带 `[Date: 2026-10-28]`；距离上一行（回答、工具结果或上一条提问）**一小时以上**的用户消息改带 `[Time: 2026-10-28 10:44 Asia/Shanghai, 3 hours after the previous message]`，模型因此知道对话隔了多久、现在几点，系统提示词说明这两种行。时区取账号里浏览器上报的 `users.time_zone`，没有就用 UTC；行一旦写出就不变，历史仍是稳定前缀。页面在同样的位置（隔一小时以上的提问上方）显示「今天 10:44」「昨天 21:05」「10月28日 10:44」，门槛两边一致（`agent.TimeGap` ↔ `TIME_GAP_MS`）。
 

@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 
 import { useDeleteAllConversations, useExportConversations } from '@/hooks/use-my-data'
 import { useMyStorage } from '@/hooks/use-my-storage'
-import { formatSize } from '@/lib/attachments'
+import { formatSize } from '@openchat/chat-core/attachments'
 import { cn } from '@/lib/utils'
 
 /**

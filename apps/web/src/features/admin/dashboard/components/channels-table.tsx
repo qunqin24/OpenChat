@@ -11,7 +11,7 @@ import {
   toneClass,
   type Tone,
 } from '@/features/admin/usage-logs/format'
-import { formatRelative } from '@/lib/grouping'
+import { formatRelative } from '@openchat/chat-core/grouping'
 import { cn } from '@/lib/utils'
 import { errorRate, errorRateClass, formatRate } from '../format'
 import { Empty } from './empty'

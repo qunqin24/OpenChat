@@ -22,6 +22,7 @@ WORKDIR /repo
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json apps/web/
 COPY packages/api-client/package.json packages/api-client/
+COPY packages/chat-core/package.json packages/chat-core/
 RUN pnpm install --frozen-lockfile --filter "@openchat/web..."
 
 COPY apps/web apps/web

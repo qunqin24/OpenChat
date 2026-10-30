@@ -2,7 +2,7 @@ import { useParams, useRouterState } from '@tanstack/react-router'
 import { useCallback, useLayoutEffect, useState } from 'react'
 
 import { useChatStore } from '@/stores/chat-store'
-import { adopt, followAddress, openView, release, startOver } from '@/lib/chat-view'
+import { adopt, followAddress, openView, release, startOver } from '@openchat/chat-core/chat-view'
 import ChatView from './ChatView'
 
 /**

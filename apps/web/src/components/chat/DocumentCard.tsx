@@ -5,9 +5,9 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 're
 import { useTranslation } from 'react-i18next'
 
 import { useDocument } from '@/hooks/use-documents'
-import { queryKeys } from '@/lib/query-keys'
+import { queryKeys } from '@openchat/chat-core/query-keys'
 import { copyClipboard } from '@/lib/clipboard'
-import { changedPassages, pendingEditOf, pendingTitle, shownText, streamingText, type DocumentChange } from '@/lib/document-tool'
+import { changedPassages, pendingEditOf, pendingTitle, shownText, streamingText, type DocumentChange } from '@openchat/chat-core/document-tool'
 import { cn } from '@/lib/utils'
 import { useDocumentActivity } from '@/stores/document-activity-store'
 import { useDocumentPanel } from '@/stores/document-panel-store'

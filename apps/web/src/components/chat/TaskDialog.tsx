@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useChatModels } from '@/hooks/use-chat-models'
 import { useCreateTask, useUpdateTask } from '@/hooks/use-tasks'
-import { inPast, scheduleOf, taskKinds, weekdayName, weekdayOrder, type TaskForm } from '@/lib/tasks'
+import { inPast, scheduleOf, taskKinds, weekdayName, weekdayOrder, type TaskForm } from '@openchat/chat-core/tasks'
 import { cn } from '@/lib/utils'
 
 /**

@@ -16,7 +16,7 @@ import { Switch } from '@/components/shadcn/ui/switch'
 import { adminKeys } from '@/features/admin/use-admin'
 import { useChatModels } from '@/hooks/use-chat-models'
 import { api, unwrap } from '@/lib/api'
-import { queryKeys } from '@/lib/query-keys'
+import { queryKeys } from '@openchat/chat-core/query-keys'
 
 /** The model select's value for "the main model's" (Radix Select takes no empty value). */
 const MAIN_MODEL = '__main__'

@@ -2,7 +2,7 @@ import { dehydrate, hydrate, type DehydratedState, type Query, type QueryClient 
 
 import { resetChatStore } from '@/stores/chat-store'
 
-import { queryKeys } from './query-keys'
+import { queryKeys } from '@openchat/chat-core/query-keys'
 
 /**
  * Keeps what the chat screen opens with — the conversation list, the models,

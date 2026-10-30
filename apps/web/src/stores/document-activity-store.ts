@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-import type { PendingEdit } from '@/lib/document-tool'
+import type { PendingEdit } from '@openchat/chat-core/document-tool'
 
 interface DocumentActivityState {
   /**

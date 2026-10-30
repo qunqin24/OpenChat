@@ -1,6 +1,6 @@
 import { isOpenChatError } from '@openchat/api-client'
 
-import { refusalOf } from '@/lib/moderation-refusal'
+import { refusalOf } from './moderation-refusal'
 
 /**
  * What a failed first send of a new chat says about the conversation made for

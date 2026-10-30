@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { IconMark } from '@/assets/custom/icon-mark'
 import type { AdminContact } from '@/features/auth'
-import { categoryKey, type AccountDisabled } from '@/lib/account-disabled'
+import { categoryKey, type AccountDisabled } from '@openchat/chat-core/account-disabled'
 import { WaitRipples } from './Ripples'
 
 /**

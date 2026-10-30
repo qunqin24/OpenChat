@@ -1,6 +1,6 @@
 import { Braces, CodeXml, File, FileText, Globe, Image, NotepadText, Sheet } from 'lucide-react'
 
-import { fileLook, type FileLook } from '@/lib/file-look'
+import { fileLook, type FileLook } from '@openchat/chat-core/file-look'
 import { cn } from '@/lib/utils'
 
 const ICONS: Record<FileLook, typeof File> = {

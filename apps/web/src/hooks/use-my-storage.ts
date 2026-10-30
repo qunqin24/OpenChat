@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/lib/api'
-import { queryKeys } from '@/lib/query-keys'
+import { queryKeys } from '@openchat/chat-core/query-keys'
 
 /** What the person's files take against their quota (settings → 数据). */
 export function useMyStorage() {

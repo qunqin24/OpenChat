@@ -94,9 +94,11 @@ generate-genui: ## Copy the generative UI catalogue (api/genui-catalog.json) to 
 check: lint test build ## Everything CI runs
 
 .PHONY: lint
-lint: ## Vet Go and lint the web app
+lint: ## Vet Go and lint the web app, the mobile app and the shared chat logic
 	cd $(SERVER) && go vet ./...
 	pnpm --filter @openchat/web lint
+	pnpm --filter @openchat/chat-core lint
+	pnpm --filter @openchat/mobile lint
 
 # The database-backed Go tests run on the Postgres server and account that
 # DATABASE_URL in .env points at, under the name openchat_test (override by
@@ -115,7 +117,9 @@ test-server: ## Run Go tests (database-backed ones need TEST_DATABASE_URL, see a
 	cd $(SERVER) && go test ./...
 
 .PHONY: test-web
-test-web: ## Run the web unit tests (vitest)
+test-web: ## Run the web unit tests (vitest), and the shared packages'
+	pnpm --filter @openchat/chat-core test
+	pnpm --filter @openchat/api-client test
 	pnpm --filter @openchat/web test
 
 .PHONY: build

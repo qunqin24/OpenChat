@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
-import { columnName, columnWidths, type Sheet } from '@/lib/workbook'
+import { columnName, columnWidths, type Sheet } from '@openchat/chat-core/workbook'
 
 /** Every row is this tall, so only the rows in view need drawing. */
 const ROW_HEIGHT = 32

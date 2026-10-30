@@ -750,6 +750,12 @@ type Querier interface {
 	// LockRegistration takes.
 	RegisterUser(ctx context.Context, arg RegisterUserParams) (User, error)
 	RenamePasskey(ctx context.Context, arg RenamePasskeyParams) (RenamePasskeyRow, error)
+	// An app's session (a bearer token) is renewed when it asks who it is
+	// (getSession) and has less than renew_below left: back to ttl from now. So
+	// an app opened at least once a month stays signed in, while each session
+	// is written at most a couple of times a month. A browser's cookie carries
+	// its own expiry and is not renewed.
+	RenewSession(ctx context.Context, arg RenewSessionParams) error
 	RequestRunCancel(ctx context.Context, arg RequestRunCancelParams) (Run, error)
 	// Starts a total cap's count again from `since`. Makes the row if the model
 	// has none (every other column then at its default: no cap, nothing changed).

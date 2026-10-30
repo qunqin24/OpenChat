@@ -33,6 +33,18 @@ UPDATE sessions
 SET last_used_at = now()
 WHERE id = $1;
 
+-- name: RenewSession :exec
+-- An app's session (a bearer token) is renewed when it asks who it is
+-- (getSession) and has less than renew_below left: back to ttl from now. So
+-- an app opened at least once a month stays signed in, while each session
+-- is written at most a couple of times a month. A browser's cookie carries
+-- its own expiry and is not renewed.
+UPDATE sessions
+SET expires_at   = now() + sqlc.arg('ttl')::interval,
+    last_used_at = now()
+WHERE id = sqlc.arg('id')
+  AND expires_at < now() + sqlc.arg('renew_below')::interval;
+
 -- name: DeleteSession :exec
 DELETE
 FROM sessions

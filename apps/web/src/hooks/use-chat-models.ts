@@ -2,7 +2,7 @@ import type { Conversation, UpdateConversationRequest } from '@openchat/api-clie
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/lib/api'
-import { queryKeys } from '@/lib/query-keys'
+import { queryKeys } from '@openchat/chat-core/query-keys'
 
 /** The models a conversation can use: whatever an enabled channel offers. */
 export const chatModelsQueryOptions = queryOptions({

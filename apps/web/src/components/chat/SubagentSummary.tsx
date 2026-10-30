@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 
 import { useSubagents } from '@/hooks/use-subagents'
-import { showSummary, tally } from '@/lib/subagents'
+import { showSummary, tally } from '@openchat/chat-core/subagents'
 import { useSubagentPanel } from '@/stores/subagent-panel-store'
 import { SubagentAvatars } from './SubagentAvatar'
 

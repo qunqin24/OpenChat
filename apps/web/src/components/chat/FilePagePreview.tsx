@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 
 import { API_BASE_URL } from '@/lib/api'
-import { TEXT_TYPE } from '@/lib/attachments'
-import { fileLook } from '@/lib/file-look'
+import { TEXT_TYPE } from '@openchat/chat-core/attachments'
+import { fileLook } from '@openchat/chat-core/file-look'
 import { pagePreview } from '@/lib/file-preview'
 import { FileBadge } from './FileBadge'
 

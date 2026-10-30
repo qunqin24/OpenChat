@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { smoothScrollBehavior } from '@/lib/motion'
-import { siteName } from '@/lib/urls'
+import { siteName } from '@openchat/chat-core/urls'
 import { cn } from '@/lib/utils'
 import { credit, type ShownPicture } from './found-image'
 

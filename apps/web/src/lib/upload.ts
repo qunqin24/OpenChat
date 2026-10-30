@@ -1,7 +1,7 @@
 import { isOpenChatError } from '@openchat/api-client'
 
 import { api, unwrap } from '@/lib/api'
-import { mediaTypeOf } from '@/lib/attachments'
+import { mediaTypeOf } from '@openchat/chat-core/attachments'
 
 /** Why an upload failed, as the `chat.file.error.*` key that explains it. */
 export type UploadError = 'type' | 'size' | 'quota' | 'failed'

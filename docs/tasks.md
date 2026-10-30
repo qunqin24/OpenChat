@@ -10,7 +10,7 @@
 4. **在 `router.go` 手工挂载**，想清楚放哪个组：公开 / `Require` / `Require`+`RequireAdmin`。没有默认保护：忘挂是 404，挂错组是越权。
 5. **归属写进查询**：凡是按 id 读写用户自己的数据，SQL 里带 `user_id`（如 `GetConversation`），别人的数据读出来就是不存在；后台接口对非管理员回 404，不回 403。
 6. 需要新 SQL，见下一节。
-7. 前端：`api.GET/POST/...`（类型已在 `schema.d.ts` 里）加 `unwrap`，query key 登记进 `lib/query-keys.ts` 或 `adminKeys`。
+7. 前端：`api.GET/POST/...`（类型已在 `schema.d.ts` 里）加 `unwrap`，query key 登记进 `chat-core/src/query-keys.ts` 或 `adminKeys`。
 8. 验证：`cd apps/server && go build ./... && go test ./...`。
 
 ## 加数据库查询
@@ -46,7 +46,7 @@ make migrate                        # 本地应用（make ser 启动时也会自
 3. `api/openapi.yaml`：新增 `XxxEvent` schema，加进 `RunEvent` 的 `oneOf` 和判别映射。
 4. `make generate-api`。
 5. `internal/api/agent_mapping.go` 的 `toRunEvent` 加一个 `case`（没有映射的事件会被丢掉）。
-6. 前端：影响转录或运行状态的，改 `lib/run-state.ts` 的 `applyBatch`；触发查询失效或导航的，改 `hooks/use-conversation-events.ts`。事件流的前端规则见 [design/frontend-chat.md](design/frontend-chat.md)。
+6. 前端：影响转录或运行状态的，改 `chat-core/src/run-state.ts` 的 `applyBatch`；触发查询失效的，改 `chat-core/src/conversation-follow.ts`（网页和 App 共用的事件跟随循环）；导航等各端自己的事，在 `hooks/use-conversation-events.ts`（网页）和 `apps/mobile/src/hooks/events.ts`（App）。事件流的前端规则见 [design/frontend-chat.md](design/frontend-chat.md)。
 
 ## 加前端页面/路由
 
@@ -72,7 +72,7 @@ make migrate                        # 本地应用（make ser 启动时也会自
 
 ## 改用户可见文案
 
-`locales/en/common.json` 和 `locales/zh/common.json` 同步加或改 key。`t()` 的 key 有类型约束，改完 `tsc --noEmit` 会指出漏掉的引用。
+`packages/chat-core/locales/en/common.json` 和 `packages/chat-core/locales/zh/common.json` 同步加或改 key。`t()` 的 key 有类型约束，改完 `tsc --noEmit` 会指出漏掉的引用。
 
 ## 常见验证命令
 

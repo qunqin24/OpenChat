@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
-import { MIN_PASSWORD_LENGTH } from '@/components/auth/validation'
+import { MIN_PASSWORD_LENGTH } from '@openchat/chat-core/auth-validation'
 import { isAuthFieldError } from '@/features/auth'
 import { useChangePassword } from '@/features/auth/use-auth'
 import { PasswordInput } from '@/components/shadcn/password-input'

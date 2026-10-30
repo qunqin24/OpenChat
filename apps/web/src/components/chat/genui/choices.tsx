@@ -2,8 +2,8 @@ import { ArrowRight } from 'lucide-react'
 import { useContext, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { choicesState } from '@/lib/genui/choices'
-import type { UINode } from '@/lib/genui/resolve'
+import { choicesState } from '@openchat/chat-core/genui/choices'
+import type { UINode } from '@openchat/chat-core/genui/resolve'
 import { cn } from '@/lib/utils'
 import { ChoicesContext } from './choices-context'
 

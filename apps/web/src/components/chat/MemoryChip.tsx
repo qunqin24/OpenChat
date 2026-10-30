@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 
 import { useUndoErrorText } from '@/hooks/use-memory-errors'
 import { useMemoryEvents, useUndoMemoryEvent } from '@/hooks/use-memory'
-import type { MemoryChange } from '@/lib/memory-tool'
+import type { MemoryChange } from '@openchat/chat-core/memory-tool'
 import { useSettings } from '@/lib/settings'
 import { cn } from '@/lib/utils'
 

@@ -1,8 +1,8 @@
 import type { RunEvent } from '@openchat/api-client'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { FINISHED_RUNS_KEPT, isRunning } from '@/lib/run-state'
-import { assistant, batch, id, run, user } from '@/lib/testing'
+import { FINISHED_RUNS_KEPT, isRunning } from '@openchat/chat-core/run-state'
+import { assistant, batch, id, run, user } from '@openchat/chat-core/testing'
 
 import { resetChatStore, useChatStore } from './chat-store'
 

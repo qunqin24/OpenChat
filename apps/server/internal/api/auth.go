@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -26,31 +27,83 @@ func (s *Server) secureCookies() bool {
 	return s.cfg.IsProduction()
 }
 
-// issueSession creates a session row and sets the cookie for it.
-func (s *Server) issueSession(w http.ResponseWriter, r *http.Request, userID uuid.UUID) error {
+// errAppClientFromBrowser refuses app mode to a request a browser made: a
+// token in a response body is readable by the page's script, which the
+// HttpOnly cookie exists to prevent. Browsers always send Origin on a POST
+// from a page; an app's HTTP stack sends none.
+var errAppClientFromBrowser = httpx.NewError(http.StatusBadRequest, "app_client_from_browser",
+	"X-OpenChat-Client: app is for native apps, not browsers")
+
+// appClient is whether a sign-in asked for app mode (`X-OpenChat-Client:
+// app`): the session token in the body, no cookie. The header is not among
+// the ones CORS lets a page send, and a request carrying an Origin is
+// refused besides, so only a native client can have a token handed to it.
+func appClient(r *http.Request, header *string) (bool, error) {
+	if header == nil || *header != string(OpenChatClientApp) {
+		return false, nil
+	}
+	if origin := r.Header.Get("Origin"); origin != "" && origin != "null" {
+		return false, errAppClientFromBrowser
+	}
+	return true, nil
+}
+
+// issued is a session just made: its token and when it lapses unless
+// renewed (an app's, by getSession).
+type issued struct {
+	token   string
+	expires time.Time
+}
+
+// issueSession creates a session row and, for a browser, sets the cookie for
+// it; an app (app) is given the token in the body instead (signInResult).
+func (s *Server) issueSession(w http.ResponseWriter, r *http.Request, userID uuid.UUID, app bool) (issued, error) {
 	token, hash, err := auth.NewToken()
 	if err != nil {
-		return err
+		return issued{}, err
 	}
 
+	expires := time.Now().Add(auth.SessionTTL)
 	if _, err := s.q.CreateSession(r.Context(), sqlc.CreateSessionParams{
 		UserID:    userID,
 		TokenHash: hash,
-		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(auth.SessionTTL), Valid: true},
+		ExpiresAt: pgtype.Timestamptz{Time: expires, Valid: true},
 		UserAgent: truncate(r.UserAgent(), 400),
 	}); err != nil {
-		return err
+		return issued{}, err
 	}
 
-	auth.SetCookie(w, token, s.secureCookies())
-	return nil
+	if !app {
+		auth.SetCookie(w, token, s.secureCookies())
+	}
+	return issued{token: token, expires: expires}, nil
+}
+
+// signInResult is what a sign-in answers: the account, and for an app the
+// session's token and expiry.
+func (s *Server) signInResult(ctx context.Context, user sqlc.User, session issued, app bool) SignInResult {
+	u := s.sessionUser(ctx, user)
+	out := SignInResult{
+		Id: u.Id, Email: u.Email, Name: u.Name, Role: u.Role,
+		AvatarUrl: u.AvatarUrl, TimeZone: u.TimeZone,
+	}
+	if app {
+		out.Token = &session.token
+		out.ExpiresAt = &session.expires
+	}
+	return out
 }
 
 // Register creates an account. Whether it may, and whether the account can be
 // used at once, is signup.go's three modes; the sign-up limit (5 attempts per
 // address per hour) is auth_limits.go's.
-func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
+func (s *Server) Register(w http.ResponseWriter, r *http.Request, params RegisterParams) {
 	ctx := r.Context()
+	app, err := appClient(r, (*string)(params.XOpenChatClient))
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
 	var body RegisterRequest
 	if err := httpx.DecodeJSON(r, &body); err != nil {
 		httpx.Fail(w, r, err)
@@ -146,15 +199,21 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.issueSession(w, r, user.ID); err != nil {
+	session, err := s.issueSession(w, r, user.ID, app)
+	if err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
-	httpx.JSON(w, http.StatusCreated, s.sessionUser(ctx, user))
+	httpx.JSON(w, http.StatusCreated, s.signInResult(ctx, user, session, app))
 }
 
-func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
+func (s *Server) Login(w http.ResponseWriter, r *http.Request, params LoginParams) {
 	ctx := r.Context()
+	app, err := appClient(r, (*string)(params.XOpenChatClient))
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
 	var body LoginRequest
 	if err := httpx.DecodeJSON(r, &body); err != nil {
 		httpx.Fail(w, r, err)
@@ -219,11 +278,12 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.issueSession(w, r, user.ID); err != nil {
+	session, err := s.issueSession(w, r, user.ID, app)
+	if err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
-	httpx.JSON(w, http.StatusOK, s.sessionUser(ctx, user))
+	httpx.JSON(w, http.StatusOK, s.signInResult(ctx, user, session, app))
 }
 
 func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
@@ -246,6 +306,20 @@ func (s *Server) GetSession(w http.ResponseWriter, r *http.Request) {
 	if err := s.q.TouchUserSeen(r.Context(), user.ID); err != nil {
 		// Not worth failing the request over.
 		logWarn(r, "touch last_seen_at", err)
+	}
+
+	// An app's token is renewed here, the call it makes each time it opens
+	// (sessions.sql RenewSession); a browser's cookie is not.
+	if _, bearer := auth.BearerToken(r); bearer {
+		if id, ok := auth.SessionIDFrom(r.Context()); ok {
+			if err := s.q.RenewSession(r.Context(), sqlc.RenewSessionParams{
+				ID:         id,
+				Ttl:        pgtype.Interval{Microseconds: auth.SessionTTL.Microseconds(), Valid: true},
+				RenewBelow: pgtype.Interval{Microseconds: (auth.SessionTTL / 2).Microseconds(), Valid: true},
+			}); err != nil {
+				logWarn(r, "renew session", err)
+			}
+		}
 	}
 
 	httpx.JSON(w, http.StatusOK, s.sessionUser(r.Context(), user))

@@ -4,8 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { api, unwrap } from '@/lib/api'
-import { queryKeys } from '@/lib/query-keys'
-import { durationParts } from '@/lib/subagents'
+import { queryKeys } from '@openchat/chat-core/query-keys'
+import { durationParts } from '@openchat/chat-core/subagents'
 
 /** How often the list is read again while a sub-agent works: its step count and activity move. */
 const LIST_POLL_MS = 3000

@@ -1,7 +1,7 @@
 import { QueryClient } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { queryKeys } from './query-keys'
+import { queryKeys } from '@openchat/chat-core/query-keys'
 
 // The module keeps who the cache belongs to in module state, so each test gets
 // a fresh copy of it, and a fake localStorage and window to go with.

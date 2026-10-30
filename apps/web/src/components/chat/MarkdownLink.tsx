@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ComponentProps, type PointerEvent } f
 import { useTranslation } from 'react-i18next'
 
 import { copyClipboard } from '@/lib/clipboard'
-import { isHttpUrl } from '@/lib/urls'
+import { isHttpUrl } from '@openchat/chat-core/urls'
 import { SourceMark } from './ToolActivity'
 
 type LinkProps = ComponentProps<'a'> & { node?: unknown }

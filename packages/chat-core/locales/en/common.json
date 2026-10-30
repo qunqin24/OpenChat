@@ -529,6 +529,7 @@
     "error": {
       "invalid-passkey": "That passkey could not sign you in. Try another, or your password.",
       "passkey-unsupported": "This browser does not support passkeys.",
+      "device-passkey-unsupported": "This device does not support passkeys.",
       "invalid-credentials": "Those credentials are incorrect",
       "email-taken": "That email is already registered",
       "email-required": "Enter your email",
@@ -576,7 +577,14 @@
         "verification": "User verification",
         "verification-preferred": "Preferred (recommended)",
         "verification-required": "Required",
-        "verification-hint": "Required asks for a fingerprint, face or device PIN every time; security keys that cannot do that will not work."
+        "verification-hint": "Required asks for a fingerprint, face or device PIN every time; security keys that cannot do that will not work.",
+        "android": "Android app",
+        "android-hint": "Let OpenChat's Android app sign in with this site's passkeys. One line per signing certificate: the package name and its SHA-256 fingerprint (as keytool -list -v prints it); one line for the release build and one for a debug build. They are published in /.well-known/assetlinks.json.",
+        "android-apps": "Apps and certificate fingerprints",
+        "android-apps-hint": "Android reads assetlinks.json on the relying party ID's domain to confirm the app may use this site's passkeys.",
+        "android-pin-rp": "Pin the relying party ID to this site's domain above first (now {{current}}): Android reads assetlinks.json on that domain.",
+        "android-origins": "The apps' origins",
+        "android-invalid": "One package name and one fingerprint per line, separated by a space, such as org.example.openchat AB:CD:… (32 bytes of hex)"
       }
     },
     "title": "Admin",
@@ -2088,5 +2096,11 @@
       "busy": "It is already working.",
       "generic": "That did not work; try again."
     }
+  },
+  "mobile": {
+    "signed-in-as": "Signed in as {{name}}",
+    "network": "Cannot reach the server. Check your connection and try again.",
+    "home-placeholder": "Chat is coming next.",
+    "retry": "Try again"
   }
 }

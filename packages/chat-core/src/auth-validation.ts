@@ -1,4 +1,4 @@
-import type { AuthErrorKey } from '@/features/auth'
+import type { AuthErrorKey } from './auth'
 
 /** Minimum password length accepted at registration. */
 export const MIN_PASSWORD_LENGTH = 8

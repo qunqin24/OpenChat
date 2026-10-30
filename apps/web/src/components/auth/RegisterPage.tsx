@@ -9,7 +9,7 @@ import { useAuthOptions } from '@/hooks/use-auth-options'
 import AuthField from './AuthField'
 import { BannedScreen, PendingScreen } from './AccountOverlay'
 import AuthShell from './AuthShell'
-import { MIN_PASSWORD_LENGTH, validateEmail, validateName, validatePassword } from './validation'
+import { MIN_PASSWORD_LENGTH, validateEmail, validateName, validatePassword } from '@openchat/chat-core/auth-validation'
 
 type Errors = Partial<Record<'email' | 'name' | 'password', AuthErrorKey>>
 type FormField = 'email' | 'name' | 'password'

@@ -1,10 +1,11 @@
 import { isOpenChatError, type CompactionState, type ContextSummary } from '@openchat/api-client'
+import { setCompaction } from '@openchat/chat-core/conversation-follow'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { api, unwrap } from '@/lib/api'
-import { queryKeys } from '@/lib/query-keys'
+import { queryKeys } from '@openchat/chat-core/query-keys'
 
 /**
  * The conversation's compressed context: the summary that stands in, for the
@@ -29,14 +30,6 @@ export function useCompaction(conversationId: string | undefined): ContextSummar
   return query.data?.summary
 }
 
-/** Puts a summary — or none — where the transcript reads it. */
-export function setCompaction(
-  queryClient: ReturnType<typeof useQueryClient>,
-  conversationId: string,
-  summary: ContextSummary | undefined,
-) {
-  queryClient.setQueryData<CompactionState>(queryKeys.conversations.compaction(conversationId), { summary })
-}
 
 /**
  * Codes taking a compression back can be refused with that have their own

@@ -1,4 +1,4 @@
-import { isDocument, TEXT_TYPE } from './attachments'
+import { isDocument, TEXT_TYPE } from '@openchat/chat-core/attachments'
 
 /**
  * What a library card shows of a file's beginning (FilePagePreview): a page

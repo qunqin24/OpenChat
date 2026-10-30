@@ -1,46 +1,22 @@
-import { isOpenChatError, type Attachment, type ConversationReference, type Message, type ReasoningEffort } from '@openchat/api-client'
+import { isOpenChatError, type Attachment, type ConversationReference } from '@openchat/api-client'
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { api, unwrap } from '@/lib/api'
-import type { AskAnswer } from '@/lib/ask-user'
-import { CAPACITY_CODE } from '@/lib/model-capacity'
-import { refusalOf, type Refusal } from '@/lib/moderation-refusal'
-import { queryKeys } from '@/lib/query-keys'
-import { appendRow, truncateTranscript, type TranscriptPages } from '@/lib/transcript-pages'
+import type { AskAnswer } from '@openchat/chat-core/ask-user'
+import { CAPACITY_CODE } from '@openchat/chat-core/model-capacity'
+import { refusalOf, type Refusal } from '@openchat/chat-core/moderation-refusal'
+import { queryKeys } from '@openchat/chat-core/query-keys'
+import {
+  choiceBody,
+  forgetDeleted,
+  keepRefused as keepRefusedRow,
+  sendErrorKey,
+  type RunChoice,
+} from '@openchat/chat-core/send'
 import { refreshNewestMessages } from '@/hooks/use-messages'
 import { useChatStore } from '@/stores/chat-store'
-
-/** Server error codes a send can fail with that have their own wording. */
-const SEND_ERRORS = [
-  'conversation_busy',
-  'no_models',
-  'model_unavailable',
-  'model_capacity_reached',
-  'content_blocked',
-  'revise_refused',
-  'attachments_not_editable',
-  'references_not_editable',
-  'reference_unavailable',
-  'reference_empty',
-  'too_many_references',
-  'moderation_unavailable',
-  'message_too_large_for_moderation',
-  'too_many_runs',
-  'too_many_attachments',
-  'attachments_too_large',
-  'attachment_unsupported',
-  'attachment_unavailable',
-  'attachment_unreadable',
-  'storage_quota_exceeded',
-  'attachment_text_too_long',
-  'nothing_to_answer',
-  'not_latest',
-  'message_not_found',
-  'not_pending',
-  'invalid_answers',
-] as const
 
 function useSendError(conversationId?: string) {
   const { t } = useTranslation()
@@ -65,10 +41,9 @@ function useSendError(conversationId?: string) {
       })
       return
     }
-    const known = SEND_ERRORS.find((c) => c === code)
     // The request's id under the message, for a report that finds its lines.
     const requestId = isOpenChatError(error) ? error.requestId : undefined
-    toast.error(known ? t(`chat.send-error.${known}`) : t('chat.send-error.generic'), {
+    toast.error(t(sendErrorKey(error)), {
       description: requestId ? t('chat.error-id', { id: requestId }) : undefined,
     })
     // The picker learned of the cap too late: its list says the model has room.
@@ -80,19 +55,6 @@ function useSendError(conversationId?: string) {
     if (code === 'revise_refused' && conversationId) void refreshNewestMessages(queryClient, conversationId).catch(() => undefined)
   }
 }
-
-/** What a run is started with, as the composer has it set. */
-interface RunChoice {
-  model?: string
-  reasoningEffort?: ReasoningEffort
-  webSearch?: boolean
-}
-
-const choiceBody = ({ model, reasoningEffort, webSearch }: RunChoice) => ({
-  ...(model ? { model } : {}),
-  ...(reasoningEffort ? { reasoningEffort } : {}),
-  ...(webSearch !== undefined ? { webSearch } : {}),
-})
 
 /**
  * Sends a message. The server writes it, starts the run that answers it and
@@ -161,40 +123,17 @@ export function useSendMessage(conversationId: string) {
   })
 }
 
-/**
- * Shows a refused send as the message the server kept: the warning its response
- * carried (live only), the row in the cached transcript, and the newest page
- * fetched to replace that row with the server's. The fetch failing is no harm:
- * the events stream announces the kept message (`transcript_changed`) and fetches
- * it with retries.
- */
-function keepRefused(queryClient: QueryClient, conversationId: string, refusal: Refusal, content: string) {
-  const messageId = refusal.messageId!
-  useChatStore.getState().refuse(messageId, refusal)
-  const row: Message = {
-    id: messageId,
-    conversationId,
-    role: 'user',
-    content,
-    parts: [{ type: 'text', text: content }],
-    status: 'blocked',
-    createdAt: new Date().toISOString(),
-  }
-  queryClient.setQueryData<TranscriptPages>(queryKeys.messages.list(conversationId), (held) => appendRow(held, row))
-  void refreshNewestMessages(queryClient, conversationId).catch(() => undefined)
-}
-
-/**
- * Takes the rows a redo deleted out of the cached transcript, for the moment
- * between the server having done it and the fetch that shows the same. The
- * events stream gets there first when it can (`use-conversation-events.ts`).
- */
+/** Takes the rows a redo deleted out of the cached transcript (chat-core `forgetDeleted`). */
 export function useForgetDeleted(conversationId: string) {
   const queryClient = useQueryClient()
-  return (target: { from?: string; after?: string }) =>
-    queryClient.setQueryData<TranscriptPages>(queryKeys.messages.list(conversationId), (held) =>
-      truncateTranscript(held, target),
-    )
+  return (target: { from?: string; after?: string }) => forgetDeleted(queryClient, conversationId, target)
+}
+
+/** A refused send shown as the message the server kept (chat-core `keepRefused`). */
+function keepRefused(queryClient: QueryClient, conversationId: string, refusal: Refusal, content: string) {
+  keepRefusedRow(queryClient, useChatStore, conversationId, refusal, content, () =>
+    refreshNewestMessages(queryClient, conversationId),
+  )
 }
 
 /**

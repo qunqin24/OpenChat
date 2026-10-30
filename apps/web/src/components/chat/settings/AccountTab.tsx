@@ -2,7 +2,7 @@ import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { MIN_PASSWORD_LENGTH, validateEmail, validateName } from '@/components/auth/validation'
+import { MIN_PASSWORD_LENGTH, validateEmail, validateName } from '@openchat/chat-core/auth-validation'
 import { UserAvatar } from '@/components/user-avatar'
 import { useChatFeatures } from '@/hooks/use-chat-models'
 import { isAuthFieldError, type AuthErrorKey } from '@/features/auth'

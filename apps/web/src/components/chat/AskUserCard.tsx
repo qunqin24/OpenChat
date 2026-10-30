@@ -2,7 +2,7 @@ import { ChevronRight, MessageCircleQuestion } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { AskAnswer, AskQuestion } from '@/lib/ask-user'
+import type { AskAnswer, AskQuestion } from '@openchat/chat-core/ask-user'
 import { cn } from '@/lib/utils'
 
 export type AskState = 'pending' | 'answered' | 'skipped'

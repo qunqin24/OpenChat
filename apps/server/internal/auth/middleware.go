@@ -12,7 +12,8 @@ import (
 	"github.com/qunqin24/openchat/apps/server/internal/logging"
 )
 
-// Middleware turns the session cookie into a user on the request context.
+// Middleware turns the session token (cookie or bearer) into a user on the
+// request context.
 type Middleware struct {
 	q        *sqlc.Queries
 	disabled func(http.ResponseWriter, *http.Request, sqlc.User)
@@ -38,7 +39,7 @@ func (m *Middleware) Require(next http.Handler) http.Handler {
 			// puzzled by here, and the three causes are indistinguishable from
 			// the outside: no cookie at all, an expired or revoked session, or a
 			// disabled account. Debug logging tells them apart.
-			slog.DebugContext(r.Context(), "rejected: no session cookie", "path", r.URL.Path)
+			slog.DebugContext(r.Context(), "rejected: no session token", "path", r.URL.Path)
 			httpx.Fail(w, r, httpx.ErrUnauthorized)
 			return
 		}
@@ -54,11 +55,14 @@ func (m *Middleware) Require(next http.Handler) http.Handler {
 			}
 			if errors.Is(err, pgx.ErrNoRows) {
 				// Expired, revoked, or the account was disabled. Clear the
-				// cookie so the browser stops sending a token that is dead.
+				// cookie so the browser stops sending a token that is dead -
+				// when it came from one: an app's token is the app's to drop.
 				slog.DebugContext(r.Context(), "rejected: session not valid",
 					"path", r.URL.Path,
 					"reason", "expired, revoked, or the account is disabled")
-				ClearCookie(w, r.TLS != nil)
+				if _, bearer := BearerToken(r); !bearer {
+					ClearCookie(w, r.TLS != nil)
+				}
 				httpx.Fail(w, r, httpx.ErrUnauthorized)
 				return
 			}

@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { authOptionsQueryOptions } from '@/hooks/use-auth-options'
 import { api, unwrap } from '@/lib/api'
 import { putAvatar, squareAvatar } from '@/lib/avatar'
-import { queryKeys } from '@/lib/query-keys'
+import { queryKeys } from '@openchat/chat-core/query-keys'
 import { forgetQueryCache } from '@/lib/query-persist'
 import { resetChatStore } from '@/stores/chat-store'
 import {

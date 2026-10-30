@@ -2,7 +2,7 @@ import type { MemoryEvent, UpdatePersonalizationRequest } from '@openchat/api-cl
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from '@/lib/api'
-import { queryKeys } from '@/lib/query-keys'
+import { queryKeys } from '@openchat/chat-core/query-keys'
 
 /**
  * A person's own memory: custom instructions, the notes, and the log of what

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -70,11 +71,30 @@ func ClearCookie(w http.ResponseWriter, secure bool) {
 	})
 }
 
-// TokenFromRequest reads the session token, or "" when the cookie is absent.
+// TokenFromRequest reads the session token, or "" when there is none: an
+// `Authorization: Bearer` header first - how the app sends it, having been
+// given the token when it signed in (api/auth.go appClient) - then the
+// cookie, how a browser does. Either way it is the same session row, looked
+// up by its hash, so every check on a session holds for both.
 func TokenFromRequest(r *http.Request) string {
+	if token, ok := BearerToken(r); ok {
+		return token
+	}
 	cookie, err := r.Cookie(CookieName)
 	if err != nil {
 		return ""
 	}
 	return cookie.Value
+}
+
+// BearerToken is the token of an `Authorization: Bearer <token>` header (the
+// scheme in any case), and whether the request carried one at all. A header
+// with the scheme and nothing after it carries none.
+func BearerToken(r *http.Request) (string, bool) {
+	scheme, token, ok := strings.Cut(strings.TrimSpace(r.Header.Get("Authorization")), " ")
+	if !ok || !strings.EqualFold(scheme, "Bearer") {
+		return "", false
+	}
+	token = strings.TrimSpace(token)
+	return token, token != ""
 }
