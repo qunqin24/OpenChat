@@ -28,6 +28,8 @@ export const adminKeys = {
   passkeys: () => [...adminKeys.all, 'passkeys'] as const,
   storage: () => [...adminKeys.all, 'storage'] as const,
   storageQuota: () => [...adminKeys.all, 'storage-quota'] as const,
+  /** The site's skills; the hooks are hooks/use-skills.ts, shared with a person's own. */
+  skills: () => [...adminKeys.all, 'skills'] as const,
 }
 
 export function useAdminDashboard(range: DashboardRange) {

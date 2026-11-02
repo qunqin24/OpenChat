@@ -51,7 +51,7 @@ func (q *Queries) CancelConversationRuns(ctx context.Context, ids []uuid.UUID) (
 const createConversation = `-- name: CreateConversation :one
 INSERT INTO conversations (user_id, title, model, temporary)
 VALUES ($1, $2, $3, $4)
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills
 `
 
 type CreateConversationParams struct {
@@ -88,12 +88,13 @@ func (q *Queries) CreateConversation(ctx context.Context, arg CreateConversation
 		&i.Background,
 		&i.StoppedByUser,
 		&i.PinnedAt,
+		&i.Skills,
 	)
 	return i, err
 }
 
 const getConversation = `-- name: GetConversation :one
-SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at
+SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills
 FROM conversations
 WHERE id = $1
   AND user_id = $2
@@ -133,12 +134,13 @@ func (q *Queries) GetConversation(ctx context.Context, arg GetConversationParams
 		&i.Background,
 		&i.StoppedByUser,
 		&i.PinnedAt,
+		&i.Skills,
 	)
 	return i, err
 }
 
 const listConversations = `-- name: ListConversations :many
-SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at
+SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills
 FROM conversations
 WHERE user_id = $1
   AND deleted_at IS NULL
@@ -191,6 +193,7 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 			&i.Background,
 			&i.StoppedByUser,
 			&i.PinnedAt,
+			&i.Skills,
 		); err != nil {
 			return nil, err
 		}
@@ -203,7 +206,7 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 }
 
 const listPinnedConversations = `-- name: ListPinnedConversations :many
-SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at
+SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills
 FROM conversations
 WHERE user_id = $1
   AND deleted_at IS NULL
@@ -244,6 +247,7 @@ func (q *Queries) ListPinnedConversations(ctx context.Context, userID *uuid.UUID
 			&i.Background,
 			&i.StoppedByUser,
 			&i.PinnedAt,
+			&i.Skills,
 		); err != nil {
 			return nil, err
 		}
@@ -289,7 +293,7 @@ func (q *Queries) ListRunningConversations(ctx context.Context, userID *uuid.UUI
 }
 
 const lockConversation = `-- name: LockConversation :one
-SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at
+SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills
 FROM conversations
 WHERE id = $1
 FOR UPDATE
@@ -320,6 +324,7 @@ func (q *Queries) LockConversation(ctx context.Context, id uuid.UUID) (Conversat
 		&i.Background,
 		&i.StoppedByUser,
 		&i.PinnedAt,
+		&i.Skills,
 	)
 	return i, err
 }
@@ -358,7 +363,7 @@ func (q *Queries) LockUserConversations(ctx context.Context, userID *uuid.UUID) 
 }
 
 const searchConversations = `-- name: SearchConversations :many
-SELECT c.id, c.user_id, c.title, c.model, c.created_at, c.updated_at, c.deleted_at, c.reasoning_effort, c.web_search, c.memory_snapshot, c.temporary, c.kind, c.parent_id, c.launched_by, c.launch_call_id, c.background, c.stopped_by_user, c.pinned_at,
+SELECT c.id, c.user_id, c.title, c.model, c.created_at, c.updated_at, c.deleted_at, c.reasoning_effort, c.web_search, c.memory_snapshot, c.temporary, c.kind, c.parent_id, c.launched_by, c.launch_call_id, c.background, c.stopped_by_user, c.pinned_at, c.skills,
        COALESCE(hit.id::text, '')::text  AS hit_id,
        COALESCE(hit.role::text, '')::text AS hit_role,
        COALESCE(hit.content, '')::text    AS hit_content
@@ -412,6 +417,7 @@ type SearchConversationsRow struct {
 	Background      bool               `json:"background"`
 	StoppedByUser   bool               `json:"stopped_by_user"`
 	PinnedAt        pgtype.Timestamptz `json:"pinned_at"`
+	Skills          []string           `json:"skills"`
 	HitID           string             `json:"hit_id"`
 	HitRole         string             `json:"hit_role"`
 	HitContent      string             `json:"hit_content"`
@@ -457,6 +463,7 @@ func (q *Queries) SearchConversations(ctx context.Context, arg SearchConversatio
 			&i.Background,
 			&i.StoppedByUser,
 			&i.PinnedAt,
+			&i.Skills,
 			&i.HitID,
 			&i.HitRole,
 			&i.HitContent,
@@ -477,7 +484,7 @@ SET model = $1
 WHERE id = $2
   AND user_id = $3
   AND deleted_at IS NULL
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills
 `
 
 type SetConversationModelParams struct {
@@ -510,6 +517,7 @@ func (q *Queries) SetConversationModel(ctx context.Context, arg SetConversationM
 		&i.Background,
 		&i.StoppedByUser,
 		&i.PinnedAt,
+		&i.Skills,
 	)
 	return i, err
 }
@@ -520,7 +528,7 @@ SET pinned_at = CASE WHEN $1::boolean THEN COALESCE(pinned_at, now()) ELSE NULL 
 WHERE id = $2
   AND user_id = $3
   AND deleted_at IS NULL
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills
 `
 
 type SetConversationPinnedParams struct {
@@ -552,6 +560,7 @@ func (q *Queries) SetConversationPinned(ctx context.Context, arg SetConversation
 		&i.Background,
 		&i.StoppedByUser,
 		&i.PinnedAt,
+		&i.Skills,
 	)
 	return i, err
 }
@@ -562,7 +571,7 @@ SET reasoning_effort = $1
 WHERE id = $2
   AND user_id = $3
   AND deleted_at IS NULL
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills
 `
 
 type SetConversationReasoningParams struct {
@@ -594,6 +603,7 @@ func (q *Queries) SetConversationReasoning(ctx context.Context, arg SetConversat
 		&i.Background,
 		&i.StoppedByUser,
 		&i.PinnedAt,
+		&i.Skills,
 	)
 	return i, err
 }
@@ -604,7 +614,7 @@ SET web_search = $1
 WHERE id = $2
   AND user_id = $3
   AND deleted_at IS NULL
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills
 `
 
 type SetConversationWebSearchParams struct {
@@ -635,6 +645,7 @@ func (q *Queries) SetConversationWebSearch(ctx context.Context, arg SetConversat
 		&i.Background,
 		&i.StoppedByUser,
 		&i.PinnedAt,
+		&i.Skills,
 	)
 	return i, err
 }
@@ -645,7 +656,7 @@ SET title = $1
 WHERE id = $2
   AND title = $3
   AND deleted_at IS NULL
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills
 `
 
 type SetGeneratedTitleParams struct {
@@ -679,6 +690,7 @@ func (q *Queries) SetGeneratedTitle(ctx context.Context, arg SetGeneratedTitlePa
 		&i.Background,
 		&i.StoppedByUser,
 		&i.PinnedAt,
+		&i.Skills,
 	)
 	return i, err
 }
@@ -739,7 +751,7 @@ SET title      = $1,
 WHERE id = $2
   AND user_id = $3
   AND deleted_at IS NULL
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills
 `
 
 type UpdateConversationTitleParams struct {
@@ -770,6 +782,7 @@ func (q *Queries) UpdateConversationTitle(ctx context.Context, arg UpdateConvers
 		&i.Background,
 		&i.StoppedByUser,
 		&i.PinnedAt,
+		&i.Skills,
 	)
 	return i, err
 }

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -114,10 +115,11 @@ type SubagentTool struct {
 
 // SubagentToolArgs are a call's arguments.
 type SubagentToolArgs struct {
-	Task       string `json:"task"`
-	Name       string `json:"name"`
-	Background *bool  `json:"background"`
-	Context    string `json:"context"`
+	Task       string   `json:"task"`
+	Name       string   `json:"name"`
+	Background *bool    `json:"background"`
+	Context    string   `json:"context"`
+	Skills     []string `json:"skills"`
 }
 
 // SubagentToolDetails is what the interface is shown of a call.
@@ -145,7 +147,8 @@ func (t SubagentTool) Definition() llm.Tool {
 	properties := `
     "task": {"type": "string", "description": "What the sub-agent is to do, complete in itself."},
     "name": {"type": "string", "description": "A short name of 2 to 4 words for the task, in the user's language. Shown to the user, and how you address the sub-agent later."},
-    "context": {"type": "string", "description": "Background the sub-agent needs from this conversation."}`
+    "context": {"type": "string", "description": "Background the sub-agent needs from this conversation."},
+    "skills": {"type": "array", "items": {"type": "string"}, "description": "Names of skills from your Skills list that the task calls for; the sub-agent can open these and no others. Omit when none applies."}`
 	required := `["task", "name"]`
 	if t.background {
 		description += " Set background to false to wait for the report, which is then this call's result: for " +
@@ -193,6 +196,10 @@ func (t SubagentTool) Execute(ctx context.Context, raw json.RawMessage) (agent.T
 		return agent.ToolResult{}, agent.Errorf("Sub-agents are turned off. Do the work yourself.")
 	}
 	background := settings.Background && args.Background != nil && *args.Background
+	named, err := s.subagentSkillNames(ctx, scope, args.Skills)
+	if err != nil {
+		return agent.ToolResult{}, err
+	}
 
 	callID := agent.ToolCallID(ctx)
 	if found, err := s.q.GetLaunchedSubagent(ctx, sqlc.GetLaunchedSubagentParams{LaunchedBy: &scope.RunID, LaunchCallID: &callID}); err == nil {
@@ -244,6 +251,7 @@ func (t SubagentTool) Execute(ctx context.Context, raw json.RawMessage) (agent.T
 		child, err = q.CreateSubagentConversation(ctx, sqlc.CreateSubagentConversationParams{
 			UserID: &user.ID, Title: name, Model: &choice.modelID, WebSearch: choice.webSearch,
 			ParentID: &scope.ConversationID, LaunchedBy: &scope.RunID, LaunchCallID: &callID, Background: background,
+			Skills: named,
 		})
 		if err != nil {
 			return err
@@ -287,6 +295,39 @@ func (t SubagentTool) Execute(ctx context.Context, raw json.RawMessage) (agent.T
 		return subagentStarted(child), nil
 	}
 	return s.awaitSubagent(ctx, child, run.ID)
+}
+
+// subagentSkillNames checks the skills a launch names against those the
+// launching conversation lists: a sub-agent can only be given what its main
+// agent could open itself. Nil for none.
+func (s *Server) subagentSkillNames(ctx context.Context, scope agent.Scope, raw []string) ([]string, error) {
+	var names []string
+	for _, name := range raw {
+		name = strings.ToLower(strings.TrimSpace(name))
+		if name != "" && !slices.Contains(names, name) {
+			names = append(names, name)
+		}
+	}
+	if len(names) == 0 {
+		return nil, nil
+	}
+	listed, err := s.notes().Skills(ctx, scope.UserID, &scope.ConversationID)
+	if err != nil {
+		return nil, err
+	}
+	known := make([]string, len(listed))
+	for i, skill := range listed {
+		known[i] = skill.Name
+	}
+	for _, name := range names {
+		if !slices.Contains(known, name) {
+			if len(known) == 0 {
+				return nil, agent.Errorf("There are no skills to give a sub-agent here. Launch it without skills.")
+			}
+			return nil, agent.Errorf("There is no skill named %q in your Skills list. Available: %s.", name, strings.Join(known, ", "))
+		}
+	}
+	return names, nil
 }
 
 // startQueued starts the first run of a launched sub-agent, inside q's

@@ -12,6 +12,7 @@
 | [writing-blocks.md](writing-blocks.md) | 写作块：文档与版本、模型的 `document` 工具、审核、卡片与编辑面板 |
 | [scheduled-tasks.md](scheduled-tasks.md) | 定时任务：表与上限、周期计算、调度器、审核、模型工具 `scheduled_tasks`、页面 |
 | [sub-agents.md](sub-agents.md) | 子智能体：隐藏的子对话、`subagent`/`subagent_message`/`subagent_stop`、报告的标记与送达、上限、面板与回复里的行、后台设置 |
+| [skills-plan.md](skills-plan.md) | 技能：Agent Skills 格式、站点与个人技能、版本与快照、`skill` 工具、审核、后续拓展（第一期已实现，后续分期仍是方案） |
 | [web-tools.md](web-tools.md) | 联网：`web_search` 的后端与设置、时间范围与限定网站、发布日期、搜索提示词、`web_fetch` 的安全检查、正文抽取成 Markdown、PDF、分段读与查找、短期缓存 |
 | [moderation.md](moderation.md) | 内容审核：检查范围、设置、日志与处罚、被拒绝的消息、指令与记忆的审核、用户标识、前端 |
 | [brand.md](brand.md) | 品牌：标志（水波）的寓意、登录页标语 |

@@ -21,7 +21,7 @@ export const WRITING: OrbLook = { state: 'compacting', variant: 'fuse' }
 export function toolOrb(name: string): OrbLook {
   if (name === 'web_search') return { state: 'searching' }
   if (name === 'web_fetch') return { state: 'using', variant: 'scroll' }
-  if (name === 'file_read') return { state: 'using', variant: 'zoom' }
+  if (name === 'file_read' || name === 'skill') return { state: 'using', variant: 'zoom' }
   if (name === 'file_search') return { state: 'searching', variant: 'lighthouse' }
   if (name === 'memory' || name === 'document') return { state: 'using', variant: 'type' }
   if (name === 'ask_user') return { state: 'waiting' }

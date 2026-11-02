@@ -106,6 +106,20 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 
 细节：[写作块](docs/design/writing-blocks.md)。
 
+## 技能
+
+模型按需读的「做事方法」（Agent Skills 格式：`SKILL.md` 的 frontmatter 给 `name`、`description`），站点的（管理员写，`owner_id` 为空）或个人的（`internal/skills`、`api/skills.go`、`tools/skill.go`）。
+
+- 每次保存是一个新版本（只留最近 20 个）；对话在快照里记下可用技能的**版本**（`memory.Snapshot.Skills`，和记忆快照同一份），`skill` 工具只认快照里的名字和版本，所以改技能只影响新对话，提示词字节不变。
+- 个人技能照自定义指令审：保存时审（来源 `skill`，算违规），保存时没审过的在取快照时审（`snapshot`，不算违规，被拒的版本记 `blocked` 不进快照）；站点技能是管理员的，不审。一个技能的全部文字不超过 `skills.MaxTextChars`，保证一次审得完。
+- 查询都按 owner 限定（个人 = 会话用户，站点 = 空），`/admin/skills` 碰不到任何人的个人技能；同名时个人的盖过站点的。
+- 内置技能在 `internal/skills/builtin/<name>/`（`go:embed`，启动时解析，不合法就 panic，测试会拦），管理员只能关（`builtin_skills_off`）；同名时站点盖过内置、个人盖过两者。
+- 输入框 `$` 选的技能以 `<skill name="…"/>` 行放在消息开头（`chat-core/src/skill-mention.ts`），服务端不展开，系统提示词让模型先用 `skill` 打开；显示、编辑、复制都要先 `parseSkills` 拆开。
+- 子 Agent 只能打开派它时 `skills` 参数点名的技能（`conversations.skills`，必须在主对话的清单里），读主对话快照里的版本；不点名就没有 `skill`。
+- 现在只收文本文件；脚本只是给模型看的参考，等沙箱来了才能跑。
+
+细节：[技能](docs/design/skills-plan.md)。
+
 ## 子智能体
 
 主 Agent 用 `subagent` 把独立的活交给子 Agent：子 Agent 是一个隐藏的子对话（`conversations.kind = 'subagent'`），每段工作是那里的一次普通 run（`api/subagents.go`）。

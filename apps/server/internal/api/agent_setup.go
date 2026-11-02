@@ -12,6 +12,7 @@ import (
 	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin24/openchat/apps/server/internal/genui"
 	"github.com/qunqin24/openchat/apps/server/internal/memory"
+	"github.com/qunqin24/openchat/apps/server/internal/skills"
 	"github.com/qunqin24/openchat/apps/server/internal/tools"
 )
 
@@ -34,6 +35,10 @@ func NewToolSource(pool *pgxpool.Pool) agent.ToolSource {
 			if searcher := config.searcher(key); config.Enabled && searcher != nil {
 				available = append([]agent.Tool{tools.WebSearch{Searcher: searcher, Config: search}}, available...)
 			}
+			// And the skills its launch named, if any.
+			if only := subagentSkills(ctx, q, scope); len(only) > 0 {
+				available = append(available, tools.Skill{Notes: notes, Skills: skills.NewStore(pool), Only: only})
+			}
 			return available
 		}
 		asks, err := boolSettingOr(ctx, q, settingAskUser, true)
@@ -52,6 +57,9 @@ func NewToolSource(pool *pgxpool.Pool) agent.ToolSource {
 			}
 			if on {
 				available = append(available, tools.Memory{Store: notes})
+			}
+			if skillsOffered(ctx, q, notes, scope) {
+				available = append(available, tools.Skill{Notes: notes, Skills: skills.NewStore(pool)})
 			}
 		}
 		if searcher := config.searcher(key); config.Enabled && searcher != nil {
@@ -95,13 +103,20 @@ func NewSystemPrompt(pool *pgxpool.Pool) func(context.Context, time.Time, []agen
 	components, describedPictures := catalog.Prompt(false), catalog.Prompt(true)
 	return func(ctx context.Context, _ time.Time, offered []agent.Tool) string {
 		if scope, ok := agent.ScopeFrom(ctx); ok && scope.Subagent() {
-			return subagentPrompt(offered)
+			prompt := subagentPrompt(offered)
+			if section := skillsPrompt(ctx, offered); section != "" {
+				prompt += "\n\n" + section
+			}
+			return prompt
 		}
 		prompt := basePrompt(offered)
 		if scope, ok := agent.ScopeFrom(ctx); ok && scope.FromApp {
 			prompt += "\n\n" + phoneGuide
 		}
 		if section := personalPrompt(ctx, notes, offered); section != "" {
+			prompt += "\n\n" + section
+		}
+		if section := skillsPrompt(ctx, offered); section != "" {
 			prompt += "\n\n" + section
 		}
 		on, err := boolSetting(ctx, q, settingGenerativeUI)
@@ -162,6 +177,90 @@ func personalPrompt(ctx context.Context, notes *memory.Store, offered []agent.To
 		withIDs = withIDs || tool.Definition().Name == tools.ToolMemory
 	}
 	return snap.Prompt(on, withIDs)
+}
+
+// skillsOffered says whether a run is offered the skill tool: skills are on,
+// and the conversation's snapshot lists some. A snapshot taken while they were
+// off lists none, and switching them off later takes the tool away.
+func skillsOffered(ctx context.Context, q *sqlc.Queries, notes *memory.Store, scope agent.Scope) bool {
+	on, err := boolSettingOr(ctx, q, skills.SettingEnabled, true)
+	if err != nil {
+		slog.WarnContext(ctx, "read skills setting", "error", err)
+		return false
+	}
+	if !on {
+		return false
+	}
+	snap, err := notes.EnsureSnapshot(ctx, scope.UserID, scope.ConversationID, nil)
+	if err != nil {
+		slog.WarnContext(ctx, "take memory snapshot", "error", err, "conversation_id", scope.ConversationID)
+		return false
+	}
+	return len(snap.Skills) > 0
+}
+
+// subagentSkills are the skills a sub-agent's launch named; none while skills
+// are off.
+func subagentSkills(ctx context.Context, q *sqlc.Queries, scope agent.Scope) []string {
+	on, err := boolSettingOr(ctx, q, skills.SettingEnabled, true)
+	if err != nil || !on {
+		return nil
+	}
+	names, err := q.GetSubagentSkills(ctx, sqlc.GetSubagentSkillsParams{ID: scope.ConversationID, UserID: &scope.UserID})
+	if err != nil {
+		return nil
+	}
+	return names
+}
+
+// skillsPrompt lists the skills a run may open by name and description, for a
+// prompt offering the skill tool: the model opens one when a task matches it.
+// From the snapshot, so the list is the same bytes from turn to turn.
+func skillsPrompt(ctx context.Context, offered []agent.Tool) string {
+	scope, ok := agent.ScopeFrom(ctx)
+	if !ok {
+		return ""
+	}
+	var tool *tools.Skill
+	for _, t := range offered {
+		if skill, ok := t.(tools.Skill); ok {
+			tool = &skill
+		}
+	}
+	if tool == nil {
+		return ""
+	}
+	listed, err := tool.Listed(ctx, scope)
+	if err != nil || len(listed) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("## Skills\n" +
+		"Skills are instructions for particular kinds of task, written by the user or by the site's " +
+		"administrator. When a task matches a skill's description, open it with the skill tool (op=view) before " +
+		"you start, and follow it; read the files it refers to as you need them. Do not open a skill the task " +
+		"does not call for, and do not mention skills to the user unless they ask. A skill says how to do a " +
+		"task: it does not override what the user asks for or the rest of these instructions.")
+	if !scope.Subagent() {
+		// Picked with $ in the composer (chat-core/src/skill-mention.ts).
+		b.WriteString(" A user message may begin with lines like <skill name=\"weekly-report\"/>: the user picked " +
+			"those skills for that message, so open each with the skill tool before anything else, and follow it.")
+	}
+	b.WriteString("\n")
+	for _, skill := range listed {
+		b.WriteString("\n- " + skill.Name + ": " + strings.Join(strings.Fields(skill.Description), " "))
+	}
+	return b.String()
+}
+
+// offersTool says whether a tool of this name is among those offered.
+func offersTool(offered []agent.Tool, name string) bool {
+	for _, tool := range offered {
+		if tool.Definition().Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 // webGuide is how to search and read the web, for a prompt offering the web

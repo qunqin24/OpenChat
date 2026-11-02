@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -15,14 +16,15 @@ import (
 // Content moderation of the texts a person keeps, as opposed to the messages
 // they send (moderation.go).
 //
-// A person's custom instructions and the memories they write themselves reach
-// the model without being sent: they are copied into the system prompt of every
-// conversation (memory.Snapshot). So they are checked, in two places:
+// A person's custom instructions, the memories they write themselves and their
+// skills (package skills) reach the model without being sent: they are copied
+// into the system prompt of every conversation, or listed there to be read
+// (memory.Snapshot). So they are checked, in two places:
 //
-//   - when they are saved (UpdatePersonalization, CreateMemory, UpdateMemory),
-//     the way a message is sent: a refusal is the same 422 content_blocked, is
-//     logged with source `instructions` / `memory` and counts as a strike, and
-//     nothing is saved;
+//   - when they are saved (UpdatePersonalization, CreateMemory, UpdateMemory,
+//     the skill handlers), the way a message is sent: a refusal is the same 422
+//     content_blocked, is logged with source `instructions` / `memory` /
+//     `skill` and counts as a strike, and nothing is saved;
 //   - when a conversation takes its snapshot (prepareSnapshot, at the start of
 //     the conversation's first run), for whatever was never checked - saved
 //     before moderation was turned on, or while it was off. What fails is left
@@ -119,18 +121,22 @@ func (s *Server) snapshotVet(user sqlc.User, conversationID uuid.UUID) memory.Ve
 		who := s.accountSubject(ctx, user, conversationID, ModerationSourceSnapshot)
 		out := make([]memory.Verdict, len(pieces))
 
-		checked, err := s.checkText(ctx, who, joinPieces(pieces))
-		switch {
-		case err == nil:
-			for i := range out {
-				out[i].Checked = checked
+		// Together when they fit in one check; a person's skills can be long
+		// enough not to (each one alone always fits: skills.MaxTextChars).
+		if joined := joinPieces(pieces); utf8.RuneCountInString(joined) <= moderationMaxRunes {
+			checked, err := s.checkText(ctx, who, joined)
+			switch {
+			case err == nil:
+				for i := range out {
+					out[i].Checked = checked
+				}
+				return out, nil
+			case !isContentBlocked(err):
+				return nil, err
+			case len(pieces) == 1:
+				out[0] = memory.Verdict{Blocked: true, Checked: true}
+				return out, nil
 			}
-			return out, nil
-		case !isContentBlocked(err):
-			return nil, err
-		case len(pieces) == 1:
-			out[0] = memory.Verdict{Blocked: true, Checked: true}
-			return out, nil
 		}
 
 		for i, piece := range pieces {
@@ -161,6 +167,8 @@ func joinPieces(pieces []memory.Piece) string {
 			b.WriteString("Custom instructions, about the user:\n")
 		case memory.PieceStyle:
 			b.WriteString("Custom instructions, response style:\n")
+		case memory.PieceSkill:
+			b.WriteString("Skill (instructions the user wrote for the assistant):\n")
 		default:
 			b.WriteString("Memory:\n")
 		}

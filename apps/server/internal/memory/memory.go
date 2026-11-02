@@ -26,6 +26,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
+	"github.com/qunqin24/openchat/apps/server/internal/skills"
 )
 
 const (
@@ -148,7 +149,30 @@ type Snapshot struct {
 	// prompt — it must not change — but the model may update or delete what it
 	// saved itself, so their ids resolve.
 	Added []SnapshotRef `json:"added,omitempty"`
+	// Skills are the skills the conversation may use (package skills), each at
+	// the version it had when the conversation started: the built-in ones, the
+	// site's, then the person's own - a site skill taking the place of a
+	// built-in one of the same name, and one of theirs the place of either.
+	// Empty when skills are off.
+	Skills []SnapshotSkill `json:"skills,omitempty"`
 }
+
+// SnapshotSkill is a skill as a conversation lists it.
+type SnapshotSkill struct {
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	VersionID   uuid.UUID `json:"versionId"`
+	// Builtin is a skill of the binary (skills.Builtin), read as the running
+	// version has it: it has no versions to pin, and changes only with an
+	// upgrade. VersionID is zero.
+	Builtin bool `json:"builtin,omitempty"`
+	// Personal is one of the person's own skills, not the site's.
+	Personal bool `json:"personal,omitempty"`
+}
+
+// MaxSnapshotSkills bounds the list in the system prompt; the site's come
+// first, then the person's most recently changed.
+const MaxSnapshotSkills = 50
 
 type SnapshotMemory struct {
 	Ref     string    `json:"ref"`
@@ -180,6 +204,9 @@ const (
 	PieceAbout  PieceKind = "about"
 	PieceStyle  PieceKind = "style"
 	PieceMemory PieceKind = "memory"
+	// PieceSkill is a person's skill: the version (Piece.ID) as one text
+	// (skills.Text).
+	PieceSkill PieceKind = "skill"
 )
 
 // Piece is one text a snapshot would carry that nobody has checked yet: one of
@@ -275,6 +302,10 @@ func (s *Store) EnsureSnapshot(ctx context.Context, userID, conversationID uuid.
 	for i, row := range memories {
 		listed[i] = consider(Piece{Kind: PieceMemory, ID: row.ID, Text: row.Content}, row.CheckedHash, row.BlockedHash)
 	}
+	offered, err := s.skillCandidates(ctx, userID, &ask, true)
+	if err != nil {
+		return Snapshot{}, err
+	}
 
 	if vet != nil && len(ask) > 0 {
 		pieces := make([]Piece, len(ask))
@@ -299,6 +330,7 @@ func (s *Store) EnsureSnapshot(ctx context.Context, userID, conversationID uuid.
 			}
 		}
 		s.recordChecks(ctx, userID, about, style, listed)
+		s.recordSkillChecks(ctx, offered)
 	}
 
 	snap := Snapshot{}
@@ -313,6 +345,7 @@ func (s *Store) EnsureSnapshot(ctx context.Context, userID, conversationID uuid.
 			snap.Memories = append(snap.Memories, SnapshotMemory{Ref: Ref(len(snap.Memories) + 1), ID: c.piece.ID, Content: c.piece.Text})
 		}
 	}
+	snap.Skills = pickSkills(offered)
 	raw, err := json.Marshal(snap)
 	if err != nil {
 		return Snapshot{}, err
@@ -371,6 +404,191 @@ func (s *Store) recordChecks(ctx context.Context, userID uuid.UUID, about, style
 			slog.WarnContext(ctx, "record the memories' moderation", "error", err, "user_id", userID)
 		}
 	}
+}
+
+// skillCandidate is a skill on its way into a snapshot.
+type skillCandidate struct {
+	*candidate
+	skill SnapshotSkill
+	site  bool   // the site's, or built in
+	hash  string // the version's content hash
+}
+
+// skillCandidates are the skills a new conversation of this person would list,
+// with a person's version that was never checked added to ask. The site's are
+// an administrator's and go in as they are.
+func (s *Store) skillCandidates(ctx context.Context, userID uuid.UUID, ask *[]*candidate, load bool) ([]*skillCandidate, error) {
+	on, err := s.setting(ctx, skills.SettingEnabled, true)
+	if err != nil || !on {
+		return nil, err
+	}
+	personal, err := s.setting(ctx, skills.SettingPersonal, true)
+	if err != nil {
+		return nil, err
+	}
+	off, err := s.builtinOff(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []*skillCandidate
+	for _, b := range skills.Builtins() {
+		if !off[b.Name] {
+			out = append(out, &skillCandidate{
+				candidate: &candidate{piece: Piece{Kind: PieceSkill}},
+				skill:     SnapshotSkill{Name: b.Name, Description: b.Description, Builtin: true},
+				site:      true,
+			})
+		}
+	}
+	rows, err := s.q.ListSnapshotSkills(ctx, &userID)
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		site := row.OwnerID == nil
+		if !site && !personal {
+			continue
+		}
+		c := &skillCandidate{
+			candidate: &candidate{piece: Piece{Kind: PieceSkill, ID: row.VersionID}},
+			skill:     SnapshotSkill{Name: row.Name, Description: row.Description, VersionID: row.VersionID, Personal: !site},
+			site:      site,
+			hash:      row.ContentHash,
+		}
+		switch {
+		case site:
+		case row.Checked != nil && *row.Checked == row.ContentHash:
+		case row.Blocked != nil && *row.Blocked == row.ContentHash:
+			c.out = true
+		case !load:
+			// Only looked at, not taken: what a check would decide is not known.
+		default:
+			text, err := s.skillText(ctx, row.VersionID)
+			if err != nil {
+				return nil, err
+			}
+			c.piece.Text = text
+			*ask = append(*ask, c.candidate)
+		}
+		out = append(out, c)
+	}
+	return out, nil
+}
+
+// Skills are the skills a conversation of this person may open: those its
+// snapshot listed, or - for none (conversationID nil) or one that has not
+// started - what a snapshot taken now would list, a person's skill never
+// checked counted in (the check is made when the snapshot is taken). Nothing
+// while skills are off.
+func (s *Store) Skills(ctx context.Context, userID uuid.UUID, conversationID *uuid.UUID) ([]SnapshotSkill, error) {
+	on, err := s.setting(ctx, skills.SettingEnabled, true)
+	if err != nil || !on {
+		return nil, err
+	}
+	if conversationID != nil {
+		state, err := s.q.GetConversationMemoryState(ctx, sqlc.GetConversationMemoryStateParams{ID: *conversationID, UserID: &userID})
+		if err != nil {
+			return nil, err
+		}
+		if state.MemorySnapshot != nil {
+			snap, err := decodeSnapshot(state.MemorySnapshot)
+			return snap.Skills, err
+		}
+	}
+	var ignored []*candidate
+	offered, err := s.skillCandidates(ctx, userID, &ignored, false)
+	if err != nil {
+		return nil, err
+	}
+	return pickSkills(offered), nil
+}
+
+func (s *Store) skillText(ctx context.Context, versionID uuid.UUID) (string, error) {
+	rows, err := s.q.ListSkillFiles(ctx, versionID)
+	if err != nil {
+		return "", err
+	}
+	files := make([]skills.File, len(rows))
+	for i, r := range rows {
+		files[i] = skills.File{Path: r.Path, Content: r.Content}
+	}
+	return skills.Text(files), nil
+}
+
+// pickSkills is the list a snapshot keeps: what was not refused, a site skill
+// in place of a built-in one of the same name and a person's in place of
+// either, at most MaxSnapshotSkills.
+func pickSkills(offered []*skillCandidate) []SnapshotSkill {
+	own, site := map[string]bool{}, map[string]bool{}
+	for _, c := range offered {
+		switch {
+		case c.out || c.skill.Builtin:
+		case c.site:
+			site[c.skill.Name] = true
+		default:
+			own[c.skill.Name] = true
+		}
+	}
+	var out []SnapshotSkill
+	for _, c := range offered {
+		shadowed := (c.site && own[c.skill.Name]) || (c.skill.Builtin && site[c.skill.Name])
+		if c.out || shadowed || len(out) == MaxSnapshotSkills {
+			continue
+		}
+		out = append(out, c.skill)
+	}
+	return out
+}
+
+// builtinOff is the built-in skills an administrator switched off.
+func (s *Store) builtinOff(ctx context.Context) (map[string]bool, error) {
+	raw, err := s.q.GetSetting(ctx, skills.SettingBuiltinOff)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return map[string]bool{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	if err := json.Unmarshal(raw, &names); err != nil {
+		return nil, err
+	}
+	off := make(map[string]bool, len(names))
+	for _, name := range names {
+		off[name] = true
+	}
+	return off, nil
+}
+
+// recordSkillChecks writes down what a snapshot-time check found about a
+// person's skills, best effort like recordChecks.
+func (s *Store) recordSkillChecks(ctx context.Context, offered []*skillCandidate) {
+	for _, c := range offered {
+		if c.found == "" {
+			continue
+		}
+		if err := s.q.MarkSkillVersionModerated(ctx, sqlc.MarkSkillVersionModeratedParams{
+			ID: c.skill.VersionID, Hash: c.hash, Verdict: c.found,
+		}); err != nil {
+			slog.WarnContext(ctx, "record a skill's moderation", "error", err, "version_id", c.skill.VersionID)
+		}
+	}
+}
+
+// setting is an administrator's switch, def when it was never set.
+func (s *Store) setting(ctx context.Context, key string, def bool) (bool, error) {
+	raw, err := s.q.GetSetting(ctx, key)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return def, nil
+	}
+	if err != nil {
+		return def, err
+	}
+	var on bool
+	if err := json.Unmarshal(raw, &on); err != nil {
+		return def, err
+	}
+	return on, nil
 }
 
 func decodeSnapshot(raw []byte) (Snapshot, error) {

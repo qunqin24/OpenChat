@@ -51,6 +51,12 @@ export const queryKeys = {
     /** The signed-in account's passkeys. */
     passkeys: ['auth', 'passkeys'] as const,
   },
+  /** A person's skills: their own words, never persisted. */
+  skills: {
+    all: ['skills'] as const,
+    list: () => [...queryKeys.skills.all, 'list'] as const,
+    detail: (id: string) => [...queryKeys.skills.all, 'detail', id] as const,
+  },
   memory: {
     all: ['memory'] as const,
     personalization: () => [...queryKeys.memory.all, 'personalization'] as const,

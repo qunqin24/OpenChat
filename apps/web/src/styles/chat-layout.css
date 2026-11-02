@@ -639,3 +639,66 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
 }
+
+/* Skills picked with $ (Composer): chips above the box; the picker a menu
+   above the field, drawn like the other menus (menu.css). */
+.chat-ui .n-composer-field { position: relative; }
+.chat-ui .n-skill-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 12px 0; }
+.chat-ui .n-skill-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 4px 2px 8px;
+  border-radius: 999px;
+  background: var(--n-hover);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 20px;
+}
+.chat-ui .n-skill-chip svg { width: 13px; height: 13px; color: var(--n-text-2); }
+.chat-ui .n-skill-chip button {
+  display: inline-flex;
+  padding: 2px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--n-text-2);
+  cursor: pointer;
+}
+.chat-ui .n-skill-chip button:hover { background: var(--n-hover-strong); color: var(--n-text); }
+.chat-ui .n-skill-chip button svg { width: 12px; height: 12px; }
+.chat-ui .n-skill-picker {
+  position: absolute;
+  z-index: 30;
+  right: 10px;
+  bottom: calc(100% + 6px);
+  left: 10px;
+  max-height: 18rem;
+  margin: 0;
+  padding: 2px;
+  overflow-y: auto;
+  border: 1px solid var(--n-menu-border);
+  border-radius: 12px;
+  background: var(--n-menu-bg);
+  color: var(--n-menu-text);
+  list-style: none;
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 10%),
+    0 4px 6px -4px rgb(0 0 0 / 10%);
+}
+.chat-ui .n-skill-option { display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; border-radius: 10px; cursor: pointer; }
+.chat-ui .n-skill-option.is-active { background: var(--n-hover); }
+.chat-ui .n-skill-option-name { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 12.5px; font-weight: 500; }
+.chat-ui .n-skill-option-name svg { width: 13px; height: 13px; color: var(--n-text-2); }
+.chat-ui .n-skill-option-source { color: var(--n-text-3); font-family: var(--font-sans); font-size: 11px; font-weight: 400; }
+.chat-ui .n-skill-option-description {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  color: var(--n-text-2);
+  font-size: 12px;
+  line-height: 17px;
+}
+/* A sent message's picked skills, above its words. */
+.chat-ui .n-msg-user .n-skill-chips { justify-content: flex-end; padding: 0 0 6px; }

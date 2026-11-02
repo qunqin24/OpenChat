@@ -1,7 +1,9 @@
-import type { ConversationReference } from '@openchat/api-client'
-import { ArrowUp, Maximize2, MessageSquareQuote, Minimize2, NotebookPen, Square, X } from 'lucide-react'
+import type { AvailableSkill, ConversationReference } from '@openchat/api-client'
+import { ArrowUp, BookOpen, Maximize2, MessageSquareQuote, Minimize2, NotebookPen, Square, X } from 'lucide-react'
 import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { mentionAt } from '@openchat/chat-core/skill-mention'
 
 import type { PendingAttachment } from '@/hooks/use-attachments'
 import { highlightPassage } from '@/lib/highlight-passage'
@@ -39,6 +41,18 @@ interface ComposerProps {
    * as cards in a row, each with its own remove.
    */
   quotes?: { title: string; passage: string; fromAnswer?: boolean; onRemove: () => void }[]
+  /**
+   * Skills picked for the message with `$`: typing `$` at the start of the box
+   * or after a space lists what this conversation's model can open; the ones
+   * picked are chips above the box, sent as lines at the message's start
+   * (chat-core/src/skill-mention.ts).
+   */
+  skills?: {
+    picked: string[]
+    available: AvailableSkill[]
+    onPick: (name: string) => void
+    onUnpick: (name: string) => void
+  }
   attach?: {
     accept: string
     hint: string
@@ -67,9 +81,34 @@ export function Composer({
   toolsSlot,
   note,
   quotes,
+  skills,
   attach,
 }: ComposerProps) {
   const { t } = useTranslation()
+  // Where the caret is, for the $ picker; and the `$` the person closed it on.
+  const [caret, setCaret] = useState(0)
+  const [dismissed, setDismissed] = useState<number | null>(null)
+  const [active, setActive] = useState(0)
+  const mention = skills ? mentionAt(value, caret) : null
+  const matches = mention
+    ? (skills?.available ?? [])
+        .filter((s) => !skills?.picked.includes(s.name))
+        .filter((s) => s.name.includes(mention.query) || s.description.toLowerCase().includes(mention.query))
+        .slice(0, 8)
+    : []
+  const picking = Boolean(mention) && matches.length > 0 && dismissed !== mention?.start
+  const pick = (name: string) => {
+    if (!mention || !skills) return
+    const next = value.slice(0, mention.start) + value.slice(caret)
+    onValueChange(next)
+    skills.onPick(name)
+    setActive(0)
+    requestAnimationFrame(() => {
+      ref.current?.focus()
+      ref.current?.setSelectionRange(mention.start, mention.start)
+      setCaret(mention.start)
+    })
+  }
   // A passage of an answer shown where it is (a click on its card): its
   // highlight goes when it is clicked again, removed or sent.
   const [picked, setPicked] = useState<string | null>(null)
@@ -203,6 +242,19 @@ export function Composer({
             ))}
           </div>
         )}
+        {skills && skills.picked.length > 0 && (
+          <div className="n-skill-chips">
+            {skills.picked.map((name) => (
+              <span key={name} className="n-skill-chip">
+                <BookOpen aria-hidden="true" />
+                <span>{name}</span>
+                <button type="button" aria-label={t('chat.skills.remove', { name })} onClick={() => skills.onUnpick(name)}>
+                  <X aria-hidden="true" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
         {attach && (
           <AttachmentTray
             items={attach.items}
@@ -213,6 +265,33 @@ export function Composer({
         )}
 
         <div className="n-composer-field">
+          {picking && (
+            <ul className="n-skill-picker" role="listbox" aria-label={t('chat.skills.picker')}>
+              {matches.map((skill, i) => (
+                <li
+                  key={skill.name}
+                  role="option"
+                  aria-selected={i === Math.min(active, matches.length - 1)}
+                  className={cn('n-skill-option', i === Math.min(active, matches.length - 1) && 'is-active')}
+                  // Before the box loses focus, so the caret is still known.
+                  onMouseDown={(event) => {
+                    event.preventDefault()
+                    pick(skill.name)
+                  }}
+                  onMouseEnter={() => setActive(i)}
+                >
+                  <span className="n-skill-option-name">
+                    <BookOpen aria-hidden="true" />
+                    {skill.name}
+                    {skill.source !== 'personal' && (
+                      <span className="n-skill-option-source">{t(skill.source === 'builtin' ? 'chat.skills.source-builtin' : 'chat.skills.source-site')}</span>
+                    )}
+                  </span>
+                  <span className="n-skill-option-description">{skill.description}</span>
+                </li>
+              ))}
+            </ul>
+          )}
           <textarea
             id="input"
             ref={ref}
@@ -222,9 +301,33 @@ export function Composer({
             disabled={disabled}
             aria-label={placeholder}
             placeholder={placeholder}
-            onChange={(event) => onValueChange(event.target.value)}
+            onChange={(event) => {
+              onValueChange(event.target.value)
+              setCaret(event.target.selectionStart)
+              setActive(0)
+            }}
+            onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
             onPaste={handlePaste}
             onKeyDown={(event) => {
+              if (picking && mention && !event.nativeEvent.isComposing) {
+                const last = matches.length - 1
+                if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                  event.preventDefault()
+                  const at = Math.min(active, last)
+                  setActive(event.key === 'ArrowDown' ? (at + 1) % matches.length : (at - 1 + matches.length) % matches.length)
+                  return
+                }
+                if (event.key === 'Enter' || event.key === 'Tab') {
+                  event.preventDefault()
+                  pick(matches[Math.min(active, last)]!.name)
+                  return
+                }
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  setDismissed(mention.start)
+                  return
+                }
+              }
               if (!isEnter(event)) return
               // Bare Enter sends; Ctrl/Cmd or Shift inserts a newline.
               if (withCtrl(event) || withShift(event)) return

@@ -2,7 +2,7 @@ import { useNavigate, useSearch } from '@tanstack/react-router'
 import { useCallback } from 'react'
 
 /** The tabs of the settings dialog, in the order they are listed. */
-export const SETTINGS_TABS = ['general', 'personalization', 'account', 'data'] as const
+export const SETTINGS_TABS = ['general', 'personalization', 'skills', 'account', 'data'] as const
 export type SettingsTab = (typeof SETTINGS_TABS)[number]
 
 export function isSettingsTab(value: unknown): value is SettingsTab {

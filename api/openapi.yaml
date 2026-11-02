@@ -17,6 +17,7 @@ security:
 
 tags:
   - name: system
+  - name: skills
   - name: auth
   - name: admin
   - name: conversations
@@ -782,6 +783,207 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SystemSettings" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/skills:
+    get:
+      tags: [admin]
+      summary: The site's skills
+      description: Skills every account's conversations may use. Not anyone's personal skills.
+      operationId: listSiteSkills
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillList" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [admin]
+      summary: Write a site skill
+      description: |
+        As `POST /me/skills`, for the whole site. Not checked by content
+        moderation: it is the administrator's, like the other site settings.
+      operationId: createSiteSkill
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillRequest" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillDetail" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/skills/import:
+    post:
+      tags: [admin]
+      summary: Import site skills from a file
+      description: As `POST /me/skills/import`, for the whole site.
+      operationId: importSiteSkills
+      parameters:
+        - name: filename
+          in: query
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillImportResult" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/skills/builtin/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [admin]
+      summary: A built-in skill, with its files
+      description: Built-in skills ship with the server and cannot be edited, only switched off.
+      operationId: getBuiltinSkill
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BuiltinSkillDetail" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [admin]
+      summary: Switch a built-in skill on or off
+      operationId: setBuiltinSkillEnabled
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillEnabledRequest" }
+      responses:
+        "204": { description: changed }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/skills/{skillId}/versions:
+    parameters:
+      - name: skillId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [admin]
+      summary: A skill's kept versions, newest first
+      description: The latest 20 are kept, the current one among them. To go back to one, save its files (`PUT`) as a new version.
+      operationId: listSiteSkillVersions
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillVersionList" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/skills/{skillId}/versions/{versionId}:
+    parameters:
+      - name: skillId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: versionId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [admin]
+      summary: One kept version's files
+      operationId: getSiteSkillVersion
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillVersionDetail" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/skills/{skillId}/export:
+    parameters:
+      - name: skillId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [admin]
+      summary: Download a skill as a ZIP
+      description: The skill's folder, named for it, with its files - the layout an import reads back.
+      operationId: exportSiteSkill
+      responses:
+        "200":
+          description: ok
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/skills/{skillId}:
+    parameters:
+      - name: skillId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [admin]
+      summary: A site skill, with its files
+      operationId: getSiteSkill
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillDetail" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [admin]
+      summary: Save a new version of a site skill
+      operationId: updateSiteSkill
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillRequest" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillDetail" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [admin]
+      summary: Switch a site skill on or off
+      operationId: setSiteSkillEnabled
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillEnabledRequest" }
+      responses:
+        "204": { description: changed }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [admin]
+      summary: Delete a site skill
+      operationId: deleteSiteSkill
+      responses:
+        "204": { description: deleted }
         default: { $ref: "#/components/responses/Error" }
 
   /admin/version:
@@ -2219,6 +2421,219 @@ paths:
         "204": { description: deleted }
         default: { $ref: "#/components/responses/Error" }
 
+  /me/skills:
+    get:
+      tags: [skills]
+      summary: Your skills, and the site's
+      description: |
+        Your own skills, newest first, and the site's that are on (read only
+        here). Never anyone else's. Capped (`limit`), so not paged.
+      operationId: listMySkills
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MySkillList" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [skills]
+      summary: Write a skill
+      description: |
+        The skill's files, `SKILL.md` among them at the root; its frontmatter
+        gives the name and the description (Agent Skills format). 400 with a
+        `skill_*` code for files that do not follow the format or the limits,
+        409 `skill_name_taken` for a name you use already, 409 `skill_limit` at
+        the cap, 403 `personal_skills_off` when the administrator has turned
+        personal skills off. With content moderation on the files are checked
+        like the custom instructions are: 422 `content_blocked` or 503
+        `moderation_unavailable`, and nothing is saved.
+      operationId: createMySkill
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillRequest" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillDetail" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /me/skills/import:
+    post:
+      tags: [skills]
+      summary: Import skills from a file
+      description: |
+        The file is the body: a `SKILL.md` (any `.md`), or a ZIP (`.zip`, or a
+        `.skill`, which is one) holding one skill with `SKILL.md` at its root or
+        several skill folders that each have one. At most 8 MiB (413
+        `file_too_large`). Each skill is saved as `POST /me/skills` would save
+        it; one that cannot be is listed in `failed` and the others are still
+        saved. Files that are not text are left out for now (`skipped`).
+      operationId: importMySkills
+      parameters:
+        - name: filename
+          in: query
+          required: true
+          description: The uploaded file's name, which says how to read it.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillImportResult" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /me/skills/available:
+    get:
+      tags: [skills]
+      summary: The skills a conversation may use, for the composer's picker
+      description: |
+        With `conversationId`, the skills that conversation listed when it
+        started (what its model can open); without, or for a conversation that
+        has not started, what a new one would list now. Empty while skills are
+        off.
+      operationId: listAvailableSkills
+      parameters:
+        - name: conversationId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AvailableSkillList" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /me/skills/{skillId}/versions:
+    parameters:
+      - name: skillId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [skills]
+      summary: A skill's kept versions, newest first
+      description: The latest 20 are kept, the current one among them. To go back to one, save its files (`PUT`) as a new version.
+      operationId: listMySkillVersions
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillVersionList" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /me/skills/{skillId}/versions/{versionId}:
+    parameters:
+      - name: skillId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: versionId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [skills]
+      summary: One kept version's files
+      operationId: getMySkillVersion
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillVersionDetail" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /me/skills/{skillId}/export:
+    parameters:
+      - name: skillId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [skills]
+      summary: Download a skill as a ZIP
+      description: The skill's folder, named for it, with its files - the layout an import reads back.
+      operationId: exportMySkill
+      responses:
+        "200":
+          description: ok
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
+        default: { $ref: "#/components/responses/Error" }
+
+  /me/skills/{skillId}:
+    parameters:
+      - name: skillId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [skills]
+      summary: One of your skills, with its files
+      operationId: getMySkill
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillDetail" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [skills]
+      summary: Save a new version of a skill
+      description: |
+        Replaces the files, as a new version; the same checks as writing one.
+        Conversations already under way keep the version they started with.
+      operationId: updateMySkill
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillRequest" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillDetail" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [skills]
+      summary: Switch a skill on or off
+      description: Off, new conversations leave it out; ones under way keep it.
+      operationId: setMySkillEnabled
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillEnabledRequest" }
+      responses:
+        "204": { description: changed }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [skills]
+      summary: Delete a skill
+      description: Conversations that listed it are told it is gone if they try to read it.
+      operationId: deleteMySkill
+      responses:
+        "204": { description: deleted }
+        default: { $ref: "#/components/responses/Error" }
+
   /me/memory-events:
     get:
       tags: [memory]
@@ -3535,6 +3950,177 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
 
+    Skill:
+      type: object
+      required: [id, name, description, enabled, source, checked, blocked, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, description: "From the SKILL.md frontmatter: lowercase letters, digits and hyphens." }
+        description: { type: string, description: What the skill does and when to use it, from the frontmatter. }
+        enabled: { type: boolean, description: Off, new conversations leave it out. }
+        source:
+          type: string
+          enum: [site, personal]
+          x-enum-varnames: [SkillSourceSite, SkillSourcePersonal]
+        checked:
+          type: boolean
+          description: |
+            The current version passed content moderation, or is the site's.
+            A personal one saved while moderation was off is false until a
+            conversation would take it, which checks it then.
+        blocked:
+          type: boolean
+          description: A check refused the current version; conversations leave it out.
+        updatedAt: { type: string, format: date-time }
+
+    BuiltinSkill:
+      type: object
+      required: [name, description, enabled]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        enabled: { type: boolean, description: Off, new conversations leave it out. }
+
+    BuiltinSkillDetail:
+      type: object
+      required: [skill, files]
+      properties:
+        skill: { $ref: "#/components/schemas/BuiltinSkill" }
+        files:
+          type: array
+          items: { $ref: "#/components/schemas/SkillFile" }
+
+    SkillVersion:
+      type: object
+      required: [id, description, createdAt, current]
+      properties:
+        id: { type: string, format: uuid }
+        description: { type: string }
+        createdAt: { type: string, format: date-time }
+        current: { type: boolean }
+
+    SkillVersionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SkillVersion" }
+
+    SkillVersionDetail:
+      type: object
+      required: [version, files]
+      properties:
+        version: { $ref: "#/components/schemas/SkillVersion" }
+        files:
+          type: array
+          items: { $ref: "#/components/schemas/SkillFile" }
+
+    AvailableSkill:
+      type: object
+      required: [name, description, source]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        source:
+          type: string
+          enum: [builtin, site, personal]
+          x-enum-varnames: [AvailableSkillSourceBuiltin, AvailableSkillSourceSite, AvailableSkillSourcePersonal]
+
+    AvailableSkillList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AvailableSkill" }
+
+    SkillFile:
+      type: object
+      required: [path, content]
+      properties:
+        path: { type: string, description: "From the skill's root, such as SKILL.md or references/guide.md." }
+        content: { type: string }
+
+    SkillDetail:
+      type: object
+      required: [skill, files]
+      properties:
+        skill: { $ref: "#/components/schemas/Skill" }
+        files:
+          type: array
+          items: { $ref: "#/components/schemas/SkillFile" }
+
+    SkillRequest:
+      type: object
+      required: [files]
+      properties:
+        files:
+          type: array
+          description: Every file of the skill, SKILL.md at the root among them; text only, at most 50.
+          items: { $ref: "#/components/schemas/SkillFile" }
+
+    SkillEnabledRequest:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+
+    SkillList:
+      type: object
+      required: [items, builtin, limit]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Skill" }
+        builtin:
+          type: array
+          description: The skills that ship with the server.
+          items: { $ref: "#/components/schemas/BuiltinSkill" }
+        limit: { type: integer, description: How many may be kept. }
+
+    MySkillList:
+      type: object
+      required: [items, site, builtin, allowed, enabled, limit]
+      properties:
+        builtin:
+          type: array
+          description: The built-in skills that are on, for every account.
+          items: { $ref: "#/components/schemas/BuiltinSkill" }
+        items:
+          type: array
+          description: Your own.
+          items: { $ref: "#/components/schemas/Skill" }
+        site:
+          type: array
+          description: The site's that are on, for every account.
+          items: { $ref: "#/components/schemas/Skill" }
+        allowed: { type: boolean, description: Whether you may write skills of your own (the administrator's switch). }
+        enabled: { type: boolean, description: Whether skills are on at all (System settings). }
+        limit: { type: integer, description: How many of your own you may keep. }
+
+    SkillImportResult:
+      type: object
+      required: [created, failed, skipped]
+      properties:
+        created:
+          type: array
+          items: { $ref: "#/components/schemas/Skill" }
+        failed:
+          type: array
+          description: Skills in the file that could not be saved, and why.
+          items:
+            type: object
+            required: [name, code, message]
+            properties:
+              name: { type: string, description: The skill's name if its frontmatter gave one, else its folder. }
+              code: { type: string }
+              message: { type: string }
+        skipped:
+          type: array
+          description: Files left out because they are not text.
+          items: { type: string }
+
     MemoryList:
       type: object
       required: [items]
@@ -3668,7 +4254,7 @@ components:
 
     ChatFeatures:
       type: object
-      required: [webSearch, avatarUploads, scheduledTasks, requestTraces]
+      required: [webSearch, avatarUploads, scheduledTasks, requestTraces, skills, personalSkills]
       properties:
         requestTraces:
           type: boolean
@@ -3686,6 +4272,12 @@ components:
         avatarUploads:
           type: boolean
           description: Whether the account settings offer uploading a picture.
+        skills:
+          type: boolean
+          description: Whether skills are on (System settings).
+        personalSkills:
+          type: boolean
+          description: Whether people may write skills of their own (System settings).
 
     ChatModel:
       type: object
@@ -4753,7 +5345,7 @@ components:
 
     SystemSettings:
       type: object
-      required: [debugLogging, generativeUi, askUser, compressContext, memory, taskModel, avatarUploads, scheduledTasks, requestTraces,
+      required: [debugLogging, generativeUi, askUser, compressContext, memory, skills, personalSkills, taskModel, avatarUploads, scheduledTasks, requestTraces,
                  deletedRetentionDays, unsentUploadHours, orphanFileHours,
                  maxConcurrentRuns,
                  allowRegistration, registrationApproval]
@@ -4853,6 +5445,18 @@ components:
             writes memories and the memory tool is not offered; people can still
             see and delete theirs, and their custom instructions still apply.
             On by default. Administrators cannot read anyone's memories either way.
+        skills:
+          type: boolean
+          description: |
+            Whether conversations list skills and models are offered the tool
+            that reads them. On by default. Off, the skills are kept; new
+            conversations list none and ones under way lose the tool.
+        personalSkills:
+          type: boolean
+          description: |
+            Whether people may write skills of their own. On by default. Off,
+            theirs are kept but left out of new conversations, and writing one
+            is 403 `personal_skills_off`.
         debugLogging:
           type: boolean
           description: |
@@ -4869,6 +5473,8 @@ components:
         askUser: { type: boolean }
         compressContext: { type: boolean }
         memory: { type: boolean }
+        skills: { type: boolean }
+        personalSkills: { type: boolean }
         avatarUploads: { type: boolean }
         scheduledTasks: { type: boolean }
         requestTraces: { type: boolean }
@@ -4975,9 +5581,10 @@ components:
         but not counted as a strike); a scheduled task's prompt as its owner
         saved it (`task`), or as it was about to be sent or a model wrote it
         (`task_run`, logged but not counted as a strike); the person's text
-        of a writing block as a model was about to read it (`document`).
-      enum: [send, edit, answer, instructions, memory, snapshot, task, task_run, document]
-      x-enum-varnames: [ModerationSourceSend, ModerationSourceEdit, ModerationSourceAnswer, ModerationSourceInstructions, ModerationSourceMemory, ModerationSourceSnapshot, ModerationSourceTask, ModerationSourceTaskRun, ModerationSourceDocument]
+        of a writing block as a model was about to read it (`document`); a
+        person's skill as they saved it (`skill`).
+      enum: [send, edit, answer, instructions, memory, snapshot, task, task_run, document, skill]
+      x-enum-varnames: [ModerationSourceSend, ModerationSourceEdit, ModerationSourceAnswer, ModerationSourceInstructions, ModerationSourceMemory, ModerationSourceSnapshot, ModerationSourceTask, ModerationSourceTaskRun, ModerationSourceDocument, ModerationSourceSkill]
 
     ModerationSanction:
       type: string

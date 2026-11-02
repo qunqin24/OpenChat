@@ -644,6 +644,160 @@ export interface paths {
         patch: operations["updateSystemSettings"];
         trace?: never;
     };
+    "/admin/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The site's skills
+         * @description Skills every account's conversations may use. Not anyone's personal skills.
+         */
+        get: operations["listSiteSkills"];
+        put?: never;
+        /**
+         * Write a site skill
+         * @description As `POST /me/skills`, for the whole site. Not checked by content
+         *     moderation: it is the administrator's, like the other site settings.
+         */
+        post: operations["createSiteSkill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/skills/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import site skills from a file
+         * @description As `POST /me/skills/import`, for the whole site.
+         */
+        post: operations["importSiteSkills"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/skills/builtin/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * A built-in skill, with its files
+         * @description Built-in skills ship with the server and cannot be edited, only switched off.
+         */
+        get: operations["getBuiltinSkill"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Switch a built-in skill on or off */
+        patch: operations["setBuiltinSkillEnabled"];
+        trace?: never;
+    };
+    "/admin/skills/{skillId}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * A skill's kept versions, newest first
+         * @description The latest 20 are kept, the current one among them. To go back to one, save its files (`PUT`) as a new version.
+         */
+        get: operations["listSiteSkillVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/skills/{skillId}/versions/{versionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skillId: string;
+                versionId: string;
+            };
+            cookie?: never;
+        };
+        /** One kept version's files */
+        get: operations["getSiteSkillVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/skills/{skillId}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Download a skill as a ZIP
+         * @description The skill's folder, named for it, with its files - the layout an import reads back.
+         */
+        get: operations["exportSiteSkill"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/skills/{skillId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        /** A site skill, with its files */
+        get: operations["getSiteSkill"];
+        /** Save a new version of a site skill */
+        put: operations["updateSiteSkill"];
+        post?: never;
+        /** Delete a site skill */
+        delete: operations["deleteSiteSkill"];
+        options?: never;
+        head?: never;
+        /** Switch a site skill on or off */
+        patch: operations["setSiteSkillEnabled"];
+        trace?: never;
+    };
     "/admin/version": {
         parameters: {
             query?: never;
@@ -1929,6 +2083,182 @@ export interface paths {
         patch: operations["updateMemory"];
         trace?: never;
     };
+    "/me/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Your skills, and the site's
+         * @description Your own skills, newest first, and the site's that are on (read only
+         *     here). Never anyone else's. Capped (`limit`), so not paged.
+         */
+        get: operations["listMySkills"];
+        put?: never;
+        /**
+         * Write a skill
+         * @description The skill's files, `SKILL.md` among them at the root; its frontmatter
+         *     gives the name and the description (Agent Skills format). 400 with a
+         *     `skill_*` code for files that do not follow the format or the limits,
+         *     409 `skill_name_taken` for a name you use already, 409 `skill_limit` at
+         *     the cap, 403 `personal_skills_off` when the administrator has turned
+         *     personal skills off. With content moderation on the files are checked
+         *     like the custom instructions are: 422 `content_blocked` or 503
+         *     `moderation_unavailable`, and nothing is saved.
+         */
+        post: operations["createMySkill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/skills/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import skills from a file
+         * @description The file is the body: a `SKILL.md` (any `.md`), or a ZIP (`.zip`, or a
+         *     `.skill`, which is one) holding one skill with `SKILL.md` at its root or
+         *     several skill folders that each have one. At most 8 MiB (413
+         *     `file_too_large`). Each skill is saved as `POST /me/skills` would save
+         *     it; one that cannot be is listed in `failed` and the others are still
+         *     saved. Files that are not text are left out for now (`skipped`).
+         */
+        post: operations["importMySkills"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/skills/available": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The skills a conversation may use, for the composer's picker
+         * @description With `conversationId`, the skills that conversation listed when it
+         *     started (what its model can open); without, or for a conversation that
+         *     has not started, what a new one would list now. Empty while skills are
+         *     off.
+         */
+        get: operations["listAvailableSkills"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/skills/{skillId}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * A skill's kept versions, newest first
+         * @description The latest 20 are kept, the current one among them. To go back to one, save its files (`PUT`) as a new version.
+         */
+        get: operations["listMySkillVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/skills/{skillId}/versions/{versionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skillId: string;
+                versionId: string;
+            };
+            cookie?: never;
+        };
+        /** One kept version's files */
+        get: operations["getMySkillVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/skills/{skillId}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Download a skill as a ZIP
+         * @description The skill's folder, named for it, with its files - the layout an import reads back.
+         */
+        get: operations["exportMySkill"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/skills/{skillId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        /** One of your skills, with its files */
+        get: operations["getMySkill"];
+        /**
+         * Save a new version of a skill
+         * @description Replaces the files, as a new version; the same checks as writing one.
+         *     Conversations already under way keep the version they started with.
+         */
+        put: operations["updateMySkill"];
+        post?: never;
+        /**
+         * Delete a skill
+         * @description Conversations that listed it are told it is gone if they try to read it.
+         */
+        delete: operations["deleteMySkill"];
+        options?: never;
+        head?: never;
+        /**
+         * Switch a skill on or off
+         * @description Off, new conversations leave it out; ones under way keep it.
+         */
+        patch: operations["setMySkillEnabled"];
+        trace?: never;
+    };
     "/me/memory-events": {
         parameters: {
             query?: never;
@@ -3035,6 +3365,111 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        Skill: {
+            /** Format: uuid */
+            id: string;
+            /** @description From the SKILL.md frontmatter: lowercase letters, digits and hyphens. */
+            name: string;
+            /** @description What the skill does and when to use it */
+            description: string;
+            /** @description Off */
+            enabled: boolean;
+            /** @enum {string} */
+            source: "site" | "personal";
+            /**
+             * @description The current version passed content moderation, or is the site's.
+             *     A personal one saved while moderation was off is false until a
+             *     conversation would take it, which checks it then.
+             */
+            checked: boolean;
+            /** @description A check refused the current version; conversations leave it out. */
+            blocked: boolean;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        BuiltinSkill: {
+            name: string;
+            description: string;
+            /** @description Off */
+            enabled: boolean;
+        };
+        BuiltinSkillDetail: {
+            skill: components["schemas"]["BuiltinSkill"];
+            files: components["schemas"]["SkillFile"][];
+        };
+        SkillVersion: {
+            /** Format: uuid */
+            id: string;
+            description: string;
+            /** Format: date-time */
+            createdAt: string;
+            current: boolean;
+        };
+        SkillVersionList: {
+            items: components["schemas"]["SkillVersion"][];
+        };
+        SkillVersionDetail: {
+            version: components["schemas"]["SkillVersion"];
+            files: components["schemas"]["SkillFile"][];
+        };
+        AvailableSkill: {
+            name: string;
+            description: string;
+            /** @enum {string} */
+            source: "builtin" | "site" | "personal";
+        };
+        AvailableSkillList: {
+            items: components["schemas"]["AvailableSkill"][];
+        };
+        SkillFile: {
+            /** @description From the skill's root, such as SKILL.md or references/guide.md. */
+            path: string;
+            content: string;
+        };
+        SkillDetail: {
+            skill: components["schemas"]["Skill"];
+            files: components["schemas"]["SkillFile"][];
+        };
+        SkillRequest: {
+            /** @description Every file of the skill, SKILL.md at the root among them; text only, at most 50. */
+            files: components["schemas"]["SkillFile"][];
+        };
+        SkillEnabledRequest: {
+            enabled: boolean;
+        };
+        SkillList: {
+            items: components["schemas"]["Skill"][];
+            /** @description The skills that ship with the server. */
+            builtin: components["schemas"]["BuiltinSkill"][];
+            /** @description How many may be kept. */
+            limit: number;
+        };
+        MySkillList: {
+            /** @description The built-in skills that are on, for every account. */
+            builtin: components["schemas"]["BuiltinSkill"][];
+            /** @description Your own. */
+            items: components["schemas"]["Skill"][];
+            /** @description The site's that are on, for every account. */
+            site: components["schemas"]["Skill"][];
+            /** @description Whether you may write skills of your own (the administrator's switch). */
+            allowed: boolean;
+            /** @description Whether skills are on at all (System settings). */
+            enabled: boolean;
+            /** @description How many of your own you may keep. */
+            limit: number;
+        };
+        SkillImportResult: {
+            created: components["schemas"]["Skill"][];
+            /** @description Skills in the file that could not be saved, and why. */
+            failed: {
+                /** @description The skill's name if its frontmatter gave one */
+                name: string;
+                code: string;
+                message: string;
+            }[];
+            /** @description Files left out because they are not text. */
+            skipped: string[];
+        };
         MemoryList: {
             items: components["schemas"]["Memory"][];
         };
@@ -3169,6 +3604,10 @@ export interface components {
             scheduledTasks: boolean;
             /** @description Whether the account settings offer uploading a picture. */
             avatarUploads: boolean;
+            /** @description Whether skills are on (System settings). */
+            skills: boolean;
+            /** @description Whether people may write skills of their own (System settings). */
+            personalSkills: boolean;
         };
         ChatModel: {
             /** @description What a conversation stores and a request names. */
@@ -4179,6 +4618,18 @@ export interface components {
              */
             memory: boolean;
             /**
+             * @description Whether conversations list skills and models are offered the tool
+             *     that reads them. On by default. Off, the skills are kept; new
+             *     conversations list none and ones under way lose the tool.
+             */
+            skills: boolean;
+            /**
+             * @description Whether people may write skills of their own. On by default. Off,
+             *     theirs are kept but left out of new conversations, and writing one
+             *     is 403 `personal_skills_off`.
+             */
+            personalSkills: boolean;
+            /**
              * @description Whether the server logs at debug level. Takes effect immediately —
              *     no restart — and persists across one, because the fault worth
              *     chasing is usually the intermittent kind.
@@ -4192,6 +4643,8 @@ export interface components {
             askUser?: boolean;
             compressContext?: boolean;
             memory?: boolean;
+            skills?: boolean;
+            personalSkills?: boolean;
             avatarUploads?: boolean;
             scheduledTasks?: boolean;
             requestTraces?: boolean;
@@ -4258,10 +4711,11 @@ export interface components {
          *     but not counted as a strike); a scheduled task's prompt as its owner
          *     saved it (`task`), or as it was about to be sent or a model wrote it
          *     (`task_run`, logged but not counted as a strike); the person's text
-         *     of a writing block as a model was about to read it (`document`).
+         *     of a writing block as a model was about to read it (`document`); a
+         *     person's skill as they saved it (`skill`).
          * @enum {string}
          */
-        ModerationSource: "send" | "edit" | "answer" | "instructions" | "memory" | "snapshot" | "task" | "task_run" | "document";
+        ModerationSource: "send" | "edit" | "answer" | "instructions" | "memory" | "snapshot" | "task" | "task_run" | "document" | "skill";
         /**
          * @description What a blocked message set off, when it reached the strike threshold.
          * @enum {string}
@@ -5861,6 +6315,293 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SystemSettings"];
                 };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listSiteSkills: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createSiteSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillRequest"];
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillDetail"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    importSiteSkills: {
+        parameters: {
+            query: {
+                filename: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillImportResult"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getBuiltinSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuiltinSkillDetail"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setBuiltinSkillEnabled: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillEnabledRequest"];
+            };
+        };
+        responses: {
+            /** @description changed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listSiteSkillVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillVersionList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getSiteSkillVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skillId: string;
+                versionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillVersionDetail"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    exportSiteSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getSiteSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillDetail"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateSiteSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillDetail"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteSiteSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setSiteSkillEnabled: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillEnabledRequest"];
+            };
+        };
+        responses: {
+            /** @description changed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Error"];
         };
@@ -7518,6 +8259,269 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Memory"];
                 };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listMySkills: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MySkillList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createMySkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillRequest"];
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillDetail"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    importMySkills: {
+        parameters: {
+            query: {
+                /** @description The uploaded file's name, which says how to read it. */
+                filename: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillImportResult"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listAvailableSkills: {
+        parameters: {
+            query?: {
+                conversationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvailableSkillList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listMySkillVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillVersionList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getMySkillVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skillId: string;
+                versionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillVersionDetail"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    exportMySkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getMySkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillDetail"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateMySkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillDetail"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteMySkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setMySkillEnabled: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillEnabledRequest"];
+            };
+        };
+        responses: {
+            /** @description changed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Error"];
         };

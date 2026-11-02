@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next'
 import type { ChatModel, Message, MessagePart } from '@openchat/api-client'
-import { MessageSquareQuote, NotebookPen } from 'lucide-react'
+import { BookOpen, MessageSquareQuote, NotebookPen } from 'lucide-react'
 import { isValidElement, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -16,6 +16,7 @@ import { DOCUMENT_TOOL, documentChangeOf, documentOpOf } from '@openchat/chat-co
 import { launchesOf, SUBAGENT_TOOL } from '@openchat/chat-core/subagents'
 import { SubagentLaunchLine } from './SubagentLines'
 import { parseQuotes, quoteMessage } from '@openchat/chat-core/document-selection'
+import { parseSkills, skillMessage } from '@openchat/chat-core/skill-mention'
 import { highlightPassage } from '@/lib/highlight-passage'
 import { cn } from '@/lib/utils'
 import MemoryChip from './MemoryChip'
@@ -87,8 +88,11 @@ export function UserMessage({
   const [typed, setTyped] = useState<string | null>(null)
   // A request about a quoted passage of a writing block: the passage is a card
   // above the words, and editing changes the words only.
-  const quoted = parseQuotes(message.content)
-  const words = quoted ? quoted.request : message.content
+  // Skills picked with $ come first (chat-core/src/skill-mention.ts): chips,
+  // kept as they were when the message is edited.
+  const { names: skills, rest } = parseSkills(message.content)
+  const quoted = parseQuotes(rest)
+  const words = quoted ? quoted.request : rest
   const draft = typed ?? restoredDraft ?? null
   const files = (message.attachments?.length || message.removedAttachments?.length || message.references?.length) ? (
     <MessageAttachments
@@ -115,7 +119,7 @@ export function UserMessage({
             onEdit &&
             ((content) => {
               closeField()
-              onEdit(quoted ? quoteMessage(quoted.quotes, content) : content)
+              onEdit(skillMessage(skills, quoted ? quoteMessage(quoted.quotes, content) : content))
             })
           }
         />
@@ -127,6 +131,16 @@ export function UserMessage({
     <div className="n-msg-user" data-turn={anchor}>
       {time && <div className="n-msg-time">{time}</div>}
       {files}
+      {skills.length > 0 && (
+        <div className="n-skill-chips" aria-label={t('chat.skills.picked')}>
+          {skills.map((name) => (
+            <span key={name} className="n-skill-chip">
+              <BookOpen aria-hidden="true" />
+              <span>{name}</span>
+            </span>
+          ))}
+        </div>
+      )}
       {quoted && (
         <div className="n-quote-cards">
           {quoted.quotes.map((quote, i) => (

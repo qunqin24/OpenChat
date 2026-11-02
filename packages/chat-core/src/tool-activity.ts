@@ -94,6 +94,7 @@ export function stepLabel(t: T, step: ToolActivityStep, running: boolean): strin
   }
   if (isFileTool(step.call.name)) return fileStepLabel(t, step, args, running)
   if (step.call.name === 'memory') return t('chat.memory.step')
+  if (step.call.name === 'skill') return skillStepLabel(t, step, args, running)
   if (step.call.name === 'scheduled_tasks') return running ? t('tasks.step-running') : t('tasks.step')
   if (step.call.name === 'document') return documentStepLabel(t, step, args, running)
   if (step.call.name.startsWith('subagent')) return subagentStepLabel(t, step, args, running)
@@ -125,6 +126,28 @@ function fileStepLabel(t: T, step: ToolActivityStep, args: Record<string, unknow
   if (running || !step.result || !query) return query ? t('chat.tool.file-searching', { query }) : t('chat.tool.file-searching-generic')
   const count = typeof details?.matches === 'number' ? details.matches : 0
   return named ? t('chat.tool.file-search-in', { name: named, query, count }) : t('chat.tool.file-search', { query, count })
+}
+
+/**
+ * A skill call (tools/skill.go): opening a skill names it; reading one of its
+ * files names the file too; a search, its phrase.
+ */
+function skillStepLabel(t: T, step: ToolActivityStep, args: Record<string, unknown>, running: boolean): string {
+  const details = (step.result?.status === 'succeeded' ? step.result.details : undefined) as
+    | { name?: unknown; path?: unknown }
+    | undefined
+  const name = typeof details?.name === 'string' && details.name ? details.name : typeof args.name === 'string' ? args.name : ''
+  const path = typeof details?.path === 'string' && details.path ? details.path : typeof args.path === 'string' ? args.path : ''
+  const pending = running || !step.result
+  if (!name) return t(pending ? 'chat.tool.skill-opening-generic' : 'chat.tool.skill-generic')
+  switch (args.op) {
+    case 'read':
+      return t(pending ? 'chat.tool.skill-reading' : 'chat.tool.skill-read', { name, path })
+    case 'search':
+      return t(pending ? 'chat.tool.skill-searching' : 'chat.tool.skill-search', { name, query: String(args.pattern ?? '') })
+    default:
+      return t(pending ? 'chat.tool.skill-opening' : 'chat.tool.skill-open', { name })
+  }
 }
 
 /**
@@ -248,7 +271,10 @@ export function activityHead(
   // it, is still the one page.
   const fetches = new Set(reads.map((step) => String(callArguments(step.call).url ?? ''))).size
   const fileLooks = steps.filter((step) => isFileTool(step.call.name)).length
-  const others = steps.length - searches - reads.length - fileLooks
+  // Skills, not calls: opening one and reading its files is still the one skill.
+  const skillCalls = steps.filter((step) => step.call.name === 'skill')
+  const skills = new Set(skillCalls.map((step) => String(callArguments(step.call).name ?? ''))).size
+  const others = steps.length - searches - reads.length - fileLooks - skillCalls.length
   const failed = steps.filter((step) => isFailure(step.status)).length
 
   const sources: SearchHit[] = []
@@ -292,6 +318,7 @@ export function activityHead(
       searches > 0 && t('chat.tool.searched', { count: searches }),
       fetches > 0 && t('chat.tool.read', { count: fetches }),
       fileLooks > 0 && t('chat.tool.files', { count: fileLooks }),
+      skills > 0 && t('chat.tool.skills', { count: skills }),
       others > 0 && t('chat.tool.used', { count: others }),
     ].filter((part): part is string => Boolean(part))
     // English clauses start lower case after the first; the line itself does not.

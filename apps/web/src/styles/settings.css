@@ -830,3 +830,120 @@
 .chat-ui .n-settings-passkey-input { font-size: 14px; font-weight: 500; }
 .chat-ui .n-settings-passkey-actions { display: inline-flex; gap: 12px; }
 .chat-ui .n-settings-toggle.is-danger { color: var(--n-err); }
+
+/* Skills (SkillsTab, SkillEditor): a line each, the name above two lines of
+   its description, the switch and the marks on the right; the editor puts the
+   files down the left and the chosen one's text on the right. */
+.chat-ui .n-skill-rows { display: flex; flex-direction: column; gap: 2px; margin: 12px 0 0; padding: 0; list-style: none; }
+.chat-ui .n-skill-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  transition: background-color 120ms;
+}
+.chat-ui .n-skill-row:hover { background: var(--n-hover); }
+.chat-ui .n-skill-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.chat-ui button.n-skill-main { cursor: pointer; }
+.chat-ui button.n-skill-main:disabled { cursor: default; }
+.chat-ui .n-skill-name { display: flex; align-items: center; font-family: var(--font-mono); font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.chat-ui .n-skill-description {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--n-text-2);
+  font-size: 12px;
+  line-height: 17px;
+  overflow-wrap: anywhere;
+}
+.chat-ui .n-skill-row .n-memory-actions { gap: 6px; }
+.chat-ui .n-settings-badge.is-warn { background: color-mix(in oklab, var(--n-err) 14%, transparent); color: var(--n-err); }
+.chat-ui .n-skill-import { display: inline-flex; align-items: center; gap: 6px; }
+.chat-ui .n-skill-import svg { width: 14px; height: 14px; }
+
+.chat-ui .n-skill-editor { width: 60rem; }
+.chat-ui .n-skill-editor-body { display: flex; gap: 12px; padding: 10px 18px 0; }
+.chat-ui .n-skill-files { display: flex; flex: none; flex-direction: column; gap: 6px; width: 13rem; }
+.chat-ui .n-skill-files ul { display: flex; flex-direction: column; gap: 2px; max-height: 26rem; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.chat-ui .n-skill-file { display: flex; align-items: center; gap: 2px; border-radius: 10px; }
+.chat-ui .n-skill-file.is-current { background: var(--n-hover-strong); }
+.chat-ui .n-skill-file:not(.is-current):hover { background: var(--n-hover); }
+.chat-ui .n-skill-file .n-memory-icon { padding: 4px; }
+.chat-ui .n-skill-file .n-memory-icon svg { width: 14px; height: 14px; }
+.chat-ui .n-skill-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.chat-ui .n-skill-add-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--n-text-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.chat-ui .n-skill-add-file:hover { background: var(--n-hover); color: var(--n-text); }
+.chat-ui .n-skill-add-file svg { width: 14px; height: 14px; }
+.chat-ui .n-skill-path {
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--n-hover);
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  outline: none;
+}
+.chat-ui .n-skill-text { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.chat-ui .n-skill-area { min-height: 26rem; font-family: var(--font-mono); font-size: 12.5px; line-height: 20px; tab-size: 2; }
+
+@media (max-width: 767px) {
+  .chat-ui .n-skill-editor-body { flex-direction: column; }
+  .chat-ui .n-skill-files { width: auto; }
+  .chat-ui .n-skill-files ul { flex-direction: row; max-height: none; overflow-x: auto; }
+  .chat-ui .n-skill-area { min-height: 18rem; }
+}
+.chat-ui .n-skill-versions {
+  margin-left: auto;
+  margin-right: 8px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--n-hover);
+  color: var(--n-text-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}

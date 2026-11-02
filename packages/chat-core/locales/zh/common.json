@@ -127,7 +127,17 @@
         "week": "最近一周",
         "month": "最近一个月",
         "year": "最近一年"
-      }
+      },
+      "skill-opening": "正在读取技能「{{name}}」",
+      "skill-open": "读取了技能「{{name}}」",
+      "skill-reading": "正在读取「{{name}}」的 {{path}}",
+      "skill-read": "读取了「{{name}}」的 {{path}}",
+      "skill-searching": "正在「{{name}}」中查找「{{query}}」",
+      "skill-search": "在「{{name}}」中查找「{{query}}」",
+      "skill-opening-generic": "正在读取技能",
+      "skill-generic": "读取了技能",
+      "skills_one": "用了 {{count}} 个技能",
+      "skills_other": "用了 {{count}} 个技能"
     },
     "error": {
       "no_model": "这个模型已不可用，请换一个模型再试。",
@@ -443,6 +453,13 @@
       "aria": "上下文窗口已用 {{percent}}%",
       "compacted": "更早的内容已压缩为摘要",
       "estimated": "压缩后的估算，下一次回答后更新为实际用量"
+    },
+    "skills": {
+      "picker": "技能",
+      "remove": "移除技能 {{name}}",
+      "picked": "这条消息选用的技能",
+      "source-builtin": "内置",
+      "source-site": "站点"
     }
   },
   "state": {
@@ -602,7 +619,8 @@
       "image-search": "图片搜索",
       "storage": "文件存储",
       "usage-logs": "使用日志",
-      "moderation-logs": "审核日志"
+      "moderation-logs": "审核日志",
+      "skills": "技能"
     },
     "dashboard": {
       "subtitle": "模型请求的用量、花费与稳定性",
@@ -1006,7 +1024,15 @@
           "required": "请填写",
           "whole": "请填写整数",
           "range": "请填写 {{min}} 到 {{max}} 之间的数"
-        }
+        },
+        "skills": "技能",
+        "skills-hint": "开启后，对话会列出可用的技能，模型按需读取。关闭后新对话不列出任何技能，进行中的对话也不能再读取；技能本身会保留。默认开启。",
+        "skills-on": "技能已开启",
+        "skills-off": "技能已关闭",
+        "personal-skills": "个人技能",
+        "personal-skills-hint": "允许用户编写自己的技能。关闭后用户的技能会保留，但不进入新对话，也不能新建或修改。个人技能保存时会经过内容审核。默认开启。",
+        "personal-skills-on": "个人技能已开启",
+        "personal-skills-off": "个人技能已关闭"
       }
     },
     "channels": {
@@ -1445,7 +1471,8 @@
         "snapshot": "对话开始时的检查",
         "task": "保存定时任务",
         "task_run": "定时任务运行前的检查",
-        "document": "写作块（模型读取前的检查）"
+        "document": "写作块（模型读取前的检查）",
+        "skill": "保存个人技能"
       },
       "sanction": {
         "disabled": "已停用账号"
@@ -1527,6 +1554,40 @@
       "no-account": "无账号",
       "deleted-user": "已删除的账号：{{name}}",
       "kind-subagent": "子智能体"
+    },
+    "skills": {
+      "title": "技能",
+      "subtitle": "所有用户的对话都能用的技能。用户自己的技能不在这里，管理员也看不到。",
+      "import": "导入",
+      "new": "新建技能",
+      "edit": "编辑技能",
+      "delete": "删除",
+      "name": "名称",
+      "description": "描述",
+      "updated": "更新时间",
+      "enabled": "启用",
+      "empty": "还没有站点技能。可以新建一个，或导入 SKILL.md、.zip、.skill 文件。",
+      "load-failed": "加载失败，请刷新重试。",
+      "imported": "已导入 {{count}} 个技能",
+      "import-skipped": "有 {{count}} 个非文本文件被跳过",
+      "delete-title": "删除技能 {{name}}？",
+      "delete-description": "删除后新对话不再列出它；已经在用它的对话再读取时会被告知它已删除。",
+      "cancel": "取消",
+      "deleted": "技能已删除",
+      "saved": "技能已保存",
+      "save": "保存",
+      "template-description": "说明这个技能做什么、什么时候用。",
+      "template-body": "# 技能标题\n\n写给模型的步骤和要求。",
+      "remove-file": "删除文件 {{path}}",
+      "file-path": "文件路径",
+      "add-file": "添加文件",
+      "editor-hint": "SKILL.md 开头的 name 和 description 决定技能叫什么、什么时候用。修改只影响之后的新对话。",
+      "export": "导出",
+      "view": "查看",
+      "versions": "历史版本",
+      "current": "当前",
+      "builtin-title": "内置技能",
+      "builtin-description": "随 OpenChat 一起发布的技能，升级时更新，不能修改，只能关闭。站点技能或用户技能和它同名时，用后者。"
     }
   },
   "settings": {
@@ -1541,7 +1602,8 @@
       "general": "通用",
       "personalization": "个性化",
       "account": "账户",
-      "data": "数据"
+      "data": "数据",
+      "skills": "技能"
     },
     "general": {
       "theme": "外观",
@@ -1683,7 +1745,48 @@
       "general": "外观,主题,深色,浅色,语言,theme,language,appearance",
       "personalization": "自定义指令,记忆,个性化,偏好,instructions,memory,personalization",
       "account": "账户,用户名,邮箱,密码,头像,account,email,password",
-      "data": "数据,导出,删除,临时聊天,data,export"
+      "data": "数据,导出,删除,临时聊天,data,export",
+      "skills": "技能,工作流,流程,说明,skill,skills,workflow"
+    },
+    "skills": {
+      "title": "技能",
+      "description": "技能是写给模型的一套做事方法，比如写作规范、排查步骤、报告格式。模型遇到和技能描述相符的任务时，会先读它再动手。格式遵循 Agent Skills：SKILL.md 开头的 name 和 description 决定技能叫什么、什么时候用。",
+      "admin-off": "管理员已关闭技能功能，新对话不会使用任何技能。",
+      "personal-off": "管理员已关闭个人技能：你的技能会保留，但新对话不会使用，也不能新建或修改。",
+      "pinned": "修改只影响之后的新对话，进行中的对话继续用它开始时的版本。",
+      "new": "新建技能",
+      "edit": "编辑技能",
+      "import": "导入",
+      "count": "{{n}} / {{max}} 个",
+      "empty": "还没有技能。可以新建一个，或导入 SKILL.md、.zip、.skill 文件。",
+      "site": "站点技能",
+      "site-description": "管理员为所有人提供的技能。你有同名技能时，用你自己的。",
+      "delete-confirm": "删除这个技能？",
+      "delete": "删除",
+      "blocked": "未通过审核",
+      "enabled": "启用 {{name}}",
+      "imported": "已导入 {{count}} 个技能",
+      "import-failed-one": "{{name}} 没有导入：{{reason}}",
+      "import-skipped": "有 {{count}} 个非文本文件被跳过（暂时只保存文本文件）",
+      "files": "文件",
+      "remove-file": "删除文件 {{path}}",
+      "add-file": "添加文件",
+      "file-path": "文件路径",
+      "editor-hint": "name 只能用小写字母、数字和连字符；description 写清楚做什么、什么时候用。正文里提到的其他文件，模型会按需读取。⌘/Ctrl + Enter 保存。",
+      "template-description": "说明这个技能做什么、什么时候用。",
+      "template-body": "# 技能标题\n\n写给模型的步骤和要求。",
+      "error": {
+        "failed": "保存失败，请稍后重试。",
+        "skill_name_taken": "已经有同名的技能了，请换一个 name。",
+        "skill_limit": "技能数量已达上限，请先删除一些。",
+        "personal_skills_off": "管理员已关闭个人技能。",
+        "file_too_large": "文件太大，最多 8 MB。",
+        "format": "技能格式不对：{{detail}}"
+      },
+      "versions": "历史版本",
+      "current": "当前",
+      "export": "导出",
+      "builtin": "内置"
     }
   },
   "library": {

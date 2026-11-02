@@ -51,6 +51,27 @@ func (e ApiFormat) Valid() bool {
 	}
 }
 
+// Defines values for AvailableSkillSource.
+const (
+	AvailableSkillSourceBuiltin  AvailableSkillSource = "builtin"
+	AvailableSkillSourcePersonal AvailableSkillSource = "personal"
+	AvailableSkillSourceSite     AvailableSkillSource = "site"
+)
+
+// Valid indicates whether the value is a known member of the AvailableSkillSource enum.
+func (e AvailableSkillSource) Valid() bool {
+	switch e {
+	case AvailableSkillSourceBuiltin:
+		return true
+	case AvailableSkillSourcePersonal:
+		return true
+	case AvailableSkillSourceSite:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BatchEventType.
 const (
 	Batch BatchEventType = "batch"
@@ -821,6 +842,7 @@ const (
 	ModerationSourceInstructions ModerationSource = "instructions"
 	ModerationSourceMemory       ModerationSource = "memory"
 	ModerationSourceSend         ModerationSource = "send"
+	ModerationSourceSkill        ModerationSource = "skill"
 	ModerationSourceSnapshot     ModerationSource = "snapshot"
 	ModerationSourceTask         ModerationSource = "task"
 	ModerationSourceTaskRun      ModerationSource = "task_run"
@@ -840,6 +862,8 @@ func (e ModerationSource) Valid() bool {
 	case ModerationSourceMemory:
 		return true
 	case ModerationSourceSend:
+		return true
+	case ModerationSourceSkill:
 		return true
 	case ModerationSourceSnapshot:
 		return true
@@ -1071,6 +1095,24 @@ const (
 func (e RunStartedEventType) Valid() bool {
 	switch e {
 	case RunStarted:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SkillSource.
+const (
+	SkillSourcePersonal SkillSource = "personal"
+	SkillSourceSite     SkillSource = "site"
+)
+
+// Valid indicates whether the value is a known member of the SkillSource enum.
+func (e SkillSource) Valid() bool {
+	switch e {
+	case SkillSourcePersonal:
+		return true
+	case SkillSourceSite:
 		return true
 	default:
 		return false
@@ -1825,6 +1867,21 @@ type AuthOptions struct {
 	Registration bool `json:"registration"`
 }
 
+// AvailableSkill defines model for AvailableSkill.
+type AvailableSkill struct {
+	Description string               `json:"description"`
+	Name        string               `json:"name"`
+	Source      AvailableSkillSource `json:"source"`
+}
+
+// AvailableSkillSource defines model for AvailableSkill.Source.
+type AvailableSkillSource string
+
+// AvailableSkillList defines model for AvailableSkillList.
+type AvailableSkillList struct {
+	Items []AvailableSkill `json:"items"`
+}
+
 // AvatarUrl A signed read URL of the account's uploaded picture (`updateMyAvatar`),
 // valid for an hour; the same URL is issued for as long as it has more
 // than half of that left, so a page that asks again keeps its picture.
@@ -1844,6 +1901,21 @@ type BatchEvent struct {
 
 // BatchEventType defines model for BatchEvent.Type.
 type BatchEventType string
+
+// BuiltinSkill defines model for BuiltinSkill.
+type BuiltinSkill struct {
+	Description string `json:"description"`
+
+	// Enabled Off
+	Enabled bool   `json:"enabled"`
+	Name    string `json:"name"`
+}
+
+// BuiltinSkillDetail defines model for BuiltinSkillDetail.
+type BuiltinSkillDetail struct {
+	Files []SkillFile  `json:"files"`
+	Skill BuiltinSkill `json:"skill"`
+}
 
 // BulkSkipReason `self` — the caller's own account, which cannot be demoted or disabled.
 // `not_found` — no such account.
@@ -2170,6 +2242,9 @@ type ChatFeatures struct {
 	// AvatarUploads Whether the account settings offer uploading a picture.
 	AvatarUploads bool `json:"avatarUploads"`
 
+	// PersonalSkills Whether people may write skills of their own (System settings).
+	PersonalSkills bool `json:"personalSkills"`
+
 	// RequestTraces Whether the caller may open the 轨迹 view of their conversations:
 	// true only for an administrator, while request traces are on
 	// (System settings).
@@ -2177,6 +2252,9 @@ type ChatFeatures struct {
 
 	// ScheduledTasks Whether scheduled tasks are on (System settings); off, `/tasks` is 404.
 	ScheduledTasks bool `json:"scheduledTasks"`
+
+	// Skills Whether skills are on (System settings).
+	Skills bool `json:"skills"`
 
 	// Subagents Whether models may launch sub-agents (Sub-agent settings).
 	Subagents *bool `json:"subagents,omitempty"`
@@ -3181,7 +3259,8 @@ type ModerationEvent struct {
 	// but not counted as a strike); a scheduled task's prompt as its owner
 	// saved it (`task`), or as it was about to be sent or a model wrote it
 	// (`task_run`, logged but not counted as a strike); the person's text
-	// of a writing block as a model was about to read it (`document`).
+	// of a writing block as a model was about to read it (`document`); a
+	// person's skill as they saved it (`skill`).
 	Source ModerationSource `json:"source"`
 
 	// UserDisabled Whether the account is disabled now; null once it is deleted.
@@ -3262,8 +3341,30 @@ type ModerationSettings struct {
 // but not counted as a strike); a scheduled task's prompt as its owner
 // saved it (`task`), or as it was about to be sent or a model wrote it
 // (`task_run`, logged but not counted as a strike); the person's text
-// of a writing block as a model was about to read it (`document`).
+// of a writing block as a model was about to read it (`document`); a
+// person's skill as they saved it (`skill`).
 type ModerationSource string
+
+// MySkillList defines model for MySkillList.
+type MySkillList struct {
+	// Allowed Whether you may write skills of your own (the administrator's switch).
+	Allowed bool `json:"allowed"`
+
+	// Builtin The built-in skills that are on, for every account.
+	Builtin []BuiltinSkill `json:"builtin"`
+
+	// Enabled Whether skills are on at all (System settings).
+	Enabled bool `json:"enabled"`
+
+	// Items Your own.
+	Items []Skill `json:"items"`
+
+	// Limit How many of your own you may keep.
+	Limit int `json:"limit"`
+
+	// Site The site's that are on, for every account.
+	Site []Skill `json:"site"`
+}
 
 // MyStorage defines model for MyStorage.
 type MyStorage struct {
@@ -3613,6 +3714,103 @@ type SignInResult struct {
 	Token *string `json:"token,omitempty"`
 }
 
+// Skill defines model for Skill.
+type Skill struct {
+	// Blocked A check refused the current version; conversations leave it out.
+	Blocked bool `json:"blocked"`
+
+	// Checked The current version passed content moderation, or is the site's.
+	// A personal one saved while moderation was off is false until a
+	// conversation would take it, which checks it then.
+	Checked bool `json:"checked"`
+
+	// Description What the skill does and when to use it
+	Description string `json:"description"`
+
+	// Enabled Off
+	Enabled bool               `json:"enabled"`
+	Id      openapi_types.UUID `json:"id"`
+
+	// Name From the SKILL.md frontmatter: lowercase letters, digits and hyphens.
+	Name      string      `json:"name"`
+	Source    SkillSource `json:"source"`
+	UpdatedAt time.Time   `json:"updatedAt"`
+}
+
+// SkillSource defines model for Skill.Source.
+type SkillSource string
+
+// SkillDetail defines model for SkillDetail.
+type SkillDetail struct {
+	Files []SkillFile `json:"files"`
+	Skill Skill       `json:"skill"`
+}
+
+// SkillEnabledRequest defines model for SkillEnabledRequest.
+type SkillEnabledRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
+// SkillFile defines model for SkillFile.
+type SkillFile struct {
+	Content string `json:"content"`
+
+	// Path From the skill's root, such as SKILL.md or references/guide.md.
+	Path string `json:"path"`
+}
+
+// SkillImportResult defines model for SkillImportResult.
+type SkillImportResult struct {
+	Created []Skill `json:"created"`
+
+	// Failed Skills in the file that could not be saved, and why.
+	Failed []struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+
+		// Name The skill's name if its frontmatter gave one
+		Name string `json:"name"`
+	} `json:"failed"`
+
+	// Skipped Files left out because they are not text.
+	Skipped []string `json:"skipped"`
+}
+
+// SkillList defines model for SkillList.
+type SkillList struct {
+	// Builtin The skills that ship with the server.
+	Builtin []BuiltinSkill `json:"builtin"`
+	Items   []Skill        `json:"items"`
+
+	// Limit How many may be kept.
+	Limit int `json:"limit"`
+}
+
+// SkillRequest defines model for SkillRequest.
+type SkillRequest struct {
+	// Files Every file of the skill, SKILL.md at the root among them; text only, at most 50.
+	Files []SkillFile `json:"files"`
+}
+
+// SkillVersion defines model for SkillVersion.
+type SkillVersion struct {
+	CreatedAt   time.Time          `json:"createdAt"`
+	Current     bool               `json:"current"`
+	Description string             `json:"description"`
+	Id          openapi_types.UUID `json:"id"`
+}
+
+// SkillVersionDetail defines model for SkillVersionDetail.
+type SkillVersionDetail struct {
+	Files   []SkillFile  `json:"files"`
+	Version SkillVersion `json:"version"`
+}
+
+// SkillVersionList defines model for SkillVersionList.
+type SkillVersionList struct {
+	Items []SkillVersion `json:"items"`
+}
+
 // SnapshotEvent Replaces everything a client holds about runs in flight.
 type SnapshotEvent struct {
 	// Live A run's work in flight, which is not a message yet.
@@ -3858,6 +4056,11 @@ type SystemSettings struct {
 	// to it is kept before the sweep removes it. Default 24.
 	OrphanFileHours int `json:"orphanFileHours"`
 
+	// PersonalSkills Whether people may write skills of their own. On by default. Off,
+	// theirs are kept but left out of new conversations, and writing one
+	// is 403 `personal_skills_off`.
+	PersonalSkills bool `json:"personalSkills"`
+
 	// RegistrationApproval Whether an account made by registering is pending until an
 	// administrator approves it. Only matters while `allowRegistration`
 	// is on. On by default; accounts made by an administrator, and the
@@ -3877,6 +4080,11 @@ type SystemSettings struct {
 	// `/tasks` is 404; the tasks are kept, and run again from their next
 	// time once it is switched back on.
 	ScheduledTasks bool `json:"scheduledTasks"`
+
+	// Skills Whether conversations list skills and models are offered the tool
+	// that reads them. On by default. Off, the skills are kept; new
+	// conversations list none and ones under way lose the tool.
+	Skills bool `json:"skills"`
 
 	// TaskModel The model background tasks use — for now, titling a conversation
 	// after its first answer. Empty: each conversation's own model.
@@ -4275,9 +4483,11 @@ type UpdateSystemSettingsRequest struct {
 
 	// OrphanFileHours 1 to 8760 (400 `invalid_retention` otherwise).
 	OrphanFileHours      *int  `json:"orphanFileHours,omitempty"`
+	PersonalSkills       *bool `json:"personalSkills,omitempty"`
 	RegistrationApproval *bool `json:"registrationApproval,omitempty"`
 	RequestTraces        *bool `json:"requestTraces,omitempty"`
 	ScheduledTasks       *bool `json:"scheduledTasks,omitempty"`
+	Skills               *bool `json:"skills,omitempty"`
 
 	// TaskModel A model an enabled channel offers (400 `model_unavailable`
 	// otherwise), or empty for each conversation's own.
@@ -4744,6 +4954,11 @@ type ListModerationEventsParams struct {
 	Category *ModerationCategory `form:"category,omitempty" json:"category,omitempty"`
 }
 
+// ImportSiteSkillsParams defines parameters for ImportSiteSkills.
+type ImportSiteSkillsParams struct {
+	Filename string `form:"filename" json:"filename"`
+}
+
 // ListUsageLogsParams defines parameters for ListUsageLogs.
 type ListUsageLogsParams struct {
 	Limit  *Limit              `form:"limit,omitempty" json:"limit,omitempty"`
@@ -4867,6 +5082,17 @@ type SearchImageParams struct {
 	Q string `form:"q" json:"q"`
 }
 
+// ListAvailableSkillsParams defines parameters for ListAvailableSkills.
+type ListAvailableSkillsParams struct {
+	ConversationId *openapi_types.UUID `form:"conversationId,omitempty" json:"conversationId,omitempty"`
+}
+
+// ImportMySkillsParams defines parameters for ImportMySkills.
+type ImportMySkillsParams struct {
+	// Filename The uploaded file's name, which says how to read it.
+	Filename string `form:"filename" json:"filename"`
+}
+
 // UpdatePasskeySettingsJSONRequestBody defines body for UpdatePasskeySettings for application/json ContentType.
 type UpdatePasskeySettingsJSONRequestBody = UpdatePasskeySettingsRequest
 
@@ -4896,6 +5122,18 @@ type UpdateModelSettingsJSONRequestBody = ModelOverride
 
 // UpdateModerationSettingsJSONRequestBody defines body for UpdateModerationSettings for application/json ContentType.
 type UpdateModerationSettingsJSONRequestBody = UpdateModerationSettingsRequest
+
+// CreateSiteSkillJSONRequestBody defines body for CreateSiteSkill for application/json ContentType.
+type CreateSiteSkillJSONRequestBody = SkillRequest
+
+// SetBuiltinSkillEnabledJSONRequestBody defines body for SetBuiltinSkillEnabled for application/json ContentType.
+type SetBuiltinSkillEnabledJSONRequestBody = SkillEnabledRequest
+
+// SetSiteSkillEnabledJSONRequestBody defines body for SetSiteSkillEnabled for application/json ContentType.
+type SetSiteSkillEnabledJSONRequestBody = SkillEnabledRequest
+
+// UpdateSiteSkillJSONRequestBody defines body for UpdateSiteSkill for application/json ContentType.
+type UpdateSiteSkillJSONRequestBody = SkillRequest
 
 // UpdateStorageSettingsJSONRequestBody defines body for UpdateStorageSettings for application/json ContentType.
 type UpdateStorageSettingsJSONRequestBody = UpdateStorageSettingsRequest
@@ -4980,6 +5218,15 @@ type UpdateMemoryJSONRequestBody = MemoryRequest
 
 // UpdatePersonalizationJSONRequestBody defines body for UpdatePersonalization for application/json ContentType.
 type UpdatePersonalizationJSONRequestBody = UpdatePersonalizationRequest
+
+// CreateMySkillJSONRequestBody defines body for CreateMySkill for application/json ContentType.
+type CreateMySkillJSONRequestBody = SkillRequest
+
+// SetMySkillEnabledJSONRequestBody defines body for SetMySkillEnabled for application/json ContentType.
+type SetMySkillEnabledJSONRequestBody = SkillEnabledRequest
+
+// UpdateMySkillJSONRequestBody defines body for UpdateMySkill for application/json ContentType.
+type UpdateMySkillJSONRequestBody = SkillRequest
 
 // CreateTaskJSONRequestBody defines body for CreateTask for application/json ContentType.
 type CreateTaskJSONRequestBody = CreateTaskRequest
@@ -5985,6 +6232,42 @@ type ServerInterface interface {
 	// ListModerationEvents The messages content moderation turned away
 	// (GET /admin/moderation/events)
 	ListModerationEvents(w http.ResponseWriter, r *http.Request, params ListModerationEventsParams)
+	// ListSiteSkills The site's skills
+	// (GET /admin/skills)
+	ListSiteSkills(w http.ResponseWriter, r *http.Request)
+	// CreateSiteSkill Write a site skill
+	// (POST /admin/skills)
+	CreateSiteSkill(w http.ResponseWriter, r *http.Request)
+	// GetBuiltinSkill A built-in skill, with its files
+	// (GET /admin/skills/builtin/{name})
+	GetBuiltinSkill(w http.ResponseWriter, r *http.Request, name string)
+	// SetBuiltinSkillEnabled Switch a built-in skill on or off
+	// (PATCH /admin/skills/builtin/{name})
+	SetBuiltinSkillEnabled(w http.ResponseWriter, r *http.Request, name string)
+	// ImportSiteSkills Import site skills from a file
+	// (POST /admin/skills/import)
+	ImportSiteSkills(w http.ResponseWriter, r *http.Request, params ImportSiteSkillsParams)
+	// DeleteSiteSkill Delete a site skill
+	// (DELETE /admin/skills/{skillId})
+	DeleteSiteSkill(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID)
+	// GetSiteSkill A site skill, with its files
+	// (GET /admin/skills/{skillId})
+	GetSiteSkill(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID)
+	// SetSiteSkillEnabled Switch a site skill on or off
+	// (PATCH /admin/skills/{skillId})
+	SetSiteSkillEnabled(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID)
+	// UpdateSiteSkill Save a new version of a site skill
+	// (PUT /admin/skills/{skillId})
+	UpdateSiteSkill(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID)
+	// ExportSiteSkill Download a skill as a ZIP
+	// (GET /admin/skills/{skillId}/export)
+	ExportSiteSkill(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID)
+	// ListSiteSkillVersions A skill's kept versions, newest first
+	// (GET /admin/skills/{skillId}/versions)
+	ListSiteSkillVersions(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID)
+	// GetSiteSkillVersion One kept version's files
+	// (GET /admin/skills/{skillId}/versions/{versionId})
+	GetSiteSkillVersion(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID, versionId openapi_types.UUID)
 	// GetStorageSettings File storage settings
 	// (GET /admin/storage)
 	GetStorageSettings(w http.ResponseWriter, r *http.Request)
@@ -6234,6 +6517,39 @@ type ServerInterface interface {
 	// UpdatePersonalization Change your custom instructions or memory switch
 	// (PATCH /me/personalization)
 	UpdatePersonalization(w http.ResponseWriter, r *http.Request)
+	// ListMySkills Your skills, and the site's
+	// (GET /me/skills)
+	ListMySkills(w http.ResponseWriter, r *http.Request)
+	// CreateMySkill Write a skill
+	// (POST /me/skills)
+	CreateMySkill(w http.ResponseWriter, r *http.Request)
+	// ListAvailableSkills The skills a conversation may use, for the composer's picker
+	// (GET /me/skills/available)
+	ListAvailableSkills(w http.ResponseWriter, r *http.Request, params ListAvailableSkillsParams)
+	// ImportMySkills Import skills from a file
+	// (POST /me/skills/import)
+	ImportMySkills(w http.ResponseWriter, r *http.Request, params ImportMySkillsParams)
+	// DeleteMySkill Delete a skill
+	// (DELETE /me/skills/{skillId})
+	DeleteMySkill(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID)
+	// GetMySkill One of your skills, with its files
+	// (GET /me/skills/{skillId})
+	GetMySkill(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID)
+	// SetMySkillEnabled Switch a skill on or off
+	// (PATCH /me/skills/{skillId})
+	SetMySkillEnabled(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID)
+	// UpdateMySkill Save a new version of a skill
+	// (PUT /me/skills/{skillId})
+	UpdateMySkill(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID)
+	// ExportMySkill Download a skill as a ZIP
+	// (GET /me/skills/{skillId}/export)
+	ExportMySkill(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID)
+	// ListMySkillVersions A skill's kept versions, newest first
+	// (GET /me/skills/{skillId}/versions)
+	ListMySkillVersions(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID)
+	// GetMySkillVersion One kept version's files
+	// (GET /me/skills/{skillId}/versions/{versionId})
+	GetMySkillVersion(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID, versionId openapi_types.UUID)
 	// GetMyStorage How much your files take
 	// (GET /me/storage)
 	GetMyStorage(w http.ResponseWriter, r *http.Request)
@@ -6423,6 +6739,78 @@ func (_ Unimplemented) UpdateModerationSettings(w http.ResponseWriter, r *http.R
 // ListModerationEvents The messages content moderation turned away
 // (GET /admin/moderation/events)
 func (_ Unimplemented) ListModerationEvents(w http.ResponseWriter, r *http.Request, params ListModerationEventsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListSiteSkills The site's skills
+// (GET /admin/skills)
+func (_ Unimplemented) ListSiteSkills(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateSiteSkill Write a site skill
+// (POST /admin/skills)
+func (_ Unimplemented) CreateSiteSkill(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetBuiltinSkill A built-in skill, with its files
+// (GET /admin/skills/builtin/{name})
+func (_ Unimplemented) GetBuiltinSkill(w http.ResponseWriter, r *http.Request, name string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SetBuiltinSkillEnabled Switch a built-in skill on or off
+// (PATCH /admin/skills/builtin/{name})
+func (_ Unimplemented) SetBuiltinSkillEnabled(w http.ResponseWriter, r *http.Request, name string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ImportSiteSkills Import site skills from a file
+// (POST /admin/skills/import)
+func (_ Unimplemented) ImportSiteSkills(w http.ResponseWriter, r *http.Request, params ImportSiteSkillsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteSiteSkill Delete a site skill
+// (DELETE /admin/skills/{skillId})
+func (_ Unimplemented) DeleteSiteSkill(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetSiteSkill A site skill, with its files
+// (GET /admin/skills/{skillId})
+func (_ Unimplemented) GetSiteSkill(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SetSiteSkillEnabled Switch a site skill on or off
+// (PATCH /admin/skills/{skillId})
+func (_ Unimplemented) SetSiteSkillEnabled(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateSiteSkill Save a new version of a site skill
+// (PUT /admin/skills/{skillId})
+func (_ Unimplemented) UpdateSiteSkill(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ExportSiteSkill Download a skill as a ZIP
+// (GET /admin/skills/{skillId}/export)
+func (_ Unimplemented) ExportSiteSkill(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListSiteSkillVersions A skill's kept versions, newest first
+// (GET /admin/skills/{skillId}/versions)
+func (_ Unimplemented) ListSiteSkillVersions(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetSiteSkillVersion One kept version's files
+// (GET /admin/skills/{skillId}/versions/{versionId})
+func (_ Unimplemented) GetSiteSkillVersion(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID, versionId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -6921,6 +7309,72 @@ func (_ Unimplemented) GetPersonalization(w http.ResponseWriter, r *http.Request
 // UpdatePersonalization Change your custom instructions or memory switch
 // (PATCH /me/personalization)
 func (_ Unimplemented) UpdatePersonalization(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListMySkills Your skills, and the site's
+// (GET /me/skills)
+func (_ Unimplemented) ListMySkills(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateMySkill Write a skill
+// (POST /me/skills)
+func (_ Unimplemented) CreateMySkill(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListAvailableSkills The skills a conversation may use, for the composer's picker
+// (GET /me/skills/available)
+func (_ Unimplemented) ListAvailableSkills(w http.ResponseWriter, r *http.Request, params ListAvailableSkillsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ImportMySkills Import skills from a file
+// (POST /me/skills/import)
+func (_ Unimplemented) ImportMySkills(w http.ResponseWriter, r *http.Request, params ImportMySkillsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteMySkill Delete a skill
+// (DELETE /me/skills/{skillId})
+func (_ Unimplemented) DeleteMySkill(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetMySkill One of your skills, with its files
+// (GET /me/skills/{skillId})
+func (_ Unimplemented) GetMySkill(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SetMySkillEnabled Switch a skill on or off
+// (PATCH /me/skills/{skillId})
+func (_ Unimplemented) SetMySkillEnabled(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateMySkill Save a new version of a skill
+// (PUT /me/skills/{skillId})
+func (_ Unimplemented) UpdateMySkill(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ExportMySkill Download a skill as a ZIP
+// (GET /me/skills/{skillId}/export)
+func (_ Unimplemented) ExportMySkill(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListMySkillVersions A skill's kept versions, newest first
+// (GET /me/skills/{skillId}/versions)
+func (_ Unimplemented) ListMySkillVersions(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetMySkillVersion One kept version's files
+// (GET /me/skills/{skillId}/versions/{versionId})
+func (_ Unimplemented) GetMySkillVersion(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID, versionId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7649,6 +8103,310 @@ func (siw *ServerInterfaceWrapper) ListModerationEvents(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListModerationEvents(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSiteSkills operation middleware
+func (siw *ServerInterfaceWrapper) ListSiteSkills(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSiteSkills(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSiteSkill operation middleware
+func (siw *ServerInterfaceWrapper) CreateSiteSkill(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSiteSkill(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetBuiltinSkill operation middleware
+func (siw *ServerInterfaceWrapper) GetBuiltinSkill(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", chi.URLParam(r, "name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBuiltinSkill(w, r, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetBuiltinSkillEnabled operation middleware
+func (siw *ServerInterfaceWrapper) SetBuiltinSkillEnabled(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", chi.URLParam(r, "name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetBuiltinSkillEnabled(w, r, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ImportSiteSkills operation middleware
+func (siw *ServerInterfaceWrapper) ImportSiteSkills(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ImportSiteSkillsParams
+
+	// ------------- Required query parameter "filename" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "filename", r.URL.Query(), &params.Filename, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "filename"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "filename", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ImportSiteSkills(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSiteSkill operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSiteSkill(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "skillId" -------------
+	var skillId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "skillId", chi.URLParam(r, "skillId"), &skillId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "skillId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSiteSkill(w, r, skillId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSiteSkill operation middleware
+func (siw *ServerInterfaceWrapper) GetSiteSkill(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "skillId" -------------
+	var skillId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "skillId", chi.URLParam(r, "skillId"), &skillId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "skillId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSiteSkill(w, r, skillId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetSiteSkillEnabled operation middleware
+func (siw *ServerInterfaceWrapper) SetSiteSkillEnabled(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "skillId" -------------
+	var skillId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "skillId", chi.URLParam(r, "skillId"), &skillId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "skillId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetSiteSkillEnabled(w, r, skillId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateSiteSkill operation middleware
+func (siw *ServerInterfaceWrapper) UpdateSiteSkill(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "skillId" -------------
+	var skillId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "skillId", chi.URLParam(r, "skillId"), &skillId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "skillId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateSiteSkill(w, r, skillId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExportSiteSkill operation middleware
+func (siw *ServerInterfaceWrapper) ExportSiteSkill(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "skillId" -------------
+	var skillId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "skillId", chi.URLParam(r, "skillId"), &skillId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "skillId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportSiteSkill(w, r, skillId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSiteSkillVersions operation middleware
+func (siw *ServerInterfaceWrapper) ListSiteSkillVersions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "skillId" -------------
+	var skillId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "skillId", chi.URLParam(r, "skillId"), &skillId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "skillId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSiteSkillVersions(w, r, skillId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSiteSkillVersion operation middleware
+func (siw *ServerInterfaceWrapper) GetSiteSkillVersion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "skillId" -------------
+	var skillId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "skillId", chi.URLParam(r, "skillId"), &skillId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "skillId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "versionId" -------------
+	var versionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "versionId", chi.URLParam(r, "versionId"), &versionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "versionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSiteSkillVersion(w, r, skillId, versionId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9761,6 +10519,291 @@ func (siw *ServerInterfaceWrapper) UpdatePersonalization(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// ListMySkills operation middleware
+func (siw *ServerInterfaceWrapper) ListMySkills(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMySkills(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateMySkill operation middleware
+func (siw *ServerInterfaceWrapper) CreateMySkill(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateMySkill(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAvailableSkills operation middleware
+func (siw *ServerInterfaceWrapper) ListAvailableSkills(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAvailableSkillsParams
+
+	// ------------- Optional query parameter "conversationId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "conversationId", r.URL.Query(), &params.ConversationId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "conversationId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAvailableSkills(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ImportMySkills operation middleware
+func (siw *ServerInterfaceWrapper) ImportMySkills(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ImportMySkillsParams
+
+	// ------------- Required query parameter "filename" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "filename", r.URL.Query(), &params.Filename, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "filename"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "filename", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ImportMySkills(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteMySkill operation middleware
+func (siw *ServerInterfaceWrapper) DeleteMySkill(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "skillId" -------------
+	var skillId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "skillId", chi.URLParam(r, "skillId"), &skillId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "skillId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteMySkill(w, r, skillId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMySkill operation middleware
+func (siw *ServerInterfaceWrapper) GetMySkill(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "skillId" -------------
+	var skillId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "skillId", chi.URLParam(r, "skillId"), &skillId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "skillId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMySkill(w, r, skillId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetMySkillEnabled operation middleware
+func (siw *ServerInterfaceWrapper) SetMySkillEnabled(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "skillId" -------------
+	var skillId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "skillId", chi.URLParam(r, "skillId"), &skillId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "skillId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetMySkillEnabled(w, r, skillId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateMySkill operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMySkill(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "skillId" -------------
+	var skillId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "skillId", chi.URLParam(r, "skillId"), &skillId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "skillId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMySkill(w, r, skillId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExportMySkill operation middleware
+func (siw *ServerInterfaceWrapper) ExportMySkill(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "skillId" -------------
+	var skillId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "skillId", chi.URLParam(r, "skillId"), &skillId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "skillId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportMySkill(w, r, skillId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMySkillVersions operation middleware
+func (siw *ServerInterfaceWrapper) ListMySkillVersions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "skillId" -------------
+	var skillId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "skillId", chi.URLParam(r, "skillId"), &skillId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "skillId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMySkillVersions(w, r, skillId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMySkillVersion operation middleware
+func (siw *ServerInterfaceWrapper) GetMySkillVersion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "skillId" -------------
+	var skillId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "skillId", chi.URLParam(r, "skillId"), &skillId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "skillId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "versionId" -------------
+	var versionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "versionId", chi.URLParam(r, "versionId"), &versionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "versionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMySkillVersion(w, r, skillId, versionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMyStorage operation middleware
 func (siw *ServerInterfaceWrapper) GetMyStorage(w http.ResponseWriter, r *http.Request) {
 
@@ -10140,6 +11183,42 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Patch(options.BaseURL+"/admin/system", wrapper.UpdateSystemSettings)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/skills", wrapper.ListSiteSkills)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/skills", wrapper.CreateSiteSkill)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/skills/import", wrapper.ImportSiteSkills)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/skills/builtin/{name}", wrapper.GetBuiltinSkill)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/admin/skills/builtin/{name}", wrapper.SetBuiltinSkillEnabled)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/skills/{skillId}/versions", wrapper.ListSiteSkillVersions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/skills/{skillId}/versions/{versionId}", wrapper.GetSiteSkillVersion)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/skills/{skillId}/export", wrapper.ExportSiteSkill)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/admin/skills/{skillId}", wrapper.DeleteSiteSkill)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/skills/{skillId}", wrapper.GetSiteSkill)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/admin/skills/{skillId}", wrapper.SetSiteSkillEnabled)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/admin/skills/{skillId}", wrapper.UpdateSiteSkill)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/version", wrapper.GetVersionInfo)
 	})
 	r.Group(func(r chi.Router) {
@@ -10348,6 +11427,39 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/me/memories/{memoryId}", wrapper.UpdateMemory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/me/skills", wrapper.ListMySkills)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/me/skills", wrapper.CreateMySkill)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/me/skills/import", wrapper.ImportMySkills)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/me/skills/available", wrapper.ListAvailableSkills)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/me/skills/{skillId}/versions", wrapper.ListMySkillVersions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/me/skills/{skillId}/versions/{versionId}", wrapper.GetMySkillVersion)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/me/skills/{skillId}/export", wrapper.ExportMySkill)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/me/skills/{skillId}", wrapper.DeleteMySkill)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/me/skills/{skillId}", wrapper.GetMySkill)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/me/skills/{skillId}", wrapper.SetMySkillEnabled)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/me/skills/{skillId}", wrapper.UpdateMySkill)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/me/memory-events", wrapper.ListMemoryEvents)

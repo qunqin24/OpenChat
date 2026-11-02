@@ -46,6 +46,9 @@ export function SettingsSystem() {
   const toggleGenUI = useSystemToggle('generativeUi', 'genui')
   const toggleAskUser = useSystemToggle('askUser', 'ask-user')
   const toggleMemory = useSystemToggle('memory', 'memory')
+  // The settings dialog's skills tab reads both from the chat's features.
+  const toggleSkills = useSystemToggle('skills', 'skills', [queryKeys.features, queryKeys.skills.all])
+  const togglePersonalSkills = useSystemToggle('personalSkills', 'personal-skills', [queryKeys.features, queryKeys.skills.all])
   // The chat's sidebar offers the tasks page from the features.
   const toggleTasks = useSystemToggle('scheduledTasks', 'tasks', [queryKeys.features])
   // The chat's top bar offers 轨迹 from the features.
@@ -145,6 +148,16 @@ export function SettingsSystem() {
           </SettingRow>
           <SettingRow id="memory" label={t('admin.settings.system.memory')} hint={t('admin.settings.system.memory-hint')}>
             {toggle('memory', data?.memory ?? true, toggleMemory)}
+          </SettingRow>
+          <SettingRow id="skills" label={t('admin.settings.system.skills')} hint={t('admin.settings.system.skills-hint')}>
+            {toggle('skills', data?.skills ?? true, toggleSkills)}
+          </SettingRow>
+          <SettingRow
+            id="personal-skills"
+            label={t('admin.settings.system.personal-skills')}
+            hint={t('admin.settings.system.personal-skills-hint')}
+          >
+            {toggle('personal-skills', data?.personalSkills ?? true, togglePersonalSkills)}
           </SettingRow>
           <SettingRow id="scheduled-tasks" label={t('admin.settings.system.tasks')} hint={t('admin.settings.system.tasks-hint')}>
             {toggle('scheduled-tasks', data?.scheduledTasks ?? true, toggleTasks)}
@@ -252,6 +265,8 @@ type SystemFlag =
   | 'generativeUi'
   | 'askUser'
   | 'memory'
+  | 'skills'
+  | 'personalSkills'
   | 'scheduledTasks'
   | 'requestTraces'
   | 'avatarUploads'

@@ -17,6 +17,7 @@ import (
 	"github.com/qunqin24/openchat/apps/server/internal/httpx"
 	"github.com/qunqin24/openchat/apps/server/internal/logging"
 	"github.com/qunqin24/openchat/apps/server/internal/memory"
+	"github.com/qunqin24/openchat/apps/server/internal/skills"
 )
 
 // settingDebugLogging is the app_settings key holding the log-level switch.
@@ -88,6 +89,12 @@ func (s *Server) systemSettings(ctx context.Context) (SystemSettings, error) {
 		return settings, err
 	}
 	if settings.Memory, err = boolSettingOr(ctx, s.q, memory.SettingEnabled, true); err != nil {
+		return settings, err
+	}
+	if settings.Skills, err = boolSettingOr(ctx, s.q, skills.SettingEnabled, true); err != nil {
+		return settings, err
+	}
+	if settings.PersonalSkills, err = boolSettingOr(ctx, s.q, skills.SettingPersonal, true); err != nil {
 		return settings, err
 	}
 	if settings.AvatarUploads, err = boolSettingOr(ctx, s.q, settingAvatarUploads, false); err != nil {
@@ -250,6 +257,8 @@ func (s *Server) UpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 		{settingAllowRegistration, body.AllowRegistration, "allow registration changed"},
 		{settingRegistrationApproval, body.RegistrationApproval, "registration approval changed"},
 		{settingMaxRuns, body.MaxConcurrentRuns, "concurrent run limit changed"},
+		{skills.SettingEnabled, body.Skills, "skills changed"},
+		{skills.SettingPersonal, body.PersonalSkills, "personal skills changed"},
 	} {
 		var (
 			value []byte

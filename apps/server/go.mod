@@ -25,6 +25,7 @@ require (
 	golang.org/x/net v0.60.0
 	golang.org/x/sync v0.23.0
 	golang.org/x/text v0.42.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -115,7 +116,6 @@ require (
 	google.golang.org/grpc v1.83.2 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 tool (

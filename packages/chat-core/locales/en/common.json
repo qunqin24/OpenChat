@@ -127,7 +127,17 @@
         "week": "past week",
         "month": "past month",
         "year": "past year"
-      }
+      },
+      "skill-opening": "Opening the skill {{name}}",
+      "skill-open": "Opened the skill {{name}}",
+      "skill-reading": "Reading {{path}} of {{name}}",
+      "skill-read": "Read {{path}} of {{name}}",
+      "skill-searching": "Searching {{name}} for “{{query}}”",
+      "skill-search": "Searched {{name}} for “{{query}}”",
+      "skill-opening-generic": "Opening a skill",
+      "skill-generic": "Opened a skill",
+      "skills_one": "used a skill",
+      "skills_other": "used {{count}} skills"
     },
     "error": {
       "no_model": "This model is no longer available. Pick another and try again.",
@@ -443,6 +453,13 @@
       "aria": "Context window {{percent}}% used",
       "compacted": "Earlier messages are compressed into a summary",
       "estimated": "Estimated after compression; the next answer reports the real figure"
+    },
+    "skills": {
+      "picker": "Skills",
+      "remove": "Remove the skill {{name}}",
+      "picked": "Skills picked for this message",
+      "source-builtin": "built in",
+      "source-site": "site"
     }
   },
   "state": {
@@ -602,7 +619,8 @@
       "image-search": "Image search",
       "storage": "File storage",
       "usage-logs": "Usage logs",
-      "moderation-logs": "Moderation log"
+      "moderation-logs": "Moderation log",
+      "skills": "Skills"
     },
     "dashboard": {
       "subtitle": "Volume, spend and reliability of model requests",
@@ -1006,7 +1024,15 @@
           "required": "Required",
           "whole": "Enter a whole number",
           "range": "Enter a number from {{min}} to {{max}}"
-        }
+        },
+        "skills": "Skills",
+        "skills-hint": "On, conversations list the skills available and the model reads them as needed. Off, new conversations list none and ones under way can no longer read them; the skills are kept. On by default.",
+        "skills-on": "Skills are on",
+        "skills-off": "Skills are off",
+        "personal-skills": "Personal skills",
+        "personal-skills-hint": "Lets people write skills of their own. Off, theirs are kept but left out of new conversations, and cannot be created or changed. Personal skills are checked by content moderation as they are saved. On by default.",
+        "personal-skills-on": "Personal skills are on",
+        "personal-skills-off": "Personal skills are off"
       }
     },
     "channels": {
@@ -1445,7 +1471,8 @@
         "snapshot": "Checked at chat start",
         "task": "Scheduled task saved",
         "task_run": "Scheduled task, before it ran",
-        "document": "Writing block, before a model read it"
+        "document": "Writing block, before a model read it",
+        "skill": "Skill saved"
       },
       "sanction": {
         "disabled": "Account disabled"
@@ -1527,6 +1554,40 @@
       "no-account": "No account",
       "deleted-user": "Deleted account: {{name}}",
       "kind-subagent": "Sub-agent"
+    },
+    "skills": {
+      "title": "Skills",
+      "subtitle": "Skills every account's conversations may use. People's own skills are not here, and administrators cannot see them.",
+      "import": "Import",
+      "new": "New skill",
+      "edit": "Edit skill",
+      "delete": "Delete",
+      "name": "Name",
+      "description": "Description",
+      "updated": "Updated",
+      "enabled": "Enabled",
+      "empty": "No site skills yet. Create one, or import a SKILL.md, .zip or .skill file.",
+      "load-failed": "Could not load. Refresh to try again.",
+      "imported": "Imported {{count}} skills",
+      "import-skipped": "{{count}} files that are not text were skipped",
+      "delete-title": "Delete the skill {{name}}?",
+      "delete-description": "New conversations will no longer list it; ones that use it are told it is gone when they try to read it.",
+      "cancel": "Cancel",
+      "deleted": "Skill deleted",
+      "saved": "Skill saved",
+      "save": "Save",
+      "template-description": "What this skill does and when to use it.",
+      "template-body": "# Skill title\n\nSteps and requirements for the model.",
+      "remove-file": "Remove {{path}}",
+      "file-path": "File path",
+      "add-file": "Add file",
+      "editor-hint": "The name and description at the top of SKILL.md say what the skill is called and when to use it. Changes reach new conversations.",
+      "export": "Export",
+      "view": "View",
+      "versions": "Earlier versions",
+      "current": "current",
+      "builtin-title": "Built-in skills",
+      "builtin-description": "Skills that ship with OpenChat and change with an upgrade. They cannot be edited, only switched off. A site or personal skill of the same name is used instead."
     }
   },
   "settings": {
@@ -1541,7 +1602,8 @@
       "general": "General",
       "personalization": "Personalization",
       "account": "Account",
-      "data": "Data"
+      "data": "Data",
+      "skills": "Skills"
     },
     "general": {
       "theme": "Appearance",
@@ -1683,7 +1745,48 @@
       "general": "appearance,theme,dark,light,language",
       "personalization": "custom instructions,memory,personalization,preferences",
       "account": "account,username,email,password,avatar",
-      "data": "data,export,delete,temporary chat"
+      "data": "data,export,delete,temporary chat",
+      "skills": "skills,skill,workflow,instructions,playbook"
+    },
+    "skills": {
+      "title": "Skills",
+      "description": "A skill is a way of doing something, written for the model: a style guide, a troubleshooting routine, a report format. When a task matches what a skill says it is for, the model reads it before starting. The format is Agent Skills: the name and description at the top of SKILL.md say what the skill is called and when to use it.",
+      "admin-off": "Skills are turned off by the administrator; new conversations use none.",
+      "personal-off": "Personal skills are turned off by the administrator: yours are kept, but new conversations do not use them, and they cannot be created or changed.",
+      "pinned": "Changes reach new conversations; one under way keeps the version it started with.",
+      "new": "New skill",
+      "edit": "Edit skill",
+      "import": "Import",
+      "count": "{{n}} / {{max}}",
+      "empty": "No skills yet. Create one, or import a SKILL.md, .zip or .skill file.",
+      "site": "Site skills",
+      "site-description": "Skills the administrator provides for everyone. A skill of yours with the same name is used instead.",
+      "delete-confirm": "Delete this skill?",
+      "delete": "Delete",
+      "blocked": "Failed moderation",
+      "enabled": "Enable {{name}}",
+      "imported": "Imported {{count}} skills",
+      "import-failed-one": "{{name}} was not imported: {{reason}}",
+      "import-skipped": "{{count}} files that are not text were skipped (only text files are kept for now)",
+      "files": "Files",
+      "remove-file": "Remove {{path}}",
+      "add-file": "Add file",
+      "file-path": "File path",
+      "editor-hint": "The name is lowercase letters, digits and hyphens; the description says what it does and when to use it. The model reads other files the instructions mention as it needs them. ⌘/Ctrl + Enter saves.",
+      "template-description": "What this skill does and when to use it.",
+      "template-body": "# Skill title\n\nSteps and requirements for the model.",
+      "error": {
+        "failed": "Could not save. Try again later.",
+        "skill_name_taken": "A skill with this name exists already; choose another name.",
+        "skill_limit": "The skill limit is reached; delete some first.",
+        "personal_skills_off": "Personal skills are turned off by the administrator.",
+        "file_too_large": "The file is too large; at most 8 MB.",
+        "format": "The skill is not in the right format: {{detail}}"
+      },
+      "versions": "Earlier versions",
+      "current": "current",
+      "export": "Export",
+      "builtin": "built in"
     }
   },
   "library": {

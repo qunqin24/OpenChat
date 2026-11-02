@@ -459,6 +459,7 @@ type Conversation struct {
 	Background      bool               `json:"background"`
 	StoppedByUser   bool               `json:"stopped_by_user"`
 	PinnedAt        pgtype.Timestamptz `json:"pinned_at"`
+	Skills          []string           `json:"skills"`
 }
 
 type Document struct {
@@ -643,6 +644,33 @@ type Session struct {
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	LastUsedAt pgtype.Timestamptz `json:"last_used_at"`
 	UserAgent  string             `json:"user_agent"`
+}
+
+type Skill struct {
+	ID               uuid.UUID          `json:"id"`
+	OwnerID          *uuid.UUID         `json:"owner_id"`
+	Name             string             `json:"name"`
+	Enabled          bool               `json:"enabled"`
+	CurrentVersionID *uuid.UUID         `json:"current_version_id"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+type SkillFile struct {
+	VersionID uuid.UUID `json:"version_id"`
+	Path      string    `json:"path"`
+	Content   string    `json:"content"`
+}
+
+type SkillVersion struct {
+	ID          uuid.UUID          `json:"id"`
+	SkillID     uuid.UUID          `json:"skill_id"`
+	Description string             `json:"description"`
+	ContentHash string             `json:"content_hash"`
+	Checked     *string            `json:"checked"`
+	Blocked     *string            `json:"blocked"`
+	CreatedBy   *uuid.UUID         `json:"created_by"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
 type SubagentInbox struct {

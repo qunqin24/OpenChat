@@ -1,4 +1,4 @@
-import { Brain, Database, Search, SlidersHorizontal, UserRound, X } from 'lucide-react'
+import { BookOpen, Brain, Database, Search, SlidersHorizontal, UserRound, X } from 'lucide-react'
 import { Dialog, Tabs } from 'radix-ui'
 import { lazy, Suspense, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -10,10 +10,12 @@ import GeneralTab from './GeneralTab'
 
 // The tab with the most in it is the one fewest people open.
 const PersonalizationTab = lazy(() => import('./PersonalizationTab'))
+const SkillsTab = lazy(() => import('./SkillsTab'))
 
 const ICONS: Record<SettingsTab, typeof Brain> = {
   general: SlidersHorizontal,
   personalization: Brain,
+  skills: BookOpen,
   account: UserRound,
   data: Database,
 }
@@ -108,6 +110,11 @@ function SettingsBody({ host }: { host: HTMLElement | null }) {
         <Tabs.Content value="personalization" className="n-settings-panel">
           <Suspense fallback={<div className="n-settings-loading" role="status"><span className="n-spinner" data-motion="essential" /></div>}>
             <PersonalizationTab host={host} />
+          </Suspense>
+        </Tabs.Content>
+        <Tabs.Content value="skills" className="n-settings-panel">
+          <Suspense fallback={<div className="n-settings-loading" role="status"><span className="n-spinner" data-motion="essential" /></div>}>
+            <SkillsTab host={host} />
           </Suspense>
         </Tabs.Content>
         <Tabs.Content value="account" className="n-settings-panel"><AccountTab /></Tabs.Content>

@@ -30,7 +30,7 @@
 
 | 工具 | 参数 | 作用 |
 | --- | --- | --- |
-| `subagent` | `task`, `name`, `background`（仅后台模式开着时）, `context?` | 派一个子 Agent。`name` 是 2–4 个词的短名（界面显示、之后按名字发消息）。 |
+| `subagent` | `task`, `name`, `background`（仅后台模式开着时）, `context?`, `skills?` | 派一个子 Agent。`name` 是 2–4 个词的短名（界面显示、之后按名字发消息）。`skills` 点名它能打开的技能，必须在主对话的技能清单里（见 [skills-plan.md](skills-plan.md) §11）。 |
 | `subagent_message` | `to`（名字或 id）, `message` | 给子 Agent 发消息：在跑就**插入**它的下一步，已结束就**续接**（带着历史接着干，干完再报告一次）。 |
 | `subagent_stop` | `to` | 停掉一个在跑的子 Agent，它已有的部分结果照常报告。 |
 

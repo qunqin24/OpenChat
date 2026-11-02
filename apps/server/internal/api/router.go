@@ -106,6 +106,20 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 			r.Delete("/me/memories/{memoryId}", wrapper.DeleteMemory)
 			r.Get("/me/memory-events", wrapper.ListMemoryEvents)
 
+			// Skills: the caller's own (the queries name the owner); the
+			// site's are listed alongside, read only.
+			r.Get("/me/skills", wrapper.ListMySkills)
+			r.Post("/me/skills", wrapper.CreateMySkill)
+			r.Post("/me/skills/import", wrapper.ImportMySkills)
+			r.Get("/me/skills/available", wrapper.ListAvailableSkills)
+			r.Get("/me/skills/{skillId}/versions", wrapper.ListMySkillVersions)
+			r.Get("/me/skills/{skillId}/versions/{versionId}", wrapper.GetMySkillVersion)
+			r.Get("/me/skills/{skillId}/export", wrapper.ExportMySkill)
+			r.Get("/me/skills/{skillId}", wrapper.GetMySkill)
+			r.Put("/me/skills/{skillId}", wrapper.UpdateMySkill)
+			r.Patch("/me/skills/{skillId}", wrapper.SetMySkillEnabled)
+			r.Delete("/me/skills/{skillId}", wrapper.DeleteMySkill)
+
 			// Writing blocks: the caller's own (the queries name the owner).
 			r.Get("/conversations/{conversationId}/documents", wrapper.ListConversationDocuments)
 			r.Get("/documents/{documentId}", wrapper.GetDocument)
@@ -188,6 +202,20 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 				r.Patch("/admin/system", wrapper.UpdateSystemSettings)
 				r.Get("/admin/subagents", wrapper.GetSubagentSettings)
 				r.Patch("/admin/subagents", wrapper.UpdateSubagentSettings)
+
+				// The site's skills; nobody's personal ones are reachable here.
+				r.Get("/admin/skills", wrapper.ListSiteSkills)
+				r.Post("/admin/skills", wrapper.CreateSiteSkill)
+				r.Post("/admin/skills/import", wrapper.ImportSiteSkills)
+				r.Get("/admin/skills/builtin/{name}", wrapper.GetBuiltinSkill)
+				r.Patch("/admin/skills/builtin/{name}", wrapper.SetBuiltinSkillEnabled)
+				r.Get("/admin/skills/{skillId}/versions", wrapper.ListSiteSkillVersions)
+				r.Get("/admin/skills/{skillId}/versions/{versionId}", wrapper.GetSiteSkillVersion)
+				r.Get("/admin/skills/{skillId}/export", wrapper.ExportSiteSkill)
+				r.Get("/admin/skills/{skillId}", wrapper.GetSiteSkill)
+				r.Put("/admin/skills/{skillId}", wrapper.UpdateSiteSkill)
+				r.Patch("/admin/skills/{skillId}", wrapper.SetSiteSkillEnabled)
+				r.Delete("/admin/skills/{skillId}", wrapper.DeleteSiteSkill)
 
 				r.Get("/admin/catalog", wrapper.GetCatalogStatus)
 				r.Post("/admin/catalog", wrapper.RefreshCatalog)

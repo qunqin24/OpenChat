@@ -24,6 +24,7 @@ import { Route as AdminImageSearchRouteImport } from './routes/admin.image-searc
 import { Route as AdminModelsRouteImport } from './routes/admin.models'
 import { Route as AdminModerationLogsRouteImport } from './routes/admin.moderation-logs'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
+import { Route as AdminSkillsRouteImport } from './routes/admin.skills'
 import { Route as AdminStorageRouteImport } from './routes/admin.storage'
 import { Route as AdminUsageLogsRouteImport } from './routes/admin.usage-logs'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
@@ -110,6 +111,11 @@ const AdminSettingsRoute = AdminSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminSkillsRoute = AdminSkillsRouteImport.update({
+  id: '/skills',
+  path: '/skills',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminStorageRoute = AdminStorageRouteImport.update({
   id: '/storage',
   path: '/storage',
@@ -186,6 +192,7 @@ export interface FileRoutesByFullPath {
   '/admin/models': typeof AdminModelsRoute
   '/admin/moderation-logs': typeof AdminModerationLogsRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
+  '/admin/skills': typeof AdminSkillsRoute
   '/admin/storage': typeof AdminStorageRoute
   '/admin/usage-logs': typeof AdminUsageLogsRoute
   '/admin/users': typeof AdminUsersRoute
@@ -211,6 +218,7 @@ export interface FileRoutesByTo {
   '/admin/image-search': typeof AdminImageSearchRoute
   '/admin/models': typeof AdminModelsRoute
   '/admin/moderation-logs': typeof AdminModerationLogsRoute
+  '/admin/skills': typeof AdminSkillsRoute
   '/admin/storage': typeof AdminStorageRoute
   '/admin/usage-logs': typeof AdminUsageLogsRoute
   '/admin/users': typeof AdminUsersRoute
@@ -240,6 +248,7 @@ export interface FileRoutesById {
   '/admin/models': typeof AdminModelsRoute
   '/admin/moderation-logs': typeof AdminModerationLogsRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
+  '/admin/skills': typeof AdminSkillsRoute
   '/admin/storage': typeof AdminStorageRoute
   '/admin/usage-logs': typeof AdminUsageLogsRoute
   '/admin/users': typeof AdminUsersRoute
@@ -270,6 +279,7 @@ export interface FileRouteTypes {
     | '/admin/models'
     | '/admin/moderation-logs'
     | '/admin/settings'
+    | '/admin/skills'
     | '/admin/storage'
     | '/admin/usage-logs'
     | '/admin/users'
@@ -295,6 +305,7 @@ export interface FileRouteTypes {
     | '/admin/image-search'
     | '/admin/models'
     | '/admin/moderation-logs'
+    | '/admin/skills'
     | '/admin/storage'
     | '/admin/usage-logs'
     | '/admin/users'
@@ -323,6 +334,7 @@ export interface FileRouteTypes {
     | '/admin/models'
     | '/admin/moderation-logs'
     | '/admin/settings'
+    | '/admin/skills'
     | '/admin/storage'
     | '/admin/usage-logs'
     | '/admin/users'
@@ -453,6 +465,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/admin/settings'
       preLoaderRoute: typeof AdminSettingsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/skills': {
+      id: '/admin/skills'
+      path: '/skills'
+      fullPath: '/admin/skills'
+      preLoaderRoute: typeof AdminSkillsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/storage': {
@@ -596,6 +615,7 @@ interface AdminRouteChildren {
   AdminModelsRoute: typeof AdminModelsRoute
   AdminModerationLogsRoute: typeof AdminModerationLogsRoute
   AdminSettingsRoute: typeof AdminSettingsRouteWithChildren
+  AdminSkillsRoute: typeof AdminSkillsRoute
   AdminStorageRoute: typeof AdminStorageRoute
   AdminUsageLogsRoute: typeof AdminUsageLogsRoute
   AdminUsersRoute: typeof AdminUsersRoute
@@ -610,6 +630,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminModelsRoute: AdminModelsRoute,
   AdminModerationLogsRoute: AdminModerationLogsRoute,
   AdminSettingsRoute: AdminSettingsRouteWithChildren,
+  AdminSkillsRoute: AdminSkillsRoute,
   AdminStorageRoute: AdminStorageRoute,
   AdminUsageLogsRoute: AdminUsageLogsRoute,
   AdminUsersRoute: AdminUsersRoute,

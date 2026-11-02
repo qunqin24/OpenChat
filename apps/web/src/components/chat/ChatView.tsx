@@ -68,6 +68,8 @@ import { useFilePanel } from '@/stores/file-panel-store'
 import FilePanel from './FilePanel'
 import { useDocumentQuote } from '@/stores/document-quote-store'
 import { answerQuote, quoteMessage } from '@openchat/chat-core/document-selection'
+import { skillMessage } from '@openchat/chat-core/skill-mention'
+import { useAvailableSkills } from '@/hooks/use-skills'
 import { gapLabel, timeGaps } from '@openchat/chat-core/time-gap'
 import AskSelection from './AskSelection'
 import { TemporaryBar, TemporaryToggle } from './TemporaryChat'
@@ -178,6 +180,8 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
   // Other conversations the message is to refer to ("+" → 引用其他对话): not
   // files, so nothing goes up; the server reads them when the model is asked.
   const [references, setReferences] = useState<ConversationReference[]>([])
+  // Skills picked with $ for the message being written.
+  const [pickedSkills, setPickedSkills] = useState<string[]>([])
   const refer = useCallback((reference: ConversationReference) => {
     setReferences((current) =>
       current.some((r) => r.conversationId === reference.conversationId) ? current : [...current, reference],
@@ -239,6 +243,9 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
   const features = useChatFeatures()
   const [draftWebSearch, setDraftWebSearch] = useState<boolean>()
   const webSearch = conversation.data?.webSearch ?? draftWebSearch ?? saved.webSearch ?? true
+  // The composer's $ picker: what this conversation's model can open.
+  const skillsOn = features.data?.skills === true
+  const availableSkills = useAvailableSkills(conversationId, skillsOn)
   const canSearch = (features.data?.webSearch ?? false) && (modelById.get(modelId)?.toolCall ?? true)
   const pickWebSearch = useCallback(
     (next: boolean) => {
@@ -665,7 +672,11 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     // front (lib/document-selection), unless this is the rewording of a
     // refused message, which keeps its own words.
     const quoted = quotes.length > 0 && !revising ? quotes : null
-    const content = quoted ? quoteMessage(quoted, typed) : typed
+    // Skills picked with $ go first (chat-core/src/skill-mention.ts); a failed
+    // send puts them back as chips and the rest back in the box.
+    const picked = revising ? [] : pickedSkills
+    const unpicked = quoted ? quoteMessage(quoted, typed) : typed
+    const content = skillMessage(picked, unpicked)
     // An answer is being made, or a message is on its way: one at a time, as the
     // server says (`conversation_busy`). Read from the store, not from this
     // render, so a second Enter in the same moment finds the first.
@@ -686,9 +697,13 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     const conversationIds = referred.map((r) => r.conversationId)
     // Back in the box with the words when the send fails, unless others were
     // chosen meanwhile.
-    const referBack = () => setReferences((current) => (current.length > 0 ? current : referred))
+    const referBack = () => {
+      setReferences((current) => (current.length > 0 ? current : referred))
+      setPickedSkills((current) => (current.length > 0 ? current : picked))
+    }
     setInput('')
     setReferences([])
+    setPickedSkills([])
     // Out of the box at once, as the text is: the message shows them now. Back
     // in the box if the send fails.
     const taken = attachments.take()
@@ -729,7 +744,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
           onSuccess: () => attachments.release(taken),
           // Refused again or not taken: the words and the files go back in the box.
           onError: () => {
-            setInput((current) => current || content)
+            setInput((current) => current || unpicked)
             attachments.restore(taken)
             referBack()
           },
@@ -754,7 +769,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
           onSuccess: () => attachments.release(taken),
           onError: () => {
             unpost(conversationId)
-            setInput((current) => current || content)
+            setInput((current) => current || unpicked)
             attachments.restore(taken)
             referBack()
           },
@@ -782,7 +797,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
       // a new first message may be on the empty key now.
       unpost('', item)
       if (!alive.current) return
-      setInput((current) => current || content)
+      setInput((current) => current || unpicked)
       attachments.restore(taken)
       referBack()
       toast.error(t('chat.send-error.generic'))
@@ -827,7 +842,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
       attachments.release(taken.filter((file) => !usable.includes(file)))
       attachments.restore(usable)
       referBack()
-      setInput((current) => current || content)
+      setInput((current) => current || unpicked)
       if (wroteNothing) onRemoved(madeId)
       else await navigate({ to: '/chat/$conversationId', params: { conversationId: madeId }, replace: true })
       return
@@ -851,6 +866,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     navigate,
     onCreated,
     onRemoved,
+    pickedSkills,
     post,
     quotes,
     references,
@@ -941,6 +957,16 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
       onSend={() => void handleSend()}
       onStop={handleStop}
       note={revising ? t('chat.revise.label') : undefined}
+      skills={
+        skillsOn && !revising
+          ? {
+              picked: pickedSkills,
+              available: availableSkills.data ?? [],
+              onPick: (name) => setPickedSkills((current) => (current.includes(name) ? current : [...current, name])),
+              onUnpick: (name) => setPickedSkills((current) => current.filter((n) => n !== name)),
+            }
+          : undefined
+      }
       quotes={
         revising
           ? undefined

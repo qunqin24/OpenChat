@@ -72,7 +72,9 @@ func TestUnearnedMemoryChecksAreCleared(t *testing.T) {
 	}
 
 	// Taking a snapshot now has the words checked, the person's rewrite among
-	// them.
+	// them. The snapshot is today's code, which reads tables added since
+	// (skills): the schema is brought up to date first.
+	s.migrateTo(goose.MaxVersion)
 	var asked []string
 	vet := func(_ context.Context, pieces []memory.Piece) ([]memory.Verdict, error) {
 		out := make([]memory.Verdict, len(pieces))

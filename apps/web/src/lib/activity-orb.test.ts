@@ -12,6 +12,7 @@ describe('toolOrb', () => {
     expect(toolOrb('web_search')).toEqual({ state: 'searching' })
     expect(toolOrb('web_fetch')).toEqual({ state: 'using', variant: 'scroll' })
     expect(toolOrb('file_search')).toEqual({ state: 'searching', variant: 'lighthouse' })
+    expect(toolOrb('skill')).toEqual({ state: 'using', variant: 'zoom' })
     expect(toolOrb('ask_user')).toEqual({ state: 'waiting' })
     expect(toolOrb('subagent_message')).toEqual({ state: 'background', variant: 'spiral' })
   })

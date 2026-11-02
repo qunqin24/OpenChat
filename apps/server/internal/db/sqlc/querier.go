@@ -101,6 +101,7 @@ type Querier interface {
 	// How many sub-agents one run has launched.
 	CountLaunchedSubagents(ctx context.Context, launchedBy *uuid.UUID) (int64, error)
 	CountMemories(ctx context.Context, userID uuid.UUID) (int64, error)
+	CountOwnedSkills(ctx context.Context, ownerID *uuid.UUID) (int64, error)
 	CountPasskeys(ctx context.Context) (int64, error)
 	// A conversation's sub-agents launched before this one that are still
 	// queued (no run yet): a queued sub-agent starts only when none ahead of it
@@ -142,6 +143,8 @@ type Querier interface {
 	// list. Insert them together with the channel in one transaction.
 	CreateSelectedChannelModels(ctx context.Context, arg CreateSelectedChannelModelsParams) error
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
+	CreateSkill(ctx context.Context, arg CreateSkillParams) (Skill, error)
+	CreateSkillVersion(ctx context.Context, arg CreateSkillVersionParams) (SkillVersion, error)
 	// Sub-agents (docs/design/sub-agents.md): hidden child conversations whose
 	// runs do work the main agent handed over, and the reports they hand back.
 	CreateSubagentConversation(ctx context.Context, arg CreateSubagentConversationParams) (Conversation, error)
@@ -206,6 +209,7 @@ type Querier interface {
 	// old credential goes, except the one asking, so the change does not sign the
 	// person out of the tab they are standing in.
 	DeleteOtherUserSessions(ctx context.Context, arg DeleteOtherUserSessionsParams) error
+	DeleteOwnedSkill(ctx context.Context, arg DeleteOwnedSkillParams) (uuid.UUID, error)
 	DeletePasskey(ctx context.Context, arg DeletePasskeyParams) (int64, error)
 	// A queued sub-agent whose wait ended without a start - the reply that
 	// launched it stopped, or the person cancelled it: it never did anything.
@@ -338,6 +342,11 @@ type Querier interface {
 	GetMessage(ctx context.Context, id uuid.UUID) (Message, error)
 	GetModelOverride(ctx context.Context, modelID string) (ModelOverride, error)
 	GetModerationEvent(ctx context.Context, id uuid.UUID) (ModerationEvent, error)
+	// One skill of a person (owner_id) or of the site (NULL): anyone else's is not
+	// found.
+	GetOwnedSkill(ctx context.Context, arg GetOwnedSkillParams) (GetOwnedSkillRow, error)
+	// One version of a skill of this owner.
+	GetOwnedSkillVersion(ctx context.Context, arg GetOwnedSkillVersionParams) (GetOwnedSkillVersionRow, error)
 	// The passkey a sign-in presented, with its account.
 	GetPasskeyByCredential(ctx context.Context, credentialID []byte) (GetPasskeyByCredentialRow, error)
 	GetPersonalization(ctx context.Context, id uuid.UUID) (GetPersonalizationRow, error)
@@ -361,6 +370,10 @@ type Querier interface {
 	// Several settings in one round trip: the moderation settings are read on every
 	// message, and a request should not cost a query per key.
 	GetSettings(ctx context.Context, keys []string) ([]GetSettingsRow, error)
+	// A version a conversation of this person may read: of a site skill, or of
+	// their own. A skill switched off since stays readable to the conversations
+	// that started with it, as the rest of their snapshot does.
+	GetSkillVersionFor(ctx context.Context, arg GetSkillVersionForParams) (GetSkillVersionForRow, error)
 	// One of a conversation's sub-agents. The parent and its owner are part of the
 	// lookup: anyone else's reads as not found.
 	GetSubagent(ctx context.Context, arg GetSubagentParams) (Conversation, error)
@@ -369,6 +382,9 @@ type Querier interface {
 	// A queued sub-agent's task: the first row of its conversation.
 	GetSubagentInput(ctx context.Context, conversationID uuid.UUID) (Message, error)
 	GetSubagentReport(ctx context.Context, runID uuid.UUID) (SubagentReport, error)
+	// The skills a sub-agent may open (its launch named them), from its own
+	// conversation's row.
+	GetSubagentSkills(ctx context.Context, arg GetSubagentSkillsParams) ([]string, error)
 	GetTask(ctx context.Context, arg GetTaskParams) (ScheduledTask, error)
 	GetUser(ctx context.Context, id uuid.UUID) (User, error)
 	// Who a stored picture belongs to: the signed read URL of a locally kept file
@@ -411,6 +427,7 @@ type Querier interface {
 	// Writes a setting only when there is none yet, so two processes that both find
 	// it missing cannot overwrite each other's value. Read it back afterwards.
 	InsertSettingIfMissing(ctx context.Context, arg InsertSettingIfMissingParams) error
+	InsertSkillFiles(ctx context.Context, arg InsertSkillFilesParams) error
 	// In the transaction that ends the run. Keyed by the run: written once.
 	InsertSubagentReport(ctx context.Context, arg InsertSubagentReportParams) error
 	// Prices and cost arrive as double precision and are stored as numeric rounded
@@ -532,6 +549,9 @@ type Querier interface {
 	// moderation_events_created_idx. The account's name and whether it is disabled
 	// are read alongside.
 	ListModerationEvents(ctx context.Context, arg ListModerationEventsParams) ([]ListModerationEventsRow, error)
+	// A person's skills (owner_id), or the site's (NULL), with their current
+	// version, newest first.
+	ListOwnedSkills(ctx context.Context, ownerID *uuid.UUID) ([]ListOwnedSkillsRow, error)
 	// Passkeys and the WebAuthn ceremonies that make and use them (api/passkeys.go).
 	// Every statement about a person's passkeys names the person.
 	ListPasskeys(ctx context.Context, userID uuid.UUID) ([]ListPasskeysRow, error)
@@ -594,6 +614,12 @@ type Querier interface {
 	// under, and sorting on an empty one would herd every uncatalogued model into a
 	// block at the top that looks like a fault.
 	ListServedModels(ctx context.Context, arg ListServedModelsParams) ([]ListServedModelsRow, error)
+	ListSkillFiles(ctx context.Context, versionID uuid.UUID) ([]ListSkillFilesRow, error)
+	// A skill's kept versions, newest first, if the skill is this owner's.
+	ListSkillVersions(ctx context.Context, arg ListSkillVersionsParams) ([]ListSkillVersionsRow, error)
+	// What a new conversation of this person may use: the site's skills that are
+	// on, then their own that are on, each at its current version.
+	ListSnapshotSkills(ctx context.Context, userID *uuid.UUID) ([]ListSnapshotSkillsRow, error)
 	// The latest report of each of a conversation's sub-agents.
 	ListSubagentLatestReports(ctx context.Context, parentID uuid.UUID) ([]SubagentReport, error)
 	// The latest run of each of a conversation's sub-agents.
@@ -669,6 +695,10 @@ type Querier interface {
 	// cannot both be let through. The key is the account's id; servers sharing
 	// the database share the lock.
 	LockRunSlots(ctx context.Context, key string) error
+	// Held while a skill is created or renamed, so two requests at once cannot both
+	// find room under the limit or both take the same name. The site's skills share
+	// one lock (the nil uuid).
+	LockSkillOwner(ctx context.Context, ownerID uuid.UUID) error
 	// Held until the transaction ends, like LockRunSlots: counting a person's
 	// sub-agent runs and starting one is one step, on one server or several.
 	LockSubagentSlots(ctx context.Context, userID string) error
@@ -697,6 +727,9 @@ type Querier interface {
 	MarkMemoryEventUndone(ctx context.Context, arg MarkMemoryEventUndoneParams) (MemoryEvent, error)
 	MarkModerationSanction(ctx context.Context, arg MarkModerationSanctionParams) error
 	MarkReportsDelivered(ctx context.Context, arg MarkReportsDeliveredParams) error
+	// What a snapshot-time check found, recorded only while the version still has
+	// the hash that was checked.
+	MarkSkillVersionModerated(ctx context.Context, arg MarkSkillVersionModeratedParams) error
 	// What a run needs to know about its model: how its thinking is controlled,
 	// how much it may read and write, and what it can do. The catalogue row is
 	// chosen the way ListServedModels chooses it — a provider one of the serving
@@ -732,6 +765,9 @@ type Querier interface {
 	// request that failed produced nothing, so the next one is made there instead.
 	// Guarded on `running` like every other step.
 	MoveRunChannel(ctx context.Context, arg MoveRunChannelParams) error
+	// Keeps the newest versions of a skill, the current one among them; a
+	// conversation that started with an older one finds it gone and is told so.
+	PruneSkillVersions(ctx context.Context, arg PruneSkillVersionsParams) error
 	// Nothing counts an attempt for longer than the longest window.
 	PurgeAuthAttempts(ctx context.Context, before pgtype.Timestamptz) (int64, error)
 	// The hard delete behind a user's delete: a conversation they deleted stays
@@ -809,6 +845,10 @@ type Querier interface {
 	SetGeneratedTitle(ctx context.Context, arg SetGeneratedTitleParams) (Conversation, error)
 	// Upsert, so a setting added after this database was created still writes.
 	SetSetting(ctx context.Context, arg SetSettingParams) error
+	SetSkillEnabled(ctx context.Context, arg SetSkillEnabledParams) (uuid.UUID, error)
+	// A save: the new version becomes the skill's, under the name its SKILL.md
+	// gives now.
+	SetSkillVersion(ctx context.Context, arg SetSkillVersionParams) error
 	SetSubagentBackground(ctx context.Context, id uuid.UUID) error
 	SetSubagentStopped(ctx context.Context, arg SetSubagentStoppedParams) error
 	SetTaskPromptChecked(ctx context.Context, arg SetTaskPromptCheckedParams) error
@@ -818,6 +858,8 @@ type Querier interface {
 	SetUserAvatar(ctx context.Context, arg SetUserAvatarParams) (User, error)
 	SetUserStorageQuota(ctx context.Context, arg SetUserStorageQuotaParams) error
 	SetUserTimeZone(ctx context.Context, arg SetUserTimeZoneParams) error
+	// Whether another skill of the same owner (or of the site) has this name.
+	SkillNameTaken(ctx context.Context, arg SkillNameTakenParams) (bool, error)
 	// Everything the user has, temporary chats included, in one statement. The
 	// owner is the only filter there is: nobody else's rows can be reached from here.
 	SoftDeleteAllConversations(ctx context.Context, userID *uuid.UUID) (int64, error)

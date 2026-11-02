@@ -710,7 +710,14 @@ func (s *Server) GetChatFeatures(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, err)
 		return
 	}
+	skillsOn, personalSkills, err := s.skillSwitches(r)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
 	httpx.JSON(w, http.StatusOK, ChatFeatures{
+		Skills:         skillsOn,
+		PersonalSkills: personalSkills,
 		Subagents:      &subagents,
 		WebSearch:      config.Enabled && config.searcher(key) != nil,
 		AvatarUploads:  avatars,

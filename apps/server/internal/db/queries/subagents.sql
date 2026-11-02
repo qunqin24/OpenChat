@@ -2,10 +2,20 @@
 -- runs do work the main agent handed over, and the reports they hand back.
 
 -- name: CreateSubagentConversation :one
-INSERT INTO conversations (user_id, title, model, web_search, kind, parent_id, launched_by, launch_call_id, background)
+INSERT INTO conversations (user_id, title, model, web_search, kind, parent_id, launched_by, launch_call_id, background, skills)
 VALUES (sqlc.arg('user_id'), sqlc.arg('title'), sqlc.arg('model'), sqlc.arg('web_search'), 'subagent',
-        sqlc.arg('parent_id'), sqlc.arg('launched_by'), sqlc.arg('launch_call_id'), sqlc.arg('background'))
+        sqlc.arg('parent_id'), sqlc.arg('launched_by'), sqlc.arg('launch_call_id'), sqlc.arg('background'),
+        sqlc.narg('skills')::text[])
 RETURNING *;
+
+-- name: GetSubagentSkills :one
+-- The skills a sub-agent may open (its launch named them), from its own
+-- conversation's row.
+SELECT COALESCE(skills, '{}')::text[] AS skills
+FROM conversations
+WHERE id = sqlc.arg('id')
+  AND user_id = sqlc.arg('user_id')
+  AND kind = 'subagent';
 
 -- name: GetLaunchedSubagent :one
 -- The sub-agent a tool call started, for the same call replayed after a restart.
