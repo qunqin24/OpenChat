@@ -14,7 +14,7 @@
  *     at it — the same call the self-hosted fonts make.
  *
  * The list of what to copy is not kept here. It is read out of the three maps
- * in `apps/web/src/components/model-icon.tsx`, which is the file that decides
+ * in `packages/chat-core/src/model-icons.ts`, which is the file that decides
  * which mark a provider, a vendor or a model family gets — one list, one place
  * to edit.
  *
@@ -36,7 +36,7 @@ const sourceDir = join(dirname(require.resolve('@lobehub/icons-static-svg/packag
  * file here wins over an upstream one of the same name.
  */
 const customDir = join(repoRoot, 'scripts/model-icons')
-const componentPath = join(repoRoot, 'apps/web/src/components/model-icon.tsx')
+const componentPath = join(repoRoot, 'packages/chat-core/src/model-icons.ts')
 const outDir = join(repoRoot, 'apps/web/public/model-icons')
 
 /**
@@ -47,7 +47,7 @@ const outDir = join(repoRoot, 'apps/web/public/model-icons')
  */
 function iconNamesFrom(source, constName) {
   const declaration = source.indexOf(`const ${constName}`)
-  if (declaration === -1) throw new Error(`${constName} not found in model-icon.tsx`)
+  if (declaration === -1) throw new Error(`${constName} not found in model-icons.ts`)
 
   const open = source.indexOf('{', declaration)
   const close = source.indexOf('\n}', open)
@@ -81,7 +81,7 @@ const wanted = [
  * So each is written twice with the ink pinned: `<name>.svg` dark, for the
  * light theme, and `<name>.dark.svg` light, for the dark one. An SVG inside an
  * image cannot see the page's theme class, and the OS's dark mode is not the
- * app's when someone picks a theme by hand; model-icon.tsx shows whichever
+ * app's when someone picks a theme by hand; the web's model-icon.tsx shows whichever
  * file the app's theme wants. Its `INK_ICONS` must name exactly these marks,
  * which is checked below.
  */
@@ -133,7 +133,7 @@ for (const name of wanted) {
       pinned.push(name)
     }
   } else if (!inherits) {
-    // model-icon.tsx inverts flat marks in dark mode on the strength of the
+    // The web's model-icon.tsx inverts flat marks in dark mode on the strength of the
     // name alone. A flat file painted with a fixed colour would be inverted
     // into something else entirely, and nothing else would notice.
     flatWithoutCurrentColor.push(name)
@@ -156,7 +156,7 @@ const inkListed = iconNamesFrom(component, 'INK_ICONS').sort()
 const inkWritten = [...pinned].sort()
 const inkMismatch = inkListed.join() !== inkWritten.join()
 if (inkMismatch) {
-  console.error(`INK_ICONS in model-icon.tsx should be: ${inkWritten.join(', ')} (it lists ${inkListed.join(', ')})`)
+  console.error(`INK_ICONS in model-icons.ts should be: ${inkWritten.join(', ')} (it lists ${inkListed.join(', ')})`)
 }
 
 if (missing.length > 0) {

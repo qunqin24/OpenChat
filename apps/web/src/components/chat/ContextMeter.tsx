@@ -4,16 +4,10 @@ import { useTranslation } from 'react-i18next'
 
 import { useCompaction } from '@/hooks/use-compaction'
 import { api, unwrap } from '@/lib/api'
+import { contextGauge } from '@openchat/chat-core/context-gauge'
 import { queryKeys } from '@openchat/chat-core/query-keys'
 import { cn } from '@/lib/utils'
 import Tooltip from './Tooltip'
-
-/** 32k, 258k, 1.2M: the window sizes people know models by. */
-function compact(tokens: number): string {
-  if (tokens >= 1_000_000) return `${+(tokens / 1_000_000).toFixed(1)}M`
-  if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}k`
-  return String(tokens)
-}
 
 const RADIUS = 7
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS
@@ -29,7 +23,7 @@ interface ContextMeterProps {
  * provider counted it — system prompt, tools and attachments included — set
  * against the window of the model chosen now, which the next request goes to.
  * Nothing shows until something has been answered, or for a model whose window
- * is unknown.
+ * is unknown. The figures are chat-core's (`contextGauge`), as the app's are.
  *
  * It opens to the same figures and notes, drawn like its tooltip (the dark
  * chip with an arrow) rather than as a menu. Compressing is only ever a run's
@@ -45,13 +39,12 @@ export default function ContextMeter({ conversationId, limit }: ContextMeterProp
       unwrap(await api.GET('/conversations/{conversationId}/context', { params: { path: { conversationId } }, signal })),
   })
   const summary = useCompaction(conversationId)
-  const used = usage.data?.usedTokens
-  if (used == null || !limit) return null
+  const gauge = contextGauge(usage.data?.usedTokens, limit)
+  if (!gauge) return null
 
-  const share = Math.min(used / limit, 1)
-  const percent = Math.round(share * 100)
-  const level = share >= 0.95 ? 'is-full' : share >= 0.8 ? 'is-high' : undefined
-  const hint = t('chat.context.hint', { percent, left: 100 - percent, used: compact(used), limit: compact(limit) })
+  const { share, percent } = gauge
+  const level = gauge.level && `is-${gauge.level}`
+  const hint = t('chat.context.hint', { percent, left: 100 - percent, used: gauge.used, limit: gauge.limit })
   return (
     <Popover.Root>
       <Tooltip label={t('chat.context.label')} hint={hint}>
