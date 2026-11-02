@@ -9,8 +9,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { THOUGHT } from '@/lib/activity-orb'
 import { cn } from '@/lib/utils'
-import { ThinkingIcon } from './ThinkingIcon'
+import { ThinkingOrb } from './ThinkingOrb'
 
 /** Rising bars, as many as the model has thinking levels, filled up to this one. */
 function Meter({ level, of }: { level: number; of: number }) {
@@ -60,7 +61,7 @@ export function ThinkingPicker({ levels, value: stored, onChange, disabled }: Th
           aria-label={t('chat.thinking.current', { level: label })}
           title={t('chat.thinking.current', { level: label })}
         >
-          <ThinkingIcon aria-hidden="true" />
+          <ThinkingOrb look={THOUGHT} still />
           <span>{t('chat.thinking.title')}</span>
           {value !== 'auto' && value !== 'none' && <Meter level={position(value)} of={scale.length} />}
           <ChevronDown aria-hidden="true" />

@@ -1,6 +1,6 @@
 /**
- * The thinking-effort mark - a bulb - as drawing data, so the web and the app
- * (each a components/chat/ThinkingIcon.tsx of its own) draw the same one. A
+ * The app's thinking-effort mark - a bulb - as drawing data, drawn by its
+ * components/chat/ThinkingIcon.tsx (the web has a still orb there now). A
  * 24-unit square, stroked and unfilled with round ends, as lucide's icons are,
  * so it sits among them. No rays: they made it busy at the size it is drawn;
  * without them the bulb fills the square's height, as lucide's own bulb does,

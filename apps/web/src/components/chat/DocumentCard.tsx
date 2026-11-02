@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 
 import { useDocument } from '@/hooks/use-documents'
 import { queryKeys } from '@openchat/chat-core/query-keys'
+import { WRITING } from '@/lib/activity-orb'
 import { copyClipboard } from '@/lib/clipboard'
 import { changedPassages, pendingEditOf, pendingTitle, shownText, streamingText, type DocumentChange } from '@openchat/chat-core/document-tool'
 import { cn } from '@/lib/utils'
@@ -178,7 +179,7 @@ function WritingCard({ label, title, text, onOpen }: { label: string; title: str
     <section className={cn('n-doc-card is-writing', onOpen && 'is-openable')} role="status" aria-label={title || label} onClick={onOpen}>
       <header className="n-doc-card-head">
         <span className="n-doc-card-label">
-          <ThinkingOrb />
+          <ThinkingOrb look={WRITING} />
           <span className="n-reasoning-live" data-motion="essential">{label}</span>
         </span>
         {count > 0 && <span className="n-doc-card-count">{t('document.count', { count })}</span>}

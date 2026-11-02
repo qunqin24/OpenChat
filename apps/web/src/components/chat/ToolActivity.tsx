@@ -3,6 +3,7 @@ import { Collapsible } from 'radix-ui'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { activityOrb, THOUGHT } from '@/lib/activity-orb'
 import { API_BASE_URL } from '@/lib/api'
 import { isHttpUrl, siteName } from '@openchat/chat-core/urls'
 import {
@@ -19,7 +20,6 @@ import { ThinkingOrb } from './ThinkingOrb'
 import { AnswerText } from './AnswerText'
 import { Markdown } from './MarkdownText'
 import { SubagentsIcon } from './SubagentAvatar'
-import { ThinkingIcon } from './ThinkingIcon'
 
 /** Source chips shown in the collapsed line, before the rest are counted. */
 const HEAD_SOURCES = 4
@@ -56,15 +56,15 @@ export function ToolActivity({
   // The process's own line says only how long the model thought; a run inside it says what it did.
   const { title, active, failed, sources, steps, thoughtOnly } = activityHead(t, items, thinking, !nested)
   const segments = activitySegments(items)
-  // Open while the model works, so the reader watches it think and search;
-  // folded away the moment the answer starts, so the answer is what is left
-  // (as ChatGPT has it). Either way the reader may open or close it.
+  // Folded, even while the model works: the line and its orb say what it is
+  // at, and the reader opens it to watch. Opened then, it folds away again the
+  // moment the answer starts, so the answer is what is left (as ChatGPT has it).
   const working = Boolean(active || thinking)
-  const [open, setOpen] = useState(working)
+  const [open, setOpen] = useState(false)
   const [wasWorking, setWasWorking] = useState(working)
   if (working !== wasWorking) {
     setWasWorking(working)
-    setOpen(working)
+    if (!working) setOpen(false)
   }
   if (items.length === 0 && !working) return null
 
@@ -81,14 +81,14 @@ export function ToolActivity({
         >
           <span className="n-activity-icon">
             {active || thinking ? (
-              // The same mark as thinking anywhere else - a search or a read in
-              // flight too, and between rounds - so the model at work always
-              // looks the same.
-              <span className="n-activity-orb" role="status" aria-label={active ? t('chat.tool.running') : t('chat.reasoning.live')}><ThinkingOrb /></span>
+              // The orb moves by what the title says the model is at - a
+              // search, a read, a thought, a retry - so the line can be read
+              // at a glance (lib/activity-orb.ts).
+              <span className="n-activity-orb" role="status" aria-label={active ? t('chat.tool.running') : t('chat.reasoning.live')}><ThinkingOrb look={activityOrb(items, thinking)} /></span>
             ) : steps.length > 0 && !thoughtOnly ? (
               stepIcon(steps[steps.length - 1]!.call.name)
             ) : (
-              <ThinkingIcon aria-hidden="true" />
+              <ThinkingOrb look={THOUGHT} still />
             )}
           </span>
           <span className="n-activity-title">{title}</span>

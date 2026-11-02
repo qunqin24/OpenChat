@@ -11,6 +11,7 @@ import { toast } from 'sonner'
 
 import { useGenerateTitle, usePinConversation, useRenameConversation } from '@/hooks/use-conversations'
 import { formatRelative } from '@openchat/chat-core/grouping'
+import { BACKGROUND } from '@/lib/activity-orb'
 import { useDisplayTitle } from '@/lib/titles'
 import { cn } from '@/lib/utils'
 import { ThinkingOrb } from './ThinkingOrb'
@@ -96,7 +97,7 @@ export function SidebarConversation({ conversation, active, running = false, onD
               // phone shows it too: the conversation left working is easy to
               // find again.
               <span className="n-row-running" role="status" aria-label={t('chat.sidebar.running')}>
-                <ThinkingOrb />
+                <ThinkingOrb look={BACKGROUND} />
               </span>
             )}
             {smartTitle.isPending ? (

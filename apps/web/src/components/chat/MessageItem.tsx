@@ -563,7 +563,7 @@ export function AssistantTurn({
       {compacting ? (
         <CompactingLine />
       ) : (
-        (waiting || retrying) && span === null && <ThinkingLine label={retrying ? t('chat.retrying') : undefined} />
+        (waiting || retrying) && span === null && <ThinkingLine retrying={retrying} />
       )}
 
       {!running && (text || onRegenerate) && (

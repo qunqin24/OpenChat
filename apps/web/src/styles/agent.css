@@ -140,7 +140,7 @@
 .chat-ui .n-activity-orb {
   display: flex;
 }
-.chat-ui .n-activity-icon svg,
+.chat-ui .n-activity-icon svg:not(.n-orb),
 .chat-ui .n-activity-chevron,
 .chat-ui .n-activity-step-icon svg {
   width: 14px;
@@ -493,6 +493,13 @@
   height: 14px;
   flex-shrink: 0;
 }
+/* The thinking picker's orb, a size down from the 16px slot so its sphere
+   stands as tall as the icons beside it, taken back to their 14px. */
+.chat-ui .n-model-trigger .n-orb {
+  width: 16px;
+  height: 16px;
+  margin: -1px;
+}
 
 .chat-ui .n-model-trigger.is-active {
   color: var(--n-text);
@@ -633,29 +640,16 @@
 /* ---- thinking orb -------------------------------------------------------- */
 
 .chat-ui .n-orb {
-  display: inline-grid;
-  grid-template-columns: repeat(3, 2.5px);
-  gap: 1.75px;
   flex-shrink: 0;
+  /* Drawn at the 20px it is tuned for, its sphere 16px across: taken back to
+     that, it fills the 16px icon slots the rest of the line keeps to, and the
+     line keeps its height. */
+  margin: -2px;
   color: var(--n-text);
 }
-.chat-ui .n-orb-dot {
-  width: 2.5px;
-  height: 2.5px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.18;
-  animation: n-orb-wave 1.32s ease-in-out infinite;
-}
-@keyframes n-orb-wave {
-  0%,
-  55%,
-  100% {
-    opacity: 0.18;
-  }
-  22% {
-    opacity: 1;
-  }
+/* Done, it is the line's icon, in the line's colour. */
+.chat-ui .n-orb.is-still {
+  color: inherit;
 }
 
 /* Before the first word: the mark and the same shimmering label the

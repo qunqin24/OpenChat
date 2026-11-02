@@ -124,13 +124,14 @@ WebKit（Safari，以及 iPhone 上的所有浏览器）照 Open WebUI 整个跳
 回复照 ChatGPT 分成「过程」和「答案」。答案之前的所有东西（思考、模型路上说的话、工具调用）是一个折叠块，答案在它下面。哪一段算过程由 chat-core 的 `reply-process.ts`（`processSpan`）决定：从第一个思考、文字或调用开始，到最后一个工具调用和紧跟它的思考为止；没有调用时，就是第一段文字之前的思考。网页 `MessageItem` 和 App `Reply.tsx` 都调它，别再各写一份。分组只在前端做，服务端照常按顺序存零件；成熟的开源项目（Open WebUI、LobeChat、LibreChat、Cherry Studio）也都是这样。
 
 - **折叠块的标题**：画在网页 `ToolActivity`、App `ActivityLine`。完成后只写「已思考 N 秒」（N 是思考零件 `durationMs` 之和，没有计时就写「已思考」），搜索次数、来源图标、失败数都不放在这一行。整段过程没有思考时，才写「搜索了 N 次」并带图标。工作时写当前在做的事。
+- **工作中的 orb**（网页）：模型在干活的标志是 Thinking Orbs 的点阵球（`components/chat/ThinkingOrb.tsx`，源码拷在 `lib/orb-core.ts`，MIT，带上游许可；和上游不同处有注释，目前只有一处：减少动态效果时照样动，加载指示器的规矩；文件头 `@ts-nocheck`，因为我们的 `noUncheckedIndexedAccess` 会让它几乎每行报错，改到能过就不像上游了）。用什么样子跟着标题走（`lib/activity-orb.ts`）：重试 `retrying`，有调用在跑时按工具（搜索 `searching`、读网页 `using·scroll`、读文件 `using·zoom`、搜文件 `searching·lighthouse`、记忆和写作块 `using·type`、`ask_user` 是 `waiting`、子 Agent `background·spiral`、其余 `using·tap`），思考 `reasoning`，两轮之间 `working·gyro`；第一个字之前 `working`，压缩 `compacting`，写作块卡片 `compacting·fuse`，侧栏里在跑的对话 `background`；思考结束后「已思考 N 秒」前面和输入框的思考强度按钮上是静止的 `idle`（`still`，只画一帧，取所在行的颜色）。按作者调校的 20px 画，球本身 16px 宽，`margin: -2px` 收回到 16px 的图标位，行高不变。`using` 和 `using·type` 用 1000 个点拼箭头和文字（其余 80 个左右，`background` 20 个），每帧每点写四个属性，所以只放在同一时间只有一个在动的地方，侧栏这种会同时出现好几个的位置不用；屏幕外的球不画（上游的 `IntersectionObserver`）。App 仍是自己的九点波浪（`ThinkingOrb`）。
 - **展开后**：内容和答案齐平，左边没有竖线，因为竖线会让过渡句看着像思维链。
   - 模型路上说的话照原样显示，和答案一样大、一样颜色，也和答案一样经 `AnswerText`（`components/chat/AnswerText.tsx`）画：里面的 `openchat-ui` 块照样画成组件，不能用普通 `Markdown`，否则第一次调用工具前写的智能 UI 收进过程后会变回源码。
   - 过渡句之间的每段思考和工具调用各收成一行，嵌套的 `ToolActivity`/`ActivityLine` 带 `nested`，比如「已思考 6 秒，搜索了 3 次 ›」，点开才是思考原文和每一步。分段由 chat-core 的 `activitySegments` 决定。
   - 模型一句话没说时只有一段，就直接平铺思考和步骤，不再多一行重复外层的标题。
   - 思考淡一号、小一号。
-- **开合**：模型工作时（run 在跑、过程之后还没有内容）自动展开，答案一开始就自动收起；翻看旧对话时默认收起。里面的分段只有最后一段跟着工作状态开合。
-- **思考的窗口**：工作时思考只露最后几行，网页 `Thought` 的 `is-peek` 最高 240px，App 是 220；窗口停在最新一行，顶上渐隐，不能单独滚动（网页嵌套滚动框会抢走页面的滚轮）。完成后长的思考（超过 240px 再多 48px 以上，`data-long`）是一个 240px 高、能自己滚动的框，上下有更多内容的一边渐隐（`data-cut`/`data-more`），滚到头时滚轮交还页面；短的直接全文。工作中的窗口不能滚，因为每个 token 都把它拉回末尾。
+- **开合**：网页一律默认收起，模型工作时也不自动展开，靠标题和 orb 说明在做什么，读者想看再点开；工作中点开的，答案一开始就自动收起。里面的分段同样默认收起。App 仍是工作时自动展开（`ActivityLine`）。
+- **思考的窗口**：工作时思考只露最后几行，网页 `Thought` 的 `is-peek` 最高 240px，App 是 220；窗口停在最新一行，顶上渐隐，不能单独滚动（网页嵌套滚动框会抢走页面的滚轮）。完成后长的思考（超过 240px 再多 48px 以上，`data-long`）是一个 240px 高、能自己滚动的框，上下有更多内容的一边渐隐（`data-cut`/`data-more`），滚到头时滚轮交还页面；短的直接全文（App 同样，240 高的 `ScrollView`）。工作中的窗口不能滚，因为每个 token 都把它拉回末尾。
 - **不吸顶**：展开后标题跟着内容一起滚走，不吸在顶部。试过吸顶（外层、内层叠着吸，吸住时顶栏变实色），快速滑动、段尾松开、内外层交接时都会出现重叠或露底，已整个去掉（连同 `useStuck`），别再加回来。
   - 展开区只在竖直方向裁切（`overflow-x: visible; overflow-y: clip`，为了展开时高度的动画），横向也裁的话，会切掉标题悬停时伸出去的灰底；上面的空白用 `padding` 留在裁切范围内，不用 margin。
   - `.is-open`、`.is-active` 的选择器只作用于自己的标题（`> .n-activity-head`），否则外层展开会让内层收起的标题箭头也朝下。

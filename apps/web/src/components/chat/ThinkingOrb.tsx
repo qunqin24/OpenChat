@@ -1,24 +1,41 @@
+import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { COMPACTING, RETRYING, WORKING } from '@/lib/activity-orb'
+import { mountOrb, type OrbLook, type OrbOptions } from '@/lib/orb-core'
+import { cn } from '@/lib/utils'
+
+/** The size every orb is tuned to read at. */
+const SIZE = 20
+
 /**
- * Nine dots in a square, lighting up in a wave from one corner to the other:
- * the mark for "the model is working on it" — before its first word, and
- * while it thinks. Opacity only, and every dot marked essential, so it keeps
- * moving under reduced motion: a still indicator reads as a stuck one.
+ * A sphere of dots that moves by what the model is doing (Thinking Orbs,
+ * lib/orb-core.ts; which look for what in lib/activity-orb.ts): the mark for
+ * "the model is working on it" - before its first word, while it thinks,
+ * while a call runs. It keeps moving under reduced motion: a still indicator
+ * reads as a stuck one. Off screen it does not draw. `still`, it is drawn
+ * once and never moves: the mark of thinking that is over, in its line's colour.
  */
-export function ThinkingOrb() {
+export function ThinkingOrb({ look = WORKING, still = false }: { look?: OrbLook; still?: boolean }) {
+  const ref = useRef<SVGSVGElement>(null)
+  const { state, variant } = look
+  useEffect(() => {
+    // Rebuilt together: a variant belongs to its state, which TypeScript loses once they are apart.
+    const orb = mountOrb(ref.current!, { state, variant, size: SIZE } as OrbOptions)
+    if (still) orb.pause()
+    return orb.destroy
+  }, [state, variant, still])
   return (
-    <span className="n-orb" aria-hidden="true">
-      {Array.from({ length: 9 }, (_, i) => (
-        <span
-          key={i}
-          className="n-orb-dot"
-          data-motion="essential"
-          // The wave runs along the anti-diagonals: row + column.
-          style={{ animationDelay: `${(Math.floor(i / 3) + (i % 3)) * 110}ms` }}
-        />
-      ))}
-    </span>
+    <svg
+      ref={ref}
+      className={cn('n-orb', still && 'is-still')}
+      width={SIZE}
+      height={SIZE}
+      viewBox={`0 0 ${SIZE} ${SIZE}`}
+      fill="currentColor"
+      aria-hidden="true"
+      data-motion="essential"
+    />
   )
 }
 
@@ -31,7 +48,7 @@ export function CompactingLine() {
   const { t } = useTranslation()
   return (
     <div className="n-thinking" role="status">
-      <ThinkingOrb />
+      <ThinkingOrb look={COMPACTING} />
       <span className="n-reasoning-live" data-motion="essential">
         {t('chat.compaction.running')}
       </span>
@@ -44,14 +61,14 @@ export function CompactingLine() {
  * as the reasoning toggle, so the line carries on into it unchanged when the
  * model starts to think.
  */
-/** The model at work; `label` says what instead (a failed request tried again). */
-export function ThinkingLine({ label }: { label?: string }) {
+/** The model at work, or a failed request being tried again. */
+export function ThinkingLine({ retrying = false }: { retrying?: boolean }) {
   const { t } = useTranslation()
   return (
     <div className="n-thinking" role="status">
-      <ThinkingOrb />
+      <ThinkingOrb look={retrying ? RETRYING : WORKING} />
       <span className="n-reasoning-live" data-motion="essential">
-        {label ?? t('chat.reasoning.live')}
+        {t(retrying ? 'chat.retrying' : 'chat.reasoning.live')}
       </span>
     </div>
   )
