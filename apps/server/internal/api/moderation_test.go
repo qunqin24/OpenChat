@@ -210,6 +210,73 @@ func TestModerateWithOpenAIWire(t *testing.T) {
 	}
 }
 
+// The endpoint takes one image a request (400 too_many_images for two): each
+// image goes alone, the first with the text, and every answer is folded in -
+// or, if any request fails, the check does.
+func TestModerateWithOpenAIOneImageARequest(t *testing.T) {
+	var mu sync.Mutex
+	var inputs [][]map[string]any
+	failSecond := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var req struct {
+			Input []map[string]any `json:"input"`
+		}
+		_ = json.Unmarshal(raw, &req)
+		images, second := 0, false
+		for _, item := range req.Input {
+			if item["type"] == "image_url" {
+				images++
+				url, _ := item["image_url"].(map[string]any)["url"].(string)
+				second = strings.HasSuffix(url, base64.StdEncoding.EncodeToString([]byte("two")))
+			}
+		}
+		mu.Lock()
+		inputs = append(inputs, req.Input)
+		mu.Unlock()
+		if images != 1 || (second && failSecond) {
+			http.Error(w, `{"error":{"code":"too_many_images"}}`, http.StatusBadRequest)
+			return
+		}
+		flagged := map[string]bool{"violence": second, "sexual": false}
+		scores := map[string]float64{"violence": map[bool]float64{true: 0.9, false: 0.1}[second], "sexual": 0}
+		_ = json.NewEncoder(w).Encode(map[string]any{"results": []any{map[string]any{"categories": flagged, "category_scores": scores}}})
+	}))
+	defer srv.Close()
+
+	s := &Server{moderationClient: srv.Client()}
+	cfg := defaultModerationConfig()
+	cfg.Categories = []ModerationCategory{ModerationCategoryViolence, ModerationCategorySexual}
+	cfg.OpenAIKey, cfg.OpenAIBaseURL = "sk-secret-key", srv.URL
+	images := []moderationImage{{contentType: "image/png", data: []byte("one")}, {contentType: "image/png", data: []byte("two")}}
+	v, err := s.moderateWithOpenAI(context.Background(), cfg, "some words", images)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(inputs) != 2 {
+		t.Fatalf("%d requests", len(inputs))
+	}
+	var texts int
+	for _, input := range inputs {
+		for _, item := range input {
+			if item["type"] == "text" && item["text"] == "some words" {
+				texts++
+			}
+		}
+	}
+	if texts != 1 {
+		t.Errorf("the text went %d times", texts)
+	}
+	if !v.flagged["violence"] || v.scores["violence"] != 0.9 {
+		t.Errorf("the second image's answer was not folded in: %+v", v)
+	}
+
+	failSecond = true
+	if _, err := s.moderateWithOpenAI(context.Background(), cfg, "some words", images); err == nil {
+		t.Error("a check with one image unanswered passed")
+	}
+}
+
 func TestModerateWithOpenAIFailures(t *testing.T) {
 	type answer struct {
 		status int

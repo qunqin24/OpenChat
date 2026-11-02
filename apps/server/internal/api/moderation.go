@@ -13,12 +13,14 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin24/openchat/apps/server/internal/httpx"
@@ -92,8 +94,11 @@ func contentBlocked(categories []string, warning moderationSanction) *httpx.APIE
 }
 
 const (
-	// moderationTimeout bounds the OpenAI request.
-	moderationTimeout = 5 * time.Second
+	// moderationTimeout bounds an OpenAI request of text alone, and
+	// moderationImageTimeout one that carries an image: the image goes up with
+	// it and is looked at, and a 4 MB one took from 4 to 12 seconds.
+	moderationTimeout      = 5 * time.Second
+	moderationImageTimeout = 30 * time.Second
 	// moderationModelTimeout bounds a model's classification, which is a
 	// completion and takes longer.
 	moderationModelTimeout = 20 * time.Second
@@ -384,7 +389,8 @@ func (s *Server) moderationHTTP() *http.Client {
 	if s.moderationClient != nil {
 		return s.moderationClient
 	}
-	return &http.Client{Timeout: moderationTimeout}
+	// No timeout of its own: each request carries its own (askOpenAI).
+	return &http.Client{}
 }
 
 // moderateWithOpenAI asks OpenAI's moderation endpoint (omni-moderation-latest,
@@ -392,10 +398,11 @@ func (s *Server) moderationHTTP() *http.Client {
 // the text. A text longer than a piece (moderationChunkRunes) goes as several
 // pieces, up to moderationItemsPerRequest to a request, and the endpoint answers
 // once per piece: a category applies if it applies to any of them, with the
-// highest score. The images, with the first piece, go as one multi-modal
-// request. A request that fails, or whose answer is not complete for every piece
-// it carried, fails the check: no part of the message is left unchecked and
-// passed as safe.
+// highest score. Each image goes in a request of its own, the first with the
+// first piece - the endpoint takes one image a request (400 too_many_images
+// for two) - and those requests are made at once. A request that fails, or
+// whose answer is not complete for every piece it carried, fails the check: no
+// part of the message is left unchecked and passed as safe.
 func (s *Server) moderateWithOpenAI(ctx context.Context, cfg moderationConfig, text string, images []moderationImage) (moderationVerdict, error) {
 	verdict := newVerdict()
 	if cfg.OpenAIKey == "" {
@@ -418,52 +425,72 @@ func (s *Server) moderateWithOpenAI(ctx context.Context, cfg moderationConfig, t
 		}})
 	}
 
-	// The requests: the images with the first piece (a multi-modal input, one
-	// answer for it), then the other pieces as plain strings (one answer each).
+	// The requests: each image (a multi-modal input, one answer for it), the
+	// first with the first piece, made at once; then the other pieces as plain
+	// strings (one answer each), in turn.
 	type request struct {
 		input   []any
 		answers int // how many results the endpoint owes
 	}
 	pieces := splitForModeration(text, moderationChunkRunes)
-	var requests []request
-	if len(imageItems) > 0 {
+	var withImages []request
+	for i, item := range imageItems {
 		var input []any
-		if len(pieces) > 0 {
+		if i == 0 && len(pieces) > 0 {
 			input = append(input, map[string]any{"type": "text", "text": pieces[0]})
 			pieces = pieces[1:]
 		}
-		requests = append(requests, request{input: append(input, imageItems...), answers: 1})
+		withImages = append(withImages, request{input: append(input, item), answers: 1})
 	}
+	var textOnly []request
 	for len(pieces) > 0 {
 		n := min(len(pieces), moderationItemsPerRequest)
 		input := make([]any, n)
 		for i, piece := range pieces[:n] {
 			input[i] = piece
 		}
-		requests = append(requests, request{input: input, answers: n})
+		textOnly = append(textOnly, request{input: input, answers: n})
 		pieces = pieces[n:]
 	}
 
-	for _, req := range requests {
-		results, err := s.askOpenAI(ctx, cfg, req.input)
+	// ask makes one request and folds its answer in.
+	var mu sync.Mutex
+	ask := func(ctx context.Context, req request, timeout time.Duration) error {
+		results, err := s.askOpenAI(ctx, cfg, req.input, timeout)
 		if err != nil {
-			return newVerdict(), err
+			return err
 		}
 		// One result per piece, or the pieces cannot be told from the results
 		// (a multi-modal input may be answered with one result, or one per item).
 		if len(results) < req.answers || (req.answers > 1 && len(results) != req.answers) {
-			return newVerdict(), fmt.Errorf("the moderation endpoint returned %d results for %d inputs", len(results), req.answers)
+			return fmt.Errorf("the moderation endpoint returned %d results for %d inputs", len(results), req.answers)
 		}
+		mu.Lock()
+		defer mu.Unlock()
 		for _, result := range results {
 			got, err := cfg.verdictFrom(result.Categories, result.CategoryScores)
 			if err != nil {
-				return newVerdict(), fmt.Errorf("the moderation endpoint's result is incomplete: %w", err)
+				return fmt.Errorf("the moderation endpoint's result is incomplete: %w", err)
 			}
 			verdict.merge(got.flagged, got.scores)
 		}
+		return nil
+	}
+
+	group, groupCtx := errgroup.WithContext(ctx)
+	for _, req := range withImages {
+		group.Go(func() error { return ask(groupCtx, req, moderationImageTimeout) })
+	}
+	if err := group.Wait(); err != nil {
+		return newVerdict(), err
+	}
+	for _, req := range textOnly {
 		// Enough has been found: the rest of the text is not worth a request.
 		if len(cfg.blocked(verdict)) > 0 {
 			break
+		}
+		if err := ask(ctx, req, moderationTimeout); err != nil {
+			return newVerdict(), err
 		}
 	}
 	return verdict, nil
@@ -474,8 +501,9 @@ type openAIResult = struct {
 	CategoryScores map[string]*float64 `json:"category_scores"`
 }
 
-// askOpenAI makes one request to the moderation endpoint and returns its results.
-func (s *Server) askOpenAI(ctx context.Context, cfg moderationConfig, input []any) ([]openAIResult, error) {
+// askOpenAI makes one request to the moderation endpoint, given timeout, and
+// returns its results.
+func (s *Server) askOpenAI(ctx context.Context, cfg moderationConfig, input []any, timeout time.Duration) ([]openAIResult, error) {
 	body, err := json.Marshal(map[string]any{"model": moderationOpenAIModel, "input": input})
 	if err != nil {
 		return nil, err
@@ -484,7 +512,7 @@ func (s *Server) askOpenAI(ctx context.Context, cfg moderationConfig, input []an
 	if base == "" {
 		base = defaultModerationOpenAIBase
 	}
-	ctx, cancel := context.WithTimeout(ctx, moderationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/moderations", bytes.NewReader(body))
 	if err != nil {
