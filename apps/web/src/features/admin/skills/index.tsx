@@ -38,9 +38,11 @@ import {
   useSaveSkill,
   useSetBuiltinSkillEnabled,
   useSetSkillEnabled,
+  usePluginSkills,
   useSiteSkills,
   useSkill,
   useSkillVersions,
+  type SkillScope,
 } from '@/hooks/use-skills'
 import { useSkillErrorText } from '@/hooks/use-skill-errors'
 import { cn } from '@/lib/utils'
@@ -220,7 +222,7 @@ export function SiteSkills() {
 
       <Dialog open={editing !== undefined} onOpenChange={(open) => !open && setEditing(undefined)}>
         <DialogContent className="sm:max-w-4xl">
-          {editing !== undefined && <EditorLoader id={editing} onClose={() => setEditing(undefined)} />}
+          {editing !== undefined && <EditorLoader scope="site" id={editing} onClose={() => setEditing(undefined)} />}
         </DialogContent>
       </Dialog>
 
@@ -250,41 +252,43 @@ export function SiteSkills() {
   )
 }
 
-function EditorLoader({ id, onClose }: { id: string | null; onClose: () => void }) {
+function EditorLoader({ scope, id, onClose }: { scope: SkillScope; id: string | null; onClose: () => void }) {
   const { t } = useTranslation()
-  const skill = useSkill('site', id)
+  const skill = useSkill(scope, id)
   if (id === null) {
     return (
       <Editor
+        scope={scope}
         id={null}
-        initial={skillTemplate('site-skill', t('admin.skills.template-description'), t('admin.skills.template-body'))}
+        initial={skillTemplate(typeof scope === 'object' ? 'plugin-skill' : 'site-skill', t('admin.skills.template-description'), t('admin.skills.template-body'))}
         onClose={onClose}
       />
     )
   }
   if (skill.isPending) return <Skeleton className="h-96 w-full" />
   if (skill.isError || !skill.data) return <p className="text-muted-foreground text-sm">{t('admin.skills.load-failed')}</p>
-  return <Editor id={id} initial={skill.data.files} onClose={onClose} />
+  return <Editor scope={scope} id={id} initial={skill.data.files} onClose={onClose} />
 }
 
 /**
  * The files down the left, SKILL.md first and not removable; the chosen one's
  * text on the right. Name and description are SKILL.md's frontmatter.
  */
-function Editor({ id, initial, onClose }: { id: string | null; initial: SkillFile[]; onClose: () => void }) {
+function Editor({ scope, id, initial, onClose }: { scope: SkillScope; id: string | null; initial: SkillFile[]; onClose: () => void }) {
   const { t, i18n } = useTranslation()
-  const save = useSaveSkill('site')
+  const save = useSaveSkill(scope)
   const errorText = useSkillErrorText()
   const [files, setFiles] = useState<SkillFile[]>(() => sortFiles(initial))
   const [current, setCurrent] = useState('SKILL.md')
   const [path, setPath] = useState('')
   const [error, setError] = useState<string>()
 
-  const versions = useSkillVersions('site', id)
+  // A plugin's skills keep no versions to go back to.
+  const versions = useSkillVersions(scope, id)
   const loadVersion = async (versionId: string) => {
-    if (!id) return
+    if (!id || typeof scope === 'object') return
     try {
-      setFiles(sortFiles((await fetchSkillVersion('site', id, versionId)).files))
+      setFiles(sortFiles((await fetchSkillVersion(scope, id, versionId)).files))
       setCurrent('SKILL.md')
       setError(undefined)
     } catch (failure) {
@@ -443,3 +447,103 @@ function sortFiles(files: SkillFile[]): SkillFile[] {
 }
 
 export default SiteSkills
+
+/**
+ * A plugin's own skills (docs/design/plugins-plan.md §2), in its editor's
+ * Skills tab: listed in the conversations of the people who installed the
+ * plugin. Written and switched as the site's are; no versions to go back to,
+ * no import or export.
+ */
+export function PluginSkills({ pluginId }: { pluginId: string }) {
+  const { t, i18n } = useTranslation()
+  const scope = { plugin: pluginId }
+  const skills = usePluginSkills(pluginId)
+  const toggle = useSetSkillEnabled(scope)
+  const remove = useDeleteSkill(scope)
+  const errorText = useSkillErrorText()
+  const [editing, setEditing] = useState<string | null | undefined>(undefined)
+  const [deleting, setDeleting] = useState<Skill | null>(null)
+  const items = skills.data?.items ?? []
+  const full = skills.data ? items.length >= skills.data.limit : false
+  const day = (iso: string) => new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium' }).format(new Date(iso))
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <p className="text-muted-foreground text-sm">{t('admin.plugins.skills-hint')}</p>
+        <Button size="sm" disabled={full} onClick={() => setEditing(null)}>
+          <Plus />
+          {t('admin.skills.new')}
+        </Button>
+      </div>
+      {skills.isPending ? (
+        <Skeleton className="h-24 w-full" />
+      ) : skills.isError ? (
+        <p className="text-muted-foreground text-sm">{t('admin.skills.load-failed')}</p>
+      ) : items.length === 0 ? (
+        <p className="text-muted-foreground text-sm">{t('admin.plugins.skills-empty')}</p>
+      ) : (
+        <div className="rounded-md border">
+          <Table>
+            <TableBody>
+              {items.map((skill) => (
+                <TableRow key={skill.id}>
+                  <TableCell className="font-mono text-xs font-medium">{skill.name}</TableCell>
+                  <TableCell className="text-muted-foreground max-w-56 text-sm whitespace-normal">
+                    <span className="line-clamp-2">{skill.description}</span>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground w-28 text-sm">{day(skill.updatedAt)}</TableCell>
+                  <TableCell className="w-14">
+                    <Switch
+                      checked={skill.enabled}
+                      disabled={toggle.isPending}
+                      aria-label={t('admin.skills.enabled')}
+                      onCheckedChange={(enabled) => toggle.mutate({ id: skill.id, enabled }, { onError: (failure) => toast.error(errorText(failure)) })}
+                    />
+                  </TableCell>
+                  <TableCell className="w-24 text-end">
+                    <Button variant="ghost" size="icon" aria-label={t('admin.skills.edit')} onClick={() => setEditing(skill.id)}>
+                      <Pencil />
+                    </Button>
+                    <Button variant="ghost" size="icon" aria-label={t('admin.skills.delete')} onClick={() => setDeleting(skill)}>
+                      <Trash2 />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      <Dialog open={editing !== undefined} onOpenChange={(open) => !open && setEditing(undefined)}>
+        <DialogContent className="sm:max-w-4xl">
+          {editing !== undefined && <EditorLoader scope={scope} id={editing} onClose={() => setEditing(undefined)} />}
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('admin.skills.delete-title', { name: deleting?.name ?? '' })}</AlertDialogTitle>
+            <AlertDialogDescription>{t('admin.skills.delete-description')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('admin.skills.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() =>
+                deleting &&
+                remove.mutate(deleting.id, {
+                  onSuccess: () => toast.success(t('admin.skills.deleted')),
+                  onError: (failure) => toast.error(errorText(failure)),
+                })
+              }
+            >
+              {t('admin.skills.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}

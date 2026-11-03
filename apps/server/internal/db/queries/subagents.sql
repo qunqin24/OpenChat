@@ -2,16 +2,25 @@
 -- runs do work the main agent handed over, and the reports they hand back.
 
 -- name: CreateSubagentConversation :one
-INSERT INTO conversations (user_id, title, model, web_search, kind, parent_id, launched_by, launch_call_id, background, skills)
+INSERT INTO conversations (user_id, title, model, web_search, kind, parent_id, launched_by, launch_call_id, background, skills,
+                           plugins)
 VALUES (sqlc.arg('user_id'), sqlc.arg('title'), sqlc.arg('model'), sqlc.arg('web_search'), 'subagent',
         sqlc.arg('parent_id'), sqlc.arg('launched_by'), sqlc.arg('launch_call_id'), sqlc.arg('background'),
-        sqlc.narg('skills')::text[])
+        sqlc.narg('skills')::text[], sqlc.narg('plugins')::text[])
 RETURNING *;
 
 -- name: GetSubagentSkills :one
 -- The skills a sub-agent may open (its launch named them), from its own
 -- conversation's row.
 SELECT COALESCE(skills, '{}')::text[] AS skills
+FROM conversations
+WHERE id = sqlc.arg('id')
+  AND user_id = sqlc.arg('user_id')
+  AND kind = 'subagent';
+
+-- name: GetSubagentPlugins :one
+-- The plugins a sub-agent may use (its launch named them), by short name.
+SELECT COALESCE(plugins, '{}')::text[] AS plugins
 FROM conversations
 WHERE id = sqlc.arg('id')
   AND user_id = sqlc.arg('user_id')

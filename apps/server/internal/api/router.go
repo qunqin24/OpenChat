@@ -157,6 +157,7 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 			r.Post("/conversations/{conversationId}/tool-calls/{callId}/answer", wrapper.AnswerQuestion)
 			r.Post("/conversations/{conversationId}/research-plans/{callId}", wrapper.AnswerResearchPlan)
 			r.Post("/conversations/{conversationId}/plugin-confirmations/{confirmationId}", wrapper.AnswerPluginConfirmation)
+			r.Get("/conversations/{conversationId}/tool-images/{imageId}", wrapper.GetToolImage)
 			r.Post("/conversations/{conversationId}/runs/{runId}/cancel", wrapper.CancelRun)
 			// A conversation's sub-agents: read, stopped, resumed, moved to the
 			// background - never written to (subagents_http.go).
@@ -203,6 +204,13 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 				r.Get("/admin/plugins/{pluginId}/tools", wrapper.ListAdminPluginTools)
 				r.Post("/admin/plugins/{pluginId}/tools/refresh", wrapper.RefreshAdminPluginTools)
 				r.Patch("/admin/plugins/{pluginId}/tools/{toolName}", wrapper.UpdateAdminPluginTool)
+				r.Get("/admin/plugins/{pluginId}/skills", wrapper.ListPluginSkills)
+				r.Post("/admin/plugins/{pluginId}/skills", wrapper.CreatePluginSkill)
+				r.Get("/admin/plugins/{pluginId}/skills/{skillId}", wrapper.GetPluginSkill)
+				r.Put("/admin/plugins/{pluginId}/skills/{skillId}", wrapper.UpdatePluginSkill)
+				r.Patch("/admin/plugins/{pluginId}/skills/{skillId}", wrapper.SetPluginSkillEnabled)
+				r.Delete("/admin/plugins/{pluginId}/skills/{skillId}", wrapper.DeletePluginSkill)
+				r.Get("/admin/plugin-calls", wrapper.ListPluginCalls)
 				r.Get("/admin/web-search", wrapper.GetWebSearchSettings)
 				r.Patch("/admin/web-search", wrapper.UpdateWebSearchSettings)
 				r.Post("/admin/web-search/test", wrapper.TestWebSearch)

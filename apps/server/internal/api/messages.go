@@ -252,6 +252,9 @@ type runChoice struct {
 	fromApp bool
 	// research: the run carries out a deep research (research.go).
 	research bool
+	// unattended: nobody watches the run - a scheduled task's - so nothing
+	// may wait for the person (plugin_code.go).
+	unattended bool
 	// webForced: web access is on for this run whatever the conversation's
 	// switch, which keeps what it was (a deep research's runs).
 	webForced bool
@@ -334,6 +337,7 @@ func createRun(ctx context.Context, q *sqlc.Queries, conv sqlc.Conversation, use
 		Continues:       c.continues,
 		FromApp:         c.fromApp,
 		Research:        c.research,
+		Unattended:      c.unattended,
 	}
 	if requestID != "" {
 		params.RequestID = &requestID

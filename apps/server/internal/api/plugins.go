@@ -33,7 +33,7 @@ func toPlugin(row sqlc.ListUserPluginsRow) Plugin {
 		Category: row.Category, Featured: row.Featured, IconText: row.IconText, IconColor: row.IconColor,
 		IconPath: row.IconPath,
 		AuthType: PluginAuthType(row.AuthType), ReadTools: int(row.ReadTools), WriteTools: int(row.WriteTools),
-		Skills: 0, Installed: row.Installed, NeedsReconnect: row.NeedsReconnect,
+		Skills: int(row.Skills), Installed: row.Installed, NeedsReconnect: row.NeedsReconnect,
 	}
 }
 

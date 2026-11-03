@@ -24,6 +24,7 @@ import { Route as AdminChannelsRouteImport } from './routes/admin.channels'
 import { Route as AdminImageSearchRouteImport } from './routes/admin.image-search'
 import { Route as AdminModelsRouteImport } from './routes/admin.models'
 import { Route as AdminModerationLogsRouteImport } from './routes/admin.moderation-logs'
+import { Route as AdminPluginCallsRouteImport } from './routes/admin.plugin-calls'
 import { Route as AdminPluginsRouteImport } from './routes/admin.plugins'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminSkillsRouteImport } from './routes/admin.skills'
@@ -111,6 +112,11 @@ const AdminModelsRoute = AdminModelsRouteImport.update({
 const AdminModerationLogsRoute = AdminModerationLogsRouteImport.update({
   id: '/moderation-logs',
   path: '/moderation-logs',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPluginCallsRoute = AdminPluginCallsRouteImport.update({
+  id: '/plugin-calls',
+  path: '/plugin-calls',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminPluginsRoute = AdminPluginsRouteImport.update({
@@ -204,6 +210,7 @@ export interface FileRoutesByFullPath {
   '/admin/image-search': typeof AdminImageSearchRoute
   '/admin/models': typeof AdminModelsRoute
   '/admin/moderation-logs': typeof AdminModerationLogsRoute
+  '/admin/plugin-calls': typeof AdminPluginCallsRoute
   '/admin/plugins': typeof AdminPluginsRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
   '/admin/skills': typeof AdminSkillsRoute
@@ -233,6 +240,7 @@ export interface FileRoutesByTo {
   '/admin/image-search': typeof AdminImageSearchRoute
   '/admin/models': typeof AdminModelsRoute
   '/admin/moderation-logs': typeof AdminModerationLogsRoute
+  '/admin/plugin-calls': typeof AdminPluginCallsRoute
   '/admin/plugins': typeof AdminPluginsRoute
   '/admin/skills': typeof AdminSkillsRoute
   '/admin/storage': typeof AdminStorageRoute
@@ -264,6 +272,7 @@ export interface FileRoutesById {
   '/admin/image-search': typeof AdminImageSearchRoute
   '/admin/models': typeof AdminModelsRoute
   '/admin/moderation-logs': typeof AdminModerationLogsRoute
+  '/admin/plugin-calls': typeof AdminPluginCallsRoute
   '/admin/plugins': typeof AdminPluginsRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
   '/admin/skills': typeof AdminSkillsRoute
@@ -297,6 +306,7 @@ export interface FileRouteTypes {
     | '/admin/image-search'
     | '/admin/models'
     | '/admin/moderation-logs'
+    | '/admin/plugin-calls'
     | '/admin/plugins'
     | '/admin/settings'
     | '/admin/skills'
@@ -326,6 +336,7 @@ export interface FileRouteTypes {
     | '/admin/image-search'
     | '/admin/models'
     | '/admin/moderation-logs'
+    | '/admin/plugin-calls'
     | '/admin/plugins'
     | '/admin/skills'
     | '/admin/storage'
@@ -356,6 +367,7 @@ export interface FileRouteTypes {
     | '/admin/image-search'
     | '/admin/models'
     | '/admin/moderation-logs'
+    | '/admin/plugin-calls'
     | '/admin/plugins'
     | '/admin/settings'
     | '/admin/skills'
@@ -489,6 +501,13 @@ declare module '@tanstack/react-router' {
       path: '/moderation-logs'
       fullPath: '/admin/moderation-logs'
       preLoaderRoute: typeof AdminModerationLogsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/plugin-calls': {
+      id: '/admin/plugin-calls'
+      path: '/plugin-calls'
+      fullPath: '/admin/plugin-calls'
+      preLoaderRoute: typeof AdminPluginCallsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/plugins': {
@@ -654,6 +673,7 @@ interface AdminRouteChildren {
   AdminImageSearchRoute: typeof AdminImageSearchRoute
   AdminModelsRoute: typeof AdminModelsRoute
   AdminModerationLogsRoute: typeof AdminModerationLogsRoute
+  AdminPluginCallsRoute: typeof AdminPluginCallsRoute
   AdminPluginsRoute: typeof AdminPluginsRoute
   AdminSettingsRoute: typeof AdminSettingsRouteWithChildren
   AdminSkillsRoute: typeof AdminSkillsRoute
@@ -670,6 +690,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminImageSearchRoute: AdminImageSearchRoute,
   AdminModelsRoute: AdminModelsRoute,
   AdminModerationLogsRoute: AdminModerationLogsRoute,
+  AdminPluginCallsRoute: AdminPluginCallsRoute,
   AdminPluginsRoute: AdminPluginsRoute,
   AdminSettingsRoute: AdminSettingsRouteWithChildren,
   AdminSkillsRoute: AdminSkillsRoute,

@@ -1011,6 +1011,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/plugin-calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Plugin tool calls, newest first
+         * @description Who called which plugin tool and how it ended, paged by cursor. Never
+         *     the input or the result. `pluginId` and `failed` narrow the list; keep
+         *     them the same between pages.
+         */
+        get: operations["listPluginCalls"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/plugins/{pluginId}/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * A plugin's skills
+         * @description Skills that come with the plugin: in the skill list of a conversation
+         *     whose owner has the plugin installed, and nobody else's. Written by
+         *     administrators, so not checked by content moderation, as site skills
+         *     are; a site skill or a person's own of the same name takes the place
+         *     of one.
+         */
+        get: operations["listPluginSkills"];
+        put?: never;
+        /** Write a plugin skill */
+        post: operations["createPluginSkill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/plugins/{pluginId}/skills/{skillId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        /** A plugin skill, with its files */
+        get: operations["getPluginSkill"];
+        /** Save a new version of a plugin skill */
+        put: operations["updatePluginSkill"];
+        post?: never;
+        /** Delete a plugin skill */
+        delete: operations["deletePluginSkill"];
+        options?: never;
+        head?: never;
+        /** Switch a plugin skill on or off */
+        patch: operations["setPluginSkillEnabled"];
+        trace?: never;
+    };
     "/admin/subagents": {
         parameters: {
             query?: never;
@@ -1891,6 +1963,31 @@ export interface paths {
          *     (the server restarted).
          */
         post: operations["answerPluginConfirmation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/conversations/{conversationId}/tool-images/{imageId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                imageId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * A picture a tool answered with
+         * @description A plugin call can answer with pictures; they are kept with the run
+         *     (`PluginCodeProgress.images`) and shown under the call. The caller's
+         *     own only; 404 otherwise.
+         */
+        get: operations["getToolImage"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3509,6 +3606,10 @@ export interface components {
             plugins: components["schemas"]["PluginBadge"][];
             /** @description The script */
             code?: string;
+            /** @description The script's search() calls, once it finished. */
+            searches?: components["schemas"]["PluginSearch"][];
+            /** @description Pictures the calls answered with, once finished (getToolImage). */
+            images?: components["schemas"]["ToolImage"][];
             /** @description Why the script failed */
             error?: string;
         };
@@ -3524,11 +3625,55 @@ export interface components {
              * @description While `waiting`, what answerPluginConfirmation takes.
              */
             confirmationId?: string;
-            /** @description While `waiting`, what the call would send, for the person to judge. */
+            /** @description What the call sends (or would, while `waiting`, for the person to judge). */
             arguments?: {
                 [key: string]: unknown;
             };
+            /** @description The start of what it answered, once done, for the step's details. */
+            result?: string;
             error?: string;
+        };
+        ToolImage: {
+            /** Format: uuid */
+            id: string;
+            mediaType: string;
+        };
+        PluginCallLog: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            userId?: string;
+            userName?: string;
+            userEmail?: string;
+            /** Format: uuid */
+            conversationId?: string;
+            /** Format: uuid */
+            pluginId?: string;
+            /** @description The plugin's short name when it was called. */
+            plugin: string;
+            /** @description Its name now; absent once deleted. */
+            pluginName?: string;
+            tool: string;
+            ok: boolean;
+            /** @description How a call that did not go through ended - denied, unattended, no_answer, not_connected, invalid, unavailable, tool_error, failed, cancelled; empty when ok. */
+            outcome: string;
+            /** @description The person allowed it when asked. */
+            confirmed: boolean;
+            durationMs: number;
+        };
+        PluginCallLogPage: {
+            items: components["schemas"]["PluginCallLog"][];
+            /** @description Absent on the last page. */
+            nextCursor?: string;
+            limit: number;
+        };
+        PluginSearch: {
+            query: string;
+            /** @description The plugin it was held to */
+            plugin?: string;
+            found: number;
         };
         PluginBadge: {
             slug: string;
@@ -7507,6 +7652,183 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    listPluginCalls: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                pluginId?: string;
+                /** @description Only the calls that did not go through. */
+                failed?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginCallLogPage"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listPluginSkills: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createPluginSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillRequest"];
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillDetail"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getPluginSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillDetail"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updatePluginSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillDetail"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deletePluginSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setPluginSkillEnabled: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+                skillId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillEnabledRequest"];
+            };
+        };
+        responses: {
+            /** @description changed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     getSubagentSettings: {
         parameters: {
             query?: never;
@@ -8635,6 +8957,33 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getToolImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                imageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                    "image/gif": string;
+                    "image/webp": string;
+                };
             };
             default: components["responses"]["Error"];
         };

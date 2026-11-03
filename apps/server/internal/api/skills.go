@@ -37,13 +37,23 @@ const skillBodyMax = 4 << 20
 func (s *Server) skills() *skills.Store { return skills.NewStore(s.pool) }
 
 // skillOwner is whose skills a request is about: the caller's for /me, nil
-// (the site's) for /admin.
+// (the site's) for /admin, or a plugin's (plugin set, id nil) for
+// /admin/plugins/{id}/skills - administrators' writing, as the site's.
 type skillOwner struct {
-	id   *uuid.UUID
-	user sqlc.User
+	id     *uuid.UUID
+	plugin *uuid.UUID
+	user   sqlc.User
 }
 
 func (o skillOwner) site() bool { return o.id == nil }
+
+// skillStore is the store of the owner's skills.
+func (s *Server) skillStore(o skillOwner) *skills.Store {
+	if o.plugin != nil {
+		return s.skills().ForPlugin(*o.plugin)
+	}
+	return s.skills()
+}
 
 func personalOwner(r *http.Request) skillOwner {
 	user := auth.MustUser(r.Context())
@@ -231,11 +241,14 @@ func (s *Server) storeSkill(r *http.Request, owner skillOwner, id *uuid.UUID, fi
 			checked = &parsed.Hash
 		}
 	}
-	skill, err := s.skills().Save(ctx, owner.id, id, parsed, checked, owner.user.ID)
+	skill, err := s.skillStore(owner).Save(ctx, owner.id, id, parsed, checked, owner.user.ID)
 	if err != nil {
 		return skills.Skill{}, skillError(err)
 	}
-	if owner.site() {
+	switch {
+	case owner.plugin != nil:
+		slog.InfoContext(ctx, "plugin skill saved", "skill", skill.Name, "plugin_id", *owner.plugin, "actor", owner.user.Email)
+	case owner.site():
 		slog.InfoContext(ctx, "site skill saved", "skill", skill.Name, "actor", owner.user.Email)
 	}
 	return skill, nil
@@ -246,7 +259,7 @@ func (s *Server) getSkill(w http.ResponseWriter, r *http.Request, owner skillOwn
 }
 
 func (s *Server) respondSkill(w http.ResponseWriter, r *http.Request, owner skillOwner, id uuid.UUID, status int) {
-	skill, files, err := s.skills().Get(r.Context(), owner.id, id)
+	skill, files, err := s.skillStore(owner).Get(r.Context(), owner.id, id)
 	if err != nil {
 		httpx.Fail(w, r, skillError(err))
 		return
@@ -271,7 +284,7 @@ func (s *Server) setSkillEnabled(w http.ResponseWriter, r *http.Request, owner s
 			return
 		}
 	}
-	if err := s.skills().SetEnabled(r.Context(), owner.id, id, body.Enabled); err != nil {
+	if err := s.skillStore(owner).SetEnabled(r.Context(), owner.id, id, body.Enabled); err != nil {
 		httpx.Fail(w, r, skillError(err))
 		return
 	}
@@ -279,7 +292,7 @@ func (s *Server) setSkillEnabled(w http.ResponseWriter, r *http.Request, owner s
 }
 
 func (s *Server) deleteSkill(w http.ResponseWriter, r *http.Request, owner skillOwner, id uuid.UUID) {
-	if err := s.skills().Delete(r.Context(), owner.id, id); err != nil {
+	if err := s.skillStore(owner).Delete(r.Context(), owner.id, id); err != nil {
 		httpx.Fail(w, r, skillError(err))
 		return
 	}
@@ -537,7 +550,7 @@ func (s *Server) getSkillVersion(w http.ResponseWriter, r *http.Request, owner s
 }
 
 func (s *Server) exportSkill(w http.ResponseWriter, r *http.Request, owner skillOwner, id uuid.UUID) {
-	skill, files, err := s.skills().Get(r.Context(), owner.id, id)
+	skill, files, err := s.skillStore(owner).Get(r.Context(), owner.id, id)
 	if err != nil {
 		httpx.Fail(w, r, skillError(err))
 		return
@@ -588,4 +601,62 @@ func fileViews(files []skills.File) []SkillFile {
 		out[i] = SkillFile{Path: f.Path, Content: f.Content}
 	}
 	return out
+}
+
+// ------------------------------------------------------- a plugin's skills
+
+// pluginOwner is the owner of a plugin's skills, once the plugin is found.
+func (s *Server) pluginOwner(w http.ResponseWriter, r *http.Request, pluginID uuid.UUID) (skillOwner, bool) {
+	if _, err := s.q.GetPlugin(r.Context(), pluginID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			err = errPluginNotFound
+		}
+		httpx.Fail(w, r, err)
+		return skillOwner{}, false
+	}
+	return skillOwner{plugin: &pluginID, user: auth.MustUser(r.Context())}, true
+}
+
+func (s *Server) ListPluginSkills(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID) {
+	owner, ok := s.pluginOwner(w, r, pluginId)
+	if !ok {
+		return
+	}
+	rows, err := s.skillStore(owner).List(r.Context(), nil)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	// No built-in ones: those are the site's.
+	httpx.JSON(w, http.StatusOK, SkillList{Items: skillViews(rows), Builtin: []BuiltinSkill{}, Limit: skills.MaxSite})
+}
+
+func (s *Server) CreatePluginSkill(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID) {
+	if owner, ok := s.pluginOwner(w, r, pluginId); ok {
+		s.saveSkill(w, r, owner, nil)
+	}
+}
+
+func (s *Server) GetPluginSkill(w http.ResponseWriter, r *http.Request, pluginId, skillID openapi_types.UUID) {
+	if owner, ok := s.pluginOwner(w, r, pluginId); ok {
+		s.getSkill(w, r, owner, skillID)
+	}
+}
+
+func (s *Server) UpdatePluginSkill(w http.ResponseWriter, r *http.Request, pluginId, skillID openapi_types.UUID) {
+	if owner, ok := s.pluginOwner(w, r, pluginId); ok {
+		s.saveSkill(w, r, owner, &skillID)
+	}
+}
+
+func (s *Server) SetPluginSkillEnabled(w http.ResponseWriter, r *http.Request, pluginId, skillID openapi_types.UUID) {
+	if owner, ok := s.pluginOwner(w, r, pluginId); ok {
+		s.setSkillEnabled(w, r, owner, skillID)
+	}
+}
+
+func (s *Server) DeletePluginSkill(w http.ResponseWriter, r *http.Request, pluginId, skillID openapi_types.UUID) {
+	if owner, ok := s.pluginOwner(w, r, pluginId); ok {
+		s.deleteSkill(w, r, owner, skillID)
+	}
 }

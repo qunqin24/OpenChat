@@ -47,6 +47,7 @@ type partJSON struct {
 	Error      string           `json:"error,omitempty"`
 	Details    json.RawMessage  `json:"details,omitempty"`
 	DurationMS *int64           `json:"durationMs,omitempty"` // also reasoning
+	Images     []ToolImage      `json:"images,omitempty"`
 
 	// attachment. Only the reference is encoded: resolved bytes and signed URLs
 	// are per request and must never be persisted or sent back to a browser.
@@ -83,7 +84,7 @@ func toPartJSON(part Part) partJSON {
 		return partJSON{Type: PartToolCall, ID: p.ID, Name: p.Name, Arguments: p.Arguments, RawArguments: p.RawArguments, Signature: p.Signature}
 	case ToolResultPart:
 		return partJSON{Type: PartToolResult, CallID: p.CallID, Name: p.Name, Content: p.Content,
-			Status: p.Status, Error: p.Error, Details: p.Details, DurationMS: p.DurationMS}
+			Status: p.Status, Error: p.Error, Details: p.Details, DurationMS: p.DurationMS, Images: p.Images}
 	case AttachmentPart:
 		return partJSON{Type: PartAttachment, Ref: p.Ref, Filename: p.Filename, MediaType: p.MediaType, SHA256: p.SHA256, Size: p.Size, TextSize: p.TextSize, Pages: p.Pages}
 	}
@@ -101,7 +102,7 @@ func (raw partJSON) part() (Part, error) {
 		return ToolCallPart{ID: raw.ID, Name: raw.Name, Arguments: raw.Arguments, RawArguments: raw.RawArguments, Signature: raw.Signature}, nil
 	case PartToolResult:
 		return ToolResultPart{CallID: raw.CallID, Name: raw.Name, Content: raw.Content, Status: raw.Status,
-			Error: raw.Error, Details: raw.Details, DurationMS: raw.DurationMS}, nil
+			Error: raw.Error, Details: raw.Details, DurationMS: raw.DurationMS, Images: raw.Images}, nil
 	case PartAttachment:
 		return AttachmentPart{Ref: raw.Ref, Filename: raw.Filename, MediaType: raw.MediaType, SHA256: raw.SHA256, Size: raw.Size, TextSize: raw.TextSize, Pages: raw.Pages}, nil
 	}

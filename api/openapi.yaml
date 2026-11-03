@@ -1224,6 +1224,130 @@ paths:
               schema: { $ref: "#/components/schemas/ModerationEventPage" }
         default: { $ref: "#/components/responses/Error" }
 
+  /admin/plugin-calls:
+    get:
+      tags: [admin]
+      summary: Plugin tool calls, newest first
+      description: |
+        Who called which plugin tool and how it ended, paged by cursor. Never
+        the input or the result. `pluginId` and `failed` narrow the list; keep
+        them the same between pages.
+      operationId: listPluginCalls
+      parameters:
+        - { $ref: "#/components/parameters/Limit" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - name: pluginId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: failed
+          in: query
+          description: Only the calls that did not go through.
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PluginCallLogPage" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/plugins/{pluginId}/skills:
+    parameters:
+      - name: pluginId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [admin]
+      summary: A plugin's skills
+      description: |
+        Skills that come with the plugin: in the skill list of a conversation
+        whose owner has the plugin installed, and nobody else's. Written by
+        administrators, so not checked by content moderation, as site skills
+        are; a site skill or a person's own of the same name takes the place
+        of one.
+      operationId: listPluginSkills
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillList" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [admin]
+      summary: Write a plugin skill
+      operationId: createPluginSkill
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillRequest" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillDetail" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/plugins/{pluginId}/skills/{skillId}:
+    parameters:
+      - name: pluginId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: skillId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [admin]
+      summary: A plugin skill, with its files
+      operationId: getPluginSkill
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillDetail" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [admin]
+      summary: Save a new version of a plugin skill
+      operationId: updatePluginSkill
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillRequest" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillDetail" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [admin]
+      summary: Switch a plugin skill on or off
+      operationId: setPluginSkillEnabled
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillEnabledRequest" }
+      responses:
+        "204": { description: changed }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [admin]
+      summary: Delete a plugin skill
+      operationId: deletePluginSkill
+      responses:
+        "204": { description: deleted }
+        default: { $ref: "#/components/responses/Error" }
+
   /admin/subagents:
     get:
       tags: [admin]
@@ -2216,6 +2340,31 @@ paths:
             schema: { $ref: "#/components/schemas/AnswerPluginConfirmationRequest" }
       responses:
         "204": { description: the answer reached the waiting call }
+        default: { $ref: "#/components/responses/Error" }
+
+  /conversations/{conversationId}/tool-images/{imageId}:
+    parameters:
+      - { $ref: "#/components/parameters/ConversationId" }
+      - name: imageId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [plugins]
+      summary: A picture a tool answered with
+      description: |
+        A plugin call can answer with pictures; they are kept with the run
+        (`PluginCodeProgress.images`) and shown under the call. The caller's
+        own only; 404 otherwise.
+      operationId: getToolImage
+      responses:
+        "200":
+          description: the image
+          content:
+            image/png: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/gif: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
         default: { $ref: "#/components/responses/Error" }
 
   /conversations/{conversationId}/research-plans/{callId}:
@@ -4157,6 +4306,14 @@ components:
           description: The plugins the calls went to, for their names and icons.
           items: { $ref: "#/components/schemas/PluginBadge" }
         code: { type: string, description: The script, once it finished. }
+        searches:
+          type: array
+          description: The script's search() calls, once it finished.
+          items: { $ref: "#/components/schemas/PluginSearch" }
+        images:
+          type: array
+          description: Pictures the calls answered with, once finished (getToolImage).
+          items: { $ref: "#/components/schemas/ToolImage" }
         error: { type: string, description: Why the script failed, when it did. }
 
     PluginCallProgress:
@@ -4174,8 +4331,59 @@ components:
         arguments:
           type: object
           additionalProperties: true
-          description: While `waiting`, what the call would send, for the person to judge.
+          description: What the call sends (or would, while `waiting`, for the person to judge).
+        result:
+          type: string
+          description: The start of what it answered, once done, for the step's details.
         error: { type: string }
+
+    ToolImage:
+      type: object
+      required: [id, mediaType]
+      properties:
+        id: { type: string, format: uuid }
+        mediaType: { type: string }
+
+    PluginCallLog:
+      type: object
+      required: [id, createdAt, plugin, tool, ok, outcome, confirmed, durationMs]
+      properties:
+        id: { type: integer, format: int64 }
+        createdAt: { type: string, format: date-time }
+        userId: { type: string, format: uuid }
+        userName: { type: string }
+        userEmail: { type: string }
+        conversationId: { type: string, format: uuid }
+        pluginId: { type: string, format: uuid }
+        plugin: { type: string, description: The plugin's short name when it was called. }
+        pluginName: { type: string, description: Its name now; absent once deleted. }
+        tool: { type: string }
+        ok: { type: boolean }
+        outcome:
+          type: string
+          description: How a call that did not go through ended - denied, unattended, no_answer, not_connected, invalid, unavailable, tool_error, failed, cancelled; empty when ok.
+        confirmed: { type: boolean, description: The person allowed it when asked. }
+        durationMs: { type: integer }
+
+    PluginCallLogPage:
+      type: object
+      required: [items, limit]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PluginCallLog" }
+        nextCursor:
+          type: string
+          description: Absent on the last page.
+        limit: { type: integer }
+
+    PluginSearch:
+      type: object
+      required: [query, found]
+      properties:
+        query: { type: string }
+        plugin: { type: string, description: The plugin it was held to, if any (short name). }
+        found: { type: integer }
 
     PluginBadge:
       type: object

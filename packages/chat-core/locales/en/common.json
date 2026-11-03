@@ -648,7 +648,8 @@
       "usage-logs": "Usage logs",
       "moderation-logs": "Moderation log",
       "skills": "Skills",
-      "plugins": "Plugins"
+      "plugins": "Plugins",
+      "plugin-calls": "Plugin calls"
     },
     "dashboard": {
       "subtitle": "Volume, spend and reliability of model requests",
@@ -1653,7 +1654,7 @@
     },
     "plugins": {
       "title": "Plugins",
-      "subtitle": "Plugins people can install from their plugins page: an MCP service and its tools, and later skills too.",
+      "subtitle": "Plugins people can install from their plugins page: an MCP service and its tools, and skills that tell the model how to use them.",
       "new": "Add plugin",
       "no-key": "Plugin key unavailable",
       "no-key-hint": "The server could not create its encryption key file data/secret.key in the data directory (the server log says why, usually an unwritable directory). Fix it and restart to have one made, or supply your own with OPENCHAT_SECRET_KEY (32 bytes, base64). Plugins that need no authentication are not affected.",
@@ -1754,7 +1755,37 @@
       "oauth-scopes-hint": "What people are asked to grant, space-separated. They see and approve it on the service's sign-in page.",
       "tools-connect-first": "Connect your own account to this plugin on the plugins page first, then list the tools.",
       "direct-tools": "List tools directly",
-      "direct-tools-hint": "By default the model calls a plugin's tools by writing a script (CodeMode). On, this plugin's tools are offered to the model one by one, one call at a time, at most 40. For services that are a code mode themselves, or models that write scripts badly."
+      "direct-tools-hint": "By default the model calls a plugin's tools by writing a script (CodeMode). On, this plugin's tools are offered to the model one by one, one call at a time, at most 40. For services that are a code mode themselves, or models that write scripts badly.",
+      "tab-skills": "Skills",
+      "skills-hint": "The plugin's own skills: in the skill list of the conversations of everyone who installed it, telling the model how to use these tools and how to go about such work. Not checked by content moderation, as site skills are; a site skill or a person's own of the same name takes the place of one.",
+      "skills-empty": "This plugin has no skills yet"
+    },
+    "plugin-calls": {
+      "subtitle": "Who called which plugin tool, when, and how it ended. Neither the input nor the result is kept.",
+      "all-plugins": "All plugins",
+      "all-calls": "All calls",
+      "failed-only": "Only ones that did not go through",
+      "refresh": "Refresh",
+      "none": "No plugin calls yet",
+      "time": "Time",
+      "who": "User",
+      "tool": "Plugin · tool",
+      "result": "Result",
+      "duration": "Took",
+      "ok": "Done",
+      "failed": "Failed",
+      "confirmed": "Allowed by the user",
+      "outcome": {
+        "denied": "Denied",
+        "unattended": "Nobody to ask",
+        "no_answer": "No answer",
+        "not_connected": "Not connected",
+        "invalid": "Invalid input",
+        "unavailable": "No longer available",
+        "tool_error": "Service error",
+        "failed": "Failed",
+        "cancelled": "Stopped"
+      }
     }
   },
   "settings": {
@@ -2041,17 +2072,23 @@
       "preparing": "Using plugins",
       "calling": "Calling {{plugin}} · {{tool}}",
       "waiting": "Waiting for you to allow {{plugin}} · {{tool}}",
-      "done_one": "Used {{plugins}}, {{count}} call",
-      "done_other": "Used {{plugins}}, {{count}} calls",
       "no-calls": "Ran a plugin script",
-      "failed": "Calls to {{plugins}} did not finish",
       "failed-generic": "The plugin script did not run",
-      "call-done": "Done",
       "call-failed": "Failed",
       "call-denied": "Not allowed",
       "call-running": "Running",
       "call-waiting": "Waiting",
-      "code": "Script"
+      "image": "A picture the plugin returned",
+      "separator": "; ",
+      "searched": "Looked up {{plugin}} tools",
+      "searched-any": "Looked up plugin tools",
+      "request": "Request",
+      "response": "Response",
+      "tab-calls": "Calls",
+      "tab-code": "Script",
+      "search-line": "Looked for “{{query}}”, found {{count}}",
+      "no-arguments": "(none)",
+      "error": "Error"
     },
     "confirm": {
       "title": "{{plugin}} wants to run {{tool}}",

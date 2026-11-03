@@ -43,8 +43,14 @@ describe('plugin calls', () => {
       { seq: 1, plugin: 'github', tool: 'get_issue', status: 'done' },
       { seq: 2, plugin: 'github', tool: 'get_issue', status: 'done' },
     ])
-    expect(pluginStepLabel(tr, 'plugin_code', done, false, false)).toBe('用了 GitHub，调用 2 次')
-    expect(pluginStepLabel(tr, 'plugin_code', done, false, true)).toBe('GitHub 的调用没有完成')
+    expect(pluginStepLabel(tr, 'plugin_code', done, false, false)).toBe('GitHub · get_issue')
+    const two = progress([
+      { seq: 1, plugin: 'github', tool: 'get_me', status: 'done' },
+      { seq: 2, plugin: 'github', tool: 'search_repositories', status: 'failed' },
+    ])
+    expect(pluginStepLabel(tr, 'plugin_code', two, false, true)).toBe('GitHub · get_me、search_repositories')
+    expect(pluginStepLabel(tr, 'plugin_code', { ...progress([]), searches: [{ query: 'repos', plugin: 'github', found: 3 }] }, false, false)).toBe('查找 GitHub 的工具')
+    expect(pluginStepLabel(tr, 'plugin_code', progress([]), false, true)).toBe('插件脚本没有运行成功')
   })
 
   it('keeps what a running call reports, from the snapshot and from events', () => {

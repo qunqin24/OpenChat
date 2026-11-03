@@ -95,14 +95,23 @@ type CallRecord struct {
 	Error string `json:"error,omitempty"`
 }
 
+// SearchRecord is one search() a script made.
+type SearchRecord struct {
+	Query     string `json:"query"`
+	Namespace string `json:"namespace,omitempty"`
+	Found     int    `json:"found"`
+}
+
 // Result is how a script ended.
 type Result struct {
 	// Value is what it returned, as JSON; null when nothing.
-	Value     json.RawMessage `json:"value,omitempty"`
-	Logs      []string        `json:"logs,omitempty"`
-	Calls     []CallRecord    `json:"calls"`
-	Error     *Diagnostic     `json:"error,omitempty"`
-	Truncated bool            `json:"truncated,omitempty"`
+	Value json.RawMessage `json:"value,omitempty"`
+	Logs  []string        `json:"logs,omitempty"`
+	Calls []CallRecord    `json:"calls"`
+	// Searches are the script's search() calls, in order.
+	Searches  []SearchRecord `json:"searches,omitempty"`
+	Error     *Diagnostic    `json:"error,omitempty"`
+	Truncated bool           `json:"truncated,omitempty"`
 }
 
 type pauseKey struct{}
@@ -256,13 +265,14 @@ type run struct {
 
 	// settled carries what a finished call does to the VM, run on the VM's
 	// goroutine (goja is not safe for concurrent use).
-	settled chan func()
-	slots   chan struct{}
-	pending int
-	calls   int
-	records []CallRecord
-	logs    []string
-	logSize int
+	settled  chan func()
+	slots    chan struct{}
+	pending  int
+	calls    int
+	records  []CallRecord
+	searches []SearchRecord
+	logs     []string
+	logSize  int
 }
 
 // install gives the script its globals: tools, search and console.
@@ -404,6 +414,7 @@ func (r *run) search(call goja.FunctionCall) goja.Value {
 		}
 	}
 	found := Search(r.tools, query, namespace, limit)
+	r.searches = append(r.searches, SearchRecord{Query: query, Namespace: namespace, Found: len(found)})
 	v, err := r.parse(found)
 	if err != nil {
 		panic(r.vm.NewGoError(err))
@@ -627,6 +638,7 @@ func depth(raw json.RawMessage) int {
 
 // finish cuts what the model will read to the output limit.
 func (r *run) finish(result Result) Result {
+	result.Searches = r.searches
 	result.Calls = r.records
 	if result.Calls == nil {
 		result.Calls = []CallRecord{}

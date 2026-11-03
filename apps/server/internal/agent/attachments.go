@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -59,6 +60,9 @@ type attachmentResolver struct {
 	// conversation reads a reference to another conversation as words
 	// (references.go), or says in note why it cannot be read.
 	conversation func(ctx context.Context, ref llm.AttachmentPart) (text, note string)
+	// toolImage reads a picture a tool answered with (llm.ToolImageRef), the
+	// run's user's only.
+	toolImage func(ctx context.Context, id uuid.UUID) ([]byte, error)
 
 	// cache keeps what a run has read, so each round of a tool loop does not
 	// fetch the same files again; references keeps the conversations.
@@ -145,6 +149,9 @@ func (a *attachmentResolver) resolve(ctx context.Context, messages []llm.Message
 func (a *attachmentResolver) one(ctx context.Context, ref llm.AttachmentPart, rows map[uuid.UUID]sqlc.Attachment, budget *int64) (resolved llm.AttachmentPart, note string) {
 	if ref.MediaType == llm.ConversationMediaType {
 		return a.reference(ctx, ref, budget)
+	}
+	if strings.HasPrefix(ref.Ref, llm.ToolImageRef) {
+		return a.picture(ctx, ref, budget)
 	}
 	id, err := uuid.Parse(ref.Ref)
 	row, found := rows[id]
@@ -239,6 +246,32 @@ func (a *attachmentResolver) one(ctx context.Context, ref llm.AttachmentPart, ro
 	return ref, ""
 }
 
+// picture resolves a picture a tool answered with, for a model that takes images.
+func (a *attachmentResolver) picture(ctx context.Context, ref llm.AttachmentPart, budget *int64) (llm.AttachmentPart, string) {
+	if !a.accepts(llm.ModalityImage) {
+		return ref, "the selected model does not take images"
+	}
+	id, err := uuid.Parse(strings.TrimPrefix(ref.Ref, llm.ToolImageRef))
+	if err != nil || a.toolImage == nil {
+		return ref, "the image is no longer available"
+	}
+	data, err := a.toolImage(ctx, id)
+	if err != nil {
+		return ref, "the image is no longer available"
+	}
+	if int64(len(data)) > *budget {
+		return ref, "too many files to send in one request"
+	}
+	sniffed, ok := sniff(llm.ModalityImage, data)
+	if !ok {
+		return ref, "the image is not what it claims to be"
+	}
+	*budget -= int64(len(data))
+	// The bytes decide what it is, not what the service said.
+	ref.Data, ref.MediaType = data, sniffed
+	return ref, ""
+}
+
 // reference resolves a reference to another conversation to its words, which
 // then go as a text file's do (whole, or as a card).
 func (a *attachmentResolver) reference(ctx context.Context, ref llm.AttachmentPart, budget *int64) (llm.AttachmentPart, string) {
@@ -307,6 +340,10 @@ func (ex *execution) withAttachments(ctx context.Context, messages []llm.Message
 					byID[row.ID] = row
 				}
 				return byID, nil
+			},
+			toolImage: func(ctx context.Context, id uuid.UUID) ([]byte, error) {
+				row, err := r.q.GetToolImage(ctx, sqlc.GetToolImageParams{ID: id, UserID: ex.run.UserID})
+				return row.Data, err
 			},
 			accepts: func(string) bool { return true },
 			budget:  MaxAttachmentBytes,

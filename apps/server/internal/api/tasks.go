@@ -404,8 +404,9 @@ func (s *Server) updateTask(ctx context.Context, user sqlc.User, id uuid.UUID, c
 
 // startTaskRun sends a task's prompt to its conversation as its owner's
 // message and starts the run that answers it: CreateMessage's path, with the
-// task's checked prompt in place of what a page sends.
-func (s *Server) startTaskRun(ctx context.Context, user sqlc.User, task sqlc.ScheduledTask) (sqlc.Run, error) {
+// task's checked prompt in place of what a page sends. unattended is the
+// scheduler's run, which nobody watches; "run now" is someone's click.
+func (s *Server) startTaskRun(ctx context.Context, user sqlc.User, task sqlc.ScheduledTask, unattended bool) (sqlc.Run, error) {
 	ctx = auth.WithUser(ctx, user)
 	conv, err := s.q.GetConversation(ctx, sqlc.GetConversationParams{ID: task.ConversationID, UserID: &user.ID})
 	if err != nil {
@@ -451,6 +452,7 @@ func (s *Server) startTaskRun(ctx context.Context, user sqlc.User, task sqlc.Sch
 		if input, err = appendInput(ctx, q, conv.ID, task.Prompt, inputParts(task.Prompt, nil)); err != nil {
 			return err
 		}
+		choice.unattended = unattended
 		run, err = createRun(ctx, q, conv, user.ID, input.ID, "", choice)
 		return err
 	})
@@ -577,7 +579,7 @@ func (s *Server) RunTask(w http.ResponseWriter, r *http.Request, taskId TaskId) 
 		httpx.Fail(w, r, dbErr(err))
 		return
 	}
-	if _, err := s.startTaskRun(ctx, user, task); err != nil {
+	if _, err := s.startTaskRun(ctx, user, task, false); err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}

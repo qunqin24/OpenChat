@@ -23,9 +23,17 @@ type Result struct {
 	Text string
 	// IsError is the service saying the call failed; Text says why.
 	IsError bool
-	// Dropped counts content that is not text (images, audio, resources),
-	// which is not passed on yet.
+	// Images are the pictures among the content.
+	Images []Image
+	// Dropped counts content that is neither text nor a picture (audio,
+	// resources), which is not passed on.
 	Dropped int
+}
+
+// Image is a picture a call answered with.
+type Image struct {
+	MediaType string
+	Data      []byte
 }
 
 // Conn is one session with a service, opened at its first call and shared by
@@ -83,16 +91,22 @@ func (c *Conn) open(ctx context.Context) (*mcp.ClientSession, error) {
 }
 
 func toResult(out *mcp.CallToolResult) Result {
-	var texts []string
-	dropped := 0
+	var (
+		texts   []string
+		images  []Image
+		dropped int
+	)
 	for _, content := range out.Content {
-		if text, ok := content.(*mcp.TextContent); ok {
-			texts = append(texts, text.Text)
-			continue
+		switch c := content.(type) {
+		case *mcp.TextContent:
+			texts = append(texts, c.Text)
+		case *mcp.ImageContent:
+			images = append(images, Image{MediaType: c.MIMEType, Data: c.Data})
+		default:
+			dropped++
 		}
-		dropped++
 	}
-	r := Result{Text: strings.Join(texts, "\n"), IsError: out.IsError, Dropped: dropped}
+	r := Result{Text: strings.Join(texts, "\n"), IsError: out.IsError, Images: images, Dropped: dropped}
 	switch {
 	case out.StructuredContent != nil && !out.IsError:
 		r.Value = out.StructuredContent

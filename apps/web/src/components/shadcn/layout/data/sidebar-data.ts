@@ -1,4 +1,4 @@
-import { ArrowLeft, BookOpen, Boxes, Globe, HardDrive, ImageIcon, KeyRound, LayoutDashboard, Plug, Puzzle, ScrollText, Settings, ShieldAlert, Users } from 'lucide-react'
+import { ArrowLeft, BookOpen, Boxes, Globe, HardDrive, ImageIcon, KeyRound, LayoutDashboard, ListChecks, Plug, Puzzle, ScrollText, Settings, ShieldAlert, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { type SidebarData } from '../types'
@@ -28,6 +28,7 @@ export function useSidebarData(): SidebarData {
           { title: t('admin.nav.models'), url: '/admin/models', icon: Boxes },
           { title: t('admin.nav.usage-logs'), url: '/admin/usage-logs', icon: ScrollText },
           { title: t('admin.nav.moderation-logs'), url: '/admin/moderation-logs', icon: ShieldAlert },
+          { title: t('admin.nav.plugin-calls'), url: '/admin/plugin-calls', icon: ListChecks },
           { title: t('admin.nav.web-search'), url: '/admin/web-search', icon: Globe },
           { title: t('admin.nav.image-search'), url: '/admin/image-search', icon: ImageIcon },
           { title: t('admin.nav.storage'), url: '/admin/storage', icon: HardDrive },

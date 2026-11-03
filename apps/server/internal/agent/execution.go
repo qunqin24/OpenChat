@@ -968,7 +968,7 @@ func (ex *execution) runCall(ctx context.Context, slot ToolSlot, tool Tool) erro
 		if out.IsError {
 			status = llm.ToolFailed
 		}
-		result = llm.ToolResultPart{CallID: slot.CallID, Name: slot.Name, Content: out.Content, Status: status}
+		result = llm.ToolResultPart{CallID: slot.CallID, Name: slot.Name, Content: out.Content, Status: status, Images: out.Images}
 		if out.IsError {
 			result.Error = out.Content
 		}

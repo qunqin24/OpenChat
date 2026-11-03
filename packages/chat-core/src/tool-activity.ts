@@ -16,6 +16,8 @@ export interface ToolActivityStep {
   status: ToolStatus
   /** What the running call last reported (`ToolSlot.progress`): a plugin script's calls so far. */
   progress?: unknown
+  /** The conversation it is in, for what its result links to (a plugin's pictures). */
+  conversationId?: string
 }
 
 /** What the model thought, or said on its way, in the process. */

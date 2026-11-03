@@ -34,6 +34,8 @@ export const adminKeys = {
   /** Plugins, and one plugin's tools. */
   plugins: () => [...adminKeys.all, 'plugins'] as const,
   pluginTools: (id: string) => [...adminKeys.all, 'plugins', id, 'tools'] as const,
+  pluginSkills: (id: string) => [...adminKeys.all, 'plugins', id, 'skills'] as const,
+  pluginCalls: (filters: object) => [...adminKeys.all, 'plugin-calls', filters] as const,
 }
 
 export function useAdminDashboard(range: DashboardRange) {

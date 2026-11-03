@@ -648,7 +648,8 @@
       "usage-logs": "使用日志",
       "moderation-logs": "审核日志",
       "skills": "技能",
-      "plugins": "插件"
+      "plugins": "插件",
+      "plugin-calls": "插件调用"
     },
     "dashboard": {
       "subtitle": "模型请求的用量、花费与稳定性",
@@ -1653,7 +1654,7 @@
     },
     "plugins": {
       "title": "插件",
-      "subtitle": "用户能在侧栏「插件」页里安装的插件：一个 MCP 服务加它的工具，以后还可以带技能。",
+      "subtitle": "用户能在侧栏「插件」页里安装的插件：一个 MCP 服务加它的工具，还可以带告诉模型怎么用的技能。",
       "new": "添加插件",
       "no-key": "插件密钥不可用",
       "no-key-hint": "服务器没能在数据目录里创建加密密钥文件 data/secret.key（看服务器日志里的原因，通常是目录不可写）。修好后重启即可自动生成；也可以用环境变量 OPENCHAT_SECRET_KEY 自己提供（32 字节，base64）。不需要认证的插件不受影响。",
@@ -1754,7 +1755,37 @@
       "oauth-scopes-hint": "用户授权时申请的权限，用空格分隔。用户会在服务的授权页看到并确认。",
       "tools-connect-first": "先用你自己的账号在插件页连接这个插件，再拉取工具。",
       "direct-tools": "直接列出工具",
-      "direct-tools-hint": "默认模型通过写脚本调用插件的工具（CodeMode）。打开后，这个插件的工具逐个直接交给模型，每次调用一个，最多 40 个。适合本身就是 CodeMode 的服务，或写不好脚本的模型。"
+      "direct-tools-hint": "默认模型通过写脚本调用插件的工具（CodeMode）。打开后，这个插件的工具逐个直接交给模型，每次调用一个，最多 40 个。适合本身就是 CodeMode 的服务，或写不好脚本的模型。",
+      "tab-skills": "技能",
+      "skills-hint": "插件自带的技能：用户装上这个插件后，出现在他的对话的技能清单里，告诉模型怎么用这些工具、怎么做这类事。和站点技能一样不经内容审核；站点或用户自己有同名技能时，以那个为准。",
+      "skills-empty": "这个插件还没有技能"
+    },
+    "plugin-calls": {
+      "subtitle": "谁在什么时候调用了哪个插件工具、结果如何。不记录参数和返回内容。",
+      "all-plugins": "全部插件",
+      "all-calls": "全部调用",
+      "failed-only": "只看没完成的",
+      "refresh": "刷新",
+      "none": "还没有插件调用",
+      "time": "时间",
+      "who": "用户",
+      "tool": "插件 · 工具",
+      "result": "结果",
+      "duration": "耗时",
+      "ok": "完成",
+      "failed": "失败",
+      "confirmed": "经用户允许",
+      "outcome": {
+        "denied": "用户拒绝",
+        "unattended": "无人确认",
+        "no_answer": "用户没回应",
+        "not_connected": "未连接",
+        "invalid": "参数不对",
+        "unavailable": "已不可用",
+        "tool_error": "服务报错",
+        "failed": "失败",
+        "cancelled": "已停止"
+      }
     }
   },
   "settings": {
@@ -2041,17 +2072,23 @@
       "preparing": "正在使用插件",
       "calling": "正在调用 {{plugin}} · {{tool}}",
       "waiting": "等你允许 {{plugin}} · {{tool}}",
-      "done_one": "用了 {{plugins}}，调用 {{count}} 次",
-      "done_other": "用了 {{plugins}}，调用 {{count}} 次",
       "no-calls": "运行了插件脚本",
-      "failed": "{{plugins}} 的调用没有完成",
       "failed-generic": "插件脚本没有运行成功",
-      "call-done": "完成",
       "call-failed": "失败",
       "call-denied": "未允许",
       "call-running": "进行中",
       "call-waiting": "等待允许",
-      "code": "脚本"
+      "image": "插件返回的图片",
+      "separator": "；",
+      "searched": "查找 {{plugin}} 的工具",
+      "searched-any": "查找插件工具",
+      "request": "请求",
+      "response": "返回",
+      "tab-calls": "调用",
+      "tab-code": "脚本",
+      "search-line": "查找“{{query}}”，找到 {{count}} 个",
+      "no-arguments": "（无）",
+      "error": "出错"
     },
     "confirm": {
       "title": "{{plugin}} 想要执行 {{tool}}",

@@ -8,7 +8,8 @@ SELECT p.*,
        (i.user_id IS NOT NULL)::boolean AS installed,
        coalesce(i.needs_reconnect, false)::boolean AS needs_reconnect,
        (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked' AND t.read_only)::bigint     AS read_tools,
-       (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked' AND NOT t.read_only)::bigint AS write_tools
+       (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked' AND NOT t.read_only)::bigint AS write_tools,
+       (SELECT count(*) FROM skills s WHERE s.plugin_id = p.id AND s.enabled)::bigint AS skills
 FROM plugins p
          LEFT JOIN plugin_installs i ON i.plugin_id = p.id AND i.user_id = sqlc.arg('user_id')
 WHERE p.enabled
@@ -21,7 +22,8 @@ SELECT p.*,
        (i.user_id IS NOT NULL)::boolean AS installed,
        coalesce(i.needs_reconnect, false)::boolean AS needs_reconnect,
        (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked' AND t.read_only)::bigint     AS read_tools,
-       (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked' AND NOT t.read_only)::bigint AS write_tools
+       (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked' AND NOT t.read_only)::bigint AS write_tools,
+       (SELECT count(*) FROM skills s WHERE s.plugin_id = p.id AND s.enabled)::bigint AS skills
 FROM plugins p
          LEFT JOIN plugin_installs i ON i.plugin_id = p.id AND i.user_id = sqlc.arg('user_id')
 WHERE p.id = sqlc.arg('id')
@@ -336,3 +338,29 @@ SELECT EXISTS (SELECT 1
 -- name: RecordPluginCall :exec
 INSERT INTO plugin_calls (user_id, conversation_id, plugin_id, plugin_slug, tool, ok, outcome, confirmed, duration_ms)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
+
+-- name: CreateToolImage :one
+INSERT INTO tool_images (run_id, conversation_id, user_id, media_type, data)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id;
+
+-- name: GetToolImage :one
+-- A picture a tool answered with, to its conversation's owner only.
+SELECT media_type, data
+FROM tool_images
+WHERE id = sqlc.arg('id')
+  AND user_id = sqlc.arg('user_id');
+
+-- name: ListPluginCalls :many
+-- The plugin calls, newest first, for the administrators: who, which tool,
+-- how it ended. Paged by id, which grows with time.
+SELECT c.id, c.created_at, c.user_id, u.name AS user_name, u.email AS user_email, c.conversation_id,
+       c.plugin_id, c.plugin_slug, p.name AS plugin_name, c.tool, c.ok, c.outcome, c.confirmed, c.duration_ms
+FROM plugin_calls c
+         LEFT JOIN users u ON u.id = c.user_id
+         LEFT JOIN plugins p ON p.id = c.plugin_id
+WHERE (sqlc.narg('before')::bigint IS NULL OR c.id < sqlc.narg('before')::bigint)
+  AND (sqlc.narg('plugin_id')::uuid IS NULL OR c.plugin_id = sqlc.narg('plugin_id')::uuid)
+  AND (NOT sqlc.arg('failed_only')::boolean OR NOT c.ok)
+ORDER BY c.id DESC
+LIMIT sqlc.arg('row_limit');

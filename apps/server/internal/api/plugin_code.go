@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -45,6 +46,12 @@ const confirmWait = 10 * time.Minute
 
 // directToolsPerPlugin bounds the tools one directly listed plugin offers.
 const directToolsPerPlugin = 40
+
+// Pictures a call answers with are kept up to these: a handful, each a few MB.
+const (
+	maxToolImages     = 4
+	maxToolImageBytes = 4 << 20
+)
 
 var errConfirmationGone = httpx.NewError(http.StatusConflict, "confirmation_gone",
 	"the run that waited for this answer is no longer running; ask again")
@@ -89,15 +96,16 @@ func listUsablePluginTools(ctx context.Context, q *sqlc.Queries, userID uuid.UUI
 	return out, nil
 }
 
-// PluginTools are the plugin tools of a person's run: plugin_code when any
-// plugin goes through scripts, and the tools of those listed directly. A
-// sub-agent gets none yet.
+// PluginTools are the plugin tools of a run: plugin_code when any plugin goes
+// through scripts, and the tools of those listed directly. A sub-agent has
+// the plugins its launch named, and of those only the tools that run without
+// asking (scopedPluginTools).
 func (s *Server) PluginTools(ctx context.Context) []agent.Tool {
 	scope, ok := agent.ScopeFrom(ctx)
-	if !ok || scope.Subagent() {
+	if !ok {
 		return nil
 	}
-	usable, err := s.usablePluginTools(ctx, scope.UserID)
+	usable, err := scopedPluginTools(ctx, s.q, scope)
 	if err != nil {
 		slog.WarnContext(ctx, "list plugin tools", "error", err)
 		return nil
@@ -168,7 +176,7 @@ func (t pluginCodeTool) Execute(ctx context.Context, raw json.RawMessage) (agent
 	if strings.TrimSpace(args.Code) == "" {
 		return agent.ToolResult{}, agent.Errorf("invalid arguments: code is empty")
 	}
-	usable, err := t.s.usablePluginTools(ctx, scope.UserID)
+	usable, err := scopedPluginTools(ctx, t.s.q, scope)
 	if err != nil {
 		return agent.ToolResult{}, err
 	}
@@ -190,7 +198,39 @@ func (t pluginCodeTool) Execute(ctx context.Context, raw json.RawMessage) (agent
 		message := describeFailure(result.Error)
 		details.Error = &message
 	}
-	return agent.ToolResult{Content: scriptReport(result), IsError: result.Error != nil, Details: details}, nil
+	if len(result.Searches) > 0 {
+		searches := make([]PluginSearch, len(result.Searches))
+		for i, found := range result.Searches {
+			searches[i] = PluginSearch{Query: found.Query, Found: found.Found}
+			if found.Namespace == "" {
+				continue
+			}
+			namespace := found.Namespace
+			searches[i].Plugin = &namespace
+			// Named for the page even when nothing of it was called.
+			if !slices.ContainsFunc(details.Plugins, func(b PluginBadge) bool { return b.Slug == namespace }) {
+				for _, u := range usable {
+					if u.Slug == namespace {
+						details.Plugins = append(details.Plugins, u.badge())
+						break
+					}
+				}
+			}
+		}
+		details.Searches = &searches
+	}
+	images, shown := host.storeImages(ctx)
+	if len(shown) > 0 {
+		details.Images = &shown
+	}
+	report := scriptReport(result)
+	if len(images) > 0 {
+		report += fmt.Sprintf("\n\nThe calls returned %d image(s); they follow this result.", len(images))
+	}
+	if host.skipped > 0 {
+		report += fmt.Sprintf("\n%d more image(s) were left out (too many, too large or not PNG, JPEG, GIF or WebP).", host.skipped)
+	}
+	return agent.ToolResult{Content: report, IsError: result.Error != nil, Details: details, Images: images}, nil
 }
 
 func describeFailure(d *codemode.Diagnostic) string {
@@ -305,7 +345,11 @@ func (t directPluginTool) Execute(ctx context.Context, raw json.RawMessage) (age
 	if utf8.RuneCountInString(text) > 20_000 {
 		text = cut(text, 20_000) + "\n[cut: the result was longer]"
 	}
-	return agent.ToolResult{Content: text, Details: details}, nil
+	images, shown := host.storeImages(ctx)
+	if len(shown) > 0 {
+		details.Images = &shown
+	}
+	return agent.ToolResult{Content: text, Details: details, Images: images}, nil
 }
 
 // ---------------------------------------------------------------- the host
@@ -323,6 +367,9 @@ type pluginHost struct {
 	calls   []PluginCallProgress
 	plugins map[string]PluginBadge
 	order   []string
+	images  []plugins.Image
+	// skipped counts pictures past what is kept.
+	skipped int
 }
 
 func (s *Server) newPluginHost(ctx context.Context, scope agent.Scope) *pluginHost {
@@ -386,14 +433,16 @@ func (h *pluginHost) Call(ctx context.Context, call codemode.Call) (any, error) 
 		return nil, fmt.Errorf("%s is not available", call.Tool.Path())
 	}
 	started := time.Now()
-	h.set(known, call.Seq, func(p *PluginCallProgress) {})
+	var sent map[string]any
+	_ = json.Unmarshal(call.Input, &sent)
+	h.set(known, call.Seq, func(p *PluginCallProgress) { p.Arguments = &sent })
 	outcome, confirmed := "", false
 	fail := func(status PluginCallProgressStatus, why string, err error) (any, error) {
 		h.set(known, call.Seq, func(p *PluginCallProgress) {
 			p.Status = status
 			message := err.Error()
 			p.Error = &message
-			p.Arguments, p.ConfirmationId = nil, nil
+			p.ConfirmationId = nil
 		})
 		h.audit(known, false, why, confirmed, started)
 		return nil, err
@@ -407,6 +456,9 @@ func (h *pluginHost) Call(ctx context.Context, call codemode.Call) (any, error) 
 	}
 	if err != nil {
 		return fail(PluginCallProgressStatusFailed, "failed", errors.New("the tool could not be looked up; try again"))
+	}
+	if h.scope.Subagent() && row.Permission != "allow" {
+		return fail(PluginCallProgressStatusDenied, "unattended", fmt.Errorf("%s may change things, and a sub-agent may only use tools that run without asking", call.Tool.Path()))
 	}
 	if err := codemode.Validate(row.InputSchema, call.Input); err != nil {
 		return fail(PluginCallProgressStatusFailed, "invalid", fmt.Errorf("%s: %v", call.Tool.Path(), err))
@@ -446,18 +498,76 @@ func (h *pluginHost) Call(ctx context.Context, call codemode.Call) (any, error) 
 		outcome = "tool_error"
 		return fail(PluginCallProgressStatusFailed, outcome, errors.New(cut(strings.TrimSpace(result.Text), 2000)))
 	}
+	answered := resultExcerpt(result.Value)
 	h.set(known, call.Seq, func(p *PluginCallProgress) {
 		p.Status = PluginCallProgressStatusDone
-		p.Arguments, p.ConfirmationId = nil, nil
+		p.ConfirmationId = nil
+		p.Result = &answered
 	})
 	h.audit(known, true, "", confirmed, started)
+	kept := h.keepImages(result.Images)
 	value := result.Value
-	if result.Dropped > 0 {
-		if text, ok := value.(string); ok {
-			value = text + fmt.Sprintf("\n[%d images or other non-text items were left out]", result.Dropped)
+	if text, ok := value.(string); ok {
+		if kept > 0 {
+			text += fmt.Sprintf("\n[%d image(s) returned: you will see them after this tool's result]", kept)
 		}
+		if result.Dropped > 0 {
+			text += fmt.Sprintf("\n[%d non-text items (audio, resources) were left out]", result.Dropped)
+		}
+		value = text
 	}
 	return value, nil
+}
+
+// keepImages holds on to a call's pictures, as many as are kept; how many it took.
+func (h *pluginHost) keepImages(images []plugins.Image) int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	kept := 0
+	for _, image := range images {
+		mediaType := http.DetectContentType(image.Data)
+		switch {
+		case mediaType != "image/png" && mediaType != "image/jpeg" && mediaType != "image/gif" && mediaType != "image/webp",
+			len(image.Data) > maxToolImageBytes, len(h.images) == maxToolImages:
+			h.skipped++
+			continue
+		}
+		h.images = append(h.images, plugins.Image{MediaType: mediaType, Data: image.Data})
+		kept++
+	}
+	return kept
+}
+
+// storeImages keeps the call's pictures with its run, for the page and the
+// model: references to them for each.
+func (h *pluginHost) storeImages(ctx context.Context) ([]llm.ToolImage, []ToolImage) {
+	h.mu.Lock()
+	images := h.images
+	h.mu.Unlock()
+	var forModel []llm.ToolImage
+	var forPage []ToolImage
+	for _, image := range images {
+		id, err := h.s.q.CreateToolImage(ctx, sqlc.CreateToolImageParams{
+			RunID: h.scope.RunID, ConversationID: h.scope.ConversationID, UserID: h.scope.UserID, MediaType: image.MediaType, Data: image.Data,
+		})
+		if err != nil {
+			slog.WarnContext(ctx, "keep tool image", "error", err)
+			continue
+		}
+		forModel = append(forModel, llm.ToolImage{Ref: id.String(), MediaType: image.MediaType})
+		forPage = append(forPage, ToolImage{Id: id, MediaType: image.MediaType})
+	}
+	return forModel, forPage
+}
+
+// resultExcerpt is the start of what a call answered, for the step's details.
+func resultExcerpt(value any) string {
+	text, ok := value.(string)
+	if !ok {
+		encoded, _ := json.Marshal(value)
+		text = string(encoded)
+	}
+	return cut(strings.TrimSpace(text), 600)
 }
 
 func deniedError(why string) error {
@@ -488,7 +598,7 @@ func shortError(err error) string {
 // confirm puts a call to the person and waits for their answer, the script's
 // clock stopped meanwhile. why says how a refusal came about.
 func (h *pluginHost) confirm(ctx context.Context, t usableTool, call codemode.Call) (allowed bool, why string) {
-	if h.scope.Subagent() || h.callID == "" {
+	if h.scope.Subagent() || h.scope.Unattended || h.callID == "" {
 		return false, "unattended"
 	}
 	row, err := h.s.q.CreatePluginConfirmation(ctx, sqlc.CreatePluginConfirmationParams{
@@ -521,7 +631,7 @@ func (h *pluginHost) confirm(ctx context.Context, t usableTool, call codemode.Ca
 		allowed = decision != "deny"
 		h.set(t, call.Seq, func(p *PluginCallProgress) {
 			p.Status = PluginCallProgressStatusRunning
-			p.Arguments, p.ConfirmationId = nil, nil
+			p.ConfirmationId = nil
 		})
 		if allowed {
 			return true, ""
@@ -691,7 +801,7 @@ func conversationCatalog(ctx context.Context, q *sqlc.Queries, scope agent.Scope
 	if len(raw) > 0 {
 		return out, json.Unmarshal(raw, &out) == nil
 	}
-	usable, err := listUsablePluginTools(ctx, q, scope.UserID)
+	usable, err := scopedPluginTools(ctx, q, scope)
 	if err != nil {
 		slog.WarnContext(ctx, "list plugin tools", "error", err)
 		return out, false
@@ -783,4 +893,65 @@ func (s *Server) PluginNote(ctx context.Context) (string, error) {
 		notes = append(notes, fmt.Sprintf("No longer available (turned off, disconnected or uninstalled): %s.", strings.Join(gone, ", ")))
 	}
 	return strings.Join(notes, " "), nil
+}
+
+// ---------------------------------------------------------------- sub-agents
+
+// subagentPluginNames checks the plugins a launch names: ones the launching
+// person may use now with at least one tool that runs without asking. Nil
+// for none.
+func (s *Server) subagentPluginNames(ctx context.Context, scope agent.Scope, raw []string) ([]string, error) {
+	var names []string
+	for _, name := range raw {
+		name = strings.ToLower(strings.TrimSpace(name))
+		if name != "" && !slices.Contains(names, name) {
+			names = append(names, name)
+		}
+	}
+	if len(names) == 0 {
+		return nil, nil
+	}
+	usable, err := s.usablePluginTools(ctx, scope.UserID)
+	if err != nil {
+		return nil, err
+	}
+	var known []string
+	for _, u := range usable {
+		if u.Permission == "allow" && !slices.Contains(known, u.Slug) {
+			known = append(known, u.Slug)
+		}
+	}
+	for _, name := range names {
+		if !slices.Contains(known, name) {
+			if len(known) == 0 {
+				return nil, agent.Errorf("No plugin has tools a sub-agent may use. Launch it without plugins.")
+			}
+			return nil, agent.Errorf("There is no plugin %q with tools a sub-agent may use. Available: %s.", name, strings.Join(known, ", "))
+		}
+	}
+	return names, nil
+}
+
+// scopedPluginTools are the tools a run may call: all of a person's own
+// run's; for a sub-agent, only those of the plugins its launch named that run
+// without asking.
+func scopedPluginTools(ctx context.Context, q *sqlc.Queries, scope agent.Scope) ([]usableTool, error) {
+	usable, err := listUsablePluginTools(ctx, q, scope.UserID)
+	if err != nil || !scope.Subagent() {
+		return usable, err
+	}
+	named, err := q.GetSubagentPlugins(ctx, sqlc.GetSubagentPluginsParams{ID: scope.ConversationID, UserID: &scope.UserID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var out []usableTool
+	for _, u := range usable {
+		if u.Permission == "allow" && slices.Contains(named, u.Slug) {
+			out = append(out, u)
+		}
+	}
+	return out, nil
 }

@@ -28,6 +28,9 @@ type Scope struct {
 	// Research: the run carries out a deep research the person started from
 	// its plan (docs/design/deep-research-plan.md).
 	Research bool
+	// Unattended: nobody watches the run (a scheduled task's), so nothing in
+	// it may wait for the person.
+	Unattended bool
 }
 
 // Subagent reports whether the scope is a sub-agent's run.

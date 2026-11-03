@@ -109,7 +109,7 @@ func (s *Server) runDueTask(ctx context.Context, task sqlc.ScheduledTask) {
 		err = errAccountUnavailable
 	}
 	if err == nil {
-		_, err = s.startTaskRun(ctx, user, task)
+		_, err = s.startTaskRun(ctx, user, task, true)
 	}
 	if err == nil {
 		log.InfoContext(ctx, "scheduled task started")

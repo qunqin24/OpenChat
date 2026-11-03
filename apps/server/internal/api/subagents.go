@@ -123,6 +123,7 @@ type SubagentToolArgs struct {
 	Background *bool    `json:"background"`
 	Context    string   `json:"context"`
 	Skills     []string `json:"skills"`
+	Plugins    []string `json:"plugins"`
 }
 
 // SubagentToolDetails is what the interface is shown of a call.
@@ -151,7 +152,8 @@ func (t SubagentTool) Definition() llm.Tool {
     "task": {"type": "string", "description": "What the sub-agent is to do, complete in itself."},
     "name": {"type": "string", "description": "A short name of 2 to 4 words for the task, in the user's language. Shown to the user, and how you address the sub-agent later."},
     "context": {"type": "string", "description": "Background the sub-agent needs from this conversation."},
-    "skills": {"type": "array", "items": {"type": "string"}, "description": "Names of skills from your Skills list that the task calls for; the sub-agent can open these and no others. Omit when none applies."}`
+    "skills": {"type": "array", "items": {"type": "string"}, "description": "Names of skills from your Skills list that the task calls for; the sub-agent can open these and no others. Omit when none applies."},
+    "plugins": {"type": "array", "items": {"type": "string"}, "description": "Short names of plugins from the Plugins list in your instructions that the task needs, if any; the sub-agent can call their tools that run without asking the user (reading, looking up), and never ones that change things. Omit when none applies."}`
 	required := `["task", "name"]`
 	if t.background {
 		description += " Set background to false to wait for the report, which is then this call's result: for " +
@@ -206,6 +208,10 @@ func (t SubagentTool) Execute(ctx context.Context, raw json.RawMessage) (agent.T
 	if err != nil {
 		return agent.ToolResult{}, err
 	}
+	plugins, err := s.subagentPluginNames(ctx, scope, args.Plugins)
+	if err != nil {
+		return agent.ToolResult{}, err
+	}
 
 	callID := agent.ToolCallID(ctx)
 	if found, err := s.q.GetLaunchedSubagent(ctx, sqlc.GetLaunchedSubagentParams{LaunchedBy: &scope.RunID, LaunchCallID: &callID}); err == nil {
@@ -257,7 +263,7 @@ func (t SubagentTool) Execute(ctx context.Context, raw json.RawMessage) (agent.T
 		child, err = q.CreateSubagentConversation(ctx, sqlc.CreateSubagentConversationParams{
 			UserID: &user.ID, Title: name, Model: &choice.modelID, WebSearch: choice.webSearch,
 			ParentID: &scope.ConversationID, LaunchedBy: &scope.RunID, LaunchCallID: &callID, Background: background,
-			Skills: named,
+			Skills: named, Plugins: plugins,
 		})
 		if err != nil {
 			return err

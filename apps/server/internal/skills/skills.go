@@ -263,16 +263,23 @@ type Skill struct {
 
 // Store reads and writes skills. owner is a person's id for their skills, nil
 // for the site's; every call is scoped to it, so another owner's skill is not
-// found.
+// found. A store made with ForPlugin holds one plugin's skills instead
+// (owner nil), which are neither the site's nor anyone's.
 type Store struct {
-	pool *pgxpool.Pool
-	q    *sqlc.Queries
+	pool   *pgxpool.Pool
+	q      *sqlc.Queries
+	plugin *uuid.UUID
 }
 
 func NewStore(pool *pgxpool.Pool) *Store { return &Store{pool: pool, q: sqlc.New(pool)} }
 
+// ForPlugin is the store of one plugin's skills (docs/design/plugins-plan.md §2).
+func (s *Store) ForPlugin(pluginID uuid.UUID) *Store {
+	return &Store{pool: s.pool, q: s.q, plugin: &pluginID}
+}
+
 func (s *Store) List(ctx context.Context, owner *uuid.UUID) ([]Skill, error) {
-	rows, err := s.q.ListOwnedSkills(ctx, owner)
+	rows, err := s.q.ListOwnedSkills(ctx, sqlc.ListOwnedSkillsParams{OwnerID: owner, PluginID: s.plugin})
 	if err != nil {
 		return nil, err
 	}
@@ -285,7 +292,7 @@ func (s *Store) List(ctx context.Context, owner *uuid.UUID) ([]Skill, error) {
 
 // Get is one skill and the files of its current version.
 func (s *Store) Get(ctx context.Context, owner *uuid.UUID, id uuid.UUID) (Skill, []File, error) {
-	r, err := s.q.GetOwnedSkill(ctx, sqlc.GetOwnedSkillParams{ID: id, OwnerID: owner})
+	r, err := s.q.GetOwnedSkill(ctx, sqlc.GetOwnedSkillParams{ID: id, OwnerID: owner, PluginID: s.plugin})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Skill{}, nil, ErrNotFound
 	}
@@ -332,10 +339,13 @@ func (s *Store) Save(ctx context.Context, owner, id *uuid.UUID, p Parsed, checke
 		if owner != nil {
 			lock = *owner
 		}
+		if s.plugin != nil {
+			lock = *s.plugin
+		}
 		if err := q.LockSkillOwner(ctx, lock); err != nil {
 			return err
 		}
-		taken, err := q.SkillNameTaken(ctx, sqlc.SkillNameTakenParams{Name: p.Name, OwnerID: owner, Except: id})
+		taken, err := q.SkillNameTaken(ctx, sqlc.SkillNameTakenParams{Name: p.Name, OwnerID: owner, PluginID: s.plugin, Except: id})
 		if err != nil {
 			return err
 		}
@@ -343,7 +353,7 @@ func (s *Store) Save(ctx context.Context, owner, id *uuid.UUID, p Parsed, checke
 			return ErrNameTaken
 		}
 		if id == nil {
-			count, err := q.CountOwnedSkills(ctx, owner)
+			count, err := q.CountOwnedSkills(ctx, sqlc.CountOwnedSkillsParams{OwnerID: owner, PluginID: s.plugin})
 			if err != nil {
 				return err
 			}
@@ -354,13 +364,13 @@ func (s *Store) Save(ctx context.Context, owner, id *uuid.UUID, p Parsed, checke
 			if count >= int64(limit) {
 				return ErrFull
 			}
-			row, err := q.CreateSkill(ctx, sqlc.CreateSkillParams{OwnerID: owner, Name: p.Name, Enabled: true})
+			row, err := q.CreateSkill(ctx, sqlc.CreateSkillParams{OwnerID: owner, PluginID: s.plugin, Name: p.Name, Enabled: true})
 			if err != nil {
 				return err
 			}
 			saved = row.ID
 		} else {
-			if _, err := q.GetOwnedSkill(ctx, sqlc.GetOwnedSkillParams{ID: *id, OwnerID: owner}); err != nil {
+			if _, err := q.GetOwnedSkill(ctx, sqlc.GetOwnedSkillParams{ID: *id, OwnerID: owner, PluginID: s.plugin}); err != nil {
 				if errors.Is(err, pgx.ErrNoRows) {
 					return ErrNotFound
 				}
@@ -394,7 +404,7 @@ func (s *Store) Save(ctx context.Context, owner, id *uuid.UUID, p Parsed, checke
 }
 
 func (s *Store) SetEnabled(ctx context.Context, owner *uuid.UUID, id uuid.UUID, enabled bool) error {
-	_, err := s.q.SetSkillEnabled(ctx, sqlc.SetSkillEnabledParams{ID: id, OwnerID: owner, Enabled: enabled})
+	_, err := s.q.SetSkillEnabled(ctx, sqlc.SetSkillEnabledParams{ID: id, OwnerID: owner, PluginID: s.plugin, Enabled: enabled})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -402,7 +412,7 @@ func (s *Store) SetEnabled(ctx context.Context, owner *uuid.UUID, id uuid.UUID, 
 }
 
 func (s *Store) Delete(ctx context.Context, owner *uuid.UUID, id uuid.UUID) error {
-	_, err := s.q.DeleteOwnedSkill(ctx, sqlc.DeleteOwnedSkillParams{ID: id, OwnerID: owner})
+	_, err := s.q.DeleteOwnedSkill(ctx, sqlc.DeleteOwnedSkillParams{ID: id, OwnerID: owner, PluginID: s.plugin})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -455,7 +465,7 @@ type VersionInfo struct {
 // Versions are a skill's kept versions, newest first; ErrNotFound when the
 // skill is not this owner's.
 func (s *Store) Versions(ctx context.Context, owner *uuid.UUID, id uuid.UUID) ([]VersionInfo, error) {
-	rows, err := s.q.ListSkillVersions(ctx, sqlc.ListSkillVersionsParams{SkillID: id, OwnerID: owner})
+	rows, err := s.q.ListSkillVersions(ctx, sqlc.ListSkillVersionsParams{SkillID: id, OwnerID: owner, PluginID: s.plugin})
 	if err != nil {
 		return nil, err
 	}
@@ -472,7 +482,7 @@ func (s *Store) Versions(ctx context.Context, owner *uuid.UUID, id uuid.UUID) ([
 // OwnedVersion is the files of one version of a skill of this owner, to look
 // at or to save again as the current one.
 func (s *Store) OwnedVersion(ctx context.Context, owner *uuid.UUID, id, versionID uuid.UUID) ([]File, error) {
-	if _, err := s.q.GetOwnedSkillVersion(ctx, sqlc.GetOwnedSkillVersionParams{VersionID: versionID, SkillID: id, OwnerID: owner}); err != nil {
+	if _, err := s.q.GetOwnedSkillVersion(ctx, sqlc.GetOwnedSkillVersionParams{VersionID: versionID, SkillID: id, OwnerID: owner, PluginID: s.plugin}); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}

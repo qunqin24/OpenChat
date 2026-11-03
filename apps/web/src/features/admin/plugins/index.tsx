@@ -35,6 +35,7 @@ import { Skeleton } from '@/components/shadcn/ui/skeleton'
 import { Switch } from '@/components/shadcn/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/shadcn/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn/ui/tabs'
+import { PluginSkills } from '@/features/admin/skills'
 import { Textarea } from '@/components/shadcn/ui/textarea'
 import { glyphColor } from '@/lib/plugin-icon'
 import {
@@ -290,6 +291,9 @@ function PluginEditor({ plugin, secretKeySet, onSaved }: { plugin: AdminPlugin |
           <TabsTrigger value="tools" disabled={!plugin}>
             {t('admin.plugins.tab-tools')}
           </TabsTrigger>
+          <TabsTrigger value="skills" disabled={!plugin}>
+            {t('admin.plugins.tab-skills')}
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="settings" className="pt-4">
           <SettingsForm plugin={plugin} secretKeySet={secretKeySet} onSaved={onSaved} />
@@ -297,6 +301,11 @@ function PluginEditor({ plugin, secretKeySet, onSaved }: { plugin: AdminPlugin |
         {plugin && (
           <TabsContent value="tools" className="pt-4">
             <ToolsPanel plugin={plugin} />
+          </TabsContent>
+        )}
+        {plugin && (
+          <TabsContent value="skills" className="pt-4">
+            <PluginSkills pluginId={plugin.id} />
           </TabsContent>
         )}
       </Tabs>

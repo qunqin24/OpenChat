@@ -208,6 +208,33 @@ func (q *Queries) CreatePluginOAuthState(ctx context.Context, arg CreatePluginOA
 	return err
 }
 
+const createToolImage = `-- name: CreateToolImage :one
+INSERT INTO tool_images (run_id, conversation_id, user_id, media_type, data)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id
+`
+
+type CreateToolImageParams struct {
+	RunID          uuid.UUID `json:"run_id"`
+	ConversationID uuid.UUID `json:"conversation_id"`
+	UserID         uuid.UUID `json:"user_id"`
+	MediaType      string    `json:"media_type"`
+	Data           []byte    `json:"data"`
+}
+
+func (q *Queries) CreateToolImage(ctx context.Context, arg CreateToolImageParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, createToolImage,
+		arg.RunID,
+		arg.ConversationID,
+		arg.UserID,
+		arg.MediaType,
+		arg.Data,
+	)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const deletePlugin = `-- name: DeletePlugin :execrows
 DELETE
 FROM plugins
@@ -415,6 +442,31 @@ func (q *Queries) GetPluginInstall(ctx context.Context, arg GetPluginInstallPara
 	return i, err
 }
 
+const getToolImage = `-- name: GetToolImage :one
+SELECT media_type, data
+FROM tool_images
+WHERE id = $1
+  AND user_id = $2
+`
+
+type GetToolImageParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+type GetToolImageRow struct {
+	MediaType string `json:"media_type"`
+	Data      []byte `json:"data"`
+}
+
+// A picture a tool answered with, to its conversation's owner only.
+func (q *Queries) GetToolImage(ctx context.Context, arg GetToolImageParams) (GetToolImageRow, error) {
+	row := q.db.QueryRow(ctx, getToolImage, arg.ID, arg.UserID)
+	var i GetToolImageRow
+	err := row.Scan(&i.MediaType, &i.Data)
+	return i, err
+}
+
 const getUsablePluginTool = `-- name: GetUsablePluginTool :one
 SELECT p.id          AS plugin_id,
        p.slug,
@@ -496,7 +548,8 @@ SELECT p.id, p.slug, p.name, p.description, p.about, p.category, p.icon_text, p.
        (i.user_id IS NOT NULL)::boolean AS installed,
        coalesce(i.needs_reconnect, false)::boolean AS needs_reconnect,
        (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked' AND t.read_only)::bigint     AS read_tools,
-       (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked' AND NOT t.read_only)::bigint AS write_tools
+       (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked' AND NOT t.read_only)::bigint AS write_tools,
+       (SELECT count(*) FROM skills s WHERE s.plugin_id = p.id AND s.enabled)::bigint AS skills
 FROM plugins p
          LEFT JOIN plugin_installs i ON i.plugin_id = p.id AND i.user_id = $1
 WHERE p.id = $2
@@ -542,6 +595,7 @@ type GetUserPluginRow struct {
 	NeedsReconnect    bool               `json:"needs_reconnect"`
 	ReadTools         int64              `json:"read_tools"`
 	WriteTools        int64              `json:"write_tools"`
+	Skills            int64              `json:"skills"`
 }
 
 // One plugin as ListUserPlugins has it; no row when the person may not see it.
@@ -580,6 +634,7 @@ func (q *Queries) GetUserPlugin(ctx context.Context, arg GetUserPluginParams) (G
 		&i.NeedsReconnect,
 		&i.ReadTools,
 		&i.WriteTools,
+		&i.Skills,
 	)
 	return i, err
 }
@@ -761,6 +816,85 @@ func (q *Queries) ListAdminPlugins(ctx context.Context) ([]ListAdminPluginsRow, 
 	return items, nil
 }
 
+const listPluginCalls = `-- name: ListPluginCalls :many
+SELECT c.id, c.created_at, c.user_id, u.name AS user_name, u.email AS user_email, c.conversation_id,
+       c.plugin_id, c.plugin_slug, p.name AS plugin_name, c.tool, c.ok, c.outcome, c.confirmed, c.duration_ms
+FROM plugin_calls c
+         LEFT JOIN users u ON u.id = c.user_id
+         LEFT JOIN plugins p ON p.id = c.plugin_id
+WHERE ($1::bigint IS NULL OR c.id < $1::bigint)
+  AND ($2::uuid IS NULL OR c.plugin_id = $2::uuid)
+  AND (NOT $3::boolean OR NOT c.ok)
+ORDER BY c.id DESC
+LIMIT $4
+`
+
+type ListPluginCallsParams struct {
+	Before     *int64     `json:"before"`
+	PluginID   *uuid.UUID `json:"plugin_id"`
+	FailedOnly bool       `json:"failed_only"`
+	RowLimit   int32      `json:"row_limit"`
+}
+
+type ListPluginCallsRow struct {
+	ID             int64              `json:"id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UserID         *uuid.UUID         `json:"user_id"`
+	UserName       *string            `json:"user_name"`
+	UserEmail      *string            `json:"user_email"`
+	ConversationID *uuid.UUID         `json:"conversation_id"`
+	PluginID       *uuid.UUID         `json:"plugin_id"`
+	PluginSlug     string             `json:"plugin_slug"`
+	PluginName     *string            `json:"plugin_name"`
+	Tool           string             `json:"tool"`
+	Ok             bool               `json:"ok"`
+	Outcome        string             `json:"outcome"`
+	Confirmed      bool               `json:"confirmed"`
+	DurationMs     int32              `json:"duration_ms"`
+}
+
+// The plugin calls, newest first, for the administrators: who, which tool,
+// how it ended. Paged by id, which grows with time.
+func (q *Queries) ListPluginCalls(ctx context.Context, arg ListPluginCallsParams) ([]ListPluginCallsRow, error) {
+	rows, err := q.db.Query(ctx, listPluginCalls,
+		arg.Before,
+		arg.PluginID,
+		arg.FailedOnly,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPluginCallsRow{}
+	for rows.Next() {
+		var i ListPluginCallsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.UserID,
+			&i.UserName,
+			&i.UserEmail,
+			&i.ConversationID,
+			&i.PluginID,
+			&i.PluginSlug,
+			&i.PluginName,
+			&i.Tool,
+			&i.Ok,
+			&i.Outcome,
+			&i.Confirmed,
+			&i.DurationMs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPluginTools = `-- name: ListPluginTools :many
 SELECT plugin_id, name, description, read_only, permission, title, input_schema, destructive
 FROM plugin_tools
@@ -887,7 +1021,8 @@ SELECT p.id, p.slug, p.name, p.description, p.about, p.category, p.icon_text, p.
        (i.user_id IS NOT NULL)::boolean AS installed,
        coalesce(i.needs_reconnect, false)::boolean AS needs_reconnect,
        (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked' AND t.read_only)::bigint     AS read_tools,
-       (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked' AND NOT t.read_only)::bigint AS write_tools
+       (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked' AND NOT t.read_only)::bigint AS write_tools,
+       (SELECT count(*) FROM skills s WHERE s.plugin_id = p.id AND s.enabled)::bigint AS skills
 FROM plugins p
          LEFT JOIN plugin_installs i ON i.plugin_id = p.id AND i.user_id = $1
 WHERE p.enabled
@@ -932,6 +1067,7 @@ type ListUserPluginsRow struct {
 	NeedsReconnect    bool               `json:"needs_reconnect"`
 	ReadTools         int64              `json:"read_tools"`
 	WriteTools        int64              `json:"write_tools"`
+	Skills            int64              `json:"skills"`
 }
 
 // Plugins (api/plugins.go, docs/design/plugins-plan.md).
@@ -979,6 +1115,7 @@ func (q *Queries) ListUserPlugins(ctx context.Context, arg ListUserPluginsParams
 			&i.NeedsReconnect,
 			&i.ReadTools,
 			&i.WriteTools,
+			&i.Skills,
 		); err != nil {
 			return nil, err
 		}

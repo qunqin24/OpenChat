@@ -40,6 +40,9 @@ type ToolResult struct {
 	// Details is for the UI only and never reaches a model: the result list of a
 	// search, the title of a fetched page.
 	Details any
+	// Images are pictures the tool answered with, already stored: the model is
+	// shown them after the result (BuildContext).
+	Images []llm.ToolImage
 }
 
 // ToolError is an error whose message is meant for the model. Anything else a

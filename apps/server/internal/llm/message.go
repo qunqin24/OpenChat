@@ -198,7 +198,21 @@ type ToolResultPart struct {
 	Details json.RawMessage
 	// DurationMS is how long the tool ran, when it ran at all. UI only.
 	DurationMS *int64
+	// Images are pictures the tool answered with, by reference (ToolImageRef).
+	// Adapters never send them here: the context builder puts them after the
+	// call's result, where every provider takes images (agent.BuildContext).
+	Images []ToolImage
 }
+
+// ToolImage is a picture a tool answered with, stored by the server.
+type ToolImage struct {
+	Ref       string `json:"ref"`
+	MediaType string `json:"mediaType"`
+}
+
+// ToolImageRef is the prefix of a reference to a stored tool picture, as an
+// AttachmentPart's Ref carries it once the context builder has placed it.
+const ToolImageRef = "tool-image:"
 
 // AttachmentPart references a file the user attached. It is a reference by
 // design: llm must not know where bytes live or who is allowed to read them.

@@ -3983,9 +3983,43 @@ type PluginBadge struct {
 	Slug      string `json:"slug"`
 }
 
+// PluginCallLog defines model for PluginCallLog.
+type PluginCallLog struct {
+	// Confirmed The person allowed it when asked.
+	Confirmed      bool                `json:"confirmed"`
+	ConversationId *openapi_types.UUID `json:"conversationId,omitempty"`
+	CreatedAt      time.Time           `json:"createdAt"`
+	DurationMs     int                 `json:"durationMs"`
+	Id             int64               `json:"id"`
+	Ok             bool                `json:"ok"`
+
+	// Outcome How a call that did not go through ended - denied, unattended, no_answer, not_connected, invalid, unavailable, tool_error, failed, cancelled; empty when ok.
+	Outcome string `json:"outcome"`
+
+	// Plugin The plugin's short name when it was called.
+	Plugin   string              `json:"plugin"`
+	PluginId *openapi_types.UUID `json:"pluginId,omitempty"`
+
+	// PluginName Its name now; absent once deleted.
+	PluginName *string             `json:"pluginName,omitempty"`
+	Tool       string              `json:"tool"`
+	UserEmail  *string             `json:"userEmail,omitempty"`
+	UserId     *openapi_types.UUID `json:"userId,omitempty"`
+	UserName   *string             `json:"userName,omitempty"`
+}
+
+// PluginCallLogPage defines model for PluginCallLogPage.
+type PluginCallLogPage struct {
+	Items []PluginCallLog `json:"items"`
+	Limit int             `json:"limit"`
+
+	// NextCursor Absent on the last page.
+	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
 // PluginCallProgress defines model for PluginCallProgress.
 type PluginCallProgress struct {
-	// Arguments While `waiting`, what the call would send, for the person to judge.
+	// Arguments What the call sends (or would, while `waiting`, for the person to judge).
 	Arguments *map[string]interface{} `json:"arguments,omitempty"`
 
 	// ConfirmationId While `waiting`, what answerPluginConfirmation takes.
@@ -3993,7 +4027,10 @@ type PluginCallProgress struct {
 	Error          *string             `json:"error,omitempty"`
 
 	// Plugin The plugin's short name.
-	Plugin string                   `json:"plugin"`
+	Plugin string `json:"plugin"`
+
+	// Result The start of what it answered, once done, for the step's details.
+	Result *string                  `json:"result,omitempty"`
 	Seq    int                      `json:"seq"`
 	Status PluginCallProgressStatus `json:"status"`
 	Tool   string                   `json:"tool"`
@@ -4012,13 +4049,28 @@ type PluginCodeProgress struct {
 	// Error Why the script failed
 	Error *string `json:"error,omitempty"`
 
+	// Images Pictures the calls answered with, once finished (getToolImage).
+	Images *[]ToolImage `json:"images,omitempty"`
+
 	// Plugins The plugins the calls went to, for their names and icons.
 	Plugins []PluginBadge `json:"plugins"`
+
+	// Searches The script's search() calls, once it finished.
+	Searches *[]PluginSearch `json:"searches,omitempty"`
 }
 
 // PluginList defines model for PluginList.
 type PluginList struct {
 	Items []Plugin `json:"items"`
+}
+
+// PluginSearch defines model for PluginSearch.
+type PluginSearch struct {
+	Found int `json:"found"`
+
+	// Plugin The plugin it was held to
+	Plugin *string `json:"plugin,omitempty"`
+	Query  string  `json:"query"`
 }
 
 // PluginTool defines model for PluginTool.
@@ -4748,6 +4800,12 @@ type ToolFinishedEvent struct {
 
 // ToolFinishedEventType defines model for ToolFinishedEvent.Type.
 type ToolFinishedEventType string
+
+// ToolImage defines model for ToolImage.
+type ToolImage struct {
+	Id        openapi_types.UUID `json:"id"`
+	MediaType string             `json:"mediaType"`
+}
 
 // ToolProgressEvent A running call reported how far it got; replaces what it reported before.
 type ToolProgressEvent struct {
@@ -5586,6 +5644,16 @@ type ListModerationEventsParams struct {
 	Category *ModerationCategory `form:"category,omitempty" json:"category,omitempty"`
 }
 
+// ListPluginCallsParams defines parameters for ListPluginCalls.
+type ListPluginCallsParams struct {
+	Limit    *Limit              `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor   *Cursor             `form:"cursor,omitempty" json:"cursor,omitempty"`
+	PluginId *openapi_types.UUID `form:"pluginId,omitempty" json:"pluginId,omitempty"`
+
+	// Failed Only the calls that did not go through.
+	Failed *bool `form:"failed,omitempty" json:"failed,omitempty"`
+}
+
 // UpdateAdminPluginToolJSONBody defines parameters for UpdateAdminPluginTool.
 type UpdateAdminPluginToolJSONBody struct {
 	// Permission `allow`: called without asking; `confirm`: the person is asked before
@@ -5775,6 +5843,15 @@ type CreateAdminPluginJSONRequestBody = AdminPluginInput
 
 // UpdateAdminPluginJSONRequestBody defines body for UpdateAdminPlugin for application/json ContentType.
 type UpdateAdminPluginJSONRequestBody = AdminPluginInput
+
+// CreatePluginSkillJSONRequestBody defines body for CreatePluginSkill for application/json ContentType.
+type CreatePluginSkillJSONRequestBody = SkillRequest
+
+// SetPluginSkillEnabledJSONRequestBody defines body for SetPluginSkillEnabled for application/json ContentType.
+type SetPluginSkillEnabledJSONRequestBody = SkillEnabledRequest
+
+// UpdatePluginSkillJSONRequestBody defines body for UpdatePluginSkill for application/json ContentType.
+type UpdatePluginSkillJSONRequestBody = SkillRequest
 
 // UpdateAdminPluginToolJSONRequestBody defines body for UpdateAdminPluginTool for application/json ContentType.
 type UpdateAdminPluginToolJSONRequestBody UpdateAdminPluginToolJSONBody
@@ -6936,6 +7013,9 @@ type ServerInterface interface {
 	// ListModerationEvents The messages content moderation turned away
 	// (GET /admin/moderation/events)
 	ListModerationEvents(w http.ResponseWriter, r *http.Request, params ListModerationEventsParams)
+	// ListPluginCalls Plugin tool calls, newest first
+	// (GET /admin/plugin-calls)
+	ListPluginCalls(w http.ResponseWriter, r *http.Request, params ListPluginCallsParams)
 	// ListAdminPlugins Every plugin
 	// (GET /admin/plugins)
 	ListAdminPlugins(w http.ResponseWriter, r *http.Request)
@@ -6948,6 +7028,24 @@ type ServerInterface interface {
 	// UpdateAdminPlugin Change a plugin
 	// (PUT /admin/plugins/{pluginId})
 	UpdateAdminPlugin(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID)
+	// ListPluginSkills A plugin's skills
+	// (GET /admin/plugins/{pluginId}/skills)
+	ListPluginSkills(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID)
+	// CreatePluginSkill Write a plugin skill
+	// (POST /admin/plugins/{pluginId}/skills)
+	CreatePluginSkill(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID)
+	// DeletePluginSkill Delete a plugin skill
+	// (DELETE /admin/plugins/{pluginId}/skills/{skillId})
+	DeletePluginSkill(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID, skillId openapi_types.UUID)
+	// GetPluginSkill A plugin skill, with its files
+	// (GET /admin/plugins/{pluginId}/skills/{skillId})
+	GetPluginSkill(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID, skillId openapi_types.UUID)
+	// SetPluginSkillEnabled Switch a plugin skill on or off
+	// (PATCH /admin/plugins/{pluginId}/skills/{skillId})
+	SetPluginSkillEnabled(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID, skillId openapi_types.UUID)
+	// UpdatePluginSkill Save a new version of a plugin skill
+	// (PUT /admin/plugins/{pluginId}/skills/{skillId})
+	UpdatePluginSkill(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID, skillId openapi_types.UUID)
 	// ListAdminPluginTools A plugin's tools
 	// (GET /admin/plugins/{pluginId}/tools)
 	ListAdminPluginTools(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID)
@@ -7182,6 +7280,9 @@ type ServerInterface interface {
 	// AnswerQuestion Answer the model's question
 	// (POST /conversations/{conversationId}/tool-calls/{callId}/answer)
 	AnswerQuestion(w http.ResponseWriter, r *http.Request, conversationId ConversationId, callId string)
+	// GetToolImage A picture a tool answered with
+	// (GET /conversations/{conversationId}/tool-images/{imageId})
+	GetToolImage(w http.ResponseWriter, r *http.Request, conversationId ConversationId, imageId openapi_types.UUID)
 	// GetConversationTrace The model requests of one of your conversations, as sent
 	// (GET /conversations/{conversationId}/trace)
 	GetConversationTrace(w http.ResponseWriter, r *http.Request, conversationId ConversationId)
@@ -7497,6 +7598,12 @@ func (_ Unimplemented) ListModerationEvents(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ListPluginCalls Plugin tool calls, newest first
+// (GET /admin/plugin-calls)
+func (_ Unimplemented) ListPluginCalls(w http.ResponseWriter, r *http.Request, params ListPluginCallsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ListAdminPlugins Every plugin
 // (GET /admin/plugins)
 func (_ Unimplemented) ListAdminPlugins(w http.ResponseWriter, r *http.Request) {
@@ -7518,6 +7625,42 @@ func (_ Unimplemented) DeleteAdminPlugin(w http.ResponseWriter, r *http.Request,
 // UpdateAdminPlugin Change a plugin
 // (PUT /admin/plugins/{pluginId})
 func (_ Unimplemented) UpdateAdminPlugin(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListPluginSkills A plugin's skills
+// (GET /admin/plugins/{pluginId}/skills)
+func (_ Unimplemented) ListPluginSkills(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreatePluginSkill Write a plugin skill
+// (POST /admin/plugins/{pluginId}/skills)
+func (_ Unimplemented) CreatePluginSkill(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeletePluginSkill Delete a plugin skill
+// (DELETE /admin/plugins/{pluginId}/skills/{skillId})
+func (_ Unimplemented) DeletePluginSkill(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID, skillId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetPluginSkill A plugin skill, with its files
+// (GET /admin/plugins/{pluginId}/skills/{skillId})
+func (_ Unimplemented) GetPluginSkill(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID, skillId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SetPluginSkillEnabled Switch a plugin skill on or off
+// (PATCH /admin/plugins/{pluginId}/skills/{skillId})
+func (_ Unimplemented) SetPluginSkillEnabled(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID, skillId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdatePluginSkill Save a new version of a plugin skill
+// (PUT /admin/plugins/{pluginId}/skills/{skillId})
+func (_ Unimplemented) UpdatePluginSkill(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID, skillId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7986,6 +8129,12 @@ func (_ Unimplemented) GenerateConversationTitle(w http.ResponseWriter, r *http.
 // AnswerQuestion Answer the model's question
 // (POST /conversations/{conversationId}/tool-calls/{callId}/answer)
 func (_ Unimplemented) AnswerQuestion(w http.ResponseWriter, r *http.Request, conversationId ConversationId, callId string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetToolImage A picture a tool answered with
+// (GET /conversations/{conversationId}/tool-images/{imageId})
+func (_ Unimplemented) GetToolImage(w http.ResponseWriter, r *http.Request, conversationId ConversationId, imageId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8969,6 +9118,78 @@ func (siw *ServerInterfaceWrapper) ListModerationEvents(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// ListPluginCalls operation middleware
+func (siw *ServerInterfaceWrapper) ListPluginCalls(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPluginCallsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pluginId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pluginId", r.URL.Query(), &params.PluginId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pluginId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pluginId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "failed" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "failed", r.URL.Query(), &params.Failed, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "failed"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "failed", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPluginCalls(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListAdminPlugins operation middleware
 func (siw *ServerInterfaceWrapper) ListAdminPlugins(w http.ResponseWriter, r *http.Request) {
 
@@ -9040,6 +9261,198 @@ func (siw *ServerInterfaceWrapper) UpdateAdminPlugin(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateAdminPlugin(w, r, pluginId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPluginSkills operation middleware
+func (siw *ServerInterfaceWrapper) ListPluginSkills(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "pluginId" -------------
+	var pluginId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "pluginId", chi.URLParam(r, "pluginId"), &pluginId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pluginId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPluginSkills(w, r, pluginId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreatePluginSkill operation middleware
+func (siw *ServerInterfaceWrapper) CreatePluginSkill(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "pluginId" -------------
+	var pluginId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "pluginId", chi.URLParam(r, "pluginId"), &pluginId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pluginId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreatePluginSkill(w, r, pluginId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeletePluginSkill operation middleware
+func (siw *ServerInterfaceWrapper) DeletePluginSkill(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "pluginId" -------------
+	var pluginId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "pluginId", chi.URLParam(r, "pluginId"), &pluginId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pluginId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "skillId" -------------
+	var skillId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "skillId", chi.URLParam(r, "skillId"), &skillId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "skillId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeletePluginSkill(w, r, pluginId, skillId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPluginSkill operation middleware
+func (siw *ServerInterfaceWrapper) GetPluginSkill(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "pluginId" -------------
+	var pluginId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "pluginId", chi.URLParam(r, "pluginId"), &pluginId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pluginId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "skillId" -------------
+	var skillId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "skillId", chi.URLParam(r, "skillId"), &skillId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "skillId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPluginSkill(w, r, pluginId, skillId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetPluginSkillEnabled operation middleware
+func (siw *ServerInterfaceWrapper) SetPluginSkillEnabled(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "pluginId" -------------
+	var pluginId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "pluginId", chi.URLParam(r, "pluginId"), &pluginId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pluginId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "skillId" -------------
+	var skillId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "skillId", chi.URLParam(r, "skillId"), &skillId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "skillId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetPluginSkillEnabled(w, r, pluginId, skillId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdatePluginSkill operation middleware
+func (siw *ServerInterfaceWrapper) UpdatePluginSkill(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "pluginId" -------------
+	var pluginId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "pluginId", chi.URLParam(r, "pluginId"), &pluginId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pluginId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "skillId" -------------
+	var skillId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "skillId", chi.URLParam(r, "skillId"), &skillId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "skillId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdatePluginSkill(w, r, pluginId, skillId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11092,6 +11505,41 @@ func (siw *ServerInterfaceWrapper) AnswerQuestion(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// GetToolImage operation middleware
+func (siw *ServerInterfaceWrapper) GetToolImage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ConversationId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", chi.URLParam(r, "conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "imageId" -------------
+	var imageId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "imageId", chi.URLParam(r, "imageId"), &imageId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "imageId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetToolImage(w, r, conversationId, imageId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetConversationTrace operation middleware
 func (siw *ServerInterfaceWrapper) GetConversationTrace(w http.ResponseWriter, r *http.Request) {
 
@@ -12555,6 +13003,27 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/admin/moderation/events", wrapper.ListModerationEvents)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/plugin-calls", wrapper.ListPluginCalls)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/plugins/{pluginId}/skills", wrapper.ListPluginSkills)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/plugins/{pluginId}/skills", wrapper.CreatePluginSkill)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/admin/plugins/{pluginId}/skills/{skillId}", wrapper.DeletePluginSkill)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/plugins/{pluginId}/skills/{skillId}", wrapper.GetPluginSkill)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/admin/plugins/{pluginId}/skills/{skillId}", wrapper.SetPluginSkillEnabled)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/admin/plugins/{pluginId}/skills/{skillId}", wrapper.UpdatePluginSkill)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/subagents", wrapper.GetSubagentSettings)
 	})
 	r.Group(func(r chi.Router) {
@@ -12694,6 +13163,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/conversations/{conversationId}/plugin-confirmations/{confirmationId}", wrapper.AnswerPluginConfirmation)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/conversations/{conversationId}/tool-images/{imageId}", wrapper.GetToolImage)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/conversations/{conversationId}/research-plans/{callId}", wrapper.AnswerResearchPlan)

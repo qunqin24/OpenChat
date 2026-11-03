@@ -168,6 +168,9 @@ type SnapshotSkill struct {
 	Builtin bool `json:"builtin,omitempty"`
 	// Personal is one of the person's own skills, not the site's.
 	Personal bool `json:"personal,omitempty"`
+	// Plugin is one an installed plugin brings: written by administrators,
+	// as the site's are.
+	Plugin bool `json:"plugin,omitempty"`
 }
 
 // MaxSnapshotSkills bounds the list in the system prompt; the site's come
@@ -445,13 +448,14 @@ func (s *Store) skillCandidates(ctx context.Context, userID uuid.UUID, ask *[]*c
 		return nil, err
 	}
 	for _, row := range rows {
+		// A plugin's skills are administrators' writing, as the site's: not checked.
 		site := row.OwnerID == nil
 		if !site && !personal {
 			continue
 		}
 		c := &skillCandidate{
 			candidate: &candidate{piece: Piece{Kind: PieceSkill, ID: row.VersionID}},
-			skill:     SnapshotSkill{Name: row.Name, Description: row.Description, VersionID: row.VersionID, Personal: !site},
+			skill:     SnapshotSkill{Name: row.Name, Description: row.Description, VersionID: row.VersionID, Personal: !site, Plugin: row.PluginID != nil},
 			site:      site,
 			hash:      row.ContentHash,
 		}
@@ -519,19 +523,29 @@ func (s *Store) skillText(ctx context.Context, versionID uuid.UUID) (string, err
 // in place of a built-in one of the same name and a person's in place of
 // either, at most MaxSnapshotSkills.
 func pickSkills(offered []*skillCandidate) []SnapshotSkill {
-	own, site := map[string]bool{}, map[string]bool{}
+	own, site, plugin := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, c := range offered {
 		switch {
 		case c.out || c.skill.Builtin:
+		case c.skill.Plugin:
+			plugin[c.skill.Name] = true
 		case c.site:
 			site[c.skill.Name] = true
 		default:
 			own[c.skill.Name] = true
 		}
 	}
+	// A person's own skill takes the place of the site's of the same name, the
+	// site's of a plugin's, a plugin's of a built-in one; two plugins naming
+	// a skill alike list the first.
 	var out []SnapshotSkill
+	taken := map[string]bool{}
 	for _, c := range offered {
-		shadowed := (c.site && own[c.skill.Name]) || (c.skill.Builtin && site[c.skill.Name])
+		shadowed := (c.site && own[c.skill.Name]) || (c.skill.Plugin && (site[c.skill.Name] || taken[c.skill.Name])) ||
+			(c.skill.Builtin && (site[c.skill.Name] || plugin[c.skill.Name]))
+		if c.skill.Plugin && !shadowed {
+			taken[c.skill.Name] = true
+		}
 		if c.out || shadowed || len(out) == MaxSnapshotSkills {
 			continue
 		}

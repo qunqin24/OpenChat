@@ -13,30 +13,41 @@ import (
 )
 
 const countOwnedSkills = `-- name: CountOwnedSkills :one
-SELECT count(*) FROM skills WHERE owner_id IS NOT DISTINCT FROM $1::uuid
+SELECT count(*) FROM skills WHERE owner_id IS NOT DISTINCT FROM $1::uuid AND plugin_id IS NOT DISTINCT FROM $2::uuid
 `
 
-func (q *Queries) CountOwnedSkills(ctx context.Context, ownerID *uuid.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countOwnedSkills, ownerID)
+type CountOwnedSkillsParams struct {
+	OwnerID  *uuid.UUID `json:"owner_id"`
+	PluginID *uuid.UUID `json:"plugin_id"`
+}
+
+func (q *Queries) CountOwnedSkills(ctx context.Context, arg CountOwnedSkillsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countOwnedSkills, arg.OwnerID, arg.PluginID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
 const createSkill = `-- name: CreateSkill :one
-INSERT INTO skills (owner_id, name, enabled)
-VALUES ($1, $2, $3)
-RETURNING id, owner_id, name, enabled, current_version_id, created_at, updated_at
+INSERT INTO skills (owner_id, plugin_id, name, enabled)
+VALUES ($1, $2, $3, $4)
+RETURNING id, owner_id, name, enabled, current_version_id, created_at, updated_at, plugin_id
 `
 
 type CreateSkillParams struct {
-	OwnerID *uuid.UUID `json:"owner_id"`
-	Name    string     `json:"name"`
-	Enabled bool       `json:"enabled"`
+	OwnerID  *uuid.UUID `json:"owner_id"`
+	PluginID *uuid.UUID `json:"plugin_id"`
+	Name     string     `json:"name"`
+	Enabled  bool       `json:"enabled"`
 }
 
 func (q *Queries) CreateSkill(ctx context.Context, arg CreateSkillParams) (Skill, error) {
-	row := q.db.QueryRow(ctx, createSkill, arg.OwnerID, arg.Name, arg.Enabled)
+	row := q.db.QueryRow(ctx, createSkill,
+		arg.OwnerID,
+		arg.PluginID,
+		arg.Name,
+		arg.Enabled,
+	)
 	var i Skill
 	err := row.Scan(
 		&i.ID,
@@ -46,6 +57,7 @@ func (q *Queries) CreateSkill(ctx context.Context, arg CreateSkillParams) (Skill
 		&i.CurrentVersionID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PluginID,
 	)
 	return i, err
 }
@@ -89,17 +101,18 @@ func (q *Queries) CreateSkillVersion(ctx context.Context, arg CreateSkillVersion
 const deleteOwnedSkill = `-- name: DeleteOwnedSkill :one
 DELETE FROM skills
 WHERE id = $1
-  AND owner_id IS NOT DISTINCT FROM $2::uuid
+  AND owner_id IS NOT DISTINCT FROM $2::uuid AND plugin_id IS NOT DISTINCT FROM $3::uuid
 RETURNING id
 `
 
 type DeleteOwnedSkillParams struct {
-	ID      uuid.UUID  `json:"id"`
-	OwnerID *uuid.UUID `json:"owner_id"`
+	ID       uuid.UUID  `json:"id"`
+	OwnerID  *uuid.UUID `json:"owner_id"`
+	PluginID *uuid.UUID `json:"plugin_id"`
 }
 
 func (q *Queries) DeleteOwnedSkill(ctx context.Context, arg DeleteOwnedSkillParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, deleteOwnedSkill, arg.ID, arg.OwnerID)
+	row := q.db.QueryRow(ctx, deleteOwnedSkill, arg.ID, arg.OwnerID, arg.PluginID)
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
@@ -111,12 +124,13 @@ SELECT s.id, s.owner_id, s.name, s.enabled, s.created_at, s.updated_at,
 FROM skills s
 JOIN skill_versions v ON v.id = s.current_version_id
 WHERE s.id = $1
-  AND s.owner_id IS NOT DISTINCT FROM $2::uuid
+  AND s.owner_id IS NOT DISTINCT FROM $2::uuid AND s.plugin_id IS NOT DISTINCT FROM $3::uuid
 `
 
 type GetOwnedSkillParams struct {
-	ID      uuid.UUID  `json:"id"`
-	OwnerID *uuid.UUID `json:"owner_id"`
+	ID       uuid.UUID  `json:"id"`
+	OwnerID  *uuid.UUID `json:"owner_id"`
+	PluginID *uuid.UUID `json:"plugin_id"`
 }
 
 type GetOwnedSkillRow struct {
@@ -136,7 +150,7 @@ type GetOwnedSkillRow struct {
 // One skill of a person (owner_id) or of the site (NULL): anyone else's is not
 // found.
 func (q *Queries) GetOwnedSkill(ctx context.Context, arg GetOwnedSkillParams) (GetOwnedSkillRow, error) {
-	row := q.db.QueryRow(ctx, getOwnedSkill, arg.ID, arg.OwnerID)
+	row := q.db.QueryRow(ctx, getOwnedSkill, arg.ID, arg.OwnerID, arg.PluginID)
 	var i GetOwnedSkillRow
 	err := row.Scan(
 		&i.ID,
@@ -160,13 +174,14 @@ FROM skill_versions v
 JOIN skills s ON s.id = v.skill_id
 WHERE v.id = $1
   AND s.id = $2
-  AND s.owner_id IS NOT DISTINCT FROM $3::uuid
+  AND s.owner_id IS NOT DISTINCT FROM $3::uuid AND s.plugin_id IS NOT DISTINCT FROM $4::uuid
 `
 
 type GetOwnedSkillVersionParams struct {
 	VersionID uuid.UUID  `json:"version_id"`
 	SkillID   uuid.UUID  `json:"skill_id"`
 	OwnerID   *uuid.UUID `json:"owner_id"`
+	PluginID  *uuid.UUID `json:"plugin_id"`
 }
 
 type GetOwnedSkillVersionRow struct {
@@ -178,7 +193,12 @@ type GetOwnedSkillVersionRow struct {
 
 // One version of a skill of this owner.
 func (q *Queries) GetOwnedSkillVersion(ctx context.Context, arg GetOwnedSkillVersionParams) (GetOwnedSkillVersionRow, error) {
-	row := q.db.QueryRow(ctx, getOwnedSkillVersion, arg.VersionID, arg.SkillID, arg.OwnerID)
+	row := q.db.QueryRow(ctx, getOwnedSkillVersion,
+		arg.VersionID,
+		arg.SkillID,
+		arg.OwnerID,
+		arg.PluginID,
+	)
 	var i GetOwnedSkillVersionRow
 	err := row.Scan(
 		&i.ID,
@@ -239,9 +259,14 @@ SELECT s.id, s.owner_id, s.name, s.enabled, s.created_at, s.updated_at,
        v.id AS version_id, v.description, v.content_hash, v.checked, v.blocked
 FROM skills s
 JOIN skill_versions v ON v.id = s.current_version_id
-WHERE s.owner_id IS NOT DISTINCT FROM $1::uuid
+WHERE s.owner_id IS NOT DISTINCT FROM $1::uuid AND s.plugin_id IS NOT DISTINCT FROM $2::uuid
 ORDER BY s.updated_at DESC, s.id
 `
+
+type ListOwnedSkillsParams struct {
+	OwnerID  *uuid.UUID `json:"owner_id"`
+	PluginID *uuid.UUID `json:"plugin_id"`
+}
 
 type ListOwnedSkillsRow struct {
 	ID          uuid.UUID          `json:"id"`
@@ -259,8 +284,8 @@ type ListOwnedSkillsRow struct {
 
 // A person's skills (owner_id), or the site's (NULL), with their current
 // version, newest first.
-func (q *Queries) ListOwnedSkills(ctx context.Context, ownerID *uuid.UUID) ([]ListOwnedSkillsRow, error) {
-	rows, err := q.db.Query(ctx, listOwnedSkills, ownerID)
+func (q *Queries) ListOwnedSkills(ctx context.Context, arg ListOwnedSkillsParams) ([]ListOwnedSkillsRow, error) {
+	rows, err := q.db.Query(ctx, listOwnedSkills, arg.OwnerID, arg.PluginID)
 	if err != nil {
 		return nil, err
 	}
@@ -325,13 +350,14 @@ SELECT v.id, v.description, v.created_at, (v.id = s.current_version_id)::boolean
 FROM skill_versions v
 JOIN skills s ON s.id = v.skill_id
 WHERE s.id = $1
-  AND s.owner_id IS NOT DISTINCT FROM $2::uuid
+  AND s.owner_id IS NOT DISTINCT FROM $2::uuid AND s.plugin_id IS NOT DISTINCT FROM $3::uuid
 ORDER BY v.created_at DESC, v.id
 `
 
 type ListSkillVersionsParams struct {
-	SkillID uuid.UUID  `json:"skill_id"`
-	OwnerID *uuid.UUID `json:"owner_id"`
+	SkillID  uuid.UUID  `json:"skill_id"`
+	OwnerID  *uuid.UUID `json:"owner_id"`
+	PluginID *uuid.UUID `json:"plugin_id"`
 }
 
 type ListSkillVersionsRow struct {
@@ -343,7 +369,7 @@ type ListSkillVersionsRow struct {
 
 // A skill's kept versions, newest first, if the skill is this owner's.
 func (q *Queries) ListSkillVersions(ctx context.Context, arg ListSkillVersionsParams) ([]ListSkillVersionsRow, error) {
-	rows, err := q.db.Query(ctx, listSkillVersions, arg.SkillID, arg.OwnerID)
+	rows, err := q.db.Query(ctx, listSkillVersions, arg.SkillID, arg.OwnerID, arg.PluginID)
 	if err != nil {
 		return nil, err
 	}
@@ -368,17 +394,27 @@ func (q *Queries) ListSkillVersions(ctx context.Context, arg ListSkillVersionsPa
 }
 
 const listSnapshotSkills = `-- name: ListSnapshotSkills :many
-SELECT s.id, s.owner_id, s.name, v.id AS version_id, v.description, v.content_hash, v.checked, v.blocked
+SELECT s.id, s.owner_id, s.plugin_id, s.name, v.id AS version_id, v.description, v.content_hash, v.checked, v.blocked
 FROM skills s
 JOIN skill_versions v ON v.id = s.current_version_id
 WHERE s.enabled
-  AND (s.owner_id IS NULL OR s.owner_id = $1)
-ORDER BY s.owner_id NULLS FIRST, s.updated_at DESC, s.id
+  AND ((s.owner_id IS NULL AND s.plugin_id IS NULL)
+    OR s.owner_id = $1
+    OR EXISTS (SELECT 1
+               FROM plugin_installs i
+                        JOIN plugins p ON p.id = i.plugin_id
+                        JOIN users u ON u.id = i.user_id
+               WHERE i.user_id = $1
+                 AND p.id = s.plugin_id
+                 AND p.enabled
+                 AND (p.audience = 'all' OR u.role = 'admin')))
+ORDER BY s.owner_id NULLS FIRST, s.plugin_id NULLS FIRST, s.updated_at DESC, s.id
 `
 
 type ListSnapshotSkillsRow struct {
 	ID          uuid.UUID  `json:"id"`
 	OwnerID     *uuid.UUID `json:"owner_id"`
+	PluginID    *uuid.UUID `json:"plugin_id"`
 	Name        string     `json:"name"`
 	VersionID   uuid.UUID  `json:"version_id"`
 	Description string     `json:"description"`
@@ -388,7 +424,8 @@ type ListSnapshotSkillsRow struct {
 }
 
 // What a new conversation of this person may use: the site's skills that are
-// on, then their own that are on, each at its current version.
+// on, then the skills of the plugins they installed that may be used now
+// (on, theirs to see), then their own that are on, each at its current version.
 func (q *Queries) ListSnapshotSkills(ctx context.Context, userID *uuid.UUID) ([]ListSnapshotSkillsRow, error) {
 	rows, err := q.db.Query(ctx, listSnapshotSkills, userID)
 	if err != nil {
@@ -401,6 +438,7 @@ func (q *Queries) ListSnapshotSkills(ctx context.Context, userID *uuid.UUID) ([]
 		if err := rows.Scan(
 			&i.ID,
 			&i.OwnerID,
+			&i.PluginID,
 			&i.Name,
 			&i.VersionID,
 			&i.Description,
@@ -478,18 +516,24 @@ const setSkillEnabled = `-- name: SetSkillEnabled :one
 UPDATE skills
 SET enabled = $1, updated_at = now()
 WHERE id = $2
-  AND owner_id IS NOT DISTINCT FROM $3::uuid
+  AND owner_id IS NOT DISTINCT FROM $3::uuid AND plugin_id IS NOT DISTINCT FROM $4::uuid
 RETURNING id
 `
 
 type SetSkillEnabledParams struct {
-	Enabled bool       `json:"enabled"`
-	ID      uuid.UUID  `json:"id"`
-	OwnerID *uuid.UUID `json:"owner_id"`
+	Enabled  bool       `json:"enabled"`
+	ID       uuid.UUID  `json:"id"`
+	OwnerID  *uuid.UUID `json:"owner_id"`
+	PluginID *uuid.UUID `json:"plugin_id"`
 }
 
 func (q *Queries) SetSkillEnabled(ctx context.Context, arg SetSkillEnabledParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, setSkillEnabled, arg.Enabled, arg.ID, arg.OwnerID)
+	row := q.db.QueryRow(ctx, setSkillEnabled,
+		arg.Enabled,
+		arg.ID,
+		arg.OwnerID,
+		arg.PluginID,
+	)
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
@@ -520,20 +564,26 @@ const skillNameTaken = `-- name: SkillNameTaken :one
 SELECT EXISTS (
     SELECT 1 FROM skills
     WHERE name = $1
-      AND owner_id IS NOT DISTINCT FROM $2::uuid
-      AND id IS DISTINCT FROM $3::uuid
+      AND owner_id IS NOT DISTINCT FROM $2::uuid AND plugin_id IS NOT DISTINCT FROM $3::uuid
+      AND id IS DISTINCT FROM $4::uuid
 ) AS taken
 `
 
 type SkillNameTakenParams struct {
-	Name    string     `json:"name"`
-	OwnerID *uuid.UUID `json:"owner_id"`
-	Except  *uuid.UUID `json:"except"`
+	Name     string     `json:"name"`
+	OwnerID  *uuid.UUID `json:"owner_id"`
+	PluginID *uuid.UUID `json:"plugin_id"`
+	Except   *uuid.UUID `json:"except"`
 }
 
 // Whether another skill of the same owner (or of the site) has this name.
 func (q *Queries) SkillNameTaken(ctx context.Context, arg SkillNameTakenParams) (bool, error) {
-	row := q.db.QueryRow(ctx, skillNameTaken, arg.Name, arg.OwnerID, arg.Except)
+	row := q.db.QueryRow(ctx, skillNameTaken,
+		arg.Name,
+		arg.OwnerID,
+		arg.PluginID,
+		arg.Except,
+	)
 	var taken bool
 	err := row.Scan(&taken)
 	return taken, err

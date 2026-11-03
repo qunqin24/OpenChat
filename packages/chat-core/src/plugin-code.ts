@@ -38,20 +38,30 @@ export function pluginName(progress: PluginCodeProgress | null, slug: string): s
 type T = TFunction<'common'>
 
 /**
- * The step's line: the plugins it used and how many calls, or the call in
- * flight while it runs.
+ * The step's line: each plugin with the tools it was asked for -
+ * "GitHub · get_me、search_repositories" - or, for a script that only looked
+ * tools up, what it looked in; while it runs, the call in flight.
  */
 export function pluginStepLabel(t: T, name: string, progress: PluginCodeProgress | null, running: boolean, failed: boolean): string {
-  const names = progress?.plugins.map((p) => p.name) ?? []
   const calls = progress?.calls ?? []
-  const listed = names.join(t('plugins.step.joiner'))
   if (running) {
     const current = [...calls].reverse().find((call) => call.status === 'running' || call.status === 'waiting')
     if (current?.status === 'waiting') return t('plugins.step.waiting', { plugin: pluginName(progress, current.plugin), tool: current.tool })
     if (current) return t('plugins.step.calling', { plugin: pluginName(progress, current.plugin), tool: current.tool })
     return name === PLUGIN_CODE ? t('plugins.step.preparing') : t('plugins.step.calling', { plugin: name.split('__')[0], tool: name.split('__')[1] ?? '' })
   }
-  if (failed) return listed ? t('plugins.step.failed', { plugins: listed }) : t('plugins.step.failed-generic')
-  if (!listed) return t('plugins.step.no-calls')
-  return t('plugins.step.done', { plugins: listed, count: calls.length })
+  if (calls.length > 0) {
+    const tools = new Map<string, string[]>()
+    for (const call of calls) {
+      const list = tools.get(call.plugin) ?? []
+      if (!list.includes(call.tool)) list.push(call.tool)
+      tools.set(call.plugin, list)
+    }
+    return [...tools].map(([slug, list]) => `${pluginName(progress, slug)} · ${list.join(t('plugins.step.joiner'))}`).join(t('plugins.step.separator'))
+  }
+  if (failed) return t('plugins.step.failed-generic')
+  const searched = progress?.searches?.find((s) => s.plugin)?.plugin
+  if (searched) return t('plugins.step.searched', { plugin: pluginName(progress, searched) })
+  if (progress?.searches?.length) return t('plugins.step.searched-any')
+  return t('plugins.step.no-calls')
 }

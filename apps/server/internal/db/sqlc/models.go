@@ -461,6 +461,7 @@ type Conversation struct {
 	PinnedAt        pgtype.Timestamptz `json:"pinned_at"`
 	Skills          []string           `json:"skills"`
 	PluginCatalog   []byte             `json:"plugin_catalog"`
+	Plugins         []string           `json:"plugins"`
 }
 
 type Document struct {
@@ -717,6 +718,7 @@ type Run struct {
 	Continues       *uuid.UUID         `json:"continues"`
 	FromApp         bool               `json:"from_app"`
 	Research        bool               `json:"research"`
+	Unattended      bool               `json:"unattended"`
 }
 
 type ScheduledTask struct {
@@ -765,6 +767,7 @@ type Skill struct {
 	CurrentVersionID *uuid.UUID         `json:"current_version_id"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	PluginID         *uuid.UUID         `json:"plugin_id"`
 }
 
 type SkillFile struct {
@@ -801,6 +804,16 @@ type SubagentReport struct {
 	ViaTool            bool               `json:"via_tool"`
 	DeliveredMessageID *uuid.UUID         `json:"delivered_message_id"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+}
+
+type ToolImage struct {
+	ID             uuid.UUID          `json:"id"`
+	RunID          uuid.UUID          `json:"run_id"`
+	ConversationID uuid.UUID          `json:"conversation_id"`
+	UserID         uuid.UUID          `json:"user_id"`
+	MediaType      string             `json:"media_type"`
+	Data           []byte             `json:"data"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 type UsageLog struct {

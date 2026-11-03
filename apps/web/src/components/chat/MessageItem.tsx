@@ -482,7 +482,7 @@ export function AssistantTurn({
                 </div>
               )
             }
-            return { key, step: { call: part, result, status: toolStatus(part.id), progress } }
+            return { key, step: { call: part, result, status: toolStatus(part.id), progress, conversationId } }
           }
           return { key, step: { call: part, result: turn.results[part.id], status: toolStatus(part.id) } }
         }

@@ -103,7 +103,7 @@ type Querier interface {
 	// How many sub-agents one run has launched.
 	CountLaunchedSubagents(ctx context.Context, launchedBy *uuid.UUID) (int64, error)
 	CountMemories(ctx context.Context, userID uuid.UUID) (int64, error)
-	CountOwnedSkills(ctx context.Context, ownerID *uuid.UUID) (int64, error)
+	CountOwnedSkills(ctx context.Context, arg CountOwnedSkillsParams) (int64, error)
 	CountPasskeys(ctx context.Context) (int64, error)
 	// A conversation's sub-agents launched before this one that are still
 	// queued (no run yet): a queued sub-agent starts only when none ahead of it
@@ -156,6 +156,7 @@ type Querier interface {
 	// runs do work the main agent handed over, and the reports they hand back.
 	CreateSubagentConversation(ctx context.Context, arg CreateSubagentConversationParams) (Conversation, error)
 	CreateTask(ctx context.Context, arg CreateTaskParams) (ScheduledTask, error)
+	CreateToolImage(ctx context.Context, arg CreateToolImageParams) (uuid.UUID, error)
 	CreateWebAuthnChallenge(ctx context.Context, arg CreateWebAuthnChallengeParams) (uuid.UUID, error)
 	// Deletes an account and, by
 	// cascade, its sessions, conversations, messages, runs, attachments, memories
@@ -406,11 +407,15 @@ type Querier interface {
 	GetSubagentByID(ctx context.Context, id uuid.UUID) (Conversation, error)
 	// A queued sub-agent's task: the first row of its conversation.
 	GetSubagentInput(ctx context.Context, conversationID uuid.UUID) (Message, error)
+	// The plugins a sub-agent may use (its launch named them), by short name.
+	GetSubagentPlugins(ctx context.Context, arg GetSubagentPluginsParams) ([]string, error)
 	GetSubagentReport(ctx context.Context, runID uuid.UUID) (SubagentReport, error)
 	// The skills a sub-agent may open (its launch named them), from its own
 	// conversation's row.
 	GetSubagentSkills(ctx context.Context, arg GetSubagentSkillsParams) ([]string, error)
 	GetTask(ctx context.Context, arg GetTaskParams) (ScheduledTask, error)
+	// A picture a tool answered with, to its conversation's owner only.
+	GetToolImage(ctx context.Context, arg GetToolImageParams) (GetToolImageRow, error)
 	// One tool as ListUsablePluginTools has it, read again at each call so a
 	// change made meanwhile counts; no row when it may not be called now.
 	GetUsablePluginTool(ctx context.Context, arg GetUsablePluginToolParams) (GetUsablePluginToolRow, error)
@@ -589,7 +594,7 @@ type Querier interface {
 	ListModerationEvents(ctx context.Context, arg ListModerationEventsParams) ([]ListModerationEventsRow, error)
 	// A person's skills (owner_id), or the site's (NULL), with their current
 	// version, newest first.
-	ListOwnedSkills(ctx context.Context, ownerID *uuid.UUID) ([]ListOwnedSkillsRow, error)
+	ListOwnedSkills(ctx context.Context, arg ListOwnedSkillsParams) ([]ListOwnedSkillsRow, error)
 	// Passkeys and the WebAuthn ceremonies that make and use them (api/passkeys.go).
 	// Every statement about a person's passkeys names the person.
 	ListPasskeys(ctx context.Context, userID uuid.UUID) ([]ListPasskeysRow, error)
@@ -598,6 +603,9 @@ type Querier interface {
 	// The caller's pinned conversations, the latest pinned first: shown above the
 	// rest of the list whatever their age, so not paged with it.
 	ListPinnedConversations(ctx context.Context, userID *uuid.UUID) ([]Conversation, error)
+	// The plugin calls, newest first, for the administrators: who, which tool,
+	// how it ended. Paged by id, which grows with time.
+	ListPluginCalls(ctx context.Context, arg ListPluginCallsParams) ([]ListPluginCallsRow, error)
 	ListPluginTools(ctx context.Context, pluginID uuid.UUID) ([]PluginTool, error)
 	// The newest rows of the conversation, oldest first: the raw material of a
 	// model request. Newest, not oldest — a long conversation is answered from its
@@ -657,7 +665,8 @@ type Querier interface {
 	// A skill's kept versions, newest first, if the skill is this owner's.
 	ListSkillVersions(ctx context.Context, arg ListSkillVersionsParams) ([]ListSkillVersionsRow, error)
 	// What a new conversation of this person may use: the site's skills that are
-	// on, then their own that are on, each at its current version.
+	// on, then the skills of the plugins they installed that may be used now
+	// (on, theirs to see), then their own that are on, each at its current version.
 	ListSnapshotSkills(ctx context.Context, userID *uuid.UUID) ([]ListSnapshotSkillsRow, error)
 	// The latest report of each of a conversation's sub-agents.
 	ListSubagentLatestReports(ctx context.Context, parentID uuid.UUID) ([]SubagentReport, error)

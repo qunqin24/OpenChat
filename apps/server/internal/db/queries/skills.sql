@@ -5,8 +5,8 @@
 SELECT pg_advisory_xact_lock(hashtextextended('skills:' || sqlc.arg('owner_id')::uuid::text, 0));
 
 -- name: CreateSkill :one
-INSERT INTO skills (owner_id, name, enabled)
-VALUES (sqlc.narg('owner_id'), sqlc.arg('name'), sqlc.arg('enabled'))
+INSERT INTO skills (owner_id, plugin_id, name, enabled)
+VALUES (sqlc.narg('owner_id'), sqlc.narg('plugin_id'), sqlc.arg('name'), sqlc.arg('enabled'))
 RETURNING *;
 
 -- name: CreateSkillVersion :one
@@ -44,12 +44,12 @@ WHERE v.skill_id = sqlc.arg('skill_id')
 SELECT EXISTS (
     SELECT 1 FROM skills
     WHERE name = sqlc.arg('name')
-      AND owner_id IS NOT DISTINCT FROM sqlc.narg('owner_id')::uuid
+      AND owner_id IS NOT DISTINCT FROM sqlc.narg('owner_id')::uuid AND plugin_id IS NOT DISTINCT FROM sqlc.narg('plugin_id')::uuid
       AND id IS DISTINCT FROM sqlc.narg('except')::uuid
 ) AS taken;
 
 -- name: CountOwnedSkills :one
-SELECT count(*) FROM skills WHERE owner_id IS NOT DISTINCT FROM sqlc.narg('owner_id')::uuid;
+SELECT count(*) FROM skills WHERE owner_id IS NOT DISTINCT FROM sqlc.narg('owner_id')::uuid AND plugin_id IS NOT DISTINCT FROM sqlc.narg('plugin_id')::uuid;
 
 -- name: ListOwnedSkills :many
 -- A person's skills (owner_id), or the site's (NULL), with their current
@@ -58,7 +58,7 @@ SELECT s.id, s.owner_id, s.name, s.enabled, s.created_at, s.updated_at,
        v.id AS version_id, v.description, v.content_hash, v.checked, v.blocked
 FROM skills s
 JOIN skill_versions v ON v.id = s.current_version_id
-WHERE s.owner_id IS NOT DISTINCT FROM sqlc.narg('owner_id')::uuid
+WHERE s.owner_id IS NOT DISTINCT FROM sqlc.narg('owner_id')::uuid AND s.plugin_id IS NOT DISTINCT FROM sqlc.narg('plugin_id')::uuid
 ORDER BY s.updated_at DESC, s.id;
 
 -- name: GetOwnedSkill :one
@@ -69,7 +69,7 @@ SELECT s.id, s.owner_id, s.name, s.enabled, s.created_at, s.updated_at,
 FROM skills s
 JOIN skill_versions v ON v.id = s.current_version_id
 WHERE s.id = sqlc.arg('id')
-  AND s.owner_id IS NOT DISTINCT FROM sqlc.narg('owner_id')::uuid;
+  AND s.owner_id IS NOT DISTINCT FROM sqlc.narg('owner_id')::uuid AND s.plugin_id IS NOT DISTINCT FROM sqlc.narg('plugin_id')::uuid;
 
 -- name: ListSkillFiles :many
 SELECT path, content FROM skill_files WHERE version_id = $1 ORDER BY path COLLATE "C";
@@ -78,24 +78,34 @@ SELECT path, content FROM skill_files WHERE version_id = $1 ORDER BY path COLLAT
 UPDATE skills
 SET enabled = sqlc.arg('enabled'), updated_at = now()
 WHERE id = sqlc.arg('id')
-  AND owner_id IS NOT DISTINCT FROM sqlc.narg('owner_id')::uuid
+  AND owner_id IS NOT DISTINCT FROM sqlc.narg('owner_id')::uuid AND plugin_id IS NOT DISTINCT FROM sqlc.narg('plugin_id')::uuid
 RETURNING id;
 
 -- name: DeleteOwnedSkill :one
 DELETE FROM skills
 WHERE id = sqlc.arg('id')
-  AND owner_id IS NOT DISTINCT FROM sqlc.narg('owner_id')::uuid
+  AND owner_id IS NOT DISTINCT FROM sqlc.narg('owner_id')::uuid AND plugin_id IS NOT DISTINCT FROM sqlc.narg('plugin_id')::uuid
 RETURNING id;
 
 -- name: ListSnapshotSkills :many
 -- What a new conversation of this person may use: the site's skills that are
--- on, then their own that are on, each at its current version.
-SELECT s.id, s.owner_id, s.name, v.id AS version_id, v.description, v.content_hash, v.checked, v.blocked
+-- on, then the skills of the plugins they installed that may be used now
+-- (on, theirs to see), then their own that are on, each at its current version.
+SELECT s.id, s.owner_id, s.plugin_id, s.name, v.id AS version_id, v.description, v.content_hash, v.checked, v.blocked
 FROM skills s
 JOIN skill_versions v ON v.id = s.current_version_id
 WHERE s.enabled
-  AND (s.owner_id IS NULL OR s.owner_id = sqlc.arg('user_id'))
-ORDER BY s.owner_id NULLS FIRST, s.updated_at DESC, s.id;
+  AND ((s.owner_id IS NULL AND s.plugin_id IS NULL)
+    OR s.owner_id = sqlc.arg('user_id')
+    OR EXISTS (SELECT 1
+               FROM plugin_installs i
+                        JOIN plugins p ON p.id = i.plugin_id
+                        JOIN users u ON u.id = i.user_id
+               WHERE i.user_id = sqlc.arg('user_id')
+                 AND p.id = s.plugin_id
+                 AND p.enabled
+                 AND (p.audience = 'all' OR u.role = 'admin')))
+ORDER BY s.owner_id NULLS FIRST, s.plugin_id NULLS FIRST, s.updated_at DESC, s.id;
 
 -- name: GetSkillVersionFor :one
 -- A version a conversation of this person may read: of a site skill, or of
@@ -122,7 +132,7 @@ SELECT v.id, v.description, v.created_at, (v.id = s.current_version_id)::boolean
 FROM skill_versions v
 JOIN skills s ON s.id = v.skill_id
 WHERE s.id = sqlc.arg('skill_id')
-  AND s.owner_id IS NOT DISTINCT FROM sqlc.narg('owner_id')::uuid
+  AND s.owner_id IS NOT DISTINCT FROM sqlc.narg('owner_id')::uuid AND s.plugin_id IS NOT DISTINCT FROM sqlc.narg('plugin_id')::uuid
 ORDER BY v.created_at DESC, v.id;
 
 -- name: GetOwnedSkillVersion :one
@@ -132,4 +142,4 @@ FROM skill_versions v
 JOIN skills s ON s.id = v.skill_id
 WHERE v.id = sqlc.arg('version_id')
   AND s.id = sqlc.arg('skill_id')
-  AND s.owner_id IS NOT DISTINCT FROM sqlc.narg('owner_id')::uuid;
+  AND s.owner_id IS NOT DISTINCT FROM sqlc.narg('owner_id')::uuid AND s.plugin_id IS NOT DISTINCT FROM sqlc.narg('plugin_id')::uuid;
