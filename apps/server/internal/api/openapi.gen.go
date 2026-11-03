@@ -1891,12 +1891,15 @@ type AvailableSkillList struct {
 // looked at, from every page that shows a name.
 type AvatarUrl = string
 
-// BatchEvent The events of one commit, in order.
+// BatchEvent The events of one commit, in order, or of one publication of a streaming response between commits.
 type BatchEvent struct {
-	Events  []RunEvent         `json:"events"`
-	RunId   openapi_types.UUID `json:"runId"`
-	Type    BatchEventType     `json:"type"`
-	Version int64              `json:"version"`
+	Events []RunEvent         `json:"events"`
+	RunId  openapi_types.UUID `json:"runId"`
+
+	// Step 0 (or absent) for a commit; for a publication between commits, how many there have been since the commit of `version`. A batch whose (version, step) is not later than what a client holds is already in it.
+	Step    *int           `json:"step,omitempty"`
+	Type    BatchEventType `json:"type"`
+	Version int64          `json:"version"`
 }
 
 // BatchEventType defines model for BatchEvent.Type.
@@ -3820,7 +3823,10 @@ type SnapshotEvent struct {
 	Messages []Message `json:"messages"`
 
 	// Run The active run; absent when the conversation is idle.
-	Run  *Run              `json:"run,omitempty"`
+	Run *Run `json:"run,omitempty"`
+
+	// Step How many batches of the run published since its version was committed `live` already holds (see BatchEvent.step). Absent is 0.
+	Step *int              `json:"step,omitempty"`
 	Type SnapshotEventType `json:"type"`
 }
 

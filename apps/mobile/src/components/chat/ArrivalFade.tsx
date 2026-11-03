@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   AccessibilityInfo,
   AppState,
@@ -11,7 +11,7 @@ import {
   type TextStyle,
 } from 'react-native'
 
-import { coverOpacity, nextArrivals, noArrivals, type ArrivalBatch, type ArrivalState } from '@openchat/chat-core/arrival'
+import { coverOpacity, nextArrivals, noArrivals, pacingOf, type ArrivalBatch, type ArrivalPacing, type ArrivalState } from '@openchat/chat-core/arrival'
 
 import { useColors } from '@/theme'
 
@@ -20,6 +20,9 @@ void AccessibilityInfo.isReduceMotionEnabled().then((on) => (reduceMotion = on))
 AccessibilityInfo.addEventListener('reduceMotionChanged', (on) => (reduceMotion = on))
 
 type Line = TextLayoutEvent['nativeEvent']['lines'][number]
+
+/** The pacing the texts of one stream share (Markdown's blocks of one answer); without it a text paces itself. */
+export const SharedPacing = createContext<{ current: ArrivalPacing } | null>(null)
 
 /** A cover over part of a line of a batch still fading in. */
 interface Cover {
@@ -65,27 +68,29 @@ interface Props extends Omit<TextProps, 'onTextLayout' | 'style'> {
 }
 
 /**
- * Text shown as it arrives, each batch fading in together (the web's
- * useArrivalFade, arrival-fade.ts; what a batch is and how it fades are
- * chat-core/arrival.ts). Nothing in the text is touched: covers in the page's
- * colour lie over the lines of the batches of the last moment, going from
- * opaque to clear - a handful of views, however long the answer, never a view
- * per character (v1.1.0's mistake). Reduced motion, and an app in the
- * background, get the text as it is.
+ * Text revealed as it arrives, each batch swept in a piece at a time (the web's useArrivalFade, arrival-fade.ts; what a piece is, when it is due
+ * and how it fades are chat-core/arrival.ts). Nothing in the text is touched:
+ * covers in the page's colour lie over the lines of the pieces still to come
+ * or fading, opaque until each is due and then going clear - a handful of
+ * views, however long the answer, never a view per character that stays
+ * (v1.1.0's mistake). Reduced motion, and an app in the background, get the
+ * text as it is.
  */
 export function FadingText({ children, fresh = false, style, ...rest }: Props) {
   const colors = useColors()
   const arrivals = useRef<ArrivalState>(noArrivals)
+  const sharedRef = useContext(SharedPacing)
   const [covers, setCovers] = useState<Cover[]>([])
 
   const laidOut = (event: TextLayoutEvent) => {
     const lines = event.nativeEvent.lines
     const length = lines.reduce((sum, line) => sum + line.text.length, 0)
     const before = arrivals.current.batches.length
-    arrivals.current = nextArrivals(arrivals.current, length, performance.now(), {
+    arrivals.current = nextArrivals(sharedRef ? { ...arrivals.current, ...sharedRef.current } : arrivals.current, length, performance.now(), {
       fresh,
       fading: !reduceMotion && AppState.currentState === 'active',
     })
+    if (sharedRef) sharedRef.current = pacingOf(arrivals.current)
     if (before === 0 && arrivals.current.batches.length === 0) return
     setCovers(coversOf(lines, arrivals.current.batches))
   }

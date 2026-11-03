@@ -3048,8 +3048,10 @@ export interface components {
             /** @description Every message the active run has written, its input first. */
             messages: components["schemas"]["Message"][];
             live?: components["schemas"]["LiveState"];
+            /** @description How many batches of the run published since its version was committed `live` already holds (see BatchEvent.step). Absent is 0. */
+            step?: number;
         };
-        /** @description The events of one commit, in order. */
+        /** @description The events of one commit, in order, or of one publication of a streaming response between commits. */
         BatchEvent: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -3060,6 +3062,8 @@ export interface components {
             runId: string;
             /** Format: int64 */
             version: number;
+            /** @description 0 (or absent) for a commit; for a publication between commits, how many there have been since the commit of `version`. A batch whose (version, step) is not later than what a client holds is already in it. */
+            step?: number;
             events: components["schemas"]["RunEvent"][];
         };
         RunEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["RunFinishedEvent"] | components["schemas"]["GenerationStartedEvent"] | components["schemas"]["PartStartedEvent"] | components["schemas"]["PartDeltaEvent"] | components["schemas"]["PartEndedEvent"] | components["schemas"]["MessageAppendedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"] | components["schemas"]["RetryScheduledEvent"] | components["schemas"]["TitleChangedEvent"] | components["schemas"]["TranscriptChangedEvent"] | components["schemas"]["CompactionStartedEvent"] | components["schemas"]["CompactionFinishedEvent"] | components["schemas"]["CompactionChangedEvent"] | components["schemas"]["ConversationDeletedEvent"] | components["schemas"]["SubagentsChangedEvent"];

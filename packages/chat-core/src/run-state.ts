@@ -21,7 +21,7 @@ export interface LiveRun {
   run: Run
   /** Rows this run wrote, its input first. */
   messages: Message[]
-  /** The response being streamed, as of the server's last commit. */
+  /** The response being streamed, as of the last batch applied. */
   partial: MessagePart[] | null
   retry: RetryInfo | null
   tools: Record<string, ToolSlot['status']>
@@ -35,6 +35,12 @@ export interface LiveRun {
   fresh: string[]
   /** Likewise for `partial`: its parts from this index on began while the page watched. */
   freshFrom: number
+  /**
+   * How many of the batches the server published between commits, after the
+   * commit of `run.version`, this holds (BatchEvent.step): with the version,
+   * which batches are already in it.
+   */
+  step: number
 }
 
 export interface ConversationLive {
@@ -63,16 +69,21 @@ export function fromSnapshot(snapshot: SnapshotEvent): ConversationLive {
       compacting: snapshot.live?.compacting ?? false,
       fresh: [],
       freshFrom: generation?.parts.length ?? 0,
+      step: snapshot.step ?? 0,
     },
   }
 }
 
-/** Applies the events of one commit. Pure: returns a new state. */
+/**
+ * Applies the events of one batch - a commit, or a publication between
+ * commits (`step`). Pure: returns a new state.
+ */
 export function applyBatch(state: ConversationLive, batch: BatchEvent): ConversationLive {
   const current = state.run
+  const step = batch.step ?? 0
   // Already contained in what we hold — the server filters these too, but a
   // locally started run can race its own first batch.
-  if (current && current.run.id === batch.runId && batch.version <= current.run.version) {
+  if (current && current.run.id === batch.runId && !later(batch.version, step, current)) {
     return state
   }
 
@@ -81,7 +92,13 @@ export function applyBatch(state: ConversationLive, batch: BatchEvent): Conversa
     live = applyEvent(live, event)
   }
   if (!live) return state
-  return { run: { ...live, run: { ...live.run, version: Math.max(live.run.version, batch.version) } } }
+  if (!later(batch.version, step, live)) return { run: live }
+  return { run: { ...live, run: { ...live.run, version: batch.version }, step } }
+}
+
+/** Whether a batch of (version, step) is later than what `live` holds. */
+function later(version: number, step: number, live: LiveRun): boolean {
+  return version > live.run.version || (version === live.run.version && step > live.step)
 }
 
 function applyEvent(live: LiveRun | null, event: RunEvent): LiveRun | null {
@@ -92,7 +109,7 @@ function applyEvent(live: LiveRun | null, event: RunEvent): LiveRun | null {
     const held = live?.run.id === event.run.id ? live.messages.find((m) => m.id === event.message.id) : undefined
     const message =
       held && held.attachments?.length ? { ...event.message, attachments: held.attachments } : event.message
-    return { run: event.run, messages: [message], partial: null, retry: null, tools: {}, compacting: false, fresh: [], freshFrom: 0 }
+    return { run: event.run, messages: [message], partial: null, retry: null, tools: {}, compacting: false, fresh: [], freshFrom: 0, step: 0 }
   }
   // Anything else belongs to a run we are holding; a stray event for one we
   // never saw start is ignored, and the next snapshot sets things straight.

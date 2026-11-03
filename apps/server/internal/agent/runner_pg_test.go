@@ -305,13 +305,13 @@ func TestRunAnswers(t *testing.T) {
 	f.assertTranscript("user hi", "assistant:stop Hello")
 
 	// Every batch is newer than the last, and the stream ends with the run.
-	var last int64
+	var last Batch
 	var finished bool
 	for _, b := range f.events() {
-		if b.Version <= last {
-			t.Fatalf("version went from %d to %d", last, b.Version)
+		if !after(b, last) {
+			t.Fatalf("batch (%d, %d) came after (%d, %d)", b.Version, b.Step, last.Version, last.Step)
 		}
-		last = b.Version
+		last = b
 		for _, e := range b.Events {
 			if _, ok := e.(RunFinished); ok {
 				finished = true
@@ -320,6 +320,129 @@ func TestRunAnswers(t *testing.T) {
 	}
 	if !finished {
 		t.Fatal("no RunFinished event")
+	}
+}
+
+// after reports whether batch b is later than batch a: a later commit, or a
+// later publication since the same one.
+func after(b, a Batch) bool {
+	return b.Version > a.Version || b.Version == a.Version && b.Step > a.Step
+}
+
+// slowly is a model that takes its time over each chunk, calling at (if set)
+// before its nth.
+type slowly struct {
+	llm.ModelClient
+	pause time.Duration
+	nth   int
+	at    func()
+}
+
+func (s slowly) Stream(ctx context.Context, req llm.Request, emit func(llm.Event) error) (llm.ModelResponse, error) {
+	n := 0
+	return s.ModelClient.Stream(ctx, req, func(ev llm.Event) error {
+		if ev.Type == llm.EventPartDelta {
+			if n++; n == s.nth && s.at != nil {
+				s.at()
+			}
+			time.Sleep(s.pause)
+		}
+		return emit(ev)
+	})
+}
+
+// textOf is the text the part deltas of batches add up to.
+func textOf(batches []Batch) string {
+	var b strings.Builder
+	for _, batch := range batches {
+		for _, e := range batch.Events {
+			if d, ok := e.(PartDelta); ok {
+				b.WriteString(d.Delta)
+			}
+		}
+	}
+	return b.String()
+}
+
+// A response streams to subscribers between its commits, as steps after the
+// last one, and what LiveOf reports holds exactly the steps published.
+func TestRunPublishesBetweenCommits(t *testing.T) {
+	chunks := make([]string, 60)
+	for i := range chunks {
+		chunks[i] = fmt.Sprintf("w%02d ", i)
+	}
+	var (
+		f      *fixture
+		runID  uuid.UUID
+		mu     sync.Mutex // the model's goroutine writes midway and live
+		midway []Batch    // published by the time LiveOf was asked
+		later  []Batch    // published after, but taken in the same drain
+		live   string
+	)
+	model := func() (llm.ModelClient, error) {
+		client, err := answer(t, chunks...)()
+		return slowly{ModelClient: client, pause: 3 * time.Millisecond, nth: 30, at: func() {
+			mu.Lock()
+			defer mu.Unlock()
+			version, step, raw, ok := f.runner.LiveOf(runID)
+			if !ok {
+				t.Error("LiveOf: the run is not executing")
+				return
+			}
+			got, err := DecodeLive(raw)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if got.Generation != nil {
+				for _, part := range got.Generation.Parts {
+					if text, ok := part.(llm.TextPart); ok {
+						live += text.Text
+					}
+				}
+			}
+			for _, b := range f.events() {
+				if after(b, Batch{Version: version, Step: step}) {
+					later = append(later, b)
+				} else {
+					midway = append(midway, b)
+				}
+			}
+		}}, err
+	}
+	f = newFixtureWith(t, func(o *Options) {
+		o.PartialInterval = 60 * time.Millisecond
+		o.PublishInterval = 10 * time.Millisecond
+	}, nil, model)
+	run := f.admit("hi")
+	runID = run.ID
+	f.runner.Start(run.ID)
+	f.waitFor(run.ID, sqlc.RunStatusCompleted)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if live == "" || textOf(midway) != live {
+		t.Fatalf("LiveOf held %q, the batches published by then %q", live, textOf(midway))
+	}
+	rest := append(later, f.events()...)
+	steps := 0
+	last := Batch{}
+	for _, b := range append(append([]Batch(nil), midway...), rest...) {
+		if !after(b, last) {
+			t.Fatalf("batch (%d, %d) came after (%d, %d)", b.Version, b.Step, last.Version, last.Step)
+		}
+		last = b
+		if b.Step > 0 {
+			steps++
+		}
+	}
+	if steps == 0 {
+		t.Fatal("nothing was published between commits")
+	}
+	// What streamed after the last publication arrives with the finished
+	// message instead, so the deltas are the answer up to some point.
+	if got, want := textOf(midway)+textOf(rest), strings.Join(chunks, ""); !strings.HasPrefix(want, got) || len(got) <= len(live) {
+		t.Fatalf("the batches add up to %q, not a start of %q past what LiveOf held", got, want)
 	}
 }
 

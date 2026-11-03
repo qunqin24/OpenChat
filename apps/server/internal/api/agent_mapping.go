@@ -242,5 +242,9 @@ func toBatchEvent(batch agent.Batch) BatchEvent {
 			events = append(events, mapped)
 		}
 	}
-	return BatchEvent{Type: Batch, RunId: batch.RunID, Version: batch.Version, Events: events}
+	out := BatchEvent{Type: Batch, RunId: batch.RunID, Version: batch.Version, Events: events}
+	if batch.Step > 0 {
+		out.Step = &batch.Step
+	}
+	return out
 }

@@ -180,7 +180,7 @@ export const chatStateCreator: StateCreator<ChatState> = (set) => ({
         live: {
           ...state.live,
           [conversationId]: {
-            run: { run, messages: [input, ...rows], partial: null, retry: null, tools: {}, compacting: false, fresh: [], freshFrom: 0 },
+            run: { run, messages: [input, ...rows], partial: null, retry: null, tools: {}, compacting: false, fresh: [], freshFrom: 0, step: 0 },
           },
         },
       }

@@ -77,6 +77,11 @@ type Options struct {
 	// PartialInterval is how often a streaming response is committed. A crash
 	// loses at most this much of it.
 	PartialInterval time.Duration
+	// PublishInterval is how often what a response streamed since the last
+	// publication reaches subscribers, between commits: every commit is a
+	// database write of the whole response so far, and a fast model's text
+	// sent only with them comes in blocks (docs/design/frontend-chat.md).
+	PublishInterval time.Duration
 	// HistoryLimit is how many transcript rows a request is built from: a
 	// safety cap and no more. What keeps a request within the model's window is
 	// compression (Compression); a cap that bit would move the start of the
@@ -136,6 +141,9 @@ func (o Options) withDefaults() Options {
 	if o.PartialInterval <= 0 {
 		o.PartialInterval = 150 * time.Millisecond
 	}
+	if o.PublishInterval <= 0 {
+		o.PublishInterval = 50 * time.Millisecond
+	}
 	if o.HistoryLimit <= 0 {
 		o.HistoryLimit = 2000
 	}
@@ -172,7 +180,9 @@ type Runner struct {
 
 	mu     sync.Mutex
 	active map[uuid.UUID]context.CancelCauseFunc
-	wg     sync.WaitGroup
+	// executing is every run this process is driving, by id, for LiveOf.
+	executing map[uuid.UUID]*execution
+	wg        sync.WaitGroup
 
 	// afterRun is told about every run that finishes, once its end is
 	// committed and published. Atomic because runs resumed at boot can finish
@@ -267,6 +277,7 @@ func NewRunner(pool *pgxpool.Pool, hub *Hub, models ModelResolver, tools ToolSou
 		base:      base,
 		stop:      stop,
 		active:    map[uuid.UUID]context.CancelCauseFunc{},
+		executing: map[uuid.UUID]*execution{},
 	}
 }
 
@@ -320,6 +331,22 @@ func (r *Runner) Resume(ctx context.Context) error {
 	return nil
 }
 
+// LiveOf is a run's work in flight as this process holds it - ahead of the
+// database by what was published since the last commit - with the version and
+// step of the last batch it published (Batch). ok is false when the run is not
+// executing here, and the database's copy is then all there is.
+func (r *Runner) LiveOf(runID uuid.UUID) (version int64, step int, live []byte, ok bool) {
+	r.mu.Lock()
+	ex := r.executing[runID]
+	r.mu.Unlock()
+	if ex == nil {
+		return 0, 0, nil, false
+	}
+	ex.mu.Lock()
+	defer ex.mu.Unlock()
+	return ex.run.Version, ex.step, mustJSON(ex.live), true
+}
+
 // Cancel stops a run. The caller has already recorded the request in the
 // database, so a run that is not executing here — between processes, say —
 // sees it when it next starts; Start is called for exactly that case.
@@ -364,6 +391,14 @@ func (r *Runner) execute(ctx context.Context, runID uuid.UUID) {
 	if ex == nil {
 		return // already terminal
 	}
+	r.mu.Lock()
+	r.executing[runID] = ex
+	r.mu.Unlock()
+	defer func() {
+		r.mu.Lock()
+		delete(r.executing, runID)
+		r.mu.Unlock()
+	}()
 	ctx = WithScope(ctx, Scope{RunID: runID, UserID: ex.run.UserID, ConversationID: ex.run.ConversationID, Parent: ex.parent, State: &RunState{}, FromApp: ex.run.FromApp})
 	// A panic in a provider adapter, the summariser or anything else on this
 	// goroutine would otherwise take the whole process down — and, the run

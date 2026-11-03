@@ -92,6 +92,9 @@ type execution struct {
 	run  sqlc.Run
 	cp   Checkpoint
 	live Live
+	// step is how many publications of the streaming response there have been
+	// since the last commit (Batch.Step); guarded by mu.
+	step int
 
 	// files resolves the attachments of each request; used by the run loop only.
 	files *attachmentResolver
@@ -177,6 +180,7 @@ func (ex *execution) commit(fn change) error {
 	}
 
 	ex.run = run
+	ex.step = 0
 	if done {
 		ex.live = Live{}
 		events = append(events, RunFinished{Run: run})
@@ -529,7 +533,7 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 	// Made after the reservation, not before: the throttle is a goroutine, and
 	// every way out above would have to remember to stop it. From here on the
 	// only exit before `stream.close()` is the request itself returning.
-	stream := newPartialStream(ctx, ex, ex.cp.Attempt, r.opts.PartialInterval)
+	stream := newPartialStream(ctx, ex, ex.cp.Attempt, r.opts.PartialInterval, r.opts.PublishInterval)
 	resp, streamErr := client.Stream(ctx, request, meter.Wrap(stream.emit))
 	stream.close()
 	resp.Message.Parts = stream.stampAll(resp.Message.Parts)
@@ -1096,7 +1100,9 @@ func retryDelay(attempt int) time.Duration {
 // ---------------------------------------------------------------- partial stream
 
 // partialStream collects a response as it streams and commits it on a
-// throttle, publishing the deltas since the previous commit with it.
+// throttle. In between it publishes what came since the last publication on a
+// shorter one, without writing it: a subscriber that connects in between gets
+// it from LiveOf, which the snapshot reads.
 type partialStream struct {
 	ex      *execution
 	attempt int
@@ -1104,7 +1110,10 @@ type partialStream struct {
 	mu      sync.Mutex
 	parts   []llm.Part
 	pending []Event
+	// dirty is set by anything not yet published, unsaved by anything not yet
+	// committed.
 	dirty   bool
+	unsaved bool
 	started bool
 
 	// lastEvent is when the provider last sent anything, to notice a stream
@@ -1123,23 +1132,31 @@ type partialStream struct {
 
 type span struct{ from, to time.Time }
 
-// newPartialStream starts the throttle of one request. Its goroutine ends on
+// newPartialStream starts the throttle of one request: a commit every
+// `commit`, a publication every `publish` in between. Its goroutine ends on
 // close, and also when ctx does, so a stream that is never closed (a path
 // added later, a panic unwinding) cannot outlive the request it was made for.
-func newPartialStream(ctx context.Context, ex *execution, attempt int, interval time.Duration) *partialStream {
+// Commits and publications both happen on it, so they never overlap.
+func newPartialStream(ctx context.Context, ex *execution, attempt int, commit, publish time.Duration) *partialStream {
 	s := &partialStream{ex: ex, attempt: attempt, thinking: map[int]*span{}, stop: make(chan struct{}), done: make(chan struct{})}
+	tick := min(commit, publish)
+	every := max(1, int((commit+tick/2)/tick))
 	go func() {
 		defer close(s.done)
-		ticker := time.NewTicker(interval)
+		ticker := time.NewTicker(tick)
 		defer ticker.Stop()
-		for {
+		for n := 1; ; n++ {
 			select {
 			case <-s.stop:
 				return
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				s.flush()
+				if n%every == 0 {
+					s.flush()
+				} else {
+					s.publish()
+				}
 			}
 		}
 	}()
@@ -1189,7 +1206,7 @@ func (s *partialStream) emit(ev llm.Event) error {
 	default:
 		return nil
 	}
-	s.dirty = true
+	s.dirty, s.unsaved = true, true
 	return nil
 }
 
@@ -1277,19 +1294,47 @@ func (s *partialStream) grow(index int) {
 	}
 }
 
-func (s *partialStream) flush() {
-	s.mu.Lock()
-	if !s.dirty {
-		s.mu.Unlock()
-		return
-	}
-	parts := append([]llm.Part(nil), s.parts...)
-	events := s.pending
+// take is what streamed since the last publication, and the response so far.
+// Caller holds s.mu.
+func (s *partialStream) take() (parts []llm.Part, events []Event) {
+	parts = append([]llm.Part(nil), s.parts...)
+	events = s.pending
 	s.pending, s.dirty = nil, false
 	if !s.started {
 		s.started = true
 		events = append([]Event{GenerationStarted{Attempt: s.attempt}}, events...)
 	}
+	return parts, events
+}
+
+// publish sends what streamed since the last publication without committing
+// it, as a step after the run's last commit (Batch.Step). The execution's live
+// state takes the response so far with it, under the same lock: a snapshot
+// taken from LiveOf holds exactly the steps published, and any commit - this
+// stream's next, or another path's - saves it.
+func (s *partialStream) publish() {
+	s.ex.mu.Lock()
+	defer s.ex.mu.Unlock()
+	s.mu.Lock()
+	if !s.dirty {
+		s.mu.Unlock()
+		return
+	}
+	parts, events := s.take()
+	s.mu.Unlock()
+	s.ex.live.Generation = &LiveGeneration{Attempt: s.attempt, Parts: parts}
+	s.ex.step++
+	s.ex.r.hub.Publish(s.ex.run.ConversationID, Batch{RunID: s.ex.run.ID, Version: s.ex.run.Version, Step: s.ex.step, Events: events})
+}
+
+func (s *partialStream) flush() {
+	s.mu.Lock()
+	if !s.unsaved {
+		s.mu.Unlock()
+		return
+	}
+	parts, events := s.take()
+	s.unsaved = false
 	s.mu.Unlock()
 
 	started := time.Now()

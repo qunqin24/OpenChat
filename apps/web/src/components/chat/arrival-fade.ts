@@ -4,17 +4,19 @@ import { prefersReducedMotion } from '@/lib/motion'
 import { coverOpacity, nextArrivals, noArrivals, type ArrivalBatch as Batch, type ArrivalState } from '@openchat/chat-core/arrival'
 
 /**
- * Text fades in a batch at a time, as it arrives: whatever one render adds is
- * one batch, shown at once and faded in over ARRIVAL_FADE_MS together, the
- * way it came.
+ * Text fades in as it arrives: whatever one render adds is one batch, laid out
+ * at once and swept in top to bottom over about the gap before the next, a
+ * piece at a time, each piece fading in over ARRIVAL_FADE_MS
+ * (chat-core/arrival.ts).
  *
  * Nothing in the rendered text is touched. A layer over it (`layer`, a sibling
- * of `content` inside a positioned box) holds a cover per line of each batch
- * still fading, in the colour of the surface behind that text, going from
- * opaque to clear: on a plain surface that is the text's own fade. So the
- * elements are the lines of the last ARRIVAL_FADE_MS, a handful, however long
- * the answer - unlike a fading element per character or word (v1.1.0's
- * Streamdown `animated`, which took long reasoning to 90% of a core), and
+ * of `content` inside a positioned box) holds a cover per line of each piece
+ * still to come or fading, in the colour of the surface behind that text,
+ * opaque until the piece is due and then going clear: on a plain surface that
+ * is the text's own fade. So the elements are the lines of the last
+ * MAX_SWEEP_MS + ARRIVAL_FADE_MS at most, however long the answer - unlike
+ * v1.1.0's Streamdown `animated`, which gave every character a fading element
+ * and never took one back, and took long reasoning to 90% of a core - and
  * React keeps the text it rendered.
  *
  * Where a batch is is counted in characters of `content`'s text: what was
@@ -97,6 +99,7 @@ function place(root: HTMLElement, layer: HTMLElement, batches: Batch[]): { el: H
   const from = Math.min(...batches.map((batch) => batch.start))
   const origin = layer.getBoundingClientRect()
   const surfaces = new Map<Element, string>()
+  const firsts = new Map<Element, Text | null>()
   let end = root.textContent?.length ?? 0
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
   const nodes: { node: Text; start: number }[] = []
@@ -119,9 +122,10 @@ function place(root: HTMLElement, layer: HTMLElement, batches: Batch[]): { el: H
       const range = document.createRange()
       range.setStart(text, a)
       range.setEnd(text, b)
-      for (const rect of range.getClientRects()) {
+      const marker = text.data.slice(0, a).trim() ? null : markerLeft(text, firsts)
+      for (const [i, rect] of [...range.getClientRects()].entries()) {
         if (rect.width === 0 || rect.height === 0) continue
-        const left = Math.floor(rect.left - origin.left)
+        const left = Math.floor((i === 0 && marker !== null ? Math.min(marker, rect.left) : rect.left) - origin.left)
         const top = Math.floor(rect.top - origin.top)
         boxes.push({ left, top, width: Math.ceil(rect.right - origin.left) - left, height: Math.ceil(rect.bottom - origin.top) - top, surface, born: batch.born })
       }
@@ -138,6 +142,32 @@ function place(root: HTMLElement, layer: HTMLElement, batches: Batch[]): { el: H
   })
   for (const spare of pool) spare.remove()
   return placed
+}
+
+/**
+ * Where the marker of the list item `text` begins, if `text` is the item's
+ * first text, so the cover over its start covers the number or bullet too: a
+ * marker is not text, and left bare it would show before its item. A number
+ * hangs out of the list's left edge once it has two digits, so the left is
+ * reckoned from its length. Each item's first text is remembered.
+ */
+function markerLeft(text: Text, firsts: Map<Element, Text | null>): number | null {
+  const item = text.parentElement?.closest('li')
+  if (!item?.parentElement) return null
+  let first = firsts.get(item)
+  if (first === undefined) {
+    const walker = document.createTreeWalker(item, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) => ((node as Text).data.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP),
+    })
+    first = walker.nextNode() as Text | null
+    firsts.set(item, first)
+  }
+  if (first !== text) return null
+  const list = item.parentElement
+  const number = list instanceof HTMLOListElement ? list.start + [...list.children].indexOf(item) : null
+  const chars = number === null ? 1 : `${number}.`.length
+  const em = parseFloat(getComputedStyle(item).fontSize) || 16
+  return Math.min(list.getBoundingClientRect().left, item.getBoundingClientRect().left - (chars * 0.6 + 0.6) * em)
 }
 
 /** The colour behind `element`: its own background, or the nearest one above it. Remembered per element. */

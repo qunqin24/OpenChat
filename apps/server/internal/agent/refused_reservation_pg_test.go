@@ -69,7 +69,7 @@ func TestRefusedReservationLeavesNoGoroutine(t *testing.T) {
 // The throttle ends with the request's context even when nobody closes it.
 func TestPartialStreamEndsWithItsContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	s := newPartialStream(ctx, nil, 0, time.Hour)
+	s := newPartialStream(ctx, nil, 0, time.Hour, time.Hour)
 	cancel()
 	select {
 	case <-s.done:

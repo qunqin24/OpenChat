@@ -140,10 +140,14 @@ func (RetryScheduled) isEvent()     {}
 func (TitleChanged) isEvent()       {}
 func (TranscriptChanged) isEvent()  {}
 
-// Batch is the events of one commit. Version is the run's version after it, so
-// a subscriber whose snapshot already reflects that commit can drop it.
+// Batch is the events of one commit, or of one publication of a streaming
+// response between commits. Version is the run's version after the commit;
+// Step is 0 for a commit and counts the publications since it otherwise. A
+// subscriber whose snapshot already reflects a batch - (Version, Step) no
+// later than the snapshot's - drops it.
 type Batch struct {
 	RunID   uuid.UUID
 	Version int64
+	Step    int
 	Events  []Event
 }

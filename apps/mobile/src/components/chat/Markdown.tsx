@@ -2,17 +2,17 @@ import * as Clipboard from 'expo-clipboard'
 import * as Haptics from 'expo-haptics'
 import { Check, Copy, Table2 as TableIcon } from 'lucide-react-native'
 import { marked, type Token, type Tokens } from 'marked'
-import { createContext, memo, useContext, useMemo, useState, type ReactNode } from 'react'
+import { createContext, memo, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native'
 import Animated, { FadeIn } from 'react-native-reanimated'
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 
-import { ARRIVAL_FADE_MS } from '@openchat/chat-core/arrival'
+import { ARRIVAL_FADE_MS, noPacing } from '@openchat/chat-core/arrival'
 import { promoteInlineMath } from '@openchat/chat-core/inline-math'
 import { isHttpUrl } from '@openchat/chat-core/urls'
 
-import { FadingText } from './ArrivalFade'
+import { FadingText, SharedPacing } from './ArrivalFade'
 import { useHighlighted } from './CodeHighlight'
 import { useKeepInPlace } from './keep-in-place'
 import { MermaidPreview } from './MermaidPreview'
@@ -22,23 +22,27 @@ import { useColors, type Colors } from '@/theme'
 const MONO = 'monospace'
 
 /**
- * Markdown as the chat draws it: an answer's text, the reasoning. Shown as it
- * arrives, each batch fading in together (ArrivalFade.tsx, as the web does),
- * parsed with marked's lexer into blocks. Each block is its own memoised
- * element keyed by its source, so while an answer streams only the last block
- * - the one still growing - is drawn again. A block that appears after the
+ * Markdown as the chat draws it: an answer's text, the reasoning. Revealed as
+ * it arrives, each batch swept in quickly (ArrivalFade.tsx, as the web does;
+ * the blocks share where the sweep has got to, so they appear in order), parsed with marked's
+ * lexer into blocks. Each block is its own memoised element keyed by its
+ * source, so while an answer streams only the last block - the one still
+ * growing - is drawn again. A block that appears after the
  * first render is new text, and fades in whole; `fresh`: the part began while
  * the reader watched, so even what it holds at first fades in.
  */
 export function Markdown({ text, fresh = false }: { text: string; streaming?: boolean; fresh?: boolean }) {
   const blocks = useMemo(() => marked.lexer(promoteInlineMath(text), { gfm: true }), [text])
   const [first] = useState(() => blocks.length)
+  const pacingRef = useRef(noPacing)
   return (
-    <View style={styles.root}>
-      {blocks.map((token, index) => (
-        <Block key={index} token={token} raw={token.raw} fresh={fresh || index >= first} />
-      ))}
-    </View>
+    <SharedPacing.Provider value={pacingRef}>
+      <View style={styles.root}>
+        {blocks.map((token, index) => (
+          <Block key={index} token={token} raw={token.raw} fresh={fresh || index >= first} />
+        ))}
+      </View>
+    </SharedPacing.Provider>
   )
 }
 

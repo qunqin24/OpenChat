@@ -195,6 +195,18 @@ describe('applyBatch', () => {
       const state = applyBatch(base(), batch(r, 12, [{ type: 'generation_started', attempt: 1 }]))
       expect(state.run?.run.version).toBe(12)
     })
+
+    it('applies what was published between commits once, in order, and the next commit after it', () => {
+      const delta = (d: string) => ({ type: 'part_delta' as const, index: 0, delta: d })
+      let state = applyBatch(base(), batch(r, 2, [{ type: 'generation_started', attempt: 1 }, { type: 'part_started', index: 0, part: text('') }]))
+      state = applyBatch(state, { ...batch(r, 2, [delta('Hel')]), step: 1 })
+      expect(applyBatch(state, { ...batch(r, 2, [delta('Hel')]), step: 1 })).toBe(state)
+      state = applyBatch(state, { ...batch(r, 2, [delta('lo')]), step: 2 })
+      expect(state.run).toMatchObject({ run: { version: 2 }, step: 2 })
+      state = applyBatch(state, batch(r, 3, [delta('!')]))
+      expect(state.run).toMatchObject({ run: { version: 3 }, step: 0, partial: [text('Hello!')] })
+      expect(applyBatch(state, { ...batch(r, 2, [delta('?')]), step: 3 })).toBe(state)
+    })
   })
 })
 
@@ -254,6 +266,13 @@ describe('fromSnapshot', () => {
       },
     })
     expect(state.run).toMatchObject({ run: r, messages: [q], partial: [text('so far')], tools: { c: 'running' } })
+  })
+
+  it('holds the publications its live state was taken after', () => {
+    const r = run('r1', { version: 4 })
+    const state = fromSnapshot({ type: 'snapshot', run: r, messages: [], step: 2, live: { generation: { attempt: 1, parts: [text('ab')] } } })
+    expect(applyBatch(state, { ...batch(r, 4, [{ type: 'part_delta', index: 0, delta: 'b' }]), step: 2 })).toBe(state)
+    expect(applyBatch(state, { ...batch(r, 4, [{ type: 'part_delta', index: 0, delta: 'c' }]), step: 3 }).run?.partial).toEqual([text('abc')])
   })
 
   it('has no partial for an empty generation', () => {

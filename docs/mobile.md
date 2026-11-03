@@ -16,10 +16,10 @@ Expo（React Native）写的原生 App，先做 Android，以后 iOS 用同一�
   - `session.ts`：会话查询（`GET /auth/session`，顺带续期）、登录、注册、通行密钥、登出。登录类请求带 `X-OpenChat-Client: app`，服务器才会在响应体里给 token（见 [认证](design/auth.md) 的「App 的会话」）。换人时 `queryClient.clear()`。
   - `i18n.ts`：用 chat-core 的同一份 `locales`，App 专有的文字放在 `mobile.*` 下；语言跟随系统。
 - `src/theme/tokens.ts`：从网页版 `chat-theme.css`、`auth.css` 移植的颜色，跟随系统深浅色。
-- 共用逻辑在 `packages/chat-core`（不依赖 React 和 DOM），网页版和 App 都从那里引用，不复制。聊天这块共用的有：事件跟随循环（`conversation-follow.ts`）、发送的缓存动作和错误文案（`send.ts`）、工具步骤的文案（`tool-activity.ts`）、图表的几何（`genui/chart-geometry.ts`）、界面块的解析（`genui/parse.ts`、`resolve.ts`、`choices.ts`）、页面规则（`chat-view.ts`）、转录（`transcript.ts`、`run-state.ts`）、流式文字的整批淡入（`arrival.ts`）。
+- 共用逻辑在 `packages/chat-core`（不依赖 React 和 DOM），网页版和 App 都从那里引用，不复制。聊天这块共用的有：事件跟随循环（`conversation-follow.ts`）、发送的缓存动作和错误文案（`send.ts`）、工具步骤的文案（`tool-activity.ts`）、图表的几何（`genui/chart-geometry.ts`）、界面块的解析（`genui/parse.ts`、`resolve.ts`、`choices.ts`）、页面规则（`chat-view.ts`）、转录（`transcript.ts`、`run-state.ts`）、流式文字的扫入与淡入（`arrival.ts`）。
 - 聊天页（`src/app/(app)/index.tsx` + `components/chat/ChatView.tsx`）：只有一个，地址是 `?id=`（对话）和 `?n=`（要新对话），按 `chat-view.ts` 决定重开还是保留；转录是倒置的 `FlatList`，停在底部时自然跟随，往上翻时才用 `maintainVisibleContentPosition` 稳住位置。
 - 事件流（`hooks/events.ts`）用 `expo/fetch`（RN 自带的 fetch 不能边收边读），带 Bearer 和 `Accept-Encoding: identity`；App 退到后台就断开，回到前台重连（从新快照开始）。
-- Markdown（`components/chat/Markdown.tsx`）：`marked` 的词法分析出块，每块按源文本 memo，流式时只有最后一块重画；文字和网页一样一到就显示、每批整体淡入（`ArrivalFade.tsx` 的 `FadingText`，批次和曲线是 chat-core 的 `arrival.ts`）：每个文字块用 `onTextLayout` 拿到排好的行，在本批所在的行上盖页面底色的浮层，0.6 秒内从不透明变透明；RN 只给行的位置和内容、不给单个字的位置，所以一行里本批开始或结束的地方按字数比例估算。第一次渲染之后才出现的块是新到的，整块淡入，代码块、表格这些不是文字的块用一次整体淡入（`FadeIn`）。不给每个字建元素，浮层只有最近 0.6 秒到的那几行。减少动态效果、App 在后台时不淡入。
+- Markdown（`components/chat/Markdown.tsx`）：`marked` 的词法分析出块，每块按源文本 memo，流式时只有最后一块重画；文字和网页一样一到就排版、每批在约一个批间隔内分段扫入（`ArrivalFade.tsx` 的 `FadingText`，分段和曲线是 chat-core 的 `arrival.ts`；同一条回复的各块共用扫入进度 `SharedPacing`，按顺序出现）：每个文字块用 `onTextLayout` 拿到排好的行，在每段所在的行上盖页面底色的浮层，到点前不透明，到点后 0.2 秒内变透明；RN 只给行的位置和内容、不给单个字的位置，所以一行里本批开始或结束的地方按字数比例估算。第一次渲染之后才出现的块是新到的，整块淡入，代码块、表格这些不是文字的块用一次整体淡入（`FadeIn`）。不给每个字建元素，浮层只有还没揭开和正在淡入的那几行。减少动态效果、App 在后台时不淡入。
 
 ## 本地运行
 

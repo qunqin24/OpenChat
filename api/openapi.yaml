@@ -3607,15 +3607,29 @@ components:
           description: Every message the active run has written, its input first.
           items: { $ref: "#/components/schemas/Message" }
         live: { $ref: "#/components/schemas/LiveState" }
+        step:
+          type: integer
+          description: >-
+            How many batches of the run published since its version was
+            committed `live` already holds (see BatchEvent.step). Absent is 0.
 
     BatchEvent:
       type: object
-      description: The events of one commit, in order.
+      description: >-
+        The events of one commit, in order, or of one publication of a
+        streaming response between commits.
       required: [type, runId, version, events]
       properties:
         type: { type: string, const: batch }
         runId: { type: string, format: uuid }
         version: { type: integer, format: int64 }
+        step:
+          type: integer
+          description: >-
+            0 (or absent) for a commit; for a publication between commits, how
+            many there have been since the commit of `version`. A batch whose
+            (version, step) is not later than what a client holds is already
+            in it.
         events:
           type: array
           items: { $ref: "#/components/schemas/RunEvent" }

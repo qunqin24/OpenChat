@@ -20,6 +20,7 @@
 
 ## 删除对话会取消 run
 
+- 流式回复的推送：run 每 150ms 落库一次已生成的部分（`PartialInterval`，`runs.live`，进程崩了最多丢这么多），两次落库之间每 50ms 把新增的增量推给订阅者一次（`PublishInterval`，`partialStream.publish`），不写库——每次落库都要重写整段回复，而只随落库推送时，几千字每秒的模型每批好几行，前端看起来一段一段冒出来。推送和落库在同一个 goroutine 上，不会交错；推送的批次带 `Step`（落库之后第几次推送，落库的批次是 0），同时在 `ex.mu` 下把最新状态写进内存里的 `ex.live`。订阅先于快照：快照读库里的 run，再用 `Runner.LiveOf` 取本进程内存里同一版本的 live 和 step（版本对不上说明中间又落了一次库，重读），于是快照恰好包含已推送的那些批次；之后按 (version, step) 去重（服务端 `inSnapshot`，客户端 `applyBatch`）。最后一次推送之后的增量不再单独推，随完成的消息一起到。新增发布或订阅路径照此：别让未落库的推送绕过 `ex.mu`，别只按 version 去重。测试 `TestRunPublishesBetweenCommits`。
 - 删除对话会取消它正在跑的 run：`DELETE /conversations/{id}` 和 `DELETE /me/conversations` 在**一个事务里**先 `LockConversation`（全部删除用 `LockUserConversations` 锁住调用者所有未删除的对话），再 `SoftDeleteConversation`/`SoftDeleteAllConversations`，再用 `CancelConversationRuns` 把这些对话里 `running` 的 run 记上 `cancel_requested`，提交后对每个 id 调 `runner.Cancel`（和停止接口同一套）。不这样做的话 run 会继续调模型、占着账号的并发 run 名额，而停止接口因为对话已删除是 404，没人能停它。另一半是互斥：发送、重新生成、改写、回答 `ask_user`（以及撤销压缩）在锁下一律用 `lockLive` 而不是直接 `LockConversation`，拿到锁后发现对话已被删除就返回 404、什么都不写——所以「已删除的对话里有 run 在跑」不会出现：要么 run 先建，被删除取消；要么删除先到，发送被拒。新增任何会在对话里起 run 的路径都要用 `lockLive`；任何新的软删除路径都要取消 run。测试在 `conversation_delete_runs_pg_test.go`。
 
 ## 上下文压缩与摘要

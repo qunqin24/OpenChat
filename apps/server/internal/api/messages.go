@@ -596,8 +596,8 @@ func (s *Server) StreamConversationEvents(w http.ResponseWriter, r *http.Request
 				continue
 			}
 			for _, batch := range batches {
-				if snapshot.Run != nil && batch.RunID == snapshot.Run.Id && batch.Version <= snapshot.Run.Version {
-					continue // already in the snapshot
+				if snapshot.Run != nil && batch.RunID == snapshot.Run.Id && inSnapshot(batch, snapshot) {
+					continue
 				}
 				if err := sendBatch(sse, batch); err != nil {
 					return
@@ -607,20 +607,61 @@ func (s *Server) StreamConversationEvents(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// inSnapshot reports whether a batch of the snapshot's run is already in it:
+// its commit is no later than the snapshot's, and it is not a publication the
+// snapshot's live state was taken before.
+func inSnapshot(batch agent.Batch, snapshot SnapshotEvent) bool {
+	step := 0
+	if snapshot.Step != nil {
+		step = *snapshot.Step
+	}
+	return batch.Version < snapshot.Run.Version || batch.Version == snapshot.Run.Version && batch.Step <= step
+}
+
+// snapshotTries is how many times a snapshot is read again when a commit lands
+// between reading the run and reading its live state from the runner.
+const snapshotTries = 5
+
 func (s *Server) snapshot(ctx context.Context, conversationID uuid.UUID) (SnapshotEvent, error) {
 	snapshot := SnapshotEvent{Type: Snapshot, Messages: []Message{}}
-	run, err := s.q.GetActiveRun(ctx, conversationID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return snapshot, nil
-	}
-	if err != nil {
-		return snapshot, err
+	var (
+		run  sqlc.Run
+		raw  []byte
+		step int
+	)
+	// The database has the run as of its last commit; a run executing here has
+	// published more since, which only the runner holds (agent.Runner.LiveOf).
+	// The two are taken together only when they are of the same commit.
+	for try := 0; ; try++ {
+		var err error
+		run, err = s.q.GetActiveRun(ctx, conversationID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return snapshot, nil
+		}
+		if err != nil {
+			return snapshot, err
+		}
+		raw, step = run.Live, 0
+		version, published, held, ok := s.runner.LiveOf(run.ID)
+		if !ok || version < run.Version {
+			break
+		}
+		if version == run.Version {
+			raw, step = held, published
+			break
+		}
+		if try == snapshotTries {
+			// The database's copy: it may lack a few deltas published just
+			// before the commit that keeps landing, until the run's finished
+			// message replaces them.
+			break
+		}
 	}
 	rows, err := s.q.ListRunMessages(ctx, sqlc.ListRunMessagesParams{RunID: &run.ID, InputMessageID: run.InputMessageID})
 	if err != nil {
 		return snapshot, err
 	}
-	live, err := agent.DecodeLive(run.Live)
+	live, err := agent.DecodeLive(raw)
 	if err != nil {
 		return snapshot, err
 	}
@@ -628,6 +669,9 @@ func (s *Server) snapshot(ctx context.Context, conversationID uuid.UUID) (Snapsh
 	state := toLiveState(live)
 	snapshot.Run = &mapped
 	snapshot.Live = &state
+	if step > 0 {
+		snapshot.Step = &step
+	}
 	attached, err := s.attachmentsFor(ctx, rows)
 	if err != nil {
 		return snapshot, err
