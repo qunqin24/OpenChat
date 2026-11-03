@@ -1525,7 +1525,7 @@ func (s *Server) SubagentNote(ctx context.Context) (string, error) {
 // the conversation's sub-agents.
 func (s *Server) TurnNote(ctx context.Context) (string, error) {
 	var notes []string
-	for _, note := range []agent.TurnNote{s.DocumentNote, s.SubagentNote} {
+	for _, note := range []agent.TurnNote{s.DocumentNote, s.SubagentNote, s.PluginNote} {
 		text, err := note(ctx)
 		if err != nil {
 			return strings.Join(notes, "\n\n"), err

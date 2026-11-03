@@ -25,6 +25,8 @@ export interface LiveRun {
   partial: MessagePart[] | null
   retry: RetryInfo | null
   tools: Record<string, ToolSlot['status']>
+  /** What each running call last reported (`ToolSlot.progress`), by call id. */
+  progress: Record<string, unknown>
   /** The run is compressing the conversation's context before its next request. */
   compacting: boolean
   /**
@@ -58,7 +60,11 @@ export function fromSnapshot(snapshot: SnapshotEvent): ConversationLive {
   if (!snapshot.run) return idle
   const generation = snapshot.live?.generation
   const tools: LiveRun['tools'] = {}
-  for (const slot of snapshot.live?.tools ?? []) tools[slot.callId] = slot.status
+  const progress: LiveRun['progress'] = {}
+  for (const slot of snapshot.live?.tools ?? []) {
+    tools[slot.callId] = slot.status
+    if (slot.progress !== undefined) progress[slot.callId] = slot.progress
+  }
   return {
     run: {
       run: snapshot.run,
@@ -66,6 +72,7 @@ export function fromSnapshot(snapshot: SnapshotEvent): ConversationLive {
       partial: generation && generation.parts.length > 0 ? generation.parts : null,
       retry: generation?.retry ?? null,
       tools,
+      progress,
       compacting: snapshot.live?.compacting ?? false,
       fresh: [],
       freshFrom: generation?.parts.length ?? 0,
@@ -109,7 +116,7 @@ function applyEvent(live: LiveRun | null, event: RunEvent): LiveRun | null {
     const held = live?.run.id === event.run.id ? live.messages.find((m) => m.id === event.message.id) : undefined
     const message =
       held && held.attachments?.length ? { ...event.message, attachments: held.attachments } : event.message
-    return { run: event.run, messages: [message], partial: null, retry: null, tools: {}, compacting: false, fresh: [], freshFrom: 0, step: 0 }
+    return { run: event.run, messages: [message], partial: null, retry: null, tools: {}, progress: {}, compacting: false, fresh: [], freshFrom: 0, step: 0 }
   }
   // Anything else belongs to a run we are holding; a stray event for one we
   // never saw start is ignored, and the next snapshot sets things straight.
@@ -141,6 +148,8 @@ function applyEvent(live: LiveRun | null, event: RunEvent): LiveRun | null {
       return { ...live, tools: { ...live.tools, [event.callId]: 'running' } }
     case 'tool_finished':
       return { ...live, tools: { ...live.tools, [event.callId]: 'done' } }
+    case 'tool_progress':
+      return { ...live, progress: { ...live.progress, [event.callId]: event.progress } }
     case 'retry_scheduled':
       return { ...live, partial: null, retry: { at: event.at, errorCode: event.errorCode }, freshFrom: 0 }
     case 'compaction_started':

@@ -64,6 +64,14 @@ type ToolStarted struct {
 	Arguments json.RawMessage
 }
 
+// ToolProgress: a running call said how far it got (ReportProgress) - a
+// script's calls so far, a call waiting for the person to allow it. Progress
+// is for the page only; it never reaches a model.
+type ToolProgress struct {
+	CallID   string
+	Progress json.RawMessage
+}
+
 // ToolFinished: a call's result row was written.
 type ToolFinished struct {
 	CallID  string
@@ -136,6 +144,7 @@ func (PartEnded) isEvent()          {}
 func (MessageAppended) isEvent()    {}
 func (ToolStarted) isEvent()        {}
 func (ToolFinished) isEvent()       {}
+func (ToolProgress) isEvent()       {}
 func (RetryScheduled) isEvent()     {}
 func (TitleChanged) isEvent()       {}
 func (TranscriptChanged) isEvent()  {}

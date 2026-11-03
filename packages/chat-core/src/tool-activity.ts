@@ -1,6 +1,7 @@
 import type { ToolCallPart, ToolResultPart } from '@openchat/api-client'
 import type { TFunction } from 'i18next'
 
+import { isPluginTool, pluginProgressOf, pluginStepLabel } from './plugin-code'
 import { isHttpUrl, siteName } from './urls'
 
 // A reply's process as its line tells it (the web's ToolActivity.tsx, the
@@ -13,6 +14,8 @@ export interface ToolActivityStep {
   call: ToolCallPart
   result?: ToolResultPart
   status: ToolStatus
+  /** What the running call last reported (`ToolSlot.progress`): a plugin script's calls so far. */
+  progress?: unknown
 }
 
 /** What the model thought, or said on its way, in the process. */
@@ -98,6 +101,10 @@ export function stepLabel(t: T, step: ToolActivityStep, running: boolean): strin
   if (step.call.name === 'scheduled_tasks') return running ? t('tasks.step-running') : t('tasks.step')
   if (step.call.name === 'document') return documentStepLabel(t, step, args, running)
   if (step.call.name.startsWith('subagent')) return subagentStepLabel(t, step, args, running)
+  if (isPluginTool(step.call.name)) {
+    const progress = pluginProgressOf(step.result?.details, step.progress)
+    return pluginStepLabel(t, step.call.name, progress, running || !step.result, isFailure(step.status))
+  }
   return t('chat.tool.generic', { name: step.call.name })
 }
 

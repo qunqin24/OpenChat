@@ -156,6 +156,7 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 			r.Post("/conversations/{conversationId}/regenerate", wrapper.RegenerateAnswer)
 			r.Post("/conversations/{conversationId}/tool-calls/{callId}/answer", wrapper.AnswerQuestion)
 			r.Post("/conversations/{conversationId}/research-plans/{callId}", wrapper.AnswerResearchPlan)
+			r.Post("/conversations/{conversationId}/plugin-confirmations/{confirmationId}", wrapper.AnswerPluginConfirmation)
 			r.Post("/conversations/{conversationId}/runs/{runId}/cancel", wrapper.CancelRun)
 			// A conversation's sub-agents: read, stopped, resumed, moved to the
 			// background - never written to (subagents_http.go).

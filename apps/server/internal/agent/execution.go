@@ -932,8 +932,16 @@ func (ex *execution) runCall(ctx context.Context, slot ToolSlot, tool Tool) erro
 		return err
 	}
 
+	report := func(progress json.RawMessage) error {
+		return ex.commit(func(context.Context, *sqlc.Queries) ([]Event, *finish, error) {
+			ex.setSlot(slot.CallID, func(s *ToolSlot) { s.Progress = progress })
+			return []Event{ToolProgress{CallID: slot.CallID, Progress: progress}}, nil, nil
+		})
+	}
+	callCtx := context.WithValue(withCall(ctx, slot.CallID), progressKey{}, report)
+
 	started := time.Now()
-	out, execErr := executeTool(withCall(ctx, slot.CallID), tool, slot.Arguments)
+	out, execErr := executeTool(callCtx, tool, slot.Arguments)
 	elapsed := time.Since(started).Milliseconds()
 
 	if errors.Is(context.Cause(ctx), errShutdown) {

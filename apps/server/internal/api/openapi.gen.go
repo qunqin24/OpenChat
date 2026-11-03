@@ -111,6 +111,27 @@ func (e AdminPluginInputAuthType) Valid() bool {
 	}
 }
 
+// Defines values for AnswerPluginConfirmationRequestDecision.
+const (
+	AnswerPluginConfirmationRequestDecisionAllow  AnswerPluginConfirmationRequestDecision = "allow"
+	AnswerPluginConfirmationRequestDecisionAlways AnswerPluginConfirmationRequestDecision = "always"
+	AnswerPluginConfirmationRequestDecisionDeny   AnswerPluginConfirmationRequestDecision = "deny"
+)
+
+// Valid indicates whether the value is a known member of the AnswerPluginConfirmationRequestDecision enum.
+func (e AnswerPluginConfirmationRequestDecision) Valid() bool {
+	switch e {
+	case AnswerPluginConfirmationRequestDecisionAllow:
+		return true
+	case AnswerPluginConfirmationRequestDecisionAlways:
+		return true
+	case AnswerPluginConfirmationRequestDecisionDeny:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AnswerResearchPlanRequestDecision.
 const (
 	Cancel AnswerResearchPlanRequestDecision = "cancel"
@@ -1059,6 +1080,33 @@ func (e PluginAuthType) Valid() bool {
 	}
 }
 
+// Defines values for PluginCallProgressStatus.
+const (
+	PluginCallProgressStatusDenied  PluginCallProgressStatus = "denied"
+	PluginCallProgressStatusDone    PluginCallProgressStatus = "done"
+	PluginCallProgressStatusFailed  PluginCallProgressStatus = "failed"
+	PluginCallProgressStatusRunning PluginCallProgressStatus = "running"
+	PluginCallProgressStatusWaiting PluginCallProgressStatus = "waiting"
+)
+
+// Valid indicates whether the value is a known member of the PluginCallProgressStatus enum.
+func (e PluginCallProgressStatus) Valid() bool {
+	switch e {
+	case PluginCallProgressStatusDenied:
+		return true
+	case PluginCallProgressStatusDone:
+		return true
+	case PluginCallProgressStatusFailed:
+		return true
+	case PluginCallProgressStatusRunning:
+		return true
+	case PluginCallProgressStatusWaiting:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PluginToolPermission.
 const (
 	PluginToolPermissionAllow   PluginToolPermission = "allow"
@@ -1461,6 +1509,21 @@ const (
 func (e ToolFinishedEventType) Valid() bool {
 	switch e {
 	case ToolFinished:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ToolProgressEventType.
+const (
+	ToolProgress ToolProgressEventType = "tool_progress"
+)
+
+// Valid indicates whether the value is a known member of the ToolProgressEventType enum.
+func (e ToolProgressEventType) Valid() bool {
+	switch e {
+	case ToolProgress:
 		return true
 	default:
 		return false
@@ -1982,6 +2045,7 @@ type AdminPlugin struct {
 	Builtin     bool   `json:"builtin"`
 	Category    string `json:"category"`
 	Description string `json:"description"`
+	DirectTools bool   `json:"directTools"`
 	Enabled     bool   `json:"enabled"`
 	Featured    bool   `json:"featured"`
 	HeaderName  string `json:"headerName"`
@@ -2030,9 +2094,12 @@ type AdminPluginInput struct {
 	AuthType    *AdminPluginInputAuthType `json:"authType,omitempty"`
 	Category    *string                   `json:"category,omitempty"`
 	Description *string                   `json:"description,omitempty"`
-	Enabled     *bool                     `json:"enabled,omitempty"`
-	Featured    *bool                     `json:"featured,omitempty"`
-	HeaderName  *string                   `json:"headerName,omitempty"`
+
+	// DirectTools Offer its tools to the model one by one instead of through plugin_code scripts.
+	DirectTools *bool   `json:"directTools,omitempty"`
+	Enabled     *bool   `json:"enabled,omitempty"`
+	Featured    *bool   `json:"featured,omitempty"`
+	HeaderName  *string `json:"headerName,omitempty"`
 
 	// HeaderValue Write-only, stored sealed. Absent keeps the stored one; empty removes it.
 	HeaderValue *string `json:"headerValue,omitempty"`
@@ -2085,6 +2152,14 @@ type AndroidApp struct {
 	// PackageName The app's package name, such as org.qunqin.openchat.
 	PackageName string `json:"packageName"`
 }
+
+// AnswerPluginConfirmationRequest defines model for AnswerPluginConfirmationRequest.
+type AnswerPluginConfirmationRequest struct {
+	Decision AnswerPluginConfirmationRequestDecision `json:"decision"`
+}
+
+// AnswerPluginConfirmationRequestDecision defines model for AnswerPluginConfirmationRequest.Decision.
+type AnswerPluginConfirmationRequestDecision string
 
 // AnswerQuestionRequest defines model for AnswerQuestionRequest.
 type AnswerQuestionRequest struct {
@@ -3899,6 +3974,48 @@ type Plugin struct {
 // set up for everyone (`header`), or each person's own (`oauth`).
 type PluginAuthType string
 
+// PluginBadge defines model for PluginBadge.
+type PluginBadge struct {
+	IconColor string `json:"iconColor"`
+	IconPath  string `json:"iconPath"`
+	IconText  string `json:"iconText"`
+	Name      string `json:"name"`
+	Slug      string `json:"slug"`
+}
+
+// PluginCallProgress defines model for PluginCallProgress.
+type PluginCallProgress struct {
+	// Arguments While `waiting`, what the call would send, for the person to judge.
+	Arguments *map[string]interface{} `json:"arguments,omitempty"`
+
+	// ConfirmationId While `waiting`, what answerPluginConfirmation takes.
+	ConfirmationId *openapi_types.UUID `json:"confirmationId,omitempty"`
+	Error          *string             `json:"error,omitempty"`
+
+	// Plugin The plugin's short name.
+	Plugin string                   `json:"plugin"`
+	Seq    int                      `json:"seq"`
+	Status PluginCallProgressStatus `json:"status"`
+	Tool   string                   `json:"tool"`
+}
+
+// PluginCallProgressStatus defines model for PluginCallProgress.Status.
+type PluginCallProgressStatus string
+
+// PluginCodeProgress The calls a plugin script (or a directly listed plugin tool) made so far, as `ToolSlot.progress` and, once finished, the tool result's `details` (with `code`).
+type PluginCodeProgress struct {
+	Calls []PluginCallProgress `json:"calls"`
+
+	// Code The script
+	Code *string `json:"code,omitempty"`
+
+	// Error Why the script failed
+	Error *string `json:"error,omitempty"`
+
+	// Plugins The plugins the calls went to, for their names and icons.
+	Plugins []PluginBadge `json:"plugins"`
+}
+
 // PluginList defines model for PluginList.
 type PluginList struct {
 	Items []Plugin `json:"items"`
@@ -4632,6 +4749,16 @@ type ToolFinishedEvent struct {
 // ToolFinishedEventType defines model for ToolFinishedEvent.Type.
 type ToolFinishedEventType string
 
+// ToolProgressEvent A running call reported how far it got; replaces what it reported before.
+type ToolProgressEvent struct {
+	CallId   string                `json:"callId"`
+	Progress interface{}           `json:"progress"`
+	Type     ToolProgressEventType `json:"type"`
+}
+
+// ToolProgressEventType defines model for ToolProgressEvent.Type.
+type ToolProgressEventType string
+
 // ToolResultPart defines model for ToolResultPart.
 type ToolResultPart struct {
 	CallId string `json:"callId"`
@@ -4658,6 +4785,9 @@ type ToolSlot struct {
 	CallId    string              `json:"callId"`
 	MessageId *openapi_types.UUID `json:"messageId,omitempty"`
 	Name      string              `json:"name"`
+
+	// Progress What the running call last reported, for the page (`PluginCodeProgress` for `plugin_code` and directly listed plugin tools).
+	Progress interface{} `json:"progress,omitempty"`
 
 	// Status `awaiting` is a question for the user: nothing runs, and the run ends on it.
 	Status ToolSlotStatus `json:"status"`
@@ -5730,6 +5860,9 @@ type CreateMessageJSONRequestBody = CreateMessageRequest
 // EditMessageJSONRequestBody defines body for EditMessage for application/json ContentType.
 type EditMessageJSONRequestBody = EditMessageRequest
 
+// AnswerPluginConfirmationJSONRequestBody defines body for AnswerPluginConfirmation for application/json ContentType.
+type AnswerPluginConfirmationJSONRequestBody = AnswerPluginConfirmationRequest
+
 // RegenerateAnswerJSONRequestBody defines body for RegenerateAnswer for application/json ContentType.
 type RegenerateAnswerJSONRequestBody = RegenerateRequest
 
@@ -6349,6 +6482,40 @@ func (t *RunEvent) MergeToolFinishedEvent(v ToolFinishedEvent) error {
 	return err
 }
 
+// AsToolProgressEvent returns the union data inside the RunEvent as a ToolProgressEvent
+func (t RunEvent) AsToolProgressEvent() (ToolProgressEvent, error) {
+	var body ToolProgressEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromToolProgressEvent overwrites any union data inside the RunEvent as the provided ToolProgressEvent
+func (t *RunEvent) FromToolProgressEvent(v ToolProgressEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"tool_progress"}`))
+	t.union = b
+	return err
+}
+
+// MergeToolProgressEvent performs a merge with any union data inside the RunEvent, using the provided ToolProgressEvent
+func (t *RunEvent) MergeToolProgressEvent(v ToolProgressEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"tool_progress"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 // AsRetryScheduledEvent returns the union data inside the RunEvent as a RetryScheduledEvent
 func (t RunEvent) AsRetryScheduledEvent() (RetryScheduledEvent, error) {
 	var body RetryScheduledEvent
@@ -6665,6 +6832,8 @@ func (t RunEvent) ValueByDiscriminator() (interface{}, error) {
 		return t.AsTitleChangedEvent()
 	case "tool_finished":
 		return t.AsToolFinishedEvent()
+	case "tool_progress":
+		return t.AsToolProgressEvent()
 	case "tool_started":
 		return t.AsToolStartedEvent()
 	case "transcript_changed":
@@ -6980,6 +7149,9 @@ type ServerInterface interface {
 	// EditMessage Ask a question again, reworded
 	// (POST /conversations/{conversationId}/messages/{messageId}/edit)
 	EditMessage(w http.ResponseWriter, r *http.Request, conversationId ConversationId, messageId openapi_types.UUID)
+	// AnswerPluginConfirmation Allow or refuse a plugin tool call that waits for the caller
+	// (POST /conversations/{conversationId}/plugin-confirmations/{confirmationId})
+	AnswerPluginConfirmation(w http.ResponseWriter, r *http.Request, conversationId ConversationId, confirmationId openapi_types.UUID)
 	// RegenerateAnswer Answer the last message again
 	// (POST /conversations/{conversationId}/regenerate)
 	RegenerateAnswer(w http.ResponseWriter, r *http.Request, conversationId ConversationId)
@@ -7748,6 +7920,12 @@ func (_ Unimplemented) CreateMessage(w http.ResponseWriter, r *http.Request, con
 // EditMessage Ask a question again, reworded
 // (POST /conversations/{conversationId}/messages/{messageId}/edit)
 func (_ Unimplemented) EditMessage(w http.ResponseWriter, r *http.Request, conversationId ConversationId, messageId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AnswerPluginConfirmation Allow or refuse a plugin tool call that waits for the caller
+// (POST /conversations/{conversationId}/plugin-confirmations/{confirmationId})
+func (_ Unimplemented) AnswerPluginConfirmation(w http.ResponseWriter, r *http.Request, conversationId ConversationId, confirmationId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -10556,6 +10734,41 @@ func (siw *ServerInterfaceWrapper) EditMessage(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// AnswerPluginConfirmation operation middleware
+func (siw *ServerInterfaceWrapper) AnswerPluginConfirmation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ConversationId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", chi.URLParam(r, "conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "confirmationId" -------------
+	var confirmationId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "confirmationId", chi.URLParam(r, "confirmationId"), &confirmationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "confirmationId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AnswerPluginConfirmation(w, r, conversationId, confirmationId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RegenerateAnswer operation middleware
 func (siw *ServerInterfaceWrapper) RegenerateAnswer(w http.ResponseWriter, r *http.Request) {
 
@@ -12478,6 +12691,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/conversations/{conversationId}/tool-calls/{callId}/answer", wrapper.AnswerQuestion)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/conversations/{conversationId}/plugin-confirmations/{confirmationId}", wrapper.AnswerPluginConfirmation)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/conversations/{conversationId}/research-plans/{callId}", wrapper.AnswerResearchPlan)

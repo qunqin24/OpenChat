@@ -160,12 +160,16 @@ func toLiveState(live agent.Live) LiveState {
 	if len(live.Tools) > 0 {
 		slots := make([]ToolSlot, 0, len(live.Tools))
 		for _, slot := range live.Tools {
-			slots = append(slots, ToolSlot{
+			out := ToolSlot{
 				CallId:    slot.CallID,
 				Name:      slot.Name,
 				Status:    ToolSlotStatus(slot.Status),
 				MessageId: slot.Message,
-			})
+			}
+			if len(slot.Progress) > 0 {
+				out.Progress = json.RawMessage(slot.Progress)
+			}
+			slots = append(slots, out)
 		}
 		out.Tools = &slots
 	}
@@ -208,6 +212,8 @@ func toRunEvent(event agent.Event) (RunEvent, bool) {
 		err = out.FromToolStartedEvent(ToolStartedEvent{Type: ToolStarted, CallId: e.CallID, Name: e.Name})
 	case agent.ToolFinished:
 		err = out.FromToolFinishedEvent(ToolFinishedEvent{Type: ToolFinished, CallId: e.CallID, MessageId: e.Message})
+	case agent.ToolProgress:
+		err = out.FromToolProgressEvent(ToolProgressEvent{Type: ToolProgress, CallId: e.CallID, Progress: json.RawMessage(e.Progress)})
 	case agent.RetryScheduled:
 		err = out.FromRetryScheduledEvent(RetryScheduledEvent{Type: RetryScheduled, Attempt: e.Attempt, At: e.At, ErrorCode: e.ErrorCode})
 	case agent.TitleChanged:

@@ -56,8 +56,8 @@ WHERE id = $1;
 
 -- name: CreatePlugin :one
 INSERT INTO plugins (slug, name, description, about, category, icon_text, icon_color, featured, enabled, audience,
-                     mcp_url, auth_type, header_name, header_secret, sort, icon_slug, icon_path)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+                     mcp_url, auth_type, header_name, header_secret, sort, icon_slug, icon_path, direct_tools)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 RETURNING *;
 
 -- name: UpdatePlugin :one
@@ -80,6 +80,7 @@ SET slug          = $2,
     sort          = $15,
     icon_slug     = $16,
     icon_path     = $17,
+    direct_tools  = $18,
     updated_at    = now()
 WHERE id = $1
 RETURNING *;
@@ -211,3 +212,127 @@ UPDATE plugins
 SET oauth_scopes = $2
 WHERE builtin = $1
   AND oauth_scopes = '';
+
+-- Calling plugin tools from conversations (api/plugin_code.go).
+
+-- name: ListUsablePluginTools :many
+-- The tools a person's runs may call: of the plugins they installed that are
+-- on and theirs to see, connected when they act as the person, not blocked.
+SELECT p.id          AS plugin_id,
+       p.slug,
+       p.name        AS plugin_name,
+       p.description AS plugin_description,
+       p.direct_tools,
+       p.icon_text,
+       p.icon_color,
+       p.icon_path,
+       t.name,
+       t.title,
+       t.description,
+       t.input_schema,
+       t.read_only,
+       t.permission
+FROM plugin_installs i
+         JOIN plugins p ON p.id = i.plugin_id
+         JOIN plugin_tools t ON t.plugin_id = p.id
+         JOIN users u ON u.id = i.user_id
+WHERE i.user_id = $1
+  AND p.enabled
+  AND (p.audience = 'all' OR u.role = 'admin')
+  AND coalesce(p.mcp_url, '') <> ''
+  AND (p.auth_type <> 'oauth' OR (i.access_token IS NOT NULL AND NOT i.needs_reconnect))
+  AND t.permission <> 'blocked'
+ORDER BY p.slug, t.name;
+
+-- name: GetUsablePluginTool :one
+-- One tool as ListUsablePluginTools has it, read again at each call so a
+-- change made meanwhile counts; no row when it may not be called now.
+SELECT p.id          AS plugin_id,
+       p.slug,
+       p.name        AS plugin_name,
+       p.description AS plugin_description,
+       p.direct_tools,
+       p.icon_text,
+       p.icon_color,
+       p.icon_path,
+       t.name,
+       t.title,
+       t.description,
+       t.input_schema,
+       t.read_only,
+       t.permission
+FROM plugin_installs i
+         JOIN plugins p ON p.id = i.plugin_id
+         JOIN plugin_tools t ON t.plugin_id = p.id
+         JOIN users u ON u.id = i.user_id
+WHERE i.user_id = sqlc.arg('user_id')
+  AND p.id = sqlc.arg('plugin_id')
+  AND t.name = sqlc.arg('tool')
+  AND p.enabled
+  AND (p.audience = 'all' OR u.role = 'admin')
+  AND coalesce(p.mcp_url, '') <> ''
+  AND (p.auth_type <> 'oauth' OR (i.access_token IS NOT NULL AND NOT i.needs_reconnect))
+  AND t.permission <> 'blocked';
+
+-- name: GetConversationPluginCatalog :one
+SELECT plugin_catalog
+FROM conversations
+WHERE id = $1;
+
+-- name: SetConversationPluginCatalog :one
+-- The catalogue a conversation lists from now on, unless another request took
+-- it first: then no row, and that one stands.
+UPDATE conversations
+SET plugin_catalog = $2
+WHERE id = $1
+  AND plugin_catalog IS NULL
+RETURNING plugin_catalog;
+
+-- name: CreatePluginConfirmation :one
+INSERT INTO plugin_confirmations (run_id, conversation_id, user_id, call_id, seq, plugin_id, tool, arguments)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING *;
+
+-- name: AnswerPluginConfirmation :one
+-- The person's answer to a call still waiting in their conversation.
+UPDATE plugin_confirmations
+SET status      = sqlc.arg('status'),
+    answered_at = now()
+WHERE id = sqlc.arg('id')
+  AND conversation_id = sqlc.arg('conversation_id')
+  AND user_id = sqlc.arg('user_id')
+  AND status = 'pending'
+RETURNING *;
+
+-- name: ExpirePluginConfirmation :exec
+UPDATE plugin_confirmations
+SET status      = 'expired',
+    answered_at = now()
+WHERE id = $1
+  AND status = 'pending';
+
+-- name: ExpireStalePluginConfirmations :execrows
+-- Calls left waiting by a run that is over: a process that died with them.
+UPDATE plugin_confirmations c
+SET status      = 'expired',
+    answered_at = now()
+FROM runs r
+WHERE r.id = c.run_id
+  AND c.status = 'pending'
+  AND r.status <> 'running';
+
+-- name: GrantPluginTool :exec
+INSERT INTO plugin_tool_grants (conversation_id, plugin_id, tool)
+VALUES ($1, $2, $3)
+ON CONFLICT DO NOTHING;
+
+-- name: PluginToolGranted :one
+SELECT EXISTS (SELECT 1
+               FROM plugin_tool_grants
+               WHERE conversation_id = $1
+                 AND plugin_id = $2
+                 AND tool = $3)::boolean;
+
+-- name: RecordPluginCall :exec
+INSERT INTO plugin_calls (user_id, conversation_id, plugin_id, plugin_slug, tool, ok, outcome, confirmed, duration_ms)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);

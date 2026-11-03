@@ -1752,7 +1752,9 @@
       "oauth-client-secret": "Client Secret",
       "oauth-scopes": "权限范围（scope）",
       "oauth-scopes-hint": "用户授权时申请的权限，用空格分隔。用户会在服务的授权页看到并确认。",
-      "tools-connect-first": "先用你自己的账号在插件页连接这个插件，再拉取工具。"
+      "tools-connect-first": "先用你自己的账号在插件页连接这个插件，再拉取工具。",
+      "direct-tools": "直接列出工具",
+      "direct-tools-hint": "默认模型通过写脚本调用插件的工具（CodeMode）。打开后，这个插件的工具逐个直接交给模型，每次调用一个，最多 40 个。适合本身就是 CodeMode 的服务，或写不好脚本的模型。"
     }
   },
   "settings": {
@@ -2033,7 +2035,37 @@
     "oauth-unconfigured": "管理员还没有为这个插件配置授权应用，暂时装不上。",
     "unreachable": "连不上 {{name}} 的服务，请稍后重试。",
     "needs-reconnect": "你的 {{name}} 账号连接已失效，重新连接后才能用。",
-    "reconnect": "重新连接"
+    "reconnect": "重新连接",
+    "step": {
+      "joiner": "、",
+      "preparing": "正在使用插件",
+      "calling": "正在调用 {{plugin}} · {{tool}}",
+      "waiting": "等你允许 {{plugin}} · {{tool}}",
+      "done_one": "用了 {{plugins}}，调用 {{count}} 次",
+      "done_other": "用了 {{plugins}}，调用 {{count}} 次",
+      "no-calls": "运行了插件脚本",
+      "failed": "{{plugins}} 的调用没有完成",
+      "failed-generic": "插件脚本没有运行成功",
+      "call-done": "完成",
+      "call-failed": "失败",
+      "call-denied": "未允许",
+      "call-running": "进行中",
+      "call-waiting": "等待允许",
+      "code": "脚本"
+    },
+    "confirm": {
+      "title": "{{plugin}} 想要执行 {{tool}}",
+      "hint": "这个操作可能会改动你在 {{plugin}} 里的内容，允许后才会执行。",
+      "no-arguments": "没有参数",
+      "more": "展开",
+      "less": "收起",
+      "deny": "拒绝",
+      "always": "本对话都允许",
+      "allow": "允许",
+      "label": "插件操作确认",
+      "gone": "这次运行已经结束了，请重新提问。",
+      "failed": "没能提交，请再试一次。"
+    }
   },
   "tasks": {
     "title": "定时任务",

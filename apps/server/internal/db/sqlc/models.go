@@ -460,6 +460,7 @@ type Conversation struct {
 	StoppedByUser   bool               `json:"stopped_by_user"`
 	PinnedAt        pgtype.Timestamptz `json:"pinned_at"`
 	Skills          []string           `json:"skills"`
+	PluginCatalog   []byte             `json:"plugin_catalog"`
 }
 
 type Document struct {
@@ -609,6 +610,36 @@ type Plugin struct {
 	OauthClientSecret []byte             `json:"oauth_client_secret"`
 	OauthScopes       string             `json:"oauth_scopes"`
 	OauthRegistered   bool               `json:"oauth_registered"`
+	DirectTools       bool               `json:"direct_tools"`
+}
+
+type PluginCall struct {
+	ID             int64              `json:"id"`
+	UserID         *uuid.UUID         `json:"user_id"`
+	ConversationID *uuid.UUID         `json:"conversation_id"`
+	PluginID       *uuid.UUID         `json:"plugin_id"`
+	PluginSlug     string             `json:"plugin_slug"`
+	Tool           string             `json:"tool"`
+	Ok             bool               `json:"ok"`
+	Outcome        string             `json:"outcome"`
+	Confirmed      bool               `json:"confirmed"`
+	DurationMs     int32              `json:"duration_ms"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type PluginConfirmation struct {
+	ID             uuid.UUID          `json:"id"`
+	RunID          uuid.UUID          `json:"run_id"`
+	ConversationID uuid.UUID          `json:"conversation_id"`
+	UserID         uuid.UUID          `json:"user_id"`
+	CallID         string             `json:"call_id"`
+	Seq            int32              `json:"seq"`
+	PluginID       uuid.UUID          `json:"plugin_id"`
+	Tool           string             `json:"tool"`
+	Arguments      []byte             `json:"arguments"`
+	Status         string             `json:"status"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	AnsweredAt     pgtype.Timestamptz `json:"answered_at"`
 }
 
 type PluginInstall struct {
@@ -639,6 +670,13 @@ type PluginTool struct {
 	Title       string    `json:"title"`
 	InputSchema []byte    `json:"input_schema"`
 	Destructive bool      `json:"destructive"`
+}
+
+type PluginToolGrant struct {
+	ConversationID uuid.UUID          `json:"conversation_id"`
+	PluginID       uuid.UUID          `json:"plugin_id"`
+	Tool           string             `json:"tool"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 type RequestTrace struct {

@@ -1752,7 +1752,9 @@
       "oauth-client-secret": "Client Secret",
       "oauth-scopes": "Scopes",
       "oauth-scopes-hint": "What people are asked to grant, space-separated. They see and approve it on the service's sign-in page.",
-      "tools-connect-first": "Connect your own account to this plugin on the plugins page first, then list the tools."
+      "tools-connect-first": "Connect your own account to this plugin on the plugins page first, then list the tools.",
+      "direct-tools": "List tools directly",
+      "direct-tools-hint": "By default the model calls a plugin's tools by writing a script (CodeMode). On, this plugin's tools are offered to the model one by one, one call at a time, at most 40. For services that are a code mode themselves, or models that write scripts badly."
     }
   },
   "settings": {
@@ -2033,7 +2035,37 @@
     "oauth-unconfigured": "An administrator has not set up this plugin's OAuth app yet, so it cannot be installed.",
     "unreachable": "Could not reach {{name}}; try again later.",
     "needs-reconnect": "Your {{name}} connection stopped working; connect again to use it.",
-    "reconnect": "Reconnect"
+    "reconnect": "Reconnect",
+    "step": {
+      "joiner": ", ",
+      "preparing": "Using plugins",
+      "calling": "Calling {{plugin}} · {{tool}}",
+      "waiting": "Waiting for you to allow {{plugin}} · {{tool}}",
+      "done_one": "Used {{plugins}}, {{count}} call",
+      "done_other": "Used {{plugins}}, {{count}} calls",
+      "no-calls": "Ran a plugin script",
+      "failed": "Calls to {{plugins}} did not finish",
+      "failed-generic": "The plugin script did not run",
+      "call-done": "Done",
+      "call-failed": "Failed",
+      "call-denied": "Not allowed",
+      "call-running": "Running",
+      "call-waiting": "Waiting",
+      "code": "Script"
+    },
+    "confirm": {
+      "title": "{{plugin}} wants to run {{tool}}",
+      "hint": "This may change your things in {{plugin}}. It runs only if you allow it.",
+      "no-arguments": "No arguments",
+      "more": "Show all",
+      "less": "Show less",
+      "deny": "Deny",
+      "always": "Allow in this chat",
+      "allow": "Allow",
+      "label": "Plugin action confirmation",
+      "gone": "This run has ended. Please ask again.",
+      "failed": "Could not send your answer. Try again."
+    }
   },
   "tasks": {
     "title": "Scheduled tasks",

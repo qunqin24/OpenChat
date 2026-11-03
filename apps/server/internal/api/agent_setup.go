@@ -138,6 +138,9 @@ func NewSystemPrompt(pool *pgxpool.Pool) func(context.Context, time.Time, []agen
 		if section := skillsPrompt(ctx, offered); section != "" {
 			prompt += "\n\n" + section
 		}
+		if section := pluginCatalogPrompt(ctx, q, offered); section != "" {
+			prompt += "\n\n" + section
+		}
 		switch researchPhaseOf(ctx, q) {
 		case phasePlan:
 			prompt += "\n\n" + researchPlanGuide

@@ -1,4 +1,4 @@
-import { AlarmClock, BookOpen, Brain, ChevronRight, FileSearch, FileText, Globe, NotebookPen, Search, TriangleAlert, Wrench } from 'lucide-react'
+import { AlarmClock, BookOpen, Brain, ChevronRight, FileSearch, FileText, Globe, NotebookPen, Puzzle, Search, TriangleAlert, Wrench } from 'lucide-react'
 import { Collapsible } from 'radix-ui'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { activityOrb, THOUGHT } from '@/lib/activity-orb'
 import { API_BASE_URL } from '@/lib/api'
 import { isHttpUrl, siteName } from '@openchat/chat-core/urls'
+import { isPluginTool, pluginName, pluginProgressOf } from '@openchat/chat-core/plugin-code'
 import {
   activityHead,
   activitySegments,
@@ -20,6 +21,7 @@ import { ThinkingOrb } from './ThinkingOrb'
 import { AnswerText } from './AnswerText'
 import { Markdown } from './MarkdownText'
 import { SubagentsIcon } from './SubagentAvatar'
+import PluginMark from './PluginMark'
 
 /** Source chips shown in the collapsed line, before the rest are counted. */
 const HEAD_SOURCES = 4
@@ -196,6 +198,8 @@ function renderItem(item: ActivityItem, working: boolean) {
 function Step({ step }: { step: ToolActivityStep }) {
   const { t } = useTranslation()
   const hits = searchHits(step.result)
+  const plugin = isPluginTool(step.call.name) ? pluginProgressOf(step.result?.details, step.progress) : null
+  const mark = plugin?.plugins[0]
   const fetched = step.call.name === 'web_fetch' && step.result?.status === 'succeeded'
     ? (step.result.details as { url?: string; title?: string } | undefined)
     : undefined
@@ -203,10 +207,26 @@ function Step({ step }: { step: ToolActivityStep }) {
   return (
     <li className={cn('n-activity-step', isFailure(step.status) && 'is-failed')}>
       <span className="n-activity-step-icon">
-        {isFailure(step.status) ? <TriangleAlert aria-hidden="true" /> : stepIcon(step.call.name)}
+        {isFailure(step.status) ? <TriangleAlert aria-hidden="true" /> : mark ? <PluginMark plugin={mark} size={16} /> : stepIcon(step.call.name)}
       </span>
       <div className="n-activity-step-body">
         <div className="n-activity-step-label">{stepLabel(t, step, false)}</div>
+        {plugin && plugin.calls.length > 0 && (
+          <ol className="n-activity-calls">
+            {plugin.calls.map((call) => (
+              <li key={call.seq} className={cn(call.status !== 'done' && call.status !== 'running' && call.status !== 'waiting' && 'is-failed')}>
+                <span>{pluginName(plugin, call.plugin)} · {call.tool}</span>
+                <span className="n-activity-call-status">{t(`plugins.step.call-${call.status}`)}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+        {plugin?.code && (
+          <details className="n-activity-code">
+            <summary>{t('plugins.step.code')}</summary>
+            <pre>{plugin.code}</pre>
+          </details>
+        )}
         {hits.length > 0 && (
           <div className="n-activity-hits">
             {hits.slice(0, STEP_SOURCES).map((hit) => (
@@ -266,6 +286,7 @@ export function SourceMark({ url }: { url: string }) {
 }
 
 function stepIcon(name: string) {
+  if (isPluginTool(name)) return <Puzzle aria-hidden="true" />
   if (name === 'web_search') return <Search aria-hidden="true" />
   if (name === 'web_fetch') return <Globe aria-hidden="true" />
   if (name === 'file_read') return <FileText aria-hidden="true" />

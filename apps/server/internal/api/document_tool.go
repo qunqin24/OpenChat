@@ -138,7 +138,8 @@ func (s *Server) ServerTools(ctx context.Context) []agent.Tool {
 		return s.DocumentTools(ctx)
 	}
 	tools := append(s.TaskTools(ctx), s.DocumentTools(ctx)...)
-	return append(tools, s.SubagentTools(ctx)...)
+	tools = append(tools, s.SubagentTools(ctx)...)
+	return append(tools, s.PluginTools(ctx)...)
 }
 
 func (t DocumentTool) Execute(ctx context.Context, raw json.RawMessage) (agent.ToolResult, error) {

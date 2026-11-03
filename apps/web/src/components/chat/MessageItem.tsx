@@ -11,11 +11,13 @@ import { turnText, type Turn } from '@openchat/chat-core/transcript'
 import { CopiedIcon, CopyIcon, EditIcon, RegenerateIcon } from './ActionIcons'
 import AskUserCard, { PreparingLine } from './AskUserCard'
 import ResearchPlanCard from './ResearchPlanCard'
+import PluginConfirmCard from './PluginConfirmCard'
 import { parsePlan, planDecisionOf, RESEARCH_PLAN } from '@openchat/chat-core/research-plan'
 import { MEMORY_TOOL, memoryChangeOf } from '@openchat/chat-core/memory-tool'
 import { TASK_TOOL, taskChangeOf } from '@openchat/chat-core/task-tool'
 import { DOCUMENT_TOOL, documentChangeOf, documentOpOf } from '@openchat/chat-core/document-tool'
 import { launchesOf, SUBAGENT_TOOL } from '@openchat/chat-core/subagents'
+import { isPluginTool, pluginProgressOf, waitingCalls } from '@openchat/chat-core/plugin-code'
 import { SubagentLaunchLine } from './SubagentLines'
 import { parseQuotes, quoteMessage } from '@openchat/chat-core/document-selection'
 import { parseSkills, skillMessage } from '@openchat/chat-core/skill-mention'
@@ -457,6 +459,30 @@ export function AssistantTurn({
             // kept; a list, or a call that failed, is a step.
             const change = taskChangeOf(turn.results[part.id])
             if (change) return <TaskChip key={key} change={change} />
+          }
+          if (isPluginTool(part.name)) {
+            // A call waiting for the person to allow it is a card in the
+            // reply, where they will see it; otherwise a step, which names
+            // the call in flight from the progress it reports.
+            const result = turn.results[part.id]
+            const progress = live?.progress[part.id]
+            const waiting = !result && running ? waitingCalls(pluginProgressOf(undefined, progress)) : []
+            if (waiting.length > 0 && conversationId) {
+              const plugins = pluginProgressOf(undefined, progress)?.plugins ?? []
+              return (
+                <div key={key}>
+                  {waiting.map((call) => (
+                    <PluginConfirmCard
+                      key={call.confirmationId}
+                      conversationId={conversationId}
+                      call={call}
+                      plugin={plugins.find((p) => p.slug === call.plugin)}
+                    />
+                  ))}
+                </div>
+              )
+            }
+            return { key, step: { call: part, result, status: toolStatus(part.id), progress } }
           }
           return { key, step: { call: part, result: turn.results[part.id], status: toolStatus(part.id) } }
         }

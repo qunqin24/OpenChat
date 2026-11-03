@@ -12,11 +12,55 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const answerPluginConfirmation = `-- name: AnswerPluginConfirmation :one
+UPDATE plugin_confirmations
+SET status      = $1,
+    answered_at = now()
+WHERE id = $2
+  AND conversation_id = $3
+  AND user_id = $4
+  AND status = 'pending'
+RETURNING id, run_id, conversation_id, user_id, call_id, seq, plugin_id, tool, arguments, status, created_at, answered_at
+`
+
+type AnswerPluginConfirmationParams struct {
+	Status         string    `json:"status"`
+	ID             uuid.UUID `json:"id"`
+	ConversationID uuid.UUID `json:"conversation_id"`
+	UserID         uuid.UUID `json:"user_id"`
+}
+
+// The person's answer to a call still waiting in their conversation.
+func (q *Queries) AnswerPluginConfirmation(ctx context.Context, arg AnswerPluginConfirmationParams) (PluginConfirmation, error) {
+	row := q.db.QueryRow(ctx, answerPluginConfirmation,
+		arg.Status,
+		arg.ID,
+		arg.ConversationID,
+		arg.UserID,
+	)
+	var i PluginConfirmation
+	err := row.Scan(
+		&i.ID,
+		&i.RunID,
+		&i.ConversationID,
+		&i.UserID,
+		&i.CallID,
+		&i.Seq,
+		&i.PluginID,
+		&i.Tool,
+		&i.Arguments,
+		&i.Status,
+		&i.CreatedAt,
+		&i.AnsweredAt,
+	)
+	return i, err
+}
+
 const createPlugin = `-- name: CreatePlugin :one
 INSERT INTO plugins (slug, name, description, about, category, icon_text, icon_color, featured, enabled, audience,
-                     mcp_url, auth_type, header_name, header_secret, sort, icon_slug, icon_path)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-RETURNING id, slug, name, description, about, category, icon_text, icon_color, featured, enabled, audience, mcp_url, auth_type, sort, created_at, updated_at, header_name, header_secret, tools_fetched_at, builtin, icon_slug, icon_path, oauth_client_id, oauth_client_secret, oauth_scopes, oauth_registered
+                     mcp_url, auth_type, header_name, header_secret, sort, icon_slug, icon_path, direct_tools)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+RETURNING id, slug, name, description, about, category, icon_text, icon_color, featured, enabled, audience, mcp_url, auth_type, sort, created_at, updated_at, header_name, header_secret, tools_fetched_at, builtin, icon_slug, icon_path, oauth_client_id, oauth_client_secret, oauth_scopes, oauth_registered, direct_tools
 `
 
 type CreatePluginParams struct {
@@ -37,6 +81,7 @@ type CreatePluginParams struct {
 	Sort         int32   `json:"sort"`
 	IconSlug     string  `json:"icon_slug"`
 	IconPath     string  `json:"icon_path"`
+	DirectTools  bool    `json:"direct_tools"`
 }
 
 func (q *Queries) CreatePlugin(ctx context.Context, arg CreatePluginParams) (Plugin, error) {
@@ -58,6 +103,7 @@ func (q *Queries) CreatePlugin(ctx context.Context, arg CreatePluginParams) (Plu
 		arg.Sort,
 		arg.IconSlug,
 		arg.IconPath,
+		arg.DirectTools,
 	)
 	var i Plugin
 	err := row.Scan(
@@ -87,6 +133,53 @@ func (q *Queries) CreatePlugin(ctx context.Context, arg CreatePluginParams) (Plu
 		&i.OauthClientSecret,
 		&i.OauthScopes,
 		&i.OauthRegistered,
+		&i.DirectTools,
+	)
+	return i, err
+}
+
+const createPluginConfirmation = `-- name: CreatePluginConfirmation :one
+INSERT INTO plugin_confirmations (run_id, conversation_id, user_id, call_id, seq, plugin_id, tool, arguments)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, run_id, conversation_id, user_id, call_id, seq, plugin_id, tool, arguments, status, created_at, answered_at
+`
+
+type CreatePluginConfirmationParams struct {
+	RunID          uuid.UUID `json:"run_id"`
+	ConversationID uuid.UUID `json:"conversation_id"`
+	UserID         uuid.UUID `json:"user_id"`
+	CallID         string    `json:"call_id"`
+	Seq            int32     `json:"seq"`
+	PluginID       uuid.UUID `json:"plugin_id"`
+	Tool           string    `json:"tool"`
+	Arguments      []byte    `json:"arguments"`
+}
+
+func (q *Queries) CreatePluginConfirmation(ctx context.Context, arg CreatePluginConfirmationParams) (PluginConfirmation, error) {
+	row := q.db.QueryRow(ctx, createPluginConfirmation,
+		arg.RunID,
+		arg.ConversationID,
+		arg.UserID,
+		arg.CallID,
+		arg.Seq,
+		arg.PluginID,
+		arg.Tool,
+		arg.Arguments,
+	)
+	var i PluginConfirmation
+	err := row.Scan(
+		&i.ID,
+		&i.RunID,
+		&i.ConversationID,
+		&i.UserID,
+		&i.CallID,
+		&i.Seq,
+		&i.PluginID,
+		&i.Tool,
+		&i.Arguments,
+		&i.Status,
+		&i.CreatedAt,
+		&i.AnsweredAt,
 	)
 	return i, err
 }
@@ -163,6 +256,38 @@ func (q *Queries) DeleteStalePluginOAuthStates(ctx context.Context) (int64, erro
 	return result.RowsAffected(), nil
 }
 
+const expirePluginConfirmation = `-- name: ExpirePluginConfirmation :exec
+UPDATE plugin_confirmations
+SET status      = 'expired',
+    answered_at = now()
+WHERE id = $1
+  AND status = 'pending'
+`
+
+func (q *Queries) ExpirePluginConfirmation(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, expirePluginConfirmation, id)
+	return err
+}
+
+const expireStalePluginConfirmations = `-- name: ExpireStalePluginConfirmations :execrows
+UPDATE plugin_confirmations c
+SET status      = 'expired',
+    answered_at = now()
+FROM runs r
+WHERE r.id = c.run_id
+  AND c.status = 'pending'
+  AND r.status <> 'running'
+`
+
+// Calls left waiting by a run that is over: a process that died with them.
+func (q *Queries) ExpireStalePluginConfirmations(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, expireStalePluginConfirmations)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const fillBuiltinPluginIcon = `-- name: FillBuiltinPluginIcon :exec
 UPDATE plugins
 SET icon_slug  = $1,
@@ -209,8 +334,21 @@ func (q *Queries) FillBuiltinPluginScopes(ctx context.Context, arg FillBuiltinPl
 	return err
 }
 
+const getConversationPluginCatalog = `-- name: GetConversationPluginCatalog :one
+SELECT plugin_catalog
+FROM conversations
+WHERE id = $1
+`
+
+func (q *Queries) GetConversationPluginCatalog(ctx context.Context, id uuid.UUID) ([]byte, error) {
+	row := q.db.QueryRow(ctx, getConversationPluginCatalog, id)
+	var plugin_catalog []byte
+	err := row.Scan(&plugin_catalog)
+	return plugin_catalog, err
+}
+
 const getPlugin = `-- name: GetPlugin :one
-SELECT id, slug, name, description, about, category, icon_text, icon_color, featured, enabled, audience, mcp_url, auth_type, sort, created_at, updated_at, header_name, header_secret, tools_fetched_at, builtin, icon_slug, icon_path, oauth_client_id, oauth_client_secret, oauth_scopes, oauth_registered
+SELECT id, slug, name, description, about, category, icon_text, icon_color, featured, enabled, audience, mcp_url, auth_type, sort, created_at, updated_at, header_name, header_secret, tools_fetched_at, builtin, icon_slug, icon_path, oauth_client_id, oauth_client_secret, oauth_scopes, oauth_registered, direct_tools
 FROM plugins
 WHERE id = $1
 `
@@ -245,6 +383,7 @@ func (q *Queries) GetPlugin(ctx context.Context, id uuid.UUID) (Plugin, error) {
 		&i.OauthClientSecret,
 		&i.OauthScopes,
 		&i.OauthRegistered,
+		&i.DirectTools,
 	)
 	return i, err
 }
@@ -276,8 +415,84 @@ func (q *Queries) GetPluginInstall(ctx context.Context, arg GetPluginInstallPara
 	return i, err
 }
 
+const getUsablePluginTool = `-- name: GetUsablePluginTool :one
+SELECT p.id          AS plugin_id,
+       p.slug,
+       p.name        AS plugin_name,
+       p.description AS plugin_description,
+       p.direct_tools,
+       p.icon_text,
+       p.icon_color,
+       p.icon_path,
+       t.name,
+       t.title,
+       t.description,
+       t.input_schema,
+       t.read_only,
+       t.permission
+FROM plugin_installs i
+         JOIN plugins p ON p.id = i.plugin_id
+         JOIN plugin_tools t ON t.plugin_id = p.id
+         JOIN users u ON u.id = i.user_id
+WHERE i.user_id = $1
+  AND p.id = $2
+  AND t.name = $3
+  AND p.enabled
+  AND (p.audience = 'all' OR u.role = 'admin')
+  AND coalesce(p.mcp_url, '') <> ''
+  AND (p.auth_type <> 'oauth' OR (i.access_token IS NOT NULL AND NOT i.needs_reconnect))
+  AND t.permission <> 'blocked'
+`
+
+type GetUsablePluginToolParams struct {
+	UserID   uuid.UUID `json:"user_id"`
+	PluginID uuid.UUID `json:"plugin_id"`
+	Tool     string    `json:"tool"`
+}
+
+type GetUsablePluginToolRow struct {
+	PluginID          uuid.UUID `json:"plugin_id"`
+	Slug              string    `json:"slug"`
+	PluginName        string    `json:"plugin_name"`
+	PluginDescription string    `json:"plugin_description"`
+	DirectTools       bool      `json:"direct_tools"`
+	IconText          string    `json:"icon_text"`
+	IconColor         string    `json:"icon_color"`
+	IconPath          string    `json:"icon_path"`
+	Name              string    `json:"name"`
+	Title             string    `json:"title"`
+	Description       string    `json:"description"`
+	InputSchema       []byte    `json:"input_schema"`
+	ReadOnly          bool      `json:"read_only"`
+	Permission        string    `json:"permission"`
+}
+
+// One tool as ListUsablePluginTools has it, read again at each call so a
+// change made meanwhile counts; no row when it may not be called now.
+func (q *Queries) GetUsablePluginTool(ctx context.Context, arg GetUsablePluginToolParams) (GetUsablePluginToolRow, error) {
+	row := q.db.QueryRow(ctx, getUsablePluginTool, arg.UserID, arg.PluginID, arg.Tool)
+	var i GetUsablePluginToolRow
+	err := row.Scan(
+		&i.PluginID,
+		&i.Slug,
+		&i.PluginName,
+		&i.PluginDescription,
+		&i.DirectTools,
+		&i.IconText,
+		&i.IconColor,
+		&i.IconPath,
+		&i.Name,
+		&i.Title,
+		&i.Description,
+		&i.InputSchema,
+		&i.ReadOnly,
+		&i.Permission,
+	)
+	return i, err
+}
+
 const getUserPlugin = `-- name: GetUserPlugin :one
-SELECT p.id, p.slug, p.name, p.description, p.about, p.category, p.icon_text, p.icon_color, p.featured, p.enabled, p.audience, p.mcp_url, p.auth_type, p.sort, p.created_at, p.updated_at, p.header_name, p.header_secret, p.tools_fetched_at, p.builtin, p.icon_slug, p.icon_path, p.oauth_client_id, p.oauth_client_secret, p.oauth_scopes, p.oauth_registered,
+SELECT p.id, p.slug, p.name, p.description, p.about, p.category, p.icon_text, p.icon_color, p.featured, p.enabled, p.audience, p.mcp_url, p.auth_type, p.sort, p.created_at, p.updated_at, p.header_name, p.header_secret, p.tools_fetched_at, p.builtin, p.icon_slug, p.icon_path, p.oauth_client_id, p.oauth_client_secret, p.oauth_scopes, p.oauth_registered, p.direct_tools,
        (i.user_id IS NOT NULL)::boolean AS installed,
        coalesce(i.needs_reconnect, false)::boolean AS needs_reconnect,
        (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked' AND t.read_only)::bigint     AS read_tools,
@@ -322,6 +537,7 @@ type GetUserPluginRow struct {
 	OauthClientSecret []byte             `json:"oauth_client_secret"`
 	OauthScopes       string             `json:"oauth_scopes"`
 	OauthRegistered   bool               `json:"oauth_registered"`
+	DirectTools       bool               `json:"direct_tools"`
 	Installed         bool               `json:"installed"`
 	NeedsReconnect    bool               `json:"needs_reconnect"`
 	ReadTools         int64              `json:"read_tools"`
@@ -359,12 +575,30 @@ func (q *Queries) GetUserPlugin(ctx context.Context, arg GetUserPluginParams) (G
 		&i.OauthClientSecret,
 		&i.OauthScopes,
 		&i.OauthRegistered,
+		&i.DirectTools,
 		&i.Installed,
 		&i.NeedsReconnect,
 		&i.ReadTools,
 		&i.WriteTools,
 	)
 	return i, err
+}
+
+const grantPluginTool = `-- name: GrantPluginTool :exec
+INSERT INTO plugin_tool_grants (conversation_id, plugin_id, tool)
+VALUES ($1, $2, $3)
+ON CONFLICT DO NOTHING
+`
+
+type GrantPluginToolParams struct {
+	ConversationID uuid.UUID `json:"conversation_id"`
+	PluginID       uuid.UUID `json:"plugin_id"`
+	Tool           string    `json:"tool"`
+}
+
+func (q *Queries) GrantPluginTool(ctx context.Context, arg GrantPluginToolParams) error {
+	_, err := q.db.Exec(ctx, grantPluginTool, arg.ConversationID, arg.PluginID, arg.Tool)
+	return err
 }
 
 const insertBuiltinPlugin = `-- name: InsertBuiltinPlugin :execrows
@@ -433,7 +667,7 @@ func (q *Queries) InstallPlugin(ctx context.Context, arg InstallPluginParams) er
 }
 
 const listAdminPlugins = `-- name: ListAdminPlugins :many
-SELECT p.id, p.slug, p.name, p.description, p.about, p.category, p.icon_text, p.icon_color, p.featured, p.enabled, p.audience, p.mcp_url, p.auth_type, p.sort, p.created_at, p.updated_at, p.header_name, p.header_secret, p.tools_fetched_at, p.builtin, p.icon_slug, p.icon_path, p.oauth_client_id, p.oauth_client_secret, p.oauth_scopes, p.oauth_registered,
+SELECT p.id, p.slug, p.name, p.description, p.about, p.category, p.icon_text, p.icon_color, p.featured, p.enabled, p.audience, p.mcp_url, p.auth_type, p.sort, p.created_at, p.updated_at, p.header_name, p.header_secret, p.tools_fetched_at, p.builtin, p.icon_slug, p.icon_path, p.oauth_client_id, p.oauth_client_secret, p.oauth_scopes, p.oauth_registered, p.direct_tools,
        (SELECT count(*) FROM plugin_installs i WHERE i.plugin_id = p.id)::bigint                       AS installs,
        (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id)::bigint                          AS tools,
        (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked')::bigint AS tools_on
@@ -468,6 +702,7 @@ type ListAdminPluginsRow struct {
 	OauthClientSecret []byte             `json:"oauth_client_secret"`
 	OauthScopes       string             `json:"oauth_scopes"`
 	OauthRegistered   bool               `json:"oauth_registered"`
+	DirectTools       bool               `json:"direct_tools"`
 	Installs          int64              `json:"installs"`
 	Tools             int64              `json:"tools"`
 	ToolsOn           int64              `json:"tools_on"`
@@ -511,6 +746,7 @@ func (q *Queries) ListAdminPlugins(ctx context.Context) ([]ListAdminPluginsRow, 
 			&i.OauthClientSecret,
 			&i.OauthScopes,
 			&i.OauthRegistered,
+			&i.DirectTools,
 			&i.Installs,
 			&i.Tools,
 			&i.ToolsOn,
@@ -561,9 +797,93 @@ func (q *Queries) ListPluginTools(ctx context.Context, pluginID uuid.UUID) ([]Pl
 	return items, nil
 }
 
+const listUsablePluginTools = `-- name: ListUsablePluginTools :many
+
+SELECT p.id          AS plugin_id,
+       p.slug,
+       p.name        AS plugin_name,
+       p.description AS plugin_description,
+       p.direct_tools,
+       p.icon_text,
+       p.icon_color,
+       p.icon_path,
+       t.name,
+       t.title,
+       t.description,
+       t.input_schema,
+       t.read_only,
+       t.permission
+FROM plugin_installs i
+         JOIN plugins p ON p.id = i.plugin_id
+         JOIN plugin_tools t ON t.plugin_id = p.id
+         JOIN users u ON u.id = i.user_id
+WHERE i.user_id = $1
+  AND p.enabled
+  AND (p.audience = 'all' OR u.role = 'admin')
+  AND coalesce(p.mcp_url, '') <> ''
+  AND (p.auth_type <> 'oauth' OR (i.access_token IS NOT NULL AND NOT i.needs_reconnect))
+  AND t.permission <> 'blocked'
+ORDER BY p.slug, t.name
+`
+
+type ListUsablePluginToolsRow struct {
+	PluginID          uuid.UUID `json:"plugin_id"`
+	Slug              string    `json:"slug"`
+	PluginName        string    `json:"plugin_name"`
+	PluginDescription string    `json:"plugin_description"`
+	DirectTools       bool      `json:"direct_tools"`
+	IconText          string    `json:"icon_text"`
+	IconColor         string    `json:"icon_color"`
+	IconPath          string    `json:"icon_path"`
+	Name              string    `json:"name"`
+	Title             string    `json:"title"`
+	Description       string    `json:"description"`
+	InputSchema       []byte    `json:"input_schema"`
+	ReadOnly          bool      `json:"read_only"`
+	Permission        string    `json:"permission"`
+}
+
+// Calling plugin tools from conversations (api/plugin_code.go).
+// The tools a person's runs may call: of the plugins they installed that are
+// on and theirs to see, connected when they act as the person, not blocked.
+func (q *Queries) ListUsablePluginTools(ctx context.Context, userID uuid.UUID) ([]ListUsablePluginToolsRow, error) {
+	rows, err := q.db.Query(ctx, listUsablePluginTools, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUsablePluginToolsRow{}
+	for rows.Next() {
+		var i ListUsablePluginToolsRow
+		if err := rows.Scan(
+			&i.PluginID,
+			&i.Slug,
+			&i.PluginName,
+			&i.PluginDescription,
+			&i.DirectTools,
+			&i.IconText,
+			&i.IconColor,
+			&i.IconPath,
+			&i.Name,
+			&i.Title,
+			&i.Description,
+			&i.InputSchema,
+			&i.ReadOnly,
+			&i.Permission,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUserPlugins = `-- name: ListUserPlugins :many
 
-SELECT p.id, p.slug, p.name, p.description, p.about, p.category, p.icon_text, p.icon_color, p.featured, p.enabled, p.audience, p.mcp_url, p.auth_type, p.sort, p.created_at, p.updated_at, p.header_name, p.header_secret, p.tools_fetched_at, p.builtin, p.icon_slug, p.icon_path, p.oauth_client_id, p.oauth_client_secret, p.oauth_scopes, p.oauth_registered,
+SELECT p.id, p.slug, p.name, p.description, p.about, p.category, p.icon_text, p.icon_color, p.featured, p.enabled, p.audience, p.mcp_url, p.auth_type, p.sort, p.created_at, p.updated_at, p.header_name, p.header_secret, p.tools_fetched_at, p.builtin, p.icon_slug, p.icon_path, p.oauth_client_id, p.oauth_client_secret, p.oauth_scopes, p.oauth_registered, p.direct_tools,
        (i.user_id IS NOT NULL)::boolean AS installed,
        coalesce(i.needs_reconnect, false)::boolean AS needs_reconnect,
        (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked' AND t.read_only)::bigint     AS read_tools,
@@ -607,6 +927,7 @@ type ListUserPluginsRow struct {
 	OauthClientSecret []byte             `json:"oauth_client_secret"`
 	OauthScopes       string             `json:"oauth_scopes"`
 	OauthRegistered   bool               `json:"oauth_registered"`
+	DirectTools       bool               `json:"direct_tools"`
 	Installed         bool               `json:"installed"`
 	NeedsReconnect    bool               `json:"needs_reconnect"`
 	ReadTools         int64              `json:"read_tools"`
@@ -653,6 +974,7 @@ func (q *Queries) ListUserPlugins(ctx context.Context, arg ListUserPluginsParams
 			&i.OauthClientSecret,
 			&i.OauthScopes,
 			&i.OauthRegistered,
+			&i.DirectTools,
 			&i.Installed,
 			&i.NeedsReconnect,
 			&i.ReadTools,
@@ -696,6 +1018,59 @@ func (q *Queries) MarkPluginToolsFetched(ctx context.Context, id uuid.UUID) erro
 	return err
 }
 
+const pluginToolGranted = `-- name: PluginToolGranted :one
+SELECT EXISTS (SELECT 1
+               FROM plugin_tool_grants
+               WHERE conversation_id = $1
+                 AND plugin_id = $2
+                 AND tool = $3)::boolean
+`
+
+type PluginToolGrantedParams struct {
+	ConversationID uuid.UUID `json:"conversation_id"`
+	PluginID       uuid.UUID `json:"plugin_id"`
+	Tool           string    `json:"tool"`
+}
+
+func (q *Queries) PluginToolGranted(ctx context.Context, arg PluginToolGrantedParams) (bool, error) {
+	row := q.db.QueryRow(ctx, pluginToolGranted, arg.ConversationID, arg.PluginID, arg.Tool)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const recordPluginCall = `-- name: RecordPluginCall :exec
+INSERT INTO plugin_calls (user_id, conversation_id, plugin_id, plugin_slug, tool, ok, outcome, confirmed, duration_ms)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+`
+
+type RecordPluginCallParams struct {
+	UserID         *uuid.UUID `json:"user_id"`
+	ConversationID *uuid.UUID `json:"conversation_id"`
+	PluginID       *uuid.UUID `json:"plugin_id"`
+	PluginSlug     string     `json:"plugin_slug"`
+	Tool           string     `json:"tool"`
+	Ok             bool       `json:"ok"`
+	Outcome        string     `json:"outcome"`
+	Confirmed      bool       `json:"confirmed"`
+	DurationMs     int32      `json:"duration_ms"`
+}
+
+func (q *Queries) RecordPluginCall(ctx context.Context, arg RecordPluginCallParams) error {
+	_, err := q.db.Exec(ctx, recordPluginCall,
+		arg.UserID,
+		arg.ConversationID,
+		arg.PluginID,
+		arg.PluginSlug,
+		arg.Tool,
+		arg.Ok,
+		arg.Outcome,
+		arg.Confirmed,
+		arg.DurationMs,
+	)
+	return err
+}
+
 const savePluginTokens = `-- name: SavePluginTokens :exec
 INSERT INTO plugin_installs (user_id, plugin_id, access_token, refresh_token, token_expires_at, needs_reconnect)
 VALUES ($1, $2, $3, $4, $5, false)
@@ -724,6 +1099,28 @@ func (q *Queries) SavePluginTokens(ctx context.Context, arg SavePluginTokensPara
 		arg.TokenExpiresAt,
 	)
 	return err
+}
+
+const setConversationPluginCatalog = `-- name: SetConversationPluginCatalog :one
+UPDATE conversations
+SET plugin_catalog = $2
+WHERE id = $1
+  AND plugin_catalog IS NULL
+RETURNING plugin_catalog
+`
+
+type SetConversationPluginCatalogParams struct {
+	ID            uuid.UUID `json:"id"`
+	PluginCatalog []byte    `json:"plugin_catalog"`
+}
+
+// The catalogue a conversation lists from now on, unless another request took
+// it first: then no row, and that one stands.
+func (q *Queries) SetConversationPluginCatalog(ctx context.Context, arg SetConversationPluginCatalogParams) ([]byte, error) {
+	row := q.db.QueryRow(ctx, setConversationPluginCatalog, arg.ID, arg.PluginCatalog)
+	var plugin_catalog []byte
+	err := row.Scan(&plugin_catalog)
+	return plugin_catalog, err
 }
 
 const setPluginOAuthClient = `-- name: SetPluginOAuthClient :exec
@@ -862,13 +1259,14 @@ SET slug          = $2,
     mcp_url       = $12,
     auth_type     = $13,
     header_name   = $14,
-    header_secret = CASE WHEN $18::boolean THEN $19::bytea ELSE header_secret END,
+    header_secret = CASE WHEN $19::boolean THEN $20::bytea ELSE header_secret END,
     sort          = $15,
     icon_slug     = $16,
     icon_path     = $17,
+    direct_tools  = $18,
     updated_at    = now()
 WHERE id = $1
-RETURNING id, slug, name, description, about, category, icon_text, icon_color, featured, enabled, audience, mcp_url, auth_type, sort, created_at, updated_at, header_name, header_secret, tools_fetched_at, builtin, icon_slug, icon_path, oauth_client_id, oauth_client_secret, oauth_scopes, oauth_registered
+RETURNING id, slug, name, description, about, category, icon_text, icon_color, featured, enabled, audience, mcp_url, auth_type, sort, created_at, updated_at, header_name, header_secret, tools_fetched_at, builtin, icon_slug, icon_path, oauth_client_id, oauth_client_secret, oauth_scopes, oauth_registered, direct_tools
 `
 
 type UpdatePluginParams struct {
@@ -889,6 +1287,7 @@ type UpdatePluginParams struct {
 	Sort         int32     `json:"sort"`
 	IconSlug     string    `json:"icon_slug"`
 	IconPath     string    `json:"icon_path"`
+	DirectTools  bool      `json:"direct_tools"`
 	SetSecret    bool      `json:"set_secret"`
 	HeaderSecret []byte    `json:"header_secret"`
 }
@@ -913,6 +1312,7 @@ func (q *Queries) UpdatePlugin(ctx context.Context, arg UpdatePluginParams) (Plu
 		arg.Sort,
 		arg.IconSlug,
 		arg.IconPath,
+		arg.DirectTools,
 		arg.SetSecret,
 		arg.HeaderSecret,
 	)
@@ -944,6 +1344,7 @@ func (q *Queries) UpdatePlugin(ctx context.Context, arg UpdatePluginParams) (Plu
 		&i.OauthClientSecret,
 		&i.OauthScopes,
 		&i.OauthRegistered,
+		&i.DirectTools,
 	)
 	return i, err
 }

@@ -55,7 +55,7 @@ func invalidPlugin(field, message string) error {
 type pluginRow struct {
 	slug, name, description, about, category, iconText, iconColor string
 	iconSlug, iconPath                                            string
-	featured, enabled                                             bool
+	featured, enabled, directTools                                bool
 	audience, authType, headerName                                string
 	mcpURL                                                        *string
 	sort                                                          int32
@@ -87,6 +87,9 @@ func (s *Server) pluginInput(body AdminPluginInput) (pluginRow, error) {
 	}
 	if body.Enabled != nil {
 		row.enabled = *body.Enabled
+	}
+	if body.DirectTools != nil {
+		row.directTools = *body.DirectTools
 	}
 	if body.Audience != nil {
 		row.audience = string(*body.Audience)
@@ -168,7 +171,7 @@ func toAdminPlugin(p sqlc.Plugin, installs, tools, toolsOn int64) AdminPlugin {
 		HeaderSet: len(p.HeaderSecret) > 0, Sort: int(p.Sort), Installs: int(installs), Tools: int(tools), ToolsOn: int(toolsOn),
 		Builtin:       p.Builtin != nil,
 		OauthClientId: p.OauthClientID, OauthSecretSet: len(p.OauthClientSecret) > 0, OauthScopes: p.OauthScopes,
-		OauthRegistered: p.OauthRegistered,
+		OauthRegistered: p.OauthRegistered, DirectTools: p.DirectTools,
 	}
 	if p.McpUrl != nil {
 		out.McpUrl = *p.McpUrl
@@ -201,8 +204,8 @@ func adminRowPlugin(r sqlc.ListAdminPluginsRow) sqlc.Plugin {
 		McpUrl: r.McpUrl, AuthType: r.AuthType, Sort: r.Sort, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 		HeaderName: r.HeaderName, HeaderSecret: r.HeaderSecret, ToolsFetchedAt: r.ToolsFetchedAt, Builtin: r.Builtin,
 		OauthClientID: r.OauthClientID, OauthClientSecret: r.OauthClientSecret, OauthScopes: r.OauthScopes,
-		OauthRegistered: r.OauthRegistered,
-		IconSlug:        r.IconSlug, IconPath: r.IconPath,
+		OauthRegistered: r.OauthRegistered, DirectTools: r.DirectTools,
+		IconSlug: r.IconSlug, IconPath: r.IconPath,
 	}
 }
 
@@ -235,7 +238,7 @@ func (s *Server) CreateAdminPlugin(w http.ResponseWriter, r *http.Request) {
 		Slug: in.slug, Name: in.name, Description: in.description, About: in.about, Category: in.category,
 		IconText: in.iconText, IconColor: in.iconColor, Featured: in.featured, Enabled: in.enabled, Audience: in.audience,
 		McpUrl: in.mcpURL, AuthType: in.authType, HeaderName: in.headerName, HeaderSecret: in.secret, Sort: in.sort,
-		IconSlug: in.iconSlug, IconPath: in.iconPath,
+		IconSlug: in.iconSlug, IconPath: in.iconPath, DirectTools: in.directTools,
 	})
 	if err != nil {
 		httpx.Fail(w, r, slugErr(err))
@@ -270,7 +273,7 @@ func (s *Server) UpdateAdminPlugin(w http.ResponseWriter, r *http.Request, plugi
 		ID: pluginId, Slug: in.slug, Name: in.name, Description: in.description, About: in.about, Category: in.category,
 		IconText: in.iconText, IconColor: in.iconColor, Featured: in.featured, Enabled: in.enabled, Audience: in.audience,
 		McpUrl: in.mcpURL, AuthType: in.authType, HeaderName: in.headerName, SetSecret: in.setSecret, HeaderSecret: in.secret,
-		Sort: in.sort, IconSlug: in.iconSlug, IconPath: in.iconPath,
+		Sort: in.sort, IconSlug: in.iconSlug, IconPath: in.iconPath, DirectTools: in.directTools,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		httpx.Fail(w, r, errPluginNotFound)

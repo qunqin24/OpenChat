@@ -84,6 +84,9 @@ func (s *Server) CleanupNow(ctx context.Context) {
 		return pgtype.Timestamptz{Time: now.Add(-age), Valid: true}
 	}
 
+	if _, err := s.q.ExpireStalePluginConfirmations(ctx); err != nil {
+		slog.WarnContext(ctx, "expire stale plugin confirmations", "error", err)
+	}
 	if _, err := s.q.DeleteStalePluginOAuthStates(ctx); err != nil {
 		slog.WarnContext(ctx, "clean up plugin sign-ins", "error", err)
 	}

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 
 	"github.com/google/uuid"
@@ -75,9 +76,30 @@ func withCall(ctx context.Context, callID string) context.Context {
 	return context.WithValue(ctx, callKey{}, callID)
 }
 
+// WithToolCall is withCall for a tool run outside the runner: a test, which
+// has no call of its own to carry.
+func WithToolCall(ctx context.Context, callID string) context.Context { return withCall(ctx, callID) }
+
 // ToolCallID is the id of the tool call ctx executes, "" outside one: what a
 // tool that must not act twice for one call keys its effect by.
 func ToolCallID(ctx context.Context) string {
 	id, _ := ctx.Value(callKey{}).(string)
 	return id
+}
+
+type progressKey struct{}
+
+// ReportProgress records how far the call ctx executes has got, replacing
+// what it reported before, and tells the conversation's subscribers once it
+// is committed. Outside a call it does nothing.
+func ReportProgress(ctx context.Context, progress any) error {
+	report, ok := ctx.Value(progressKey{}).(func(json.RawMessage) error)
+	if !ok {
+		return nil
+	}
+	raw, err := json.Marshal(progress)
+	if err != nil {
+		return err
+	}
+	return report(raw)
 }

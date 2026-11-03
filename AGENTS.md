@@ -155,6 +155,10 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 - 用户能看到的插件 = 启用的、面向所有人或面向管理员且本人是管理员的；看不到的一律 404。
 - 工具权限三档 `allow`/`confirm`/`blocked`；重新拉取工具只更新描述，不动管理员设过的权限。
 - 每人授权（OAuth 2.1 + PKCE）：`connect` 发起、`/plugins/oauth/callback` 收尾，state 一次性且只认发起人，令牌加密存在本人的 `plugin_installs` 行；取令牌一律走 `pluginToken`（会刷新、刷新失败标 `needs_reconnect`），别直接读列。服务返回的授权地址只跟 https 或同主机。
+- 对话里调插件走 CodeMode（`api/plugin_code.go`、`internal/codemode`）：模型只有一个 `plugin_code`，写 JS 调 `tools.<短名>.<工具>()`，脚本在 goja 里跑，只注入 `tools`、`search`、`console`，不给 `fetch`、定时器、模块；时长、调用次数、并发、输出、内存都有上限（共享服务器，别去掉）。开了「直接列出」（`plugins.direct_tools`）的插件工具按 `<短名>__<工具>` 逐个给模型，走同一个 `pluginHost.Call`。
+- 每次调用都现查 `GetUsablePluginTool`（权限、安装、连接）、按 `inputSchema` 校验，再取令牌；需确认的停在调用处等 `AnswerPluginConfirmation`（run 不结束，`codemode.Pause` 停表，最多 10 分钟），子 Agent 和没有调用 id 的直接拒绝。审计只写 `plugin_calls`，绝不记参数和结果。
+- 系统提示词的插件目录随对话快照（`conversations.plugin_catalog`，第一次提供 `plugin_code` 时取），之后装卸插件只经 `PluginNote` 告诉模型，别改提示词。
+- 运行中的工具给页面报进度用 `agent.ReportProgress`（`ToolSlot.progress`、`tool_progress` 事件，先提交再推送），只给页面，不进模型上下文。
 
 细节：[插件](docs/design/plugins-plan.md)。
 

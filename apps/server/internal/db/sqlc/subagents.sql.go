@@ -165,7 +165,7 @@ INSERT INTO conversations (user_id, title, model, web_search, kind, parent_id, l
 VALUES ($1, $2, $3, $4, 'subagent',
         $5, $6, $7, $8,
         $9::text[])
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog
 `
 
 type CreateSubagentConversationParams struct {
@@ -215,6 +215,7 @@ func (q *Queries) CreateSubagentConversation(ctx context.Context, arg CreateSuba
 		&i.StoppedByUser,
 		&i.PinnedAt,
 		&i.Skills,
+		&i.PluginCatalog,
 	)
 	return i, err
 }
@@ -284,7 +285,7 @@ func (q *Queries) ExistingRuns(ctx context.Context, ids []uuid.UUID) ([]uuid.UUI
 }
 
 const findSubagentsByName = `-- name: FindSubagentsByName :many
-SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills
+SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog
 FROM conversations
 WHERE parent_id = $1
   AND user_id = $2
@@ -330,6 +331,7 @@ func (q *Queries) FindSubagentsByName(ctx context.Context, arg FindSubagentsByNa
 			&i.StoppedByUser,
 			&i.PinnedAt,
 			&i.Skills,
+			&i.PluginCatalog,
 		); err != nil {
 			return nil, err
 		}
@@ -342,7 +344,7 @@ func (q *Queries) FindSubagentsByName(ctx context.Context, arg FindSubagentsByNa
 }
 
 const getChatConversationByID = `-- name: GetChatConversationByID :one
-SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills
+SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog
 FROM conversations
 WHERE id = $1
   AND kind = 'chat'
@@ -373,6 +375,7 @@ func (q *Queries) GetChatConversationByID(ctx context.Context, id uuid.UUID) (Co
 		&i.StoppedByUser,
 		&i.PinnedAt,
 		&i.Skills,
+		&i.PluginCatalog,
 	)
 	return i, err
 }
@@ -436,7 +439,7 @@ func (q *Queries) GetLatestRun(ctx context.Context, conversationID uuid.UUID) (R
 }
 
 const getLaunchedSubagent = `-- name: GetLaunchedSubagent :one
-SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills
+SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog
 FROM conversations
 WHERE launched_by = $1
   AND launch_call_id = $2
@@ -471,12 +474,13 @@ func (q *Queries) GetLaunchedSubagent(ctx context.Context, arg GetLaunchedSubage
 		&i.StoppedByUser,
 		&i.PinnedAt,
 		&i.Skills,
+		&i.PluginCatalog,
 	)
 	return i, err
 }
 
 const getSubagent = `-- name: GetSubagent :one
-SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills
+SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog
 FROM conversations
 WHERE id = $1
   AND parent_id = $2
@@ -515,12 +519,13 @@ func (q *Queries) GetSubagent(ctx context.Context, arg GetSubagentParams) (Conve
 		&i.StoppedByUser,
 		&i.PinnedAt,
 		&i.Skills,
+		&i.PluginCatalog,
 	)
 	return i, err
 }
 
 const getSubagentByID = `-- name: GetSubagentByID :one
-SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills
+SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog
 FROM conversations
 WHERE id = $1
   AND kind = 'subagent'
@@ -550,6 +555,7 @@ func (q *Queries) GetSubagentByID(ctx context.Context, id uuid.UUID) (Conversati
 		&i.StoppedByUser,
 		&i.PinnedAt,
 		&i.Skills,
+		&i.PluginCatalog,
 	)
 	return i, err
 }
@@ -692,7 +698,7 @@ func (q *Queries) InsertSubagentReport(ctx context.Context, arg InsertSubagentRe
 }
 
 const listBackgroundQueuedSubagents = `-- name: ListBackgroundQueuedSubagents :many
-SELECT c.id, c.user_id, c.title, c.model, c.created_at, c.updated_at, c.deleted_at, c.reasoning_effort, c.web_search, c.memory_snapshot, c.temporary, c.kind, c.parent_id, c.launched_by, c.launch_call_id, c.background, c.stopped_by_user, c.pinned_at, c.skills
+SELECT c.id, c.user_id, c.title, c.model, c.created_at, c.updated_at, c.deleted_at, c.reasoning_effort, c.web_search, c.memory_snapshot, c.temporary, c.kind, c.parent_id, c.launched_by, c.launch_call_id, c.background, c.stopped_by_user, c.pinned_at, c.skills, c.plugin_catalog
 FROM conversations c
          JOIN conversations p ON p.id = c.parent_id
 WHERE c.kind = 'subagent'
@@ -738,6 +744,7 @@ func (q *Queries) ListBackgroundQueuedSubagents(ctx context.Context, userID *uui
 			&i.StoppedByUser,
 			&i.PinnedAt,
 			&i.Skills,
+			&i.PluginCatalog,
 		); err != nil {
 			return nil, err
 		}
@@ -979,7 +986,7 @@ func (q *Queries) ListSubagentRunningRuns(ctx context.Context, parentID *uuid.UU
 }
 
 const listSubagents = `-- name: ListSubagents :many
-SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills
+SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog
 FROM conversations
 WHERE parent_id = $1
   AND user_id = $2
@@ -1021,6 +1028,7 @@ func (q *Queries) ListSubagents(ctx context.Context, arg ListSubagentsParams) ([
 			&i.StoppedByUser,
 			&i.PinnedAt,
 			&i.Skills,
+			&i.PluginCatalog,
 		); err != nil {
 			return nil, err
 		}

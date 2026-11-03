@@ -271,6 +271,7 @@ function inputOf(plugin: AdminPlugin): AdminPluginInput {
     // Sent back as they are, so switching it on or off keeps its OAuth client.
     oauthClientId: plugin.oauthRegistered ? '' : plugin.oauthClientId,
     oauthScopes: plugin.oauthScopes,
+    directTools: plugin.directTools,
     sort: plugin.sort,
   }
 }
@@ -333,6 +334,7 @@ function SettingsForm({ plugin, secretKeySet, onSaved }: { plugin: AdminPlugin |
     oauthClientId: z.string().trim().max(300),
     oauthClientSecret: z.string(),
     oauthScopes: z.string().trim().max(1000),
+    directTools: z.boolean(),
     sort: z.string().trim().regex(/^-?\d*$/, t('admin.plugins.number')),
   })
   type Values = z.infer<typeof schema>
@@ -359,6 +361,7 @@ function SettingsForm({ plugin, secretKeySet, onSaved }: { plugin: AdminPlugin |
       oauthClientId: plugin?.oauthRegistered ? '' : (plugin?.oauthClientId ?? ''),
       oauthClientSecret: '',
       oauthScopes: plugin?.oauthScopes ?? '',
+      directTools: plugin?.directTools ?? false,
       sort: String(plugin?.sort ?? 0),
     },
   })
@@ -611,6 +614,22 @@ function SettingsForm({ plugin, secretKeySet, onSaved }: { plugin: AdminPlugin |
             />
           </div>
         )}
+
+        <FormField
+          control={form.control}
+          name="directTools"
+          render={({ field }) => (
+            <FormItem className="flex items-start justify-between gap-6">
+              <div className="space-y-1">
+                <FormLabel>{t('admin.plugins.direct-tools')}</FormLabel>
+                <FormDescription>{t('admin.plugins.direct-tools-hint')}</FormDescription>
+              </div>
+              <FormControl>
+                <Switch checked={field.value} onCheckedChange={field.onChange} />
+              </FormControl>
+            </FormItem>
+          )}
+        />
 
         <div className="flex justify-end">
           <Button type="submit" disabled={save.isPending}>

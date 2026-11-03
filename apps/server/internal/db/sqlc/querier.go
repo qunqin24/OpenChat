@@ -43,6 +43,8 @@ type Querier interface {
 	// A due task's turn is taken: when it runs next (NULL: a one-off that has now
 	// had its turn). The run it starts, or why none, is recorded after.
 	AdvanceTask(ctx context.Context, arg AdvanceTaskParams) error
+	// The person's answer to a call still waiting in their conversation.
+	AnswerPluginConfirmation(ctx context.Context, arg AnswerPluginConfirmationParams) (PluginConfirmation, error)
 	// The only way a transcript row is written by the agent layer. Rows are never
 	// updated afterwards: a reply still being generated lives in runs.live, and
 	// becomes a row only when it is finished.
@@ -141,6 +143,7 @@ type Querier interface {
 	CreateDocument(ctx context.Context, arg CreateDocumentParams) (Document, error)
 	CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error)
 	CreatePlugin(ctx context.Context, arg CreatePluginParams) (Plugin, error)
+	CreatePluginConfirmation(ctx context.Context, arg CreatePluginConfirmationParams) (PluginConfirmation, error)
 	CreatePluginOAuthState(ctx context.Context, arg CreatePluginOAuthStateParams) error
 	CreateRun(ctx context.Context, arg CreateRunParams) (Run, error)
 	// These are the operator's selections at creation, not the endpoint's entire
@@ -246,6 +249,9 @@ type Querier interface {
 	DeleteTranscriptFrom(ctx context.Context, arg DeleteTranscriptFromParams) ([]string, error)
 	DeleteUserSessions(ctx context.Context, userID uuid.UUID) error
 	ExistingRuns(ctx context.Context, ids []uuid.UUID) ([]uuid.UUID, error)
+	ExpirePluginConfirmation(ctx context.Context, id uuid.UUID) error
+	// Calls left waiting by a run that is over: a process that died with them.
+	ExpireStalePluginConfirmations(ctx context.Context) (int64, error)
 	// A built-in plugin's icon, for a row made before the definition had one; an
 	// icon an administrator picked stays.
 	FillBuiltinPluginIcon(ctx context.Context, arg FillBuiltinPluginIconParams) error
@@ -288,6 +294,7 @@ type Querier interface {
 	GetConversationKind(ctx context.Context, id uuid.UUID) (GetConversationKindRow, error)
 	// Whether the conversation exists for this user, is temporary, and its snapshot.
 	GetConversationMemoryState(ctx context.Context, arg GetConversationMemoryStateParams) (GetConversationMemoryStateRow, error)
+	GetConversationPluginCatalog(ctx context.Context, id uuid.UUID) ([]byte, error)
 	// The snapshot, with the row locked: the tool adds to it as memories are saved.
 	GetConversationSnapshotForUpdate(ctx context.Context, arg GetConversationSnapshotForUpdateParams) (GetConversationSnapshotForUpdateRow, error)
 	// Per upstream, to show which one is failing or slow. A channel is its id and
@@ -404,6 +411,9 @@ type Querier interface {
 	// conversation's row.
 	GetSubagentSkills(ctx context.Context, arg GetSubagentSkillsParams) ([]string, error)
 	GetTask(ctx context.Context, arg GetTaskParams) (ScheduledTask, error)
+	// One tool as ListUsablePluginTools has it, read again at each call so a
+	// change made meanwhile counts; no row when it may not be called now.
+	GetUsablePluginTool(ctx context.Context, arg GetUsablePluginToolParams) (GetUsablePluginToolRow, error)
 	GetUser(ctx context.Context, id uuid.UUID) (User, error)
 	// Who a stored picture belongs to: the signed read URL of a locally kept file
 	// is served to anyone holding it, and this is what says the key is a picture.
@@ -421,6 +431,7 @@ type Querier interface {
 	GetUserPlugin(ctx context.Context, arg GetUserPluginParams) (GetUserPluginRow, error)
 	// An account's own quota; NULL for the instance's default.
 	GetUserStorageQuota(ctx context.Context, id uuid.UUID) (*int64, error)
+	GrantPluginTool(ctx context.Context, arg GrantPluginToolParams) error
 	// Whether anyone has registered yet. While nobody has, registration is open to
 	// the one account that becomes the administrator, however the switch is set.
 	HasAccounts(ctx context.Context) (bool, error)
@@ -668,6 +679,10 @@ type Querier interface {
 	// A referenced conversation as ListTranscript takes it, up to when it was
 	// referenced: what came after is not what the message referred to.
 	ListTranscriptUpTo(ctx context.Context, arg ListTranscriptUpToParams) ([]Message, error)
+	// Calling plugin tools from conversations (api/plugin_code.go).
+	// The tools a person's runs may call: of the plugins they installed that are
+	// on and theirs to see, connected when they act as the person, not blocked.
+	ListUsablePluginTools(ctx context.Context, userID uuid.UUID) ([]ListUsablePluginToolsRow, error)
 	// Newest first, by keyset on (created_at, id): the order of usage_logs_created_idx,
 	// so a page deep into a ledger of millions of rows costs what the first one
 	// does, and a row written meanwhile cannot shift the pages. The total is the
@@ -804,6 +819,7 @@ type Querier interface {
 	// request that failed produced nothing, so the next one is made there instead.
 	// Guarded on `running` like every other step.
 	MoveRunChannel(ctx context.Context, arg MoveRunChannelParams) error
+	PluginToolGranted(ctx context.Context, arg PluginToolGrantedParams) (bool, error)
 	// Keeps the newest versions of a skill, the current one among them; a
 	// conversation that started with an older one finds it gone and is told so.
 	PruneSkillVersions(ctx context.Context, arg PruneSkillVersionsParams) error
@@ -817,6 +833,7 @@ type Querier interface {
 	PurgeWebAuthnChallenges(ctx context.Context, createdAt pgtype.Timestamptz) (int64, error)
 	PutSearchCache(ctx context.Context, arg PutSearchCacheParams) error
 	QueueSubagentMessage(ctx context.Context, arg QueueSubagentMessageParams) error
+	RecordPluginCall(ctx context.Context, arg RecordPluginCallParams) error
 	RecordResearchStart(ctx context.Context, arg RecordResearchStartParams) error
 	// The first account created becomes the admin: someone has to be able to reach
 	// the admin panel, and there is no other bootstrap path. It is never pending
@@ -875,6 +892,9 @@ type Querier interface {
 	SetConversationModel(ctx context.Context, arg SetConversationModelParams) (Conversation, error)
 	// Pins or unpins without touching updated_at: pinning is not activity.
 	SetConversationPinned(ctx context.Context, arg SetConversationPinnedParams) (Conversation, error)
+	// The catalogue a conversation lists from now on, unless another request took
+	// it first: then no row, and that one stands.
+	SetConversationPluginCatalog(ctx context.Context, arg SetConversationPluginCatalogParams) ([]byte, error)
 	// NULL is automatic: the model's own default.
 	SetConversationReasoning(ctx context.Context, arg SetConversationReasoningParams) (Conversation, error)
 	// Only the first one is kept: two requests that both found none cannot

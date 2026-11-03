@@ -295,3 +295,134 @@
 .chat-ui .n-plugin-dialog-about.is-warning {
   color: var(--n-err);
 }
+
+/* ---------------------------------------------------------------- in a reply */
+/* A plugin script as a step of the process (ToolActivity): its mark, the
+   calls it made, and the script folded away. */
+.chat-ui .n-activity-step-icon .n-plugin-mark {
+  border-radius: 4px;
+}
+.chat-ui .n-activity-step-icon .n-plugin-mark svg {
+  width: 9px;
+  height: 9px;
+}
+.chat-ui .n-activity-calls {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--n-text-2);
+  font-size: 12.5px;
+}
+.chat-ui .n-activity-calls li {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+.chat-ui .n-activity-calls li > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-ui .n-activity-call-status {
+  flex: none;
+  color: var(--n-text-3);
+}
+.chat-ui .n-activity-calls li.is-failed .n-activity-call-status {
+  color: var(--n-err);
+}
+.chat-ui .n-activity-code > summary {
+  width: fit-content;
+  color: var(--n-text-3);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.chat-ui .n-activity-code > pre {
+  max-height: 240px;
+  margin: 6px 0 0;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--n-chat-code-bg);
+  color: var(--n-text);
+  font-size: 12.5px;
+  line-height: 18px;
+  white-space: pre;
+}
+
+/* A call waiting for the person: laid out as the research plan's card. */
+.chat-ui .n-plugin-confirm {
+  max-width: 560px;
+  margin: 8px 0 12px;
+  padding: 18px 20px 16px;
+  border-radius: 16px;
+  box-shadow: inset 0 0 0 1px var(--n-line);
+}
+.chat-ui .n-plugin-confirm-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.chat-ui .n-plugin-confirm-title {
+  margin: 0;
+  color: var(--n-text);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+  overflow-wrap: anywhere;
+}
+.chat-ui .n-plugin-confirm-hint {
+  margin: 2px 0 0;
+  color: var(--n-text-2);
+  font-size: 13.5px;
+  line-height: 20px;
+}
+.chat-ui .n-plugin-confirm-none {
+  margin: 14px 0 0;
+  color: var(--n-text-3);
+  font-size: 13.5px;
+}
+.chat-ui .n-plugin-confirm-args {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  gap: 8px 14px;
+  margin: 14px 0 0;
+  font-size: 13.5px;
+  line-height: 20px;
+}
+.chat-ui .n-plugin-confirm-args dt {
+  color: var(--n-text-2);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+.chat-ui .n-plugin-confirm-args dd {
+  min-width: 0;
+  margin: 0;
+}
+.chat-ui .n-plugin-confirm-args pre {
+  margin: 0;
+  color: var(--n-text);
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.chat-ui .n-plugin-confirm-args pre.is-json {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+.chat-ui .n-plugin-confirm-more {
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--n-text-3);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.chat-ui .n-plugin-confirm-error {
+  margin: 12px 0 0;
+  color: var(--n-err);
+  font-size: 13.5px;
+}

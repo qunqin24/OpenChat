@@ -6,9 +6,9 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { useConnectPlugin, useInstallPlugin, usePlugins, useUninstallPlugin } from '@/hooks/use-plugins'
-import { glyphColor } from '@/lib/plugin-icon'
 import { cn } from '@/lib/utils'
 import { SidebarToggle } from './ChatShell'
+import PluginMark from './PluginMark'
 
 /** The page's filters: everything, what is installed, or one of the administrator's categories. */
 type Filter = { kind: 'all' } | { kind: 'installed' } | { kind: 'category'; name: string }
@@ -139,22 +139,6 @@ function FilterTab({ active, onClick, children }: { active: boolean; onClick: ()
     <button type="button" role="tab" aria-selected={active} className={cn('n-plugin-filter', active && 'is-active')} onClick={onClick}>
       {children}
     </button>
-  )
-}
-
-/** A plugin's mark: its brand icon, or its letters, on its colour. */
-function PluginMark({ plugin, size }: { plugin: Plugin; size: number }) {
-  const style = { width: size, height: size, fontSize: Math.round(size * 0.42), ...(plugin.iconColor ? { background: plugin.iconColor, color: glyphColor(plugin.iconColor) } : {}) }
-  return (
-    <span className="n-plugin-mark" aria-hidden="true" style={style}>
-      {plugin.iconPath ? (
-        <svg viewBox="0 0 24 24" width={Math.round(size * 0.56)} height={Math.round(size * 0.56)} fill="currentColor">
-          <path d={plugin.iconPath} />
-        </svg>
-      ) : (
-        plugin.iconText || plugin.name.slice(0, 1)
-      )}
-    </span>
   )
 }
 

@@ -1,6 +1,6 @@
 // Package plugins speaks MCP to the services plugins reach
-// (docs/design/plugins-plan.md): for now, listing a service's tools for the
-// administrators' page; calling them from conversations builds on it.
+// (docs/design/plugins-plan.md): listing a service's tools for the
+// administrators' page, and calling them from conversations (call.go).
 package plugins
 
 import (
@@ -18,7 +18,7 @@ import (
 const listTimeout = 30 * time.Second
 
 // maxTools is how many tools of one service are kept: a service listing more
-// is not one plugin's worth (the model is offered at most 40 of them).
+// is not one plugin's worth.
 const maxTools = 200
 
 // Tool is one tool as the service describes it.
@@ -48,7 +48,7 @@ type Endpoint struct {
 func ListTools(ctx context.Context, end Endpoint) ([]Tool, error) {
 	ctx, cancel := context.WithTimeout(ctx, listTimeout)
 	defer cancel()
-	session, err := connect(ctx, end)
+	session, err := connect(ctx, end, listTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -67,8 +67,9 @@ func ListTools(ctx context.Context, end Endpoint) ([]Tool, error) {
 	return out, nil
 }
 
-func connect(ctx context.Context, end Endpoint) (*mcp.ClientSession, error) {
-	httpClient := &http.Client{Timeout: listTimeout}
+// connect opens a session; timeout bounds each HTTP request of it.
+func connect(ctx context.Context, end Endpoint, timeout time.Duration) (*mcp.ClientSession, error) {
+	httpClient := &http.Client{Timeout: timeout}
 	if end.HeaderValue != "" {
 		httpClient.Transport = withHeader{name: end.HeaderName, value: end.HeaderValue, next: http.DefaultTransport}
 	}

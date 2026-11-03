@@ -50,3 +50,21 @@ export function useUninstallPlugin() {
     onSuccess: (id) => remember(queryClient, id, false),
   })
 }
+
+/**
+ * The person's answer to a plugin call waiting for it (api/plugin_code.go):
+ * the run that waits goes on by itself and reports on its events stream.
+ */
+export function useAnswerPluginConfirmation(conversationId: string) {
+  return useMutation({
+    // Shown in the card itself.
+    meta: { silent: true },
+    mutationFn: async ({ confirmationId, decision }: { confirmationId: string; decision: 'allow' | 'always' | 'deny' }) =>
+      unwrap(
+        await api.POST('/conversations/{conversationId}/plugin-confirmations/{confirmationId}', {
+          params: { path: { conversationId, confirmationId } },
+          body: { decision },
+        }),
+      ),
+  })
+}

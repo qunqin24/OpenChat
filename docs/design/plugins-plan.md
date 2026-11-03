@@ -1,6 +1,6 @@
 # 插件（技能 + MCP）：方案
 
-> 状态：第一期进行中。已做：插件目录与安装（`api/plugins.go`）；侧栏「插件」页；后台「插件」页（增删改、启停、图标、MCP 地址与认证方式、OAuth 应用、拉取工具、按工具三档权限，`api/plugins_admin.go`）；内置插件（GitHub）；`internal/secrets`（密钥自动生成在 `data/secret.key`）；`internal/plugins`（官方 Go SDK 列工具；OAuth 发现、动态注册、PKCE、换取与刷新令牌）；每人连接账号（`api/plugins_oauth.go`）。还没做：对话里调用插件工具（CodeMode，§6）、确认卡片、审计日志、插件技能、Client ID Metadata Document。
+> 状态：第一期进行中。已做：插件目录与安装（`api/plugins.go`）；侧栏「插件」页；后台「插件」页（增删改、启停、图标、MCP 地址与认证方式、OAuth 应用、拉取工具、按工具三档权限，`api/plugins_admin.go`）；内置插件（GitHub）；`internal/secrets`（密钥自动生成在 `data/secret.key`）；`internal/plugins`（官方 Go SDK 列工具；OAuth 发现、动态注册、PKCE、换取与刷新令牌）；每人连接账号（`api/plugins_oauth.go`）。对话里调用插件工具（CodeMode，§6：`plugin_code`、`internal/codemode`、目录快照与轮次说明、直接列出开关、确认卡片、`plugin_calls` 审计）。还没做：插件技能、Client ID Metadata Document、子 Agent 与研究员点名插件（现在子 Agent 拿不到插件工具）、定时任务里需确认的调用立即拒绝（现在照常等，10 分钟后按没回应处理）、工具结果里的图片、后台查看审计日志的页面。
 
 ## 0. 结论先行
 

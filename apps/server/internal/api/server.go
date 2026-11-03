@@ -44,6 +44,9 @@ type Server struct {
 	// secrets seals plugin credentials (internal/secrets); without a key the
 	// parts of plugins that need one are refused.
 	secrets *secrets.Box
+	// pluginWaits holds, by confirmation id, the channel a plugin call that
+	// waits for the person to allow it listens on (plugin_code.go).
+	pluginWaits sync.Map
 	// avatars holds the read URLs issued for account pictures.
 	avatars avatarCache
 	// usage is the ledger of model requests, for the ones the server makes

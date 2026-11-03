@@ -1867,6 +1867,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/conversations/{conversationId}/plugin-confirmations/{confirmationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                confirmationId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Allow or refuse a plugin tool call that waits for the caller
+         * @description A plugin tool that needs confirmation pauses the script that called it
+         *     (`plugin_code`) inside its run, which stays `running`; the call is in
+         *     the running tool's `progress` (`PluginCodeProgress`, status `waiting`,
+         *     with this id). `allow` lets it run, `always` also allows that tool for
+         *     the rest of the conversation, `deny` refuses it (the script sees an
+         *     error). 404 for a call that is not the caller's or not waiting; 409
+         *     `confirmation_gone` when the run that waited is no longer here to go on
+         *     (the server restarted).
+         */
+        post: operations["answerPluginConfirmation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/conversations/{conversationId}/research-plans/{callId}": {
         parameters: {
             query?: never;
@@ -3353,6 +3383,8 @@ export interface components {
             status: "pending" | "running" | "done" | "awaiting";
             /** Format: uuid */
             messageId?: string;
+            /** @description What the running call last reported, for the page (`PluginCodeProgress` for `plugin_code` and directly listed plugin tools). */
+            progress?: unknown;
         };
         /** @description One SSE frame of the events stream. */
         ConversationEvent: components["schemas"]["SnapshotEvent"] | components["schemas"]["BatchEvent"];
@@ -3386,7 +3418,7 @@ export interface components {
             step?: number;
             events: components["schemas"]["RunEvent"][];
         };
-        RunEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["RunFinishedEvent"] | components["schemas"]["GenerationStartedEvent"] | components["schemas"]["PartStartedEvent"] | components["schemas"]["PartDeltaEvent"] | components["schemas"]["PartEndedEvent"] | components["schemas"]["MessageAppendedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"] | components["schemas"]["RetryScheduledEvent"] | components["schemas"]["TitleChangedEvent"] | components["schemas"]["TranscriptChangedEvent"] | components["schemas"]["CompactionStartedEvent"] | components["schemas"]["CompactionFinishedEvent"] | components["schemas"]["CompactionChangedEvent"] | components["schemas"]["ConversationDeletedEvent"] | components["schemas"]["SubagentsChangedEvent"];
+        RunEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["RunFinishedEvent"] | components["schemas"]["GenerationStartedEvent"] | components["schemas"]["PartStartedEvent"] | components["schemas"]["PartDeltaEvent"] | components["schemas"]["PartEndedEvent"] | components["schemas"]["MessageAppendedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"] | components["schemas"]["ToolProgressEvent"] | components["schemas"]["RetryScheduledEvent"] | components["schemas"]["TitleChangedEvent"] | components["schemas"]["TranscriptChangedEvent"] | components["schemas"]["CompactionStartedEvent"] | components["schemas"]["CompactionFinishedEvent"] | components["schemas"]["CompactionChangedEvent"] | components["schemas"]["ConversationDeletedEvent"] | components["schemas"]["SubagentsChangedEvent"];
         RunStartedEvent: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -3459,6 +3491,55 @@ export interface components {
             type: "tool_started";
             callId: string;
             name: string;
+        };
+        /** @description A running call reported how far it got; replaces what it reported before. */
+        ToolProgressEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "tool_progress";
+            callId: string;
+            progress: unknown;
+        };
+        /** @description The calls a plugin script (or a directly listed plugin tool) made so far, as `ToolSlot.progress` and, once finished, the tool result's `details` (with `code`). */
+        PluginCodeProgress: {
+            calls: components["schemas"]["PluginCallProgress"][];
+            /** @description The plugins the calls went to, for their names and icons. */
+            plugins: components["schemas"]["PluginBadge"][];
+            /** @description The script */
+            code?: string;
+            /** @description Why the script failed */
+            error?: string;
+        };
+        PluginCallProgress: {
+            seq: number;
+            /** @description The plugin's short name. */
+            plugin: string;
+            tool: string;
+            /** @enum {string} */
+            status: "running" | "waiting" | "done" | "failed" | "denied";
+            /**
+             * Format: uuid
+             * @description While `waiting`, what answerPluginConfirmation takes.
+             */
+            confirmationId?: string;
+            /** @description While `waiting`, what the call would send, for the person to judge. */
+            arguments?: {
+                [key: string]: unknown;
+            };
+            error?: string;
+        };
+        PluginBadge: {
+            slug: string;
+            name: string;
+            iconText: string;
+            iconColor: string;
+            iconPath: string;
+        };
+        AnswerPluginConfirmationRequest: {
+            /** @enum {string} */
+            decision: "allow" | "always" | "deny";
         };
         ToolFinishedEvent: {
             /**
@@ -4207,9 +4288,12 @@ export interface components {
             oauthClientSecret?: string;
             /** @description Scopes asked for, space-separated. */
             oauthScopes?: string;
+            /** @description Offer its tools to the model one by one instead of through plugin_code scripts. */
+            directTools?: boolean;
             sort?: number;
         };
         AdminPlugin: {
+            directTools: boolean;
             /** Format: uuid */
             id: string;
             slug: string;
@@ -8525,6 +8609,32 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AnswerQuestionResponse"];
                 };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    answerPluginConfirmation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                confirmationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerPluginConfirmationRequest"];
+            };
+        };
+        responses: {
+            /** @description the answer reached the waiting call */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Error"];
         };

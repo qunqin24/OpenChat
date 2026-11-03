@@ -79,6 +79,9 @@ type ToolSlot struct {
 	Arguments json.RawMessage `json:"arguments,omitempty"`
 	// Message is the tool row holding the result, once there is one.
 	Message *uuid.UUID `json:"message,omitempty"`
+	// Progress is what the running call last reported (ReportProgress), for
+	// the page: a reconnecting one sees it in the snapshot.
+	Progress json.RawMessage `json:"progress,omitempty"`
 }
 
 func decodeCheckpoint(data []byte) (Checkpoint, error) {
