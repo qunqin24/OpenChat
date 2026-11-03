@@ -84,6 +84,15 @@ func (s *Server) CleanupNow(ctx context.Context) {
 		return pgtype.Timestamptz{Time: now.Add(-age), Valid: true}
 	}
 
+	if _, err := s.q.DeleteStalePluginOAuthStates(ctx); err != nil {
+		slog.WarnContext(ctx, "clean up plugin sign-ins", "error", err)
+	}
+	if n, err := s.q.DeleteExpiredSearchCache(ctx); err != nil {
+		slog.WarnContext(ctx, "clean up expired search results", "error", err)
+	} else if n > 0 {
+		slog.InfoContext(ctx, "cleaned up expired search results", "count", n)
+	}
+
 	s.removeConversations(ctx, "expired temporary chats", func() (int, []string, error) {
 		rows, err := s.q.DeleteExpiredTemporaryConversations(ctx,
 			sqlc.DeleteExpiredTemporaryConversationsParams{Before: at(temporaryLifetime), RowLimit: cleanupBatch})

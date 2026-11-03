@@ -125,6 +125,12 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 			r.Get("/documents/{documentId}", wrapper.GetDocument)
 			r.Patch("/documents/{documentId}", wrapper.UpdateDocument)
 
+			// Plugins: the catalogue the caller may see, and their own installs.
+			r.Get("/plugins", wrapper.ListPlugins)
+			r.Post("/plugins/{pluginId}/connect", wrapper.ConnectPlugin)
+			r.Get("/plugins/oauth/callback", wrapper.PluginOAuthCallback)
+			r.Post("/plugins/{pluginId}/install", wrapper.InstallPlugin)
+			r.Delete("/plugins/{pluginId}/install", wrapper.UninstallPlugin)
 			// Scheduled tasks: always the caller's own; 404 while switched off.
 			r.Get("/tasks", wrapper.ListTasks)
 			r.Post("/tasks", wrapper.CreateTask)
@@ -149,6 +155,7 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 			r.Post("/conversations/{conversationId}/messages/{messageId}/edit", wrapper.EditMessage)
 			r.Post("/conversations/{conversationId}/regenerate", wrapper.RegenerateAnswer)
 			r.Post("/conversations/{conversationId}/tool-calls/{callId}/answer", wrapper.AnswerQuestion)
+			r.Post("/conversations/{conversationId}/research-plans/{callId}", wrapper.AnswerResearchPlan)
 			r.Post("/conversations/{conversationId}/runs/{runId}/cancel", wrapper.CancelRun)
 			// A conversation's sub-agents: read, stopped, resumed, moved to the
 			// background - never written to (subagents_http.go).
@@ -188,9 +195,19 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 				r.Post("/admin/version/check", wrapper.CheckForUpdate)
 				r.Get("/admin/authentication/passkeys", wrapper.GetPasskeySettings)
 				r.Patch("/admin/authentication/passkeys", wrapper.UpdatePasskeySettings)
+				r.Get("/admin/plugins", wrapper.ListAdminPlugins)
+				r.Post("/admin/plugins", wrapper.CreateAdminPlugin)
+				r.Put("/admin/plugins/{pluginId}", wrapper.UpdateAdminPlugin)
+				r.Delete("/admin/plugins/{pluginId}", wrapper.DeleteAdminPlugin)
+				r.Get("/admin/plugins/{pluginId}/tools", wrapper.ListAdminPluginTools)
+				r.Post("/admin/plugins/{pluginId}/tools/refresh", wrapper.RefreshAdminPluginTools)
+				r.Patch("/admin/plugins/{pluginId}/tools/{toolName}", wrapper.UpdateAdminPluginTool)
 				r.Get("/admin/web-search", wrapper.GetWebSearchSettings)
 				r.Patch("/admin/web-search", wrapper.UpdateWebSearchSettings)
 				r.Post("/admin/web-search/test", wrapper.TestWebSearch)
+				r.Get("/admin/web-fetch", wrapper.GetWebFetchSettings)
+				r.Patch("/admin/web-fetch", wrapper.UpdateWebFetchSettings)
+				r.Post("/admin/web-fetch/test", wrapper.TestWebFetch)
 				r.Get("/admin/image-search", wrapper.GetImageSearchSettings)
 				r.Patch("/admin/image-search", wrapper.UpdateImageSearchSettings)
 				r.Post("/admin/image-search/test", wrapper.TestImageSearch)

@@ -115,7 +115,7 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 - 个人技能照自定义指令审：保存时审（来源 `skill`，算违规），保存时没审过的在取快照时审（`snapshot`，不算违规，被拒的版本记 `blocked` 不进快照）；站点技能是管理员的，不审。一个技能的全部文字不超过 `skills.MaxTextChars`，保证一次审得完。
 - 查询都按 owner 限定（个人 = 会话用户，站点 = 空），`/admin/skills` 碰不到任何人的个人技能；同名时个人的盖过站点的。
 - 内置技能在 `internal/skills/builtin/<name>/`（`go:embed`，启动时解析，不合法就 panic，测试会拦），管理员只能关（`builtin_skills_off`）；同名时站点盖过内置、个人盖过两者。
-- 输入框 `$` 选的技能以 `<skill name="…"/>` 行放在消息开头（`chat-core/src/skill-mention.ts`），服务端不展开，系统提示词让模型先用 `skill` 打开；显示、编辑、复制都要先 `parseSkills` 拆开。
+- 输入框打 `/` 选的技能（附件、深度研究等在「+」里）以 `<skill name="…"/>` 行放在消息开头（`chat-core/src/skill-mention.ts`），服务端不展开，系统提示词让模型先用 `skill` 打开；显示、编辑、复制都要先 `parseSkills` 拆开。
 - 子 Agent 只能打开派它时 `skills` 参数点名的技能（`conversations.skills`，必须在主对话的清单里），读主对话快照里的版本；不点名就没有 `skill`。
 - 现在只收文本文件；脚本只是给模型看的参考，等沙箱来了才能跑。
 
@@ -134,11 +134,36 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 
 细节：[子智能体](docs/design/sub-agents.md)。
 
+## 深度研究
+
+只有用户能开：「+」里选「深度研究」，消息开头是 `<deep-research/>` 一行（在技能行之前，`skillMessage`/`parseSkills`；服务端 `splitResearch`/`personWords`），先出计划、用户确认才研究（`api/research.go`）。
+
+- 计划 run 只多一个 `research_plan`（和 `ask_user` 一样是用户回答的工具，`pendingCall`）；回应走 `POST /conversations/{id}/research-plans/{callId}`：`start` 起 `runs.research = true` 的 run（continues 计划 run），`revise` 起新的计划 run，`cancel` 只写结果不起 run。
+- 每人每月次数（`deep_research_monthly`，默认 10，管理员不限）在 `start` 的事务里 `LockResearchStarts` 后数，记一行 `research_starts`（run 删了不退）；发起计划前先查，用完 429 `research_limit`。搜索、读网页不设上限。
+- 阶段由 `researchPhaseOf` 认（计划 / 研究 / 研究员），按阶段给工具和提示词：研究 run 不看子智能体开关、单 run 至多派 `researchMaxSubagents` 个且都在前台；研究员是发起 run 为研究 run 的子 Agent。计划、研究和研究员 run 都强制联网（`forceWeb`，不改对话记住的开关）。
+- 研究员的搜索结果只给短摘要（不管后台的压缩设置），提示词要求先少量搜索、再完整读 5 到 8 个一手来源；报告由主 Agent 分节写（`document` 的 `append`），边写边附来源。
+- 免费搜索全进程过 `tools.DefaultFreeGate`（每家并发上限、失败后冷却），结果经 `tools.CachedSearch` 存 `search_cache` 24 小时（限最近一天的 1 小时），跨用户共享。
+
+细节：[深度研究](docs/design/deep-research-plan.md)。
+
+## 插件
+
+插件 = 技能 + 远程 MCP 服务，管理员在后台添加，用户在侧栏「插件」页安装（`api/plugins.go`、`api/plugins_admin.go`、`internal/plugins`）。
+
+- 只接远程 Streamable HTTP（官方 Go SDK），不跑 stdio；管理员填的地址可以是内网（不过 `GuardedClient`）。
+- 凭证（统一请求头的值，以后的个人令牌）经 `internal/secrets` 加密入库。密钥首次启动时自动生成在数据目录 `data/secret.key`（0600，已 gitignore），设了 `OPENCHAT_SECRET_KEY` 就用它；绝不存进数据库、绝不随响应返回或写日志。拿不到密钥时相关功能 409 `secret_key_missing`，其他照常。
+- 用户能看到的插件 = 启用的、面向所有人或面向管理员且本人是管理员的；看不到的一律 404。
+- 工具权限三档 `allow`/`confirm`/`blocked`；重新拉取工具只更新描述，不动管理员设过的权限。
+- 每人授权（OAuth 2.1 + PKCE）：`connect` 发起、`/plugins/oauth/callback` 收尾，state 一次性且只认发起人，令牌加密存在本人的 `plugin_installs` 行；取令牌一律走 `pluginToken`（会刷新、刷新失败标 `needs_reconnect`），别直接读列。服务返回的授权地址只跟 https 或同主机。
+
+细节：[插件](docs/design/plugins-plan.md)。
+
 ## 联网
 
 `web_search`/`web_fetch` 在 `internal/tools`，只在对话开着联网时提供（`UsesWeb`）。
 
-- `web_fetch` 的地址来自模型输出，只能经 `GuardedClient` 连接（每次拨号都检查目标是公网地址，每一跳重定向同样，不读环境代理）；不要新增绕开它的抓取路径。
+- `web_fetch` 的地址来自模型输出，只能经 `GuardedClient` 连接（每次拨号都检查目标是公网地址，每一跳重定向同样，不读环境代理）；不要新增绕开它的抓取路径。被拒时可改请 Jina Reader 代读（后台「网页读取」三种模式，`tools.ReaderMode`，`tools/reader.go`），连 Jina 同样走 `GuardedClient`，人机验证页按失败处理。
+- 转录行写入前经 `agent.EncodeParts`/`PlainText` 去掉 NUL（Postgres 的 text/jsonb 都不收，网页文字里偶尔有），别绕开它们直接写 `parts`/`content`。
 - 屏蔽站点（`Blocklist`）对请求的地址和重定向后的地址各查一次。
 - 读取输出有上限：每次最多 `fetchMaxChars`，用 `offset` 续读；`find` 的段数和总量同样封顶。不要新增一次返回整篇长页面的路径。
 - 搜索的时间范围（`recency`）和限定网站（`sites`）：后端能过滤的交给后端，回来的结果在 `WebSearch.Run` 里再按同样条件过一遍。

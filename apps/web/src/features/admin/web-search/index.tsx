@@ -46,6 +46,7 @@ import {
   type WebSearchSettings,
   type WebSearchTestResult,
 } from './use-web-search'
+import { WebFetchSection } from './web-fetch-section'
 
 /** The free search's services, by the id the server reports. */
 const VENDOR_NAMES: Record<string, string> = {
@@ -112,6 +113,7 @@ export function WebSearch() {
               <ProviderFields settings={data} />
             </Section>
             <PolicyForm settings={data} />
+            <WebFetchSection />
           </div>
         )}
       </Main>

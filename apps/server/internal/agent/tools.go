@@ -73,6 +73,11 @@ func DecodeArgs(raw json.RawMessage, into any) error {
 // question that was skipped, not as a tool that was interrupted (BuildContext).
 const ToolAskUser = "ask_user"
 
+// ToolResearchPlan puts a deep research's plan to the person, who starts it,
+// revises it or cancels it. Like ask_user, a call left without a result was
+// skipped: the person wrote something else instead.
+const ToolResearchPlan = "research_plan"
+
 // UserTool is implemented by a tool the person answers, not the server: its
 // calls are not executed. The run runs the other calls of the response, then
 // stops with status `awaiting_input` and the call on the transcript with no

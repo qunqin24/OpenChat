@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/qunqin24/openchat/apps/server/internal/agent"
 	"github.com/qunqin24/openchat/apps/server/internal/auth"
@@ -92,7 +93,7 @@ func (c webSearchConfig) searchConfig() tools.SearchConfig {
 func (c webSearchConfig) searcher(key string) tools.Searcher {
 	switch c.Provider {
 	case string(Free):
-		return tools.FreeSearch{}
+		return tools.FreeSearch{Gate: tools.DefaultFreeGate}
 	default:
 		if key == "" {
 			return nil
@@ -287,4 +288,37 @@ func (s *Server) TestWebSearch(w http.ResponseWriter, r *http.Request) {
 		result.Results = append(result.Results, WebSearchTestHit{Title: hit.Title, Url: hit.URL, Content: hit.Content})
 	}
 	httpx.JSON(w, http.StatusOK, result)
+}
+
+// searchStore keeps search results in the database (tools.CachedSearch), so
+// every server process and every user shares them.
+type searchStore struct{ q *sqlc.Queries }
+
+func (s searchStore) GetSearch(ctx context.Context, key string) ([]byte, bool) {
+	raw, err := s.q.GetSearchCache(ctx, key)
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			slog.WarnContext(ctx, "read cached search", "error", err)
+		}
+		return nil, false
+	}
+	return raw, true
+}
+
+func (s searchStore) PutSearch(ctx context.Context, key string, results []byte, ttl time.Duration) {
+	if err := s.q.PutSearchCache(ctx, sqlc.PutSearchCacheParams{
+		Key: key, Results: agent.StorableJSON(results), ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(ttl), Valid: true},
+	}); err != nil {
+		slog.WarnContext(ctx, "cache search results", "error", err)
+	}
+}
+
+// cachedSearcher is the configured search behind the shared cache, nil when
+// there is none.
+func (c webSearchConfig) cachedSearcher(key string, q *sqlc.Queries) tools.Searcher {
+	searcher := c.searcher(key)
+	if searcher == nil {
+		return nil
+	}
+	return tools.CachedSearch{Searcher: searcher, Store: searchStore{q: q}, Backend: c.Provider}
 }

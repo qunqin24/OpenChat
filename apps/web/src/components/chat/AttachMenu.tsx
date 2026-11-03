@@ -1,5 +1,5 @@
 import type { ConversationReference, LibraryFile } from '@openchat/api-client'
-import { Camera, Check, ChevronLeft, ChevronRight, LibraryBig, MessagesSquare, Paperclip, Plus, Search } from 'lucide-react'
+import { Camera, Check, ChevronLeft, ChevronRight, LibraryBig, MessagesSquare, Paperclip, Plus, Search, Telescope } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -13,7 +13,8 @@ import {
 import { useConversations, useConversationSearch } from '@/hooks/use-conversations'
 import { useDebounced } from '@/hooks/use-debounced'
 import { useLibraryFiles } from '@/hooks/use-library'
-import { canCaptureScreen, captureScreen, libraryFileAsFile } from '@/lib/attach-sources'
+import { useScreenshot } from '@/hooks/use-screenshot'
+import { canCaptureScreen, libraryFileAsFile } from '@/lib/attach-sources'
 import { useDisplayTitle } from '@/lib/titles'
 import { cn } from '@/lib/utils'
 import { FileIcon } from './FileIcon'
@@ -25,9 +26,11 @@ const MAX_REFERENCES = 5
 type View = 'main' | 'library' | 'conversations'
 
 /**
- * The composer's "+": a menu of ways to attach, after OpenWebUI's - a file
- * from the disk, a screenshot, a file already sent (the library), or another
- * conversation. The last two, as there, turn the menu itself into a list to
+ * The composer's "+": ways to attach, after
+ * OpenWebUI's - a file from the disk, a screenshot, a file already sent (the
+ * library), or another conversation - each with a word on what it does, as
+ * ChatGPT's menu has it, and deep research. Skills have a list of their own, typed for with /. The library and the
+ * conversations, as there, turn the menu itself into a list to
  * pick from (a way back, a search field, the list) rather than open a second
  * menu beside it. The files end in a File for `onAdd`
  * (lib/attach-sources.ts), so all of them meet the same checks as a picked
@@ -36,16 +39,23 @@ type View = 'main' | 'library' | 'conversations'
  */
 export function AttachMenu({
   disabled,
+  filesOff,
   hint,
+  side,
   conversationId,
   references,
   onPickFiles,
   onAdd,
   onRefer,
+  research,
 }: {
   disabled: boolean
+  /** The model takes no files: what attaches is shown but cannot be picked. */
+  filesOff: boolean
   /** What the button does, or why it is off. */
   hint: string
+  /** Where the menu opens, asked as it opens: below a box in the middle of the page, above one at its foot. */
+  side: () => 'top' | 'bottom'
   /** The conversation being written in, left out of the conversations offered. */
   conversationId?: string
   /** The conversations already referred to, shown as chosen. */
@@ -53,11 +63,16 @@ export function AttachMenu({
   onPickFiles: () => void
   onAdd: (files: File[]) => void
   onRefer: (reference: ConversationReference) => void
+  /** Deep research, when it is offered: what the line says, and whether this month's are used up. */
+  research?: { desc: string; blocked: boolean; onPick: () => void }
 }) {
   const { t } = useTranslation()
   const [view, setView] = useState<View>('main')
   // Which way the view slides in: into a list from the right, back from the left.
   const [cameBack, setCameBack] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [placement, setPlacement] = useState<'top' | 'bottom'>('top')
+  const screenshot = useScreenshot(onAdd)
 
   // Fetching a file can take a moment; the toast says so, and says it if it
   // fails. Nothing is added until the File is whole.
@@ -69,17 +84,6 @@ export function AttachMenu({
       onAdd([file])
     } catch {
       toast.error(t('chat.attach.failed', { name }), { id })
-    }
-  }
-
-  const screenshot = async () => {
-    try {
-      // "2026-10-29 15.30.12": sortable, and no colon, which some systems refuse in a name.
-      const stamp = new Date().toLocaleString('sv').replace(/:/g, '.')
-      const file = await captureScreen(`${t('chat.attach.screenshot-name')} ${stamp}`)
-      if (file) onAdd([file])
-    } catch {
-      toast.error(t('chat.attach.screenshot-failed'))
     }
   }
 
@@ -97,8 +101,13 @@ export function AttachMenu({
   return (
     // Opened again, it starts from the top.
     <DropdownMenu
-      onOpenChange={(open) => {
-        if (open) return
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (next) {
+          setPlacement(side())
+          return
+        }
         setView('main')
         setCameBack(false)
       }}
@@ -118,7 +127,7 @@ export function AttachMenu({
       <DropdownMenuContent
         className="n-attach-menu"
         align="start"
-        side="top"
+        side={placement}
         // Closed, the menu would hand focus back to "+", whose tooltip then
         // opens over the box: what comes next is writing, so focus goes there
         // - but not on a touch screen, where it would bring the keyboard up.
@@ -129,26 +138,37 @@ export function AttachMenu({
       >
         {view === 'main' && (
           <div className={cn('n-attach-view', cameBack && 'is-back')}>
-            <DropdownMenuItem onSelect={onPickFiles}>
+            <DropdownMenuItem disabled={filesOff} onSelect={onPickFiles}>
               <Paperclip aria-hidden="true" />
-              <span>{t('chat.attach.upload')}</span>
+              <span className="n-at-title">{t('chat.attach.upload')}</span>
+              <span className="n-at-desc">{t('chat.attach.upload-desc')}</span>
             </DropdownMenuItem>
             {canCaptureScreen() && (
-              <DropdownMenuItem onSelect={() => void screenshot()}>
+              <DropdownMenuItem disabled={filesOff} onSelect={() => void screenshot()}>
                 <Camera aria-hidden="true" />
-                <span>{t('chat.attach.screenshot')}</span>
+                <span className="n-at-title">{t('chat.attach.screenshot')}</span>
+                <span className="n-at-desc">{t('chat.attach.screenshot-desc')}</span>
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem onSelect={opens('library')}>
+            <DropdownMenuItem disabled={filesOff} onSelect={opens('library')}>
               <LibraryBig aria-hidden="true" />
-              <span>{t('chat.attach.library')}</span>
+              <span className="n-at-title">{t('chat.attach.library')}</span>
+              <span className="n-at-desc">{t('chat.attach.library-desc')}</span>
               <ChevronRight className="n-attach-more" aria-hidden="true" />
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={opens('conversations')}>
+            <DropdownMenuItem disabled={filesOff} onSelect={opens('conversations')}>
               <MessagesSquare aria-hidden="true" />
-              <span>{t('chat.attach.conversation')}</span>
+              <span className="n-at-title">{t('chat.attach.conversation')}</span>
+              <span className="n-at-desc">{t('chat.attach.conversation-desc')}</span>
               <ChevronRight className="n-attach-more" aria-hidden="true" />
             </DropdownMenuItem>
+            {research && (
+              <DropdownMenuItem disabled={research.blocked} onSelect={research.onPick}>
+                <Telescope aria-hidden="true" />
+                <span className="n-at-title">{t('chat.attach.research')}</span>
+                <span className="n-at-desc">{research.desc}</span>
+              </DropdownMenuItem>
+            )}
           </div>
         )}
         {view === 'library' && (

@@ -1,9 +1,9 @@
 -- name: CreateRun :one
 INSERT INTO runs (conversation_id, user_id, input_message_id, request_id, model_id, channel_id, reasoning_effort,
-                  web_search, continues, from_app)
+                  web_search, continues, from_app, research)
 VALUES (sqlc.arg('conversation_id'), sqlc.arg('user_id'), sqlc.arg('input_message_id'),
         sqlc.narg('request_id'), sqlc.arg('model_id'), sqlc.narg('channel_id'), sqlc.narg('reasoning_effort'),
-        sqlc.arg('web_search'), sqlc.narg('continues'), sqlc.arg('from_app'))
+        sqlc.arg('web_search'), sqlc.narg('continues'), sqlc.arg('from_app'), sqlc.arg('research'))
 RETURNING *;
 
 -- name: LockRunSlots :exec

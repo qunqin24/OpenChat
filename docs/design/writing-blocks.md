@@ -10,7 +10,7 @@
 
 ## 模型的工具 `document`（`api/document_tool.go`）
 
-- `create`(title, content)、`update`(id, edits[{find, replace}] 或 content 整篇重写、可改 title)、`read`(id)、`list`。只能动本对话的文档。
+- `create`(title, content)、`update`(id, edits[{find, replace}] 或 content 整篇重写、可改 title；`append` 在末尾接一段，排在 edits 之后，用来一节一节写长文档，比如深度研究的报告；只追加不覆盖，所以不受下面「整篇重写的保护」限制)、`read`(id)、`list`。只能动本对话的文档。
 - `update` 的每个 `find` 必须在当前文本里恰好出现一次，否则整次调用不改任何东西并说明原因（没找到 / 出现多次）。写入前在事务里锁文档、确认没有新版本插进来（用户刚保存过就报错让模型先读）。
 - 文档最新版本是用户写的时，`read`/`update` 的结果会提示「用户改过」。
 - 用户自己改过、没告诉模型就让它「接着写」（`api/document_edits.go`）：
@@ -31,6 +31,6 @@
 - 切到只读、按版本载入内容都不能算作编辑：Tiptap 的 `setEditable` 默认会触发 update 事件，必须传 `false`，`onUpdate` 也只在可编辑时记为改动（曾因此把旧版本的文字存成了新版本）。
 - 回头找文档：顶栏右侧有「写作」按钮（`DocumentsMenu`，只在对话里有文档时出现），一篇时点了直接打开，多篇时列出全部、按最近修改排序（`GET /conversations/{id}/documents`，`ListConversationDocuments` 带 `user_id`，非本人对话 404），不用滑回写作那一条回复。列表在文档被写出/修改（`DocumentCard`）和用户保存后失效重取。面板与聊天之间的分隔条可拖动（`PanelResizer`，宽度存 localStorage，双击还原）。
 - 选中文字出现浮条（`DocumentBubble`，Tiptap `BubbleMenu`）：「提出修改请求」、链接、粗体、斜体、段落样式。样式列表画在浮条里面，不用 Radix 菜单：菜单的 portal 定位在浮条之外，曾跑到页面左上角；浮条的 `mousedown` 都 `preventDefault`，否则编辑器失焦、选区和浮条一起消失。
-- 「提出修改请求」把选区序列化成 Markdown（`passageFor` 找原文里能逐字对上的那段），放进输入框上方的引用卡（`document-quote-store`），手机上随即关掉面板。发出去的消息正文是 `<document-selection id="..." title="...">\n原文\n</document-selection>\n\n请求`（`chat-core/src/document-selection.ts`）；用户消息里解析出来画成引用卡，编辑/复制只碰请求那几个字。系统提示词让模型只改这段（`op=update`，以原文作 `find`）。
+- 「提出修改请求」把选区序列化成 Markdown（`passageFor` 找原文里能逐字对上的那段），放进输入框上方的引用卡（`document-quote-store`），手机上随即关掉面板。发出去的消息正文是 `<document-selection id="..." title="...">\n原文\n</document-selection>\n\n请求`（`chat-core/src/document-selection.ts`）；用户消息里解析出来画成引用（`QuoteBlock`：左侧一道竖线加原文，Markdown 读成文字（`chat-core/src/quote-preview.ts`），没有边框；一段显示两行和来源，多段每段一行、带编号，输入框里超过 3 段收成「还有 N 段」；发出的消息里引用放在气泡内、问题上方），编辑/复制只碰请求那几个字。系统提示词让模型只改这段（`op=update`，以原文作 `find`）。
 - 修改过程：`update` 的参数还在流式输出时（`pendingEditOf` 从半截 JSON 里取 id 和 `find`），回复里是「正在修改…」，面板自动打开一次，被改的段落（`blocksTouched`；给了 `content` 就是全部）盖上骨架屏闪光（`document-marks.ts` 的 ProseMirror decoration，`n-doc-rewriting`，`data-motion="essential"`），编辑器只读；新版本到了换上内容，新出现的段落淡淡高亮一下（`n-doc-fresh`）。
 - 进行中的修改按卡片实例登记（`document-activity-store`，键是 `useId`），不按工具调用 id：流式回复和存好的消息会同时画同一个调用，按调用 id 时先卸载的那张会把另一张登记的删掉，闪光提前一秒消失。查看旧版本的 effect 只在「看哪个版本」真变了时才重设内容，否则每次重取都会把标记连同内容冲掉。

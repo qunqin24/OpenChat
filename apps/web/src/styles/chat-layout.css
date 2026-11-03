@@ -640,65 +640,66 @@
   -webkit-line-clamp: 3;
 }
 
-/* Skills picked with $ (Composer): chips above the box; the picker a menu
-   above the field, drawn like the other menus (menu.css). */
-.chat-ui .n-composer-field { position: relative; }
-.chat-ui .n-skill-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 12px 0; }
-.chat-ui .n-skill-chip {
+/* Skills picked with / (Composer): words at the start of the box's
+   first line, in the blue of the web toggle, as Grok marks a picked skill; the
+   text is indented past them. A click takes one back. */
+.chat-ui .n-skill-tokens {
+  position: absolute;
+  z-index: 1;
+  top: 16px;
+  left: 14px;
   display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 4px 2px 8px;
-  border-radius: 999px;
-  background: var(--n-hover);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 20px;
+  max-width: calc(100% - 28px);
+  gap: 6px;
+  white-space: nowrap;
 }
-.chat-ui .n-skill-chip svg { width: 13px; height: 13px; color: var(--n-text-2); }
-.chat-ui .n-skill-chip button {
-  display: inline-flex;
-  padding: 2px;
+.chat-ui .n-skill-token {
+  padding: 0;
   border: 0;
-  border-radius: 999px;
   background: transparent;
-  color: var(--n-text-2);
+  color: #2563eb;
+  font: inherit;
   cursor: pointer;
 }
-.chat-ui .n-skill-chip button:hover { background: var(--n-hover-strong); color: var(--n-text); }
-.chat-ui .n-skill-chip button svg { width: 12px; height: 12px; }
-.chat-ui .n-skill-picker {
+.chat-ui .n-skill-token:hover { text-decoration: line-through; }
+.dark .chat-ui .n-skill-token { color: #60a5fa; }
+/* Deep research leads them, with its telescope (research.css has the plan). */
+.chat-ui .n-skill-token.is-research { display: inline-flex; align-items: center; gap: 4px; }
+.chat-ui .n-skill-token.is-research svg { width: 15px; height: 15px; }
+.chat-ui .n-composer-field { position: relative; }
+/* The lists typed for in the box (Composer) - @ for the "+" menu's lines, /
+   for the skills: as wide as the box, above it - or below a box in the middle of
+   the page. Focus stays in the box, which the arrows and Enter drive. */
+.chat-ui .n-at-popup {
   position: absolute;
   z-index: 30;
-  right: 10px;
-  bottom: calc(100% + 6px);
-  left: 10px;
-  max-height: 18rem;
+  right: 0;
+  bottom: calc(100% + 8px);
+  left: 0;
+  max-height: 22rem;
   margin: 0;
-  padding: 2px;
+  padding: 6px;
   overflow-y: auto;
   border: 1px solid var(--n-menu-border);
-  border-radius: 12px;
+  border-radius: 16px;
   background: var(--n-menu-bg);
   color: var(--n-menu-text);
+  font-size: 13px;
+  line-height: 20px;
   list-style: none;
   box-shadow:
-    0 10px 15px -3px rgb(0 0 0 / 10%),
-    0 4px 6px -4px rgb(0 0 0 / 10%);
+    0 16px 40px -12px rgb(0 0 0 / 18%),
+    0 4px 10px -6px rgb(0 0 0 / 10%);
 }
-.chat-ui .n-skill-option { display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; border-radius: 10px; cursor: pointer; }
-.chat-ui .n-skill-option.is-active { background: var(--n-hover); }
-.chat-ui .n-skill-option-name { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 12.5px; font-weight: 500; }
-.chat-ui .n-skill-option-name svg { width: 13px; height: 13px; color: var(--n-text-2); }
-.chat-ui .n-skill-option-source { color: var(--n-text-3); font-family: var(--font-sans); font-size: 11px; font-weight: 400; }
-.chat-ui .n-skill-option-description {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-  color: var(--n-text-2);
-  font-size: 12px;
-  line-height: 17px;
-}
-/* A sent message's picked skills, above its words. */
-.chat-ui .n-msg-user .n-skill-chips { justify-content: flex-end; padding: 0 0 6px; }
+.chat-ui .n-at-popup.is-below { top: calc(100% + 8px); bottom: auto; }
+/* Opened below, the list lies over the welcome's starters, which come later
+   in the dock and are each a layer of their own (their entrance animation):
+   the box is lifted over them while it shows. */
+.chat-ui .n-composer:has(.n-at-popup) { z-index: 40; }
+.chat-ui .n-at-option { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px; cursor: pointer; }
+.chat-ui .n-at-option.is-active { background: var(--n-menu-hover); }
+.chat-ui .n-at-icon { display: inline-flex; flex: none; }
+.chat-ui .n-at-icon svg { width: 16px; height: 16px; }
+/* A sent message's picked skills, at the start of its words. */
+.chat-ui .n-skill-token.is-sent { cursor: default; }
+.chat-ui .n-skill-token.is-sent:hover { text-decoration: none; }

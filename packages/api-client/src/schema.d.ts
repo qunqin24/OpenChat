@@ -644,6 +644,123 @@ export interface paths {
         patch: operations["updateSystemSettings"];
         trace?: never;
     };
+    "/admin/plugins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every plugin */
+        get: operations["listAdminPlugins"];
+        put?: never;
+        /**
+         * Add a plugin
+         * @description 409 `slug_taken` for a short name in use; 409 `secret_key_missing`
+         *     for a header value while OPENCHAT_SECRET_KEY is not set; 400
+         *     `invalid_plugin` for a field out of shape.
+         */
+        post: operations["createAdminPlugin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/plugins/{pluginId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change a plugin
+         * @description The whole plugin, as `createAdminPlugin` takes it; the header value only when `headerValue` is present.
+         */
+        put: operations["updateAdminPlugin"];
+        post?: never;
+        /**
+         * Delete a plugin
+         * @description Its tools and everyone's installs of it go with it. A built-in one is 409 `plugin_builtin`.
+         */
+        delete: operations["deleteAdminPlugin"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/plugins/{pluginId}/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+            };
+            cookie?: never;
+        };
+        /** A plugin's tools */
+        get: operations["listAdminPluginTools"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/plugins/{pluginId}/tools/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * List the service's tools again
+         * @description Connects to the plugin's MCP service and stores the tools it lists:
+         *     new ones start allowed when they only read and asking otherwise, known
+         *     ones keep their permission, ones no longer listed go. 409
+         *     `plugin_no_service` for a plugin without an address; 409
+         *     `plugin_not_connected` for one that acts as each person when the
+         *     administrator has not connected their own account to it (the tools
+         *     are listed with it); 502 `plugin_unreachable` when the
+         *     service could not be listed, with why in the message.
+         */
+        post: operations["refreshAdminPluginTools"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/plugins/{pluginId}/tools/{toolName}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+                toolName: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set a tool's permission */
+        patch: operations["updateAdminPluginTool"];
+        trace?: never;
+    };
     "/admin/skills": {
         parameters: {
             query?: never;
@@ -958,6 +1075,49 @@ export interface paths {
          * @description Read by every run at its next request, so a change reaches runs in progress.
          */
         patch: operations["updateWebSearchSettings"];
+        trace?: never;
+    };
+    "/admin/web-fetch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Web page reading settings */
+        get: operations["getWebFetchSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change web page reading settings
+         * @description Read by every run at its next request, so a change reaches runs in progress.
+         */
+        patch: operations["updateWebFetchSettings"];
+        trace?: never;
+    };
+    "/admin/web-fetch/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read one page with the current settings
+         * @description Reads the page the way web_fetch would - the same mode, key and
+         *     blocklist - and reports how it went. A page that could not be read is
+         *     a 200 with `ok: false`.
+         */
+        post: operations["testWebFetch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/admin/web-search/test": {
@@ -1707,6 +1867,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/conversations/{conversationId}/research-plans/{callId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                callId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start, revise or cancel a deep research plan
+         * @description A message that begins with the line `<deep-research/>` asks for a deep
+         *     research. Its run drafts a plan and calls `research_plan`, and stops
+         *     there as `awaiting_input`, like `ask_user`. This answers the plan:
+         *
+         *     - `start`: the research begins. It counts against the caller's
+         *       monthly allowance (`SystemSettings.deepResearchMonthly`; 429
+         *       `research_limit` when none is left) and starts a run that continues
+         *       the one that drafted the plan, with the model and effort given.
+         *     - `revise`: `feedback` (required, moderated as the caller's words)
+         *       becomes the result, and a run starts that revises the plan.
+         *     - `cancel`: the result says so and no run starts; `run` is absent.
+         *
+         *     The result row is announced on the events stream. 409 `not_pending`
+         *     for a plan already answered, written past or deleted; 409
+         *     `conversation_busy` while a run is going; 403 `deep_research_off`
+         *     when deep research is off; 409 `revise_refused` while a refused
+         *     message is the last row.
+         */
+        post: operations["answerResearchPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/conversations/{conversationId}/events": {
         parameters: {
             query?: never;
@@ -1941,6 +2140,105 @@ export interface paths {
          *     a model next reads it, not now.
          */
         patch: operations["updateDocument"];
+        trace?: never;
+    };
+    "/plugins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The plugins the caller may install
+         * @description Plugins an administrator added and switched on, for everyone or for
+         *     administrators when the caller is one, featured first, each with
+         *     whether the caller installed it.
+         */
+        get: operations["listPlugins"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plugins/{pluginId}/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start connecting the caller's own account
+         * @description For a plugin that acts as each person (`authType: oauth`): finds the
+         *     service's authorization server, and answers with where the browser
+         *     is to go to sign in. Coming back to `/plugins/oauth/callback`
+         *     installs the plugin with the caller's tokens. 409
+         *     `plugin_oauth_unconfigured` when the plugin has no OAuth client and
+         *     its server registers none on the fly; 409 `secret_key_missing`
+         *     without the sealing key; 502 `plugin_unreachable` when the service
+         *     or its authorization server cannot be read.
+         */
+        post: operations["connectPlugin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plugins/oauth/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where the authorization server sends the person back
+         * @description Takes the one-time state, trades the code for the caller's tokens,
+         *     seals them and installs the plugin, then redirects to `/plugins`
+         *     with `connected=<slug>`, or `connect_error=<reason>` when it did not.
+         */
+        get: operations["pluginOAuthCallback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plugins/{pluginId}/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install a plugin
+         * @description Installs it for the caller; installing it again changes nothing. 404
+         *     for a plugin the caller may not see. 409 `plugin_needs_account` for
+         *     one that acts as the caller (OAuth): that is installed by connecting
+         *     the account (`connectPlugin`).
+         */
+        post: operations["installPlugin"];
+        /** Uninstall a plugin */
+        delete: operations["uninstallPlugin"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/tasks": {
@@ -2970,6 +3268,28 @@ export interface components {
             result: components["schemas"]["Message"];
             run: components["schemas"]["Run"];
         };
+        AnswerResearchPlanRequest: {
+            /** @enum {string} */
+            decision: "start" | "revise" | "cancel";
+            /** @description What to change; required for `revise`. */
+            feedback?: string;
+            model?: string;
+            reasoningEffort?: components["schemas"]["ReasoningEffort"];
+            /** @description Chosen by the client; a retry with the same id finds the same run. */
+            requestId?: string;
+        };
+        AnswerResearchPlanResponse: {
+            /** @description The user message that asked for the research. */
+            message: components["schemas"]["Message"];
+            /**
+             * @description The tool row written for the call. Its result's `details` holds
+             *     `decision` (`started`, `revised` or `cancelled`) and, for a
+             *     revision, `feedback`.
+             */
+            result: components["schemas"]["Message"];
+            /** @description The run started; absent for `cancel`. */
+            run?: components["schemas"]["Run"];
+        };
         CreateMessageResponse: {
             message: components["schemas"]["Message"];
             run: components["schemas"]["Run"];
@@ -3612,6 +3932,22 @@ export interface components {
             skills: boolean;
             /** @description Whether people may write skills of their own (System settings). */
             personalSkills: boolean;
+            deepResearch?: components["schemas"]["DeepResearchAllowance"];
+        };
+        /**
+         * @description Whether the caller can start a deep research (`@` → 深度研究). Absent
+         *     when deep research is off or web search is unavailable.
+         */
+        DeepResearchAllowance: {
+            /** @description True for an administrator, or when the allowance is 0 (no limit). */
+            unlimited: boolean;
+            /** @description Researches the caller may still start this month. */
+            left: number;
+            /**
+             * Format: date-time
+             * @description When the month's allowance starts again.
+             */
+            resetsAt: string;
         };
         ChatModel: {
             /** @description What a conversation stores and a request names. */
@@ -3832,6 +4168,145 @@ export interface components {
             lastError?: string;
             /** Format: date-time */
             createdAt: string;
+        };
+        PluginList: {
+            items: components["schemas"]["Plugin"][];
+        };
+        AdminPluginList: {
+            items: components["schemas"]["AdminPlugin"][];
+            /** @description Whether OPENCHAT_SECRET_KEY is set, without which header values and accounts cannot be stored. */
+            secretKeySet: boolean;
+        };
+        AdminPluginInput: {
+            /** @description Lowercase letters, digits and single hyphens; the prefix of its tool names. */
+            slug: string;
+            name: string;
+            description?: string;
+            about?: string;
+            category?: string;
+            iconText?: string;
+            iconColor?: string;
+            /** @description The Simple Icons slug of its icon; empty for none. */
+            iconSlug?: string;
+            /** @description That icon's SVG path data (24 x 24), commands and numbers only (400 `invalid_plugin` otherwise). */
+            iconPath?: string;
+            featured?: boolean;
+            enabled?: boolean;
+            /** @enum {string} */
+            audience?: "all" | "admins";
+            /** @description The MCP service's Streamable HTTP address; empty for a plugin of skills only. May be on the internal network. */
+            mcpUrl?: string;
+            /** @enum {string} */
+            authType?: "none" | "header" | "oauth";
+            headerName?: string;
+            /** @description Write-only, stored sealed. Absent keeps the stored one; empty removes it. */
+            headerValue?: string;
+            /** @description For `oauth`, the client registered with the authorization server (GitHub's OAuth app, say); empty to register one on the fly where the server allows it. */
+            oauthClientId?: string;
+            /** @description Write-only, stored sealed. Absent keeps the stored one; empty removes it. */
+            oauthClientSecret?: string;
+            /** @description Scopes asked for, space-separated. */
+            oauthScopes?: string;
+            sort?: number;
+        };
+        AdminPlugin: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            name: string;
+            description: string;
+            about: string;
+            category: string;
+            iconText: string;
+            iconColor: string;
+            iconSlug: string;
+            iconPath: string;
+            featured: boolean;
+            enabled: boolean;
+            /** @enum {string} */
+            audience: "all" | "admins";
+            mcpUrl: string;
+            /** @enum {string} */
+            authType: "none" | "header" | "oauth";
+            headerName: string;
+            /** @description Whether a header value is stored. Never sent back. */
+            headerSet: boolean;
+            oauthClientId: string;
+            /** @description Whether a client secret is stored. Never sent back. */
+            oauthSecretSet: boolean;
+            oauthScopes: string;
+            /** @description The client was registered on the fly rather than given. */
+            oauthRegistered: boolean;
+            sort: number;
+            /** @description How many people installed it. */
+            installs: number;
+            /** @description Tools last listed by its service. */
+            tools: number;
+            /** @description Of those, the ones not blocked. */
+            toolsOn: number;
+            /** Format: date-time */
+            toolsFetchedAt?: string;
+            /**
+             * @description It ships with OpenChat: made switched off on the first start, and
+             *     turned off rather than deleted (409 `plugin_builtin`).
+             */
+            builtin: boolean;
+        };
+        /**
+         * @description `allow`: called without asking; `confirm`: the person is asked before
+         *     each call; `blocked`: never offered to the model.
+         * @enum {string}
+         */
+        PluginToolPermission: "allow" | "confirm" | "blocked";
+        PluginTool: {
+            name: string;
+            title: string;
+            description: string;
+            /** @description The service says it only reads (readOnlyHint). */
+            readOnly: boolean;
+            /** @description The service says it may destroy (destructiveHint, true unless it says otherwise). */
+            destructive: boolean;
+            permission: components["schemas"]["PluginToolPermission"];
+        };
+        PluginToolList: {
+            items: components["schemas"]["PluginTool"][];
+            /** Format: date-time */
+            fetchedAt?: string;
+        };
+        Plugin: {
+            /** Format: uuid */
+            id: string;
+            /** @description The prefix of the plugin's tool names. */
+            slug: string;
+            name: string;
+            /** @description One line, for its tile. */
+            description: string;
+            /** @description More on what it does, shown before installing. */
+            about: string;
+            /** @description The administrator's grouping (办公, 开发…); empty for none. */
+            category: string;
+            featured: boolean;
+            /** @description A letter or two drawn as its mark. */
+            iconText: string;
+            /** @description The mark's colour (CSS), empty for the default. */
+            iconColor: string;
+            /** @description Its brand icon's SVG path (Simple Icons, 24 x 24), drawn instead of iconText; empty for none. */
+            iconPath: string;
+            /**
+             * @description How it reaches its service: no account, one the administrator
+             *     set up for everyone (`header`), or each person's own (`oauth`).
+             * @enum {string}
+             */
+            authType: "none" | "header" | "oauth";
+            /** @description Tools it offers that only read. */
+            readTools: number;
+            /** @description Tools it offers that may change things; the model asks before calling those the administrator did not allow outright. */
+            writeTools: number;
+            /** @description Skills it brings. */
+            skills: number;
+            installed: boolean;
+            /** @description The caller's account for it stopped working (its token could not be refreshed); connecting again mends it. */
+            needsReconnect: boolean;
         };
         TaskList: {
             items: components["schemas"]["Task"][];
@@ -4634,6 +5109,16 @@ export interface components {
              */
             personalSkills: boolean;
             /**
+             * @description Whether people may start a deep research from the composer's `@`
+             *     menu. On by default; needs web search to be available.
+             */
+            deepResearch: boolean;
+            /**
+             * @description How many deep researches one person may start per calendar month;
+             *     0 is unlimited. 10 unless changed. Administrators are exempt.
+             */
+            deepResearchMonthly: number;
+            /**
              * @description Whether the server logs at debug level. Takes effect immediately —
              *     no restart — and persists across one, because the fault worth
              *     chasing is usually the intermittent kind.
@@ -4649,6 +5134,9 @@ export interface components {
             memory?: boolean;
             skills?: boolean;
             personalSkills?: boolean;
+            deepResearch?: boolean;
+            /** @description 0 to 10000 (400 `invalid_research_limit` otherwise); 0 is unlimited. */
+            deepResearchMonthly?: number;
             avatarUploads?: boolean;
             scheduledTasks?: boolean;
             requestTraces?: boolean;
@@ -4928,6 +5416,49 @@ export interface components {
             compression?: components["schemas"]["WebSearchCompression"];
             truncateLength?: number;
             blocklist?: string[];
+        };
+        /**
+         * @description How web_fetch reads a page. `builtin` fetches it itself and nothing
+         *     else. `fallback` (the default) fetches it itself and, when the site
+         *     turns it away (403, 429, a timeout) or it has no readable text, asks
+         *     Jina Reader (r.jina.ai), which reads it as a browser would. `jina`
+         *     asks Jina Reader first and fetches it itself when Jina cannot. Jina is
+         *     sent the page's address.
+         * @enum {string}
+         */
+        WebFetchReader: "builtin" | "fallback" | "jina";
+        WebFetchSettings: {
+            reader: components["schemas"]["WebFetchReader"];
+            /** @description Whether a Jina API key is stored. Without one Jina is used keyless, at its lower rate limit. */
+            jinaKeySet: boolean;
+            /** @description The key's last four characters. */
+            jinaKeyPreview?: string;
+        };
+        /** @description Only the fields present are changed. */
+        UpdateWebFetchSettingsRequest: {
+            reader?: components["schemas"]["WebFetchReader"];
+            /** @description Jina's API key. Empty removes the stored one. */
+            jinaKey?: string;
+        };
+        WebFetchTestRequest: {
+            url: string;
+        };
+        WebFetchTestResult: {
+            ok: boolean;
+            /** Format: int64 */
+            latencyMs: number;
+            /**
+             * @description Who read the page.
+             * @enum {string}
+             */
+            via?: "builtin" | "jina";
+            title?: string;
+            /** @description How many characters of text the page has. */
+            chars?: number;
+            /** @description The text's first few hundred characters. */
+            preview?: string;
+            /** @description Why the page could not be read, in English, when it could not. */
+            error?: string;
         };
         WebSearchTestRequest: {
             /** @description What to search for. A fixed query when absent. */
@@ -6323,6 +6854,174 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    listAdminPlugins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPluginList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createAdminPlugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPluginInput"];
+            };
+        };
+        responses: {
+            /** @description added */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPlugin"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateAdminPlugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPluginInput"];
+            };
+        };
+        responses: {
+            /** @description changed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPlugin"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteAdminPlugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listAdminPluginTools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginToolList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    refreshAdminPluginTools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description listed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginToolList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateAdminPluginTool: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+                toolName: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    permission: components["schemas"]["PluginToolPermission"];
+                };
+            };
+        };
+        responses: {
+            /** @description set */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     listSiteSkills: {
         parameters: {
             query?: never;
@@ -6857,6 +7556,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WebSearchSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getWebFetchSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebFetchSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateWebFetchSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWebFetchSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebFetchSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    testWebFetch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebFetchTestRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebFetchTestResult"];
                 };
             };
             default: components["responses"]["Error"];
@@ -7759,6 +8529,34 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    answerResearchPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+                callId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerResearchPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description the decision was recorded */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnswerResearchPlanResponse"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     streamConversationEvents: {
         parameters: {
             query?: never;
@@ -8033,6 +8831,119 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Document"];
                 };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listPlugins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    connectPlugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description where to sign in */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        authorizeUrl: string;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    pluginOAuthCallback: {
+        parameters: {
+            query?: {
+                state?: string;
+                code?: string;
+                error?: string;
+                iss?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description back to the plugins page */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    installPlugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description installed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plugin"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    uninstallPlugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description uninstalled */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Error"];
         };

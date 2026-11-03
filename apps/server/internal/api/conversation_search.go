@@ -65,7 +65,7 @@ func (s *Server) searchConversations(w http.ResponseWriter, r *http.Request, use
 			conv.Match = &ConversationMatch{
 				MessageId: id,
 				Role:      ConversationMatchRole(row.HitRole),
-				Excerpt:   excerpt(row.HitContent, search),
+				Excerpt:   excerpt(searchedWords(row.HitContent), search),
 			}
 		}
 		page.Items = append(page.Items, conv)
@@ -113,4 +113,11 @@ outer:
 		return i
 	}
 	return -1
+}
+
+// searchedWords is a matched message as its excerpt shows it: without the
+// lines of the skills picked for it with /, which are tags, not its words.
+func searchedWords(content string) string {
+	words := personWords(content)
+	return words
 }

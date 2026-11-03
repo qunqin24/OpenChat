@@ -1,0 +1,181 @@
+/**
+ * Deep research (docs/design/deep-research-plan.md §6): the plan card in the
+ * reply (ResearchPlanCard), laid out after ChatGPT's, and the deep research
+ * token at the start of a message.
+ *
+ * Chat tokens only (`--n-*`), under `.chat-ui`. The countdown ring is the only
+ * motion; under reduced motion it still counts, without the easing.
+ */
+
+.chat-ui .n-plan {
+  max-width: 560px;
+  margin: 8px 0 12px;
+  padding: 18px 20px 16px;
+  border-radius: 16px;
+  box-shadow: inset 0 0 0 1px var(--n-line);
+}
+.chat-ui .n-plan-title {
+  margin: 0 0 10px;
+  color: var(--n-text);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+}
+.chat-ui .n-plan-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.chat-ui .n-plan-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: var(--n-text);
+  font-size: 15px;
+  line-height: 22px;
+}
+.chat-ui .n-plan-dot {
+  width: 16px;
+  height: 16px;
+  margin-top: 3px;
+  flex: none;
+  color: var(--n-text-3);
+}
+.chat-ui .n-plan-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+.chat-ui .n-plan-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--n-line);
+  color: var(--n-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 120ms ease, opacity 120ms ease;
+}
+.chat-ui .n-plan-btn:not(:disabled):hover {
+  background: var(--n-hover);
+}
+.chat-ui .n-plan-btn.is-primary {
+  background: var(--n-accent);
+  box-shadow: none;
+  color: var(--n-accent-fg);
+}
+.chat-ui .n-plan-btn.is-primary:has(.n-plan-ring) {
+  padding-inline-end: 5px;
+}
+.chat-ui .n-plan-btn.is-primary:not(:disabled):hover {
+  background: var(--n-accent-hover);
+}
+.chat-ui .n-plan-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+/* The seconds left, in a ring that empties as they run out. */
+.chat-ui .n-plan-ring {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.chat-ui .n-plan-ring svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+.chat-ui .n-plan-ring circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  transition: stroke-dasharray 1s linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-ui .n-plan-ring circle {
+    transition: none;
+  }
+}
+.chat-ui .n-plan-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 14px 0 0;
+  color: var(--n-text-2);
+  font-size: 14px;
+  line-height: 20px;
+}
+.chat-ui .n-plan-status svg {
+  width: 15px;
+  height: 15px;
+}
+.chat-ui .n-plan.is-decided .n-plan-step {
+  color: var(--n-text-2);
+}
+
+/* The plan being revised, over the composer's text. */
+.chat-ui .n-plan-chip {
+  display: inline-flex;
+  align-self: flex-start;
+  width: fit-content;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 28px);
+  margin: 12px 14px 0;
+  padding: 5px 6px 5px 10px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--n-line);
+  color: var(--n-text);
+  font-size: 14px;
+  line-height: 20px;
+}
+.chat-ui .n-plan-chip > svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  color: var(--n-text-2);
+}
+.chat-ui .n-plan-chip > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-ui .n-plan-chip button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--n-text-2);
+  cursor: pointer;
+}
+.chat-ui .n-plan-chip button:hover {
+  background: var(--n-hover);
+  color: var(--n-text);
+}
+.chat-ui .n-plan-chip button svg {
+  width: 14px;
+  height: 14px;
+}

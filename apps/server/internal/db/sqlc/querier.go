@@ -107,6 +107,8 @@ type Querier interface {
 	// queued (no run yet): a queued sub-agent starts only when none ahead of it
 	// waits, so they start in the order they were launched.
 	CountQueuedSubagentsBefore(ctx context.Context, arg CountQueuedSubagentsBeforeParams) (int64, error)
+	// The researches a person started since the given moment (the month's start).
+	CountResearchStarts(ctx context.Context, arg CountResearchStartsParams) (int64, error)
 	// The total behind ListServedModels; see the comments there. Counting `served`
 	// rather than channel_models is what keeps a model served by three channels
 	// from counting three times.
@@ -138,6 +140,8 @@ type Querier interface {
 	// another person's document reads as missing.
 	CreateDocument(ctx context.Context, arg CreateDocumentParams) (Document, error)
 	CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error)
+	CreatePlugin(ctx context.Context, arg CreatePluginParams) (Plugin, error)
+	CreatePluginOAuthState(ctx context.Context, arg CreatePluginOAuthStateParams) error
 	CreateRun(ctx context.Context, arg CreateRunParams) (Run, error)
 	// These are the operator's selections at creation, not the endpoint's entire
 	// list. Insert them together with the channel in one transaction.
@@ -173,6 +177,7 @@ type Querier interface {
 	DeleteCatalogProviders(ctx context.Context) error
 	DeleteChannel(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteContextSummary(ctx context.Context, conversationID uuid.UUID) (int64, error)
+	DeleteExpiredSearchCache(ctx context.Context) (int64, error)
 	DeleteExpiredSessions(ctx context.Context) (int64, error)
 	// Deletions that take files with them. An attachment row is the only thing
 	// that says a stored file is wanted, so each statement hands back the storage
@@ -211,6 +216,10 @@ type Querier interface {
 	DeleteOtherUserSessions(ctx context.Context, arg DeleteOtherUserSessionsParams) error
 	DeleteOwnedSkill(ctx context.Context, arg DeleteOwnedSkillParams) (uuid.UUID, error)
 	DeletePasskey(ctx context.Context, arg DeletePasskeyParams) (int64, error)
+	// A plugin an administrator added; a built-in one is turned off instead.
+	DeletePlugin(ctx context.Context, id uuid.UUID) (int64, error)
+	// Tools the service no longer lists.
+	DeletePluginToolsExcept(ctx context.Context, arg DeletePluginToolsExceptParams) error
 	// A queued sub-agent whose wait ended without a start - the reply that
 	// launched it stopped, or the person cancelled it: it never did anything.
 	DeleteQueuedSubagent(ctx context.Context, id uuid.UUID) (int64, error)
@@ -220,6 +229,7 @@ type Querier interface {
 	// row was never the endpoint's to mention, so its absence says nothing about
 	// it.
 	DeleteStaleChannelModels(ctx context.Context, arg DeleteStaleChannelModelsParams) (int64, error)
+	DeleteStalePluginOAuthStates(ctx context.Context) (int64, error)
 	// Uploads no message ever claimed: the user attached a file and never sent, or
 	// the send failed. Anything this old has no request in flight that could still
 	// claim it.
@@ -236,6 +246,11 @@ type Querier interface {
 	DeleteTranscriptFrom(ctx context.Context, arg DeleteTranscriptFromParams) ([]string, error)
 	DeleteUserSessions(ctx context.Context, userID uuid.UUID) error
 	ExistingRuns(ctx context.Context, ids []uuid.UUID) ([]uuid.UUID, error)
+	// A built-in plugin's icon, for a row made before the definition had one; an
+	// icon an administrator picked stays.
+	FillBuiltinPluginIcon(ctx context.Context, arg FillBuiltinPluginIconParams) error
+	// A built-in plugin's scopes, for a row made before the definition had them.
+	FillBuiltinPluginScopes(ctx context.Context, arg FillBuiltinPluginScopesParams) error
 	// A conversation's sub-agents with this name, newest first: the main agent
 	// addresses them by the names it gave.
 	FindSubagentsByName(ctx context.Context, arg FindSubagentsByNameParams) ([]Conversation, error)
@@ -353,8 +368,11 @@ type Querier interface {
 	GetPicture(ctx context.Context, id uuid.UUID) (Picture, error)
 	// A picture already kept, found again by other words.
 	GetPictureAt(ctx context.Context, arg GetPictureAtParams) (Picture, error)
+	GetPlugin(ctx context.Context, id uuid.UUID) (Plugin, error)
+	GetPluginInstall(ctx context.Context, arg GetPluginInstallParams) (PluginInstall, error)
 	GetRun(ctx context.Context, id uuid.UUID) (Run, error)
 	GetRunByRequestID(ctx context.Context, arg GetRunByRequestIDParams) (Run, error)
+	GetSearchCache(ctx context.Context, key string) ([]byte, error)
 	// A run's pinned channel, as long as it still serves the model. Anything else
 	// — deleted, disabled, the model switched off — reads as no rows, which is
 	// the run's `no_model`.
@@ -399,6 +417,8 @@ type Querier interface {
 	// row the planner returned first, which is the wrong account rather than an
 	// error. Addresses win, so nobody's username can shadow somebody's email.
 	GetUserByLogin(ctx context.Context, identifier string) (User, error)
+	// One plugin as ListUserPlugins has it; no row when the person may not see it.
+	GetUserPlugin(ctx context.Context, arg GetUserPluginParams) (GetUserPluginRow, error)
 	// An account's own quota; NULL for the instance's default.
 	GetUserStorageQuota(ctx context.Context, id uuid.UUID) (*int64, error)
 	// Whether anyone has registered yet. While nobody has, registration is open to
@@ -409,6 +429,9 @@ type Querier interface {
 	HasPendingReports(ctx context.Context, parentID uuid.UUID) (bool, error)
 	HasSubagentInbox(ctx context.Context, conversationID uuid.UUID) (bool, error)
 	InsertAuthAttempt(ctx context.Context, arg InsertAuthAttemptParams) (int64, error)
+	// A built-in plugin, unless it was made before (or its short name is taken).
+	// Starts switched off: it needs an administrator's setup before anyone can use it.
+	InsertBuiltinPlugin(ctx context.Context, arg InsertBuiltinPluginParams) (int64, error)
 	InsertCatalogModels(ctx context.Context, arg []InsertCatalogModelsParams) (int64, error)
 	InsertCatalogProviders(ctx context.Context, arg []InsertCatalogProvidersParams) (int64, error)
 	// The next version of a document. The caller holds the document's row lock
@@ -443,6 +466,7 @@ type Querier interface {
 	// NULL, so writing it for every account's request is what labels the one whose
 	// account is deleted while it is out.
 	InsertUsageLog(ctx context.Context, arg InsertUsageLogParams) (uuid.UUID, error)
+	InstallPlugin(ctx context.Context, arg InstallPluginParams) error
 	// Before an account is deleted: its requests keep the name it had, as the
 	// foreign key is about to set their owner to NULL.
 	LabelDeletedUserUsage(ctx context.Context, arg LabelDeletedUserUsageParams) error
@@ -458,6 +482,9 @@ type Querier interface {
 	// reference to it takes in (agent/references.go). Refused messages, tool
 	// results and sub-agent reports are not the conversation, as for an export.
 	LatestReferableMessageAt(ctx context.Context, conversationID uuid.UUID) (pgtype.Timestamptz, error)
+	// Every plugin, for the administrators' page, with how many installed it and
+	// how many of its tools are not blocked.
+	ListAdminPlugins(ctx context.Context) ([]ListAdminPluginsRow, error)
 	ListAttachmentsByMessages(ctx context.Context, messageIds []uuid.UUID) ([]Attachment, error)
 	// Attachments by id, within one user's scope: what the context builder resolves
 	// a reference through, so a reference to someone else's file reads as missing.
@@ -560,6 +587,7 @@ type Querier interface {
 	// The caller's pinned conversations, the latest pinned first: shown above the
 	// rest of the list whatever their age, so not paged with it.
 	ListPinnedConversations(ctx context.Context, userID *uuid.UUID) ([]Conversation, error)
+	ListPluginTools(ctx context.Context, pluginID uuid.UUID) ([]PluginTool, error)
 	// The newest rows of the conversation, oldest first: the raw material of a
 	// model request. Newest, not oldest — a long conversation is answered from its
 	// end. A message that moderation refused (status 'blocked') is not a row of the
@@ -648,6 +676,11 @@ type Querier interface {
 	// `to` is exclusive, so a day's end is the next day's start and nothing falls
 	// between two ranges.
 	ListUsageLogs(ctx context.Context, arg ListUsageLogsParams) ([]ListUsageLogsRow, error)
+	// Plugins (api/plugins.go, docs/design/plugins-plan.md).
+	// The plugins a person may install - on, and for everyone or for
+	// administrators when they are one - with whether they installed each and
+	// what tools it offers that are not blocked.
+	ListUserPlugins(ctx context.Context, arg ListUserPluginsParams) ([]ListUserPluginsRow, error)
 	// Offset paging rather than keyset: the admin table needs page numbers and a
 	// total, and the row count here stays small enough that the scan is cheap.
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
@@ -687,6 +720,10 @@ type Querier interface {
 	// answered one registration at a time: two people registering on a fresh
 	// install cannot both be made the administrator.
 	LockRegistration(ctx context.Context) error
+	// Deep research (api/research.go, docs/design/deep-research-plan.md).
+	// Held until the transaction ends, so that counting this month's researches
+	// and recording one more is a single step.
+	LockResearchStarts(ctx context.Context, key string) error
 	// Held until the transaction ends, so two answers to one question queue up and
 	// the second finds the first's.
 	LockRun(ctx context.Context, id uuid.UUID) (Run, error)
@@ -726,6 +763,8 @@ type Querier interface {
 	MarkMemoriesModerated(ctx context.Context, arg MarkMemoriesModeratedParams) error
 	MarkMemoryEventUndone(ctx context.Context, arg MarkMemoryEventUndoneParams) (MemoryEvent, error)
 	MarkModerationSanction(ctx context.Context, arg MarkModerationSanctionParams) error
+	MarkPluginNeedsReconnect(ctx context.Context, arg MarkPluginNeedsReconnectParams) error
+	MarkPluginToolsFetched(ctx context.Context, id uuid.UUID) error
 	MarkReportsDelivered(ctx context.Context, arg MarkReportsDeliveredParams) error
 	// What a snapshot-time check found, recorded only while the version still has
 	// the hash that was checked.
@@ -776,7 +815,9 @@ type Querier interface {
 	PurgeDeletedConversations(ctx context.Context, arg PurgeDeletedConversationsParams) ([]PurgeDeletedConversationsRow, error)
 	PurgeModerationEvents(ctx context.Context, before pgtype.Timestamptz) (int64, error)
 	PurgeWebAuthnChallenges(ctx context.Context, createdAt pgtype.Timestamptz) (int64, error)
+	PutSearchCache(ctx context.Context, arg PutSearchCacheParams) error
 	QueueSubagentMessage(ctx context.Context, arg QueueSubagentMessageParams) error
+	RecordResearchStart(ctx context.Context, arg RecordResearchStartParams) error
 	// The first account created becomes the admin: someone has to be able to reach
 	// the admin panel, and there is no other bootstrap path. It is never pending
 	// and never refused, whatever the switches say - a fresh install must not be
@@ -802,6 +843,8 @@ type Querier interface {
 	// and a field it sends as null goes back to following the catalogue. A cap's
 	// period and exemption left out (NULL) are their defaults, total and exempt.
 	SaveModelOverride(ctx context.Context, arg SaveModelOverrideParams) (ModelOverride, error)
+	// A person's tokens after connecting or refreshing: the install is made, or brought up to date.
+	SavePluginTokens(ctx context.Context, arg SavePluginTokensParams) error
 	// One step of a run: a new checkpoint, new live state, or both. Guarded on
 	// `running` so nothing can resurrect a run that already finished.
 	SaveRunState(ctx context.Context, arg SaveRunStateParams) (Run, error)
@@ -843,6 +886,11 @@ type Querier interface {
 	// renamed in the meantime keeps their name. Not a change of activity, so the
 	// conversation keeps its place in the list.
 	SetGeneratedTitle(ctx context.Context, arg SetGeneratedTitleParams) (Conversation, error)
+	// The OAuth client as an administrator gives it; the secret only when given.
+	SetPluginOAuthClient(ctx context.Context, arg SetPluginOAuthClientParams) error
+	// A client registered on the fly (RFC 7591), unless an administrator gave one meanwhile.
+	SetPluginRegisteredClient(ctx context.Context, arg SetPluginRegisteredClientParams) error
+	SetPluginToolPermission(ctx context.Context, arg SetPluginToolPermissionParams) (int64, error)
 	// Upsert, so a setting added after this database was created still writes.
 	SetSetting(ctx context.Context, arg SetSettingParams) error
 	SetSkillEnabled(ctx context.Context, arg SetSkillEnabledParams) (uuid.UUID, error)
@@ -864,6 +912,9 @@ type Querier interface {
 	// owner is the only filter there is: nobody else's rows can be reached from here.
 	SoftDeleteAllConversations(ctx context.Context, userID *uuid.UUID) (int64, error)
 	SoftDeleteConversation(ctx context.Context, arg SoftDeleteConversationParams) (int64, error)
+	// Whether a sub-agent's conversation was launched by a research run: it is
+	// then a researcher.
+	SubagentLaunchedByResearch(ctx context.Context, id uuid.UUID) (bool, error)
 	// The total behind ListUsageLogs, with what an operator wants above the table:
 	// how many requests, how many failed, how many tokens and how much money. The
 	// same filters, in the same words -- if they drift the total stops matching
@@ -876,6 +927,8 @@ type Querier interface {
 	// full input price, less what they did cost, over the requests priced with
 	// both -- 0 when none were.
 	SummarizeUsageLogs(ctx context.Context, arg SummarizeUsageLogsParams) (SummarizeUsageLogsRow, error)
+	// An authorization's state, taken once: it is gone whatever happens next.
+	TakePluginOAuthState(ctx context.Context, arg TakePluginOAuthStateParams) (PluginOauthState, error)
 	// A foreground call takes its sub-agent's report as its result, unless it was
 	// delivered some other way first. Taking it again is the same call replayed
 	// (the claim is committed apart from the call's result, and a process can die
@@ -904,6 +957,7 @@ type Querier interface {
 	TouchPasskey(ctx context.Context, arg TouchPasskeyParams) error
 	TouchSession(ctx context.Context, id uuid.UUID) error
 	TouchUserSeen(ctx context.Context, id uuid.UUID) error
+	UninstallPlugin(ctx context.Context, arg UninstallPluginParams) (int64, error)
 	// Every editable field in one statement, so a partial edit cannot half-apply.
 	//
 	// `api_key` is the one field whose "absent" and "empty" mean different things:
@@ -925,6 +979,8 @@ type Querier interface {
 	// it was not, or could not be, checked) and forgets the hash of what was
 	// refused; a field sent unchanged, or not sent, keeps both.
 	UpdatePersonalization(ctx context.Context, arg UpdatePersonalizationParams) (UpdatePersonalizationRow, error)
+	// The whole plugin as the form has it; the header's value only when given.
+	UpdatePlugin(ctx context.Context, arg UpdatePluginParams) (Plugin, error)
 	// Everything a person can change at once; the caller fills in what stays.
 	UpdateTask(ctx context.Context, arg UpdateTaskParams) (ScheduledTask, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
@@ -947,6 +1003,10 @@ type Querier interface {
 	// `unnest(ids, names)`, which says the same thing in one line but which sqlc's
 	// analyser cannot type.
 	UpsertFetchedChannelModels(ctx context.Context, arg UpsertFetchedChannelModelsParams) error
+	// A tool as the service now lists it. A new one starts allowed when it only
+	// reads and asking otherwise; one already known keeps the permission the
+	// administrator gave it.
+	UpsertPluginTool(ctx context.Context, arg UpsertPluginToolParams) error
 	// What a request needs to be priced and labelled: the channel's current name,
 	// and the catalogue's per-million-token prices for the model.
 	//

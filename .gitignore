@@ -16,6 +16,8 @@ coverage/
 **/data/avatars/
 **/data/pictures/
 **/data/probes/
+# The key that seals plugin credentials (internal/secrets): never committed.
+**/data/secret.key
 
 # The web build the server embeds (scripts/embed-web.mjs copies it here). Only the
 # placeholder is tracked, so `go build` works before any web build has run.

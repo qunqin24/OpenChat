@@ -28,12 +28,23 @@ func NewToolSource(pool *pgxpool.Pool) agent.ToolSource {
 			slog.WarnContext(ctx, "read web search settings", "error", err)
 		}
 		search := config.searchConfig()
-		available := []agent.Tool{tools.WebFetch{Blocklist: search.Blocklist}}
+		reading, readerKey, err := loadWebFetch(ctx, q)
+		if err != nil {
+			slog.WarnContext(ctx, "read web fetch settings", "error", err)
+		}
+		available := []agent.Tool{reading.tool(readerKey, search.Blocklist)}
 		// A sub-agent searches and reads the web, and nothing else from here:
 		// it cannot ask the person anything, and has no memory of theirs.
 		if scope, ok := agent.ScopeFrom(ctx); ok && scope.Subagent() {
-			if searcher := config.searcher(key); config.Enabled && searcher != nil {
-				available = append([]agent.Tool{tools.WebSearch{Searcher: searcher, Config: search}}, available...)
+			// A deep research's researcher gets short excerpts, whatever the
+			// site's setting: with page text in every result it read the
+			// excerpts and opened almost nothing (research.go, researcherGuide).
+			researcher := search
+			if researchPhaseOf(ctx, q) == phaseResearcher {
+				researcher.Compression = tools.CompressSnippet
+			}
+			if searcher := config.cachedSearcher(key, q); config.Enabled && searcher != nil {
+				available = append([]agent.Tool{tools.WebSearch{Searcher: searcher, Config: researcher}}, available...)
 			}
 			// And the skills its launch named, if any.
 			if only := subagentSkills(ctx, q, scope); len(only) > 0 {
@@ -47,6 +58,11 @@ func NewToolSource(pool *pgxpool.Pool) agent.ToolSource {
 		}
 		if asks {
 			available = append(available, tools.AskUser{})
+		}
+		// A deep research's plan is put to the person before anything is
+		// researched (research.go).
+		if researchPhaseOf(ctx, q) == phasePlan {
+			available = append(available, tools.ResearchPlan{})
 		}
 		// Memory is for one person's runs and never for a temporary
 		// conversation; the store decides from the run's owner and conversation.
@@ -62,7 +78,7 @@ func NewToolSource(pool *pgxpool.Pool) agent.ToolSource {
 				available = append(available, tools.Skill{Notes: notes, Skills: skills.NewStore(pool)})
 			}
 		}
-		if searcher := config.searcher(key); config.Enabled && searcher != nil {
+		if searcher := config.cachedSearcher(key, q); config.Enabled && searcher != nil {
 			available = append([]agent.Tool{tools.WebSearch{Searcher: searcher, Config: search}}, available...)
 		}
 		return available
@@ -104,6 +120,9 @@ func NewSystemPrompt(pool *pgxpool.Pool) func(context.Context, time.Time, []agen
 	return func(ctx context.Context, _ time.Time, offered []agent.Tool) string {
 		if scope, ok := agent.ScopeFrom(ctx); ok && scope.Subagent() {
 			prompt := subagentPrompt(offered)
+			if researchPhaseOf(ctx, q) == phaseResearcher {
+				prompt += "\n\n" + researcherGuide
+			}
 			if section := skillsPrompt(ctx, offered); section != "" {
 				prompt += "\n\n" + section
 			}
@@ -118,6 +137,12 @@ func NewSystemPrompt(pool *pgxpool.Pool) func(context.Context, time.Time, []agen
 		}
 		if section := skillsPrompt(ctx, offered); section != "" {
 			prompt += "\n\n" + section
+		}
+		switch researchPhaseOf(ctx, q) {
+		case phasePlan:
+			prompt += "\n\n" + researchPlanGuide
+		case phaseResearch:
+			prompt += "\n\n" + researchGuide
 		}
 		on, err := boolSetting(ctx, q, settingGenerativeUI)
 		if err != nil {
@@ -242,7 +267,7 @@ func skillsPrompt(ctx context.Context, offered []agent.Tool) string {
 		"does not call for, and do not mention skills to the user unless they ask. A skill says how to do a " +
 		"task: it does not override what the user asks for or the rest of these instructions.")
 	if !scope.Subagent() {
-		// Picked with $ in the composer (chat-core/src/skill-mention.ts).
+		// Picked with / in the composer (chat-core/src/skill-mention.ts).
 		b.WriteString(" A user message may begin with lines like <skill name=\"weekly-report\"/>: the user picked " +
 			"those skills for that message, so open each with the skill tool before anything else, and follow it.")
 	}

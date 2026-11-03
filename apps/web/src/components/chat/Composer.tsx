@@ -1,6 +1,6 @@
 import type { AvailableSkill, ConversationReference } from '@openchat/api-client'
-import { ArrowUp, BookOpen, Maximize2, MessageSquareQuote, Minimize2, NotebookPen, Square, X } from 'lucide-react'
-import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
+import { ArrowUp, BookOpen, Maximize2, Minimize2, Square, Telescope, X } from 'lucide-react'
+import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { mentionAt } from '@openchat/chat-core/skill-mention'
@@ -10,6 +10,7 @@ import { highlightPassage } from '@/lib/highlight-passage'
 import { isEnter, withCtrl, withShift } from '@/lib/keys'
 import { cn } from '@/lib/utils'
 import { AttachMenu } from './AttachMenu'
+import { ComposerQuotes } from './QuoteBlock'
 import AttachmentTray from './AttachmentTray'
 import Tooltip, { TooltipGroup } from './Tooltip'
 
@@ -42,10 +43,9 @@ interface ComposerProps {
    */
   quotes?: { title: string; passage: string; fromAnswer?: boolean; onRemove: () => void }[]
   /**
-   * Skills picked for the message with `$`: typing `$` at the start of the box
-   * or after a space lists what this conversation's model can open; the ones
-   * picked are chips above the box, sent as lines at the message's start
-   * (chat-core/src/skill-mention.ts).
+   * Skills picked for the message: typed for with / (a list of them, filtered
+   * by what follows the /). The ones picked lead the box's text, and are sent as
+   * lines at the message's start (chat-core/src/skill-mention.ts).
    */
   skills?: {
     picked: string[]
@@ -53,6 +53,24 @@ interface ComposerProps {
     onPick: (name: string) => void
     onUnpick: (name: string) => void
   }
+  /**
+   * Deep research, when it is offered ("+" → 深度研究): picked, it leads the box
+   * as a token and the message asks for one (chat-core/src/skill-mention.ts).
+   * `desc` is what its line says - with what is left this month - and
+   * `blocked` that this month's are used up.
+   */
+  research?: {
+    picked: boolean
+    desc: string
+    blocked: boolean
+    onPick: () => void
+    onUnpick: () => void
+  }
+  /**
+   * A deep research plan being revised: the box writes what to change, shown
+   * under the plan's title, which `onStop` gives up.
+   */
+  plan?: { title: string; onStop: () => void }
   attach?: {
     accept: string
     hint: string
@@ -82,27 +100,39 @@ export function Composer({
   note,
   quotes,
   skills,
+  research,
+  plan,
   attach,
 }: ComposerProps) {
   const { t } = useTranslation()
-  // Where the caret is, for the $ picker; and the `$` the person closed it on.
+  const box = useRef<HTMLDivElement>(null)
+  const tokens = useRef<HTMLSpanElement>(null)
+  // Menus open below a box in the middle of the page (a new chat), above one at its foot.
+  const menuSide = (): 'top' | 'bottom' => {
+    const rect = box.current?.getBoundingClientRect()
+    return rect && window.innerHeight - rect.bottom > 340 ? 'bottom' : 'top'
+  }
+  // / at the start of the box or after a space lists the skills, filtered by
+  // what follows; where the caret is, and the / the person closed the list on.
   const [caret, setCaret] = useState(0)
   const [dismissed, setDismissed] = useState<number | null>(null)
   const [active, setActive] = useState(0)
+  const [below, setBelow] = useState(false)
   const mention = skills ? mentionAt(value, caret) : null
-  const matches = mention
+  const entries: MenuEntry[] = mention
     ? (skills?.available ?? [])
         .filter((s) => !skills?.picked.includes(s.name))
-        .filter((s) => s.name.includes(mention.query) || s.description.toLowerCase().includes(mention.query))
-        .slice(0, 8)
+        .map((s) => ({ key: s.name, title: s.name, desc: s.description, run: () => skills?.onPick(s.name) }))
+        .filter((e) => matchesQuery(e, mention.query))
     : []
-  const picking = Boolean(mention) && matches.length > 0 && dismissed !== mention?.start
-  const pick = (name: string) => {
-    if (!mention || !skills) return
-    const next = value.slice(0, mention.start) + value.slice(caret)
-    onValueChange(next)
-    skills.onPick(name)
+  const picking = Boolean(mention) && entries.length > 0 && dismissed !== mention?.start
+  const current = Math.min(active, entries.length - 1)
+  const choose = (entry: MenuEntry) => {
+    if (!mention) return
+    // The / and what was typed after it go; the skill is picked.
+    onValueChange(value.slice(0, mention.start) + value.slice(caret))
     setActive(0)
+    entry.run()
     requestAnimationFrame(() => {
       ref.current?.focus()
       ref.current?.setSelectionRange(mention.start, mention.start)
@@ -128,14 +158,29 @@ export function Composer({
   // What the box asks for: a change to a writing block's passage, a question
   // about passages of answers, or a message.
   const first = quotes?.[0]
-  const placeholder = first
-    ? t(first.fromAnswer ? 'chat.quote-placeholder' : 'document.quote-placeholder')
-    : t('chat.placeholder')
+  const placeholder = plan
+    ? t('chat.research.revise-placeholder')
+    : first
+      ? t(first.fromAnswer ? 'chat.quote-placeholder' : 'document.quote-placeholder')
+      : t('chat.placeholder')
   const ref = useRef<HTMLTextAreaElement>(null)
   const picker = useRef<HTMLInputElement>(null)
 
   const [expanded, setExpanded] = useState(false)
   const [overflowing, setOverflowing] = useState(false)
+
+  // The text starts after the picked skills (and deep research) on the first
+  // line, and wraps under them: indented by their width, measured as it changes.
+  const tokened = Boolean(research?.picked) || Boolean(skills?.picked.length)
+  const pickedKey = `${research?.picked ? 'research ' : ''}${skills?.picked.join(' ') ?? ''}`
+  const [indent, setIndent] = useState(0)
+  useLayoutEffect(() => {
+    const el = tokens.current
+    if (!el) return
+    const observer = new ResizeObserver(() => setIndent(el.offsetWidth + 6))
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [pickedKey])
 
   // Grow with the content up to the CSS max-height, then scroll.
   useEffect(() => {
@@ -174,7 +219,7 @@ export function Composer({
           {note}
         </p>
       )}
-      <div className={cn('n-composer', expanded && 'expanded', showToggle && 'has-toggle')}>
+      <div ref={box} className={cn('n-composer', expanded && 'expanded', showToggle && 'has-toggle')}>
         {showToggle && (
           <Tooltip
             label={expanded ? t('chat.composer.collapse') : t('chat.composer.expand')}
@@ -197,63 +242,12 @@ export function Composer({
         )}
 
         {quotes && quotes.length > 0 && (
-          <div className="n-quote-tray">
-            {quotes.map((quote, i) => (
-              <div
-                key={`${i}-${quote.passage.slice(0, 24)}`}
-                className={cn('n-quote-card', quote.fromAnswer && 'is-showable', shownQuote === quote.passage && 'is-shown')}
-                {...(quote.fromAnswer
-                  ? {
-                      role: 'button',
-                      tabIndex: 0,
-                      'aria-pressed': shownQuote === quote.passage,
-                      'aria-label': t('chat.quote-show'),
-                      onClick: () => showQuote(quote.passage),
-                      onKeyDown: (event: ReactKeyboardEvent) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault()
-                          showQuote(quote.passage)
-                        }
-                      },
-                    }
-                  : {})}
-              >
-                <p className="n-quote-text" dir="auto">{quote.passage}</p>
-                <span className="n-quote-label">
-                  {quote.fromAnswer ? <MessageSquareQuote aria-hidden="true" /> : <NotebookPen aria-hidden="true" />}
-                  {quote.fromAnswer
-                    ? quotes.length > 1
-                      ? t('chat.quote-label-n', { n: i + 1 })
-                      : t('chat.quote-label')
-                    : quote.title || t('document.quote-label')}
-                </span>
-                <button
-                  type="button"
-                  className="n-quote-remove"
-                  aria-label={t(quote.fromAnswer ? 'chat.quote-remove' : 'document.quote-remove')}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    quote.onRemove()
-                  }}
-                >
-                  <X aria-hidden="true" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        {skills && skills.picked.length > 0 && (
-          <div className="n-skill-chips">
-            {skills.picked.map((name) => (
-              <span key={name} className="n-skill-chip">
-                <BookOpen aria-hidden="true" />
-                <span>{name}</span>
-                <button type="button" aria-label={t('chat.skills.remove', { name })} onClick={() => skills.onUnpick(name)}>
-                  <X aria-hidden="true" />
-                </button>
-              </span>
-            ))}
-          </div>
+          <ComposerQuotes
+            quotes={quotes}
+            shown={shownQuote}
+            onShow={showQuote}
+            onRemove={(i) => quotes[i]?.onRemove()}
+          />
         )}
         {attach && (
           <AttachmentTray
@@ -264,33 +258,76 @@ export function Composer({
           />
         )}
 
-        <div className="n-composer-field">
-          {picking && (
-            <ul className="n-skill-picker" role="listbox" aria-label={t('chat.skills.picker')}>
-              {matches.map((skill, i) => (
-                <li
-                  key={skill.name}
+        {picking && (
+          <ul
+            className={cn('n-at-popup', below && 'is-below')}
+            role="listbox"
+            aria-label={t('settings.skills.title')}
+          >
+            {entries.map((entry, i) => (
+              <li key={entry.key} className="n-at-group">
+                <div
                   role="option"
-                  aria-selected={i === Math.min(active, matches.length - 1)}
-                  className={cn('n-skill-option', i === Math.min(active, matches.length - 1) && 'is-active')}
+                  aria-selected={i === current}
+                  className={cn('n-at-option', i === current && 'is-active')}
                   // Before the box loses focus, so the caret is still known.
                   onMouseDown={(event) => {
                     event.preventDefault()
-                    pick(skill.name)
+                    choose(entry)
                   }}
                   onMouseEnter={() => setActive(i)}
                 >
-                  <span className="n-skill-option-name">
-                    <BookOpen aria-hidden="true" />
-                    {skill.name}
-                    {skill.source !== 'personal' && (
-                      <span className="n-skill-option-source">{t(skill.source === 'builtin' ? 'chat.skills.source-builtin' : 'chat.skills.source-site')}</span>
-                    )}
-                  </span>
-                  <span className="n-skill-option-description">{skill.description}</span>
-                </li>
+                  <span className="n-at-icon" aria-hidden="true"><BookOpen /></span>
+                  <span className="n-at-title is-skill">{entry.title}</span>
+                  <span className="n-at-desc">{entry.desc}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {plan && (
+          <div className="n-plan-chip">
+            <Telescope aria-hidden="true" />
+            <span>{plan.title}</span>
+            <button type="button" aria-label={t('chat.research.revise-stop')} title={t('chat.research.revise-stop')} onClick={plan.onStop}>
+              <X aria-hidden="true" />
+            </button>
+          </div>
+        )}
+
+        <div className="n-composer-field">
+          {/* The picked skills sit at the start of the text, as Grok's: words
+              over the box's first line, the text indented past them (below). */}
+          {tokened && (
+            <span ref={tokens} className="n-skill-tokens">
+              {research?.picked && (
+                <button
+                  type="button"
+                  className="n-skill-token is-research"
+                  title={t('chat.research.remove')}
+                  aria-label={t('chat.research.remove')}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={research.onUnpick}
+                >
+                  <Telescope aria-hidden="true" />
+                  {t('chat.research.token')}
+                </button>
+              )}
+              {skills?.picked.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  className="n-skill-token"
+                  title={t('chat.skills.remove', { name })}
+                  aria-label={t('chat.skills.remove', { name })}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => skills.onUnpick(name)}
+                >
+                  /{name}
+                </button>
               ))}
-            </ul>
+            </span>
           )}
           <textarea
             id="input"
@@ -300,26 +337,27 @@ export function Composer({
             value={value}
             disabled={disabled}
             aria-label={placeholder}
-            placeholder={placeholder}
+            placeholder={tokened ? '' : placeholder}
+            style={tokened ? { textIndent: indent } : undefined}
             onChange={(event) => {
               onValueChange(event.target.value)
               setCaret(event.target.selectionStart)
               setActive(0)
+              // Which way the / list would open, from where the box is now.
+              setBelow(menuSide() === 'bottom')
             }}
             onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
             onPaste={handlePaste}
             onKeyDown={(event) => {
               if (picking && mention && !event.nativeEvent.isComposing) {
-                const last = matches.length - 1
                 if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
                   event.preventDefault()
-                  const at = Math.min(active, last)
-                  setActive(event.key === 'ArrowDown' ? (at + 1) % matches.length : (at - 1 + matches.length) % matches.length)
+                  setActive(event.key === 'ArrowDown' ? (current + 1) % entries.length : (current - 1 + entries.length) % entries.length)
                   return
                 }
                 if (event.key === 'Enter' || event.key === 'Tab') {
                   event.preventDefault()
-                  pick(matches[Math.min(active, last)]!.name)
+                  choose(entries[current]!)
                   return
                 }
                 if (event.key === 'Escape') {
@@ -327,6 +365,19 @@ export function Composer({
                   setDismissed(mention.start)
                   return
                 }
+              }
+              // Backspace at the very start takes the last token back: a skill,
+              // then deep research.
+              if (
+                event.key === 'Backspace' &&
+                tokened &&
+                event.currentTarget.selectionStart === 0 &&
+                event.currentTarget.selectionEnd === 0
+              ) {
+                event.preventDefault()
+                if (skills?.picked.length) skills.onUnpick(skills.picked[skills.picked.length - 1]!)
+                else research?.onUnpick()
+                return
               }
               if (!isEnter(event)) return
               // Bare Enter sends; Ctrl/Cmd or Shift inserts a newline.
@@ -340,12 +391,15 @@ export function Composer({
         <div className="n-composer-bar">
           <AttachMenu
             disabled={!canUpload}
+            filesOff={!canUpload}
+            side={menuSide}
             hint={attach?.hint ?? t('chat.file.none')}
             conversationId={attach?.conversationId}
             references={attach?.references ?? []}
             onPickFiles={() => picker.current?.click()}
             onAdd={(files) => attach?.onAdd(files)}
             onRefer={(reference) => attach?.onRefer(reference)}
+            research={research && !research.picked ? { desc: research.desc, blocked: research.blocked, onPick: research.onPick } : undefined}
           />
           {attach && (
             <input
@@ -392,3 +446,17 @@ export function Composer({
 }
 
 export default Composer
+
+/** One line of the skills typed for with /. */
+interface MenuEntry {
+  key: string
+  title: string
+  desc: string
+  run: () => void
+}
+
+/** Whether a line answers what was typed after the /: in its name or its words. */
+function matchesQuery(entry: MenuEntry, query: string) {
+  if (!query) return true
+  return entry.title.toLocaleLowerCase().includes(query) || entry.desc.toLocaleLowerCase().includes(query)
+}

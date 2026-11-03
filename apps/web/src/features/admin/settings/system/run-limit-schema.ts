@@ -3,6 +3,9 @@ import { z } from 'zod'
 /** The most a run limit can be set to (internal/api/run_limits.go's maxRunLimit). */
 export const MAX_RUNS = 1000
 
+/** The most the monthly deep research limit can be set to (internal/api/research.go's maxResearchMonthly). */
+export const MAX_RESEARCH = 10000
+
 /** The words of the messages, translated by the form that builds the schema. */
 export interface LimitMessages {
   required: string

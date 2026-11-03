@@ -26,6 +26,10 @@ const interruptedResult = "The tool call was interrupted before it returned a re
 const skippedResult = "The user did not answer this question and sent a new message instead. " +
 	"Take that message as their reply and carry on; ask again only if you still need the answer."
 
+// skippedPlan answers a research plan the person did not respond to.
+const skippedPlan = "The user did not respond to this research plan and sent a new message instead, so the " +
+	"research was not started. Take that message as their reply."
+
 // BuildContext turns transcript rows into a model request's messages.
 //
 // The transcript is what happened, in the order it was committed. A model
@@ -171,6 +175,9 @@ func BuildContextIn(rows []sqlc.Message, loc *time.Location) ([]llm.Message, err
 
 // missingResult is what a call without a result row is answered with.
 func missingResult(call llm.ToolCallPart) llm.ToolResultPart {
+	if call.Name == ToolResearchPlan {
+		return llm.ToolResultPart{CallID: call.ID, Name: call.Name, Content: skippedPlan, Status: llm.ToolSucceeded}
+	}
 	if call.Name == ToolAskUser {
 		return llm.ToolResultPart{CallID: call.ID, Name: call.Name, Content: skippedResult, Status: llm.ToolSucceeded}
 	}

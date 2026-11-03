@@ -42,6 +42,9 @@ type DocumentToolArgs struct {
 	Title   *string            `json:"title"`
 	Content *string            `json:"content"`
 	Edits   []DocumentToolEdit `json:"edits"`
+	// Append is text added at the end, after any edits: how a long document is
+	// written a section at a time (a deep research's report).
+	Append *string `json:"append"`
 }
 
 // DocumentToolEdit replaces one passage.
@@ -84,7 +87,8 @@ func (t DocumentTool) Definition() llm.Tool {
 			"op=create writes a new document (title, content). op=update changes one (id): give edits, each " +
 			"replacing an exact passage (find, copied exactly from the current text and long enough to occur only " +
 			"once) with new text (replace) - prefer this for any change smaller than the whole text; give content to " +
-			"rewrite it all; give title to rename it. op=read returns a document's current text (id). op=list shows " +
+			"rewrite it all; give append to add text at the end, such as the next section of a long document; give title " +
+			"to rename it. op=read returns a document's current text (id). op=list shows " +
 			"this conversation's documents. The user may have edited a document since you last saw it: read it " +
 			"before editing if unsure. Content is Markdown.",
 		Parameters: json.RawMessage(`{
@@ -94,6 +98,7 @@ func (t DocumentTool) Definition() llm.Tool {
     "id": {"type": "string", "description": "The document's id. For update and read."},
     "title": {"type": "string", "description": "The document's title, shown above the text as its heading. For create, or to rename it on update."},
     "content": {"type": "string", "description": "The whole text, in Markdown, without the title: it starts with the text itself, never a # heading (the title is shown above it). For create, or to rewrite it all on update."},
+    "append": {"type": "string", "description": "For update: Markdown added at the end of the text, after any edits - the next section of a long document."},
     "edits": {
       "type": "array",
       "description": "For update: passages to replace, applied in order.",
@@ -282,8 +287,13 @@ func (t DocumentTool) update(ctx context.Context, scope agent.Scope, doc sqlc.Do
 					"Include more of the surrounding text so it occurs once.", i+1, n)
 			}
 		}
-	case args.Title == nil:
-		return agent.ToolResult{}, agent.Errorf("invalid arguments: update needs edits, content or title")
+	case args.Title == nil && args.Append == nil:
+		return agent.ToolResult{}, agent.Errorf("invalid arguments: update needs edits, content, append or title")
+	}
+	// Added after whatever else changed, on a line of its own: it overwrites
+	// nothing, so an unseen version of the person's is no reason to refuse it.
+	if args.Append != nil && strings.TrimSpace(*args.Append) != "" {
+		content = strings.TrimRight(content, "\n") + "\n\n" + strings.TrimLeft(*args.Append, "\n")
 	}
 	if utf8.RuneCountInString(content) > maxDocumentContent {
 		return agent.ToolResult{}, agent.Errorf("the result would be longer than %d characters. Nothing was changed.", maxDocumentContent)

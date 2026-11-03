@@ -25,6 +25,7 @@ tags:
   - name: files
   - name: memory
   - name: tasks
+  - name: plugins
   - name: documents
 
 paths:
@@ -785,6 +786,143 @@ paths:
               schema: { $ref: "#/components/schemas/SystemSettings" }
         default: { $ref: "#/components/responses/Error" }
 
+  /admin/plugins:
+    get:
+      tags: [admin]
+      summary: Every plugin
+      operationId: listAdminPlugins
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminPluginList" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [admin]
+      summary: Add a plugin
+      description: |
+        409 `slug_taken` for a short name in use; 409 `secret_key_missing`
+        for a header value while OPENCHAT_SECRET_KEY is not set; 400
+        `invalid_plugin` for a field out of shape.
+      operationId: createAdminPlugin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminPluginInput" }
+      responses:
+        "201":
+          description: added
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminPlugin" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/plugins/{pluginId}:
+    parameters:
+      - name: pluginId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [admin]
+      summary: Change a plugin
+      description: The whole plugin, as `createAdminPlugin` takes it; the header value only when `headerValue` is present.
+      operationId: updateAdminPlugin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminPluginInput" }
+      responses:
+        "200":
+          description: changed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminPlugin" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [admin]
+      summary: Delete a plugin
+      description: Its tools and everyone's installs of it go with it. A built-in one is 409 `plugin_builtin`.
+      operationId: deleteAdminPlugin
+      responses:
+        "204": { description: deleted }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/plugins/{pluginId}/tools:
+    parameters:
+      - name: pluginId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [admin]
+      summary: A plugin's tools
+      operationId: listAdminPluginTools
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PluginToolList" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/plugins/{pluginId}/tools/refresh:
+    parameters:
+      - name: pluginId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [admin]
+      summary: List the service's tools again
+      description: |
+        Connects to the plugin's MCP service and stores the tools it lists:
+        new ones start allowed when they only read and asking otherwise, known
+        ones keep their permission, ones no longer listed go. 409
+        `plugin_no_service` for a plugin without an address; 409
+        `plugin_not_connected` for one that acts as each person when the
+        administrator has not connected their own account to it (the tools
+        are listed with it); 502 `plugin_unreachable` when the
+        service could not be listed, with why in the message.
+      operationId: refreshAdminPluginTools
+      responses:
+        "200":
+          description: listed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PluginToolList" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/plugins/{pluginId}/tools/{toolName}:
+    parameters:
+      - name: pluginId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: toolName
+        in: path
+        required: true
+        schema: { type: string, maxLength: 200 }
+    patch:
+      tags: [admin]
+      summary: Set a tool's permission
+      operationId: updateAdminPluginTool
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permission]
+              properties:
+                permission: { $ref: "#/components/schemas/PluginToolPermission" }
+      responses:
+        "204": { description: set }
+        default: { $ref: "#/components/responses/Error" }
+
   /admin/skills:
     get:
       tags: [admin]
@@ -1179,6 +1317,58 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/WebSearchSettings" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/web-fetch:
+    get:
+      tags: [admin]
+      summary: Web page reading settings
+      operationId: getWebFetchSettings
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebFetchSettings" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [admin]
+      summary: Change web page reading settings
+      description: Read by every run at its next request, so a change reaches runs in progress.
+      operationId: updateWebFetchSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateWebFetchSettingsRequest" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebFetchSettings" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /admin/web-fetch/test:
+    post:
+      tags: [admin]
+      summary: Read one page with the current settings
+      description: |
+        Reads the page the way web_fetch would - the same mode, key and
+        blocklist - and reports how it went. A page that could not be read is
+        a 200 with `ok: false`.
+      operationId: testWebFetch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebFetchTestRequest" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebFetchTestResult" }
         default: { $ref: "#/components/responses/Error" }
 
   /admin/web-search/test:
@@ -1999,6 +2189,48 @@ paths:
               schema: { $ref: "#/components/schemas/AnswerQuestionResponse" }
         default: { $ref: "#/components/responses/Error" }
 
+  /conversations/{conversationId}/research-plans/{callId}:
+    parameters:
+      - { $ref: "#/components/parameters/ConversationId" }
+      - name: callId
+        in: path
+        required: true
+        schema: { type: string, maxLength: 200 }
+    post:
+      tags: [messages]
+      summary: Start, revise or cancel a deep research plan
+      description: |
+        A message that begins with the line `<deep-research/>` asks for a deep
+        research. Its run drafts a plan and calls `research_plan`, and stops
+        there as `awaiting_input`, like `ask_user`. This answers the plan:
+
+        - `start`: the research begins. It counts against the caller's
+          monthly allowance (`SystemSettings.deepResearchMonthly`; 429
+          `research_limit` when none is left) and starts a run that continues
+          the one that drafted the plan, with the model and effort given.
+        - `revise`: `feedback` (required, moderated as the caller's words)
+          becomes the result, and a run starts that revises the plan.
+        - `cancel`: the result says so and no run starts; `run` is absent.
+
+        The result row is announced on the events stream. 409 `not_pending`
+        for a plan already answered, written past or deleted; 409
+        `conversation_busy` while a run is going; 403 `deep_research_off`
+        when deep research is off; 409 `revise_refused` while a refused
+        message is the last row.
+      operationId: answerResearchPlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnswerResearchPlanRequest" }
+      responses:
+        "202":
+          description: the decision was recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnswerResearchPlanResponse" }
+        default: { $ref: "#/components/responses/Error" }
+
   /conversations/{conversationId}/events:
     parameters:
       - { $ref: "#/components/parameters/ConversationId" }
@@ -2250,6 +2482,101 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Document" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /plugins:
+    get:
+      tags: [plugins]
+      summary: The plugins the caller may install
+      description: |
+        Plugins an administrator added and switched on, for everyone or for
+        administrators when the caller is one, featured first, each with
+        whether the caller installed it.
+      operationId: listPlugins
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PluginList" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /plugins/{pluginId}/connect:
+    parameters:
+      - name: pluginId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [plugins]
+      summary: Start connecting the caller's own account
+      description: |
+        For a plugin that acts as each person (`authType: oauth`): finds the
+        service's authorization server, and answers with where the browser
+        is to go to sign in. Coming back to `/plugins/oauth/callback`
+        installs the plugin with the caller's tokens. 409
+        `plugin_oauth_unconfigured` when the plugin has no OAuth client and
+        its server registers none on the fly; 409 `secret_key_missing`
+        without the sealing key; 502 `plugin_unreachable` when the service
+        or its authorization server cannot be read.
+      operationId: connectPlugin
+      responses:
+        "200":
+          description: where to sign in
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [authorizeUrl]
+                properties:
+                  authorizeUrl: { type: string }
+        default: { $ref: "#/components/responses/Error" }
+
+  /plugins/oauth/callback:
+    get:
+      tags: [plugins]
+      summary: Where the authorization server sends the person back
+      description: |
+        Takes the one-time state, trades the code for the caller's tokens,
+        seals them and installs the plugin, then redirects to `/plugins`
+        with `connected=<slug>`, or `connect_error=<reason>` when it did not.
+      operationId: pluginOAuthCallback
+      parameters:
+        - { name: state, in: query, schema: { type: string } }
+        - { name: code, in: query, schema: { type: string } }
+        - { name: error, in: query, schema: { type: string } }
+        - { name: iss, in: query, schema: { type: string } }
+      responses:
+        "302": { description: back to the plugins page }
+
+  /plugins/{pluginId}/install:
+    parameters:
+      - name: pluginId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [plugins]
+      summary: Install a plugin
+      description: |
+        Installs it for the caller; installing it again changes nothing. 404
+        for a plugin the caller may not see. 409 `plugin_needs_account` for
+        one that acts as the caller (OAuth): that is installed by connecting
+        the account (`connectPlugin`).
+      operationId: installPlugin
+      responses:
+        "200":
+          description: installed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Plugin" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [plugins]
+      summary: Uninstall a plugin
+      operationId: uninstallPlugin
+      responses:
+        "204": { description: uninstalled, or was not installed }
         default: { $ref: "#/components/responses/Error" }
 
   /tasks:
@@ -3505,6 +3832,41 @@ components:
             holds the answers by question position, as `{selected, other}`.
         run: { $ref: "#/components/schemas/Run" }
 
+    AnswerResearchPlanRequest:
+      type: object
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [start, revise, cancel]
+        feedback:
+          type: string
+          maxLength: 4000
+          description: What to change; required for `revise`.
+        model: { type: string }
+        reasoningEffort: { $ref: "#/components/schemas/ReasoningEffort" }
+        requestId:
+          type: string
+          maxLength: 100
+          description: Chosen by the client; a retry with the same id finds the same run.
+
+    AnswerResearchPlanResponse:
+      type: object
+      required: [message, result]
+      properties:
+        message:
+          $ref: "#/components/schemas/Message"
+          description: The user message that asked for the research.
+        result:
+          $ref: "#/components/schemas/Message"
+          description: |
+            The tool row written for the call. Its result's `details` holds
+            `decision` (`started`, `revised` or `cancelled`) and, for a
+            revision, `feedback`.
+        run:
+          $ref: "#/components/schemas/Run"
+          description: The run started; absent for `cancel`.
+
     CreateMessageResponse:
       type: object
       required: [message, run]
@@ -4292,6 +4654,26 @@ components:
         personalSkills:
           type: boolean
           description: Whether people may write skills of their own (System settings).
+        deepResearch:
+          $ref: "#/components/schemas/DeepResearchAllowance"
+
+    DeepResearchAllowance:
+      type: object
+      description: |
+        Whether the caller can start a deep research (`@` → 深度研究). Absent
+        when deep research is off or web search is unavailable.
+      required: [unlimited, left, resetsAt]
+      properties:
+        unlimited:
+          type: boolean
+          description: True for an administrator, or when the allowance is 0 (no limit).
+        left:
+          type: integer
+          description: Researches the caller may still start this month.
+        resetsAt:
+          type: string
+          format: date-time
+          description: When the month's allowance starts again.
 
     ChatModel:
       type: object
@@ -4548,6 +4930,205 @@ components:
             `account_unavailable`, `missed` (the server could not run it
             within an hour of its time; it runs again at its next), `failed`.
         createdAt: { type: string, format: date-time }
+
+    PluginList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Plugin" }
+
+    AdminPluginList:
+      type: object
+      required: [items, secretKeySet]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminPlugin" }
+        secretKeySet:
+          type: boolean
+          description: Whether OPENCHAT_SECRET_KEY is set, without which header values and accounts cannot be stored.
+
+    AdminPluginInput:
+      type: object
+      required: [slug, name]
+      properties:
+        slug:
+          type: string
+          maxLength: 32
+          description: Lowercase letters, digits and single hyphens; the prefix of its tool names.
+        name: { type: string, maxLength: 60 }
+        description: { type: string, maxLength: 200 }
+        about: { type: string, maxLength: 2000 }
+        category: { type: string, maxLength: 30 }
+        iconText: { type: string, maxLength: 4 }
+        iconColor: { type: string, maxLength: 30 }
+        iconSlug:
+          type: string
+          maxLength: 64
+          description: The Simple Icons slug of its icon; empty for none.
+        iconPath:
+          type: string
+          maxLength: 20000
+          description: That icon's SVG path data (24 x 24), commands and numbers only (400 `invalid_plugin` otherwise).
+        featured: { type: boolean }
+        enabled: { type: boolean }
+        audience: { type: string, enum: [all, admins] }
+        mcpUrl:
+          type: string
+          maxLength: 2000
+          description: The MCP service's Streamable HTTP address; empty for a plugin of skills only. May be on the internal network.
+        authType: { type: string, enum: [none, header, oauth] }
+        headerName: { type: string, maxLength: 100 }
+        headerValue:
+          type: string
+          maxLength: 4000
+          description: Write-only, stored sealed. Absent keeps the stored one; empty removes it.
+        oauthClientId:
+          type: string
+          maxLength: 300
+          description: For `oauth`, the client registered with the authorization server (GitHub's OAuth app, say); empty to register one on the fly where the server allows it.
+        oauthClientSecret:
+          type: string
+          maxLength: 1000
+          description: Write-only, stored sealed. Absent keeps the stored one; empty removes it.
+        oauthScopes:
+          type: string
+          maxLength: 1000
+          description: Scopes asked for, space-separated.
+        sort: { type: integer }
+
+    AdminPlugin:
+      type: object
+      required: [id, slug, name, description, about, category, iconText, iconColor, iconSlug, iconPath, featured, enabled, audience, mcpUrl, authType, headerName, headerSet, oauthClientId, oauthSecretSet, oauthScopes, oauthRegistered, sort, installs, tools, toolsOn, builtin]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        description: { type: string }
+        about: { type: string }
+        category: { type: string }
+        iconText: { type: string }
+        iconColor: { type: string }
+        iconSlug: { type: string }
+        iconPath: { type: string }
+        featured: { type: boolean }
+        enabled: { type: boolean }
+        audience: { type: string, enum: [all, admins] }
+        mcpUrl: { type: string }
+        authType: { type: string, enum: [none, header, oauth] }
+        headerName: { type: string }
+        headerSet:
+          type: boolean
+          description: Whether a header value is stored. Never sent back.
+        oauthClientId: { type: string }
+        oauthSecretSet:
+          type: boolean
+          description: Whether a client secret is stored. Never sent back.
+        oauthScopes: { type: string }
+        oauthRegistered:
+          type: boolean
+          description: The client was registered on the fly rather than given.
+        sort: { type: integer }
+        installs:
+          type: integer
+          description: How many people installed it.
+        tools:
+          type: integer
+          description: Tools last listed by its service.
+        toolsOn:
+          type: integer
+          description: Of those, the ones not blocked.
+        toolsFetchedAt:
+          type: string
+          format: date-time
+        builtin:
+          type: boolean
+          description: |
+            It ships with OpenChat: made switched off on the first start, and
+            turned off rather than deleted (409 `plugin_builtin`).
+
+    PluginToolPermission:
+      type: string
+      enum: [allow, confirm, blocked]
+      description: |
+        `allow`: called without asking; `confirm`: the person is asked before
+        each call; `blocked`: never offered to the model.
+
+    PluginTool:
+      type: object
+      required: [name, title, description, readOnly, destructive, permission]
+      properties:
+        name: { type: string }
+        title: { type: string }
+        description: { type: string }
+        readOnly:
+          type: boolean
+          description: The service says it only reads (readOnlyHint).
+        destructive:
+          type: boolean
+          description: The service says it may destroy (destructiveHint, true unless it says otherwise).
+        permission: { $ref: "#/components/schemas/PluginToolPermission" }
+
+    PluginToolList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PluginTool" }
+        fetchedAt:
+          type: string
+          format: date-time
+
+    Plugin:
+      type: object
+      required: [id, slug, name, description, about, category, featured, iconText, iconColor, iconPath, authType, readTools, writeTools, skills, installed, needsReconnect]
+      properties:
+        id: { type: string, format: uuid }
+        slug:
+          type: string
+          description: The prefix of the plugin's tool names.
+        name: { type: string }
+        description:
+          type: string
+          description: One line, for its tile.
+        about:
+          type: string
+          description: More on what it does, shown before installing.
+        category:
+          type: string
+          description: The administrator's grouping (办公, 开发…); empty for none.
+        featured: { type: boolean }
+        iconText:
+          type: string
+          description: A letter or two drawn as its mark.
+        iconColor:
+          type: string
+          description: The mark's colour (CSS), empty for the default.
+        iconPath:
+          type: string
+          description: Its brand icon's SVG path (Simple Icons, 24 x 24), drawn instead of iconText; empty for none.
+        authType:
+          type: string
+          enum: [none, header, oauth]
+          description: |
+            How it reaches its service: no account, one the administrator
+            set up for everyone (`header`), or each person's own (`oauth`).
+        readTools:
+          type: integer
+          description: Tools it offers that only read.
+        writeTools:
+          type: integer
+          description: Tools it offers that may change things; the model asks before calling those the administrator did not allow outright.
+        skills:
+          type: integer
+          description: Skills it brings.
+        installed: { type: boolean }
+        needsReconnect:
+          type: boolean
+          description: The caller's account for it stopped working (its token could not be refreshed); connecting again mends it.
 
     TaskList:
       type: object
@@ -5359,7 +5940,7 @@ components:
 
     SystemSettings:
       type: object
-      required: [debugLogging, generativeUi, askUser, compressContext, memory, skills, personalSkills, taskModel, avatarUploads, scheduledTasks, requestTraces,
+      required: [debugLogging, generativeUi, askUser, compressContext, memory, skills, personalSkills, deepResearch, deepResearchMonthly, taskModel, avatarUploads, scheduledTasks, requestTraces,
                  deletedRetentionDays, unsentUploadHours, orphanFileHours,
                  maxConcurrentRuns,
                  allowRegistration, registrationApproval]
@@ -5471,6 +6052,16 @@ components:
             Whether people may write skills of their own. On by default. Off,
             theirs are kept but left out of new conversations, and writing one
             is 403 `personal_skills_off`.
+        deepResearch:
+          type: boolean
+          description: |
+            Whether people may start a deep research from the composer's `@`
+            menu. On by default; needs web search to be available.
+        deepResearchMonthly:
+          type: integer
+          description: |
+            How many deep researches one person may start per calendar month;
+            0 is unlimited. 10 unless changed. Administrators are exempt.
         debugLogging:
           type: boolean
           description: |
@@ -5489,6 +6080,10 @@ components:
         memory: { type: boolean }
         skills: { type: boolean }
         personalSkills: { type: boolean }
+        deepResearch: { type: boolean }
+        deepResearchMonthly:
+          type: integer
+          description: 0 to 10000 (400 `invalid_research_limit` otherwise); 0 is unlimited.
         avatarUploads: { type: boolean }
         scheduledTasks: { type: boolean }
         requestTraces: { type: boolean }
@@ -5888,6 +6483,68 @@ components:
           type: array
           maxItems: 500
           items: { type: string, maxLength: 300 }
+
+    WebFetchReader:
+      type: string
+      enum: [builtin, fallback, jina]
+      description: |
+        How web_fetch reads a page. `builtin` fetches it itself and nothing
+        else. `fallback` (the default) fetches it itself and, when the site
+        turns it away (403, 429, a timeout) or it has no readable text, asks
+        Jina Reader (r.jina.ai), which reads it as a browser would. `jina`
+        asks Jina Reader first and fetches it itself when Jina cannot. Jina is
+        sent the page's address.
+
+    WebFetchSettings:
+      type: object
+      required: [reader, jinaKeySet]
+      properties:
+        reader: { $ref: "#/components/schemas/WebFetchReader" }
+        jinaKeySet:
+          type: boolean
+          description: Whether a Jina API key is stored. Without one Jina is used keyless, at its lower rate limit.
+        jinaKeyPreview:
+          type: string
+          description: The key's last four characters.
+
+    UpdateWebFetchSettingsRequest:
+      type: object
+      description: Only the fields present are changed.
+      properties:
+        reader: { $ref: "#/components/schemas/WebFetchReader" }
+        jinaKey:
+          type: string
+          maxLength: 500
+          description: Jina's API key. Empty removes the stored one.
+
+    WebFetchTestRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          maxLength: 2000
+
+    WebFetchTestResult:
+      type: object
+      required: [ok, latencyMs]
+      properties:
+        ok: { type: boolean }
+        latencyMs: { type: integer, format: int64 }
+        via:
+          type: string
+          enum: [builtin, jina]
+          description: Who read the page.
+        title: { type: string }
+        chars:
+          type: integer
+          description: How many characters of text the page has.
+        preview:
+          type: string
+          description: The text's first few hundred characters.
+        error:
+          type: string
+          description: Why the page could not be read, in English, when it could not.
 
     WebSearchTestRequest:
       type: object

@@ -50,15 +50,18 @@
   transform: scale(0.82);
 }
 
-/* A quarter turn puts each petal where the next one was, so for the loop to
-   join up the breath must have moved on by one petal too: the turn lasts
-   2¼ breaths (3.6s against 1.6s, staggered 0.4s). At 3.2s - two whole
-   breaths - every petal came back to its own breath in its neighbour's place,
-   and all four jumped in size at the seam. */
+/* The flower turns a quarter at a time, easing in and out of each (3.6s a
+   quarter), while the petals breathe one after another (1.6s, staggered
+   0.4s). A loop of one quarter turn cannot join up: at the snap from 90deg
+   back to 0 each place swaps the petal it shows for its neighbour, whose
+   breath is 0.4s off, so the whole pattern jumped back a petal every 3.6s.
+   The loop is the full turn instead - every petal back in its own place - and
+   lasts a whole number of breaths (4 x 3.6s = 14.4s = 9 x 1.6s), so at the
+   seam nothing moves. */
 .chat-ui .n-subagent-avatar.is-running .n-subagent-bloom {
   transform-box: view-box;
   transform-origin: 12px 12px;
-  animation: n-subagent-turn 3.6s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  animation: n-subagent-turn 14.4s infinite;
 }
 
 .chat-ui .n-subagent-avatar.is-running .n-subagent-petal {
@@ -69,8 +72,13 @@
 .chat-ui .n-subagent-avatar.is-running .n-subagent-bloom > g:nth-child(3) .n-subagent-petal { animation-delay: -0.8s; }
 .chat-ui .n-subagent-avatar.is-running .n-subagent-bloom > g:nth-child(4) .n-subagent-petal { animation-delay: -1.2s; }
 
+/* Each quarter eases on its own: the timing function applies between keyframes. */
 @keyframes n-subagent-turn {
-  to { transform: rotate(90deg); }
+  0% { transform: rotate(0deg); animation-timing-function: cubic-bezier(0.45, 0.05, 0.55, 0.95); }
+  25% { transform: rotate(90deg); animation-timing-function: cubic-bezier(0.45, 0.05, 0.55, 0.95); }
+  50% { transform: rotate(180deg); animation-timing-function: cubic-bezier(0.45, 0.05, 0.55, 0.95); }
+  75% { transform: rotate(270deg); animation-timing-function: cubic-bezier(0.45, 0.05, 0.55, 0.95); }
+  100% { transform: rotate(360deg); }
 }
 
 @keyframes n-subagent-breathe {

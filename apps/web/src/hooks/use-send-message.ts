@@ -274,6 +274,49 @@ export function useAnswerQuestion(conversationId: string) {
   })
 }
 
+/**
+ * What the person does with a deep research's plan (api/research.go): start it,
+ * have it revised with their words, or cancel it. Starting and revising start a
+ * run, as answering a question does; cancelling only writes the result, which
+ * the transcript is fetched again for. The month's allowance in the features
+ * changes with a start.
+ */
+export function useResearchPlan(conversationId: string) {
+  const startRun = useChatStore((s) => s.startRun)
+  const queryClient = useQueryClient()
+  const onError = useSendError(conversationId)
+
+  return useMutation({
+    // Shown in the plan's card itself.
+    meta: { silent: true },
+    mutationFn: async ({
+      callId,
+      decision,
+      feedback,
+      model,
+      reasoningEffort,
+    }: Pick<RunChoice, 'model' | 'reasoningEffort'> & { callId: string; decision: 'start' | 'revise' | 'cancel'; feedback?: string }) =>
+      unwrap(
+        await api.POST('/conversations/{conversationId}/research-plans/{callId}', {
+          params: { path: { conversationId, callId } },
+          body: {
+            decision,
+            requestId: crypto.randomUUID(),
+            ...(feedback ? { feedback } : {}),
+            ...(model ? { model } : {}),
+            ...(reasoningEffort ? { reasoningEffort } : {}),
+          },
+        }),
+      ),
+    onSuccess: (response, { decision }) => {
+      if (response.run) startRun(conversationId, response.run, response.message, [response.result])
+      else void refreshNewestMessages(queryClient, conversationId).catch(() => undefined)
+      if (decision === 'start') void queryClient.invalidateQueries({ queryKey: queryKeys.features })
+    },
+    onError: (error) => onError(error),
+  })
+}
+
 /** Stops a run. What it generated so far is kept. */
 export function useCancelRun(conversationId: string) {
   return useMutation({

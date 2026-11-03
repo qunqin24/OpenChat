@@ -480,3 +480,22 @@ func (s *Store) OwnedVersion(ctx context.Context, owner *uuid.UUID, id, versionI
 	}
 	return s.files(ctx, s.q, versionID)
 }
+
+// mentionLine is one skill a person picked for a message with / in the composer:
+// a line `<skill name="…"/>` at the message's start (chat-core/src/skill-mention.ts).
+var mentionLine = regexp.MustCompile(`^<skill name="([a-z0-9]+(?:-[a-z0-9]+)*)"/>\n`)
+
+// SplitMentions is a message's picked skills, in order, and the rest of it: the
+// words the person wrote, for whatever reads them as such - a title, a fallback
+// title - rather than as the model's instructions.
+func SplitMentions(content string) (names []string, rest string) {
+	rest = content
+	for {
+		m := mentionLine.FindStringSubmatch(rest)
+		if m == nil {
+			return names, rest
+		}
+		names = append(names, m[1])
+		rest = rest[len(m[0]):]
+	}
+}

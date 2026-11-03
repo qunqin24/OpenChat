@@ -33,6 +33,9 @@ type FreeSearch struct {
 	// Vendors override the four services, for tests. Nil is all four.
 	Vendors []FreeVendor
 	Client  *http.Client
+	// Gate paces the services across the process (FreeGate); nil, every
+	// search goes straight out.
+	Gate *FreeGate
 }
 
 // FreeVendor is one keyless search service.
@@ -73,26 +76,75 @@ func (f FreeSearch) Search(ctx context.Context, req SearchRequest) ([]SearchResu
 		client = &http.Client{Timeout: 30 * time.Second}
 	}
 
+	// Each service is asked at most once, in ring order. With a gate, one that
+	// is busy is passed over and looked at again on the next pass, one that is
+	// resting is not asked at all; when every service left is resting, the
+	// search ends with how long they rest.
 	start := int(freeCursor.Add(1)-1) % len(vendors)
-	var last error
+	left := make([]FreeVendor, 0, len(vendors))
 	for i := range vendors {
-		vendor := vendors[(start+i)%len(vendors)]
-		results, err := vendor.Search(ctx, client, req)
-		if err == nil {
-			for j := range results {
-				results[j].Source = vendor.Name
+		left = append(left, vendors[(start+i)%len(vendors)])
+	}
+	var deadline time.Time
+	if f.Gate != nil {
+		deadline = time.Now().Add(f.Gate.Wait)
+	}
+	var last error
+	for len(left) > 0 {
+		var (
+			waiting []FreeVendor
+			resting time.Duration
+		)
+		for _, vendor := range left {
+			if f.Gate != nil {
+				ok, cooling := f.Gate.take(vendor.Name)
+				if !ok {
+					if cooling == 0 {
+						waiting = append(waiting, vendor)
+					} else if resting == 0 || cooling < resting {
+						resting = cooling
+					}
+					continue
+				}
 			}
-			return results, nil
+			results, err := vendor.Search(ctx, client, req)
+			if f.Gate != nil {
+				f.Gate.release(vendor.Name)
+				if d := coolFor(err); err != nil && d > 0 && ctx.Err() == nil {
+					f.Gate.cool(vendor.Name, d)
+				}
+			}
+			if err == nil {
+				for j := range results {
+					results[j].Source = vendor.Name
+				}
+				return results, nil
+			}
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			last = err
+			var vendorErr *freeError
+			if !errors.As(err, &vendorErr) || !vendorErr.passOn {
+				// A malformed query fails everywhere; asking the others wastes their quota.
+				slog.WarnContext(ctx, "free search failed", "error", err)
+				return nil, agent.Errorf("The free search services are busy or unavailable right now; try again shortly.")
+			}
+			slog.InfoContext(ctx, "free search vendor unavailable, trying the next", "vendor", vendor.Name, "error", err)
 		}
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
+		if len(waiting) == 0 {
+			if last == nil && resting > 0 {
+				return nil, errSearchCooling(resting)
+			}
+			break
 		}
-		last = err
-		var vendorErr *freeError
-		if !errors.As(err, &vendorErr) || !vendorErr.passOn {
-			break // a malformed query fails everywhere; asking the others wastes their quota
+		if time.Now().After(deadline) {
+			return nil, agent.Errorf("Web search is busy right now; try again shortly, or read the sources you already have.")
 		}
-		slog.InfoContext(ctx, "free search vendor unavailable, trying the next", "vendor", vendor.Name, "error", err)
+		if err := pause(ctx); err != nil {
+			return nil, err
+		}
+		left = waiting
 	}
 	slog.WarnContext(ctx, "free search failed", "error", last)
 	return nil, agent.Errorf("The free search services are busy or unavailable right now; try again shortly.")
@@ -105,6 +157,8 @@ type freeError struct {
 	vendor string
 	msg    string
 	passOn bool
+	// status is the HTTP status of the response, 0 when there was none.
+	status int
 }
 
 func (e *freeError) Error() string { return e.vendor + ": " + e.msg }
@@ -122,7 +176,7 @@ func httpFailure(vendor string, status int, body []byte) error {
 	}
 	passOn := status == http.StatusTooManyRequests || status == 401 || status == 402 || status == 403 ||
 		status >= 500 || rateLimited.MatchString(snippet)
-	return &freeError{vendor: vendor, msg: fmt.Sprintf("HTTP %d: %s", status, snippet), passOn: passOn}
+	return &freeError{vendor: vendor, msg: fmt.Sprintf("HTTP %d: %s", status, snippet), passOn: passOn, status: status}
 }
 
 // post sends JSON and returns the body of a 2xx response.

@@ -106,6 +106,16 @@ func (s *Server) AnswerQuestion(w http.ResponseWriter, r *http.Request, conversa
 		head = *asked.run.Continues
 	}
 	choice.continues = &head
+	// A deep research goes on as what it was: the research, or its plan.
+	if asked.run.Research {
+		choice.research = true
+		choice.forceWeb()
+	} else if input, err := s.q.GetMessage(ctx, asked.run.InputMessageID); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	} else if asks, _ := splitResearch(input.Content); asks {
+		choice.forceWeb()
+	}
 
 	var (
 		run     sqlc.Run
@@ -219,58 +229,71 @@ const pendingLookback = 64
 // conversation is waiting on (see the note at the top of the file).
 func pendingQuestion(ctx context.Context, q *sqlc.Queries, conversationID uuid.UUID, callID string) (asking, error) {
 	var out asking
+	call, run, err := pendingCall(ctx, q, conversationID, callID, agent.ToolAskUser)
+	if err != nil {
+		return out, err
+	}
+	out.run = run
+	if out.questions, err = tools.ParseQuestions(call.Arguments); err != nil {
+		return out, errNotPending
+	}
+	return out, nil
+}
+
+// pendingCall finds the call of the person's tool `name` with this id if it is
+// the one the conversation is waiting on, with the run that made it.
+func pendingCall(ctx context.Context, q *sqlc.Queries, conversationID uuid.UUID, callID, name string) (llm.ToolCallPart, sqlc.Run, error) {
+	var (
+		none llm.ToolCallPart
+		run  sqlc.Run
+	)
 	// The question is in the newest assistant row. Only the results of the
 	// other calls that row made may come after it: those run first, and the
 	// run then waits on the question — a reply that both searched and asked
 	// ends with the search's result, not with the question.
 	rows, err := q.ListRecentMessages(ctx, sqlc.ListRecentMessagesParams{ConversationID: conversationID, RowLimit: pendingLookback})
 	if err != nil {
-		return out, err
+		return none, run, err
 	}
 	at := len(rows) - 1
 	for at >= 0 && rows[at].Role == sqlc.MessageRoleTool {
 		at--
 	}
 	if at < 0 || rows[at].Role != sqlc.MessageRoleAssistant || rows[at].RunID == nil {
-		return out, errNotPending
+		return none, run, errNotPending
 	}
 	for _, after := range rows[at+1:] {
 		if after.RunID == nil || *after.RunID != *rows[at].RunID {
-			return out, errNotPending
+			return none, run, errNotPending
 		}
 		results, err := agent.DecodeParts(after.Parts)
 		if err != nil {
-			return out, err
+			return none, run, err
 		}
 		for _, part := range results {
 			if result, ok := part.(llm.ToolResultPart); ok && result.CallID == callID {
-				return out, errNotPending // answered already
+				return none, run, errNotPending // answered already
 			}
 		}
 	}
 	rows = rows[at : at+1]
-	out.run, err = q.GetRun(ctx, *rows[0].RunID)
-	if errors.Is(err, pgx.ErrNoRows) || (err == nil && out.run.Status != sqlc.RunStatusAwaitingInput) {
-		return out, errNotPending
+	run, err = q.GetRun(ctx, *rows[0].RunID)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && run.Status != sqlc.RunStatusAwaitingInput) {
+		return none, run, errNotPending
 	}
 	if err != nil {
-		return out, err
+		return none, run, err
 	}
 	parts, err := agent.DecodeParts(rows[0].Parts)
 	if err != nil {
-		return out, err
+		return none, run, err
 	}
 	for _, part := range parts {
-		call, ok := part.(llm.ToolCallPart)
-		if !ok || call.ID != callID || call.Name != agent.ToolAskUser {
-			continue
+		if call, ok := part.(llm.ToolCallPart); ok && call.ID == callID && call.Name == name {
+			return call, run, nil
 		}
-		if out.questions, err = tools.ParseQuestions(call.Arguments); err != nil {
-			return out, errNotPending
-		}
-		return out, nil
 	}
-	return out, errNotPending
+	return none, run, errNotPending
 }
 
 // existingAnswer is the answer a retried request already started.

@@ -1,0 +1,297 @@
+/*
+ * Plugins (`/plugins`, PluginsPage): the featured plugin, the filters, three
+ * columns of tiles and the dialog a plugin opens (design C, 2026-11-03).
+ * Chat-side tokens only. Tiles have no border, only a faint ground on hover,
+ * as the tasks page's ideas.
+ */
+
+.chat-ui .n-plugins-column {
+  width: 100%;
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 8px 32px 48px;
+}
+
+.chat-ui .n-plugins-head {
+  margin-bottom: 22px;
+}
+
+.chat-ui .n-plugins-sub {
+  margin: 4px 0 0;
+  color: var(--n-text-2);
+  font-size: 14px;
+}
+
+/* ---------------------------------------------------------------- mark */
+.chat-ui .n-plugin-mark {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  border-radius: 28%;
+  background: var(--n-text);
+  color: var(--n-card, #fff);
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* ---------------------------------------------------------------- hero */
+.chat-ui .n-plugin-hero {
+  --n-plugin-tint: var(--n-text);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 22px;
+  padding: 22px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--n-plugin-tint) 9%, transparent), color-mix(in srgb, var(--n-plugin-tint) 3%, transparent));
+}
+
+.chat-ui .n-plugin-hero-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.chat-ui .n-plugin-hero-label {
+  color: var(--n-plugin-tint);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.chat-ui .n-plugin-hero-name {
+  color: var(--n-text);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.chat-ui .n-plugin-hero-desc {
+  color: var(--n-text-2);
+  font-size: 13px;
+}
+
+/* ------------------------------------------------------------- buttons */
+.chat-ui .n-plugin-btn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--n-hover);
+  color: var(--n-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease, opacity 120ms ease;
+}
+
+.chat-ui .n-plugin-btn > svg {
+  width: 14px;
+  height: 14px;
+}
+
+.chat-ui .n-plugin-btn.is-done {
+  background: transparent;
+  color: var(--n-text-2);
+}
+
+.chat-ui .n-plugin-btn.is-quiet {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--n-line);
+}
+
+.chat-ui .n-plugin-btn.is-quiet:hover:not(:disabled) {
+  background: var(--n-hover);
+}
+
+.chat-ui .n-plugin-btn.is-primary {
+  background: var(--n-accent);
+  color: var(--n-accent-fg);
+}
+
+.chat-ui .n-plugin-btn.is-primary:hover:not(:disabled) {
+  background: var(--n-accent-hover);
+}
+
+.chat-ui .n-plugin-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ------------------------------------------------------------- filters */
+.chat-ui .n-plugin-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.chat-ui .n-plugin-filter {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--n-text-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chat-ui .n-plugin-filter:hover {
+  color: var(--n-text);
+}
+
+.chat-ui .n-plugin-filter.is-active {
+  background: var(--n-hover);
+  color: var(--n-text);
+  font-weight: 500;
+}
+
+.chat-ui .n-plugins-none {
+  padding: 24px 4px;
+  color: var(--n-text-3);
+  font-size: 14px;
+}
+
+/* ---------------------------------------------------------------- grid */
+.chat-ui .n-plugin-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (max-width: 860px) {
+  .chat-ui .n-plugin-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 560px) {
+  .chat-ui .n-plugins-column { padding: 8px 16px 40px; }
+  .chat-ui .n-plugin-grid { grid-template-columns: minmax(0, 1fr); }
+  .chat-ui .n-plugin-hero { flex-wrap: wrap; }
+}
+
+.chat-ui .n-plugin-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  padding: 14px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.chat-ui .n-plugin-tile:hover {
+  background: var(--n-hover);
+}
+
+.chat-ui .n-plugin-name {
+  margin-top: 6px;
+  color: var(--n-text);
+  font-weight: 500;
+}
+
+.chat-ui .n-plugin-desc {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--n-text-2);
+  font-size: 12.5px;
+  line-height: 18px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.chat-ui .n-plugin-badge {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--n-text-2);
+  font-size: 12px;
+}
+
+.chat-ui .n-plugin-badge > svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* -------------------------------------------------------------- dialog */
+.chat-ui .n-plugin-dialog {
+  position: relative;
+  width: 420px;
+  padding: 28px;
+}
+
+.chat-ui .n-plugin-dialog-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+}
+
+.chat-ui .n-plugin-dialog-title {
+  margin: 14px 0 4px;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 26px;
+}
+
+.chat-ui .n-plugin-dialog-about {
+  margin: 0 0 10px;
+  color: var(--n-text-2);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.chat-ui .n-plugin-points {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 6px 0 22px;
+  padding: 0;
+  color: var(--n-text);
+  font-size: 13px;
+  list-style: none;
+}
+
+.chat-ui .n-plugin-points li {
+  display: flex;
+  gap: 8px;
+}
+
+.chat-ui .n-plugin-points svg {
+  width: 15px;
+  height: 15px;
+  margin-top: 2px;
+  flex: none;
+  color: var(--n-text-2);
+}
+
+.chat-ui .n-plugin-dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* An account that stopped working: said above what the plugin does. */
+.chat-ui .n-plugin-dialog-about.is-warning {
+  color: var(--n-err);
+}

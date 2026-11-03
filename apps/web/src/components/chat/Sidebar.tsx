@@ -1,6 +1,6 @@
 import type { Conversation } from '@openchat/api-client'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { AlarmClock, ChevronRight, LibraryBig, PanelLeft, Search, SquarePen } from 'lucide-react'
+import { AlarmClock, ChevronRight, LibraryBig, PanelLeft, Puzzle, Search, SquarePen } from 'lucide-react'
 import { Collapsible } from 'radix-ui'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -149,6 +149,11 @@ export function Sidebar({ collapsed, mobile, onToggle, onNavigate, activeId, onD
                   </Link>
                 </Tooltip>
               )}
+              <Tooltip label={t('plugins.title')} side="right">
+                <Link className="n-row n-sidebar-nav-row" to="/plugins" activeProps={{ className: 'active' }} aria-label={t('plugins.title')}>
+                  <Puzzle aria-hidden="true" />
+                </Link>
+              </Tooltip>
             </nav>
             {/* The empty length of the rail opens the sidebar too. */}
             <button type="button" className="n-sidebar-rail-fill" tabIndex={-1} aria-hidden="true" onClick={onToggle} />
@@ -192,6 +197,10 @@ export function Sidebar({ collapsed, mobile, onToggle, onNavigate, activeId, onD
                     <span className="n-row-label">{t('tasks.title')}</span>
                   </Link>
                 )}
+                <Link className="n-row n-sidebar-nav-row" to="/plugins" activeProps={{ className: 'active' }} onClick={(event) => { if (!event.metaKey && !event.ctrlKey) onNavigate() }}>
+                  <Puzzle aria-hidden="true" />
+                  <span className="n-row-label">{t('plugins.title')}</span>
+                </Link>
               </nav>
 
               <div className="n-sidebar-history">

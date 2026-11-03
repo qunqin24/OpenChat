@@ -13,6 +13,7 @@
 ## `web_fetch`（`webfetch.go`、`webpage.go`）
 
 - **安全**：地址来自模型输出，所以每一次连接（包括每一跳重定向）都在拨号时检查目标地址是不是公网（`GuardedClient`），不读环境里的代理；屏蔽站点按请求的地址和重定向后的地址各查一次。
+- **读取方式**（后台「联网搜索 → 网页读取」，`api/web_fetch.go`，设置 `web_fetch` 和 `web_fetch_jina_key`）：内置读取器不跑 JavaScript，带人机验证的网站常回 403（一次深度研究里 9 次读网页被拒了 4 次），所以可以请 Jina Reader（`r.jina.ai`，`tools/reader.go`）代读。三种模式（`tools.ReaderMode`）：`fallback`（默认）自己读，被拒（401/403/406/429/451/5xx、连接失败或超时，`fetchRefused`）或读不出文字时请 Jina 读一次；`builtin` 只自己读；`jina` 先请 Jina，读不了再自己读。Jina 只得知网址；连到 Jina 也走 `GuardedClient`；`jina` 模式下明显不是公网的地址（IP 字面量、localhost）先拒，不交给 Jina；Jina 返回的最终地址照样查屏蔽站点；Jina 也被人机验证挡住时拿回的「Just a moment…」页按失败处理（`challengePage`），不当作网页内容。填了 Jina 的 Key 就带上，频率上限更高（免 Key 约每分钟 20 次）。后台可以试读一个网址，看是谁读到的、多少字。
 - **网页读成正文 Markdown**：先去掉不含正文的元素（脚本、样式、`nav`、`footer`、`select` 等；不去 `form`，有些站把整页包在里面），再用 readability（`codeberg.org/readeck/go-readability`，Firefox 阅读模式的移植）找正文，转成 Markdown（`html-to-markdown`，含表格）。正文太短、明显不是整页的主体时（少于 500 字且不到全页一半）退回整页。图片从正文里去掉、在结果末尾单独列（`htmlImages`，图片代理只放行列出过的地址）；链接的 title、脚注标记和页内锚点链接去掉，非 ASCII 的转义还原成文字（`readableAddress`，只还原 0x80 以上的字节，不会冒出空格、括号、`?`）。readability 认出发布日期时带 `Published:` 行。
 - **PDF**：响应是 `application/pdf`，或是 `octet-stream` 但开头是 `%PDF-`，就交给 `doctext`（和附件同一套 pdftotext，带 `[Page n]`），上限 20 MB；扫描件、太长、服务器没装 pdftotext 都明确告诉模型换来源。
 - **分段读与查找**：一次最多 `fetchMaxChars`（2 万字）。结果末尾写明读到哪、下一段的 `offset`；`offset` 按字符（rune）计，起点往回对齐到行首、终点往前对齐到行尾。`find` 不按顺序读，而是返回从 `offset` 起含这个词（不分大小写）的段落，最多 8 段，每段注明起点 offset，模型可以从那里接着读。挨得近的命中合进同一段，但一段最长 2000 字（`findPassageMax`）、所有段加起来不超过一次读取的 2 万字；超出的命中只计数，结果里给出下一次查找的 `offset`——常见词不会把整篇长文一次带进来。

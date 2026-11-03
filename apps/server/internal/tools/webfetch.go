@@ -52,6 +52,15 @@ type WebFetch struct {
 	// Blocklist is the sites an administrator has ruled out, checked against
 	// the address asked for and the one a redirect lands on.
 	Blocklist Blocklist
+	// Mode is how the reading service is used (ReaderMode); empty is
+	// ReaderFallback.
+	Mode ReaderMode
+	// Reader is the reading service's address (readerFetch). Empty is Jina
+	// Reader in production and none in a test that set Client.
+	Reader string
+	// ReaderKey is the reading service's API key, which raises its rate
+	// limit; empty reads keyless.
+	ReaderKey string
 }
 
 var _ agent.Tool = WebFetch{}
@@ -111,7 +120,7 @@ func (w WebFetch) Execute(ctx context.Context, raw json.RawMessage) (agent.ToolR
 		if client == nil {
 			client = guardedClient()
 		}
-		if page, err = fetch(ctx, client, target.String()); err != nil {
+		if page, err = w.load(ctx, client, target); err != nil {
 			return agent.ToolResult{}, err
 		}
 		recentPages.put(target.String(), page)
@@ -227,7 +236,9 @@ type page struct {
 	published string
 	text      string
 	// pages is a PDF's page count; 0 for a web page.
-	pages  int
+	pages int
+	// via is "jina" for a page the reading service read, else empty.
+	via    string
 	images []PageImage
 }
 
@@ -263,12 +274,16 @@ func fetch(ctx context.Context, client *http.Client, target string) (page, error
 		if errors.Is(err, errTooManyRedirects) {
 			return page{}, agent.Errorf("The page redirected too many times.")
 		}
-		return page{}, agent.Errorf("The page could not be fetched: the connection failed or timed out.")
+		return page{}, &fetchRefused{agent.Errorf("The page could not be fetched: the connection failed or timed out.")}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return page{}, agent.Errorf("The page could not be fetched (HTTP %d).", resp.StatusCode)
+		err := agent.Errorf("The page could not be fetched (HTTP %d).", resp.StatusCode)
+		if turnedAway(resp.StatusCode) {
+			return page{}, &fetchRefused{err}
+		}
+		return page{}, err
 	}
 
 	mediaType, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
@@ -316,6 +331,23 @@ func fetch(ctx context.Context, client *http.Client, target string) (page, error
 	}
 	title, published, text := pageMarkdown(doc, resp.Request.URL)
 	return page{url: final, title: title, published: published, text: text, images: htmlImages(doc, resp.Request.URL)}, nil
+}
+
+// fetchRefused is a fetch the site turned away or that did not get through -
+// a bot wall's 403, a rate limit, a timeout - which a reading service may
+// still get past (readerFetch). A page that is not there (404) is not one.
+type fetchRefused struct{ err error }
+
+func (e *fetchRefused) Error() string { return e.err.Error() }
+func (e *fetchRefused) Unwrap() error { return e.err }
+
+func turnedAway(status int) bool {
+	switch status {
+	case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotAcceptable, http.StatusTooManyRequests,
+		http.StatusUnavailableForLegalReasons:
+		return true
+	}
+	return status >= 500
 }
 
 // pdfPage reads a PDF's text as an attached one is read (doctext): page by

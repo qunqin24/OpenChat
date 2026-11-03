@@ -31,6 +31,11 @@ export const queryKeys = {
   },
   /** What the person's files take against their quota (GET /me/storage): changes with every upload, never persisted. */
   storage: ['storage'] as const,
+  /** Plugins the person may install, and whether they did. */
+  plugins: {
+    all: ['plugins'] as const,
+    list: () => [...queryKeys.plugins.all, 'list'] as const,
+  },
   /** Scheduled tasks: small, and moved on by the server, so never persisted. */
   tasks: {
     all: ['tasks'] as const,

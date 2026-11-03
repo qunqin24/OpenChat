@@ -145,6 +145,10 @@ func (s *Server) CreateMessage(w http.ResponseWriter, r *http.Request, conversat
 		httpx.Fail(w, r, err)
 		return
 	}
+	if err := s.chooseResearch(ctx, user, content, &choice); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
 	var ids []uuid.UUID
 	if body.AttachmentIds != nil {
 		ids = *body.AttachmentIds
@@ -246,6 +250,11 @@ type runChoice struct {
 	// fromApp: the request came from the phone app, so the answer is laid out
 	// for a narrow screen (phoneGuide).
 	fromApp bool
+	// research: the run carries out a deep research (research.go).
+	research bool
+	// webForced: web access is on for this run whatever the conversation's
+	// switch, which keeps what it was (a deep research's runs).
+	webForced bool
 }
 
 // chooseRun settles a run's model, effort and web access from what the request
@@ -324,6 +333,7 @@ func createRun(ctx context.Context, q *sqlc.Queries, conv sqlc.Conversation, use
 		WebSearch:       c.webSearch,
 		Continues:       c.continues,
 		FromApp:         c.fromApp,
+		Research:        c.research,
 	}
 	if requestID != "" {
 		params.RequestID = &requestID
@@ -346,7 +356,7 @@ func createRun(ctx context.Context, q *sqlc.Queries, conv sqlc.Conversation, use
 			return run, err
 		}
 	}
-	if c.webSearch != conv.WebSearch {
+	if c.webSearch != conv.WebSearch && !c.webForced {
 		if _, err := q.SetConversationWebSearch(ctx, sqlc.SetConversationWebSearchParams{
 			ID: conv.ID, UserID: &userID, WebSearch: c.webSearch,
 		}); err != nil {
@@ -759,10 +769,24 @@ func (s *Server) GetChatFeatures(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, err)
 		return
 	}
+	var research *DeepResearchAllowance
+	if on, err := researchOn(r.Context(), s.q); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	} else if on {
+		a, err := researchAllowance(r.Context(), s.q, auth.MustUser(r.Context()))
+		if err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+		contract := a.contract()
+		research = &contract
+	}
 	httpx.JSON(w, http.StatusOK, ChatFeatures{
 		Skills:         skillsOn,
 		PersonalSkills: personalSkills,
 		Subagents:      &subagents,
+		DeepResearch:   research,
 		WebSearch:      config.Enabled && config.searcher(key) != nil,
 		AvatarUploads:  avatars,
 		ScheduledTasks: tasks,

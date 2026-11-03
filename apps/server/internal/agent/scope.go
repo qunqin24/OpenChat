@@ -24,6 +24,9 @@ type Scope struct {
 	// FromApp: the run was started from the phone app, and its answer is read
 	// on a narrow screen.
 	FromApp bool
+	// Research: the run carries out a deep research the person started from
+	// its plan (docs/design/deep-research-plan.md).
+	Research bool
 }
 
 // Subagent reports whether the scope is a sub-agent's run.

@@ -1,4 +1,5 @@
 import { parseQuotes } from './document-selection'
+import { parseSkills } from './skill-mention'
 import { turnText, type Turn } from './transcript'
 
 /**
@@ -23,8 +24,10 @@ export function turnOutline(turns: readonly Turn[]): OutlineEntry[] {
   turns.forEach((turn, i) => {
     if (turn.kind !== 'user') return
     const { message } = turn
-    // A request about a quoted passage is its words, not the passage.
-    const words = parseQuotes(message.content)?.request ?? message.content
+    // A request about a quoted passage is its words, not the passage, nor the
+    // skills picked for it.
+    const { rest } = parseSkills(message.content)
+    const words = parseQuotes(rest)?.request ?? rest
     const files = (message.attachments ?? []).map((file) => file.filename)
     const reply = turns[i + 1]
     entries.push({

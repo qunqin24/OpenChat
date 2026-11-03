@@ -21,6 +21,7 @@ import (
 	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin24/openchat/apps/server/internal/httpx"
 	"github.com/qunqin24/openchat/apps/server/internal/imagesearch"
+	"github.com/qunqin24/openchat/apps/server/internal/secrets"
 	"github.com/qunqin24/openchat/apps/server/internal/storage"
 	"github.com/qunqin24/openchat/apps/server/internal/usage"
 )
@@ -40,6 +41,9 @@ type Server struct {
 	// storageMu serializes changes to the storage settings.
 	storageMu sync.Mutex
 	runner    *agent.Runner
+	// secrets seals plugin credentials (internal/secrets); without a key the
+	// parts of plugins that need one are refused.
+	secrets *secrets.Box
 	// avatars holds the read URLs issued for account pictures.
 	avatars avatarCache
 	// usage is the ledger of model requests, for the ones the server makes
@@ -88,6 +92,9 @@ func NewServer(cfg *config.Config, pool *pgxpool.Pool, store storage.Backend, ru
 	}
 	return s
 }
+
+// UseSecrets gives the server the box that seals plugin credentials.
+func (s *Server) UseSecrets(box *secrets.Box) { s.secrets = box }
 
 // GetHealth reports liveness and, best-effort, database reachability.
 func (s *Server) GetHealth(w http.ResponseWriter, r *http.Request) {

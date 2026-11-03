@@ -32,11 +32,11 @@ func (q *Queries) CountUserRunningRuns(ctx context.Context, userID uuid.UUID) (i
 
 const createRun = `-- name: CreateRun :one
 INSERT INTO runs (conversation_id, user_id, input_message_id, request_id, model_id, channel_id, reasoning_effort,
-                  web_search, continues, from_app)
+                  web_search, continues, from_app, research)
 VALUES ($1, $2, $3,
         $4, $5, $6, $7,
-        $8, $9, $10)
-RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, from_app
+        $8, $9, $10, $11)
+RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, from_app, research
 `
 
 type CreateRunParams struct {
@@ -50,6 +50,7 @@ type CreateRunParams struct {
 	WebSearch       bool       `json:"web_search"`
 	Continues       *uuid.UUID `json:"continues"`
 	FromApp         bool       `json:"from_app"`
+	Research        bool       `json:"research"`
 }
 
 func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, error) {
@@ -64,6 +65,7 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 		arg.WebSearch,
 		arg.Continues,
 		arg.FromApp,
+		arg.Research,
 	)
 	var i Run
 	err := row.Scan(
@@ -87,6 +89,7 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 		&i.WebSearch,
 		&i.Continues,
 		&i.FromApp,
+		&i.Research,
 	)
 	return i, err
 }
@@ -101,7 +104,7 @@ SET status      = $1,
     finished_at = now()
 WHERE id = $3
   AND status = 'running'
-RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, from_app
+RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, from_app, research
 `
 
 type FinishRunParams struct {
@@ -136,12 +139,13 @@ func (q *Queries) FinishRun(ctx context.Context, arg FinishRunParams) (Run, erro
 		&i.WebSearch,
 		&i.Continues,
 		&i.FromApp,
+		&i.Research,
 	)
 	return i, err
 }
 
 const getActiveRun = `-- name: GetActiveRun :one
-SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, from_app
+SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, from_app, research
 FROM runs
 WHERE conversation_id = $1
   AND status = 'running'
@@ -171,12 +175,13 @@ func (q *Queries) GetActiveRun(ctx context.Context, conversationID uuid.UUID) (R
 		&i.WebSearch,
 		&i.Continues,
 		&i.FromApp,
+		&i.Research,
 	)
 	return i, err
 }
 
 const getRun = `-- name: GetRun :one
-SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, from_app
+SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, from_app, research
 FROM runs
 WHERE id = $1
 `
@@ -205,12 +210,13 @@ func (q *Queries) GetRun(ctx context.Context, id uuid.UUID) (Run, error) {
 		&i.WebSearch,
 		&i.Continues,
 		&i.FromApp,
+		&i.Research,
 	)
 	return i, err
 }
 
 const getRunByRequestID = `-- name: GetRunByRequestID :one
-SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, from_app
+SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, from_app, research
 FROM runs
 WHERE conversation_id = $1
   AND request_id = $2
@@ -245,12 +251,13 @@ func (q *Queries) GetRunByRequestID(ctx context.Context, arg GetRunByRequestIDPa
 		&i.WebSearch,
 		&i.Continues,
 		&i.FromApp,
+		&i.Research,
 	)
 	return i, err
 }
 
 const listRunningRuns = `-- name: ListRunningRuns :many
-SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, from_app
+SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, from_app, research
 FROM runs
 WHERE status = 'running'
 ORDER BY created_at
@@ -287,6 +294,7 @@ func (q *Queries) ListRunningRuns(ctx context.Context) ([]Run, error) {
 			&i.WebSearch,
 			&i.Continues,
 			&i.FromApp,
+			&i.Research,
 		); err != nil {
 			return nil, err
 		}
@@ -299,7 +307,7 @@ func (q *Queries) ListRunningRuns(ctx context.Context) ([]Run, error) {
 }
 
 const lockRun = `-- name: LockRun :one
-SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, from_app
+SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, from_app, research
 FROM runs
 WHERE id = $1
 FOR UPDATE
@@ -331,6 +339,7 @@ func (q *Queries) LockRun(ctx context.Context, id uuid.UUID) (Run, error) {
 		&i.WebSearch,
 		&i.Continues,
 		&i.FromApp,
+		&i.Research,
 	)
 	return i, err
 }
@@ -376,7 +385,7 @@ SET cancel_requested = true,
 WHERE id = $1
   AND conversation_id = $2
   AND status = 'running'
-RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, from_app
+RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, from_app, research
 `
 
 type RequestRunCancelParams struct {
@@ -408,6 +417,7 @@ func (q *Queries) RequestRunCancel(ctx context.Context, arg RequestRunCancelPara
 		&i.WebSearch,
 		&i.Continues,
 		&i.FromApp,
+		&i.Research,
 	)
 	return i, err
 }
@@ -420,7 +430,7 @@ SET checkpoint = $1,
     updated_at = now()
 WHERE id = $3
   AND status = 'running'
-RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, from_app
+RETURNING id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, from_app, research
 `
 
 type SaveRunStateParams struct {
@@ -455,6 +465,7 @@ func (q *Queries) SaveRunState(ctx context.Context, arg SaveRunStateParams) (Run
 		&i.WebSearch,
 		&i.Continues,
 		&i.FromApp,
+		&i.Research,
 	)
 	return i, err
 }

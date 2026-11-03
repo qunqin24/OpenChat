@@ -95,11 +95,14 @@ func (s *Server) SubagentTools(ctx context.Context) []agent.Tool {
 		slog.WarnContext(ctx, "read sub-agent settings", "error", err)
 		return nil
 	}
-	if !settings.Enabled {
+	// A deep research has researchers whatever the switch, and waits for
+	// them; its plan has none (research.go).
+	phase := researchPhaseOf(ctx, s.q)
+	if phase == phasePlan || (!settings.Enabled && phase != phaseResearch) {
 		return nil
 	}
 	return []agent.Tool{
-		SubagentTool{s: s, background: settings.Background},
+		SubagentTool{s: s, background: settings.Background && phase != phaseResearch},
 		SubagentMessageTool{s: s},
 		SubagentStopTool{s: s},
 	}
@@ -192,7 +195,10 @@ func (t SubagentTool) Execute(ctx context.Context, raw json.RawMessage) (agent.T
 	if err != nil {
 		return agent.ToolResult{}, err
 	}
-	if !settings.Enabled {
+	if researchPhaseOf(ctx, s.q) == phaseResearch {
+		settings.MaxPerRun = max(settings.MaxPerRun, researchMaxSubagents)
+		args.Background = nil
+	} else if !settings.Enabled {
 		return agent.ToolResult{}, agent.Errorf("Sub-agents are turned off. Do the work yourself.")
 	}
 	background := settings.Background && args.Background != nil && *args.Background

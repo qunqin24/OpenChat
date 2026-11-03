@@ -24,12 +24,16 @@ export const adminKeys = {
   catalog: () => [...adminKeys.all, 'catalog'] as const,
   channels: () => [...adminKeys.all, 'channels'] as const,
   webSearch: () => [...adminKeys.all, 'web-search'] as const,
+  webFetch: () => [...adminKeys.all, 'web-fetch'] as const,
   imageSearch: () => [...adminKeys.all, 'image-search'] as const,
   passkeys: () => [...adminKeys.all, 'passkeys'] as const,
   storage: () => [...adminKeys.all, 'storage'] as const,
   storageQuota: () => [...adminKeys.all, 'storage-quota'] as const,
   /** The site's skills; the hooks are hooks/use-skills.ts, shared with a person's own. */
   skills: () => [...adminKeys.all, 'skills'] as const,
+  /** Plugins, and one plugin's tools. */
+  plugins: () => [...adminKeys.all, 'plugins'] as const,
+  pluginTools: (id: string) => [...adminKeys.all, 'plugins', id, 'tools'] as const,
 }
 
 export function useAdminDashboard(range: DashboardRange) {

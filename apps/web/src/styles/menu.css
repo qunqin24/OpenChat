@@ -170,6 +170,12 @@
 .n-menu.n-attach-menu {
   width: 220px;
 }
+/* Its first view: a word on each way to attach
+   after its name, as ChatGPT's menu has it - a little wider, the words cut to
+   what fits. The lists of files and conversations keep the narrow width. */
+.n-menu.n-attach-menu:has(.n-at-title) {
+  width: min(18rem, calc(100vw - 24px));
+}
 
 /* "+" turned into one of its lists (AttachMenu), after OpenWebUI's: the same
    width whatever it shows (narrower than its 280px, our labels being short),
@@ -292,4 +298,19 @@
   flex-shrink: 0;
   width: 14px;
   height: 14px;
+}
+
+/* The menu's lines (AttachMenu, and Composer's lists typed for with @ and /): the
+   icon, the name, then its words in grey, cut to one line. */
+.n-menu-item > .n-at-title,
+.n-at-option > .n-at-title { flex: none; white-space: nowrap; }
+.n-at-title.is-skill { font-family: var(--font-mono); font-size: 12.5px; }
+.n-menu-item > .n-at-desc,
+.n-at-option > .n-at-desc {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--n-text-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

@@ -444,3 +444,35 @@ func TestSkillsVersionsExportAndPicker(t *testing.T) {
 	h.createSkill(h.user, false, skillBody(later, "Added after.", "x", nil))
 	sameList(t, "after the snapshot", available(), []string{name})
 }
+
+// The skills picked with / lead a message as tags; a title is asked of its
+// words alone, and falls back on them.
+func TestSkillTagsAreNotATitle(t *testing.T) {
+	h := newMemHarness(t, nil)
+	resetSkillSettings(t, h)
+	conv := h.conversation(false)
+	h.send(conv.ID, "<skill name=\"doc-coauthoring\"/>\nwrite a product spec")
+
+	run, err := h.q.GetRun(context.Background(), h.lastRun)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exchange, question, err := h.server.exchangeOf(context.Background(), run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustContain(t, "exchange", exchange, "write a product spec")
+	mustNotContain(t, "exchange", exchange, "skill name")
+	if title := questionTitle(question); strings.Contains(title, "skill") {
+		t.Fatalf("fallback title %q", title)
+	}
+
+	rec := httptest.NewRecorder()
+	h.server.GenerateConversationTitle(rec, h.request(http.MethodPost, ""), conv.ID)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("title: %d %s", rec.Code, rec.Body)
+	}
+	asked := h.body(h.requests())
+	mustContain(t, "title request", asked, "write a product spec")
+	mustNotContain(t, "title request", asked, "skill name")
+}

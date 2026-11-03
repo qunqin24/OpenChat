@@ -582,6 +582,65 @@ type Picture struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
+type Plugin struct {
+	ID                uuid.UUID          `json:"id"`
+	Slug              string             `json:"slug"`
+	Name              string             `json:"name"`
+	Description       string             `json:"description"`
+	About             string             `json:"about"`
+	Category          string             `json:"category"`
+	IconText          string             `json:"icon_text"`
+	IconColor         string             `json:"icon_color"`
+	Featured          bool               `json:"featured"`
+	Enabled           bool               `json:"enabled"`
+	Audience          string             `json:"audience"`
+	McpUrl            *string            `json:"mcp_url"`
+	AuthType          string             `json:"auth_type"`
+	Sort              int32              `json:"sort"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	HeaderName        string             `json:"header_name"`
+	HeaderSecret      []byte             `json:"header_secret"`
+	ToolsFetchedAt    pgtype.Timestamptz `json:"tools_fetched_at"`
+	Builtin           *string            `json:"builtin"`
+	IconSlug          string             `json:"icon_slug"`
+	IconPath          string             `json:"icon_path"`
+	OauthClientID     string             `json:"oauth_client_id"`
+	OauthClientSecret []byte             `json:"oauth_client_secret"`
+	OauthScopes       string             `json:"oauth_scopes"`
+	OauthRegistered   bool               `json:"oauth_registered"`
+}
+
+type PluginInstall struct {
+	UserID         uuid.UUID          `json:"user_id"`
+	PluginID       uuid.UUID          `json:"plugin_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	AccessToken    []byte             `json:"access_token"`
+	RefreshToken   []byte             `json:"refresh_token"`
+	TokenExpiresAt pgtype.Timestamptz `json:"token_expires_at"`
+	NeedsReconnect bool               `json:"needs_reconnect"`
+}
+
+type PluginOauthState struct {
+	StateHash   []byte             `json:"state_hash"`
+	UserID      uuid.UUID          `json:"user_id"`
+	PluginID    uuid.UUID          `json:"plugin_id"`
+	Verifier    []byte             `json:"verifier"`
+	RedirectUri string             `json:"redirect_uri"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+type PluginTool struct {
+	PluginID    uuid.UUID `json:"plugin_id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	ReadOnly    bool      `json:"read_only"`
+	Permission  string    `json:"permission"`
+	Title       string    `json:"title"`
+	InputSchema []byte    `json:"input_schema"`
+	Destructive bool      `json:"destructive"`
+}
+
 type RequestTrace struct {
 	UsageLogID     uuid.UUID          `json:"usage_log_id"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
@@ -589,6 +648,13 @@ type RequestTrace struct {
 	ConversationID uuid.UUID          `json:"conversation_id"`
 	Request        []byte             `json:"request"`
 	Response       []byte             `json:"response"`
+}
+
+type ResearchStart struct {
+	ID        uuid.UUID          `json:"id"`
+	UserID    uuid.UUID          `json:"user_id"`
+	RunID     *uuid.UUID         `json:"run_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type Run struct {
@@ -612,6 +678,7 @@ type Run struct {
 	WebSearch       bool               `json:"web_search"`
 	Continues       *uuid.UUID         `json:"continues"`
 	FromApp         bool               `json:"from_app"`
+	Research        bool               `json:"research"`
 }
 
 type ScheduledTask struct {
@@ -634,6 +701,12 @@ type ScheduledTask struct {
 	LastError      *string            `json:"last_error"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type SearchCache struct {
+	Key       string             `json:"key"`
+	Results   []byte             `json:"results"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 }
 
 type Session struct {

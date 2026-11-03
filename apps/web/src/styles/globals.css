@@ -35,6 +35,8 @@
 @import './viewer.css';
 @import './document.css';
 @import './subagents.css';
+@import './research.css';
+@import './plugins.css';
 
 /* The admin panel keeps shadcn's own look, so its tokens and base layer come
    across unchanged — the base layer scoped so it cannot reach the chat UI. */

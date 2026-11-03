@@ -634,136 +634,76 @@
 .n-doc-block-option.is-h3 { font-weight: 500; }
 
 /* --------------------------- a quoted passage, in the composer and sent */
-.chat-ui .n-quote-tray {
-  /* Several passages sit in a row, scrolled sideways past the width. */
-  display: flex;
-  gap: 8px;
-  padding: 12px 12px 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-/* In the composer a quote is a small card, as ChatGPT's: three lines of the
-   passage and its label, its remove only on hover (always on touch). */
-.chat-ui .n-quote-tray .n-quote-card {
-  flex: none;
-  gap: 6px;
-  width: 172px;
-  padding: 8px 10px;
-  border-radius: 12px;
-}
-.chat-ui .n-quote-tray .n-quote-text {
-  font-size: 12px;
-  line-height: 1.5;
-  -webkit-line-clamp: 3;
-}
-.chat-ui .n-quote-tray .n-quote-label {
-  gap: 5px;
-  font-size: 12px;
-}
-.chat-ui .n-quote-tray .n-quote-label > svg {
-  width: 13px;
-  height: 13px;
-}
-.chat-ui .n-quote-tray .n-quote-remove {
-  top: 4px;
-  right: 4px;
-  width: 18px;
-  height: 18px;
-  opacity: 0;
-  transition: opacity 120ms ease;
-}
-.chat-ui .n-quote-tray .n-quote-card:is(:hover, :focus-within) .n-quote-remove {
-  opacity: 1;
-}
-@media (hover: none) {
-  .chat-ui .n-quote-tray .n-quote-remove { opacity: 1; }
-}
-/* A sent message's passages, in a row on the right above its words. */
-.chat-ui .n-quote-cards {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-  align-self: flex-end;
-  max-width: min(100%, 680px);
-  margin-bottom: 6px;
-}
-.chat-ui .n-quote-cards .n-quote-card.is-sent {
-  width: 200px;
-  margin-bottom: 0;
-}
-.chat-ui .n-quote-cards .n-quote-card.is-sent:only-child {
-  width: min(78vw, 320px);
-}
-
-.chat-ui .n-quote-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: min(100%, 260px);
-  padding: 10px 12px;
-  border: 1px solid var(--n-line);
-  border-radius: 14px;
-  background: var(--n-panel);
-}
-
-.chat-ui .n-quote-card.is-sent {
-  align-self: flex-end;
-  width: min(78%, 320px);
-  margin-bottom: 6px;
-  background: transparent;
-}
-
-.chat-ui .n-quote-text {
+/* As a mail client quotes (QuoteBlock, design B): a thin grey bar on the left
+   and the passage as text, no box. One passage shows two lines and where it is
+   from; several are a numbered line each. */
+.chat-ui .n-qb { position: relative; display: flex; min-width: 0; flex-direction: column; gap: 2px; padding: 1px 0 1px 12px; }
+.chat-ui .n-qb::before { content: ""; position: absolute; top: 2px; bottom: 2px; left: 0; width: 3px; border-radius: 3px; background: var(--n-hover-strong); }
+.chat-ui .n-qb-text {
   display: -webkit-box;
-  margin: 0;
   overflow: hidden;
   color: var(--n-text-2);
   font-size: 13px;
-  line-height: 1.55;
-  white-space: pre-line;
+  line-height: 19px;
+  text-align: start;
+  overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 2;
 }
-
-.chat-ui .n-quote-label {
+.chat-ui .n-qb-text.is-line { display: block; text-overflow: ellipsis; white-space: nowrap; }
+.chat-ui .n-qb-src { display: inline-flex; min-width: 0; align-items: center; gap: 4px; color: var(--n-text-3); font-size: 12px; line-height: 18px; }
+.chat-ui .n-qb-src > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-ui .n-qb-src > svg { width: 12px; height: 12px; flex: none; }
+.chat-ui .n-qb-num {
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--n-text);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.chat-ui .n-quote-label > svg {
   flex: none;
-  width: 14px;
-  height: 14px;
-  color: #3b82f6;
-}
-
-.chat-ui .n-quote-remove {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--n-hover-strong);
+  color: var(--n-text-2);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1;
+}
+/* In the composer: above the box, each with its remove. */
+.chat-ui .n-qb-tray { display: flex; flex-direction: column; gap: 6px; padding: 14px 14px 0; }
+.chat-ui .n-qb-item { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.chat-ui .n-qb-item:has(.n-qb.is-one) { align-items: flex-start; }
+.chat-ui .n-qb-body { display: block; flex: 1; min-width: 0; padding: 0; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; text-align: start; }
+.chat-ui .n-qb-remove {
+  display: inline-flex;
+  flex: none;
+  padding: 3px;
   border: 0;
   border-radius: 999px;
-  background: rgb(0 0 0 / 55%);
-  color: #fff;
+  background: transparent;
+  color: var(--n-text-3);
   cursor: pointer;
 }
-
-.chat-ui .n-quote-remove > svg { width: 12px; height: 12px; }
+.chat-ui .n-qb-remove:hover { background: var(--n-hover); color: var(--n-text); }
+.chat-ui .n-qb-remove > svg { width: 14px; height: 14px; }
+.chat-ui .n-qb-more {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 4px;
+  padding: 0 0 0 24px;
+  border: 0;
+  background: transparent;
+  color: var(--n-text-3);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.chat-ui .n-qb-more:hover { color: var(--n-text-2); }
+.chat-ui .n-qb-more > svg { width: 13px; height: 13px; }
+/* Sent: inside the bubble, above its words, one bar for all of them. */
+.chat-ui .n-qb.is-sent { gap: 4px; margin: 2px 0 8px; }
+.chat-ui .n-qb-row { display: flex; min-width: 0; align-items: center; gap: 6px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: start; }
+.chat-ui .n-qb-row > .n-qb-text { flex: 1; min-width: 0; }
 
 /* ------------------------------- the model at work on a passage, and after */
 .chat-ui .n-doc-prose {
@@ -1128,18 +1068,10 @@
 .chat-ui .n-sheet-grid tbody th { left: 0; min-width: 40px; text-align: center; }
 .chat-ui .n-sheet-grid thead th:first-child { left: 0; z-index: 2; }
 
-/* A passage of an answer, shown where it is at a click on its card. */
-.chat-ui .n-quote-card.is-showable {
-  cursor: pointer;
-  font: inherit;
-  text-align: start;
-  transition: background-color 120ms ease;
-}
-.chat-ui button.n-quote-card.is-showable { color: inherit; }
-.chat-ui .n-quote-card.is-showable:hover,
-.chat-ui .n-quote-card.is-shown {
-  background: var(--n-hover-strong);
-}
+/* A passage of an answer, shown where it is at a click on it (QuoteBlock). */
+.chat-ui :is(.n-qb-body, .n-qb-row).is-showable { cursor: pointer; }
+.chat-ui :is(.n-qb-body, .n-qb-row).is-showable:hover .n-qb-text,
+.chat-ui :is(.n-qb-body, .n-qb-row).is-shown .n-qb-text { color: var(--n-text); }
 ::highlight(n-quote) {
   background-color: rgb(253 224 71 / 45%);
 }

@@ -148,7 +148,10 @@ func (s *Server) exchangeOf(ctx context.Context, run sqlc.Run) (exchange, asked 
 			if row.Origin != nil {
 				continue // a sub-agent's report: no words the person asked with
 			}
-			question.WriteString(row.Content)
+			// The skills picked with / lead the message as tags, which the
+			// title model took for the topic: only the words are named.
+			words := personWords(row.Content)
+			question.WriteString(words)
 		case sqlc.MessageRoleAssistant:
 			answer.WriteString(row.Content)
 		}
@@ -340,7 +343,8 @@ func (s *Server) GenerateConversationTitle(w http.ResponseWriter, r *http.Reques
 	}
 	var transcript strings.Builder
 	for _, row := range rows {
-		text := strings.TrimSpace(row.Content)
+		words := personWords(row.Content)
+		text := strings.TrimSpace(words)
 		if text == "" || (row.Role != sqlc.MessageRoleUser && row.Role != sqlc.MessageRoleAssistant) {
 			continue
 		}

@@ -12,6 +12,8 @@ export type UpdateWebSearchSettings = Schemas['UpdateWebSearchSettingsRequest']
 export type WebSearchCompression = Schemas['WebSearchCompression']
 export type WebSearchDepth = Schemas['WebSearchDepth']
 export type WebSearchTestResult = Schemas['WebSearchTestResult']
+export type WebFetchSettings = Schemas['WebFetchSettings']
+export type WebFetchTestResult = Schemas['WebFetchTestResult']
 
 export function useWebSearchSettings() {
   return useQuery({
@@ -38,5 +40,26 @@ export function useTestWebSearch() {
   return useMutation({
     mutationFn: async (body: { query?: string; apiKey?: string }) =>
       unwrap(await api.POST('/admin/web-search/test', { body })),
+  })
+}
+
+export function useWebFetchSettings() {
+  return useQuery({
+    queryKey: adminKeys.webFetch(),
+    queryFn: async ({ signal }) => unwrap(await api.GET('/admin/web-fetch', { signal })),
+  })
+}
+
+export function useUpdateWebFetchSettings() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (body: Schemas['UpdateWebFetchSettingsRequest']) => unwrap(await api.PATCH('/admin/web-fetch', { body })),
+    onSuccess: (next) => queryClient.setQueryData(adminKeys.webFetch(), next),
+  })
+}
+
+export function useTestWebFetch() {
+  return useMutation({
+    mutationFn: async (url: string) => unwrap(await api.POST('/admin/web-fetch/test', { body: { url } })),
   })
 }

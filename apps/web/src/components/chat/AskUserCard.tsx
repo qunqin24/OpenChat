@@ -1,4 +1,4 @@
-import { ChevronRight, MessageCircleQuestion } from 'lucide-react'
+import { ChevronRight, MessageCircleQuestion, Telescope } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -37,14 +37,16 @@ export default function AskUserCard({ questions, state, answers, onOpen }: AskUs
  * indicator cannot be told from a stuck one). It is replaced by the waiting
  * line the moment the call is complete.
  */
-export function PreparingLine() {
+export function PreparingLine({ plan = false }: { plan?: boolean }) {
   const { t } = useTranslation()
+  // A deep research's plan being written says so, with its telescope (ResearchPlanCard).
+  const Icon = plan ? Telescope : MessageCircleQuestion
   return (
-    <section className="n-ask is-preparing" aria-label={t('chat.ask.label')}>
+    <section className="n-ask is-preparing" aria-label={plan ? t('chat.research.plan') : t('chat.ask.label')}>
       <div className="n-ask-fold" role="status">
-        <MessageCircleQuestion className="n-ask-icon" aria-hidden="true" />
+        <Icon className="n-ask-icon" aria-hidden="true" />
         <span className="n-ask-label n-ask-pulse" data-motion="essential">
-          {t('chat.ask.preparing')}
+          {plan ? t('chat.research.preparing') : t('chat.ask.preparing')}
         </span>
       </div>
     </section>

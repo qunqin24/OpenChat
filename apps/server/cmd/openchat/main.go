@@ -31,6 +31,8 @@ import (
 	"github.com/qunqin24/openchat/apps/server/internal/db"
 	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin24/openchat/apps/server/internal/logging"
+	"github.com/qunqin24/openchat/apps/server/internal/plugins"
+	"github.com/qunqin24/openchat/apps/server/internal/secrets"
 )
 
 func main() {
@@ -91,6 +93,10 @@ func run() error {
 	}
 
 	queries := sqlc.New(pool)
+	// The plugins OpenChat ships with, made once, switched off.
+	if err := plugins.EnsureBuiltins(ctx, queries); err != nil {
+		return err
+	}
 
 	// The agent layer: runs execute here, in the background, and outlive the
 	// requests that start them.
@@ -102,6 +108,21 @@ func run() error {
 			Reserver:    api.NewSpendReserver(pool),
 			Tracer:      api.NewTracer(pool)})
 	server := api.NewServer(cfg, pool, store, runner)
+	// The key that seals plugin credentials: made on the first start in the
+	// data directory, beside the local files and never in the database. A
+	// malformed one stops the start rather than leaving them unopenable; one
+	// that cannot be written leaves plugin credentials off.
+	box, source, err := secrets.Load("./data")
+	switch {
+	case err != nil && box == nil:
+		return err
+	case err != nil:
+		slog.Warn("plugin credentials cannot be stored", "error", err)
+	case source == secrets.Generated:
+		slog.Info("made the key that seals plugin credentials; back up the data directory with the database",
+			"file", "./data/"+secrets.KeyFile)
+	}
+	server.UseSecrets(box)
 	// Tools that act through the server: scheduling tasks, writing blocks.
 	runner.AddTools(server.ServerTools)
 	// Each run's model is told of the writing blocks the person edited, and of

@@ -97,6 +97,12 @@ func (s *Server) systemSettings(ctx context.Context) (SystemSettings, error) {
 	if settings.PersonalSkills, err = boolSettingOr(ctx, s.q, skills.SettingPersonal, true); err != nil {
 		return settings, err
 	}
+	if settings.DeepResearch, err = boolSettingOr(ctx, s.q, settingDeepResearch, true); err != nil {
+		return settings, err
+	}
+	if settings.DeepResearchMonthly, err = intSettingOr(ctx, s.q, settingResearchMonthly, defaultResearchMonthly); err != nil {
+		return settings, err
+	}
 	if settings.AvatarUploads, err = boolSettingOr(ctx, s.q, settingAvatarUploads, false); err != nil {
 		return settings, err
 	}
@@ -134,6 +140,10 @@ func (s *Server) UpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 
 	// Nothing is saved if the run limit is out of range.
 	if err := validRunLimit(body.MaxConcurrentRuns); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	if err := validResearchLimit(body.DeepResearchMonthly); err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
@@ -259,6 +269,8 @@ func (s *Server) UpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 		{settingMaxRuns, body.MaxConcurrentRuns, "concurrent run limit changed"},
 		{skills.SettingEnabled, body.Skills, "skills changed"},
 		{skills.SettingPersonal, body.PersonalSkills, "personal skills changed"},
+		{settingDeepResearch, body.DeepResearch, "deep research changed"},
+		{settingResearchMonthly, body.DeepResearchMonthly, "deep research monthly limit changed"},
 	} {
 		var (
 			value []byte

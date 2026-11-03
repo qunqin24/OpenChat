@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn/ui
 import { ModerationPanel } from '@/features/admin/moderation/moderation-panel'
 import { ContentSection } from '../components/content-section'
 import { RetentionForm } from './retention-form'
+import { ResearchLimitForm } from './research-limit-form'
 import { RunLimitForm } from './run-limit-form'
 import { SubagentsPanel } from './subagents-panel'
 import { SYSTEM_TABS, type SystemTab } from './tabs'
@@ -54,6 +55,8 @@ export function SettingsSystem() {
   // The chat's top bar offers 轨迹 from the features.
   const toggleTraces = useSystemToggle('requestTraces', 'traces', [queryKeys.features])
   const toggleCompress = useSystemToggle('compressContext', 'compress-context')
+  // The composer's "+" menu offers deep research from the features.
+  const toggleResearch = useSystemToggle('deepResearch', 'deep-research', [queryKeys.features])
   // The account settings read it from the chat's features.
   const toggleAvatars = useSystemToggle('avatarUploads', 'avatars', [queryKeys.features])
   // The sign-in pages offer the register link from these.
@@ -159,6 +162,13 @@ export function SettingsSystem() {
           >
             {toggle('personal-skills', data?.personalSkills ?? true, togglePersonalSkills)}
           </SettingRow>
+          <SettingRow
+            id="deep-research"
+            label={t('admin.settings.system.deep-research')}
+            hint={t('admin.settings.system.deep-research-hint')}
+          >
+            {toggle('deep-research', data?.deepResearch ?? true, toggleResearch)}
+          </SettingRow>
           <SettingRow id="scheduled-tasks" label={t('admin.settings.system.tasks')} hint={t('admin.settings.system.tasks-hint')}>
             {toggle('scheduled-tasks', data?.scheduledTasks ?? true, toggleTasks)}
           </SettingRow>
@@ -179,6 +189,13 @@ export function SettingsSystem() {
               <p className="text-muted-foreground text-sm">{t('admin.settings.system.run-limit.intro')}</p>
             </div>
             {isPending || !data ? <Skeleton className="my-4 h-28 w-full" /> : <RunLimitForm settings={data} />}
+          </div>
+          <div className="py-4">
+            <div className="space-y-1">
+              <div className="text-sm font-medium">{t('admin.settings.system.research-limit.title')}</div>
+              <p className="text-muted-foreground text-sm">{t('admin.settings.system.research-limit.intro')}</p>
+            </div>
+            {isPending || !data ? <Skeleton className="my-4 h-28 w-full" /> : <ResearchLimitForm settings={data} />}
           </div>
         </TabsContent>
 
@@ -267,6 +284,7 @@ type SystemFlag =
   | 'memory'
   | 'skills'
   | 'personalSkills'
+  | 'deepResearch'
   | 'scheduledTasks'
   | 'requestTraces'
   | 'avatarUploads'

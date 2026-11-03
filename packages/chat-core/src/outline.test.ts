@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { plainText, turnOutline } from './outline'
 import { answerQuote, quoteMessage } from './document-selection'
+import { skillMessage } from './skill-mention'
 import { assistant, text, user } from './testing'
 import { buildTurns } from './transcript'
 
@@ -25,6 +26,11 @@ describe('turnOutline', () => {
       user('f', { content: '', attachments: [{ id: 'x', filename: 'plan.pdf', contentType: 'application/pdf', size: 1, url: 'u' }] }),
     ]
     expect(turnOutline(buildTurns(rows, null)).map((entry) => entry.question)).toEqual(['shorter please', 'plan.pdf'])
+  })
+
+  it('shows the words of a message, not the skills picked for it', () => {
+    const rows = [user('s', { content: skillMessage(['doc-coauthoring'], quoteMessage(answerQuote('p'), 'write a doc')) })]
+    expect(turnOutline(buildTurns(rows, null)).map((entry) => entry.question)).toEqual(['write a doc'])
   })
 })
 

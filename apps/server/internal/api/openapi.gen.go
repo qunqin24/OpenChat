@@ -33,6 +33,105 @@ func (e AdminDashboardBucket) Valid() bool {
 	}
 }
 
+// Defines values for AdminPluginAudience.
+const (
+	AdminPluginAudienceAdmins AdminPluginAudience = "admins"
+	AdminPluginAudienceAll    AdminPluginAudience = "all"
+)
+
+// Valid indicates whether the value is a known member of the AdminPluginAudience enum.
+func (e AdminPluginAudience) Valid() bool {
+	switch e {
+	case AdminPluginAudienceAdmins:
+		return true
+	case AdminPluginAudienceAll:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminPluginAuthType.
+const (
+	AdminPluginAuthTypeHeader AdminPluginAuthType = "header"
+	AdminPluginAuthTypeNone   AdminPluginAuthType = "none"
+	AdminPluginAuthTypeOauth  AdminPluginAuthType = "oauth"
+)
+
+// Valid indicates whether the value is a known member of the AdminPluginAuthType enum.
+func (e AdminPluginAuthType) Valid() bool {
+	switch e {
+	case AdminPluginAuthTypeHeader:
+		return true
+	case AdminPluginAuthTypeNone:
+		return true
+	case AdminPluginAuthTypeOauth:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminPluginInputAudience.
+const (
+	AdminPluginInputAudienceAdmins AdminPluginInputAudience = "admins"
+	AdminPluginInputAudienceAll    AdminPluginInputAudience = "all"
+)
+
+// Valid indicates whether the value is a known member of the AdminPluginInputAudience enum.
+func (e AdminPluginInputAudience) Valid() bool {
+	switch e {
+	case AdminPluginInputAudienceAdmins:
+		return true
+	case AdminPluginInputAudienceAll:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminPluginInputAuthType.
+const (
+	AdminPluginInputAuthTypeHeader AdminPluginInputAuthType = "header"
+	AdminPluginInputAuthTypeNone   AdminPluginInputAuthType = "none"
+	AdminPluginInputAuthTypeOauth  AdminPluginInputAuthType = "oauth"
+)
+
+// Valid indicates whether the value is a known member of the AdminPluginInputAuthType enum.
+func (e AdminPluginInputAuthType) Valid() bool {
+	switch e {
+	case AdminPluginInputAuthTypeHeader:
+		return true
+	case AdminPluginInputAuthTypeNone:
+		return true
+	case AdminPluginInputAuthTypeOauth:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AnswerResearchPlanRequestDecision.
+const (
+	Cancel AnswerResearchPlanRequestDecision = "cancel"
+	Revise AnswerResearchPlanRequestDecision = "revise"
+	Start  AnswerResearchPlanRequestDecision = "start"
+)
+
+// Valid indicates whether the value is a known member of the AnswerResearchPlanRequestDecision enum.
+func (e AnswerResearchPlanRequestDecision) Valid() bool {
+	switch e {
+	case Cancel:
+		return true
+	case Revise:
+		return true
+	case Start:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ApiFormat.
 const (
 	Chat      ApiFormat = "chat"
@@ -939,6 +1038,48 @@ func (e PasskeySettingsUserVerification) Valid() bool {
 	}
 }
 
+// Defines values for PluginAuthType.
+const (
+	PluginAuthTypeHeader PluginAuthType = "header"
+	PluginAuthTypeNone   PluginAuthType = "none"
+	PluginAuthTypeOauth  PluginAuthType = "oauth"
+)
+
+// Valid indicates whether the value is a known member of the PluginAuthType enum.
+func (e PluginAuthType) Valid() bool {
+	switch e {
+	case PluginAuthTypeHeader:
+		return true
+	case PluginAuthTypeNone:
+		return true
+	case PluginAuthTypeOauth:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PluginToolPermission.
+const (
+	PluginToolPermissionAllow   PluginToolPermission = "allow"
+	PluginToolPermissionBlocked PluginToolPermission = "blocked"
+	PluginToolPermissionConfirm PluginToolPermission = "confirm"
+)
+
+// Valid indicates whether the value is a known member of the PluginToolPermission enum.
+func (e PluginToolPermission) Valid() bool {
+	switch e {
+	case PluginToolPermissionAllow:
+		return true
+	case PluginToolPermissionBlocked:
+		return true
+	case PluginToolPermissionConfirm:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ReasoningEffort.
 const (
 	ReasoningEffortAuto    ReasoningEffort = "auto"
@@ -1560,6 +1701,45 @@ func (e VersionInfoCheckError) Valid() bool {
 	}
 }
 
+// Defines values for WebFetchReader.
+const (
+	WebFetchReaderBuiltin  WebFetchReader = "builtin"
+	WebFetchReaderFallback WebFetchReader = "fallback"
+	WebFetchReaderJina     WebFetchReader = "jina"
+)
+
+// Valid indicates whether the value is a known member of the WebFetchReader enum.
+func (e WebFetchReader) Valid() bool {
+	switch e {
+	case WebFetchReaderBuiltin:
+		return true
+	case WebFetchReaderFallback:
+		return true
+	case WebFetchReaderJina:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WebFetchTestResultVia.
+const (
+	WebFetchTestResultViaBuiltin WebFetchTestResultVia = "builtin"
+	WebFetchTestResultViaJina    WebFetchTestResultVia = "jina"
+)
+
+// Valid indicates whether the value is a known member of the WebFetchTestResultVia enum.
+func (e WebFetchTestResultVia) Valid() bool {
+	switch e {
+	case WebFetchTestResultViaBuiltin:
+		return true
+	case WebFetchTestResultViaJina:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WebSearchCompression.
 const (
 	WebSearchCompressionNone     WebSearchCompression = "none"
@@ -1791,6 +1971,112 @@ type AdminDashboard struct {
 // AdminDashboardBucket What one trend point spans.
 type AdminDashboardBucket string
 
+// AdminPlugin defines model for AdminPlugin.
+type AdminPlugin struct {
+	About    string              `json:"about"`
+	Audience AdminPluginAudience `json:"audience"`
+	AuthType AdminPluginAuthType `json:"authType"`
+
+	// Builtin It ships with OpenChat: made switched off on the first start, and
+	// turned off rather than deleted (409 `plugin_builtin`).
+	Builtin     bool   `json:"builtin"`
+	Category    string `json:"category"`
+	Description string `json:"description"`
+	Enabled     bool   `json:"enabled"`
+	Featured    bool   `json:"featured"`
+	HeaderName  string `json:"headerName"`
+
+	// HeaderSet Whether a header value is stored. Never sent back.
+	HeaderSet bool               `json:"headerSet"`
+	IconColor string             `json:"iconColor"`
+	IconPath  string             `json:"iconPath"`
+	IconSlug  string             `json:"iconSlug"`
+	IconText  string             `json:"iconText"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// Installs How many people installed it.
+	Installs      int    `json:"installs"`
+	McpUrl        string `json:"mcpUrl"`
+	Name          string `json:"name"`
+	OauthClientId string `json:"oauthClientId"`
+
+	// OauthRegistered The client was registered on the fly rather than given.
+	OauthRegistered bool   `json:"oauthRegistered"`
+	OauthScopes     string `json:"oauthScopes"`
+
+	// OauthSecretSet Whether a client secret is stored. Never sent back.
+	OauthSecretSet bool   `json:"oauthSecretSet"`
+	Slug           string `json:"slug"`
+	Sort           int    `json:"sort"`
+
+	// Tools Tools last listed by its service.
+	Tools          int        `json:"tools"`
+	ToolsFetchedAt *time.Time `json:"toolsFetchedAt,omitempty"`
+
+	// ToolsOn Of those, the ones not blocked.
+	ToolsOn int `json:"toolsOn"`
+}
+
+// AdminPluginAudience defines model for AdminPlugin.Audience.
+type AdminPluginAudience string
+
+// AdminPluginAuthType defines model for AdminPlugin.AuthType.
+type AdminPluginAuthType string
+
+// AdminPluginInput defines model for AdminPluginInput.
+type AdminPluginInput struct {
+	About       *string                   `json:"about,omitempty"`
+	Audience    *AdminPluginInputAudience `json:"audience,omitempty"`
+	AuthType    *AdminPluginInputAuthType `json:"authType,omitempty"`
+	Category    *string                   `json:"category,omitempty"`
+	Description *string                   `json:"description,omitempty"`
+	Enabled     *bool                     `json:"enabled,omitempty"`
+	Featured    *bool                     `json:"featured,omitempty"`
+	HeaderName  *string                   `json:"headerName,omitempty"`
+
+	// HeaderValue Write-only, stored sealed. Absent keeps the stored one; empty removes it.
+	HeaderValue *string `json:"headerValue,omitempty"`
+	IconColor   *string `json:"iconColor,omitempty"`
+
+	// IconPath That icon's SVG path data (24 x 24), commands and numbers only (400 `invalid_plugin` otherwise).
+	IconPath *string `json:"iconPath,omitempty"`
+
+	// IconSlug The Simple Icons slug of its icon; empty for none.
+	IconSlug *string `json:"iconSlug,omitempty"`
+	IconText *string `json:"iconText,omitempty"`
+
+	// McpUrl The MCP service's Streamable HTTP address; empty for a plugin of skills only. May be on the internal network.
+	McpUrl *string `json:"mcpUrl,omitempty"`
+	Name   string  `json:"name"`
+
+	// OauthClientId For `oauth`, the client registered with the authorization server (GitHub's OAuth app, say); empty to register one on the fly where the server allows it.
+	OauthClientId *string `json:"oauthClientId,omitempty"`
+
+	// OauthClientSecret Write-only, stored sealed. Absent keeps the stored one; empty removes it.
+	OauthClientSecret *string `json:"oauthClientSecret,omitempty"`
+
+	// OauthScopes Scopes asked for, space-separated.
+	OauthScopes *string `json:"oauthScopes,omitempty"`
+
+	// Slug Lowercase letters, digits and single hyphens; the prefix of its tool names.
+	Slug string `json:"slug"`
+	Sort *int   `json:"sort,omitempty"`
+}
+
+// AdminPluginInputAudience defines model for AdminPluginInput.Audience.
+type AdminPluginInputAudience string
+
+// AdminPluginInputAuthType defines model for AdminPluginInput.AuthType.
+type AdminPluginInputAuthType string
+
+// AdminPluginList defines model for AdminPluginList.
+type AdminPluginList struct {
+	Items []AdminPlugin `json:"items"`
+
+	// SecretKeySet Whether OPENCHAT_SECRET_KEY is set, without which header values and accounts cannot be stored.
+	SecretKeySet bool `json:"secretKeySet"`
+}
+
 // AndroidApp defines model for AndroidApp.
 type AndroidApp struct {
 	// Fingerprints SHA-256 fingerprints of the certificates the app is signed with (`keytool -list -v`), as hex with or without colons.
@@ -1834,6 +2120,42 @@ type AnswerQuestionResponse struct {
 
 	// Run The work from one input to its final answer.
 	Run Run `json:"run"`
+}
+
+// AnswerResearchPlanRequest defines model for AnswerResearchPlanRequest.
+type AnswerResearchPlanRequest struct {
+	Decision AnswerResearchPlanRequestDecision `json:"decision"`
+
+	// Feedback What to change; required for `revise`.
+	Feedback *string `json:"feedback,omitempty"`
+	Model    *string `json:"model,omitempty"`
+
+	// ReasoningEffort How hard a reasoning model thinks. `auto` sends nothing and leaves the
+	// model at its own default. The other values are the levels providers
+	// use; each model accepts its own subset, listed as
+	// `ChatModel.reasoningEfforts` (from models.dev). A level the model does
+	// not offer is dropped, which is the same as `auto`.
+	ReasoningEffort *ReasoningEffort `json:"reasoningEffort,omitempty"`
+
+	// RequestId Chosen by the client; a retry with the same id finds the same run.
+	RequestId *string `json:"requestId,omitempty"`
+}
+
+// AnswerResearchPlanRequestDecision defines model for AnswerResearchPlanRequest.Decision.
+type AnswerResearchPlanRequestDecision string
+
+// AnswerResearchPlanResponse defines model for AnswerResearchPlanResponse.
+type AnswerResearchPlanResponse struct {
+	// Message The user message that asked for the research.
+	Message Message `json:"message"`
+
+	// Result The tool row written for the call. Its result's `details` holds
+	// `decision` (`started`, `revised` or `cancelled`) and, for a
+	// revision, `feedback`.
+	Result Message `json:"result"`
+
+	// Run The run started; absent for `cancel`.
+	Run *Run `json:"run,omitempty"`
 }
 
 // ApiFormat Which of OpenAI's request formats a channel on the OpenAI protocol
@@ -2244,6 +2566,10 @@ type ChannelTypeInfo struct {
 type ChatFeatures struct {
 	// AvatarUploads Whether the account settings offer uploading a picture.
 	AvatarUploads bool `json:"avatarUploads"`
+
+	// DeepResearch Whether the caller can start a deep research (`@` → 深度研究). Absent
+	// when deep research is off or web search is unavailable.
+	DeepResearch *DeepResearchAllowance `json:"deepResearch,omitempty"`
 
 	// PersonalSkills Whether people may write skills of their own (System settings).
 	PersonalSkills bool `json:"personalSkills"`
@@ -2714,6 +3040,19 @@ type DashboardUser struct {
 	UserEmail     *string             `json:"userEmail,omitempty"`
 	UserId        *openapi_types.UUID `json:"userId,omitempty"`
 	UserName      *string             `json:"userName,omitempty"`
+}
+
+// DeepResearchAllowance Whether the caller can start a deep research (`@` → 深度研究). Absent
+// when deep research is off or web search is unavailable.
+type DeepResearchAllowance struct {
+	// Left Researches the caller may still start this month.
+	Left int `json:"left"`
+
+	// ResetsAt When the month's allowance starts again.
+	ResetsAt time.Time `json:"resetsAt"`
+
+	// Unlimited True for an administrator, or when the allowance is 0 (no limit).
+	Unlimited bool `json:"unlimited"`
 }
 
 // DeletedConversations defines model for DeletedConversations.
@@ -3512,6 +3851,86 @@ type Personalization struct {
 	ResponseStyle string `json:"responseStyle"`
 }
 
+// Plugin defines model for Plugin.
+type Plugin struct {
+	// About More on what it does, shown before installing.
+	About string `json:"about"`
+
+	// AuthType How it reaches its service: no account, one the administrator
+	// set up for everyone (`header`), or each person's own (`oauth`).
+	AuthType PluginAuthType `json:"authType"`
+
+	// Category The administrator's grouping (办公, 开发…); empty for none.
+	Category string `json:"category"`
+
+	// Description One line, for its tile.
+	Description string `json:"description"`
+	Featured    bool   `json:"featured"`
+
+	// IconColor The mark's colour (CSS), empty for the default.
+	IconColor string `json:"iconColor"`
+
+	// IconPath Its brand icon's SVG path (Simple Icons, 24 x 24), drawn instead of iconText; empty for none.
+	IconPath string `json:"iconPath"`
+
+	// IconText A letter or two drawn as its mark.
+	IconText  string             `json:"iconText"`
+	Id        openapi_types.UUID `json:"id"`
+	Installed bool               `json:"installed"`
+	Name      string             `json:"name"`
+
+	// NeedsReconnect The caller's account for it stopped working (its token could not be refreshed); connecting again mends it.
+	NeedsReconnect bool `json:"needsReconnect"`
+
+	// ReadTools Tools it offers that only read.
+	ReadTools int `json:"readTools"`
+
+	// Skills Skills it brings.
+	Skills int `json:"skills"`
+
+	// Slug The prefix of the plugin's tool names.
+	Slug string `json:"slug"`
+
+	// WriteTools Tools it offers that may change things; the model asks before calling those the administrator did not allow outright.
+	WriteTools int `json:"writeTools"`
+}
+
+// PluginAuthType How it reaches its service: no account, one the administrator
+// set up for everyone (`header`), or each person's own (`oauth`).
+type PluginAuthType string
+
+// PluginList defines model for PluginList.
+type PluginList struct {
+	Items []Plugin `json:"items"`
+}
+
+// PluginTool defines model for PluginTool.
+type PluginTool struct {
+	Description string `json:"description"`
+
+	// Destructive The service says it may destroy (destructiveHint, true unless it says otherwise).
+	Destructive bool   `json:"destructive"`
+	Name        string `json:"name"`
+
+	// Permission `allow`: called without asking; `confirm`: the person is asked before
+	// each call; `blocked`: never offered to the model.
+	Permission PluginToolPermission `json:"permission"`
+
+	// ReadOnly The service says it only reads (readOnlyHint).
+	ReadOnly bool   `json:"readOnly"`
+	Title    string `json:"title"`
+}
+
+// PluginToolList defines model for PluginToolList.
+type PluginToolList struct {
+	FetchedAt *time.Time   `json:"fetchedAt,omitempty"`
+	Items     []PluginTool `json:"items"`
+}
+
+// PluginToolPermission `allow`: called without asking; `confirm`: the person is asked before
+// each call; `blocked`: never offered to the model.
+type PluginToolPermission string
+
 // ReasoningEffort How hard a reasoning model thinks. `auto` sends nothing and leaves the
 // model at its own default. The other values are the levels providers
 // use; each model accepts its own subset, listed as
@@ -4036,6 +4455,14 @@ type SystemSettings struct {
 	// chasing is usually the intermittent kind.
 	DebugLogging bool `json:"debugLogging"`
 
+	// DeepResearch Whether people may start a deep research from the composer's `@`
+	// menu. On by default; needs web search to be available.
+	DeepResearch bool `json:"deepResearch"`
+
+	// DeepResearchMonthly How many deep researches one person may start per calendar month;
+	// 0 is unlimited. 10 unless changed. Administrators are exempt.
+	DeepResearchMonthly int `json:"deepResearchMonthly"`
+
 	// DeletedRetentionDays How many days a conversation a user deleted is kept before it is
 	// removed for good, with its messages and files. Until then the
 	// delete can still be undone in the database. Default 30.
@@ -4478,6 +4905,10 @@ type UpdateSystemSettingsRequest struct {
 	AvatarUploads     *bool `json:"avatarUploads,omitempty"`
 	CompressContext   *bool `json:"compressContext,omitempty"`
 	DebugLogging      *bool `json:"debugLogging,omitempty"`
+	DeepResearch      *bool `json:"deepResearch,omitempty"`
+
+	// DeepResearchMonthly 0 to 10000 (400 `invalid_research_limit` otherwise); 0 is unlimited.
+	DeepResearchMonthly *int `json:"deepResearchMonthly,omitempty"`
 
 	// DeletedRetentionDays 1 to 3650 (400 `invalid_retention` otherwise).
 	DeletedRetentionDays *int  `json:"deletedRetentionDays,omitempty"`
@@ -4539,6 +4970,20 @@ type UpdateUserRequest struct {
 
 	// StorageQuotaBytes How much this account may keep in files, in bytes; -1 gives it the default again.
 	StorageQuotaBytes *int64 `json:"storageQuotaBytes,omitempty"`
+}
+
+// UpdateWebFetchSettingsRequest Only the fields present are changed.
+type UpdateWebFetchSettingsRequest struct {
+	// JinaKey Jina's API key. Empty removes the stored one.
+	JinaKey *string `json:"jinaKey,omitempty"`
+
+	// Reader How web_fetch reads a page. `builtin` fetches it itself and nothing
+	// else. `fallback` (the default) fetches it itself and, when the site
+	// turns it away (403, 429, a timeout) or it has no readable text, asks
+	// Jina Reader (r.jina.ai), which reads it as a browser would. `jina`
+	// asks Jina Reader first and fetches it itself when Jina cannot. Jina is
+	// sent the page's address.
+	Reader *WebFetchReader `json:"reader,omitempty"`
 }
 
 // UpdateWebSearchSettingsRequest Only the fields present are changed.
@@ -4801,6 +5246,57 @@ type VersionInfo struct {
 // VersionInfoCheckError The last look failed; `latest` (if any) is from an earlier one.
 type VersionInfoCheckError string
 
+// WebFetchReader How web_fetch reads a page. `builtin` fetches it itself and nothing
+// else. `fallback` (the default) fetches it itself and, when the site
+// turns it away (403, 429, a timeout) or it has no readable text, asks
+// Jina Reader (r.jina.ai), which reads it as a browser would. `jina`
+// asks Jina Reader first and fetches it itself when Jina cannot. Jina is
+// sent the page's address.
+type WebFetchReader string
+
+// WebFetchSettings defines model for WebFetchSettings.
+type WebFetchSettings struct {
+	// JinaKeyPreview The key's last four characters.
+	JinaKeyPreview *string `json:"jinaKeyPreview,omitempty"`
+
+	// JinaKeySet Whether a Jina API key is stored. Without one Jina is used keyless, at its lower rate limit.
+	JinaKeySet bool `json:"jinaKeySet"`
+
+	// Reader How web_fetch reads a page. `builtin` fetches it itself and nothing
+	// else. `fallback` (the default) fetches it itself and, when the site
+	// turns it away (403, 429, a timeout) or it has no readable text, asks
+	// Jina Reader (r.jina.ai), which reads it as a browser would. `jina`
+	// asks Jina Reader first and fetches it itself when Jina cannot. Jina is
+	// sent the page's address.
+	Reader WebFetchReader `json:"reader"`
+}
+
+// WebFetchTestRequest defines model for WebFetchTestRequest.
+type WebFetchTestRequest struct {
+	Url string `json:"url"`
+}
+
+// WebFetchTestResult defines model for WebFetchTestResult.
+type WebFetchTestResult struct {
+	// Chars How many characters of text the page has.
+	Chars *int `json:"chars,omitempty"`
+
+	// Error Why the page could not be read, in English, when it could not.
+	Error     *string `json:"error,omitempty"`
+	LatencyMs int64   `json:"latencyMs"`
+	Ok        bool    `json:"ok"`
+
+	// Preview The text's first few hundred characters.
+	Preview *string `json:"preview,omitempty"`
+	Title   *string `json:"title,omitempty"`
+
+	// Via Who read the page.
+	Via *WebFetchTestResultVia `json:"via,omitempty"`
+}
+
+// WebFetchTestResultVia Who read the page.
+type WebFetchTestResultVia string
+
 // WebSearchCompression What a result gives the model, and so how much of its context a search
 // costs. `snippet` is the search service's own excerpt. `truncate` is the
 // page's text cut to `truncateLength` characters. `none` is the page's
@@ -4960,6 +5456,13 @@ type ListModerationEventsParams struct {
 	Category *ModerationCategory `form:"category,omitempty" json:"category,omitempty"`
 }
 
+// UpdateAdminPluginToolJSONBody defines parameters for UpdateAdminPluginTool.
+type UpdateAdminPluginToolJSONBody struct {
+	// Permission `allow`: called without asking; `confirm`: the person is asked before
+	// each call; `blocked`: never offered to the model.
+	Permission PluginToolPermission `json:"permission"`
+}
+
 // ImportSiteSkillsParams defines parameters for ImportSiteSkills.
 type ImportSiteSkillsParams struct {
 	Filename string `form:"filename" json:"filename"`
@@ -5099,6 +5602,14 @@ type ImportMySkillsParams struct {
 	Filename string `form:"filename" json:"filename"`
 }
 
+// PluginOAuthCallbackParams defines parameters for PluginOAuthCallback.
+type PluginOAuthCallbackParams struct {
+	State *string `form:"state,omitempty" json:"state,omitempty"`
+	Code  *string `form:"code,omitempty" json:"code,omitempty"`
+	Error *string `form:"error,omitempty" json:"error,omitempty"`
+	Iss   *string `form:"iss,omitempty" json:"iss,omitempty"`
+}
+
 // UpdatePasskeySettingsJSONRequestBody defines body for UpdatePasskeySettings for application/json ContentType.
 type UpdatePasskeySettingsJSONRequestBody = UpdatePasskeySettingsRequest
 
@@ -5128,6 +5639,15 @@ type UpdateModelSettingsJSONRequestBody = ModelOverride
 
 // UpdateModerationSettingsJSONRequestBody defines body for UpdateModerationSettings for application/json ContentType.
 type UpdateModerationSettingsJSONRequestBody = UpdateModerationSettingsRequest
+
+// CreateAdminPluginJSONRequestBody defines body for CreateAdminPlugin for application/json ContentType.
+type CreateAdminPluginJSONRequestBody = AdminPluginInput
+
+// UpdateAdminPluginJSONRequestBody defines body for UpdateAdminPlugin for application/json ContentType.
+type UpdateAdminPluginJSONRequestBody = AdminPluginInput
+
+// UpdateAdminPluginToolJSONRequestBody defines body for UpdateAdminPluginTool for application/json ContentType.
+type UpdateAdminPluginToolJSONRequestBody UpdateAdminPluginToolJSONBody
 
 // CreateSiteSkillJSONRequestBody defines body for CreateSiteSkill for application/json ContentType.
 type CreateSiteSkillJSONRequestBody = SkillRequest
@@ -5164,6 +5684,12 @@ type BulkUpdateUsersJSONRequestBody = BulkUpdateUsersRequest
 
 // UpdateUserJSONRequestBody defines body for UpdateUser for application/json ContentType.
 type UpdateUserJSONRequestBody = UpdateUserRequest
+
+// UpdateWebFetchSettingsJSONRequestBody defines body for UpdateWebFetchSettings for application/json ContentType.
+type UpdateWebFetchSettingsJSONRequestBody = UpdateWebFetchSettingsRequest
+
+// TestWebFetchJSONRequestBody defines body for TestWebFetch for application/json ContentType.
+type TestWebFetchJSONRequestBody = WebFetchTestRequest
 
 // UpdateWebSearchSettingsJSONRequestBody defines body for UpdateWebSearchSettings for application/json ContentType.
 type UpdateWebSearchSettingsJSONRequestBody = UpdateWebSearchSettingsRequest
@@ -5206,6 +5732,9 @@ type EditMessageJSONRequestBody = EditMessageRequest
 
 // RegenerateAnswerJSONRequestBody defines body for RegenerateAnswer for application/json ContentType.
 type RegenerateAnswerJSONRequestBody = RegenerateRequest
+
+// AnswerResearchPlanJSONRequestBody defines body for AnswerResearchPlan for application/json ContentType.
+type AnswerResearchPlanJSONRequestBody = AnswerResearchPlanRequest
 
 // AnswerQuestionJSONRequestBody defines body for AnswerQuestion for application/json ContentType.
 type AnswerQuestionJSONRequestBody = AnswerQuestionRequest
@@ -6238,6 +6767,27 @@ type ServerInterface interface {
 	// ListModerationEvents The messages content moderation turned away
 	// (GET /admin/moderation/events)
 	ListModerationEvents(w http.ResponseWriter, r *http.Request, params ListModerationEventsParams)
+	// ListAdminPlugins Every plugin
+	// (GET /admin/plugins)
+	ListAdminPlugins(w http.ResponseWriter, r *http.Request)
+	// CreateAdminPlugin Add a plugin
+	// (POST /admin/plugins)
+	CreateAdminPlugin(w http.ResponseWriter, r *http.Request)
+	// DeleteAdminPlugin Delete a plugin
+	// (DELETE /admin/plugins/{pluginId})
+	DeleteAdminPlugin(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID)
+	// UpdateAdminPlugin Change a plugin
+	// (PUT /admin/plugins/{pluginId})
+	UpdateAdminPlugin(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID)
+	// ListAdminPluginTools A plugin's tools
+	// (GET /admin/plugins/{pluginId}/tools)
+	ListAdminPluginTools(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID)
+	// RefreshAdminPluginTools List the service's tools again
+	// (POST /admin/plugins/{pluginId}/tools/refresh)
+	RefreshAdminPluginTools(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID)
+	// UpdateAdminPluginTool Set a tool's permission
+	// (PATCH /admin/plugins/{pluginId}/tools/{toolName})
+	UpdateAdminPluginTool(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID, toolName string)
 	// ListSiteSkills The site's skills
 	// (GET /admin/skills)
 	ListSiteSkills(w http.ResponseWriter, r *http.Request)
@@ -6325,6 +6875,15 @@ type ServerInterface interface {
 	// CheckForUpdate Look for a newer release now
 	// (POST /admin/version/check)
 	CheckForUpdate(w http.ResponseWriter, r *http.Request)
+	// GetWebFetchSettings Web page reading settings
+	// (GET /admin/web-fetch)
+	GetWebFetchSettings(w http.ResponseWriter, r *http.Request)
+	// UpdateWebFetchSettings Change web page reading settings
+	// (PATCH /admin/web-fetch)
+	UpdateWebFetchSettings(w http.ResponseWriter, r *http.Request)
+	// TestWebFetch Read one page with the current settings
+	// (POST /admin/web-fetch/test)
+	TestWebFetch(w http.ResponseWriter, r *http.Request)
 	// GetWebSearchSettings Web search settings
 	// (GET /admin/web-search)
 	GetWebSearchSettings(w http.ResponseWriter, r *http.Request)
@@ -6424,6 +6983,9 @@ type ServerInterface interface {
 	// RegenerateAnswer Answer the last message again
 	// (POST /conversations/{conversationId}/regenerate)
 	RegenerateAnswer(w http.ResponseWriter, r *http.Request, conversationId ConversationId)
+	// AnswerResearchPlan Start, revise or cancel a deep research plan
+	// (POST /conversations/{conversationId}/research-plans/{callId})
+	AnswerResearchPlan(w http.ResponseWriter, r *http.Request, conversationId ConversationId, callId string)
 	// CancelRun Stop a run
 	// (POST /conversations/{conversationId}/runs/{runId}/cancel)
 	CancelRun(w http.ResponseWriter, r *http.Request, conversationId ConversationId, runId openapi_types.UUID)
@@ -6565,6 +7127,21 @@ type ServerInterface interface {
 	// GetPicture A picture found for an answer, fetched for the reader
 	// (GET /pictures/{pictureId})
 	GetPicture(w http.ResponseWriter, r *http.Request, pictureId openapi_types.UUID)
+	// ListPlugins The plugins the caller may install
+	// (GET /plugins)
+	ListPlugins(w http.ResponseWriter, r *http.Request)
+	// PluginOAuthCallback Where the authorization server sends the person back
+	// (GET /plugins/oauth/callback)
+	PluginOAuthCallback(w http.ResponseWriter, r *http.Request, params PluginOAuthCallbackParams)
+	// ConnectPlugin Start connecting the caller's own account
+	// (POST /plugins/{pluginId}/connect)
+	ConnectPlugin(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID)
+	// UninstallPlugin Uninstall a plugin
+	// (DELETE /plugins/{pluginId}/install)
+	UninstallPlugin(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID)
+	// InstallPlugin Install a plugin
+	// (POST /plugins/{pluginId}/install)
+	InstallPlugin(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID)
 	// ListTasks List your scheduled tasks
 	// (GET /tasks)
 	ListTasks(w http.ResponseWriter, r *http.Request)
@@ -6748,6 +7325,48 @@ func (_ Unimplemented) ListModerationEvents(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ListAdminPlugins Every plugin
+// (GET /admin/plugins)
+func (_ Unimplemented) ListAdminPlugins(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateAdminPlugin Add a plugin
+// (POST /admin/plugins)
+func (_ Unimplemented) CreateAdminPlugin(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteAdminPlugin Delete a plugin
+// (DELETE /admin/plugins/{pluginId})
+func (_ Unimplemented) DeleteAdminPlugin(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateAdminPlugin Change a plugin
+// (PUT /admin/plugins/{pluginId})
+func (_ Unimplemented) UpdateAdminPlugin(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListAdminPluginTools A plugin's tools
+// (GET /admin/plugins/{pluginId}/tools)
+func (_ Unimplemented) ListAdminPluginTools(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RefreshAdminPluginTools List the service's tools again
+// (POST /admin/plugins/{pluginId}/tools/refresh)
+func (_ Unimplemented) RefreshAdminPluginTools(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateAdminPluginTool Set a tool's permission
+// (PATCH /admin/plugins/{pluginId}/tools/{toolName})
+func (_ Unimplemented) UpdateAdminPluginTool(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID, toolName string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ListSiteSkills The site's skills
 // (GET /admin/skills)
 func (_ Unimplemented) ListSiteSkills(w http.ResponseWriter, r *http.Request) {
@@ -6919,6 +7538,24 @@ func (_ Unimplemented) GetVersionInfo(w http.ResponseWriter, r *http.Request) {
 // CheckForUpdate Look for a newer release now
 // (POST /admin/version/check)
 func (_ Unimplemented) CheckForUpdate(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetWebFetchSettings Web page reading settings
+// (GET /admin/web-fetch)
+func (_ Unimplemented) GetWebFetchSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateWebFetchSettings Change web page reading settings
+// (PATCH /admin/web-fetch)
+func (_ Unimplemented) UpdateWebFetchSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// TestWebFetch Read one page with the current settings
+// (POST /admin/web-fetch/test)
+func (_ Unimplemented) TestWebFetch(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7117,6 +7754,12 @@ func (_ Unimplemented) EditMessage(w http.ResponseWriter, r *http.Request, conve
 // RegenerateAnswer Answer the last message again
 // (POST /conversations/{conversationId}/regenerate)
 func (_ Unimplemented) RegenerateAnswer(w http.ResponseWriter, r *http.Request, conversationId ConversationId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AnswerResearchPlan Start, revise or cancel a deep research plan
+// (POST /conversations/{conversationId}/research-plans/{callId})
+func (_ Unimplemented) AnswerResearchPlan(w http.ResponseWriter, r *http.Request, conversationId ConversationId, callId string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7399,6 +8042,36 @@ func (_ Unimplemented) ListChatModels(w http.ResponseWriter, r *http.Request) {
 // GetPicture A picture found for an answer, fetched for the reader
 // (GET /pictures/{pictureId})
 func (_ Unimplemented) GetPicture(w http.ResponseWriter, r *http.Request, pictureId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListPlugins The plugins the caller may install
+// (GET /plugins)
+func (_ Unimplemented) ListPlugins(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PluginOAuthCallback Where the authorization server sends the person back
+// (GET /plugins/oauth/callback)
+func (_ Unimplemented) PluginOAuthCallback(w http.ResponseWriter, r *http.Request, params PluginOAuthCallbackParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ConnectPlugin Start connecting the caller's own account
+// (POST /plugins/{pluginId}/connect)
+func (_ Unimplemented) ConnectPlugin(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UninstallPlugin Uninstall a plugin
+// (DELETE /plugins/{pluginId}/install)
+func (_ Unimplemented) UninstallPlugin(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// InstallPlugin Install a plugin
+// (POST /plugins/{pluginId}/install)
+func (_ Unimplemented) InstallPlugin(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8109,6 +8782,173 @@ func (siw *ServerInterfaceWrapper) ListModerationEvents(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListModerationEvents(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAdminPlugins operation middleware
+func (siw *ServerInterfaceWrapper) ListAdminPlugins(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAdminPlugins(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAdminPlugin operation middleware
+func (siw *ServerInterfaceWrapper) CreateAdminPlugin(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAdminPlugin(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteAdminPlugin operation middleware
+func (siw *ServerInterfaceWrapper) DeleteAdminPlugin(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "pluginId" -------------
+	var pluginId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "pluginId", chi.URLParam(r, "pluginId"), &pluginId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pluginId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteAdminPlugin(w, r, pluginId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAdminPlugin operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAdminPlugin(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "pluginId" -------------
+	var pluginId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "pluginId", chi.URLParam(r, "pluginId"), &pluginId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pluginId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAdminPlugin(w, r, pluginId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAdminPluginTools operation middleware
+func (siw *ServerInterfaceWrapper) ListAdminPluginTools(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "pluginId" -------------
+	var pluginId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "pluginId", chi.URLParam(r, "pluginId"), &pluginId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pluginId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAdminPluginTools(w, r, pluginId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RefreshAdminPluginTools operation middleware
+func (siw *ServerInterfaceWrapper) RefreshAdminPluginTools(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "pluginId" -------------
+	var pluginId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "pluginId", chi.URLParam(r, "pluginId"), &pluginId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pluginId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RefreshAdminPluginTools(w, r, pluginId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAdminPluginTool operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAdminPluginTool(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "pluginId" -------------
+	var pluginId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "pluginId", chi.URLParam(r, "pluginId"), &pluginId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pluginId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "toolName" -------------
+	var toolName string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "toolName", chi.URLParam(r, "toolName"), &toolName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "toolName", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAdminPluginTool(w, r, pluginId, toolName)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8856,6 +9696,48 @@ func (siw *ServerInterfaceWrapper) CheckForUpdate(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CheckForUpdate(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetWebFetchSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetWebFetchSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWebFetchSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateWebFetchSettings operation middleware
+func (siw *ServerInterfaceWrapper) UpdateWebFetchSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateWebFetchSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestWebFetch operation middleware
+func (siw *ServerInterfaceWrapper) TestWebFetch(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestWebFetch(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9691,6 +10573,41 @@ func (siw *ServerInterfaceWrapper) RegenerateAnswer(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RegenerateAnswer(w, r, conversationId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AnswerResearchPlan operation middleware
+func (siw *ServerInterfaceWrapper) AnswerResearchPlan(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ConversationId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", chi.URLParam(r, "conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "callId" -------------
+	var callId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "callId", chi.URLParam(r, "callId"), &callId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "callId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AnswerResearchPlan(w, r, conversationId, callId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10864,6 +11781,170 @@ func (siw *ServerInterfaceWrapper) GetPicture(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// ListPlugins operation middleware
+func (siw *ServerInterfaceWrapper) ListPlugins(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPlugins(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PluginOAuthCallback operation middleware
+func (siw *ServerInterfaceWrapper) PluginOAuthCallback(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PluginOAuthCallbackParams
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "code" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "code", r.URL.Query(), &params.Code, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "code"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "code", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "error" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "error", r.URL.Query(), &params.Error, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "error"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "error", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "iss" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "iss", r.URL.Query(), &params.Iss, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "iss"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "iss", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PluginOAuthCallback(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConnectPlugin operation middleware
+func (siw *ServerInterfaceWrapper) ConnectPlugin(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "pluginId" -------------
+	var pluginId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "pluginId", chi.URLParam(r, "pluginId"), &pluginId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pluginId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConnectPlugin(w, r, pluginId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UninstallPlugin operation middleware
+func (siw *ServerInterfaceWrapper) UninstallPlugin(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "pluginId" -------------
+	var pluginId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "pluginId", chi.URLParam(r, "pluginId"), &pluginId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pluginId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UninstallPlugin(w, r, pluginId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// InstallPlugin operation middleware
+func (siw *ServerInterfaceWrapper) InstallPlugin(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "pluginId" -------------
+	var pluginId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "pluginId", chi.URLParam(r, "pluginId"), &pluginId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pluginId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.InstallPlugin(w, r, pluginId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListTasks operation middleware
 func (siw *ServerInterfaceWrapper) ListTasks(w http.ResponseWriter, r *http.Request) {
 
@@ -11189,6 +12270,27 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Patch(options.BaseURL+"/admin/system", wrapper.UpdateSystemSettings)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/plugins", wrapper.ListAdminPlugins)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/plugins", wrapper.CreateAdminPlugin)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/admin/plugins/{pluginId}", wrapper.DeleteAdminPlugin)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/admin/plugins/{pluginId}", wrapper.UpdateAdminPlugin)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/plugins/{pluginId}/tools", wrapper.ListAdminPluginTools)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/plugins/{pluginId}/tools/refresh", wrapper.RefreshAdminPluginTools)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/admin/plugins/{pluginId}/tools/{toolName}", wrapper.UpdateAdminPluginTool)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/skills", wrapper.ListSiteSkills)
 	})
 	r.Group(func(r chi.Router) {
@@ -11256,6 +12358,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/admin/web-search", wrapper.UpdateWebSearchSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/web-fetch", wrapper.GetWebFetchSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/admin/web-fetch", wrapper.UpdateWebFetchSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/web-fetch/test", wrapper.TestWebFetch)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/admin/web-search/test", wrapper.TestWebSearch)
@@ -11369,6 +12480,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/conversations/{conversationId}/tool-calls/{callId}/answer", wrapper.AnswerQuestion)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/conversations/{conversationId}/research-plans/{callId}", wrapper.AnswerResearchPlan)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/conversations/{conversationId}/events", wrapper.StreamConversationEvents)
 	})
 	r.Group(func(r chi.Router) {
@@ -11403,6 +12517,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/documents/{documentId}", wrapper.UpdateDocument)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/plugins", wrapper.ListPlugins)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/plugins/{pluginId}/connect", wrapper.ConnectPlugin)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/plugins/oauth/callback", wrapper.PluginOAuthCallback)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/plugins/{pluginId}/install", wrapper.UninstallPlugin)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/plugins/{pluginId}/install", wrapper.InstallPlugin)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/tasks", wrapper.ListTasks)

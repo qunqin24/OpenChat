@@ -16,6 +16,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as AuthedChatRouteImport } from './routes/_authed._chat'
 import { Route as AuthedLibraryRouteImport } from './routes/_authed.library'
+import { Route as AuthedPluginsRouteImport } from './routes/_authed.plugins'
 import { Route as AuthedTasksRouteImport } from './routes/_authed.tasks'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAuthenticationRouteImport } from './routes/admin.authentication'
@@ -23,6 +24,7 @@ import { Route as AdminChannelsRouteImport } from './routes/admin.channels'
 import { Route as AdminImageSearchRouteImport } from './routes/admin.image-search'
 import { Route as AdminModelsRouteImport } from './routes/admin.models'
 import { Route as AdminModerationLogsRouteImport } from './routes/admin.moderation-logs'
+import { Route as AdminPluginsRouteImport } from './routes/admin.plugins'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminSkillsRouteImport } from './routes/admin.skills'
 import { Route as AdminStorageRouteImport } from './routes/admin.storage'
@@ -71,6 +73,11 @@ const AuthedLibraryRoute = AuthedLibraryRouteImport.update({
   path: '/library',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedPluginsRoute = AuthedPluginsRouteImport.update({
+  id: '/plugins',
+  path: '/plugins',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedTasksRoute = AuthedTasksRouteImport.update({
   id: '/tasks',
   path: '/tasks',
@@ -104,6 +111,11 @@ const AdminModelsRoute = AdminModelsRouteImport.update({
 const AdminModerationLogsRoute = AdminModerationLogsRouteImport.update({
   id: '/moderation-logs',
   path: '/moderation-logs',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPluginsRoute = AdminPluginsRouteImport.update({
+  id: '/plugins',
+  path: '/plugins',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
@@ -185,12 +197,14 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/library': typeof AuthedLibraryRoute
+  '/plugins': typeof AuthedPluginsRoute
   '/tasks': typeof AuthedTasksRoute
   '/admin/authentication': typeof AdminAuthenticationRoute
   '/admin/channels': typeof AdminChannelsRoute
   '/admin/image-search': typeof AdminImageSearchRoute
   '/admin/models': typeof AdminModelsRoute
   '/admin/moderation-logs': typeof AdminModerationLogsRoute
+  '/admin/plugins': typeof AdminPluginsRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
   '/admin/skills': typeof AdminSkillsRoute
   '/admin/storage': typeof AdminStorageRoute
@@ -212,12 +226,14 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/library': typeof AuthedLibraryRoute
+  '/plugins': typeof AuthedPluginsRoute
   '/tasks': typeof AuthedTasksRoute
   '/admin/authentication': typeof AdminAuthenticationRoute
   '/admin/channels': typeof AdminChannelsRoute
   '/admin/image-search': typeof AdminImageSearchRoute
   '/admin/models': typeof AdminModelsRoute
   '/admin/moderation-logs': typeof AdminModerationLogsRoute
+  '/admin/plugins': typeof AdminPluginsRoute
   '/admin/skills': typeof AdminSkillsRoute
   '/admin/storage': typeof AdminStorageRoute
   '/admin/usage-logs': typeof AdminUsageLogsRoute
@@ -241,12 +257,14 @@ export interface FileRoutesById {
   '/register': typeof RegisterRoute
   '/_authed/_chat': typeof AuthedChatRouteWithChildren
   '/_authed/library': typeof AuthedLibraryRoute
+  '/_authed/plugins': typeof AuthedPluginsRoute
   '/_authed/tasks': typeof AuthedTasksRoute
   '/admin/authentication': typeof AdminAuthenticationRoute
   '/admin/channels': typeof AdminChannelsRoute
   '/admin/image-search': typeof AdminImageSearchRoute
   '/admin/models': typeof AdminModelsRoute
   '/admin/moderation-logs': typeof AdminModerationLogsRoute
+  '/admin/plugins': typeof AdminPluginsRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
   '/admin/skills': typeof AdminSkillsRoute
   '/admin/storage': typeof AdminStorageRoute
@@ -272,12 +290,14 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/library'
+    | '/plugins'
     | '/tasks'
     | '/admin/authentication'
     | '/admin/channels'
     | '/admin/image-search'
     | '/admin/models'
     | '/admin/moderation-logs'
+    | '/admin/plugins'
     | '/admin/settings'
     | '/admin/skills'
     | '/admin/storage'
@@ -299,12 +319,14 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/library'
+    | '/plugins'
     | '/tasks'
     | '/admin/authentication'
     | '/admin/channels'
     | '/admin/image-search'
     | '/admin/models'
     | '/admin/moderation-logs'
+    | '/admin/plugins'
     | '/admin/skills'
     | '/admin/storage'
     | '/admin/usage-logs'
@@ -327,12 +349,14 @@ export interface FileRouteTypes {
     | '/register'
     | '/_authed/_chat'
     | '/_authed/library'
+    | '/_authed/plugins'
     | '/_authed/tasks'
     | '/admin/authentication'
     | '/admin/channels'
     | '/admin/image-search'
     | '/admin/models'
     | '/admin/moderation-logs'
+    | '/admin/plugins'
     | '/admin/settings'
     | '/admin/skills'
     | '/admin/storage'
@@ -411,6 +435,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedLibraryRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/plugins': {
+      id: '/_authed/plugins'
+      path: '/plugins'
+      fullPath: '/plugins'
+      preLoaderRoute: typeof AuthedPluginsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/tasks': {
       id: '/_authed/tasks'
       path: '/tasks'
@@ -458,6 +489,13 @@ declare module '@tanstack/react-router' {
       path: '/moderation-logs'
       fullPath: '/admin/moderation-logs'
       preLoaderRoute: typeof AdminModerationLogsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/plugins': {
+      id: '/admin/plugins'
+      path: '/plugins'
+      fullPath: '/admin/plugins'
+      preLoaderRoute: typeof AdminPluginsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/settings': {
@@ -578,12 +616,14 @@ const AuthedChatRouteWithChildren = AuthedChatRoute._addFileChildren(
 interface AuthedRouteChildren {
   AuthedChatRoute: typeof AuthedChatRouteWithChildren
   AuthedLibraryRoute: typeof AuthedLibraryRoute
+  AuthedPluginsRoute: typeof AuthedPluginsRoute
   AuthedTasksRoute: typeof AuthedTasksRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedChatRoute: AuthedChatRouteWithChildren,
   AuthedLibraryRoute: AuthedLibraryRoute,
+  AuthedPluginsRoute: AuthedPluginsRoute,
   AuthedTasksRoute: AuthedTasksRoute,
 }
 
@@ -614,6 +654,7 @@ interface AdminRouteChildren {
   AdminImageSearchRoute: typeof AdminImageSearchRoute
   AdminModelsRoute: typeof AdminModelsRoute
   AdminModerationLogsRoute: typeof AdminModerationLogsRoute
+  AdminPluginsRoute: typeof AdminPluginsRoute
   AdminSettingsRoute: typeof AdminSettingsRouteWithChildren
   AdminSkillsRoute: typeof AdminSkillsRoute
   AdminStorageRoute: typeof AdminStorageRoute
@@ -629,6 +670,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminImageSearchRoute: AdminImageSearchRoute,
   AdminModelsRoute: AdminModelsRoute,
   AdminModerationLogsRoute: AdminModerationLogsRoute,
+  AdminPluginsRoute: AdminPluginsRoute,
   AdminSettingsRoute: AdminSettingsRouteWithChildren,
   AdminSkillsRoute: AdminSkillsRoute,
   AdminStorageRoute: AdminStorageRoute,

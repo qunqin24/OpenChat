@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next'
 import type { ChatModel, Message, MessagePart } from '@openchat/api-client'
-import { BookOpen, MessageSquareQuote, NotebookPen } from 'lucide-react'
+import { Telescope } from 'lucide-react'
 import { isValidElement, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -10,6 +10,8 @@ import { copyClipboard } from '@/lib/clipboard'
 import { turnText, type Turn } from '@openchat/chat-core/transcript'
 import { CopiedIcon, CopyIcon, EditIcon, RegenerateIcon } from './ActionIcons'
 import AskUserCard, { PreparingLine } from './AskUserCard'
+import ResearchPlanCard from './ResearchPlanCard'
+import { parsePlan, planDecisionOf, RESEARCH_PLAN } from '@openchat/chat-core/research-plan'
 import { MEMORY_TOOL, memoryChangeOf } from '@openchat/chat-core/memory-tool'
 import { TASK_TOOL, taskChangeOf } from '@openchat/chat-core/task-tool'
 import { DOCUMENT_TOOL, documentChangeOf, documentOpOf } from '@openchat/chat-core/document-tool'
@@ -17,9 +19,8 @@ import { launchesOf, SUBAGENT_TOOL } from '@openchat/chat-core/subagents'
 import { SubagentLaunchLine } from './SubagentLines'
 import { parseQuotes, quoteMessage } from '@openchat/chat-core/document-selection'
 import { parseSkills, skillMessage } from '@openchat/chat-core/skill-mention'
-import { highlightPassage } from '@/lib/highlight-passage'
-import { cn } from '@/lib/utils'
 import MemoryChip from './MemoryChip'
+import { SentQuotes } from './QuoteBlock'
 import TaskChip from './TaskChip'
 import DocumentCard from './DocumentCard'
 import MessageAttachments from './MessageAttachments'
@@ -88,9 +89,9 @@ export function UserMessage({
   const [typed, setTyped] = useState<string | null>(null)
   // A request about a quoted passage of a writing block: the passage is a card
   // above the words, and editing changes the words only.
-  // Skills picked with $ come first (chat-core/src/skill-mention.ts): chips,
-  // kept as they were when the message is edited.
-  const { names: skills, rest } = parseSkills(message.content)
+  // Skills picked with / come first (chat-core/src/skill-mention.ts): shown
+  // at the start of its words, kept as they were when the message is edited.
+  const { names: skills, rest, research } = parseSkills(message.content)
   const quoted = parseQuotes(rest)
   const words = quoted ? quoted.request : rest
   const draft = typed ?? restoredDraft ?? null
@@ -119,7 +120,7 @@ export function UserMessage({
             onEdit &&
             ((content) => {
               closeField()
-              onEdit(skillMessage(skills, quoted ? quoteMessage(quoted.quotes, content) : content))
+              onEdit(skillMessage(skills, quoted ? quoteMessage(quoted.quotes, content) : content, research))
             })
           }
         />
@@ -131,30 +132,25 @@ export function UserMessage({
     <div className="n-msg-user" data-turn={anchor}>
       {time && <div className="n-msg-time">{time}</div>}
       {files}
-      {skills.length > 0 && (
-        <div className="n-skill-chips" aria-label={t('chat.skills.picked')}>
-          {skills.map((name) => (
-            <span key={name} className="n-skill-chip">
-              <BookOpen aria-hidden="true" />
-              <span>{name}</span>
-            </span>
-          ))}
-        </div>
-      )}
-      {quoted && (
-        <div className="n-quote-cards">
-          {quoted.quotes.map((quote, i) => (
-            <QuoteCard
-              key={i}
-              title={quote.title}
-              passage={quote.passage}
-              fromAnswer={!quote.documentId}
-              n={quoted.quotes.length > 1 ? i + 1 : undefined}
-            />
-          ))}
-        </div>
-      )}
-      <div className="n-bubble">{words}</div>
+      <div className="n-bubble">
+        {/* The passages it asks about come first, inside the bubble (QuoteBlock). */}
+        {quoted && (
+          <SentQuotes quotes={quoted.quotes.map((q) => ({ title: q.title, passage: q.passage, fromAnswer: !q.documentId }))} />
+        )}
+        {/* Deep research and the skills picked for it lead its words, as they did in the box. */}
+        {research && (
+          <span className="n-skill-token is-research is-sent">
+            <Telescope aria-hidden="true" />
+            {t('chat.research.token')}{' '}
+          </span>
+        )}
+        {skills.map((name) => (
+          <span key={name} className="n-skill-token is-sent">
+            /{name}{' '}
+          </span>
+        ))}
+        {words}
+      </div>
       <div className="n-actions">
         <CopyButton content={words} />
         {onEdit && (
@@ -163,43 +159,6 @@ export function UserMessage({
           </button>
         )}
       </div>
-    </div>
-  )
-}
-
-/** The passage a request is about - of a writing block or an answer - above its words. */
-function QuoteCard({ title, passage, fromAnswer, n }: { title: string; passage: string; fromAnswer: boolean; n?: number }) {
-  const { t } = useTranslation()
-  // A passage of an answer is shown where it is at a click (highlightPassage).
-  const [shown, setShown] = useState(false)
-  if (fromAnswer) {
-    return (
-      <button
-        type="button"
-        className={cn('n-quote-card is-sent is-showable', shown && 'is-shown')}
-        aria-pressed={shown}
-        aria-label={t('chat.quote-show')}
-        onClick={() => {
-          const next = !shown && highlightPassage(passage)
-          if (!next) highlightPassage(null)
-          setShown(next)
-        }}
-      >
-        <p className="n-quote-text" dir="auto">{passage}</p>
-        <span className="n-quote-label">
-          <MessageSquareQuote aria-hidden="true" />
-          {n ? t('chat.quote-label-n', { n }) : t('chat.quote-label')}
-        </span>
-      </button>
-    )
-  }
-  return (
-    <div className="n-quote-card is-sent">
-      <p className="n-quote-text" dir="auto">{passage}</p>
-      <span className="n-quote-label">
-        {fromAnswer ? <MessageSquareQuote aria-hidden="true" /> : <NotebookPen aria-hidden="true" />}
-        {fromAnswer ? (n ? t('chat.quote-label-n', { n }) : t('chat.quote-label')) : title || t('document.quote-label')}
-      </span>
     </div>
   )
 }
@@ -338,6 +297,20 @@ interface AssistantTurnProps {
   onOpenQuestion?: () => void
   /** What the divider drawn inside this reply (`turn.inside`) can do. */
   divider?: { onUndo?: () => void; undoing?: boolean }
+  /** The deep research plan the conversation waits on, and what can be done with it. */
+  plan?: PlanActions
+}
+
+export interface PlanActions {
+  /** The call id of the plan waiting on the person, if any. */
+  callId: string | null
+  /** A decision is on its way. */
+  busy: boolean
+  /** The plan whose changes are being written in the composer. */
+  editing: string | null
+  onStart: (callId: string) => void
+  onCancel: (callId: string) => void
+  onEdit: (callId: string, title: string) => void
 }
 
 /**
@@ -352,6 +325,7 @@ export function AssistantTurn({
   askingCallId,
   onOpenQuestion,
   divider,
+  plan: planActions,
 }: AssistantTurnProps) {
   const { t } = useTranslation()
   const live = turn.live
@@ -370,7 +344,8 @@ export function AssistantTurn({
   // what they would fold into: everything before the answer becomes one fold
   // (see `blocks` below).
   // `fresh(index)`: that part began while the reader watched (`LiveRun.fresh`).
-  const renderParts = (parts: MessagePart[], keyPrefix: string, streaming: boolean, fresh: (index: number) => boolean): Block[] =>
+  // `writtenAt`: when the response was saved, for a plan's countdown.
+  const renderParts = (parts: MessagePart[], keyPrefix: string, streaming: boolean, fresh: (index: number) => boolean, writtenAt = ''): Block[] =>
     parts.map((part, index) => {
       const key = `${keyPrefix}:${index}`
       const isLast = index === parts.length - 1
@@ -422,6 +397,30 @@ export function AssistantTurn({
                 />
               )
             }
+          }
+          if (part.name === RESEARCH_PLAN) {
+            // A deep research's plan is a card in the reply, with its buttons
+            // while it waits (ResearchPlanCard).
+            const plan = parsePlan(part.arguments)
+            const result = turn.results[part.id]
+            if (result?.status === 'failed') return null
+            if (!plan) return streaming ? <PreparingLine key={key} plan /> : null
+            const decided = planDecisionOf(result)
+            const waiting = planActions?.callId === part.id
+            const state = decided ? decided.decision : waiting || (!result && running) ? 'pending' : 'skipped'
+            return (
+              <ResearchPlanCard
+                key={key}
+                plan={plan}
+                state={state}
+                writtenAt={writtenAt}
+                busy={!waiting || planActions.busy}
+                editing={planActions?.editing === part.id}
+                onStart={waiting ? () => planActions.onStart(part.id) : undefined}
+                onCancel={waiting ? () => planActions.onCancel(part.id) : undefined}
+                onEdit={waiting ? () => planActions.onEdit(part.id, plan.title) : undefined}
+              />
+            )
           }
           if (part.name === MEMORY_TOOL) {
             // A note the model kept is one quiet line in the reply, with its
@@ -477,7 +476,7 @@ export function AssistantTurn({
   // drawn: the launch line and the side panel already say how each stands.
   for (const [position, response] of turn.responses.entries()) {
     const arrived = Boolean(live?.fresh.includes(response.id))
-    entries.push(...renderParts(response.parts, `r${position}`, false, () => arrived))
+    entries.push(...renderParts(response.parts, `r${position}`, false, () => arrived, response.createdAt))
     if (response.stopReason === 'error') {
       entries.push(
         <Notice key={`${response.id}:error`} tone="error">

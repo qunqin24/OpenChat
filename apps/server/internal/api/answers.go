@@ -113,6 +113,10 @@ func (s *Server) RegenerateAnswer(w http.ResponseWriter, r *http.Request, conver
 		httpx.Fail(w, r, err)
 		return
 	}
+	if err := s.chooseResearch(ctx, user, input.Content, &choice); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
 	// The conversation's first run takes its memory snapshot here, with whatever
 	// it carries that was never moderated checked first (moderation_text.go).
 	if err := s.prepareSnapshot(ctx, user, conv); err != nil {
@@ -217,6 +221,10 @@ func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversatio
 	}
 	choice, err := s.chooseRun(ctx, conv, body.Model, body.ReasoningEffort, body.WebSearch)
 	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	if err := s.chooseResearch(ctx, user, content, &choice); err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}

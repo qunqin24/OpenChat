@@ -1,6 +1,7 @@
 import type { ContextSummary, Message, MessagePart, ToolResultPart } from '@openchat/api-client'
 
 import { ASK_USER } from './ask-user'
+import { RESEARCH_PLAN } from './research-plan'
 import type { LiveRun } from './run-state'
 import { isReportRow, parseReports, type ReportNotice } from './subagents'
 
@@ -288,6 +289,15 @@ export function turnText(turn: AssistantTurn): string {
  * else is how a question is skipped.
  */
 export function pendingQuestion(turns: Turn[], busy: boolean): string | null {
+  return pendingCall(turns, busy, ASK_USER)
+}
+
+/** The research plan the conversation is waiting on, by call id, as pendingQuestion. */
+export function pendingPlan(turns: Turn[], busy: boolean): string | null {
+  return pendingCall(turns, busy, RESEARCH_PLAN)
+}
+
+function pendingCall(turns: Turn[], busy: boolean, name: string): string | null {
   // A message refused after the question neither answers it nor hides it - but
   // while it ends the conversation the question cannot be answered past it: the
   // refused message is reworded first.
@@ -296,7 +306,7 @@ export function pendingQuestion(turns: Turn[], busy: boolean): string | null {
   const response = last.responses.at(-1)
   if (response?.stopReason !== 'tool_calls') return null
   for (const part of response.parts) {
-    if (part.type === 'tool_call' && part.name === ASK_USER && !last.results[part.id]) return part.id
+    if (part.type === 'tool_call' && part.name === name && !last.results[part.id]) return part.id
   }
   return null
 }

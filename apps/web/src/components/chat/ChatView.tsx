@@ -20,6 +20,7 @@ import { useFileDrop } from '@/hooks/use-file-drop'
 import { useMessages } from '@/hooks/use-messages'
 import {
   useAnswerQuestion,
+  useResearchPlan,
   useCancelRun,
   useEditMessage,
   useRegenerate,
@@ -35,7 +36,7 @@ import { acceptAttribute, acceptsOf, TEXT_TYPE } from '@openchat/chat-core/attac
 import { isRunning } from '@openchat/chat-core/run-state'
 import { composerMode, reviseDraft } from '@openchat/chat-core/revise'
 import { returnableFiles, startWroteNothing } from '@openchat/chat-core/start-failure'
-import { buildTurns, pendingQuestion, regenerable } from '@openchat/chat-core/transcript'
+import { buildTurns, pendingPlan, pendingQuestion, regenerable } from '@openchat/chat-core/transcript'
 import { turnOutline } from '@openchat/chat-core/outline'
 import { parseQuestions, type AskAnswer } from '@openchat/chat-core/ask-user'
 import { useChatStore } from '@/stores/chat-store'
@@ -45,7 +46,7 @@ import Composer from './Composer'
 import ContextMeter from './ContextMeter'
 import { DropOverlay } from './DropOverlay'
 import { ChoicesContext, type ChoicesActions } from './genui/choices-context'
-import { AssistantTurn, PendingReply, RefusedReply, UserMessage } from './MessageItem'
+import { AssistantTurn, PendingReply, RefusedReply, UserMessage, type PlanActions } from './MessageItem'
 import { TurnNavigator } from './TurnNavigator'
 import ModelPicker from './ModelPicker'
 import ThinkingPicker from './ThinkingPicker'
@@ -121,6 +122,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
   const regenerate = useRegenerate(conversationId ?? '')
   const editMessage = useEditMessage(conversationId ?? '')
   const answerQuestion = useAnswerQuestion(conversationId ?? '')
+  const researchPlan = useResearchPlan(conversationId ?? '')
   const summary = useCompaction(conversationId)
   const undoCompaction = useUndoCompaction(conversationId ?? '')
   const updateSettings = useUpdateConversationSettings()
@@ -145,7 +147,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
   // else does, or is about to: a run going, a message or a redo on its way.
   const superseded =
     isRunning(live) || sendMessage.isPending || regenerate.isPending || editMessage.isPending || Boolean(outgoing) || Boolean(replacing)
-  const working = superseded || answerQuestion.isPending
+  const working = superseded || answerQuestion.isPending || researchPlan.isPending
 
   // What the composer was last set to, anywhere, for a new chat to open with.
   const session = useSession().data
@@ -180,8 +182,10 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
   // Other conversations the message is to refer to ("+" → 引用其他对话): not
   // files, so nothing goes up; the server reads them when the model is asked.
   const [references, setReferences] = useState<ConversationReference[]>([])
-  // Skills picked with $ for the message being written.
+  // Skills picked with / for the message being written.
   const [pickedSkills, setPickedSkills] = useState<string[]>([])
+  // Deep research picked in the "+" menu for it.
+  const [pickedResearch, setPickedResearch] = useState(false)
   const refer = useCallback((reference: ConversationReference) => {
     setReferences((current) =>
       current.some((r) => r.conversationId === reference.conversationId) ? current : [...current, reference],
@@ -304,6 +308,43 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
   // The last answer can be asked for again (not while a refused message ends the
   // conversation: it is reworded first).
   const last = useMemo(() => regenerable(turns), [turns])
+
+  // The deep research plan the last reply ended on, if nobody has decided on it
+  // or written past it; and the one whose changes the composer is writing
+  // (编辑), while it is still the one waiting.
+  const planCallId = useMemo(() => pendingPlan(turns, superseded), [turns, superseded])
+  const [revisingPlan, setRevisingPlan] = useState<{ callId: string; title: string } | null>(null)
+  const editingPlan = revisingPlan && revisingPlan.callId === planCallId ? revisingPlan : null
+  const decidePlanMutate = researchPlan.mutate
+  const decidePlan = useCallback(
+    (callId: string, decision: 'start' | 'revise' | 'cancel', feedback?: string, onFailed?: () => void) => {
+      parked.current = true
+      decidePlanMutate(
+        { callId, decision, feedback, model: modelId || undefined, reasoningEffort: canThink ? effort : undefined },
+        { onError: () => onFailed?.() },
+      )
+    },
+    [canThink, decidePlanMutate, effort, modelId],
+  )
+  const planActions: PlanActions = {
+    callId: planCallId,
+    busy: researchPlan.isPending,
+    editing: editingPlan?.callId ?? null,
+    onStart: (callId) => decidePlan(callId, 'start'),
+    onCancel: (callId) => decidePlan(callId, 'cancel'),
+    onEdit: (callId, title) => {
+      setRevisingPlan({ callId, title })
+      dock.current?.querySelector<HTMLTextAreaElement>('textarea')?.focus()
+    },
+  }
+  const allowance = features.data?.deepResearch
+  const researchDesc = !allowance
+    ? ''
+    : allowance.unlimited
+      ? t('chat.attach.research-desc')
+      : allowance.left > 0
+        ? `${t('chat.attach.research-desc')} · ${t('chat.attach.research-left', { count: allowance.left })}`
+        : t('chat.attach.research-used', { date: new Date(allowance.resetsAt).toLocaleDateString(i18n.language, { month: 'long', day: 'numeric' }) })
 
   // The question the last reply ended on, if nobody has answered or written past it.
   const askingCallId = useMemo(() => pendingQuestion(turns, superseded), [turns, superseded])
@@ -668,15 +709,27 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
   const handleSend = useCallback(async () => {
     const typed = input.trim()
     if (!typed || attachments.uploading || attachments.failed) return
+    // What to change in the plan being revised (编辑): its answer, not a message.
+    if (editingPlan && !revising) {
+      if (working) return
+      setInput('')
+      setRevisingPlan(null)
+      decidePlan(editingPlan.callId, 'revise', typed, () => {
+        setInput((current) => current || typed)
+        setRevisingPlan((current) => current ?? editingPlan)
+      })
+      return
+    }
     // A passage of a writing block quoted for this request goes with it, in
     // front (lib/document-selection), unless this is the rewording of a
     // refused message, which keeps its own words.
     const quoted = quotes.length > 0 && !revising ? quotes : null
-    // Skills picked with $ go first (chat-core/src/skill-mention.ts); a failed
+    // Skills picked with / go first (chat-core/src/skill-mention.ts); a failed
     // send puts them back as chips and the rest back in the box.
     const picked = revising ? [] : pickedSkills
+    const research = !revising && pickedResearch && Boolean(allowance)
     const unpicked = quoted ? quoteMessage(quoted, typed) : typed
-    const content = skillMessage(picked, unpicked)
+    const content = skillMessage(picked, unpicked, research)
     // An answer is being made, or a message is on its way: one at a time, as the
     // server says (`conversation_busy`). Read from the store, not from this
     // render, so a second Enter in the same moment finds the first.
@@ -700,10 +753,12 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     const referBack = () => {
       setReferences((current) => (current.length > 0 ? current : referred))
       setPickedSkills((current) => (current.length > 0 ? current : picked))
+      if (research) setPickedResearch(true)
     }
     setInput('')
     setReferences([])
     setPickedSkills([])
+    setPickedResearch(false)
     // Out of the box at once, as the text is: the message shows them now. Back
     // in the box if the send fails.
     const taken = attachments.take()
@@ -867,6 +922,10 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     onCreated,
     onRemoved,
     pickedSkills,
+    pickedResearch,
+    allowance,
+    editingPlan,
+    decidePlan,
     post,
     quotes,
     references,
@@ -957,8 +1016,20 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
       onSend={() => void handleSend()}
       onStop={handleStop}
       note={revising ? t('chat.revise.label') : undefined}
+      research={
+        allowance && !revising && !editingPlan
+          ? {
+              picked: pickedResearch,
+              desc: researchDesc,
+              blocked: !allowance.unlimited && allowance.left === 0,
+              onPick: () => setPickedResearch(true),
+              onUnpick: () => setPickedResearch(false),
+            }
+          : undefined
+      }
+      plan={editingPlan ? { title: editingPlan.title, onStop: () => setRevisingPlan(null) } : undefined}
       skills={
-        skillsOn && !revising
+        skillsOn && !revising && !editingPlan
           ? {
               picked: pickedSkills,
               available: availableSkills.data ?? [],
@@ -1128,6 +1199,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
                       model={modelById.get(turnModel(turn) ?? modelId)}
                       askingCallId={askingCallId}
                       onOpenQuestion={() => setDismissedCallId(null)}
+                      plan={planActions}
                       onRegenerate={turn === last?.answer && !working && !outgoing ? handleRegenerate : undefined}
                       divider={divider}
                     />

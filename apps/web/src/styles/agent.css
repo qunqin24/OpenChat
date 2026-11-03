@@ -493,13 +493,6 @@
   height: 14px;
   flex-shrink: 0;
 }
-/* The thinking picker's orb, a size down from the 16px slot so its sphere
-   stands as tall as the icons beside it, taken back to their 14px. */
-.chat-ui .n-model-trigger .n-orb {
-  width: 16px;
-  height: 16px;
-  margin: -1px;
-}
 
 .chat-ui .n-model-trigger.is-active {
   color: var(--n-text);
@@ -650,6 +643,21 @@
 /* Done, it is the line's icon, in the line's colour. */
 .chat-ui .n-orb.is-still {
   color: inherit;
+}
+/* One look giving way to the next (ThinkingOrb): both in one cell, the old
+   fading and shrinking a little as the new one grows in over it. */
+.chat-ui .n-orb-stack {
+  display: inline-grid;
+  flex-shrink: 0;
+}
+.chat-ui .n-orb-stack > .n-orb { grid-area: 1 / 1; }
+.chat-ui .n-orb.is-in { animation: n-orb-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.chat-ui .n-orb.is-out { animation: n-orb-out 260ms cubic-bezier(0.4, 0, 1, 1) both; }
+@keyframes n-orb-in { from { opacity: 0; scale: 0.82; } }
+@keyframes n-orb-out { to { opacity: 0; scale: 0.82; } }
+@media (prefers-reduced-motion: reduce) {
+  .chat-ui .n-orb.is-in { animation: none; }
+  .chat-ui .n-orb.is-out { display: none; }
 }
 
 /* Before the first word: the mark and the same shimmering label the

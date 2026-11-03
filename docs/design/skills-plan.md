@@ -1,6 +1,6 @@
 # 技能（Skills）：方案
 
-> 状态：第一、二期已实现（2026-11-02），与方案的出入见 §10、§11。先把「技能」这个机制做出来，作为后面几件事的地基：深度研究（[deep-research-plan.md](deep-research-plan.md)）做成一个内置技能，沙箱（[sandbox-plan.md](sandbox-plan.md)）里改 Word、做 PPT 靠技能教模型，用户和管理员也能写自己的技能。
+> 状态：第一、二期已实现（2026-11-02），与方案的出入见 §10、§11；点名入口见 §12（技能用 `/`）。先把「技能」这个机制做出来，作为后面几件事的地基：深度研究（[deep-research-plan.md](deep-research-plan.md)）做成一个内置技能，沙箱（[sandbox-plan.md](sandbox-plan.md)）里改 Word、做 PPT 靠技能教模型，用户和管理员也能写自己的技能。
 
 ## 0. 结论先行
 
@@ -149,10 +149,23 @@
 
 ## 11. 第二期实现
 
-- **内置技能**：`internal/skills/builtin/<name>/` 用 `go:embed` 编进程序，启动时解析（`skills.Builtins`），名字必须和目录一致。先放了一个 `skill-authoring`：教模型帮用户写技能，写好交给用户粘贴到设置里（模型自己不能保存）。管理员在后台「技能」页可以查看、开关（`app_settings.builtin_skills_off`，存关掉的名字）。快照里内置技能没有版本（`SnapshotSkill.Builtin`），按当前程序里的内容读，升级时才变。
+- **内置技能**：`internal/skills/builtin/<name>/` 用 `go:embed` 编进程序，启动时解析（`skills.Builtins`），名字必须和目录一致。现在有三个：
+  - `skill-authoring`（自己写的）：教模型帮用户写技能，写好交给用户粘贴到设置里（模型自己不能保存）。
+  - `doc-coauthoring`、`internal-comms`：来自 [anthropics/skills](https://github.com/anthropics/skills)（commit `ca45fc4`），Apache 2.0，各自目录里带 `LICENSE.txt`，frontmatter 的 `metadata.source` 记出处、`metadata.changes` 记改动。`internal-comms` 原样搬来（只加了 frontmatter 的两行）。`doc-coauthoring` 改了写稿的部分以适配 OpenChat：文档是写作块（`document` 工具）而不是 artifact 或文件，修改用写作块的定点替换，读者测试用 `subagent`，去掉了 claude.ai 和「在 Claude 设置里开连接器」的说法。它的目录在上游没有单独的许可文件，依据是上游 README「除 docx、pdf、pptx、xlsx 四个是 source-available 外，其余以 Apache 2.0 开源」，许可文本取自同仓库 `internal-comms` 的 `LICENSE.txt`。
+  - 上游的 `docx`、`pdf`、`pptx`、`xlsx` 不是开源许可，不能打包。管理员在后台「技能」页可以查看、开关（`app_settings.builtin_skills_off`，存关掉的名字）。快照里内置技能没有版本（`SnapshotSkill.Builtin`），按当前程序里的内容读，升级时才变。
 - **`$` 点名**：输入框打 `$`（开头或空格后）列出这个对话能用的技能（`GET /me/skills/available`：对话已开始就用快照里的清单，没开始就是现在会列出的），方向键加回车选，选中的变成输入框上方的标签。发出时每个技能一行 `<skill name="…"/>` 放在消息开头，和 `<quote>` 一样走文字、服务端不展开；系统提示词告诉模型「消息以这种行开头，就先用 skill 打开它们」。消息气泡上方显示成标签，编辑时保留，复制时去掉。没有采用「把 SKILL.md 全文塞进消息」：那样要在构建请求时按版本展开、处理审核和压缩，第一版靠提示词已经够用。
 - **子 Agent 读技能**：`subagent` 工具加了 `skills` 参数，名字必须在主对话的技能清单里，存在子对话的 `conversations.skills`；子 Agent 的工具里多一个只认这些名字的 `skill`，系统提示词列出它们，读的是主对话快照里的版本。
 - **版本历史与导出**：`GET …/skills/{id}/versions`、`…/versions/{versionId}` 列出和读取保留的 20 个版本；编辑器里选一个旧版本会载入它的文件，保存后成为新版本（不另设「回退」接口）。`GET …/skills/{id}/export` 下载 ZIP（技能文件夹，导入能读回）。
 
-还没做：手机 App 的技能设置页和 `$` 点名（App 里带 `<skill>` 行的消息目前会显示原文）、从网址导入、模型自己建技能、沙箱挂载。
+还没做：手机 App 的技能设置页和点名（App 里带 `<skill>` 行的消息目前会显示原文）、从网址导入、模型自己建技能、沙箱挂载。
 
+## 12. 输入框的 `/`
+
+第二期的 `$` 选择器换成了两个触发符（2026-11-02 定，菜单排法照 ChatGPT，选中技能的样子照 Grok）：
+
+- **`/` 只列技能**：在输入框开头或空格后打 `/`，弹出这个对话能用的技能，和输入框一样宽；`/` 后接着打字按名称和说明筛选，方向键加回车选，Esc 关。选中的技能以蓝色 `/技能名` 出现在第一行开头，正文从它后面开始、换行时排在它下面（按它的宽度首行缩进）；在开头按退格删掉最后一个，点它也能删。发出去的消息里同样以 `/技能名` 打头显示。
+- **`@` 菜单去掉了**（2026-11-03）：曾经打 `@` 弹出和「+」一样的几项，几版样式都不满意，入口只留「+」。
+- **「+」菜单**：上传文件、截图、从文件库添加、引用其他对话、深度研究，每项名称后面跟一句灰色说明，窄（18rem），不列技能。
+- 地址、路径和链接里的 `/`（`a/b`、`https://x`）不触发（`chat-core/src/skill-mention.ts` 的 `mentionAt`）。
+- **方向**：新对话时输入框在页面中间，列表往下开（打开时输入框压在欢迎页的建议按钮上面）；输入框在页面底部时往上开。
+- **发出去的格式不变**：每个技能一行 `<skill name="…"/>`，放在消息开头。联网搜索保留输入框里的开关。

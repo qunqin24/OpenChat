@@ -68,6 +68,10 @@ services:
       # The copy of the log on the data volume (the image sets LOG_FILE).
       LOG_FILE_MAX_MB: ${LOG_FILE_MAX_MB:-20}
       LOG_FILE_KEEP: ${LOG_FILE_KEEP:-5}
+      # The key that seals plugin credentials is made on the first start as
+      # data/secret.key on the volume below; back the volume up with the
+      # database. Set this only to supply your own (openssl rand -base64 32).
+      OPENCHAT_SECRET_KEY: ${OPENCHAT_SECRET_KEY:-}
     volumes:
       - openchat-data:/app/data
     # Reachable only through Caddy (docker-compose.trial.yml publishes it for

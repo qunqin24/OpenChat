@@ -8,7 +8,7 @@ export const RETRYING: OrbLook = { state: 'retrying' }
 export const COMPACTING: OrbLook = { state: 'compacting' }
 /** A conversation left working, in the sidebar: the lightest orb, as several may run at once. */
 export const BACKGROUND: OrbLook = { state: 'background' }
-/** Thinking at rest, drawn still: on the process's line once the answer has come, and on the thinking picker. */
+/** Thinking at rest, drawn still: on the process's line once the answer has come. */
 export const THOUGHT: OrbLook = { state: 'idle' }
 /** The model rewriting a document, on its card. */
 export const WRITING: OrbLook = { state: 'compacting', variant: 'fuse' }
@@ -24,7 +24,7 @@ export function toolOrb(name: string): OrbLook {
   if (name === 'file_read' || name === 'skill') return { state: 'using', variant: 'zoom' }
   if (name === 'file_search') return { state: 'searching', variant: 'lighthouse' }
   if (name === 'memory' || name === 'document') return { state: 'using', variant: 'type' }
-  if (name === 'ask_user') return { state: 'waiting' }
+  if (name === 'ask_user' || name === 'research_plan') return { state: 'waiting' }
   if (name.startsWith('subagent')) return { state: 'background', variant: 'spiral' }
   return { state: 'using', variant: 'tap' }
 }

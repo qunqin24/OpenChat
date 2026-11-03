@@ -124,9 +124,17 @@ func TestBuiltinsParse(t *testing.T) {
 	if len(Builtins()) == 0 {
 		t.Fatal("no built-in skills")
 	}
-	b, ok := Builtin("skill-authoring")
-	if !ok || b.Description == "" || b.Files[0].Path != Entry {
-		t.Fatalf("skill-authoring = %+v %v", b, ok)
+	for _, name := range []string{"skill-authoring", "doc-coauthoring", "internal-comms"} {
+		b, ok := Builtin(name)
+		if !ok || b.Description == "" || !hasFile(b.Files, Entry) {
+			t.Fatalf("%s = %+v %v", name, b, ok)
+		}
+	}
+	// The ones from anthropics/skills carry their licence.
+	for _, name := range []string{"doc-coauthoring", "internal-comms"} {
+		if b, _ := Builtin(name); !hasFile(b.Files, "LICENSE.txt") {
+			t.Fatalf("%s has no LICENSE.txt", name)
+		}
 	}
 }
 
@@ -142,5 +150,24 @@ func TestZipRoundTrips(t *testing.T) {
 	}
 	if _, err := Parse(out.Skills[0]); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func hasFile(files []File, path string) bool {
+	for _, f := range files {
+		if f.Path == path {
+			return true
+		}
+	}
+	return false
+}
+
+func TestSplitMentions(t *testing.T) {
+	names, rest := SplitMentions("<skill name=\"doc-coauthoring\"/>\n<skill name=\"house-style\"/>\n写一篇文档")
+	if strings.Join(names, ",") != "doc-coauthoring,house-style" || rest != "写一篇文档" {
+		t.Fatalf("names %v, rest %q", names, rest)
+	}
+	if names, rest := SplitMentions("see <skill name=\"x\"/>\n"); names != nil || rest != "see <skill name=\"x\"/>\n" {
+		t.Fatalf("a tag later in the text was taken: %v %q", names, rest)
 	}
 }
