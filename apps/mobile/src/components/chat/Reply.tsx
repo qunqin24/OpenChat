@@ -23,7 +23,7 @@ import { ActivityLine } from './Activity'
 import { DocumentCard } from './DocumentCard'
 import { GenUIBlock } from './genui/GenUIBlock'
 import { Markdown } from './Markdown'
-import { Pulse } from './Pulse'
+import { LiveText, ThinkingOrb } from './ThinkingOrb'
 import { SubagentLaunchLine } from './SubagentLines'
 
 /** Run failures with their own wording (`chat.error.*`). */
@@ -309,13 +309,23 @@ export function Reply({ turn, model, modelId, onRegenerate, askingCallId, onOpen
   )
 }
 
-/** A quiet line in a reply: a note kept, a question being prepared, the model working. */
+/**
+ * A quiet line in a reply: a note kept, a question being prepared, the model
+ * working. Working (`pulse`), it is the web's ThinkingLine: the orb, and what
+ * the model is doing - "Thinking…" unless said - with a highlight sweeping
+ * across it.
+ */
 function QuietLine({ text, pulse, icon, onPress }: { text: string; pulse?: boolean; icon?: ReactNode; onPress?: () => void }) {
+  const { t } = useTranslation()
   const colors = useColors()
   return (
     <Pressable style={styles.quiet} disabled={!onPress} onPress={onPress}>
-      {pulse ? <Pulse /> : icon}
-      {text ? <Text style={[styles.quietText, { color: colors.text2 }]}>{text}</Text> : null}
+      {pulse ? <ThinkingOrb color={colors.text2} /> : icon}
+      {pulse ? (
+        <LiveText text={text || t('chat.reasoning.live')} style={styles.quietText} />
+      ) : text ? (
+        <Text style={[styles.quietText, { color: colors.text2 }]}>{text}</Text>
+      ) : null}
     </Pressable>
   )
 }

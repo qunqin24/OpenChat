@@ -342,7 +342,12 @@ function Table({ token, colors }: { token: Tokens.Table; colors: Colors }) {
     // Too wide: no column takes more than a share of the frame (its text wraps
     // instead), so part of the next one always shows and says there is more.
     const cap = Math.max(COLUMN_MIN, frame * COLUMN_SHARE)
-    return natural.map((w) => Math.round(Math.min(w, cap)))
+    const capped = natural.map((w) => Math.min(w, cap))
+    const narrowed = capped.reduce((sum, w) => sum + w, 0)
+    // Capped, they may all fit after all - two long columns at 42% each left a
+    // sixth of the frame empty: then they share the rest, and fill it.
+    if (narrowed <= frame) return capped.map((w) => Math.floor((w * frame) / narrowed))
+    return capped.map(Math.round)
   }, [token, frame])
   const more = content - frame - scrolled > 4
   const cell = (c: Tokens.TableCell, head: boolean, key: number, last: boolean) => (

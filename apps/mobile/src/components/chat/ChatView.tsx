@@ -38,9 +38,11 @@ import { useUser } from '@/lib/session'
 import { useChatStore } from '@/lib/store'
 import { toast } from '@/lib/toast'
 import { HeaderIcon, HeaderPill } from '@/components/HeaderPill'
+import { LogoMark } from '@/components/LogoMark'
 import { useColors } from '@/theme'
 import { AskUserDock } from './AskUserDock'
 import { AttachMenu } from './AttachMenu'
+import { ContextMeter } from './ContextMeter'
 import { EffortSlider } from './EffortSlider'
 import { KeepInPlace } from './keep-in-place'
 import { ModelPicker } from './ModelPicker'
@@ -583,7 +585,10 @@ export function ChatView({ conversationId, onCreated, onRemoved, onSettled, onGo
       </View>
 
       {isEmpty ? (
+        // Our mark, drawn as the page opens, and the greeting under it in a serif (the web's
+        // Welcome), together a little above the middle.
         <View style={styles.welcome}>
+          <LogoMark size={84} color={colors.text} />
           <Text style={[styles.greeting, { color: colors.text }]}>{t(greeting.key, { name: user?.name ?? '' })}</Text>
         </View>
       ) : (
@@ -651,6 +656,7 @@ export function ChatView({ conversationId, onCreated, onRemoved, onSettled, onGo
             // The keyboard stays up: the slider stands just above it.
             onOpenEffort={() => setChoosingEffort(true)}
             onAttach={() => setAttaching(true)}
+            meter={conversationId ? <ContextMeter conversationId={conversationId} limit={modelById.get(modelId)?.contextLimit} /> : null}
             hasTray={quotes.length > 0 || attachments.items.length > 0 || references.length > 0}
             tray={
               <>
@@ -733,9 +739,11 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   veil: { position: 'absolute', top: 0, left: 0, right: 0 },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingBottom: 6, gap: 8, zIndex: 1 },
-  welcome: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
-  greeting: { fontSize: 26, lineHeight: 34, fontWeight: '500' },
-  transcript: { paddingHorizontal: 18, paddingVertical: 16 },
+  welcome: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 28, paddingHorizontal: 32, paddingBottom: 72 },
+  greeting: { fontFamily: 'serif', fontSize: 28, lineHeight: 38, fontWeight: '600', textAlign: 'center' },
+  // At least the list's height, its rows at the end - the top, in an inverted list - so a short
+  // conversation reads from the top down, under the header, rather than sitting on the composer.
+  transcript: { flexGrow: 1, justifyContent: 'flex-end', paddingHorizontal: 18, paddingVertical: 16 },
   gap: { height: 20 },
   // A raised pill like the header's, so it stands off the text it floats over.
   jump: {

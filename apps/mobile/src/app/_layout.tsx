@@ -4,7 +4,6 @@ import { isOpenChatError } from '@openchat/api-client'
 import { Stack } from 'expo-router'
 import * as SplashScreen from 'expo-splash-screen'
 import { StatusBar } from 'expo-status-bar'
-import { useEffect } from 'react'
 import { I18nextProvider } from 'react-i18next'
 import { StyleSheet, Text, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -13,6 +12,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/Button'
+import { LaunchScreen } from '@/components/LaunchScreen'
 import { Toaster } from '@/components/Toaster'
 import { UpdatePrompt } from '@/components/UpdatePrompt'
 import { setUnauthorizedListener } from '@/lib/api'
@@ -59,17 +59,25 @@ export default function RootLayout() {
  * needs no navigation of its own.
  */
 function Screens() {
-  const colors = useColors()
   const session = useSession()
   const state = session.data?.state
 
-  useEffect(() => {
-    if (!session.isPending) void SplashScreen.hideAsync()
-  }, [session.isPending])
+  return (
+    <>
+      {session.isPending ? null : session.isError ? (
+        <Unreachable onRetry={() => void session.refetch()} busy={session.isFetching} />
+      ) : (
+        <Ready state={state} />
+      )}
+      {/* Over everything, from the first frame: the system's splash hands over to it as soon as it is
+          drawn, and it leaves once it has played and the session is known. */}
+      <LaunchScreen ready={!session.isPending} onShown={() => void SplashScreen.hideAsync()} />
+    </>
+  )
+}
 
-  if (session.isPending) return null
-  if (session.isError) return <Unreachable onRetry={() => void session.refetch()} busy={session.isFetching} />
-
+function Ready({ state }: { state: string | undefined }) {
+  const colors = useColors()
   return (
     <>
       <StatusBar style="auto" />

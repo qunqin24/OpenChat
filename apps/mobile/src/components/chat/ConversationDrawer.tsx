@@ -4,6 +4,7 @@ import { AlarmClock, Pin, Search, SquarePen, X } from 'lucide-react-native'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert, Pressable, SectionList, StyleSheet, Text, TextInput, View } from 'react-native'
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
@@ -52,6 +53,8 @@ export function ConversationDrawer({ current, onOpen, onNewChat, onTasks, onSett
   const [term, setTerm] = useState('')
   const [acting, setActing] = useState<Conversation | null>(null)
   const [renaming, setRenaming] = useState<{ conversation: Conversation; title: string } | null>(null)
+  const [topHeight, setTopHeight] = useState(0)
+  const [bottomHeight, setBottomHeight] = useState(0)
 
   const list = useConversations()
   const pinned = usePinnedConversations()
@@ -97,9 +100,13 @@ export function ConversationDrawer({ current, onOpen, onNewChat, onTasks, onSett
   const tasksOn = features.data?.scheduledTasks !== false
   return (
     // The search is at the foot: the drawer rises with the keyboard so it stays in sight.
-    <KeyboardAvoidingView behavior="padding" style={[styles.drawer, { backgroundColor: colors.panel, paddingTop: insets.top + 10 }]}>
-      {/* Who is signed in (the way to settings), and a new chat. */}
-      <View style={styles.top}>
+    <KeyboardAvoidingView behavior="padding" style={[styles.drawer, { backgroundColor: colors.panel }]}>
+      {/* Inside the keyboard's padding: the foot, placed absolutely, would otherwise sit under the keyboard. */}
+      <View style={styles.drawer}>
+      {/* Who is signed in (the way to settings), and a new chat. It floats over the list, which runs on
+          under it as the transcript runs under the chat's header, showing faintly through a veil. */}
+      <View style={[styles.top, { paddingTop: insets.top + 10 }]} onLayout={(event) => setTopHeight(event.nativeEvent.layout.height)}>
+        <Veil edge="top" height={topHeight} color={colors.panel} />
         <Pressable onPress={onSettings} accessibilityRole="button" accessibilityLabel={t('settings.title')} style={styles.who}>
           {user ? <UserAvatar id={user.id} name={user.name} email={user.email} src={user.avatarUrl} size={44} /> : null}
           <Text style={[styles.user, { color: colors.text }]} numberOfLines={1}>
@@ -118,7 +125,7 @@ export function ConversationDrawer({ current, onOpen, onNewChat, onTasks, onSett
         keyExtractor={(item) => item.id}
         stickySectionHeadersEnabled={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.list}
+        contentContainerStyle={{ paddingTop: topHeight, paddingBottom: bottomHeight + 12 }}
         renderSectionHeader={({ section }) =>
           section.title ? <Text style={[styles.section, { color: colors.text3 }]}>{section.title}</Text> : null
         }
@@ -153,7 +160,8 @@ export function ConversationDrawer({ current, onOpen, onNewChat, onTasks, onSett
       />
 
       {/* Search where the thumb is, and the scheduled tasks beside it. */}
-      <View style={[styles.bottom, { paddingBottom: insets.bottom + 10 }]}>
+      <View style={[styles.bottom, { paddingBottom: insets.bottom + 10 }]} onLayout={(event) => setBottomHeight(event.nativeEvent.layout.height)}>
+        <Veil edge="bottom" height={bottomHeight} color={colors.panel} />
         <HeaderPill style={styles.searchPill}>
           <Search size={18} color={colors.text2} />
           <TextInput
@@ -177,6 +185,7 @@ export function ConversationDrawer({ current, onOpen, onNewChat, onTasks, onSett
             </HeaderIcon>
           </HeaderPill>
         ) : null}
+      </View>
       </View>
 
       <Sheet open={acting !== null} onClose={() => setActing(null)} title={acting ? displayTitle(acting.title, t) : undefined}>
@@ -233,17 +242,46 @@ export function ConversationDrawer({ current, onOpen, onNewChat, onTasks, onSett
   )
 }
 
+/** How far a veil reaches past its bar, thinning out to nothing. */
+const VEIL_FADE = 28
+
+/**
+ * The page's colour behind a bar floating over the list, at most of its
+ * strength over the bar and thinning out past it, so the conversations going
+ * under show through faintly and never run into the avatar or the search.
+ * The chat's header has the same (ChatView).
+ */
+function Veil({ edge, height, color }: { edge: 'top' | 'bottom'; height: number; color: string }) {
+  if (!height) return null
+  const total = height + VEIL_FADE
+  // Where the bar's own strength ends, from the edge it stands on.
+  const solid = Math.max(0, (height - 12) / total)
+  const id = `drawer-veil-${edge}`
+  return (
+    <Svg pointerEvents="none" style={[styles.veil, edge === 'top' ? { top: 0 } : { bottom: 0 }]} width="100%" height={total}>
+      <Defs>
+        <LinearGradient id={id} x1="0" y1={edge === 'top' ? '0' : '1'} x2="0" y2={edge === 'top' ? '1' : '0'}>
+          <Stop offset="0" stopColor={color} stopOpacity={0.88} />
+          <Stop offset={solid} stopColor={color} stopOpacity={0.88} />
+          <Stop offset="1" stopColor={color} stopOpacity={0} />
+        </LinearGradient>
+      </Defs>
+      <Rect x="0" y="0" width="100%" height={total} fill={`url(#${id})`} />
+    </Svg>
+  )
+}
+
 const styles = StyleSheet.create({
   drawer: { flex: 1 },
-  top: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingBottom: 12 },
+  top: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingBottom: 12 },
+  veil: { position: 'absolute', left: 0, right: 0 },
   who: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   user: { flexShrink: 1, fontSize: 18, fontWeight: '500' },
-  list: { paddingBottom: 12 },
   section: { fontSize: 12, paddingHorizontal: 24, paddingTop: 18, paddingBottom: 6 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 10, paddingHorizontal: 14, paddingVertical: 13, borderRadius: 16 },
   rowTitle: { flex: 1, fontSize: 16 },
   empty: { fontSize: 14, textAlign: 'center', marginTop: 32 },
-  bottom: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 8 },
+  bottom: { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 8 },
   searchPill: { flex: 1, gap: 8, paddingHorizontal: 16 },
   searchInput: { flex: 1, fontSize: 16, paddingVertical: 0 },
   rename: { paddingHorizontal: 12, paddingBottom: 12 },

@@ -1,7 +1,7 @@
 import { AlarmClock, Brain, ChevronDown, ChevronRight, FileSearch, FileText, NotebookPen, Search, TriangleAlert, Workflow, Wrench } from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 
 import {
@@ -23,7 +23,8 @@ import { Sheet } from '@/components/Sheet'
 import { useColors } from '@/theme'
 import { useKeepInPlace } from './keep-in-place'
 import { Markdown } from './Markdown'
-import { Pulse } from './Pulse'
+import { ThinkingIcon } from './ThinkingIcon'
+import { LiveText, ThinkingOrb } from './ThinkingOrb'
 
 /** Source marks stacked in the collapsed line, before the rest are counted. */
 const HEAD_SOURCES = 4
@@ -65,6 +66,7 @@ export function ActivityLine({
   }
   const Chevron = open ? ChevronDown : ChevronRight
   const marks = thoughtOnly ? [] : sources.slice(0, HEAD_SOURCES)
+  const lastStep = items.findLast((item): item is Extract<ActivityItem, { kind: 'tool' }> => item.kind === 'tool')
   const keep = useKeepInPlace()
   if (items.length === 0 && !working) return null
 
@@ -79,11 +81,25 @@ export function ActivityLine({
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
       >
-        {working ? <Pulse /> : null}
-        <Text style={[styles.title, nested && styles.nestedTitle, { color: colors.text2 }]} numberOfLines={1}>
-          {title}
-          {!working && !thoughtOnly && failed > 0 ? <Text style={{ color: colors.errInk }}>{`  ${t('chat.tool.failures', { count: failed })}`}</Text> : null}
-        </Text>
+        {/* As the web's line: the orb while the model works; done, the last step's tool, or the bulb
+            for thinking alone. */}
+        <View style={styles.headIcon}>
+          {working ? (
+            <ThinkingOrb color={colors.text2} />
+          ) : lastStep && !thoughtOnly ? (
+            stepIcon(lastStep.call.name, colors.text2)
+          ) : (
+            <ThinkingIcon size={15} color={colors.text2} strokeWidth={1.75} />
+          )}
+        </View>
+        {working ? (
+          <LiveText text={title} style={[styles.title, nested && styles.nestedTitle]} />
+        ) : (
+          <Text style={[styles.title, nested && styles.nestedTitle, { color: colors.text2 }]} numberOfLines={1}>
+            {title}
+            {!thoughtOnly && failed > 0 ? <Text style={{ color: colors.errInk }}>{`  ${t('chat.tool.failures', { count: failed })}`}</Text> : null}
+          </Text>
+        )}
         {!open && marks.length > 0 ? (
           <View style={styles.marks}>
             {marks.map((hit, i) => (
@@ -137,35 +153,66 @@ function Moment({ item, working }: { item: ActivityItem; working: boolean }) {
 
 /** How tall a thought's window is while the model works. */
 const PEEK = 220
+/** How tall a finished long thought's box is (the web's THOUGHT_BOX). */
+const THOUGHT_BOX = 240
+/** A thought only a line or so taller shows whole: a box to scroll one more line is not worth it. */
+const THOUGHT_SLACK = 48
 
 /**
  * A thought. While the model works only its last lines show, in a window kept
  * at the newest, faded at the top where it is cut (as the web's Thought), so a
- * long one does not push what follows a screen away; once it is done the fold
- * has closed, and opened again it shows the whole of it. Never a box that
- * scrolls on its own, which would take the swipe from the transcript.
+ * long one does not push what follows a screen away; that window does not
+ * scroll, since it is moved to its end with every token. Done, a long one is
+ * a box of its own height that scrolls (nested in the transcript, which takes
+ * the swipe back at its ends), faded at an edge with more beyond it; a short
+ * one shows whole.
  */
 function Thought({ text, streaming, fresh, peek }: { text: string; streaming: boolean; fresh: boolean; peek: boolean }) {
-  const colors = useColors()
   const [height, setHeight] = useState(0)
-  const cut = peek && height > PEEK
+  const [offset, setOffset] = useState(0)
+  const body = (
+    <View onLayout={(event) => setHeight(event.nativeEvent.layout.height)}>
+      <Markdown text={text} streaming={streaming} fresh={fresh && streaming} />
+    </View>
+  )
+  if (!peek && height > THOUGHT_BOX + THOUGHT_SLACK) {
+    return (
+      <View style={styles.thought}>
+        <ScrollView
+          style={styles.thoughtBox}
+          nestedScrollEnabled
+          onScroll={(event) => setOffset(event.nativeEvent.contentOffset.y)}
+          scrollEventThrottle={32}
+        >
+          {body}
+        </ScrollView>
+        {offset > 1 ? <ThoughtFade edge="top" /> : null}
+        {offset < height - THOUGHT_BOX - 1 ? <ThoughtFade edge="bottom" /> : null}
+      </View>
+    )
+  }
   return (
     <View style={[styles.thought, peek && styles.peek]}>
-      <View onLayout={(event) => setHeight(event.nativeEvent.layout.height)}>
-        <Markdown text={text} streaming={streaming} fresh={fresh && streaming} />
-      </View>
-      {cut ? (
-        <Svg style={styles.peekFade} width="100%" height={56} pointerEvents="none">
-          <Defs>
-            <LinearGradient id="peek" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={colors.bg} stopOpacity={1} />
-              <Stop offset="1" stopColor={colors.bg} stopOpacity={0} />
-            </LinearGradient>
-          </Defs>
-          <Rect width="100%" height="100%" fill="url(#peek)" />
-        </Svg>
-      ) : null}
+      {body}
+      {peek && height > PEEK ? <ThoughtFade edge="top" /> : null}
     </View>
+  )
+}
+
+/** The page's colour fading over a thought's edge where it is cut, so the cut line is not hard. */
+function ThoughtFade({ edge }: { edge: 'top' | 'bottom' }) {
+  const colors = useColors()
+  const id = `thought-${edge}`
+  return (
+    <Svg style={[styles.thoughtFade, edge === 'top' ? { top: 0 } : { bottom: 0 }]} width="100%" height={edge === 'top' ? 56 : 40} pointerEvents="none">
+      <Defs>
+        <LinearGradient id={id} x1="0" y1={edge === 'top' ? '0' : '1'} x2="0" y2={edge === 'top' ? '1' : '0'}>
+          <Stop offset="0" stopColor={colors.bg} stopOpacity={1} />
+          <Stop offset="1" stopColor={colors.bg} stopOpacity={0} />
+        </LinearGradient>
+      </Defs>
+      <Rect width="100%" height="100%" fill={`url(#${id})`} />
+    </Svg>
   )
 }
 
@@ -350,6 +397,7 @@ export function SourceMark({ url, size, ring }: { url: string; size: number; rin
 
 const styles = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 30 },
+  headIcon: { width: 15, alignItems: 'center' },
   title: { flexShrink: 1, fontSize: 14, lineHeight: 20 },
   marks: { flexDirection: 'row', alignItems: 'center' },
   overlap: { marginLeft: -5 },
@@ -364,7 +412,8 @@ const styles = StyleSheet.create({
   // A step quieter than the answer.
   thought: { opacity: 0.6 },
   peek: { maxHeight: PEEK, overflow: 'hidden', justifyContent: 'flex-end' },
-  peekFade: { position: 'absolute', top: 0, left: 0 },
+  thoughtBox: { maxHeight: THOUGHT_BOX },
+  thoughtFade: { position: 'absolute', left: 0 },
   found: { gap: 3 },
   foundHead: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 22 },
   stepLabel: { flexShrink: 1, fontSize: 14, lineHeight: 22 },

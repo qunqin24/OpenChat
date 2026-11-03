@@ -17,7 +17,7 @@ Expo（React Native）写的原生 App，先做 Android，以后 iOS 用同一�
   - `i18n.ts`：用 chat-core 的同一份 `locales`，App 专有的文字放在 `mobile.*` 下；语言跟随系统。
 - `src/theme/tokens.ts`：从网页版 `chat-theme.css`、`auth.css` 移植的颜色，跟随系统深浅色。
 - 共用逻辑在 `packages/chat-core`（不依赖 React 和 DOM），网页版和 App 都从那里引用，不复制。聊天这块共用的有：事件跟随循环（`conversation-follow.ts`）、发送的缓存动作和错误文案（`send.ts`）、工具步骤的文案（`tool-activity.ts`）、图表的几何（`genui/chart-geometry.ts`）、界面块的解析（`genui/parse.ts`、`resolve.ts`、`choices.ts`）、页面规则（`chat-view.ts`）、转录（`transcript.ts`、`run-state.ts`）、流式文字的扫入与淡入（`arrival.ts`）。
-- 聊天页（`src/app/(app)/index.tsx` + `components/chat/ChatView.tsx`）：只有一个，地址是 `?id=`（对话）和 `?n=`（要新对话），按 `chat-view.ts` 决定重开还是保留；转录是倒置的 `FlatList`，停在底部时自然跟随，往上翻时才用 `maintainVisibleContentPosition` 稳住位置。
+- 聊天页（`src/app/(app)/index.tsx` + `components/chat/ChatView.tsx`）：只有一个，地址是 `?id=`（对话）和 `?n=`（要新对话），按 `chat-view.ts` 决定重开还是保留；转录是倒置的 `FlatList`，停在底部时自然跟随，往上翻时才用 `maintainVisibleContentPosition` 稳住位置；内容区 `flexGrow: 1` + `justifyContent: 'flex-end'`（倒置后就是顶上），所以短对话从顶上往下排，不贴着输入框。
 - 事件流（`hooks/events.ts`）用 `expo/fetch`（RN 自带的 fetch 不能边收边读），带 Bearer 和 `Accept-Encoding: identity`；App 退到后台就断开，回到前台重连（从新快照开始）。
 - Markdown（`components/chat/Markdown.tsx`）：`marked` 的词法分析出块，每块按源文本 memo，流式时只有最后一块重画；文字和网页一样一到就排版、每批在约一个批间隔内分段扫入（`ArrivalFade.tsx` 的 `FadingText`，分段和曲线是 chat-core 的 `arrival.ts`；同一条回复的各块共用扫入进度 `SharedPacing`，按顺序出现）：每个文字块用 `onTextLayout` 拿到排好的行，在每段所在的行上盖页面底色的浮层，到点前不透明，到点后 0.2 秒内变透明；RN 只给行的位置和内容、不给单个字的位置，所以一行里本批开始或结束的地方按字数比例估算。第一次渲染之后才出现的块是新到的，整块淡入，代码块、表格这些不是文字的块用一次整体淡入（`FadeIn`）。不给每个字建元素，浮层只有还没揭开和正在淡入的那几行。减少动态效果、App 在后台时不淡入。
 
@@ -59,13 +59,18 @@ APP_VARIANT=development EXPO_PUBLIC_SERVER_URL=http://10.0.2.2:8080 npx expo run
 - 回答里的表格（`Markdown.tsx` 的 `Table`）和代码块用同一套外框：顶上一条标题栏，写着「表格 · N 列 · M 行」，右边是带文字的「复制」按钮，点了变成「已复制」，复制的是这张表的 Markdown 原文。单元格不能跨格选中，这是把表格拿走的办法。列宽先按内容估算（72 到 240）：放得下时按比例撑满外框；放不下时每列最多占外框的 42%，好让下一列露出一截。右边还有内容时，边缘有一道渐隐。
 - 回答的过程（`Activity.tsx` 的 `ActivityLine`）和网页一样照 ChatGPT 排：答案之前是一个「已思考 N 秒」折叠块，规则见 [聊天页与前端约定](design/frontend-chat.md)。
   - 展开后没有竖线：模型路上说的话照原样显示；过渡句之间的思考和步骤各收成一行，点开才是细节。
-  - 模型工作时，思考只露最后几行（最高 220），顶上用 SVG 渐隐，不放能单独滚动的框，否则会抢走对话列表的滑动。
+  - 标题行前面的图标和网页一样：模型工作时是 3×3 的点阵波浪（`ThinkingOrb.tsx`，网页同名组件的移植），标题文字上有一道高光从左扫到右（`LiveText`，文字做遮罩、下面滑动一条渐变）；完成后是最后一步工具的图标，只有思考时是灯泡。还没出字时的「正在思考…」行（`Reply.tsx` 的 `QuietLine`）也用同样的点阵和高光。
+  - 模型工作时，思考只露最后几行（最高 220），顶上用 SVG 渐隐；这个窗口不能单独滚动，因为每个 token 都会把它拉回末尾。完成后，比 240 高出 48 以上的思考是一个 240 高、能单独滚动的框（嵌在对话列表里的 `ScrollView`，`nestedScrollEnabled`，滑到头时交还列表），上下有更多内容的一边渐隐；短的直接全文。和网页一样。
   - 只有搜索、没有思考时，标题写「搜索了 N 次」，后面叠着来源网站的图标（经服务端 `/favicons/{domain}` 取，没有图标时显示站名首字母）。
   - 搜索步骤写「搜索到 N 个网页」，叠着该次的网站图标（同一网站只出现一次），下一行是搜索词；点开是结果列表（站点、日期、标题、两行摘要），点一条打开网页。读网页的步骤写「已浏览 某站」。
   - 摘要先经 chat-core 的 `plainSnippet` 去掉 Markdown 链接、图片和裸网址再显示。
 - 展开或收起回答里的某一块（思考、活动、长代码）时，列表按这块高度的变化跟着滚动，点的那一行留在手指下面（`keep-in-place.ts`）。对话列表是倒序的、贴着底部，不这样做的话，展开的内容会把上面的东西整个顶出屏幕。要等列表重新排好版再滚，所以放在下一帧。
 - 侧栏（`ConversationDrawer.tsx`）照 Kimi 的布局：浅灰底；顶上是头像和名字（点开设置）和新对话圆钮；中间是对话列表，字大、无分隔线，当前对话一块圆角浅灰底；底部是搜索胶囊和定时任务圆钮，键盘弹出时整个侧栏跟着抬高（`KeyboardAvoidingView`）。打开时聊天页被推开而不是被盖住（`drawerType: 'slide'`），并按侧栏的打开程度（`useDrawerProgress`，经 Drawer 的 `screenLayout` 包在每个页面外）缩小到 94%、圆角 32、边缘只有一圈几乎看不出的阴影（`rgba(0,0,0,0.02)`，再深就成了一条灰带）、内容变淡。Kimi 在对话标题下显示附件缩略图，我们的对话列表接口不返回附件，暂时没有。
+- 启动动画（`components/LaunchScreen.tsx`，挂在根布局 `_layout.tsx` 的最上层）：网页登录页左边那块墨色面板，时间也照网页（`auth.css`）：面板从 0.6 倍放大淡入（0–0.7 秒），白色圆环从面板右边缘、偏下一点的那个点依次展开（0.45 秒起，每圈晚 40 毫秒，各 1.8 秒，越往外越慢），品牌名和标语「话一出口，世界便有了回声。」依次淡入（1.7、1.9 秒）；3 秒后面板缩一点、淡出，露出 App。每次冷启动都播；系统启动图在它画出第一帧时就交给它（`onShown` 里 `SplashScreen.hideAsync()`），会话没确定前它不退场；点一下提前结束；系统开了减弱动态效果时不播动画，静止的面板在会话确定后直接消失。
+- 新对话页（`ChatView` 的空状态）：中间偏上是 OpenChat 的标志（`components/LogoMark.tsx`，网页 `public/logo-mark.svg` 的六个相切圆），打开时圆环从小到大依次淡入（减弱动态效果时直接显示），下面是衬线体的问候，和网页同一套句子（chat-core 的 `greeting.ts`）。不显示当前模型，也没有建议问题。
 - 模型在聊天页的顶栏选（`ModelPicker.tsx`，菜单按钮旁边的模型名），不在输入框下面；顶栏因此不再显示对话标题，标题在侧栏里看。
+  - 胶囊里是模型图标和名字。点开后，菜单从胶囊下方长出来（像 ChatGPT 的 App，不用底部弹层）：页面盖一层浅色，胶囊在这层上面再画一遍（按 `measureInWindow` 量到的位置），当作菜单的标题，点它或点空白处、按返回键都会关上。一行一个模型：图标、名字，选中的铺浅灰、加粗、打勾；满额的变淡、标「已满」、点不了。模型多时菜单内部滚动。
+  - 模型图标（`components/ModelIcon.tsx`）：哪个模型用哪个图标由 chat-core 的 `model-icons.ts` 决定，网页的 `model-icon.tsx` 也用它（`scripts/sync-model-icons.mjs` 从这个文件读要拷贝哪些图标）。图标文件就是网页 `public/model-icons/` 里那些，App 从服务器的 `/model-icons/` 取，每个文件只取一次，打开菜单前就预先取好（`preloadModelIcons`）。单色和随主题变色的图标用主题的文字颜色画；没有图标的模型显示名字首字母。
 - 顶栏是几颗浮起的按钮（`HeaderPill.tsx`：白底、细边框、轻阴影，44 高）：左边菜单圆钮和模型名，右边子智能体、写作和新对话共用一颗胶囊。对话列表也延伸到顶栏底下（`marginTop` 为负的顶栏高度），顶栏下面铺一层 85% 不透明的页面底色，正文从底下经过时只隐约可见，不会和状态栏、按钮叠在一起；这层底色在按钮下方再延伸 32，渐变到全透明，不留一条边。SVG 渐变用明确的宽高，写 `100%` 时高度按错了参照，遮罩会提前变淡。
 - 输入框（`Composer.tsx`）是白底、细边框、轻阴影（`boxShadow`）的胶囊，「+」和发送都是 44 的浅灰圆钮，有内容可发或正在停止时发送钮才变成墨色。平时是一行：「+」、提示文字、发送。聚焦、有文字、附件栏有东西或正在改写被拒绝的消息时展开成两行，第二行左边是「+」，右边是思考强度（灯泡）和发送，三个都是 44 的圆钮。展开前后 `TextInput` 在组件树里的位置不变，所以点一下展开不会丢焦点；Android 按返回收起键盘时焦点还在，所以在 `keyboardDidHide` 时主动 `blur`，让它收回一行。键盘弹出时页面已经整体抬高了键盘的高度，输入框底下给手势条留的空间要跟着键盘动画收掉（`useReanimatedKeyboardAnimation`），否则输入框和键盘之间会空出一大截。平时输入框底下离手势条再多留 10。
 - 输入框浮在对话上：消息列表向下延伸到输入框底下（`marginBottom` 为负的输入框高度），输入框四周和下方看到的是对话本身，不是一条白底栏；列表末端（倒序列表的 `paddingTop`）和回到底部的按钮按输入框的实测高度让开，最后一条消息仍完整停在输入框上方。输入框外层 `pointerEvents="box-none"`，空白处的触摸交给下面的列表。
@@ -95,7 +100,11 @@ APP_VARIANT=development EXPO_PUBLIC_SERVER_URL=http://10.0.2.2:8080 npx expo run
 - 关闭时模糊的强度随淡出一起降到 0（`useAnimatedProps`）：Android 的模糊不理会外层 View 的透明度，只淡外层会让模糊灰着停到最后一帧。胶囊和旋钮的阴影用 `boxShadow`，不用 `elevation`（elevation 的阴影不随透明度淡出，会留下一团灰）；胶囊比背景淡得快一点、略微缩小，免得白底先消失、只剩旋钮的黑圈飘着。
 - 拖动用 gesture-handler 3 的 `usePanGesture`，旋钮由 reanimated 在 UI 线程上移动，只有换档时才回到 JS（更新档名、轻震）。
 
-思考强度的图标是一只灯泡（不带光芒，和 lucide 的灯泡一样占满图标高度、居中），网页和 App 共用同一份线条数据（chat-core 的 `thinking-icon.ts`，两边各有一个 `ThinkingIcon.tsx` 负责画）。代表记忆的大脑图标不变。
+思考强度的图标是一只灯泡（不带光芒，和 lucide 的灯泡一样占满图标高度、居中），线条数据在 chat-core 的 `thinking-icon.ts`，由 App 的 `ThinkingIcon.tsx` 画；网页的思考按钮上没有图标，只有文字和强度竖条。代表记忆的大脑图标不变。
+
+## 上下文用量
+
+输入框展开后，思考强度按钮左边是一个圆环（`ContextMeter.tsx`，和网页的同名组件一样读 `GET /conversations/{id}/context`）：最近一次请求实际用掉的 token 对比当前所选模型的上下文窗口，超过 80% 变琥珀色、超过 95% 变红。数字和颜色档位由 chat-core 的 `context-gauge.ts` 算，网页也用它。点一下，圆环上方出现和网页提示框一样的深色小卡片：用了多少、还剩多少，压缩后的估算、已压缩为摘要时各多一行说明；4 秒后或再点一下收起。还没有回答过、或模型的窗口未知时不显示。压缩只由 run 自己做，所以这里没有按钮。
 
 ## 告诉模型用户在手机上
 

@@ -27,6 +27,8 @@ interface Props {
   tray?: React.ReactNode
   /** Whether the tray holds anything: the box stays open while it does. */
   hasTray: boolean
+  /** How full the context window is (ContextMeter), beside the effort button. */
+  meter?: React.ReactNode
 }
 
 /**
@@ -109,6 +111,7 @@ export function Composer(props: Props) {
         <View style={styles.row}>
           {plus}
           <View style={styles.spacer} />
+          {props.meter}
           {/* Beside send and the same size; the level itself is named on the slider it opens. */}
           {props.thinkingLevels.length > 0 ? (
             <Pressable
