@@ -29,41 +29,44 @@ export default function PluginStep({ step }: { step: ToolActivityStep }) {
   const canOpen = progress !== null && (progress.calls.length > 0 || Boolean(progress.code) || Boolean(progress.error) || lookedUp)
 
   return (
-    <li className={cn('n-activity-step', failed && 'is-failed')}>
-      <span className="n-activity-step-icon">
-        {failed ? (
-          <TriangleAlert aria-hidden="true" />
-        ) : lookedUp ? (
-          <Search aria-hidden="true" />
-        ) : mark ? (
-          <PluginMark plugin={mark} size={16} />
-        ) : (
-          <Puzzle aria-hidden="true" />
-        )}
-      </span>
-      <div className="n-activity-step-body">
-        {canOpen ? (
-          <button type="button" className="n-plugin-step-head" aria-expanded={open} onClick={() => setOpen(!open)}>
-            <span>{stepLabel(t, step, running)}</span>
-            <ChevronRight className={cn('n-plugin-step-chevron', open && 'is-open')} aria-hidden="true" />
-          </button>
-        ) : (
-          <div className="n-activity-step-label">{stepLabel(t, step, running)}</div>
-        )}
-        {progress?.images && progress.images.length > 0 && step.conversationId && (
-          <div className="n-activity-images">
-            {progress.images.map((image) => {
-              const src = `${API_BASE_URL}/conversations/${encodeURIComponent(step.conversationId ?? '')}/tool-images/${encodeURIComponent(image.id)}`
-              return (
-                <a key={image.id} href={src} target="_blank" rel="noreferrer">
-                  <img src={src} alt={t('plugins.step.image')} loading="lazy" decoding="async" />
-                </a>
-              )
-            })}
-          </div>
-        )}
-        {open && progress && <Details progress={progress} tab={tab} onTab={setTab} />}
+    <li className={cn('n-activity-step n-plugin-step', failed && 'is-failed')}>
+      <div className="n-plugin-step-row">
+        <span className="n-activity-step-icon">
+          {failed ? (
+            <TriangleAlert aria-hidden="true" />
+          ) : lookedUp ? (
+            <Search aria-hidden="true" />
+          ) : mark ? (
+            <PluginMark plugin={mark} size={16} />
+          ) : (
+            <Puzzle aria-hidden="true" />
+          )}
+        </span>
+        <div className="n-activity-step-body">
+          {canOpen ? (
+            <button type="button" className="n-plugin-step-head" aria-expanded={open} onClick={() => setOpen(!open)}>
+              <span>{stepLabel(t, step, running)}</span>
+              <ChevronRight className={cn('n-plugin-step-chevron', open && 'is-open')} aria-hidden="true" />
+            </button>
+          ) : (
+            <div className="n-activity-step-label">{stepLabel(t, step, running)}</div>
+          )}
+          {progress?.images && progress.images.length > 0 && step.conversationId && (
+            <div className="n-activity-images">
+              {progress.images.map((image) => {
+                const src = `${API_BASE_URL}/conversations/${encodeURIComponent(step.conversationId ?? '')}/tool-images/${encodeURIComponent(image.id)}`
+                return (
+                  <a key={image.id} href={src} target="_blank" rel="noreferrer">
+                    <img src={src} alt={t('plugins.step.image')} loading="lazy" decoding="async" />
+                  </a>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </div>
+      {/* The whole width of the process, under the line, not just under its words. */}
+      {open && progress && <Details progress={progress} tab={tab} onTab={setTab} />}
     </li>
   )
 }
@@ -104,9 +107,14 @@ function Details({ progress, tab, onTab }: { progress: PluginCodeProgress; tab: 
   )
 }
 
+/**
+ * One call as Open WebUI shows a tool call: its input, each argument on a line
+ * of its own, and its output - JSON laid out on a light ground, text as it is.
+ */
 function Call({ call, progress }: { call: PluginCallProgress; progress: PluginCodeProgress }) {
   const { t } = useTranslation()
-  const request = call.arguments && Object.keys(call.arguments).length > 0 ? JSON.stringify(call.arguments) : t('plugins.step.no-arguments')
+  const args = Object.entries(call.arguments ?? {})
+  const output = call.error ?? call.result
   return (
     <div className="n-plugin-call">
       <span className="n-plugin-call-name">
@@ -115,22 +123,37 @@ function Call({ call, progress }: { call: PluginCallProgress; progress: PluginCo
           <span className={cn('n-plugin-call-status', (call.status === 'failed' || call.status === 'denied') && 'is-failed')}>{t(`plugins.step.call-${call.status}`)}</span>
         )}
       </span>
-      <dl className="n-plugin-call-kv">
-        <dt>{t('plugins.step.request')}</dt>
-        <dd>{request}</dd>
-        {call.result !== undefined && (
-          <>
-            <dt>{t('plugins.step.response')}</dt>
-            <dd>{call.result}</dd>
-          </>
-        )}
-        {call.error && (
-          <>
-            <dt>{t('plugins.step.error')}</dt>
-            <dd className="is-failed">{call.error}</dd>
-          </>
-        )}
-      </dl>
+      {args.length > 0 && (
+        <div className="n-plugin-call-section">
+          <div className="n-plugin-call-label">{t('plugins.step.request')}</div>
+          {args.map(([key, value]) => (
+            <div key={key} className="n-plugin-call-arg">
+              <span>{key}</span>
+              <span>{typeof value === 'string' ? value : JSON.stringify(value)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {output !== undefined && (
+        <div className="n-plugin-call-section">
+          <div className="n-plugin-call-label">{t('plugins.step.response')}</div>
+          <Output text={output} failed={call.error !== undefined} />
+        </div>
+      )}
     </div>
   )
+}
+
+/** JSON (an object or a list) laid out on a light ground; anything else as text. */
+function Output({ text, failed }: { text: string; failed: boolean }) {
+  let pretty: string | null = null
+  if (!failed && /^[[{]/.test(text.trim())) {
+    try {
+      pretty = JSON.stringify(JSON.parse(text), null, 2)
+    } catch {
+      // Cut short, so not JSON any more: shown as the text it is.
+    }
+  }
+  if (pretty !== null) return <pre className="n-plugin-call-json">{pretty}</pre>
+  return <pre className={cn('n-plugin-call-text', failed && 'is-failed')}>{text}</pre>
 }

@@ -2082,12 +2082,11 @@
       "separator": "；",
       "searched": "查找 {{plugin}} 的工具",
       "searched-any": "查找插件工具",
-      "request": "请求",
-      "response": "返回",
+      "request": "输入",
+      "response": "输出",
       "tab-calls": "调用",
       "tab-code": "脚本",
       "search-line": "查找“{{query}}”，找到 {{count}} 个",
-      "no-arguments": "（无）",
       "error": "出错"
     },
     "confirm": {
@@ -2279,7 +2278,7 @@
     "tab": {
       "content": "内容",
       "overview": "概述",
-      "request": "请求",
+      "request": "输入",
       "response": "响应",
       "raw": "原始"
     },

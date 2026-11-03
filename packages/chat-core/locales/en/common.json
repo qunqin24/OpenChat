@@ -2082,12 +2082,11 @@
       "separator": "; ",
       "searched": "Looked up {{plugin}} tools",
       "searched-any": "Looked up plugin tools",
-      "request": "Request",
-      "response": "Response",
+      "request": "Input",
+      "response": "Output",
       "tab-calls": "Calls",
       "tab-code": "Script",
       "search-line": "Looked for “{{query}}”, found {{count}}",
-      "no-arguments": "(none)",
       "error": "Error"
     },
     "confirm": {
@@ -2279,8 +2278,8 @@
     "tab": {
       "content": "Content",
       "overview": "Overview",
-      "request": "Request",
-      "response": "Response",
+      "request": "Input",
+      "response": "Output",
       "raw": "Raw"
     },
     "section": {
