@@ -29,3 +29,7 @@ apps/server/internal/webui/dist/*
 
 # Claude Code worktrees
 .claude/worktrees/
+
+# Local tool state: preview launch configs, other assistants' notes.
+.claude/
+.commandcode/
