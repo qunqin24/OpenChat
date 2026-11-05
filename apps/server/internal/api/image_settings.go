@@ -39,6 +39,19 @@ type imageConfig struct {
 	MaxPerRun  int    `json:"maxPerRun"`
 	// Daily is the site's allowance per person per day; 0 is no limit.
 	Daily int `json:"daily"`
+	// DefaultQuality is the level a call that names none is made at, and
+	// MaxQuality the highest one may ask for; empty is the provider's
+	// default and no cap. Only models that take a quality use them.
+	DefaultQuality llm.Quality `json:"defaultQuality,omitempty"`
+	MaxQuality     llm.Quality `json:"maxQuality,omitempty"`
+	// QualityFixed: every picture is made at DefaultQuality, and the model is
+	// not offered a quality to choose (the tool has no such argument).
+	QualityFixed bool `json:"qualityFixed,omitempty"`
+	// DefaultComplexity is how much a call that names none plans first, and
+	// ComplexityFixed makes it every call's, with no choice offered. Only
+	// models that take a complexity use them (gpt-image 2.6 on).
+	DefaultComplexity llm.Complexity `json:"defaultComplexity,omitempty"`
+	ComplexityFixed   bool           `json:"complexityFixed,omitempty"`
 }
 
 func defaultImageConfig() imageConfig {
@@ -73,6 +86,14 @@ func (c imageConfig) validate() error {
 		return bad("maxPerRun", "pictures per answer cannot be fewer than per call")
 	case c.Daily < 0 || c.Daily > 100000:
 		return bad("daily", "pictures per day is 0 (no limit) to 100000")
+	case !validQuality(c.DefaultQuality):
+		return bad("defaultQuality", "not a quality level")
+	case !validQuality(c.MaxQuality):
+		return bad("maxQuality", "not a quality level")
+	case !validComplexity(c.DefaultComplexity):
+		return bad("defaultComplexity", "not a complexity level")
+	case !c.QualityFixed && c.DefaultQuality.Capped(c.MaxQuality) != c.DefaultQuality:
+		return bad("defaultQuality", "the default quality cannot be above the highest")
 	case c.Enabled && c.Model == "":
 		return bad("model", "choose an image model before switching image generation on")
 	}
@@ -177,8 +198,42 @@ func (s *Server) imageGenerationFor(ctx context.Context, user sqlc.User) bool {
 func (s *Server) toImageSettings(ctx context.Context, c imageConfig) ImageGenerationSettings {
 	return ImageGenerationSettings{
 		Enabled: c.Enabled, Model: c.Model, MaxPerCall: c.MaxPerCall, MaxPerRun: c.MaxPerRun, Daily: c.Daily,
+		DefaultQuality: qualityOut(c.DefaultQuality), MaxQuality: qualityOut(c.MaxQuality), QualityFixed: c.QualityFixed,
+		DefaultComplexity: complexityOut(c.DefaultComplexity), ComplexityFixed: c.ComplexityFixed,
 		ModelPriced: s.imageModelPriced(ctx, c.Model),
 	}
+}
+
+func validQuality(q llm.Quality) bool {
+	_, ok := llm.ParseQuality(string(q))
+	return ok
+}
+
+func validComplexity(c llm.Complexity) bool {
+	_, ok := llm.ParseComplexity(string(c))
+	return ok
+}
+
+// complexityOut is a level as the contract spells it: auto for none.
+func complexityOut(c llm.Complexity) ImageComplexity {
+	if c == llm.ComplexityAuto {
+		return ImageComplexityAuto
+	}
+	return ImageComplexity(c)
+}
+
+// qualityOut is a level as the contract spells it: auto for none.
+func qualityOut(q llm.Quality) ImageQuality {
+	if q == llm.QualityAuto {
+		return ImageQualityAuto
+	}
+	return ImageQuality(q)
+}
+
+// qualityIn is a level the contract gave, or auto.
+func qualityIn(q ImageQuality) llm.Quality {
+	level, _ := llm.ParseQuality(string(q))
+	return level
 }
 
 func (s *Server) GetImageGenerationSettings(w http.ResponseWriter, r *http.Request) {
@@ -216,6 +271,34 @@ func (s *Server) UpdateImageGenerationSettings(w http.ResponseWriter, r *http.Re
 	}
 	if body.Daily != nil {
 		config.Daily = *body.Daily
+	}
+	if body.DefaultQuality != nil {
+		if !body.DefaultQuality.Valid() {
+			httpx.Fail(w, r, httpx.NewFieldError("defaultQuality", "invalid_image_settings", "not a quality level"))
+			return
+		}
+		config.DefaultQuality = qualityIn(*body.DefaultQuality)
+	}
+	if body.QualityFixed != nil {
+		config.QualityFixed = *body.QualityFixed
+	}
+	if body.DefaultComplexity != nil {
+		level, ok := llm.ParseComplexity(string(*body.DefaultComplexity))
+		if !ok {
+			httpx.Fail(w, r, httpx.NewFieldError("defaultComplexity", "invalid_image_settings", "not a complexity level"))
+			return
+		}
+		config.DefaultComplexity = level
+	}
+	if body.ComplexityFixed != nil {
+		config.ComplexityFixed = *body.ComplexityFixed
+	}
+	if body.MaxQuality != nil {
+		if !body.MaxQuality.Valid() {
+			httpx.Fail(w, r, httpx.NewFieldError("maxQuality", "invalid_image_settings", "not a quality level"))
+			return
+		}
+		config.MaxQuality = qualityIn(*body.MaxQuality)
 	}
 	if err := config.validate(); err != nil {
 		httpx.Fail(w, r, err)
@@ -265,7 +348,8 @@ func (s *Server) TestImageGeneration(w http.ResponseWriter, r *http.Request) {
 	}
 	made, err := s.makePictures(ctx, pictureJob{
 		user: user, modelID: config.Model, who: asker{staff: true, admin: true},
-		req: llm.ImageRequest{Prompt: prompt, Count: 1, Aspect: llm.AspectSquare},
+		req: llm.ImageRequest{Prompt: prompt, Count: 1, Aspect: llm.AspectSquare, Quality: config.DefaultQuality,
+			Complexity: config.DefaultComplexity},
 	})
 	if err != nil {
 		fail(pictureFailure(err))
@@ -296,6 +380,8 @@ type madePictures struct {
 	images []llm.GeneratedImage
 	model  string
 	cost   *float64
+	// ignored is what was asked for that the model does not take.
+	ignored []string
 }
 
 // errPictureRefused is the image service turning the prompt down on its own
@@ -317,7 +403,7 @@ func (s *Server) makePictures(ctx context.Context, job pictureJob) (madePictures
 	}
 	job.req.Model = job.modelID
 	job.req.User = s.endUsers.Account(ctx, job.user.ID)
-	tokens := llm.PictureTokens(job.modelID, job.req.Aspect)
+	tokens := llm.PictureTokens(job.modelID, job.req.Aspect, job.req.Quality)
 	var last error
 	for _, channelID := range order {
 		channel, err := s.q.GetChannel(ctx, channelID)
@@ -349,7 +435,7 @@ func (s *Server) makePictures(ctx context.Context, job pictureJob) (madePictures
 		cancel()
 		meter.EndImages(ctx, resp, len(resp.Images), err)
 		if len(resp.Images) > 0 {
-			return madePictures{images: resp.Images, model: resp.ServedModel, cost: s.pictureCost(ctx, job.modelID, len(resp.Images), resp.Usage)}, nil
+			return madePictures{images: resp.Images, model: resp.ServedModel, cost: s.pictureCost(ctx, job.modelID, len(resp.Images), resp.Usage), ignored: resp.Ignored}, nil
 		}
 		if ctx.Err() != nil {
 			return madePictures{}, ctx.Err()

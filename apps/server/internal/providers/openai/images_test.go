@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -71,13 +72,14 @@ func TestImagesGenerateSendsTheRequestAndReadsBase64(t *testing.T) {
 	if _, ok := got["response_format"]; ok {
 		t.Errorf("sent response_format to gpt-image: %v", got)
 	}
-	if got["size"] != "1536x1024" || got["quality"] != "low" || got["user"] != "u1" || got["n"] != float64(1) {
+	// gpt-image takes the end user as safety_identifier.
+	if got["size"] != "1536x1024" || got["quality"] != "low" || got["safety_identifier"] != "u1" || got["user"] != nil || got["n"] != float64(1) {
 		t.Errorf("body = %v", got)
 	}
 }
 
 func TestImagesUserOnlyWhenTheChannelSendsIt(t *testing.T) {
-	fields := imageFields(llm.ImageRequest{Model: "seedream-4", Prompt: "x", User: "u1", Aspect: llm.AspectPortrait}, false)
+	fields, _ := imageFields(llm.ImageRequest{Model: "seedream-4", Prompt: "x", User: "u1", Aspect: llm.AspectPortrait}, false)
 	if _, ok := fields["user"]; ok {
 		t.Error("user sent on a channel that does not send it")
 	}
@@ -85,7 +87,7 @@ func TestImagesUserOnlyWhenTheChannelSendsIt(t *testing.T) {
 		t.Errorf("fields = %v", fields)
 	}
 	// A null in the operator's parameters removes a field.
-	fields = imageFields(llm.ImageRequest{Model: "some-relay-model", Prompt: "x", Extra: map[string]any{"response_format": nil}}, false)
+	fields, _ = imageFields(llm.ImageRequest{Model: "some-relay-model", Prompt: "x", Extra: map[string]any{"response_format": nil}}, false)
 	if _, ok := fields["response_format"]; ok {
 		t.Error("a null extra did not remove the field")
 	}
@@ -187,7 +189,11 @@ func TestImagesSizesPerFamily(t *testing.T) {
 		want   string
 	}{
 		// An exact size goes as asked to the models that take sizes.
-		{"gpt-image-2", llm.AspectAuto, 1920, 1080, "size", "1920x1080"},
+		// gpt-image's sizes come to its bounds: sides of 16, ratio, pixels.
+		{"gpt-image-2", llm.AspectAuto, 1920, 1080, "size", "1920x1088"},
+		{"gpt-image-2", llm.AspectAuto, 4096, 4096, "size", "2880x2880"},
+		{"gpt-image-2", llm.AspectAuto, 3000, 600, "size", "3008x1008"},
+		{"gpt-image-2", llm.AspectAuto, 512, 512, "size", "816x816"},
 		{"seedream-4", llm.AspectAuto, 2560, 1440, "size", "2560x1440"},
 		{"some-relay-model", llm.AspectAuto, 800, 600, "size", "800x600"},
 		// A ratio becomes the family's own size for it.
@@ -200,9 +206,51 @@ func TestImagesSizesPerFamily(t *testing.T) {
 		{"grok-imagine-image", llm.Aspect4x3, 0, 0, "aspect_ratio", "4:3"},
 	}
 	for _, c := range cases {
-		fields := imageFields(llm.ImageRequest{Model: c.model, Prompt: "x", Aspect: c.aspect, Width: c.w, Height: c.h}, false)
+		fields, _ := imageFields(llm.ImageRequest{Model: c.model, Prompt: "x", Aspect: c.aspect, Width: c.w, Height: c.h}, false)
 		if fields[c.field] != c.want {
 			t.Errorf("%s %s %dx%d: %s = %v, want %s", c.model, c.aspect, c.w, c.h, c.field, fields[c.field], c.want)
 		}
+	}
+}
+
+func TestImagesQualityAndTransparency(t *testing.T) {
+	fields, ignored := imageFields(llm.ImageRequest{Model: "gpt-image-2.5-flare", Prompt: "x", Quality: llm.QualityXHigh, Transparent: true}, false)
+	if fields["quality"] != "xhigh" || fields["background"] != "transparent" || fields["output_format"] != "png" || len(ignored) != 0 {
+		t.Fatalf("gpt-image: %v %v", fields, ignored)
+	}
+	fields, ignored = imageFields(llm.ImageRequest{Model: "dall-e-3", Prompt: "x", Quality: llm.QualityMax, Transparent: true}, false)
+	if fields["quality"] != "hd" || !slices.Equal(ignored, []string{"transparent"}) {
+		t.Fatalf("dall-e-3: %v %v", fields, ignored)
+	}
+	fields, ignored = imageFields(llm.ImageRequest{Model: "seedream-4", Prompt: "x", Quality: llm.QualityHigh, Transparent: true}, false)
+	if _, sent := fields["quality"]; sent || !slices.Equal(ignored, []string{"quality", "transparent"}) {
+		t.Fatalf("seedream: %v %v", fields, ignored)
+	}
+}
+
+func TestImagesComplexityOnlyFromTwoSix(t *testing.T) {
+	cases := []struct {
+		model string
+		sent  bool
+	}{
+		{"gpt-image-2.6-flare", true},
+		{"gpt-image-2.6-sunburst", true},
+		{"gpt-image-3", true},
+		{"gpt-image-2.5-flare", false},
+		{"gpt-image-2", false},
+		{"chatgpt-image-latest", false},
+		{"seedream-4", false},
+	}
+	for _, c := range cases {
+		fields, ignored := imageFields(llm.ImageRequest{Model: c.model, Prompt: "x", Complexity: llm.ComplexityLow}, false)
+		_, sent := fields["complexity"]
+		if sent != c.sent || slices.Contains(ignored, "complexity") == c.sent {
+			t.Errorf("%s: sent %v, ignored %v", c.model, sent, ignored)
+		}
+	}
+	// A relay that is not OpenAI still gets user.
+	fields, _ := imageFields(llm.ImageRequest{Model: "seedream-4", Prompt: "x", User: "u1"}, true)
+	if fields["user"] != "u1" || fields["safety_identifier"] != nil {
+		t.Fatalf("relay: %v", fields)
 	}
 }

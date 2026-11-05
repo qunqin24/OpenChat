@@ -94,6 +94,69 @@ func NearestAspect(width, height int, choices []Aspect) Aspect {
 	return best
 }
 
+// Quality is how carefully a picture is made, where the model takes it
+// (gpt-image: low to max; dall-e-3: standard or hd). Empty is the provider's
+// default.
+type Quality string
+
+const (
+	QualityAuto   Quality = ""
+	QualityLow    Quality = "low"
+	QualityMedium Quality = "medium"
+	QualityHigh   Quality = "high"
+	QualityXHigh  Quality = "xhigh"
+	QualityMax    Quality = "max"
+)
+
+// Qualities are the levels, lowest first.
+var Qualities = []Quality{QualityLow, QualityMedium, QualityHigh, QualityXHigh, QualityMax}
+
+// ParseQuality reads a level; auto (empty) for anything else, ok false for a
+// word that is not one.
+func ParseQuality(s string) (Quality, bool) {
+	value := Quality(strings.ToLower(strings.TrimSpace(s)))
+	if value == "" || value == "auto" {
+		return QualityAuto, true
+	}
+	return value, slices.Contains(Qualities, value)
+}
+
+// Capped is q no higher than limit; a limit of auto caps nothing.
+func (q Quality) Capped(limit Quality) Quality {
+	if q == QualityAuto || limit == QualityAuto {
+		return q
+	}
+	if slices.Index(Qualities, q) > slices.Index(Qualities, limit) {
+		return limit
+	}
+	return q
+}
+
+// Complexity is how much the image model plans before it renders, where it
+// takes that (gpt-image 2.6 on): low suits a focused edit, high dense text
+// and busy layouts. Empty is the provider's default (high, for 2.6).
+type Complexity string
+
+const (
+	ComplexityAuto   Complexity = ""
+	ComplexityLow    Complexity = "low"
+	ComplexityMedium Complexity = "medium"
+	ComplexityHigh   Complexity = "high"
+)
+
+// ParseComplexity reads a level; auto (empty) for nothing or "auto", ok
+// false for a word that is not one.
+func ParseComplexity(s string) (Complexity, bool) {
+	value := Complexity(strings.ToLower(strings.TrimSpace(s)))
+	switch value {
+	case "", "auto":
+		return ComplexityAuto, true
+	case ComplexityLow, ComplexityMedium, ComplexityHigh:
+		return value, true
+	}
+	return ComplexityAuto, false
+}
+
 // MinSide and MaxSide bound an exact size a model may ask for.
 const (
 	MinSide = 256
@@ -135,6 +198,13 @@ type ImageRequest struct {
 	// adapter sends it where the model takes sizes, and else the nearest
 	// shape (and, for Gemini, the resolution tier) it does take.
 	Width, Height int
+	// Quality is the level asked for, empty for the provider's default.
+	Quality Quality
+	// Transparent asks for a picture without a background, where the model
+	// can make one (gpt-image), as a PNG.
+	Transparent bool
+	// Complexity is the planning asked for, empty for the provider's default.
+	Complexity Complexity
 	// User is the end-user identifier every model request carries
 	// (end_user.go); an adapter sends it only where its channel says to.
 	User string
@@ -158,6 +228,9 @@ type ImageResponse struct {
 	// Revised is the prompt the provider says it actually drew from, when it
 	// rewrites prompts (dall-e-3); empty otherwise.
 	Revised string
+	// Ignored names what was asked for that this model does not take
+	// ("quality", "transparent"), for the model to be told.
+	Ignored []string
 }
 
 // Picture media types we keep. GIF is left out: no image model makes one, and
@@ -182,17 +255,17 @@ func SniffPicture(data []byte) (mediaType string, width, height int, ok bool) {
 // PictureTokens is an estimate of what one picture costs in output tokens,
 // for a request whose provider reported nothing: the ledger bills it at the
 // model's output price (usage.Meter). The figures are the providers' own
-// tables — gpt-image's by size at medium quality, Gemini's flat count — and
-// anything else gets Gemini's, which is the cheaper guess.
-func PictureTokens(model string, aspect Aspect) int {
+// tables — gpt-image's by size and quality (auto taken as medium, the two
+// levels above high as more again), Gemini's flat count — and anything else
+// gets Gemini's, which is the cheaper guess.
+func PictureTokens(model string, aspect Aspect, quality Quality) int {
 	id := strings.ToLower(model)
-	switch {
-	case strings.Contains(id, "gpt-image"), strings.Contains(id, "chatgpt-image"):
-		if aspect.Wide() || aspect.Tall() {
-			return 1568
-		}
-		return 1056
-	default:
+	if !strings.Contains(id, "gpt-image") && !strings.Contains(id, "chatgpt-image") {
 		return 1290
 	}
+	square := map[Quality]int{QualityLow: 272, QualityAuto: 1056, QualityMedium: 1056, QualityHigh: 4160, QualityXHigh: 6240, QualityMax: 8320}[quality]
+	if aspect.Wide() || aspect.Tall() {
+		return square * 3 / 2
+	}
+	return square
 }

@@ -483,7 +483,6 @@ export function AssistantTurn({
                   key={key}
                   call={part}
                   result={result}
-                  working={live?.tools[part.id] === 'running'}
                   conversationId={conversationId}
                 />
               )

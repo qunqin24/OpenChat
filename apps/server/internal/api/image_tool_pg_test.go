@@ -40,10 +40,14 @@ func TestImageTool(t *testing.T) {
 		t.Fatal(err)
 	}
 	var generations, edits atomic.Int32
+	var asked atomic.Value // the last generation request's body
 	service := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/images/generations":
 			generations.Add(1)
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			asked.Store(body)
 		case "/v1/images/edits":
 			edits.Add(1)
 		default:
@@ -58,7 +62,8 @@ func TestImageTool(t *testing.T) {
 	t.Cleanup(service.Close)
 
 	tag := strings.ReplaceAll(uuid.NewString()[:8], "-", "")
-	modelID := "gpt-image-test-" + tag
+	// A gpt-image id, so the adapter sends quality and sizes as gpt-image takes them.
+	modelID := "gpt-image-2.6-test-" + tag
 	channel, err := q.CreateChannel(ctx, sqlc.CreateChannelParams{
 		Name: "images " + tag, Type: sqlc.ChannelTypeOpenaiCompatible, Enabled: true, BaseUrl: service.URL + "/v1", ApiKey: "sk-test",
 	})
@@ -84,7 +89,8 @@ func TestImageTool(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	setImages(imageConfig{Enabled: true, Model: modelID, MaxPerCall: 2, MaxPerRun: 8})
+	setImages(imageConfig{Enabled: true, Model: modelID, MaxPerCall: 2, MaxPerRun: 8, DefaultQuality: llm.QualityMedium, MaxQuality: llm.QualityHigh,
+		DefaultComplexity: llm.ComplexityLow})
 	t.Cleanup(func() {
 		_, _ = pool.Exec(context.Background(), "DELETE FROM app_settings WHERE key = $1", settingImageGeneration)
 	})
@@ -135,6 +141,10 @@ func TestImageTool(t *testing.T) {
 	made := call(map[string]any{"prompt": "a calm mountain lake at dawn", "aspect": "landscape"})
 	if made.IsError || len(made.Files) != 1 || generations.Load() != 1 {
 		t.Fatalf("result = %+v", made)
+	}
+	// The site's default quality when the call names none.
+	if body := asked.Load().(map[string]any); body["quality"] != "medium" || body["size"] != "1536x1024" || body["complexity"] != "low" {
+		t.Fatalf("first request: %v", body)
 	}
 	details := made.Details.(ImageToolDetails)
 	handle := details.Images[0].Handle
@@ -187,12 +197,28 @@ func TestImageTool(t *testing.T) {
 		t.Fatalf("an unknown picture was accepted: %+v", unknown)
 	}
 
-	// The day's allowance: two made, an allowance of two, nothing more.
-	if err := setUserImageDaily(ctx, q, user.ID, 2); err != nil {
+	// A level above the site's highest is made at the highest, and the model
+	// is told; an exact size comes to gpt-image's bounds.
+	capped := call(map[string]any{"prompt": "a lake, finely detailed", "quality": "max", "size": "1920x1080", "background": "transparent", "complexity": "high"})
+	body := asked.Load().(map[string]any)
+	if capped.IsError || body["quality"] != "high" || body["size"] != "1920x1088" || body["background"] != "transparent" || body["complexity"] != "high" ||
+		!strings.Contains(capped.Content, "up to high") {
+		t.Fatalf("capped: %v\n%s", body, capped.Content)
+	}
+
+	// Fixed by the administrator: the site's quality, whatever is asked.
+	setImages(imageConfig{Enabled: true, Model: modelID, MaxPerCall: 2, MaxPerRun: 8, DefaultQuality: llm.QualityLow, QualityFixed: true})
+	fixed := call(map[string]any{"prompt": "a lake", "quality": "max"})
+	if body := asked.Load().(map[string]any); fixed.IsError || body["quality"] != "low" {
+		t.Fatalf("fixed: %v", body)
+	}
+
+	// The day's allowance: four made, an allowance of four, nothing more.
+	if err := setUserImageDaily(ctx, q, user.ID, 4); err != nil {
 		t.Fatal(err)
 	}
 	refused := call(map[string]any{"prompt": "one more"})
-	if !refused.IsError || !strings.Contains(refused.Content, "allowance") || generations.Load() != 1 {
+	if !refused.IsError || !strings.Contains(refused.Content, "allowance") || generations.Load() != 3 {
 		t.Fatalf("over the allowance: %+v", refused)
 	}
 	// More per call than allowed is the model's mistake to correct.
@@ -200,7 +226,7 @@ func TestImageTool(t *testing.T) {
 		t.Fatal("three pictures in a call of at most two")
 	}
 	var done int64
-	if err := pool.QueryRow(ctx, `SELECT COALESCE(sum(count), 0) FROM image_requests WHERE user_id = $1 AND status = 'done'`, user.ID).Scan(&done); err != nil || done != 2 {
+	if err := pool.QueryRow(ctx, `SELECT COALESCE(sum(count), 0) FROM image_requests WHERE user_id = $1 AND status = 'done'`, user.ID).Scan(&done); err != nil || done != 4 {
 		t.Fatalf("requests done = %d, %v", done, err)
 	}
 

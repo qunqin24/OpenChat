@@ -44,6 +44,17 @@ func NewImages(cfg Config) (*ImageClient, error) {
 
 func (c *ImageClient) Generate(ctx context.Context, req llm.ImageRequest) (llm.ImageResponse, error) {
 	out := llm.ImageResponse{Provider: c.cfg.Provider, ServedModel: req.Model}
+	// Resolution is its tier (imageConfig); it has no quality and no
+	// transparent background to ask for.
+	if req.Quality != llm.QualityAuto {
+		out.Ignored = append(out.Ignored, "quality")
+	}
+	if req.Transparent {
+		out.Ignored = append(out.Ignored, "transparent")
+	}
+	if req.Complexity != llm.ComplexityAuto {
+		out.Ignored = append(out.Ignored, "complexity")
+	}
 	var total llm.Usage
 	reported := false
 	for i := 0; i < max(req.Count, 1); i++ {

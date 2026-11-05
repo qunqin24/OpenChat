@@ -29,6 +29,14 @@ import { api, unwrap } from '@/lib/api'
 import { queryKeys } from '@openchat/chat-core/query-keys'
 
 type ImageSettings = components['schemas']['ImageGenerationSettings']
+type ImageQuality = components['schemas']['ImageQuality']
+type ImageComplexity = components['schemas']['ImageComplexity']
+
+/** The planning levels, after auto (the provider's default). */
+const COMPLEXITIES: ImageComplexity[] = ['auto', 'low', 'medium', 'high']
+
+/** The levels, lowest first, after auto (the provider's default, or no cap). */
+const QUALITIES: ImageQuality[] = ['auto', 'low', 'medium', 'high', 'xhigh', 'max']
 type UpdateImageSettings = components['schemas']['UpdateImageGenerationSettingsRequest']
 
 function useImageSettings() {
@@ -169,15 +177,37 @@ function SettingsForm({ settings }: { settings: ImageSettings }) {
       maxPerCall: whole(1, 10, t('admin.image-generation.per-call-range')),
       maxPerRun: whole(1, 50, t('admin.image-generation.per-run-range')),
       daily: whole(0, 100000, t('admin.image-generation.daily-range')),
+      defaultQuality: z.enum(QUALITIES),
+      maxQuality: z.enum(QUALITIES),
+      qualityFixed: z.boolean(),
+      defaultComplexity: z.enum(COMPLEXITIES),
+      complexityFixed: z.boolean(),
     })
     .refine((v) => v.maxPerRun >= v.maxPerCall, { path: ['maxPerRun'], message: t('admin.image-generation.per-run-below') })
+    .refine(
+      (v) =>
+        v.qualityFixed || v.defaultQuality === 'auto' || v.maxQuality === 'auto' || QUALITIES.indexOf(v.defaultQuality) <= QUALITIES.indexOf(v.maxQuality),
+      { path: ['defaultQuality'], message: t('admin.image-generation.quality-above-max') },
+    )
   type Values = z.infer<typeof schema>
 
   const form = useForm<z.input<typeof schema>, unknown, Values>({
     resolver: zodResolver(schema),
-    values: { model: settings.model, maxPerCall: settings.maxPerCall, maxPerRun: settings.maxPerRun, daily: settings.daily },
+    values: {
+      model: settings.model,
+      maxPerCall: settings.maxPerCall,
+      maxPerRun: settings.maxPerRun,
+      daily: settings.daily,
+      defaultQuality: settings.defaultQuality,
+      maxQuality: settings.maxQuality,
+      qualityFixed: settings.qualityFixed,
+      defaultComplexity: settings.defaultComplexity,
+      complexityFixed: settings.complexityFixed,
+    },
   })
   const chosen = useWatch({ control: form.control, name: 'model' })
+  const qualityFixed = useWatch({ control: form.control, name: 'qualityFixed' })
+  const complexityFixed = useWatch({ control: form.control, name: 'complexityFixed' })
 
   const save = (values: Values) =>
     update.mutate(values, {
@@ -196,6 +226,36 @@ function SettingsForm({ settings }: { settings: ImageSettings }) {
             <Input type="number" inputMode="numeric" className="w-32" {...field} value={field.value as number | string} />
           </FormControl>
           <FormDescription>{t(`admin.image-generation.${name}-hint`)}</FormDescription>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  )
+
+  const quality = (name: 'defaultQuality' | 'maxQuality') => (
+    <FormField
+      control={form.control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>{t(name === 'defaultQuality' && qualityFixed ? 'admin.image-generation.fixedQuality' : `admin.image-generation.${name}`)}</FormLabel>
+          <Select value={field.value} onValueChange={field.onChange}>
+            <FormControl>
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+            </FormControl>
+            <SelectContent>
+              {QUALITIES.map((level) => (
+                <SelectItem key={level} value={level}>
+                  {level === 'auto' ? t(`admin.image-generation.quality-auto-${name}`) : t(`admin.image-generation.quality-${level}`)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <FormDescription>
+            {t(name === 'defaultQuality' && qualityFixed ? 'admin.image-generation.fixedQuality-hint' : `admin.image-generation.${name}-hint`)}
+          </FormDescription>
           <FormMessage />
         </FormItem>
       )}
@@ -247,6 +307,73 @@ function SettingsForm({ settings }: { settings: ImageSettings }) {
               <AlertDescription>{t('admin.image-generation.unpriced-hint')}</AlertDescription>
             </Alert>
           )}
+        </Section>
+
+        <Section title={t('admin.image-generation.quality')} description={t('admin.image-generation.quality-hint')}>
+          <FormField
+            control={form.control}
+            name="qualityFixed"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between gap-4 rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-base">{t('admin.image-generation.qualityFixed')}</FormLabel>
+                  <FormDescription>{t('admin.image-generation.qualityFixed-hint')}</FormDescription>
+                </div>
+                <FormControl>
+                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+          <div className="grid gap-6 sm:grid-cols-2">
+            {quality('defaultQuality')}
+            {!qualityFixed && quality('maxQuality')}
+          </div>
+        </Section>
+
+        <Section title={t('admin.image-generation.complexity')} description={t('admin.image-generation.complexity-hint')}>
+          <FormField
+            control={form.control}
+            name="complexityFixed"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between gap-4 rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-base">{t('admin.image-generation.complexityFixed')}</FormLabel>
+                  <FormDescription>{t('admin.image-generation.complexityFixed-hint')}</FormDescription>
+                </div>
+                <FormControl>
+                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="defaultComplexity"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t(complexityFixed ? 'admin.image-generation.fixedComplexity' : 'admin.image-generation.defaultComplexity')}</FormLabel>
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <FormControl>
+                    <SelectTrigger className="w-48">
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {COMPLEXITIES.map((level) => (
+                      <SelectItem key={level} value={level}>
+                        {t(`admin.image-generation.complexity-${level}`)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormDescription>
+                  {t(complexityFixed ? 'admin.image-generation.fixedComplexity-hint' : 'admin.image-generation.defaultComplexity-hint')}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </Section>
 
         <Section title={t('admin.image-generation.limits')} description={t('admin.image-generation.limits-hint')}>

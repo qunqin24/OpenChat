@@ -1,6 +1,6 @@
 import type { ToolCallPart, ToolResultPart } from '@openchat/api-client'
 import { Download, PenLine } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -9,101 +9,148 @@ import { downloadFile } from '@/hooks/use-library'
 import { cn } from '@/lib/utils'
 import { useImageViewer, type ViewerImage } from '@/stores/image-viewer-store'
 import { usePictureRefs } from '@/stores/picture-ref-store'
-import { imageRequestOf, pictureSrc, picturesOf, placeholderSize, type GeneratedPicture, type ImageRequest } from '@openchat/chat-core/image-tool'
+import { imageRequestOf, pictureSrc, picturesOf, placeholderSize, type GeneratedPicture } from '@openchat/chat-core/image-tool'
 import DevelopingPicture from './DevelopingPicture'
 
 // The pictures an image call made, in the reply itself (design A: frameless,
-// at their own shape, actions on hover), or the placeholders while they are
-// being made (「显影 · 对焦」, DevelopingPicture). A call that made none is
-// a failed step of the activity, not this (MessageItem).
+// at their own shape, actions on hover), and before them the placeholders
+// (「显影 · 对焦」, DevelopingPicture). One card goes from one to the other:
+// the colour field keeps moving under where the picture will be, the picture
+// comes into focus over it once it has loaded, and only then is the field
+// taken away and the 「正在生成图片」 line folded up. A call that made none
+// is a failed step of the activity, not this (MessageItem).
 
 interface Props {
   call: ToolCallPart
   result?: ToolResultPart
-  /** The call is being made now, as opposed to waiting or long finished. */
-  working: boolean
   conversationId?: string
 }
 
-export default function GeneratedImages({ call, result, working, conversationId }: Props) {
+export default function GeneratedImages({ call, result, conversationId }: Props) {
+  const { t } = useTranslation()
   const request = imageRequestOf(call)
   const pictures = picturesOf(result)
-  // Pictures that arrive while the reader watches come into focus as the
-  // placeholder did; ones drawn from history are simply there.
-  // Whether it was first drawn before its result: then the reader is watching.
+  // Whether it was first drawn before its result: then the reader watched
+  // it being made, and the pictures arrive into the placeholders. Drawn from
+  // history, the pictures are simply there.
   const [watched] = useState(() => !result)
+  // How many pictures have come into focus; the line under them goes once
+  // every one has.
+  const [settled, setSettled] = useState(0)
+  const [captionGone, setCaptionGone] = useState(false)
+  const countSettled = useCallback(() => setSettled((n) => n + 1), [])
 
-  if (pictures.length > 0) {
-    return <Pictures pictures={pictures} prompt={request?.prompt ?? ''} fresh={watched} conversationId={conversationId} />
-  }
-  if (result || !request) return null
-  return <Developing request={request} working={working} callId={call.id} />
-}
+  const leaving = pictures.length > 0 && settled >= pictures.length
+  // Gone from the tree once it has folded up (pictures.css: 0.5 s).
+  useEffect(() => {
+    if (!leaving) return
+    const timer = window.setTimeout(() => setCaptionGone(true), 600)
+    return () => window.clearTimeout(timer)
+  }, [leaving])
 
-function Developing({ request, working, callId }: { request: ImageRequest; working: boolean; callId: string }) {
-  const { t } = useTranslation()
-  const { prompt, count } = request
-  // Auto has no size of its own yet: drawn square, labelled with none.
-  const size = placeholderSize(request)
-  const shape = size ?? { width: 1, height: 1 }
-  const seconds = useSeconds(working)
+  if (result && pictures.length === 0) return null
+  if (!request && pictures.length === 0) return null
+
   // Each call starts from a palette of its own, so two side by side differ.
-  const seed = [...callId].reduce((sum, c) => sum + c.charCodeAt(0), 0)
+  const seed = [...call.id].reduce((sum, c) => sum + c.charCodeAt(0), 0)
+  // The shape asked for, so the picture takes its place without a jump; auto
+  // has none yet and is drawn square. The size is not shown.
+  const shape = (request && placeholderSize(request)) ?? { width: 1, height: 1 }
+  const count = pictures.length > 0 ? pictures.length : (request?.count ?? 1)
+  const developing = pictures.length === 0
+  const prompt = request?.prompt ?? ''
+
   return (
-    <figure className="n-pictures-developing" aria-busy="true" aria-label={t('chat.picture.making')}>
+    <figure className="n-pictures-figure" aria-busy={developing} aria-label={developing ? t('chat.picture.making') : undefined}>
       <div className={cn('n-pictures', count > 1 && 'is-grid')}>
         {Array.from({ length: count }, (_, i) => (
-          <div key={i} className="n-picture is-developing" style={{ aspectRatio: `${shape.width} / ${shape.height}` }} data-motion="essential">
-            <DevelopingPicture seed={seed + i * 3} />
-          </div>
+          <Tile
+            // By place, not by picture: the card that was the placeholder
+            // becomes the picture, and its colour field runs on unbroken.
+            key={i}
+            picture={pictures[i]}
+            pictures={pictures}
+            index={i}
+            shape={shape}
+            seed={seed + i * 3}
+            fresh={watched}
+            prompt={prompt}
+            conversationId={conversationId}
+            onSettled={countSettled}
+          />
         ))}
       </div>
-      <figcaption className="n-picture-meta">
-        <span className="n-picture-status">{t('chat.picture.making')}</span>
-        <span className="n-picture-size">
-          {size ? `${size.width} × ${size.height}` : ''}
-          {size && working ? ' · ' : ''}
-          {working ? t('chat.picture.seconds', { count: seconds }) : ''}
-        </span>
-        {prompt && <span className="n-picture-prompt">{prompt}</span>}
-      </figcaption>
+      {watched && !captionGone && (
+        <figcaption
+          className={cn('n-picture-meta', leaving && 'is-leaving')}
+        >
+          <span className="n-picture-status">{t('chat.picture.making')}</span>
+        </figcaption>
+      )}
     </figure>
   )
 }
 
-/** Seconds since the call was first seen being made. */
-function useSeconds(running: boolean) {
-  const [started] = useState(() => Date.now())
-  const [now, setNow] = useState(started)
-  useEffect(() => {
-    if (!running) return
-    const timer = window.setInterval(() => setNow(Date.now()), 1000)
-    return () => window.clearInterval(timer)
-  }, [running])
-  return Math.max(0, Math.floor((now - started) / 1000))
-}
-
-function Pictures({ pictures, prompt, fresh, conversationId }: {
+function Tile({ picture, pictures, index, shape, seed, fresh, prompt, conversationId, onSettled }: {
+  picture?: GeneratedPicture
   pictures: GeneratedPicture[]
-  prompt: string
+  index: number
+  shape: { width: number; height: number }
+  seed: number
   fresh: boolean
+  prompt: string
   conversationId?: string
+  onSettled: () => void
 }) {
   const { t } = useTranslation()
   const open = useImageViewer((s) => s.open)
   const pick = usePictureRefs((s) => s.add)
-  const save = (picture: GeneratedPicture) => void downloadFile(picture.id).catch(() => toast.error(t('library.download-failed')))
-  const gallery: ViewerImage[] = pictures.map((picture) => ({
-    src: pictureSrc(API_BASE_URL, picture.id),
-    title: prompt || picture.handle,
-    download: () => save(picture),
-  }))
+  // The picture has loaded (so it comes into focus), and has finished coming
+  // in (so the field under it can go).
+  const [loaded, setLoaded] = useState(false)
+  const [settled, setSettled] = useState(!fresh)
+
+  const save = (p: GeneratedPicture) => void downloadFile(p.id).catch(() => toast.error(t('library.download-failed')))
+  const ratio = picture ? `${picture.width} / ${picture.height}` : `${shape.width} / ${shape.height}`
+  // In once its transition has run (pictures.css: 1.1 s, 0.25 s with
+  // reduced motion) - timed rather than told by transitionend, which does
+  // not always come.
+  useEffect(() => {
+    if (!loaded || settled) return
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const timer = window.setTimeout(() => {
+      setSettled(true)
+      onSettled()
+    }, still ? 300 : 1150)
+    return () => window.clearTimeout(timer)
+  }, [loaded, settled, onSettled])
+  const gallery = (): ViewerImage[] =>
+    pictures.map((p) => ({
+      src: pictureSrc(API_BASE_URL, p.id),
+      // Not the prompt: that is the model's words for the image model.
+      title: t('chat.picture.viewer-title'),
+      download: () => save(p),
+    }))
+
   return (
-    <div className={cn('n-pictures', pictures.length > 1 && 'is-grid')}>
-      {pictures.map((picture, i) => (
-        <div key={picture.id} className={cn('n-picture', fresh && 'is-fresh')} style={{ aspectRatio: `${picture.width} / ${picture.height}` }}>
-          <button type="button" className="n-picture-open" aria-label={t('chat.picture.open')} onClick={() => open(gallery, i)}>
-            <img src={gallery[i]!.src} alt={prompt} loading="lazy" width={picture.width} height={picture.height} />
+    <div
+      className={cn('n-picture', !settled && 'is-developing', fresh && 'is-arriving', loaded && 'is-loaded')}
+      style={{ aspectRatio: ratio }}
+      data-motion={settled ? undefined : 'essential'}
+    >
+      {!settled && <DevelopingPicture seed={seed} />}
+      {picture && (
+        <>
+          <button type="button" className="n-picture-open" aria-label={t('chat.picture.open')} onClick={() => open(gallery(), index)}>
+            <img
+              src={pictureSrc(API_BASE_URL, picture.id)}
+              alt={prompt}
+              width={picture.width}
+              height={picture.height}
+              onLoad={() => setLoaded(true)}
+              // A picture that will not load is not kept waiting under the field.
+              onError={() => setLoaded(true)}
+            />
           </button>
           <div className="n-picture-actions">
             {conversationId && (
@@ -124,8 +171,8 @@ function Pictures({ pictures, prompt, fresh, conversationId }: {
               <Download aria-hidden="true" />
             </button>
           </div>
-        </div>
-      ))}
+        </>
+      )}
     </div>
   )
 }

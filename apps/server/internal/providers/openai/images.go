@@ -12,6 +12,9 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
+	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -71,7 +74,8 @@ func NewImages(cfg ImageConfig) (*ImageClient, error) {
 
 func (c *ImageClient) Generate(ctx context.Context, req llm.ImageRequest) (llm.ImageResponse, error) {
 	out := llm.ImageResponse{Provider: c.cfg.Provider, ServedModel: req.Model}
-	fields := imageFields(req, c.cfg.SendUser)
+	fields, ignored := imageFields(req, c.cfg.SendUser)
+	out.Ignored = ignored
 
 	var httpReq *http.Request
 	var err error
@@ -214,8 +218,10 @@ func (c *ImageClient) picture(ctx context.Context, item wireImageItem) ([]byte, 
 // imageFields is the request's parameters, by name. Extra goes last, so an
 // operator's per-model setting wins; a null in it removes a field we would
 // otherwise send (a relay that rejects response_format, say).
-func imageFields(req llm.ImageRequest, sendUser bool) map[string]any {
+// The second result names what was asked for that the family does not take.
+func imageFields(req llm.ImageRequest, sendUser bool) (map[string]any, []string) {
 	fields := map[string]any{"model": req.Model, "prompt": req.Prompt, "n": max(req.Count, 1)}
+	var ignored []string
 	id := strings.ToLower(req.Model)
 	exact := req.Width > 0 && req.Height > 0
 	// The shape asked for: the exact size's, else the aspect.
@@ -224,21 +230,43 @@ func imageFields(req llm.ImageRequest, sendUser bool) map[string]any {
 		shape = llm.NearestAspect(req.Width, req.Height, llm.Aspects)
 	}
 	switch {
-	case strings.Contains(id, "gpt-image") || strings.Contains(id, "chatgpt-image"):
+	case gptImage(id):
 		// Always base64; the parameter itself is refused. An exact size goes
 		// as asked - the newer models take any within their limits, and one
 		// that does not says so, for the model to try a shape instead.
 		switch {
 		case exact:
-			fields["size"] = fmt.Sprintf("%dx%d", req.Width, req.Height)
+			width, height := gptImageSize(req.Width, req.Height)
+			fields["size"] = fmt.Sprintf("%dx%d", width, height)
 		case shape == llm.AspectAuto:
 			fields["size"] = "auto"
 		default:
 			fields["size"] = classicSize(shape, "1024x1024", "1536x1024", "1024x1536")
 		}
+		if req.Quality != llm.QualityAuto {
+			fields["quality"] = string(req.Quality)
+		}
+		if req.Transparent {
+			fields["background"] = "transparent"
+			fields["output_format"] = "png"
+		}
+		if req.Complexity != llm.ComplexityAuto && takesComplexity(id) {
+			fields["complexity"] = string(req.Complexity)
+		}
 	case strings.Contains(id, "dall-e-3"):
 		fields["response_format"] = "b64_json"
 		fields["size"] = classicSize(shape, "1024x1024", "1792x1024", "1024x1792")
+		// Two levels only: the upper three are hd.
+		switch req.Quality {
+		case llm.QualityAuto:
+		case llm.QualityHigh, llm.QualityXHigh, llm.QualityMax:
+			fields["quality"] = "hd"
+		default:
+			fields["quality"] = "standard"
+		}
+		if req.Transparent {
+			ignored = append(ignored, "transparent")
+		}
 	case strings.Contains(id, "grok"):
 		// Takes a ratio, not a size.
 		fields["response_format"] = "b64_json"
@@ -264,8 +292,23 @@ func imageFields(req llm.ImageRequest, sendUser bool) map[string]any {
 			fields["size"] = classicSize(shape, "1024x1024", "1536x1024", "1024x1536")
 		}
 	}
+	if _, sent := fields["quality"]; req.Quality != llm.QualityAuto && !sent {
+		ignored = append(ignored, "quality")
+	}
+	if _, sent := fields["background"]; req.Transparent && !sent && !slices.Contains(ignored, "transparent") {
+		ignored = append(ignored, "transparent")
+	}
+	if _, sent := fields["complexity"]; req.Complexity != llm.ComplexityAuto && !sent {
+		ignored = append(ignored, "complexity")
+	}
 	if sendUser && req.User != "" {
-		fields["user"] = req.User
+		// OpenAI's images API takes the end user as safety_identifier now
+		// (user is deprecated there); other services know only user.
+		if gptImage(id) {
+			fields["safety_identifier"] = req.User
+		} else {
+			fields["user"] = req.User
+		}
 	}
 	for name, value := range req.Extra {
 		if value == nil {
@@ -274,7 +317,69 @@ func imageFields(req llm.ImageRequest, sendUser bool) map[string]any {
 		}
 		fields[name] = value
 	}
-	return fields
+	return fields, ignored
+}
+
+// gptImage says the model is OpenAI's gpt-image family.
+func gptImage(id string) bool {
+	return strings.Contains(id, "gpt-image") || strings.Contains(id, "chatgpt-image")
+}
+
+var gptImageVersion = regexp.MustCompile(`gpt-image-(\d+)(?:\.(\d+))?`)
+
+// takesComplexity says a gpt-image model plans with a complexity: 2.6 and
+// later. An id without a version (chatgpt-image-latest) is not assumed to.
+func takesComplexity(id string) bool {
+	match := gptImageVersion.FindStringSubmatch(id)
+	if match == nil {
+		return false
+	}
+	major, _ := strconv.Atoi(match[1])
+	minor, _ := strconv.Atoi(match[2])
+	return major > 2 || (major == 2 && minor >= 6)
+}
+
+// gpt-image's bounds on a size: sides multiples of 16, none over 3840, the
+// long side at most three times the short, and between 655,360 and 8,294,400
+// pixels in all. A size outside them is brought inside at its own shape, as
+// close as it can be; the result tells the model what was made.
+const (
+	gptImageMaxSide   = 3840
+	gptImageMaxRatio  = 3.0
+	gptImageMinPixels = 655360
+	gptImageMaxPixels = 8294400
+)
+
+func gptImageSize(width, height int) (int, int) {
+	w, h := float64(width), float64(height)
+	if w >= h && w > h*gptImageMaxRatio {
+		h = w / gptImageMaxRatio
+	} else if h > w && h > w*gptImageMaxRatio {
+		w = h / gptImageMaxRatio
+	}
+	if side := math.Max(w, h); side > gptImageMaxSide {
+		w, h = w*gptImageMaxSide/side, h*gptImageMaxSide/side
+	}
+	if pixels := w * h; pixels > gptImageMaxPixels {
+		k := math.Sqrt(gptImageMaxPixels / pixels)
+		w, h = w*k, h*k
+	} else if pixels < gptImageMinPixels {
+		k := math.Sqrt(gptImageMinPixels / pixels)
+		w, h = w*k, h*k
+	}
+	snap := func(v float64, up bool) int {
+		if up {
+			return int(math.Ceil(v/16)) * 16
+		}
+		return int(math.Round(v/16)) * 16
+	}
+	// Rounded to the nearest multiple, unless that would fall below the
+	// fewest pixels; and never past the longest side.
+	sw, sh := snap(w, false), snap(h, false)
+	if sw*sh < gptImageMinPixels {
+		sw, sh = snap(w, true), snap(h, true)
+	}
+	return min(sw, gptImageMaxSide), min(sh, gptImageMaxSide)
 }
 
 // classicSize is the size of a model with three: square, landscape, portrait.

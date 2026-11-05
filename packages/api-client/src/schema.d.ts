@@ -5665,6 +5665,23 @@ export interface components {
              *     Administrators have no daily limit.
              */
             daily: number;
+            /** @description The quality a call that names none is made at; `auto` is the provider's default. */
+            defaultQuality: components["schemas"]["ImageQuality"];
+            /** @description The highest quality a call may ask for; `auto` is no cap. */
+            maxQuality: components["schemas"]["ImageQuality"];
+            /**
+             * @description Every picture is made at `defaultQuality`, and the model is not
+             *     offered a quality to choose (`maxQuality` does not apply). Takes
+             *     effect for the runs that start after it.
+             */
+            qualityFixed: boolean;
+            /** @description How much a call that names none plans before drawing; `auto` is the provider's default (high). */
+            defaultComplexity: components["schemas"]["ImageComplexity"];
+            /**
+             * @description Every picture is planned at `defaultComplexity`, and the model is
+             *     not offered a complexity to choose. For the runs that start after it.
+             */
+            complexityFixed: boolean;
             /**
              * @description Whether the chosen model has a price (per picture, or per token in
              *     the catalogue). Without one its pictures cost nothing in the logs
@@ -5679,7 +5696,25 @@ export interface components {
             maxPerCall?: number;
             maxPerRun?: number;
             daily?: number;
+            defaultQuality?: components["schemas"]["ImageQuality"];
+            maxQuality?: components["schemas"]["ImageQuality"];
+            qualityFixed?: boolean;
+            defaultComplexity?: components["schemas"]["ImageComplexity"];
+            complexityFixed?: boolean;
         };
+        /**
+         * @description How carefully a picture is made, for the models that take it (gpt-image;
+         *     dall-e-3 takes the upper three as hd). `auto` is the provider's default.
+         * @enum {string}
+         */
+        ImageQuality: "auto" | "low" | "medium" | "high" | "xhigh" | "max";
+        /**
+         * @description How much the image model plans before it draws, for the models that take
+         *     it (gpt-image 2.6 on): low for a focused edit, high for dense text and
+         *     busy layouts. `auto` is the provider's default. No separate fee.
+         * @enum {string}
+         */
+        ImageComplexity: "auto" | "low" | "medium" | "high";
         ImageGenerationTestRequest: {
             prompt: string;
         };

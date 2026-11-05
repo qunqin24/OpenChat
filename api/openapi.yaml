@@ -6750,7 +6750,7 @@ components:
 
     ImageGenerationSettings:
       type: object
-      required: [enabled, model, maxPerCall, maxPerRun, daily, modelPriced]
+      required: [enabled, model, maxPerCall, maxPerRun, daily, defaultQuality, maxQuality, qualityFixed, defaultComplexity, complexityFixed, modelPriced]
       properties:
         enabled:
           type: boolean
@@ -6768,6 +6768,26 @@ components:
             Pictures a person may make a day (0 is no limit), unless their own
             allowance says otherwise (`UpdateUserRequest.imageDaily`).
             Administrators have no daily limit.
+        defaultQuality:
+          allOf: [{ $ref: "#/components/schemas/ImageQuality" }]
+          description: The quality a call that names none is made at; `auto` is the provider's default.
+        maxQuality:
+          allOf: [{ $ref: "#/components/schemas/ImageQuality" }]
+          description: The highest quality a call may ask for; `auto` is no cap.
+        qualityFixed:
+          type: boolean
+          description: |
+            Every picture is made at `defaultQuality`, and the model is not
+            offered a quality to choose (`maxQuality` does not apply). Takes
+            effect for the runs that start after it.
+        defaultComplexity:
+          allOf: [{ $ref: "#/components/schemas/ImageComplexity" }]
+          description: How much a call that names none plans before drawing; `auto` is the provider's default (high).
+        complexityFixed:
+          type: boolean
+          description: |
+            Every picture is planned at `defaultComplexity`, and the model is
+            not offered a complexity to choose. For the runs that start after it.
         modelPriced:
           type: boolean
           description: |
@@ -6784,6 +6804,26 @@ components:
         maxPerCall: { type: integer }
         maxPerRun: { type: integer }
         daily: { type: integer }
+        defaultQuality: { $ref: "#/components/schemas/ImageQuality" }
+        maxQuality: { $ref: "#/components/schemas/ImageQuality" }
+        qualityFixed: { type: boolean }
+        defaultComplexity: { $ref: "#/components/schemas/ImageComplexity" }
+        complexityFixed: { type: boolean }
+
+    ImageQuality:
+      type: string
+      description: |
+        How carefully a picture is made, for the models that take it (gpt-image;
+        dall-e-3 takes the upper three as hd). `auto` is the provider's default.
+      enum: [auto, low, medium, high, xhigh, max]
+
+    ImageComplexity:
+      type: string
+      description: |
+        How much the image model plans before it draws, for the models that take
+        it (gpt-image 2.6 on): low for a focused edit, high for dense text and
+        busy layouts. `auto` is the provider's default. No separate fee.
+      enum: [auto, low, medium, high]
 
     ImageGenerationTestRequest:
       type: object

@@ -603,6 +603,60 @@ func (e HealthStatus) Valid() bool {
 	}
 }
 
+// Defines values for ImageComplexity.
+const (
+	ImageComplexityAuto   ImageComplexity = "auto"
+	ImageComplexityHigh   ImageComplexity = "high"
+	ImageComplexityLow    ImageComplexity = "low"
+	ImageComplexityMedium ImageComplexity = "medium"
+)
+
+// Valid indicates whether the value is a known member of the ImageComplexity enum.
+func (e ImageComplexity) Valid() bool {
+	switch e {
+	case ImageComplexityAuto:
+		return true
+	case ImageComplexityHigh:
+		return true
+	case ImageComplexityLow:
+		return true
+	case ImageComplexityMedium:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImageQuality.
+const (
+	ImageQualityAuto   ImageQuality = "auto"
+	ImageQualityHigh   ImageQuality = "high"
+	ImageQualityLow    ImageQuality = "low"
+	ImageQualityMax    ImageQuality = "max"
+	ImageQualityMedium ImageQuality = "medium"
+	ImageQualityXhigh  ImageQuality = "xhigh"
+)
+
+// Valid indicates whether the value is a known member of the ImageQuality enum.
+func (e ImageQuality) Valid() bool {
+	switch e {
+	case ImageQualityAuto:
+		return true
+	case ImageQualityHigh:
+		return true
+	case ImageQualityLow:
+		return true
+	case ImageQualityMax:
+		return true
+	case ImageQualityMedium:
+		return true
+	case ImageQualityXhigh:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ImageSearchProvider.
 const (
 	Bing      ImageSearchProvider = "bing"
@@ -3294,12 +3348,27 @@ type Health struct {
 // HealthStatus defines model for Health.Status.
 type HealthStatus string
 
+// ImageComplexity How much the image model plans before it draws, for the models that take
+// it (gpt-image 2.6 on): low for a focused edit, high for dense text and
+// busy layouts. `auto` is the provider's default. No separate fee.
+type ImageComplexity string
+
 // ImageGenerationSettings defines model for ImageGenerationSettings.
 type ImageGenerationSettings struct {
+	// ComplexityFixed Every picture is planned at `defaultComplexity`, and the model is
+	// not offered a complexity to choose. For the runs that start after it.
+	ComplexityFixed bool `json:"complexityFixed"`
+
 	// Daily Pictures a person may make a day (0 is no limit), unless their own
 	// allowance says otherwise (`UpdateUserRequest.imageDaily`).
 	// Administrators have no daily limit.
 	Daily int `json:"daily"`
+
+	// DefaultComplexity How much a call that names none plans before drawing; `auto` is the provider's default (high).
+	DefaultComplexity ImageComplexity `json:"defaultComplexity"`
+
+	// DefaultQuality The quality a call that names none is made at; `auto` is the provider's default.
+	DefaultQuality ImageQuality `json:"defaultQuality"`
 
 	// Enabled Whether models may make pictures, in everyone's conversations
 	// (scheduled tasks' included; sub-agents' and deep research's not).
@@ -3311,6 +3380,9 @@ type ImageGenerationSettings struct {
 	// MaxPerRun Pictures one answer may make
 	MaxPerRun int `json:"maxPerRun"`
 
+	// MaxQuality The highest quality a call may ask for; `auto` is no cap.
+	MaxQuality ImageQuality `json:"maxQuality"`
+
 	// Model The image model the pictures are made with; empty when none is chosen.
 	Model string `json:"model"`
 
@@ -3318,6 +3390,11 @@ type ImageGenerationSettings struct {
 	// the catalogue). Without one its pictures cost nothing in the logs
 	// and a spending cap never trips.
 	ModelPriced bool `json:"modelPriced"`
+
+	// QualityFixed Every picture is made at `defaultQuality`, and the model is not
+	// offered a quality to choose (`maxQuality` does not apply). Takes
+	// effect for the runs that start after it.
+	QualityFixed bool `json:"qualityFixed"`
 }
 
 // ImageGenerationTestRequest defines model for ImageGenerationTestRequest.
@@ -3340,6 +3417,10 @@ type ImageGenerationTestResult struct {
 	Ok    bool    `json:"ok"`
 	Width *int    `json:"width,omitempty"`
 }
+
+// ImageQuality How carefully a picture is made, for the models that take it (gpt-image;
+// dall-e-3 takes the upper three as hd). `auto` is the provider's default.
+type ImageQuality string
 
 // ImageSearchHit defines model for ImageSearchHit.
 type ImageSearchHit struct {
@@ -5043,11 +5124,26 @@ type UpdateDocumentRequest struct {
 
 // UpdateImageGenerationSettingsRequest Only the fields present are changed.
 type UpdateImageGenerationSettingsRequest struct {
-	Daily      *int    `json:"daily,omitempty"`
-	Enabled    *bool   `json:"enabled,omitempty"`
-	MaxPerCall *int    `json:"maxPerCall,omitempty"`
-	MaxPerRun  *int    `json:"maxPerRun,omitempty"`
-	Model      *string `json:"model,omitempty"`
+	ComplexityFixed *bool `json:"complexityFixed,omitempty"`
+	Daily           *int  `json:"daily,omitempty"`
+
+	// DefaultComplexity How much the image model plans before it draws, for the models that take
+	// it (gpt-image 2.6 on): low for a focused edit, high for dense text and
+	// busy layouts. `auto` is the provider's default. No separate fee.
+	DefaultComplexity *ImageComplexity `json:"defaultComplexity,omitempty"`
+
+	// DefaultQuality How carefully a picture is made, for the models that take it (gpt-image;
+	// dall-e-3 takes the upper three as hd). `auto` is the provider's default.
+	DefaultQuality *ImageQuality `json:"defaultQuality,omitempty"`
+	Enabled        *bool         `json:"enabled,omitempty"`
+	MaxPerCall     *int          `json:"maxPerCall,omitempty"`
+	MaxPerRun      *int          `json:"maxPerRun,omitempty"`
+
+	// MaxQuality How carefully a picture is made, for the models that take it (gpt-image;
+	// dall-e-3 takes the upper three as hd). `auto` is the provider's default.
+	MaxQuality   *ImageQuality `json:"maxQuality,omitempty"`
+	Model        *string       `json:"model,omitempty"`
+	QualityFixed *bool         `json:"qualityFixed,omitempty"`
 }
 
 // UpdateImageSearchSettingsRequest Only the fields present are changed.

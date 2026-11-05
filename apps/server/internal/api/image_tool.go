@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -76,39 +77,58 @@ func (s *Server) ImageTools(ctx context.Context) []agent.Tool {
 	if !ok || scope.Subagent() || scope.Research {
 		return nil
 	}
+	// The tool as the run was first offered it, quality choice included: a
+	// definition that changed mid-run would invalidate the model's thinking.
 	if decided, ok := scope.State.Load(imageOfferedKey{}); ok {
-		if decided.(bool) {
-			return []agent.Tool{imageTool{s: s}}
+		if tool, ok := decided.(imageTool); ok {
+			return []agent.Tool{tool}
 		}
 		return nil
 	}
 	user, err := s.q.GetUser(ctx, scope.UserID)
-	offered := err == nil && s.imageGenerationFor(ctx, user)
-	scope.State.Store(imageOfferedKey{}, offered)
-	if !offered {
+	if err != nil || !s.imageGenerationFor(ctx, user) {
+		scope.State.Store(imageOfferedKey{}, false)
 		return nil
 	}
-	return []agent.Tool{imageTool{s: s}}
+	config, err := loadImageConfig(ctx, s.q)
+	if err != nil {
+		scope.State.Store(imageOfferedKey{}, false)
+		return nil
+	}
+	tool := imageTool{s: s, fixedQuality: config.QualityFixed, fixedComplexity: config.ComplexityFixed}
+	scope.State.Store(imageOfferedKey{}, tool)
+	return []agent.Tool{tool}
 }
 
-type imageTool struct{ s *Server }
+type imageTool struct {
+	s *Server
+	// fixedQuality, fixedComplexity: the administrator fixed them, so the
+	// model is not offered a choice of them.
+	fixedQuality    bool
+	fixedComplexity bool
+}
 
 type imageToolArgs struct {
-	Prompt string   `json:"prompt"`
-	Aspect string   `json:"aspect"`
-	Size   string   `json:"size"`
-	Count  int      `json:"count"`
-	Images []string `json:"images"`
+	Prompt     string   `json:"prompt"`
+	Aspect     string   `json:"aspect"`
+	Size       string   `json:"size"`
+	Quality    string   `json:"quality"`
+	Complexity string   `json:"complexity"`
+	Background string   `json:"background"`
+	Count      int      `json:"count"`
+	Images     []string `json:"images"`
 }
 
 // ImageToolDetails is what the page shows of a call: the pictures, by id,
 // and what was asked. Never read by a model.
 type ImageToolDetails struct {
-	Prompt string             `json:"prompt"`
-	Aspect string             `json:"aspect"`
-	Size   string             `json:"size,omitempty"`
-	Model  string             `json:"model,omitempty"`
-	Images []ImageToolPicture `json:"images"`
+	Prompt string `json:"prompt"`
+	Aspect string `json:"aspect"`
+	Size   string `json:"size,omitempty"`
+	// Quality is the level asked of the model, after the administrator's cap.
+	Quality string             `json:"quality,omitempty"`
+	Model   string             `json:"model,omitempty"`
+	Images  []ImageToolPicture `json:"images"`
 }
 
 type ImageToolPicture struct {
@@ -128,7 +148,22 @@ type imageProgress struct {
 	Prompt string `json:"prompt"`
 }
 
-func (imageTool) Definition() llm.Tool {
+func (t imageTool) Definition() llm.Tool {
+	qualityWords := " Set quality only when the user asks for a higher or lower one (high for a detailed or final " +
+		"picture, low for a quick draft); otherwise leave it for the site's default."
+	qualityParam := `
+    "quality": {"type": "string", "enum": ["auto", "low", "medium", "high", "xhigh", "max"], "description": "How carefully it is made; higher is slower and costs more. Default: the site's."},`
+	if t.fixedQuality {
+		qualityWords, qualityParam = "", ""
+	}
+	complexityWords := " Set complexity to how much the picture needs planning: low for a focused edit (a new " +
+		"background, a changed sign), high for dense text, busy layouts or many related objects; otherwise " +
+		"leave it for the site's default. Higher is slower and can change more than asked."
+	complexityParam := `
+    "complexity": {"type": "string", "enum": ["auto", "low", "medium", "high"], "description": "How much the image model plans before drawing. Default: the site's."},`
+	if t.fixedComplexity {
+		complexityWords, complexityParam = "", ""
+	}
 	return llm.Tool{
 		Name: toolImageGenerate,
 		Description: "Make pictures, or change pictures already in this conversation, with an image model. " +
@@ -142,13 +177,15 @@ func (imageTool) Definition() llm.Tool {
 			"images or links, and do not describe each one at length. Give the shape with aspect; when the user " +
 			"asks for a resolution or exact pixel size (1920x1080, 4K, a 512x512 avatar), put it in size as " +
 			"WIDTHxHEIGHT and the image model is asked for it - some models make only certain sizes and may refuse " +
-			"or round it; the result says what was actually made.",
+			"or round it; the result says what was actually made." + qualityWords + complexityWords + " Set background to " +
+			"transparent only for a picture meant to go on something else (a logo, an icon, a sticker).",
 		Parameters: json.RawMessage(`{
   "type": "object",
   "properties": {
     "prompt": {"type": "string", "description": "The whole picture, described in full."},
     "aspect": {"type": "string", "enum": ["auto", "1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "21:9"], "description": "The shape, width:height. Default auto."},
-    "size": {"type": "string", "description": "An exact size in pixels, WIDTHxHEIGHT (each side 256 to 4096), only when the user asks for a resolution or size. Overrides aspect."},
+    "size": {"type": "string", "description": "An exact size in pixels, WIDTHxHEIGHT (each side 256 to 4096), only when the user asks for a resolution or size. Overrides aspect."},` + qualityParam + complexityParam + `
+    "background": {"type": "string", "enum": ["auto", "transparent"], "description": "transparent for a picture without a background, as a PNG."},
     "count": {"type": "integer", "minimum": 1, "description": "How many pictures. Default 1; ask for more only when the user wants options."},
     "images": {"type": "array", "items": {"type": "string"}, "description": "Ids of pictures in this conversation to edit or combine."}
   },
@@ -203,6 +240,27 @@ func (t imageTool) Execute(ctx context.Context, raw json.RawMessage) (agent.Tool
 		}
 		aspect = llm.NearestAspect(width, height, llm.Aspects)
 	}
+	asked, ok := llm.ParseQuality(args.Quality)
+	if !ok {
+		return agent.ToolResult{}, agent.Errorf("invalid arguments: quality is one of auto, low, medium, high, xhigh, max")
+	}
+	// Fixed by the administrator (when the run began, or since): the site's
+	// quality, whatever was asked.
+	if asked == llm.QualityAuto || t.fixedQuality || config.QualityFixed {
+		asked = config.DefaultQuality
+	}
+	quality := asked
+	if !config.QualityFixed {
+		quality = asked.Capped(config.MaxQuality)
+	}
+	complexity, ok := llm.ParseComplexity(args.Complexity)
+	if !ok {
+		return agent.ToolResult{}, agent.Errorf("invalid arguments: complexity is one of auto, low, medium, high")
+	}
+	if complexity == llm.ComplexityAuto || t.fixedComplexity || config.ComplexityFixed {
+		complexity = config.DefaultComplexity
+	}
+	transparent := strings.EqualFold(strings.TrimSpace(args.Background), "transparent")
 	sizeText := ""
 	if width > 0 {
 		sizeText = fmt.Sprintf("%dx%d", width, height)
@@ -275,7 +333,8 @@ func (t imageTool) Execute(ctx context.Context, raw json.RawMessage) (agent.Tool
 	runID := scope.RunID
 	result, err := s.makePictures(ctx, pictureJob{
 		user: user, modelID: config.Model, who: asker{staff: admin, admin: admin},
-		req:   llm.ImageRequest{Prompt: prompt, Count: count, Aspect: aspect, Width: width, Height: height, Images: sources},
+		req: llm.ImageRequest{Prompt: prompt, Count: count, Aspect: aspect, Width: width, Height: height, Images: sources,
+			Quality: quality, Transparent: transparent, Complexity: complexity},
 		runID: &runID, conversationID: &conversationID,
 	})
 	if err != nil {
@@ -297,7 +356,7 @@ func (t imageTool) Execute(ctx context.Context, raw json.RawMessage) (agent.Tool
 	kept = true
 	s.finishImageRequest(ctx, requestID, "done", len(pictures))
 
-	details := ImageToolDetails{Prompt: prompt, Aspect: string(aspect), Size: sizeText, Model: result.model, Images: pictures}
+	details := ImageToolDetails{Prompt: prompt, Aspect: string(aspect), Size: sizeText, Quality: string(quality), Model: result.model, Images: pictures}
 	ids := make([]uuid.UUID, 0, len(pictures))
 	var b strings.Builder
 	fmt.Fprintf(&b, "Made %d picture%s, shown to the user above your reply:", len(pictures), plural(len(pictures)))
@@ -308,6 +367,18 @@ func (t imageTool) Execute(ctx context.Context, raw json.RawMessage) (agent.Tool
 	b.WriteString(". Do not repeat them as Markdown or links. To change one, call image_generate again with its id in images and a full prompt.")
 	if width > 0 && len(pictures) > 0 && (pictures[0].Width != width || pictures[0].Height != height) {
 		fmt.Fprintf(&b, " The image model made %d×%d rather than the %d×%d asked for; tell the user.", pictures[0].Width, pictures[0].Height, width, height)
+	}
+	if quality != asked {
+		fmt.Fprintf(&b, " The site allows quality up to %s, so it was made at %s.", quality, quality)
+	}
+	if slices.Contains(result.ignored, "quality") && quality != llm.QualityAuto {
+		b.WriteString(" This image model has no quality setting, so the quality was not applied.")
+	}
+	if slices.Contains(result.ignored, "complexity") && complexity != llm.ComplexityAuto {
+		b.WriteString(" This image model has no complexity setting, so it was not applied.")
+	}
+	if slices.Contains(result.ignored, "transparent") {
+		b.WriteString(" This image model cannot leave the background transparent, so the picture has one.")
 	}
 	if len(pictures) < count {
 		fmt.Fprintf(&b, " (%d of the %d asked for were made.)", len(pictures), count)
