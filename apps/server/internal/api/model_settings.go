@@ -189,7 +189,7 @@ func servedDefaults(row sqlc.ListServedModelsRow) catalog.Defaults {
 		return catalog.UnknownDefaults(row.ModelID)
 	}
 	return catalog.Defaults{
-		Kind:            catalog.DefaultKind(row.ModelID, row.OutputModalities),
+		Kind:            catalog.DefaultKind(row.ModelID, row.OutputModalities, row.ModelType),
 		Reasoning:       row.Reasoning,
 		ToolCall:        row.ToolCall,
 		InputModalities: row.InputModalities,
@@ -208,7 +208,7 @@ func loadModelSettings(ctx context.Context, q *sqlc.Queries, modelID string) (ca
 	switch {
 	case err == nil:
 		defaults = catalog.Defaults{
-			Kind:            catalog.DefaultKind(modelID, profile.OutputModalities),
+			Kind:            catalog.DefaultKind(modelID, profile.OutputModalities, profile.ModelType),
 			Reasoning:       profile.Reasoning,
 			ToolCall:        profile.ToolCall,
 			InputModalities: profile.InputModalities,

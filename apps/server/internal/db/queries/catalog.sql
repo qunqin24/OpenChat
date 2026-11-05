@@ -113,7 +113,10 @@ SELECT coalesce(m.provider_id, '')::text                            AS provider_
        coalesce(s.enabled, false)::boolean                          AS enabled,
        -- How the model's thinking is controlled, verbatim from models.dev;
        -- catalog.ParseReasoningOptions reads it.
-       coalesce(m.reasoning_options, '[]'::jsonb)::jsonb            AS reasoning_options
+       coalesce(m.reasoning_options, '[]'::jsonb)::jsonb            AS reasoning_options,
+       -- models.dev's own word for what the model is (`image` for the image
+       -- models); catalog.DefaultKind reads it before the outputs.
+       coalesce(m.model_type, '')::text                             AS model_type
 FROM served s
          -- One catalogue row at most, chosen rather than joined: the same model
          -- id appears under several providers, and joining them all would
@@ -138,6 +141,7 @@ FROM served s
                                    c2.input_modalities,
                                    c2.output_modalities,
                                    c2.raw -> 'reasoning_options' AS reasoning_options,
+                                   c2.raw ->> 'type' AS model_type,
                                    p.name AS provider_name
                             FROM catalog_models c2
                                      JOIN catalog_providers p ON p.id = c2.provider_id
@@ -261,7 +265,8 @@ SELECT coalesce(m.raw -> 'reasoning_options', '[]'::jsonb)::jsonb AS reasoning_o
        m.reasoning,
        m.tool_call,
        m.input_modalities,
-       m.output_modalities
+       m.output_modalities,
+       coalesce(m.raw ->> 'type', '')::text AS model_type
 FROM catalog_models m
 WHERE m.model_id = sqlc.arg('model_id')
 ORDER BY (m.provider_id IN (SELECT c.type::text

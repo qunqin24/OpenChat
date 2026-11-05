@@ -39,7 +39,7 @@ func (q *Queries) AttachToMessage(ctx context.Context, arg AttachToMessageParams
 const createAttachment = `-- name: CreateAttachment :one
 INSERT INTO attachments (user_id, storage_key, filename, content_type, size_bytes)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, message_id, storage_key, filename, content_type, size_bytes, created_at, user_id
+RETURNING id, message_id, storage_key, filename, content_type, size_bytes, created_at, user_id, origin, run_id, sha256, width, height
 `
 
 type CreateAttachmentParams struct {
@@ -68,6 +68,11 @@ func (q *Queries) CreateAttachment(ctx context.Context, arg CreateAttachmentPara
 		&i.SizeBytes,
 		&i.CreatedAt,
 		&i.UserID,
+		&i.Origin,
+		&i.RunID,
+		&i.Sha256,
+		&i.Width,
+		&i.Height,
 	)
 	return i, err
 }
@@ -112,7 +117,7 @@ func (q *Queries) DeleteLibraryFile(ctx context.Context, arg DeleteLibraryFilePa
 }
 
 const getAttachmentByStorageKey = `-- name: GetAttachmentByStorageKey :one
-SELECT id, message_id, storage_key, filename, content_type, size_bytes, created_at, user_id
+SELECT id, message_id, storage_key, filename, content_type, size_bytes, created_at, user_id, origin, run_id, sha256, width, height
 FROM attachments
 WHERE storage_key = $1
 `
@@ -131,12 +136,17 @@ func (q *Queries) GetAttachmentByStorageKey(ctx context.Context, storageKey stri
 		&i.SizeBytes,
 		&i.CreatedAt,
 		&i.UserID,
+		&i.Origin,
+		&i.RunID,
+		&i.Sha256,
+		&i.Width,
+		&i.Height,
 	)
 	return i, err
 }
 
 const getLibraryFile = `-- name: GetLibraryFile :one
-SELECT a.id, a.message_id, a.storage_key, a.filename, a.content_type, a.size_bytes, a.created_at, a.user_id
+SELECT a.id, a.message_id, a.storage_key, a.filename, a.content_type, a.size_bytes, a.created_at, a.user_id, a.origin, a.run_id, a.sha256, a.width, a.height
 FROM attachments a
          JOIN messages m ON m.id = a.message_id
          JOIN conversations c ON c.id = m.conversation_id
@@ -165,12 +175,17 @@ func (q *Queries) GetLibraryFile(ctx context.Context, arg GetLibraryFileParams) 
 		&i.SizeBytes,
 		&i.CreatedAt,
 		&i.UserID,
+		&i.Origin,
+		&i.RunID,
+		&i.Sha256,
+		&i.Width,
+		&i.Height,
 	)
 	return i, err
 }
 
 const listAttachmentsByMessages = `-- name: ListAttachmentsByMessages :many
-SELECT id, message_id, storage_key, filename, content_type, size_bytes, created_at, user_id
+SELECT id, message_id, storage_key, filename, content_type, size_bytes, created_at, user_id, origin, run_id, sha256, width, height
 FROM attachments
 WHERE message_id = ANY ($1::uuid[])
 ORDER BY created_at, id
@@ -194,6 +209,11 @@ func (q *Queries) ListAttachmentsByMessages(ctx context.Context, messageIds []uu
 			&i.SizeBytes,
 			&i.CreatedAt,
 			&i.UserID,
+			&i.Origin,
+			&i.RunID,
+			&i.Sha256,
+			&i.Width,
+			&i.Height,
 		); err != nil {
 			return nil, err
 		}
@@ -206,7 +226,7 @@ func (q *Queries) ListAttachmentsByMessages(ctx context.Context, messageIds []uu
 }
 
 const listAttachmentsForUser = `-- name: ListAttachmentsForUser :many
-SELECT id, message_id, storage_key, filename, content_type, size_bytes, created_at, user_id
+SELECT id, message_id, storage_key, filename, content_type, size_bytes, created_at, user_id, origin, run_id, sha256, width, height
 FROM attachments
 WHERE id = ANY ($1::uuid[])
   AND user_id = $2
@@ -237,6 +257,11 @@ func (q *Queries) ListAttachmentsForUser(ctx context.Context, arg ListAttachment
 			&i.SizeBytes,
 			&i.CreatedAt,
 			&i.UserID,
+			&i.Origin,
+			&i.RunID,
+			&i.Sha256,
+			&i.Width,
+			&i.Height,
 		); err != nil {
 			return nil, err
 		}
@@ -308,7 +333,7 @@ func (q *Queries) ListConversationTextFileMessages(ctx context.Context, conversa
 }
 
 const listLibraryFiles = `-- name: ListLibraryFiles :many
-SELECT a.id, a.message_id, a.storage_key, a.filename, a.content_type, a.size_bytes, a.created_at, a.user_id,
+SELECT a.id, a.message_id, a.storage_key, a.filename, a.content_type, a.size_bytes, a.created_at, a.user_id, a.origin, a.run_id, a.sha256, a.width, a.height,
        c.id    AS conversation_id,
        c.title AS conversation_title
 FROM attachments a
@@ -344,6 +369,11 @@ type ListLibraryFilesRow struct {
 	SizeBytes         int64              `json:"size_bytes"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UserID            *uuid.UUID         `json:"user_id"`
+	Origin            *string            `json:"origin"`
+	RunID             *uuid.UUID         `json:"run_id"`
+	Sha256            *string            `json:"sha256"`
+	Width             *int32             `json:"width"`
+	Height            *int32             `json:"height"`
 	ConversationID    uuid.UUID          `json:"conversation_id"`
 	ConversationTitle string             `json:"conversation_title"`
 }
@@ -377,6 +407,11 @@ func (q *Queries) ListLibraryFiles(ctx context.Context, arg ListLibraryFilesPara
 			&i.SizeBytes,
 			&i.CreatedAt,
 			&i.UserID,
+			&i.Origin,
+			&i.RunID,
+			&i.Sha256,
+			&i.Width,
+			&i.Height,
 			&i.ConversationID,
 			&i.ConversationTitle,
 		); err != nil {
@@ -391,7 +426,7 @@ func (q *Queries) ListLibraryFiles(ctx context.Context, arg ListLibraryFilesPara
 }
 
 const listPendingAttachments = `-- name: ListPendingAttachments :many
-SELECT id, message_id, storage_key, filename, content_type, size_bytes, created_at, user_id
+SELECT id, message_id, storage_key, filename, content_type, size_bytes, created_at, user_id, origin, run_id, sha256, width, height
 FROM attachments
 WHERE id = ANY ($1::uuid[])
   AND user_id = $2
@@ -423,6 +458,11 @@ func (q *Queries) ListPendingAttachments(ctx context.Context, arg ListPendingAtt
 			&i.SizeBytes,
 			&i.CreatedAt,
 			&i.UserID,
+			&i.Origin,
+			&i.RunID,
+			&i.Sha256,
+			&i.Width,
+			&i.Height,
 		); err != nil {
 			return nil, err
 		}

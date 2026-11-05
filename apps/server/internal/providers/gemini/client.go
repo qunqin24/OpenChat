@@ -140,6 +140,12 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, emit func(llm.Even
 // string because that is where this API takes it, which is why the result is
 // never allowed to appear in an error.
 func (c *Client) endpoint(model string) (string, error) {
+	return c.endpointFor(model, streamMethod, true)
+}
+
+// endpointFor is endpoint for any method: the image adapter asks the plain
+// generateContent, which answers in one JSON object rather than in events.
+func (c *Client) endpointFor(model, method string, sse bool) (string, error) {
 	resource := strings.TrimSpace(model)
 	if resource == "" {
 		return "", llm.Errorf(llm.ErrorProvider, nil, "gemini: the request names no model")
@@ -151,10 +157,12 @@ func (c *Client) endpoint(model string) (string, error) {
 	}
 
 	u := *c.base
-	u.Path = strings.TrimSuffix(u.Path, "/") + "/" + resource + streamMethod
+	u.Path = strings.TrimSuffix(u.Path, "/") + "/" + resource + method
 
 	query := u.Query()
-	query.Set("alt", "sse")
+	if sse {
+		query.Set("alt", "sse")
+	}
 	if c.cfg.APIKey != "" {
 		query.Set("key", c.cfg.APIKey)
 	}

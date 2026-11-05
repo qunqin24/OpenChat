@@ -18,16 +18,24 @@ const (
 	KindRerank    Kind = "rerank"
 )
 
-// DefaultKind reads a model's kind from what the catalogue says it outputs,
-// and failing that from its id: models.dev lists few embedding or rerank
-// models, and a relay's own list says nothing but the id.
-func DefaultKind(modelID string, outputModalities []string) Kind {
+// DefaultKind reads a model's kind from what the catalogue says it is, then
+// from what it outputs, and failing that from its id: models.dev lists few
+// embedding or rerank models, and a relay's own list says nothing but the id.
+//
+// modelType is the entry's own `type`. models.dev marks image models with it
+// even where their outputs read {text, image} (gpt-image-1.5, the Gemini
+// *-image models): read by outputs alone they were offered in chat, where
+// they answer with an error or with words only. They are made through the
+// image tool instead (docs/design/image-generation-plan.md).
+func DefaultKind(modelID string, outputModalities []string, modelType string) Kind {
 	id := strings.ToLower(modelID)
 	switch {
 	case strings.Contains(id, "rerank"):
 		return KindRerank
 	case strings.Contains(id, "embed"):
 		return KindEmbedding
+	case modelType == string(KindImage):
+		return KindImage
 	case len(outputModalities) > 0 && !slices.Contains(outputModalities, "text") &&
 		slices.Contains(outputModalities, "image"):
 		return KindImage
@@ -55,7 +63,7 @@ type Defaults struct {
 // that is how such a model was always called, and an operator who knows it
 // cannot take them switches them off.
 func UnknownDefaults(modelID string) Defaults {
-	return Defaults{Kind: DefaultKind(modelID, nil), ToolCall: true}
+	return Defaults{Kind: DefaultKind(modelID, nil, ""), ToolCall: true}
 }
 
 // Override is what an operator has decided. A nil field follows the catalogue.

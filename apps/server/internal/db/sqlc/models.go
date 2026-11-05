@@ -356,6 +356,11 @@ type Attachment struct {
 	SizeBytes   int64              `json:"size_bytes"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UserID      *uuid.UUID         `json:"user_id"`
+	Origin      *string            `json:"origin"`
+	RunID       *uuid.UUID         `json:"run_id"`
+	Sha256      *string            `json:"sha256"`
+	Width       *int32             `json:"width"`
+	Height      *int32             `json:"height"`
 }
 
 type AuthAttempt struct {
@@ -483,6 +488,15 @@ type DocumentVersion struct {
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
+type ImageRequest struct {
+	ID        uuid.UUID          `json:"id"`
+	UserID    uuid.UUID          `json:"user_id"`
+	RunID     *uuid.UUID         `json:"run_id"`
+	Count     int32              `json:"count"`
+	Status    string             `json:"status"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type ImageSearch struct {
 	Query      string             `json:"query"`
 	PictureID  *uuid.UUID         `json:"picture_id"`
@@ -541,6 +555,7 @@ type ModelOverride struct {
 	CapacityPeriod      string             `json:"capacity_period"`
 	CapacityAdminExempt bool               `json:"capacity_admin_exempt"`
 	CapacitySince       pgtype.Timestamptz `json:"capacity_since"`
+	ImagePrice          pgtype.Numeric     `json:"image_price"`
 }
 
 type ModerationEvent struct {
@@ -845,6 +860,8 @@ type UsageLog struct {
 	DurationMs       int32              `json:"duration_ms"`
 	Estimated        bool               `json:"estimated"`
 	DeletedUser      *string            `json:"deleted_user"`
+	Images           int32              `json:"images"`
+	ImagePrice       pgtype.Numeric     `json:"image_price"`
 }
 
 type User struct {
@@ -872,6 +889,7 @@ type User struct {
 	DisabledReason               *string            `json:"disabled_reason"`
 	DisabledNote                 *string            `json:"disabled_note"`
 	DisabledBy                   *uuid.UUID         `json:"disabled_by"`
+	ImageDaily                   *int32             `json:"image_daily"`
 }
 
 type UserMemory struct {

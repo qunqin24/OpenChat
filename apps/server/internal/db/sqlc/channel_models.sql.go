@@ -313,7 +313,8 @@ SELECT DISTINCT ON (m.model_id) m.provider_id,
        m.output_modalities,
        p.name                          AS provider_name,
        coalesce(s.enabled, false)      AS enabled,
-       coalesce(m.raw -> 'reasoning_options', '[]'::jsonb)::jsonb AS reasoning_options
+       coalesce(m.raw -> 'reasoning_options', '[]'::jsonb)::jsonb AS reasoning_options,
+       coalesce(m.raw ->> 'type', '')::text AS model_type
 FROM catalog_models m
          JOIN catalog_providers p ON p.id = m.provider_id
          LEFT JOIN LATERAL (SELECT bool_or(cm.enabled) AS enabled
@@ -350,6 +351,7 @@ type ListCatalogModelsForChannelRow struct {
 	ProviderName     string   `json:"provider_name"`
 	Enabled          bool     `json:"enabled"`
 	ReasoningOptions []byte   `json:"reasoning_options"`
+	ModelType        string   `json:"model_type"`
 }
 
 // What models.dev knows about the models one channel lists.
@@ -397,6 +399,7 @@ func (q *Queries) ListCatalogModelsForChannel(ctx context.Context, arg ListCatal
 			&i.ProviderName,
 			&i.Enabled,
 			&i.ReasoningOptions,
+			&i.ModelType,
 		); err != nil {
 			return nil, err
 		}

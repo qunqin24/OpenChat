@@ -11,16 +11,21 @@ func TestDefaultKind(t *testing.T) {
 	cases := map[string]struct {
 		id     string
 		output []string
+		typ    string
 		want   Kind
 	}{
-		"chat":       {"claude-haiku-5-5", []string{"text"}, KindText},
-		"image":      {"gpt-image-2", []string{"image"}, KindImage},
-		"embedding":  {"text-embedding-3-large", nil, KindEmbedding},
-		"rerank":     {"bge-reranker-v2", nil, KindRerank},
-		"text+image": {"gemini-3-flash-image", []string{"text", "image"}, KindText},
+		"chat":       {"claude-haiku-5-5", []string{"text"}, "", KindText},
+		"image":      {"gpt-image-2", []string{"image"}, "", KindImage},
+		"embedding":  {"text-embedding-3-large", nil, "", KindEmbedding},
+		"rerank":     {"bge-reranker-v2", nil, "", KindRerank},
+		"text+image": {"gemini-3-flash", []string{"text", "image"}, "", KindText},
+		// models.dev's own type wins over outputs that also list text.
+		"typed image":  {"gpt-image-1.5", []string{"text", "image"}, "image", KindImage},
+		"gemini image": {"gemini-3.1-flash-image", []string{"text", "image"}, "image", KindImage},
+		"typed chat":   {"gpt-5.5", []string{"text"}, "chat", KindText},
 	}
 	for name, c := range cases {
-		if got := DefaultKind(c.id, c.output); got != c.want {
+		if got := DefaultKind(c.id, c.output, c.typ); got != c.want {
 			t.Errorf("%s: DefaultKind = %s, want %s", name, got, c.want)
 		}
 	}

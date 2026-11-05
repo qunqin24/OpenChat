@@ -23,7 +23,7 @@ func (q *Queries) DeleteModelOverride(ctx context.Context, modelID string) error
 }
 
 const getModelOverride = `-- name: GetModelOverride :one
-SELECT model_id, kind, reasoning, tool_call, input_modalities, context_limit, input_limit, output_limit, reasoning_efforts, updated_at, admin_only, capacity, capacity_period, capacity_admin_exempt, capacity_since
+SELECT model_id, kind, reasoning, tool_call, input_modalities, context_limit, input_limit, output_limit, reasoning_efforts, updated_at, admin_only, capacity, capacity_period, capacity_admin_exempt, capacity_since, image_price
 FROM model_overrides
 WHERE model_id = $1
 `
@@ -47,12 +47,13 @@ func (q *Queries) GetModelOverride(ctx context.Context, modelID string) (ModelOv
 		&i.CapacityPeriod,
 		&i.CapacityAdminExempt,
 		&i.CapacitySince,
+		&i.ImagePrice,
 	)
 	return i, err
 }
 
 const listModelOverrides = `-- name: ListModelOverrides :many
-SELECT model_id, kind, reasoning, tool_call, input_modalities, context_limit, input_limit, output_limit, reasoning_efforts, updated_at, admin_only, capacity, capacity_period, capacity_admin_exempt, capacity_since
+SELECT model_id, kind, reasoning, tool_call, input_modalities, context_limit, input_limit, output_limit, reasoning_efforts, updated_at, admin_only, capacity, capacity_period, capacity_admin_exempt, capacity_since, image_price
 FROM model_overrides
 WHERE model_id = ANY ($1::text[])
 `
@@ -82,6 +83,7 @@ func (q *Queries) ListModelOverrides(ctx context.Context, modelIds []string) ([]
 			&i.CapacityPeriod,
 			&i.CapacityAdminExempt,
 			&i.CapacitySince,
+			&i.ImagePrice,
 		); err != nil {
 			return nil, err
 		}
@@ -184,7 +186,7 @@ VALUES ($1, $2)
 ON CONFLICT (model_id) DO UPDATE
     SET capacity_since = excluded.capacity_since,
         updated_at     = now()
-RETURNING model_id, kind, reasoning, tool_call, input_modalities, context_limit, input_limit, output_limit, reasoning_efforts, updated_at, admin_only, capacity, capacity_period, capacity_admin_exempt, capacity_since
+RETURNING model_id, kind, reasoning, tool_call, input_modalities, context_limit, input_limit, output_limit, reasoning_efforts, updated_at, admin_only, capacity, capacity_period, capacity_admin_exempt, capacity_since, image_price
 `
 
 type ResetModelCapacityParams struct {
@@ -213,6 +215,7 @@ func (q *Queries) ResetModelCapacity(ctx context.Context, arg ResetModelCapacity
 		&i.CapacityPeriod,
 		&i.CapacityAdminExempt,
 		&i.CapacitySince,
+		&i.ImagePrice,
 	)
 	return i, err
 }
@@ -242,7 +245,7 @@ ON CONFLICT (model_id) DO UPDATE
         capacity_period       = excluded.capacity_period,
         capacity_admin_exempt = excluded.capacity_admin_exempt,
         updated_at        = now()
-RETURNING model_id, kind, reasoning, tool_call, input_modalities, context_limit, input_limit, output_limit, reasoning_efforts, updated_at, admin_only, capacity, capacity_period, capacity_admin_exempt, capacity_since
+RETURNING model_id, kind, reasoning, tool_call, input_modalities, context_limit, input_limit, output_limit, reasoning_efforts, updated_at, admin_only, capacity, capacity_period, capacity_admin_exempt, capacity_since, image_price
 `
 
 type SaveModelOverrideParams struct {
@@ -297,6 +300,7 @@ func (q *Queries) SaveModelOverride(ctx context.Context, arg SaveModelOverridePa
 		&i.CapacityPeriod,
 		&i.CapacityAdminExempt,
 		&i.CapacitySince,
+		&i.ImagePrice,
 	)
 	return i, err
 }
