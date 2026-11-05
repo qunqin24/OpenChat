@@ -1,6 +1,7 @@
 import type { ToolCallPart, ToolResultPart } from '@openchat/api-client'
 import type { TFunction } from 'i18next'
 
+import { BROWSER_TOOL, browserProgressOf, browserStepLabel } from './browser-tool'
 import { isPluginTool, pluginProgressOf, pluginStepLabel } from './plugin-code'
 import { isHttpUrl, siteName } from './urls'
 
@@ -104,6 +105,9 @@ export function stepLabel(t: T, step: ToolActivityStep, running: boolean): strin
   if (step.call.name === 'document') return documentStepLabel(t, step, args, running)
   if (step.call.name === 'image_generate') return running ? t('chat.picture.making') : t('chat.picture.step')
   if (step.call.name.startsWith('subagent')) return subagentStepLabel(t, step, args, running)
+  if (step.call.name === BROWSER_TOOL) {
+    return browserStepLabel(t, args, browserProgressOf(step.result?.details, step.progress), running || !step.result)
+  }
   if (isPluginTool(step.call.name)) {
     const progress = pluginProgressOf(step.result?.details, step.progress)
     return pluginStepLabel(t, step.call.name, progress, running || !step.result, isFailure(step.status))

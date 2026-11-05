@@ -1,6 +1,6 @@
 # 部署文件
 
-这个目录放生产部署用的文件：`docker-compose.yml`（Postgres、应用、Caddy）、`Caddyfile`、`docker-compose.build.yml`（用当前代码自己构建镜像）、`docker-compose.trial.yml`（没有域名时的纯 HTTP 试用），以及配置模板 `.env.example`。
+这个目录放生产部署用的文件：`docker-compose.yml`（Postgres、应用、Caddy）、`Caddyfile`、`docker-compose.build.yml`（用当前代码自己构建镜像）、`docker-compose.trial.yml`（没有域名时的纯 HTTP 试用）、`docker-compose.browser.yml`（浏览器工具用的 headless Chromium，要用时加上它，再在后台「浏览器」打开），以及配置模板 `.env.example`。
 
 在仓库根目录，复制 `deploy/.env.example` 为 `deploy/.env` 并填好 `DOMAIN` 和 `POSTGRES_PASSWORD`，然后：
 

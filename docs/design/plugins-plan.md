@@ -40,6 +40,11 @@
 
 - **内置插件**定义在 `internal/plugins/builtin.go`，每次启动时补上库里还没有的（`plugins.builtin` 记定义的键），**默认关闭**：要等管理员把自己那部分配好（比如 GitHub 的 OAuth App）再打开。管理员可以改、可以关，不能删（409 `plugin_builtin`）；短名已被管理员自己的插件占用时跳过。
 - 第一个内置插件是 **GitHub**：官方托管的 MCP 服务 `https://api.githubcopilot.com/mcp/`，每人用自己的账号授权。实测它的受保护资源元数据指向 `https://github.com/login/oauth`，GitHub 不支持动态注册客户端，所以管理员要先在 GitHub 上注册一个 OAuth App（回调地址指向本站），等账号授权做好后在后台填 client ID 和 secret。
+- 第二个内置插件是 **arXiv**（2026-11-03）：arXiv 没有官方 MCP 服务，就在 OpenChat 进程里跑一个（`internal/plugins/arxiv`）。地址写成 `openchat:arxiv`（`plugins.LocalScheme`），连接时不走网络，用 SDK 的内存传输（`plugins/local.go`）；后台列表的「服务」显示「OpenChat 内置」。三个只读工具：`search_papers`（关键词或 arXiv 检索语法，可按分类、日期过滤，按相关度/提交/更新排序）、`get_paper`（完整元数据）、`read_paper`（全文，先读 arXiv 生成的 HTML，没有就读 PDF，按段续读，最近读过的缓存 30 分钟）。不需要账号，管理员打开、拉取工具即可。按 arXiv 的使用条款，进程内所有对 arXiv 的请求排队，每 3 秒至多一个。arXiv 的检索很朴素：普通词逐个必须出现、常用词不入索引，所以去掉常用词、保留引号里的短语，工具说明让模型优先用引号短语或 `ti:`。
+- **内置插件带技能**（2026-11-03）：GitHub 的 `github-work`、arXiv 的 `arxiv-research`，文件在 `internal/plugins/builtin_skills/<键>/<技能>/`，随二进制发布，启动时写进插件的技能（`EnsureBuiltinSkills`，`app_settings.builtin_plugin_skills` 记每个技能上次发布的哈希：没写过的补上；内容仍是上次发布那版的更新到新版；管理员改过的、删掉的都不动）。插件的技能只在插件有未禁用的工具时进快照：实测一个启用了却没拉取工具的 arXiv，模型读了技能找不到工具，转去网页搜索。
+- **工具自动拉取**（2026-11-03）：添加插件、改了地址或认证时自动拉一次；要账号的插件在管理员第一次连上自己的账号时拉；进程内的内置插件每次启动时拉。拉不到不影响保存。
+- **又一批进程内的内置插件**（2026-11-03）：OpenAlex（论文的引用、参考文献、学者，`plugins/openalex`；按每日额度计费，不填 key 时同一 IP 的人共用很小的免费额度，所以插件的认证方式是「请求头」，管理员把 key 填成值，服务当 `api_key` 发）、天气（Open-Meteo，`plugins/weather`；按名字查地点时按名字的文字选语言，地理编码只匹配所问语言的名字；Open-Meteo 对非商业用途免费）、维基百科（`plugins/wikipedia`；`zh` 转简体，`zh-tw`/`zh-hk` 繁体，给出条目在其他语言的标题）、Hacker News（`plugins/hackernews`，Algolia 的接口；讨论按楼层顺序给，最多 2 万字）。各带一个技能。共用 `plugins/localkit`。
+- linux.do（2026-11-03 评估，不做）：它全站对非浏览器客户端开 Cloudflare 验证，现成的 linuxdo-mcp 靠用户本机 Chrome 的 `cf_clearance` 过盾；放到服务器上只能让无界面浏览器伪装成真人去过盾，这等于绕过站点的机器人检测，不做。管理员可以自己部署后当普通远程插件接入。
 - **图标**用 Simple Icons（simpleicons.org，CC0，npm `simple-icons`）。后台表单里按名字搜索挑选，图标库约 5 MB，只在打开挑选框时按需加载；选中后把 slug、SVG 路径和品牌色存进插件（`icon_slug`、`icon_path`、`icon_color`），用户的插件页直接画存下的路径，不加载图标库。路径只允许 SVG 路径命令和数字（服务端校验）。图标画在品牌色的方块上，浅色品牌用深色图形（`lib/plugin-icon.ts`）。没有图标时显示标志文字。内置插件的图标在后来的版本里补上时，只填给还没有图标的行，不覆盖管理员选的。
 
 ## 3. 范围

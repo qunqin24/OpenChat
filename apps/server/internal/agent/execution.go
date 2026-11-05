@@ -873,22 +873,40 @@ func (ex *execution) runTools(ctx context.Context) (bool, error) {
 		errMu    sync.Mutex
 		firstErr error
 	)
+	// Each call is a chain of its own, but a sequential tool's calls are one
+	// chain, in the order they were made.
+	var chains [][]ToolSlot
+	chainOf := map[string]int{}
 	for _, slot := range toRun {
+		if tool := byName[slot.Name]; tool != nil && sequential(tool) {
+			if i, ok := chainOf[slot.Name]; ok {
+				chains[i] = append(chains[i], slot)
+				continue
+			}
+			chainOf[slot.Name] = len(chains)
+		}
+		chains = append(chains, []ToolSlot{slot})
+	}
+	for _, chain := range chains {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			select {
-			case sem <- struct{}{}:
-			case <-ctx.Done():
-				return
-			}
-			defer func() { <-sem }()
-			if err := ex.runCall(ctx, slot, byName[slot.Name]); err != nil {
-				errMu.Lock()
-				if firstErr == nil {
-					firstErr = err
+			for _, slot := range chain {
+				select {
+				case sem <- struct{}{}:
+				case <-ctx.Done():
+					return
 				}
-				errMu.Unlock()
+				err := ex.runCall(ctx, slot, byName[slot.Name])
+				<-sem
+				if err != nil {
+					errMu.Lock()
+					if firstErr == nil {
+						firstErr = err
+					}
+					errMu.Unlock()
+					return
+				}
 			}
 		}()
 	}

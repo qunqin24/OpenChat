@@ -20,7 +20,7 @@ WHERE id = $2
   AND conversation_id = $3
   AND user_id = $4
   AND status = 'pending'
-RETURNING id, run_id, conversation_id, user_id, call_id, seq, plugin_id, tool, arguments, status, created_at, answered_at
+RETURNING id, run_id, conversation_id, user_id, call_id, seq, plugin_id, tool, arguments, status, created_at, answered_at, site
 `
 
 type AnswerPluginConfirmationParams struct {
@@ -52,6 +52,70 @@ func (q *Queries) AnswerPluginConfirmation(ctx context.Context, arg AnswerPlugin
 		&i.Status,
 		&i.CreatedAt,
 		&i.AnsweredAt,
+		&i.Site,
+	)
+	return i, err
+}
+
+const browserSiteGranted = `-- name: BrowserSiteGranted :one
+SELECT EXISTS (SELECT 1 FROM browser_site_grants WHERE conversation_id = $1 AND site = $2)::boolean
+`
+
+type BrowserSiteGrantedParams struct {
+	ConversationID uuid.UUID `json:"conversation_id"`
+	Site           string    `json:"site"`
+}
+
+func (q *Queries) BrowserSiteGranted(ctx context.Context, arg BrowserSiteGrantedParams) (bool, error) {
+	row := q.db.QueryRow(ctx, browserSiteGranted, arg.ConversationID, arg.Site)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const createBrowserConfirmation = `-- name: CreateBrowserConfirmation :one
+
+INSERT INTO plugin_confirmations (run_id, conversation_id, user_id, call_id, seq, site, tool, arguments)
+VALUES ($1, $2, $3, $4, 1, $5, $6, $7)
+RETURNING id, run_id, conversation_id, user_id, call_id, seq, plugin_id, tool, arguments, status, created_at, answered_at, site
+`
+
+type CreateBrowserConfirmationParams struct {
+	RunID          uuid.UUID `json:"run_id"`
+	ConversationID uuid.UUID `json:"conversation_id"`
+	UserID         uuid.UUID `json:"user_id"`
+	CallID         string    `json:"call_id"`
+	Site           *string   `json:"site"`
+	Tool           string    `json:"tool"`
+	Arguments      []byte    `json:"arguments"`
+}
+
+// The browser tool (api/browser_tool.go).
+func (q *Queries) CreateBrowserConfirmation(ctx context.Context, arg CreateBrowserConfirmationParams) (PluginConfirmation, error) {
+	row := q.db.QueryRow(ctx, createBrowserConfirmation,
+		arg.RunID,
+		arg.ConversationID,
+		arg.UserID,
+		arg.CallID,
+		arg.Site,
+		arg.Tool,
+		arg.Arguments,
+	)
+	var i PluginConfirmation
+	err := row.Scan(
+		&i.ID,
+		&i.RunID,
+		&i.ConversationID,
+		&i.UserID,
+		&i.CallID,
+		&i.Seq,
+		&i.PluginID,
+		&i.Tool,
+		&i.Arguments,
+		&i.Status,
+		&i.CreatedAt,
+		&i.AnsweredAt,
+		&i.Site,
 	)
 	return i, err
 }
@@ -141,18 +205,18 @@ func (q *Queries) CreatePlugin(ctx context.Context, arg CreatePluginParams) (Plu
 const createPluginConfirmation = `-- name: CreatePluginConfirmation :one
 INSERT INTO plugin_confirmations (run_id, conversation_id, user_id, call_id, seq, plugin_id, tool, arguments)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, run_id, conversation_id, user_id, call_id, seq, plugin_id, tool, arguments, status, created_at, answered_at
+RETURNING id, run_id, conversation_id, user_id, call_id, seq, plugin_id, tool, arguments, status, created_at, answered_at, site
 `
 
 type CreatePluginConfirmationParams struct {
-	RunID          uuid.UUID `json:"run_id"`
-	ConversationID uuid.UUID `json:"conversation_id"`
-	UserID         uuid.UUID `json:"user_id"`
-	CallID         string    `json:"call_id"`
-	Seq            int32     `json:"seq"`
-	PluginID       uuid.UUID `json:"plugin_id"`
-	Tool           string    `json:"tool"`
-	Arguments      []byte    `json:"arguments"`
+	RunID          uuid.UUID  `json:"run_id"`
+	ConversationID uuid.UUID  `json:"conversation_id"`
+	UserID         uuid.UUID  `json:"user_id"`
+	CallID         string     `json:"call_id"`
+	Seq            int32      `json:"seq"`
+	PluginID       *uuid.UUID `json:"plugin_id"`
+	Tool           string     `json:"tool"`
+	Arguments      []byte     `json:"arguments"`
 }
 
 func (q *Queries) CreatePluginConfirmation(ctx context.Context, arg CreatePluginConfirmationParams) (PluginConfirmation, error) {
@@ -180,6 +244,7 @@ func (q *Queries) CreatePluginConfirmation(ctx context.Context, arg CreatePlugin
 		&i.Status,
 		&i.CreatedAt,
 		&i.AnsweredAt,
+		&i.Site,
 	)
 	return i, err
 }
@@ -359,6 +424,17 @@ type FillBuiltinPluginScopesParams struct {
 func (q *Queries) FillBuiltinPluginScopes(ctx context.Context, arg FillBuiltinPluginScopesParams) error {
 	_, err := q.db.Exec(ctx, fillBuiltinPluginScopes, arg.Builtin, arg.OauthScopes)
 	return err
+}
+
+const getBuiltinPluginID = `-- name: GetBuiltinPluginID :one
+SELECT id FROM plugins WHERE builtin = $1
+`
+
+func (q *Queries) GetBuiltinPluginID(ctx context.Context, builtin *string) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getBuiltinPluginID, builtin)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const getConversationPluginCatalog = `-- name: GetConversationPluginCatalog :one
@@ -639,6 +715,22 @@ func (q *Queries) GetUserPlugin(ctx context.Context, arg GetUserPluginParams) (G
 	return i, err
 }
 
+const grantBrowserSite = `-- name: GrantBrowserSite :exec
+INSERT INTO browser_site_grants (conversation_id, site)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING
+`
+
+type GrantBrowserSiteParams struct {
+	ConversationID uuid.UUID `json:"conversation_id"`
+	Site           string    `json:"site"`
+}
+
+func (q *Queries) GrantBrowserSite(ctx context.Context, arg GrantBrowserSiteParams) error {
+	_, err := q.db.Exec(ctx, grantBrowserSite, arg.ConversationID, arg.Site)
+	return err
+}
+
 const grantPluginTool = `-- name: GrantPluginTool :exec
 INSERT INTO plugin_tool_grants (conversation_id, plugin_id, tool)
 VALUES ($1, $2, $3)
@@ -658,8 +750,8 @@ func (q *Queries) GrantPluginTool(ctx context.Context, arg GrantPluginToolParams
 
 const insertBuiltinPlugin = `-- name: InsertBuiltinPlugin :execrows
 INSERT INTO plugins (builtin, slug, name, description, about, category, icon_text, icon_color, mcp_url, auth_type,
-                     enabled, sort, icon_slug, icon_path, oauth_scopes)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11, $12, $13, $14)
+                     enabled, sort, icon_slug, icon_path, oauth_scopes, header_name)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11, $12, $13, $14, $15)
 ON CONFLICT DO NOTHING
 `
 
@@ -678,6 +770,7 @@ type InsertBuiltinPluginParams struct {
 	IconSlug    string  `json:"icon_slug"`
 	IconPath    string  `json:"icon_path"`
 	OauthScopes string  `json:"oauth_scopes"`
+	HeaderName  string  `json:"header_name"`
 }
 
 // A built-in plugin, unless it was made before (or its short name is taken).
@@ -698,6 +791,7 @@ func (q *Queries) InsertBuiltinPlugin(ctx context.Context, arg InsertBuiltinPlug
 		arg.IconSlug,
 		arg.IconPath,
 		arg.OauthScopes,
+		arg.HeaderName,
 	)
 	if err != nil {
 		return 0, err
@@ -805,6 +899,65 @@ func (q *Queries) ListAdminPlugins(ctx context.Context) ([]ListAdminPluginsRow, 
 			&i.Installs,
 			&i.Tools,
 			&i.ToolsOn,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBrowserActions = `-- name: ListBrowserActions :many
+SELECT a.id, a.created_at, a.user_id, u.name AS user_name, u.email AS user_email, a.conversation_id,
+       a.site, a.action, a.target, a.outcome
+FROM browser_actions a
+         LEFT JOIN users u ON u.id = a.user_id
+WHERE ($1::bigint IS NULL OR a.id < $1::bigint)
+ORDER BY a.id DESC
+LIMIT $2
+`
+
+type ListBrowserActionsParams struct {
+	Before   *int64 `json:"before"`
+	RowLimit int32  `json:"row_limit"`
+}
+
+type ListBrowserActionsRow struct {
+	ID             int64              `json:"id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UserID         *uuid.UUID         `json:"user_id"`
+	UserName       *string            `json:"user_name"`
+	UserEmail      *string            `json:"user_email"`
+	ConversationID *uuid.UUID         `json:"conversation_id"`
+	Site           string             `json:"site"`
+	Action         string             `json:"action"`
+	Target         string             `json:"target"`
+	Outcome        string             `json:"outcome"`
+}
+
+func (q *Queries) ListBrowserActions(ctx context.Context, arg ListBrowserActionsParams) ([]ListBrowserActionsRow, error) {
+	rows, err := q.db.Query(ctx, listBrowserActions, arg.Before, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBrowserActionsRow{}
+	for rows.Next() {
+		var i ListBrowserActionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.UserID,
+			&i.UserName,
+			&i.UserEmail,
+			&i.ConversationID,
+			&i.Site,
+			&i.Action,
+			&i.Target,
+			&i.Outcome,
 		); err != nil {
 			return nil, err
 		}
@@ -1174,6 +1327,32 @@ func (q *Queries) PluginToolGranted(ctx context.Context, arg PluginToolGrantedPa
 	var column_1 bool
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const recordBrowserAction = `-- name: RecordBrowserAction :exec
+INSERT INTO browser_actions (user_id, conversation_id, site, action, target, outcome)
+VALUES ($1, $2, $3, $4, $5, $6)
+`
+
+type RecordBrowserActionParams struct {
+	UserID         *uuid.UUID `json:"user_id"`
+	ConversationID *uuid.UUID `json:"conversation_id"`
+	Site           string     `json:"site"`
+	Action         string     `json:"action"`
+	Target         string     `json:"target"`
+	Outcome        string     `json:"outcome"`
+}
+
+func (q *Queries) RecordBrowserAction(ctx context.Context, arg RecordBrowserActionParams) error {
+	_, err := q.db.Exec(ctx, recordBrowserAction,
+		arg.UserID,
+		arg.ConversationID,
+		arg.Site,
+		arg.Action,
+		arg.Target,
+		arg.Outcome,
+	)
+	return err
 }
 
 const recordPluginCall = `-- name: RecordPluginCall :exec

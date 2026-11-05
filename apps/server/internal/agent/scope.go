@@ -52,6 +52,14 @@ func (s *RunState) Load(key any) (any, bool) {
 	return s.m.Load(key)
 }
 
+// LoadOrStore is what key holds, storing value first when it holds nothing.
+func (s *RunState) LoadOrStore(key, value any) (any, bool) {
+	if s == nil {
+		return value, false
+	}
+	return s.m.LoadOrStore(key, value)
+}
+
 // Store sets what key holds.
 func (s *RunState) Store(key, value any) {
 	if s != nil {

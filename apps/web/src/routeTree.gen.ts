@@ -20,6 +20,7 @@ import { Route as AuthedPluginsRouteImport } from './routes/_authed.plugins'
 import { Route as AuthedTasksRouteImport } from './routes/_authed.tasks'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAuthenticationRouteImport } from './routes/admin.authentication'
+import { Route as AdminBrowserRouteImport } from './routes/admin.browser'
 import { Route as AdminChannelsRouteImport } from './routes/admin.channels'
 import { Route as AdminImageGenerationRouteImport } from './routes/admin.image-generation'
 import { Route as AdminImageSearchRouteImport } from './routes/admin.image-search'
@@ -93,6 +94,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
 const AdminAuthenticationRoute = AdminAuthenticationRouteImport.update({
   id: '/authentication',
   path: '/authentication',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminBrowserRoute = AdminBrowserRouteImport.update({
+  id: '/browser',
+  path: '/browser',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminChannelsRoute = AdminChannelsRouteImport.update({
@@ -212,6 +218,7 @@ export interface FileRoutesByFullPath {
   '/plugins': typeof AuthedPluginsRoute
   '/tasks': typeof AuthedTasksRoute
   '/admin/authentication': typeof AdminAuthenticationRoute
+  '/admin/browser': typeof AdminBrowserRoute
   '/admin/channels': typeof AdminChannelsRoute
   '/admin/image-generation': typeof AdminImageGenerationRoute
   '/admin/image-search': typeof AdminImageSearchRoute
@@ -243,6 +250,7 @@ export interface FileRoutesByTo {
   '/plugins': typeof AuthedPluginsRoute
   '/tasks': typeof AuthedTasksRoute
   '/admin/authentication': typeof AdminAuthenticationRoute
+  '/admin/browser': typeof AdminBrowserRoute
   '/admin/channels': typeof AdminChannelsRoute
   '/admin/image-generation': typeof AdminImageGenerationRoute
   '/admin/image-search': typeof AdminImageSearchRoute
@@ -276,6 +284,7 @@ export interface FileRoutesById {
   '/_authed/plugins': typeof AuthedPluginsRoute
   '/_authed/tasks': typeof AuthedTasksRoute
   '/admin/authentication': typeof AdminAuthenticationRoute
+  '/admin/browser': typeof AdminBrowserRoute
   '/admin/channels': typeof AdminChannelsRoute
   '/admin/image-generation': typeof AdminImageGenerationRoute
   '/admin/image-search': typeof AdminImageSearchRoute
@@ -311,6 +320,7 @@ export interface FileRouteTypes {
     | '/plugins'
     | '/tasks'
     | '/admin/authentication'
+    | '/admin/browser'
     | '/admin/channels'
     | '/admin/image-generation'
     | '/admin/image-search'
@@ -342,6 +352,7 @@ export interface FileRouteTypes {
     | '/plugins'
     | '/tasks'
     | '/admin/authentication'
+    | '/admin/browser'
     | '/admin/channels'
     | '/admin/image-generation'
     | '/admin/image-search'
@@ -374,6 +385,7 @@ export interface FileRouteTypes {
     | '/_authed/plugins'
     | '/_authed/tasks'
     | '/admin/authentication'
+    | '/admin/browser'
     | '/admin/channels'
     | '/admin/image-generation'
     | '/admin/image-search'
@@ -485,6 +497,13 @@ declare module '@tanstack/react-router' {
       path: '/authentication'
       fullPath: '/admin/authentication'
       preLoaderRoute: typeof AdminAuthenticationRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/browser': {
+      id: '/admin/browser'
+      path: '/browser'
+      fullPath: '/admin/browser'
+      preLoaderRoute: typeof AdminBrowserRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/channels': {
@@ -688,6 +707,7 @@ const AdminSettingsRouteWithChildren = AdminSettingsRoute._addFileChildren(
 
 interface AdminRouteChildren {
   AdminAuthenticationRoute: typeof AdminAuthenticationRoute
+  AdminBrowserRoute: typeof AdminBrowserRoute
   AdminChannelsRoute: typeof AdminChannelsRoute
   AdminImageGenerationRoute: typeof AdminImageGenerationRoute
   AdminImageSearchRoute: typeof AdminImageSearchRoute
@@ -706,6 +726,7 @@ interface AdminRouteChildren {
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAuthenticationRoute: AdminAuthenticationRoute,
+  AdminBrowserRoute: AdminBrowserRoute,
   AdminChannelsRoute: AdminChannelsRoute,
   AdminImageGenerationRoute: AdminImageGenerationRoute,
   AdminImageSearchRoute: AdminImageSearchRoute,

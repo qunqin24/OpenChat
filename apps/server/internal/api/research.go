@@ -305,7 +305,7 @@ func (s *Server) AnswerResearchPlan(w http.ResponseWriter, r *http.Request, conv
 		httpx.Fail(w, r, errResearchOff)
 		return
 	}
-	choice, err := s.chooseRun(ctx, conv, body.Model, body.ReasoningEffort, nil)
+	choice, err := s.chooseRun(ctx, conv, body.Model, body.ReasoningEffort, nil, nil)
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return

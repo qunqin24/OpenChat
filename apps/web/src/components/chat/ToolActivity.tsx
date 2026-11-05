@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { activityOrb, THOUGHT } from '@/lib/activity-orb'
 import { API_BASE_URL } from '@/lib/api'
 import { isHttpUrl, siteName } from '@openchat/chat-core/urls'
+import { BROWSER_TOOL } from '@openchat/chat-core/browser-tool'
 import { isPluginTool } from '@openchat/chat-core/plugin-code'
 import {
   activityHead,
@@ -21,6 +22,7 @@ import { ThinkingOrb } from './ThinkingOrb'
 import { AnswerText } from './AnswerText'
 import { Markdown } from './MarkdownText'
 import { SubagentsIcon } from './SubagentAvatar'
+import BrowserStep from './BrowserStep'
 import PluginStep from './PluginStep'
 
 /** Source chips shown in the collapsed line, before the rest are counted. */
@@ -202,6 +204,7 @@ function Step({ step }: { step: ToolActivityStep }) {
     ? (step.result.details as { url?: string; title?: string } | undefined)
     : undefined
   if (isPluginTool(step.call.name)) return <PluginStep step={step} />
+  if (step.call.name === BROWSER_TOOL) return <BrowserStep step={step} />
 
   return (
     <li className={cn('n-activity-step', isFailure(step.status) && 'is-failed')}>

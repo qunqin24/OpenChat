@@ -195,6 +195,20 @@ try { await %s.erase({}) } catch (e) { return [typeof shot, e.message] }`, ns, n
 	if !listed() {
 		t.Fatal("the plugin's skill is not listed")
 	}
+	// Not while the plugin has no tool the run could call: the skill would
+	// send the model looking for them.
+	if _, err := pool.Exec(ctx, `UPDATE plugin_tools SET permission = 'blocked' WHERE plugin_id = $1`, pluginID); err != nil {
+		t.Fatal(err)
+	}
+	if listed() {
+		t.Fatal("the skill of a plugin with every tool blocked is listed")
+	}
+	if _, err := pool.Exec(ctx, `UPDATE plugin_tools SET permission = 'allow' WHERE plugin_id = $1`, pluginID); err != nil {
+		t.Fatal(err)
+	}
+	if !listed() {
+		t.Fatal("the plugin's skill is not listed again")
+	}
 	rec = httptest.NewRecorder()
 	s.ListSiteSkills(rec, httptest.NewRequest(http.MethodGet, "/", nil).WithContext(asUser))
 	if strings.Contains(rec.Body.String(), "camera-tips-"+tag) {

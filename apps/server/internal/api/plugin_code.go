@@ -138,7 +138,8 @@ const pluginCodeDescription = "Run JavaScript that calls the user's plugin tools
 	"The plugins and their tools are listed in the system prompt under \"Plugins\". Call a tool as " +
 	"`await tools.<plugin>.<tool>(input)`, with one object as its input, exactly as its signature shows; use brackets " +
 	"for names that are not identifiers: `tools[\"my-crm\"][\"find-contact\"]({ name: \"Ada\" })`. " +
-	"`search(query, { plugin })` finds tools the list leaves out and returns their paths and signatures.\n\n" +
+	"`await search(query, { plugin })` - a function of its own, not under tools - finds tools the list leaves out " +
+	"and returns their paths and signatures. Only the plugins listed exist; there is no other tool to find.\n\n" +
 	"- Await every call whose result you need. Run calls that do not depend on each other together with " +
 	"`await Promise.allSettled([...])`.\n" +
 	"- End with `return <value>`. Only the returned value and console.log output come back to you, so pick out " +
@@ -603,7 +604,7 @@ func (h *pluginHost) confirm(ctx context.Context, t usableTool, call codemode.Ca
 	}
 	row, err := h.s.q.CreatePluginConfirmation(ctx, sqlc.CreatePluginConfirmationParams{
 		RunID: h.scope.RunID, ConversationID: h.scope.ConversationID, UserID: h.scope.UserID, CallID: h.callID,
-		Seq: int32(call.Seq), PluginID: t.PluginID, Tool: t.Name, Arguments: call.Input,
+		Seq: int32(call.Seq), PluginID: &t.PluginID, Tool: t.Name, Arguments: call.Input,
 	})
 	if err != nil {
 		slog.WarnContext(ctx, "plugin confirmation", "error", err)
@@ -744,8 +745,15 @@ func (s *Server) AnswerPluginConfirmation(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if decision == "always" {
-		if err := s.q.GrantPluginTool(ctx, sqlc.GrantPluginToolParams{ConversationID: row.ConversationID, PluginID: row.PluginID, Tool: row.Tool}); err != nil {
-			slog.WarnContext(ctx, "grant plugin tool", "error", err)
+		// A browser action's "always" is for its site (browser_tool.go).
+		var err error
+		if row.PluginID != nil {
+			err = s.q.GrantPluginTool(ctx, sqlc.GrantPluginToolParams{ConversationID: row.ConversationID, PluginID: *row.PluginID, Tool: row.Tool})
+		} else if row.Site != nil {
+			err = s.q.GrantBrowserSite(ctx, sqlc.GrantBrowserSiteParams{ConversationID: row.ConversationID, Site: *row.Site})
+		}
+		if err != nil {
+			slog.WarnContext(ctx, "grant after confirmation", "error", err)
 		}
 	}
 	select {
@@ -832,7 +840,8 @@ const pluginsGuide = "## Plugins\n" +
 	"The user installed these plugins. Use them through the plugin_code tool: a script that calls " +
 	"`await tools.<plugin>.<tool>(input)`, as its description explains. Signatures are TypeScript; " +
 	"`?` marks what may be left out. Use a plugin when the user's request is about what it reaches (their " +
-	"repositories, their documents...); otherwise answer as usual.\n\n"
+	"repositories, their documents...); otherwise answer as usual. Never use a plugin for something it does not " +
+	"do: when none of these can do what the user asks, say so plainly and answer as best you can without one.\n\n"
 
 // pluginCatalogPrompt is the system prompt's plugin section, for a run that
 // is offered plugin_code.

@@ -48,10 +48,22 @@ func (q *Queries) CancelConversationRuns(ctx context.Context, ids []uuid.UUID) (
 	return items, nil
 }
 
+const conversationBrowser = `-- name: ConversationBrowser :one
+SELECT browser FROM conversations WHERE id = $1
+`
+
+// Whether the browser is open in a conversation, for its runs' tools.
+func (q *Queries) ConversationBrowser(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, conversationBrowser, id)
+	var browser bool
+	err := row.Scan(&browser)
+	return browser, err
+}
+
 const createConversation = `-- name: CreateConversation :one
 INSERT INTO conversations (user_id, title, model, temporary)
 VALUES ($1, $2, $3, $4)
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins, browser
 `
 
 type CreateConversationParams struct {
@@ -91,12 +103,13 @@ func (q *Queries) CreateConversation(ctx context.Context, arg CreateConversation
 		&i.Skills,
 		&i.PluginCatalog,
 		&i.Plugins,
+		&i.Browser,
 	)
 	return i, err
 }
 
 const getConversation = `-- name: GetConversation :one
-SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins
+SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins, browser
 FROM conversations
 WHERE id = $1
   AND user_id = $2
@@ -139,12 +152,13 @@ func (q *Queries) GetConversation(ctx context.Context, arg GetConversationParams
 		&i.Skills,
 		&i.PluginCatalog,
 		&i.Plugins,
+		&i.Browser,
 	)
 	return i, err
 }
 
 const listConversations = `-- name: ListConversations :many
-SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins
+SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins, browser
 FROM conversations
 WHERE user_id = $1
   AND deleted_at IS NULL
@@ -200,6 +214,7 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 			&i.Skills,
 			&i.PluginCatalog,
 			&i.Plugins,
+			&i.Browser,
 		); err != nil {
 			return nil, err
 		}
@@ -212,7 +227,7 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 }
 
 const listPinnedConversations = `-- name: ListPinnedConversations :many
-SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins
+SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins, browser
 FROM conversations
 WHERE user_id = $1
   AND deleted_at IS NULL
@@ -256,6 +271,7 @@ func (q *Queries) ListPinnedConversations(ctx context.Context, userID *uuid.UUID
 			&i.Skills,
 			&i.PluginCatalog,
 			&i.Plugins,
+			&i.Browser,
 		); err != nil {
 			return nil, err
 		}
@@ -301,7 +317,7 @@ func (q *Queries) ListRunningConversations(ctx context.Context, userID *uuid.UUI
 }
 
 const lockConversation = `-- name: LockConversation :one
-SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins
+SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins, browser
 FROM conversations
 WHERE id = $1
 FOR UPDATE
@@ -335,6 +351,7 @@ func (q *Queries) LockConversation(ctx context.Context, id uuid.UUID) (Conversat
 		&i.Skills,
 		&i.PluginCatalog,
 		&i.Plugins,
+		&i.Browser,
 	)
 	return i, err
 }
@@ -373,7 +390,7 @@ func (q *Queries) LockUserConversations(ctx context.Context, userID *uuid.UUID) 
 }
 
 const searchConversations = `-- name: SearchConversations :many
-SELECT c.id, c.user_id, c.title, c.model, c.created_at, c.updated_at, c.deleted_at, c.reasoning_effort, c.web_search, c.memory_snapshot, c.temporary, c.kind, c.parent_id, c.launched_by, c.launch_call_id, c.background, c.stopped_by_user, c.pinned_at, c.skills, c.plugin_catalog, c.plugins,
+SELECT c.id, c.user_id, c.title, c.model, c.created_at, c.updated_at, c.deleted_at, c.reasoning_effort, c.web_search, c.memory_snapshot, c.temporary, c.kind, c.parent_id, c.launched_by, c.launch_call_id, c.background, c.stopped_by_user, c.pinned_at, c.skills, c.plugin_catalog, c.plugins, c.browser,
        COALESCE(hit.id::text, '')::text  AS hit_id,
        COALESCE(hit.role::text, '')::text AS hit_role,
        COALESCE(hit.content, '')::text    AS hit_content
@@ -430,6 +447,7 @@ type SearchConversationsRow struct {
 	Skills          []string           `json:"skills"`
 	PluginCatalog   []byte             `json:"plugin_catalog"`
 	Plugins         []string           `json:"plugins"`
+	Browser         bool               `json:"browser"`
 	HitID           string             `json:"hit_id"`
 	HitRole         string             `json:"hit_role"`
 	HitContent      string             `json:"hit_content"`
@@ -478,6 +496,7 @@ func (q *Queries) SearchConversations(ctx context.Context, arg SearchConversatio
 			&i.Skills,
 			&i.PluginCatalog,
 			&i.Plugins,
+			&i.Browser,
 			&i.HitID,
 			&i.HitRole,
 			&i.HitContent,
@@ -492,13 +511,58 @@ func (q *Queries) SearchConversations(ctx context.Context, arg SearchConversatio
 	return items, nil
 }
 
+const setConversationBrowser = `-- name: SetConversationBrowser :one
+UPDATE conversations
+SET browser = $1
+WHERE id = $2
+  AND user_id = $3
+  AND deleted_at IS NULL
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins, browser
+`
+
+type SetConversationBrowserParams struct {
+	Browser bool       `json:"browser"`
+	ID      uuid.UUID  `json:"id"`
+	UserID  *uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) SetConversationBrowser(ctx context.Context, arg SetConversationBrowserParams) (Conversation, error) {
+	row := q.db.QueryRow(ctx, setConversationBrowser, arg.Browser, arg.ID, arg.UserID)
+	var i Conversation
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Title,
+		&i.Model,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.ReasoningEffort,
+		&i.WebSearch,
+		&i.MemorySnapshot,
+		&i.Temporary,
+		&i.Kind,
+		&i.ParentID,
+		&i.LaunchedBy,
+		&i.LaunchCallID,
+		&i.Background,
+		&i.StoppedByUser,
+		&i.PinnedAt,
+		&i.Skills,
+		&i.PluginCatalog,
+		&i.Plugins,
+		&i.Browser,
+	)
+	return i, err
+}
+
 const setConversationModel = `-- name: SetConversationModel :one
 UPDATE conversations
 SET model = $1
 WHERE id = $2
   AND user_id = $3
   AND deleted_at IS NULL
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins, browser
 `
 
 type SetConversationModelParams struct {
@@ -534,6 +598,7 @@ func (q *Queries) SetConversationModel(ctx context.Context, arg SetConversationM
 		&i.Skills,
 		&i.PluginCatalog,
 		&i.Plugins,
+		&i.Browser,
 	)
 	return i, err
 }
@@ -544,7 +609,7 @@ SET pinned_at = CASE WHEN $1::boolean THEN COALESCE(pinned_at, now()) ELSE NULL 
 WHERE id = $2
   AND user_id = $3
   AND deleted_at IS NULL
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins, browser
 `
 
 type SetConversationPinnedParams struct {
@@ -579,6 +644,7 @@ func (q *Queries) SetConversationPinned(ctx context.Context, arg SetConversation
 		&i.Skills,
 		&i.PluginCatalog,
 		&i.Plugins,
+		&i.Browser,
 	)
 	return i, err
 }
@@ -589,7 +655,7 @@ SET reasoning_effort = $1
 WHERE id = $2
   AND user_id = $3
   AND deleted_at IS NULL
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins, browser
 `
 
 type SetConversationReasoningParams struct {
@@ -624,6 +690,7 @@ func (q *Queries) SetConversationReasoning(ctx context.Context, arg SetConversat
 		&i.Skills,
 		&i.PluginCatalog,
 		&i.Plugins,
+		&i.Browser,
 	)
 	return i, err
 }
@@ -634,7 +701,7 @@ SET web_search = $1
 WHERE id = $2
   AND user_id = $3
   AND deleted_at IS NULL
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins, browser
 `
 
 type SetConversationWebSearchParams struct {
@@ -668,6 +735,7 @@ func (q *Queries) SetConversationWebSearch(ctx context.Context, arg SetConversat
 		&i.Skills,
 		&i.PluginCatalog,
 		&i.Plugins,
+		&i.Browser,
 	)
 	return i, err
 }
@@ -678,7 +746,7 @@ SET title = $1
 WHERE id = $2
   AND title = $3
   AND deleted_at IS NULL
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins, browser
 `
 
 type SetGeneratedTitleParams struct {
@@ -715,6 +783,7 @@ func (q *Queries) SetGeneratedTitle(ctx context.Context, arg SetGeneratedTitlePa
 		&i.Skills,
 		&i.PluginCatalog,
 		&i.Plugins,
+		&i.Browser,
 	)
 	return i, err
 }
@@ -775,7 +844,7 @@ SET title      = $1,
 WHERE id = $2
   AND user_id = $3
   AND deleted_at IS NULL
-RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins
+RETURNING id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins, browser
 `
 
 type UpdateConversationTitleParams struct {
@@ -809,6 +878,7 @@ func (q *Queries) UpdateConversationTitle(ctx context.Context, arg UpdateConvers
 		&i.Skills,
 		&i.PluginCatalog,
 		&i.Plugins,
+		&i.Browser,
 	)
 	return i, err
 }

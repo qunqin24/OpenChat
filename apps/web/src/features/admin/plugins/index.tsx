@@ -149,7 +149,11 @@ export function AdminPlugins() {
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground max-w-[16rem] truncate text-sm">
-                      {plugin.mcpUrl ? hostOf(plugin.mcpUrl) : t('admin.plugins.skills-only')}
+                      {!plugin.mcpUrl
+                        ? t('admin.plugins.skills-only')
+                        : plugin.mcpUrl.startsWith('openchat:')
+                          ? t('admin.plugins.runs-here')
+                          : hostOf(plugin.mcpUrl)}
                     </TableCell>
                     <TableCell className="text-sm">{t(`admin.plugins.auth-${plugin.authType}`)}</TableCell>
                     <TableCell className="text-sm">{plugin.tools > 0 ? `${plugin.toolsOn} / ${plugin.tools}` : '—'}</TableCell>
@@ -336,7 +340,8 @@ function SettingsForm({ plugin, secretKeySet, onSaved }: { plugin: AdminPlugin |
     mcpUrl: z
       .string()
       .trim()
-      .refine((v) => v === '' || /^https?:\/\/\S+$/.test(v), t('admin.plugins.url-rule')),
+      // openchat:<name> is a built-in's service that runs inside OpenChat (plugins.LocalScheme).
+      .refine((v) => v === '' || /^https?:\/\/\S+$/.test(v) || /^openchat:[a-z0-9-]+$/.test(v), t('admin.plugins.url-rule')),
     authType: z.enum(['none', 'header', 'oauth']),
     headerName: z.string().trim().max(100),
     headerValue: z.string(),

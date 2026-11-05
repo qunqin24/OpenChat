@@ -401,3 +401,28 @@ func (c *pageCache) put(address string, p page) {
 	}
 	c.byURL[address] = cachedPage{page: p, at: time.Now()}
 }
+
+// PageText is a page's title and its reading text as Markdown, read as
+// web_fetch reads one: for the browser tool's read, from the HTML a browser
+// rendered.
+func PageText(source, address string) (title, text string, err error) {
+	doc, err := html.Parse(strings.NewReader(source))
+	if err != nil {
+		return "", "", err
+	}
+	base, _ := url.Parse(address)
+	title, _, text = pageMarkdown(doc, base)
+	return title, tidyText(text), nil
+}
+
+// TextPart is the part of text a read from offset shows, as web_fetch cuts a
+// page, and where the next part starts: -1 when this one reaches the end.
+func TextPart(text string, offset int) (part string, next int) {
+	runes := []rune(text)
+	start, end := window(runes, offset)
+	next = -1
+	if end < len(runes) {
+		next = end
+	}
+	return string(runes[start:end]), next
+}

@@ -1,5 +1,5 @@
 import type { AvailableSkill, ConversationReference } from '@openchat/api-client'
-import { ArrowUp, BookOpen, Maximize2, Minimize2, Square, Telescope, X } from 'lucide-react'
+import { ArrowUp, BookOpen, Globe, Maximize2, Minimize2, Square, Telescope, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -69,6 +69,11 @@ interface ComposerProps {
     onUnpick: () => void
   }
   /**
+   * The browser, when it is offered ("+" → 浏览器): open, it leads the box as a
+   * token that closes it, and stays open for the conversation's next messages.
+   */
+  browser?: { open: boolean; onOpen: () => void; onClose: () => void }
+  /**
    * A deep research plan being revised: the box writes what to change, shown
    * under the plan's title, which `onStop` gives up.
    */
@@ -104,6 +109,7 @@ export function Composer({
   pictures,
   skills,
   research,
+  browser,
   plan,
   attach,
 }: ComposerProps) {
@@ -174,8 +180,8 @@ export function Composer({
 
   // The text starts after the picked skills (and deep research) on the first
   // line, and wraps under them: indented by their width, measured as it changes.
-  const tokened = Boolean(research?.picked) || Boolean(skills?.picked.length)
-  const pickedKey = `${research?.picked ? 'research ' : ''}${skills?.picked.join(' ') ?? ''}`
+  const tokened = Boolean(browser?.open) || Boolean(research?.picked) || Boolean(skills?.picked.length)
+  const pickedKey = `${browser?.open ? 'browser ' : ''}${research?.picked ? 'research ' : ''}${skills?.picked.join(' ') ?? ''}`
   const [indent, setIndent] = useState(0)
   useLayoutEffect(() => {
     const el = tokens.current
@@ -322,6 +328,19 @@ export function Composer({
               over the box's first line, the text indented past them (below). */}
           {tokened && (
             <span ref={tokens} className="n-skill-tokens">
+              {browser?.open && (
+                <button
+                  type="button"
+                  className="n-skill-token is-research"
+                  title={t('chat.browser.close')}
+                  aria-label={t('chat.browser.close')}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={browser.onClose}
+                >
+                  <Globe aria-hidden="true" />
+                  {t('chat.browser.token')}
+                </button>
+              )}
               {research?.picked && (
                 <button
                   type="button"
@@ -388,7 +407,8 @@ export function Composer({
                 }
               }
               // Backspace at the very start takes the last token back: a skill,
-              // then deep research.
+              // then deep research. Not the browser, which stays open until its
+              // token is clicked.
               if (
                 event.key === 'Backspace' &&
                 tokened &&
@@ -397,7 +417,7 @@ export function Composer({
               ) {
                 event.preventDefault()
                 if (skills?.picked.length) skills.onUnpick(skills.picked[skills.picked.length - 1]!)
-                else research?.onUnpick()
+                else if (research?.picked) research.onUnpick()
                 return
               }
               if (!isEnter(event)) return
@@ -421,6 +441,7 @@ export function Composer({
             onAdd={(files) => attach?.onAdd(files)}
             onRefer={(reference) => attach?.onRefer(reference)}
             research={research && !research.picked ? { desc: research.desc, blocked: research.blocked, onPick: research.onPick } : undefined}
+            onOpenBrowser={browser && !browser.open ? browser.onOpen : undefined}
           />
           {attach && (
             <input

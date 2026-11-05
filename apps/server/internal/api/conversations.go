@@ -114,6 +114,14 @@ func (s *Server) CreateConversation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if body.Browser != nil && *body.Browser && s.browserOffered(r.Context()) {
+		if row, err = s.q.SetConversationBrowser(r.Context(), sqlc.SetConversationBrowserParams{
+			ID: row.ID, UserID: &user.ID, Browser: true,
+		}); err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+	}
 	httpx.JSON(w, http.StatusCreated, toConversation(row))
 }
 
@@ -136,9 +144,9 @@ func (s *Server) UpdateConversation(w http.ResponseWriter, r *http.Request, conv
 		httpx.Fail(w, r, err)
 		return
 	}
-	if body.Title == nil && body.Model == nil && body.ReasoningEffort == nil && body.WebSearch == nil && body.Pinned == nil {
+	if body.Title == nil && body.Model == nil && body.ReasoningEffort == nil && body.WebSearch == nil && body.Browser == nil && body.Pinned == nil {
 		httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "nothing_to_update",
-			"give a title, a model, a reasoning effort, a web search choice or a pin"))
+			"give a title, a model, a reasoning effort, a web search or browser choice, or a pin"))
 		return
 	}
 	var effort *string
@@ -209,6 +217,15 @@ func (s *Server) UpdateConversation(w http.ResponseWriter, r *http.Request, conv
 	if body.WebSearch != nil {
 		if row, err = s.q.SetConversationWebSearch(ctx, sqlc.SetConversationWebSearchParams{
 			ID: conversationId, UserID: &user.ID, WebSearch: *body.WebSearch,
+		}); err != nil {
+			httpx.Fail(w, r, dbErr(err))
+			return
+		}
+	}
+	// Opening it is for whoever is offered the browser; closing, for anyone.
+	if body.Browser != nil && (!*body.Browser || s.browserOffered(ctx)) {
+		if row, err = s.q.SetConversationBrowser(ctx, sqlc.SetConversationBrowserParams{
+			ID: conversationId, UserID: &user.ID, Browser: *body.Browser,
 		}); err != nil {
 			httpx.Fail(w, r, dbErr(err))
 			return

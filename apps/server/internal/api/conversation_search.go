@@ -58,7 +58,7 @@ func (s *Server) searchConversations(w http.ResponseWriter, r *http.Request, use
 		conv := toConversation(sqlc.Conversation{
 			ID: row.ID, UserID: row.UserID, Title: row.Title, Model: row.Model,
 			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, DeletedAt: row.DeletedAt,
-			ReasoningEffort: row.ReasoningEffort, WebSearch: row.WebSearch,
+			ReasoningEffort: row.ReasoningEffort, WebSearch: row.WebSearch, Browser: row.Browser,
 			MemorySnapshot: row.MemorySnapshot, Temporary: row.Temporary,
 		})
 		if id, err := uuid.Parse(row.HitID); err == nil {

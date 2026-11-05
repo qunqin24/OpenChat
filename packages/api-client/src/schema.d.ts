@@ -1011,6 +1011,117 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/browser": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Browser settings */
+        get: operations["getBrowserSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change browser settings
+         * @description Takes effect at once: a new address closes every browser session open
+         *     now. 400 `invalid_browser_settings` for an address or network that does
+         *     not parse.
+         */
+        patch: operations["updateBrowserSettings"];
+        trace?: never;
+    };
+    "/admin/browser/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open one page in the browser with the current settings
+         * @description Opens the page the way the browser tool would - through the proxy, with
+         *     the blocklist - in a session of its own, and reports how it went. A
+         *     page that could not be opened is a 200 with `ok: false`.
+         */
+        post: operations["testBrowser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/image-generation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Image generation settings */
+        get: operations["getImageGenerationSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change image generation settings
+         * @description Takes effect for the runs that start after it. 400
+         *     `invalid_image_settings` for a limit out of range, or a model that is
+         *     not an image model served by a channel that can make pictures.
+         */
+        patch: operations["updateImageGenerationSettings"];
+        trace?: never;
+    };
+    "/admin/image-generation/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make one picture with the current settings
+         * @description Makes one picture with the image model, as the image tool would, in no
+         *     conversation; its cost is logged like any other image request. A
+         *     picture that could not be made is a 200 with `ok: false`.
+         */
+        post: operations["testImageGeneration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/browser/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Browser actions that needed asking, newest first
+         * @description Who clicked or typed what on which site, among the actions the browser
+         *     tool puts to the person first, and how each ended. Never what was typed.
+         */
+        get: operations["listBrowserActions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/plugin-calls": {
         parameters: {
             query?: never;
@@ -1208,51 +1319,6 @@ export interface paths {
          *     is a 200 with `ok: false`: the request worked, the search did not.
          */
         post: operations["testWebSearch"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/image-generation": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Image generation settings */
-        get: operations["getImageGenerationSettings"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Change image generation settings
-         * @description Takes effect for the runs that start after it. 400
-         *     `invalid_image_settings` for a limit out of range, or a model that is
-         *     not an image model served by a channel that can make pictures.
-         */
-        patch: operations["updateImageGenerationSettings"];
-        trace?: never;
-    };
-    "/admin/image-generation/test": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Make one picture with the current settings
-         * @description Makes one picture with the image model, as the image tool would, in no
-         *     conversation; its cost is logged like any other image request. A
-         *     picture that could not be made is a 200 with `ok: false`.
-         */
-        post: operations["testImageGeneration"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2005,7 +2071,10 @@ export interface paths {
          *     the rest of the conversation, `deny` refuses it (the script sees an
          *     error). 404 for a call that is not the caller's or not waiting; 409
          *     `confirmation_gone` when the run that waited is no longer here to go on
-         *     (the server restarted).
+         *     (the server restarted). The browser tool's actions that need asking
+         *     wait the same way (`BrowserProgress`, status `waiting`); for them
+         *     `always` allows every such action on that site for the rest of the
+         *     conversation.
          */
         post: operations["answerPluginConfirmation"];
         delete?: never;
@@ -3168,6 +3237,13 @@ export interface components {
              *     Has no effect where the server offers no web search.
              */
             webSearch: boolean;
+            /**
+             * @description Whether the person opened the browser for this conversation (the
+             *     composer's "+" menu): its runs are offered the browser tool, and web
+             *     search with it. Off by default; has no effect for someone the
+             *     browser is not offered to (`ChatFeatures.browser`).
+             */
+            browser: boolean;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -3215,6 +3291,8 @@ export interface components {
             model?: string;
             reasoningEffort?: components["schemas"]["ReasoningEffort"];
             webSearch?: boolean;
+            /** @description Ignored for someone the browser is not offered to. */
+            browser?: boolean;
             temporary?: boolean;
         };
         UpdateConversationRequest: {
@@ -3223,6 +3301,8 @@ export interface components {
             model?: string;
             reasoningEffort?: components["schemas"]["ReasoningEffort"];
             webSearch?: boolean;
+            /** @description Takes effect at the conversation's next run: a run keeps the tools it started with. */
+            browser?: boolean;
             /** @description Pins it to the top of the list, or unpins it. Not its activity - `updatedAt` stays. */
             pinned?: boolean;
         };
@@ -3404,6 +3484,8 @@ export interface components {
             reasoningEffort?: components["schemas"]["ReasoningEffort"];
             /** @description For this run, and remembered by the conversation. Absent keeps the conversation's. */
             webSearch?: boolean;
+            /** @description As webSearch. Ignored for someone the browser is not offered to. */
+            browser?: boolean;
             /** @description Chosen by the client; a retry with the same id finds the same run. */
             requestId?: string;
             attachmentIds?: string[];
@@ -3421,6 +3503,7 @@ export interface components {
             model?: string;
             reasoningEffort?: components["schemas"]["ReasoningEffort"];
             webSearch?: boolean;
+            browser?: boolean;
             /**
              * @description Uploads to send with the new wording. Only for the edit of a message
              *     content moderation refused (it carries none of its own); any other
@@ -3436,6 +3519,7 @@ export interface components {
             model?: string;
             reasoningEffort?: components["schemas"]["ReasoningEffort"];
             webSearch?: boolean;
+            browser?: boolean;
             /** @description Chosen by the client; a retry with the same id finds the same run. */
             requestId?: string;
         };
@@ -3452,6 +3536,7 @@ export interface components {
             model?: string;
             reasoningEffort?: components["schemas"]["ReasoningEffort"];
             webSearch?: boolean;
+            browser?: boolean;
             /** @description Chosen by the client; a retry with the same id finds the same run. */
             requestId?: string;
         };
@@ -3550,7 +3635,7 @@ export interface components {
             status: "pending" | "running" | "done" | "awaiting";
             /** Format: uuid */
             messageId?: string;
-            /** @description What the running call last reported, for the page (`PluginCodeProgress` for `plugin_code` and directly listed plugin tools). */
+            /** @description What the running call last reported, for the page (`PluginCodeProgress` for `plugin_code` and directly listed plugin tools, `BrowserProgress` for `browser`). */
             progress?: unknown;
         };
         /** @description One SSE frame of the events stream. */
@@ -3732,6 +3817,185 @@ export interface components {
             /** @description The person allowed it when asked. */
             confirmed: boolean;
             durationMs: number;
+        };
+        /**
+         * @description What a browser call is doing, as `ToolSlot.progress` and, once
+         *     finished, the tool result's `details`.
+         */
+        BrowserProgress: {
+            /** @description The tool's action: open, snapshot, find, click, type, select, press, scroll, back, wait, screenshot or read. */
+            action: string;
+            /** @enum {string} */
+            status: "running" | "waiting" | "done" | "failed" | "denied";
+            /** @description The page's address after the action (or the one asked for */
+            url?: string;
+            title?: string;
+            /** @description The element acted on, as the snapshot names it (`button "Buy now"`). */
+            target?: string;
+            /** @description What a find or wait looked for */
+            text?: string;
+            /** @description The site an action that needs asking is on. */
+            site?: string;
+            /** @description Why it needs asking, while `waiting` (`submit`, `password_form`, `payment`, `words`, `model`). */
+            reason?: string;
+            /**
+             * Format: uuid
+             * @description While `waiting`, what answerPluginConfirmation takes.
+             */
+            confirmationId?: string;
+            image?: components["schemas"]["ToolImage"];
+            error?: string;
+        };
+        ImageGenerationSettings: {
+            /**
+             * @description Whether models may make pictures, in everyone's conversations
+             *     (scheduled tasks' included; sub-agents' and deep research's not).
+             */
+            enabled: boolean;
+            /** @description The image model the pictures are made with; empty when none is chosen. */
+            model: string;
+            /** @description Pictures one call may ask for */
+            maxPerCall: number;
+            /** @description Pictures one answer may make */
+            maxPerRun: number;
+            /**
+             * @description Pictures a person may make a day (0 is no limit), unless their own
+             *     allowance says otherwise (`UpdateUserRequest.imageDaily`).
+             *     Administrators have no daily limit.
+             */
+            daily: number;
+            /** @description The quality a call that names none is made at; `auto` is the provider's default. */
+            defaultQuality: components["schemas"]["ImageQuality"];
+            /** @description The highest quality a call may ask for; `auto` is no cap. */
+            maxQuality: components["schemas"]["ImageQuality"];
+            /**
+             * @description Every picture is made at `defaultQuality`, and the model is not
+             *     offered a quality to choose (`maxQuality` does not apply). Takes
+             *     effect for the runs that start after it.
+             */
+            qualityFixed: boolean;
+            /** @description How much a call that names none plans before drawing; `auto` is the provider's default (high). */
+            defaultComplexity: components["schemas"]["ImageComplexity"];
+            /**
+             * @description Every picture is planned at `defaultComplexity`, and the model is
+             *     not offered a complexity to choose. For the runs that start after it.
+             */
+            complexityFixed: boolean;
+            /**
+             * @description Whether the chosen model has a price (per picture, or per token in
+             *     the catalogue). Without one its pictures cost nothing in the logs
+             *     and a spending cap never trips.
+             */
+            modelPriced: boolean;
+        };
+        /** @description Only the fields present are changed. */
+        UpdateImageGenerationSettingsRequest: {
+            enabled?: boolean;
+            model?: string;
+            maxPerCall?: number;
+            maxPerRun?: number;
+            daily?: number;
+            defaultQuality?: components["schemas"]["ImageQuality"];
+            maxQuality?: components["schemas"]["ImageQuality"];
+            qualityFixed?: boolean;
+            defaultComplexity?: components["schemas"]["ImageComplexity"];
+            complexityFixed?: boolean;
+        };
+        /**
+         * @description How carefully a picture is made, for the models that take it (gpt-image;
+         *     dall-e-3 takes the upper three as hd). `auto` is the provider's default.
+         * @enum {string}
+         */
+        ImageQuality: "auto" | "low" | "medium" | "high" | "xhigh" | "max";
+        /**
+         * @description How much the image model plans before it draws, for the models that take
+         *     it (gpt-image 2.6 on): low for a focused edit, high for dense text and
+         *     busy layouts. `auto` is the provider's default. No separate fee.
+         * @enum {string}
+         */
+        ImageComplexity: "auto" | "low" | "medium" | "high";
+        ImageGenerationTestRequest: {
+            prompt: string;
+        };
+        ImageGenerationTestResult: {
+            ok: boolean;
+            /** Format: int64 */
+            durationMs: number;
+            /** @description The picture as a data URL, when it was made. */
+            image?: string;
+            width?: number;
+            height?: number;
+            /**
+             * Format: double
+             * @description What it cost in USD, when the model has a price.
+             */
+            cost?: number | null;
+            /** @description Why not */
+            error?: string;
+        };
+        BrowserSettings: {
+            /** @description Whether administrators are offered the browser (the only ones, for now). */
+            enabled: boolean;
+            /** @description The browser's CDP address (`http://browserd:9222`), or `exec:<path>` to start a local Chromium. */
+            endpoint: string;
+            /** @description Where OpenChat listens for the browser's traffic (`:8188`). Every page goes through it. */
+            proxyListen: string;
+            /** @description The proxy as the browser reaches it (`http://openchat:8188`). */
+            proxyUrl: string;
+            /**
+             * @description Networks besides the browser's own address (found from `endpoint`)
+             *     and loopback that may use the proxy, as CIDR.
+             */
+            proxySources: string[];
+            /** @description Browser sessions open at once */
+            maxSessions: number;
+            /** @description Sessions open now. */
+            sessions: number;
+        };
+        /** @description Only the fields present are changed. */
+        UpdateBrowserSettingsRequest: {
+            enabled?: boolean;
+            endpoint?: string;
+            proxyListen?: string;
+            proxyUrl?: string;
+            proxySources?: string[];
+            maxSessions?: number;
+        };
+        BrowserTestRequest: {
+            url: string;
+        };
+        BrowserTestResult: {
+            ok: boolean;
+            /** Format: int64 */
+            latencyMs: number;
+            url?: string;
+            title?: string;
+            /** @description The start of the page's snapshot. */
+            preview?: string;
+            error?: string;
+        };
+        BrowserActionLog: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            userId?: string;
+            userName?: string;
+            userEmail?: string;
+            /** Format: uuid */
+            conversationId?: string;
+            site: string;
+            action: string;
+            target: string;
+            /** @description `allowed`, `granted` (the site was allowed earlier), `denied`, `no_answer`, `unattended` or `failed`. */
+            outcome: string;
+        };
+        BrowserActionLogPage: {
+            items: components["schemas"]["BrowserActionLog"][];
+            /** @description Absent on the last page. */
+            nextCursor?: string;
+            limit: number;
         };
         PluginCallLogPage: {
             items: components["schemas"]["PluginCallLog"][];
@@ -4223,6 +4487,8 @@ export interface components {
              *     (Image generation settings, and the image model offered to them).
              */
             imageGeneration?: boolean;
+            /** @description Whether the caller may open the browser in a conversation (Browser settings; administrators only for now). */
+            browser?: boolean;
             /** @description Whether models may launch sub-agents (Sub-agent settings). */
             subagents?: boolean;
             /** @description Whether scheduled tasks are on (System settings); off, `/tasks` is 404. */
@@ -5646,93 +5912,6 @@ export interface components {
             /** @description Absent on the last page. */
             nextCursor?: string;
             limit: number;
-        };
-        ImageGenerationSettings: {
-            /**
-             * @description Whether models may make pictures, in everyone's conversations
-             *     (scheduled tasks' included; sub-agents' and deep research's not).
-             */
-            enabled: boolean;
-            /** @description The image model the pictures are made with; empty when none is chosen. */
-            model: string;
-            /** @description Pictures one call may ask for */
-            maxPerCall: number;
-            /** @description Pictures one answer may make */
-            maxPerRun: number;
-            /**
-             * @description Pictures a person may make a day (0 is no limit), unless their own
-             *     allowance says otherwise (`UpdateUserRequest.imageDaily`).
-             *     Administrators have no daily limit.
-             */
-            daily: number;
-            /** @description The quality a call that names none is made at; `auto` is the provider's default. */
-            defaultQuality: components["schemas"]["ImageQuality"];
-            /** @description The highest quality a call may ask for; `auto` is no cap. */
-            maxQuality: components["schemas"]["ImageQuality"];
-            /**
-             * @description Every picture is made at `defaultQuality`, and the model is not
-             *     offered a quality to choose (`maxQuality` does not apply). Takes
-             *     effect for the runs that start after it.
-             */
-            qualityFixed: boolean;
-            /** @description How much a call that names none plans before drawing; `auto` is the provider's default (high). */
-            defaultComplexity: components["schemas"]["ImageComplexity"];
-            /**
-             * @description Every picture is planned at `defaultComplexity`, and the model is
-             *     not offered a complexity to choose. For the runs that start after it.
-             */
-            complexityFixed: boolean;
-            /**
-             * @description Whether the chosen model has a price (per picture, or per token in
-             *     the catalogue). Without one its pictures cost nothing in the logs
-             *     and a spending cap never trips.
-             */
-            modelPriced: boolean;
-        };
-        /** @description Only the fields present are changed. */
-        UpdateImageGenerationSettingsRequest: {
-            enabled?: boolean;
-            model?: string;
-            maxPerCall?: number;
-            maxPerRun?: number;
-            daily?: number;
-            defaultQuality?: components["schemas"]["ImageQuality"];
-            maxQuality?: components["schemas"]["ImageQuality"];
-            qualityFixed?: boolean;
-            defaultComplexity?: components["schemas"]["ImageComplexity"];
-            complexityFixed?: boolean;
-        };
-        /**
-         * @description How carefully a picture is made, for the models that take it (gpt-image;
-         *     dall-e-3 takes the upper three as hd). `auto` is the provider's default.
-         * @enum {string}
-         */
-        ImageQuality: "auto" | "low" | "medium" | "high" | "xhigh" | "max";
-        /**
-         * @description How much the image model plans before it draws, for the models that take
-         *     it (gpt-image 2.6 on): low for a focused edit, high for dense text and
-         *     busy layouts. `auto` is the provider's default. No separate fee.
-         * @enum {string}
-         */
-        ImageComplexity: "auto" | "low" | "medium" | "high";
-        ImageGenerationTestRequest: {
-            prompt: string;
-        };
-        ImageGenerationTestResult: {
-            ok: boolean;
-            /** Format: int64 */
-            durationMs: number;
-            /** @description The picture as a data URL, when it was made. */
-            image?: string;
-            width?: number;
-            height?: number;
-            /**
-             * Format: double
-             * @description What it cost in USD, when the model has a price.
-             */
-            cost?: number | null;
-            /** @description Why not */
-            error?: string;
         };
         ImageSearchSettings: {
             /**
@@ -7846,6 +8025,172 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    getBrowserSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateBrowserSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateBrowserSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    testBrowser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowserTestRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserTestResult"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getImageGenerationSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageGenerationSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateImageGenerationSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateImageGenerationSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageGenerationSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    testImageGeneration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImageGenerationTestRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageGenerationTestResult"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listBrowserActions: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserActionLogPage"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     listPluginCalls: {
         parameters: {
             query?: {
@@ -8252,77 +8597,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WebSearchTestResult"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    getImageGenerationSettings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description ok */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ImageGenerationSettings"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    updateImageGenerationSettings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateImageGenerationSettingsRequest"];
-            };
-        };
-        responses: {
-            /** @description ok */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ImageGenerationSettings"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    testImageGeneration: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ImageGenerationTestRequest"];
-            };
-        };
-        responses: {
-            /** @description ok */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ImageGenerationTestResult"];
                 };
             };
             default: components["responses"]["Error"];

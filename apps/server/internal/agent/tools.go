@@ -118,6 +118,18 @@ func definitions(tools []Tool) []llm.Tool {
 	return defs
 }
 
+// SequentialTool is implemented by a tool whose calls of one round must run
+// one after another, in the order the model made them, while other tools'
+// run alongside: each acts on state the one before left (the browser's page).
+type SequentialTool interface {
+	Sequential() bool
+}
+
+func sequential(tool Tool) bool {
+	s, ok := tool.(SequentialTool)
+	return ok && s.Sequential()
+}
+
 // WebTool is implemented by a tool that reaches the web. A run whose
 // conversation has web access switched off is not offered these.
 type WebTool interface {

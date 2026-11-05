@@ -28,7 +28,7 @@ export function useChatFeatures() {
 }
 
 /**
- * Remembers a conversation's model, reasoning effort and web access, so its
+ * Remembers a conversation's model, reasoning effort, web access and browser, so its
  * next run — and another device — use them. Applied to the cached conversation
  * at once: the picker shows the choice before the server has confirmed it.
  */
@@ -38,7 +38,7 @@ export function useUpdateConversationSettings() {
     mutationFn: async ({
       conversationId,
       ...body
-    }: { conversationId: string } & Pick<UpdateConversationRequest, 'model' | 'reasoningEffort' | 'webSearch'>) =>
+    }: { conversationId: string } & Pick<UpdateConversationRequest, 'model' | 'reasoningEffort' | 'webSearch' | 'browser'>) =>
       unwrap(
         await api.PATCH('/conversations/{conversationId}', {
           params: { path: { conversationId } },

@@ -135,8 +135,8 @@ WHERE plugin_id = $1
 -- A built-in plugin, unless it was made before (or its short name is taken).
 -- Starts switched off: it needs an administrator's setup before anyone can use it.
 INSERT INTO plugins (builtin, slug, name, description, about, category, icon_text, icon_color, mcp_url, auth_type,
-                     enabled, sort, icon_slug, icon_path, oauth_scopes)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11, $12, $13, $14)
+                     enabled, sort, icon_slug, icon_path, oauth_scopes, header_name)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11, $12, $13, $14, $15)
 ON CONFLICT DO NOTHING;
 
 -- name: FillBuiltinPluginIcon :exec
@@ -364,3 +364,34 @@ WHERE (sqlc.narg('before')::bigint IS NULL OR c.id < sqlc.narg('before')::bigint
   AND (NOT sqlc.arg('failed_only')::boolean OR NOT c.ok)
 ORDER BY c.id DESC
 LIMIT sqlc.arg('row_limit');
+
+-- The browser tool (api/browser_tool.go).
+
+-- name: CreateBrowserConfirmation :one
+INSERT INTO plugin_confirmations (run_id, conversation_id, user_id, call_id, seq, site, tool, arguments)
+VALUES ($1, $2, $3, $4, 1, $5, $6, $7)
+RETURNING *;
+
+-- name: GrantBrowserSite :exec
+INSERT INTO browser_site_grants (conversation_id, site)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING;
+
+-- name: BrowserSiteGranted :one
+SELECT EXISTS (SELECT 1 FROM browser_site_grants WHERE conversation_id = $1 AND site = $2)::boolean;
+
+-- name: RecordBrowserAction :exec
+INSERT INTO browser_actions (user_id, conversation_id, site, action, target, outcome)
+VALUES ($1, $2, $3, $4, $5, $6);
+
+-- name: ListBrowserActions :many
+SELECT a.id, a.created_at, a.user_id, u.name AS user_name, u.email AS user_email, a.conversation_id,
+       a.site, a.action, a.target, a.outcome
+FROM browser_actions a
+         LEFT JOIN users u ON u.id = a.user_id
+WHERE (sqlc.narg('before')::bigint IS NULL OR a.id < sqlc.narg('before')::bigint)
+ORDER BY a.id DESC
+LIMIT sqlc.arg('row_limit');
+
+-- name: GetBuiltinPluginID :one
+SELECT id FROM plugins WHERE builtin = $1;

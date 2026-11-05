@@ -379,6 +379,23 @@ type BranchBackfill struct {
 	Newest         int64       `json:"newest"`
 }
 
+type BrowserAction struct {
+	ID             int64              `json:"id"`
+	UserID         *uuid.UUID         `json:"user_id"`
+	ConversationID *uuid.UUID         `json:"conversation_id"`
+	Site           string             `json:"site"`
+	Action         string             `json:"action"`
+	Target         string             `json:"target"`
+	Outcome        string             `json:"outcome"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type BrowserSiteGrant struct {
+	ConversationID uuid.UUID          `json:"conversation_id"`
+	Site           string             `json:"site"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
 type CatalogModel struct {
 	ProviderID       string             `json:"provider_id"`
 	ModelID          string             `json:"model_id"`
@@ -467,6 +484,7 @@ type Conversation struct {
 	Skills          []string           `json:"skills"`
 	PluginCatalog   []byte             `json:"plugin_catalog"`
 	Plugins         []string           `json:"plugins"`
+	Browser         bool               `json:"browser"`
 }
 
 type Document struct {
@@ -650,12 +668,13 @@ type PluginConfirmation struct {
 	UserID         uuid.UUID          `json:"user_id"`
 	CallID         string             `json:"call_id"`
 	Seq            int32              `json:"seq"`
-	PluginID       uuid.UUID          `json:"plugin_id"`
+	PluginID       *uuid.UUID         `json:"plugin_id"`
 	Tool           string             `json:"tool"`
 	Arguments      []byte             `json:"arguments"`
 	Status         string             `json:"status"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	AnsweredAt     pgtype.Timestamptz `json:"answered_at"`
+	Site           *string            `json:"site"`
 }
 
 type PluginInstall struct {

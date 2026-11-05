@@ -62,6 +62,7 @@ type Querier interface {
 	// many seconds the count falls below the limit again: when the row_limit-th
 	// most recent attempt leaves the window. No row: not at the limit.
 	AuthAttemptsFull(ctx context.Context, arg AuthAttemptsFullParams) (int32, error)
+	BrowserSiteGranted(ctx context.Context, arg BrowserSiteGrantedParams) (bool, error)
 	// Only accounts that are waiting count, so the number reported is the number
 	// let in.
 	BulkApproveUsers(ctx context.Context, ids []uuid.UUID) (int64, error)
@@ -92,6 +93,8 @@ type Querier interface {
 	ClaimPendingReports(ctx context.Context, parentID uuid.UUID) ([]SubagentReport, error)
 	// Hands the files a tool stored in a run to the row that holds its result.
 	ClaimRunFiles(ctx context.Context, arg ClaimRunFilesParams) error
+	// Whether the browser is open in a conversation, for its runs' tools.
+	ConversationBrowser(ctx context.Context, id uuid.UUID) (bool, error)
 	CountAdmins(ctx context.Context) (int64, error)
 	CountCatalogModels(ctx context.Context) (int64, error)
 	CountCatalogProviders(ctx context.Context) (int64, error)
@@ -136,6 +139,8 @@ type Querier interface {
 	CountUsers(ctx context.Context) (int64, error)
 	CountUsersFiltered(ctx context.Context, arg CountUsersFilteredParams) (int64, error)
 	CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (Attachment, error)
+	// The browser tool (api/browser_tool.go).
+	CreateBrowserConfirmation(ctx context.Context, arg CreateBrowserConfirmationParams) (PluginConfirmation, error)
 	// An empty format is the default, so a caller that has no opinion — tests,
 	// older code — gets Chat Completions rather than a constraint violation; a zero
 	// weight is the default weight, 1, the same way.
@@ -282,6 +287,7 @@ type Querier interface {
 	// What the local storage driver's handlers know a file by. The signature in
 	// the URL is what authorises the request, so there is no owner to check.
 	GetAttachmentByStorageKey(ctx context.Context, storageKey string) (Attachment, error)
+	GetBuiltinPluginID(ctx context.Context, builtin *string) (uuid.UUID, error)
 	GetCatalogModel(ctx context.Context, arg GetCatalogModelParams) (GetCatalogModelRow, error)
 	GetChannel(ctx context.Context, id uuid.UUID) (Channel, error)
 	GetChannelModel(ctx context.Context, arg GetChannelModelParams) (ChannelModel, error)
@@ -449,6 +455,7 @@ type Querier interface {
 	GetUserPlugin(ctx context.Context, arg GetUserPluginParams) (GetUserPluginRow, error)
 	// An account's own quota; NULL for the instance's default.
 	GetUserStorageQuota(ctx context.Context, id uuid.UUID) (*int64, error)
+	GrantBrowserSite(ctx context.Context, arg GrantBrowserSiteParams) error
 	GrantPluginTool(ctx context.Context, arg GrantPluginToolParams) error
 	// Whether anyone has registered yet. While nobody has, registration is open to
 	// the one account that becomes the administrator, however the switch is set.
@@ -527,6 +534,7 @@ type Querier interface {
 	// one person, or everyone (the sweep). Not the ones the person cancelled, nor
 	// those of a deleted conversation.
 	ListBackgroundQueuedSubagents(ctx context.Context, userID *uuid.UUID) ([]Conversation, error)
+	ListBrowserActions(ctx context.Context, arg ListBrowserActionsParams) ([]ListBrowserActionsRow, error)
 	// What models.dev knows about the models one channel lists.
 	//
 	// Deliberately the same column list as ListServedModels, so the row converts to
@@ -688,7 +696,9 @@ type Querier interface {
 	ListSkillVersions(ctx context.Context, arg ListSkillVersionsParams) ([]ListSkillVersionsRow, error)
 	// What a new conversation of this person may use: the site's skills that are
 	// on, then the skills of the plugins they installed that may be used now
-	// (on, theirs to see), then their own that are on, each at its current version.
+	// (on, theirs to see, and with a tool that is not blocked unless they have no
+	// service: a skill about tools the run lacks sends the model looking for
+	// them), then their own that are on, each at its current version.
 	ListSnapshotSkills(ctx context.Context, userID *uuid.UUID) ([]ListSnapshotSkillsRow, error)
 	// The latest report of each of a conversation's sub-agents.
 	ListSubagentLatestReports(ctx context.Context, parentID uuid.UUID) ([]SubagentReport, error)
@@ -867,6 +877,7 @@ type Querier interface {
 	PurgeWebAuthnChallenges(ctx context.Context, createdAt pgtype.Timestamptz) (int64, error)
 	PutSearchCache(ctx context.Context, arg PutSearchCacheParams) error
 	QueueSubagentMessage(ctx context.Context, arg QueueSubagentMessageParams) error
+	RecordBrowserAction(ctx context.Context, arg RecordBrowserActionParams) error
 	RecordPluginCall(ctx context.Context, arg RecordPluginCallParams) error
 	RecordResearchStart(ctx context.Context, arg RecordResearchStartParams) error
 	// The first account created becomes the admin: someone has to be able to reach
@@ -921,6 +932,7 @@ type Querier interface {
 	// the column: whether this installation offers a model is our decision, and a
 	// refresh of somebody else's list is not an occasion to revisit it.
 	SetChannelModelEnabled(ctx context.Context, arg SetChannelModelEnabledParams) (ChannelModel, error)
+	SetConversationBrowser(ctx context.Context, arg SetConversationBrowserParams) (Conversation, error)
 	// The model a conversation's next run uses. Remembered per conversation so a
 	// reload, or another device, continues with the same one.
 	SetConversationModel(ctx context.Context, arg SetConversationModelParams) (Conversation, error)

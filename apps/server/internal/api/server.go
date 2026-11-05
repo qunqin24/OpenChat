@@ -65,6 +65,8 @@ type Server struct {
 	now func() time.Time
 	// updates is the last look at the project's releases (version.go).
 	updates updateChecker
+	// browser is the browser tool's sessions and proxy (browser.go).
+	browser browsers
 }
 
 var _ ServerInterface = (*Server)(nil)

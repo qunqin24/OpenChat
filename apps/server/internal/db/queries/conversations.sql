@@ -157,6 +157,18 @@ WHERE id = sqlc.arg('id')
   AND deleted_at IS NULL
 RETURNING *;
 
+-- name: SetConversationBrowser :one
+UPDATE conversations
+SET browser = sqlc.arg('browser')
+WHERE id = sqlc.arg('id')
+  AND user_id = sqlc.arg('user_id')
+  AND deleted_at IS NULL
+RETURNING *;
+
+-- name: ConversationBrowser :one
+-- Whether the browser is open in a conversation, for its runs' tools.
+SELECT browser FROM conversations WHERE id = $1;
+
 -- name: SetGeneratedTitle :one
 -- A generated title, only over the default one: a conversation the user has
 -- renamed in the meantime keeps their name. Not a change of activity, so the

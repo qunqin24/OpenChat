@@ -241,7 +241,7 @@ func (s *Server) storeSkill(r *http.Request, owner skillOwner, id *uuid.UUID, fi
 			checked = &parsed.Hash
 		}
 	}
-	skill, err := s.skillStore(owner).Save(ctx, owner.id, id, parsed, checked, owner.user.ID)
+	skill, err := s.skillStore(owner).Save(ctx, owner.id, id, parsed, checked, &owner.user.ID)
 	if err != nil {
 		return skills.Skill{}, skillError(err)
 	}

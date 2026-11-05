@@ -140,7 +140,7 @@ func (s *Server) CreateMessage(w http.ResponseWriter, r *http.Request, conversat
 		httpx.Fail(w, r, err)
 		return
 	}
-	choice, err := s.chooseRun(ctx, conv, body.Model, body.ReasoningEffort, body.WebSearch)
+	choice, err := s.chooseRun(ctx, conv, body.Model, body.ReasoningEffort, body.WebSearch, body.Browser)
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
@@ -244,6 +244,10 @@ type runChoice struct {
 	effort, runEffort *string
 	rememberEffort    bool
 	webSearch         bool
+	// browser: the conversation's browser switch as this run leaves it, kept
+	// by the conversation when rememberBrowser. browserOn: the run has the
+	// browser, and so web search too (browser_tool.go).
+	browser, rememberBrowser, browserOn bool
 	// continues is set when the run answers a question the model asked: the
 	// first run of the answer it carries on (see ask_user.go).
 	continues *uuid.UUID
@@ -262,7 +266,7 @@ type runChoice struct {
 
 // chooseRun settles a run's model, effort and web access from what the request
 // asked for, else the conversation's.
-func (s *Server) chooseRun(ctx context.Context, conv sqlc.Conversation, model *string, askedEffort *ReasoningEffort, askedWeb *bool) (runChoice, error) {
+func (s *Server) chooseRun(ctx context.Context, conv sqlc.Conversation, model *string, askedEffort *ReasoningEffort, askedWeb, askedBrowser *bool) (runChoice, error) {
 	var c runChoice
 	modelID := ""
 	if model != nil {
@@ -310,6 +314,13 @@ func (s *Server) chooseRun(ctx context.Context, conv sqlc.Conversation, model *s
 	if askedWeb != nil {
 		c.webSearch = *askedWeb
 	}
+	// The browser likewise, opened only by someone it is offered to.
+	offered := s.browserOffered(ctx)
+	c.browser = conv.Browser
+	if askedBrowser != nil && *askedBrowser != conv.Browser && (!*askedBrowser || offered) {
+		c.browser, c.rememberBrowser = *askedBrowser, true
+	}
+	c.browserOn = c.browser && offered
 	c.fromApp = auth.FromApp(ctx)
 	return c, nil
 }
@@ -333,7 +344,7 @@ func createRun(ctx context.Context, q *sqlc.Queries, conv sqlc.Conversation, use
 		ModelID:         c.modelID,
 		ChannelID:       &c.channelID,
 		ReasoningEffort: c.runEffort,
-		WebSearch:       c.webSearch,
+		WebSearch:       c.webSearch || c.browserOn,
 		Continues:       c.continues,
 		FromApp:         c.fromApp,
 		Research:        c.research,
@@ -363,6 +374,13 @@ func createRun(ctx context.Context, q *sqlc.Queries, conv sqlc.Conversation, use
 	if c.webSearch != conv.WebSearch && !c.webForced {
 		if _, err := q.SetConversationWebSearch(ctx, sqlc.SetConversationWebSearchParams{
 			ID: conv.ID, UserID: &userID, WebSearch: c.webSearch,
+		}); err != nil {
+			return run, err
+		}
+	}
+	if c.rememberBrowser {
+		if _, err := q.SetConversationBrowser(ctx, sqlc.SetConversationBrowserParams{
+			ID: conv.ID, UserID: &userID, Browser: c.browser,
 		}); err != nil {
 			return run, err
 		}
@@ -758,6 +776,7 @@ func (s *Server) GetChatFeatures(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, err)
 		return
 	}
+	browserOn := s.browserOffered(r.Context())
 	imagesOn := s.imageGenerationFor(r.Context(), auth.MustUser(r.Context()))
 	traces, err := s.tracesOn(r.Context())
 	if err != nil {
@@ -796,6 +815,7 @@ func (s *Server) GetChatFeatures(w http.ResponseWriter, r *http.Request) {
 		AvatarUploads:   avatars,
 		ScheduledTasks:  tasks,
 		RequestTraces:   traces && isStaff(r.Context()),
+		Browser:         &browserOn,
 		ImageGeneration: &imagesOn,
 	})
 }

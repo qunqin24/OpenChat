@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -120,8 +121,9 @@ func (s *Server) pluginInput(body AdminPluginInput) (pluginRow, error) {
 		return row, invalidPlugin("headerName", "not a header name")
 	}
 	if address := str(body.McpUrl); address != "" {
+		// Or a service that runs inside OpenChat (a built-in's, plugins.LocalScheme).
 		u, err := url.Parse(address)
-		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		if !plugins.IsLocal(address) && (err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "") {
 			return row, invalidPlugin("mcpUrl", "the MCP address must be an http or https URL")
 		}
 		row.mcpURL = &address
@@ -249,6 +251,7 @@ func (s *Server) CreateAdminPlugin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.InfoContext(ctx, "plugin added", "plugin", p.Slug, "actor", auth.MustUser(ctx).Email)
+	s.autoFetchPluginTools(r, p)
 	out, err := s.adminPlugin(ctx, p.ID)
 	if err != nil {
 		httpx.Fail(w, r, err)
@@ -265,6 +268,15 @@ func (s *Server) UpdateAdminPlugin(w http.ResponseWriter, r *http.Request, plugi
 		return
 	}
 	in, err := s.pluginInput(body)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	before, err := s.q.GetPlugin(ctx, pluginId)
+	if errors.Is(err, pgx.ErrNoRows) {
+		httpx.Fail(w, r, errPluginNotFound)
+		return
+	}
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
@@ -288,6 +300,11 @@ func (s *Server) UpdateAdminPlugin(w http.ResponseWriter, r *http.Request, plugi
 	if err := s.setOAuthClient(ctx, p.ID, in); err != nil {
 		httpx.Fail(w, r, err)
 		return
+	}
+	// Listed again when where or how it is reached changed, or never was.
+	if !p.ToolsFetchedAt.Valid || ptrString(before.McpUrl) != ptrString(p.McpUrl) || before.AuthType != p.AuthType ||
+		before.HeaderName != p.HeaderName || in.setSecret {
+		s.autoFetchPluginTools(r, p)
 	}
 	out, err := s.adminPlugin(ctx, p.ID)
 	if err != nil {
@@ -398,49 +415,7 @@ func (s *Server) RefreshAdminPluginTools(w http.ResponseWriter, r *http.Request,
 		httpx.Fail(w, r, errPluginNoService)
 		return
 	}
-	end := plugins.Endpoint{URL: *p.McpUrl, HeaderName: p.HeaderName, Version: s.cfg.Version}
-	// One that acts as each person is listed as the administrator: with their
-	// own connection, made on the plugins page like anyone's.
-	if p.AuthType == "oauth" {
-		token, err := s.pluginToken(ctx, auth.MustUser(ctx).ID, p, pluginRedirectURI(r))
-		if err != nil {
-			httpx.Fail(w, r, err)
-			return
-		}
-		end.HeaderName, end.HeaderValue = "Authorization", "Bearer "+token
-	}
-	if p.AuthType == "header" && len(p.HeaderSecret) > 0 {
-		value, err := s.secrets.Open(p.HeaderSecret)
-		if err != nil {
-			httpx.Fail(w, r, errSecretKeyMissing)
-			return
-		}
-		end.HeaderValue = string(value)
-	}
-	tools, err := plugins.ListTools(ctx, end)
-	if err != nil {
-		slog.WarnContext(ctx, "plugin tools could not be listed", "plugin", p.Slug, "error", err)
-		httpx.Fail(w, r, httpx.NewError(http.StatusBadGateway, "plugin_unreachable", fmt.Sprintf("the service could not be listed: %v", err)))
-		return
-	}
-	names := make([]string, 0, len(tools))
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		q := s.q.WithTx(tx)
-		for _, t := range tools {
-			names = append(names, t.Name)
-			if err := q.UpsertPluginTool(ctx, sqlc.UpsertPluginToolParams{
-				PluginID: p.ID, Name: t.Name, Title: t.Title, Description: t.Description, InputSchema: t.InputSchema,
-				ReadOnly: t.ReadOnly, Destructive: t.Destructive,
-			}); err != nil {
-				return err
-			}
-		}
-		if err := q.DeletePluginToolsExcept(ctx, sqlc.DeletePluginToolsExceptParams{PluginID: p.ID, Names: names}); err != nil {
-			return err
-		}
-		return q.MarkPluginToolsFetched(ctx, p.ID)
-	})
-	if err != nil {
+	if err := s.fetchPluginTools(ctx, p, auth.MustUser(ctx).ID, pluginRedirectURI(r)); err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
@@ -451,6 +426,93 @@ func (s *Server) RefreshAdminPluginTools(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	httpx.JSON(w, http.StatusOK, out)
+}
+
+// fetchPluginTools lists a plugin's tools from its service and keeps them.
+// One that acts as each person is listed as the administrator asking: with
+// their own connection, made on the plugins page like anyone's.
+func (s *Server) fetchPluginTools(ctx context.Context, p sqlc.Plugin, admin uuid.UUID, redirectURI string) error {
+	end := plugins.Endpoint{URL: *p.McpUrl, HeaderName: p.HeaderName, Version: s.cfg.Version}
+	if p.AuthType == "oauth" {
+		token, err := s.pluginToken(ctx, admin, p, redirectURI)
+		if err != nil {
+			return err
+		}
+		end.HeaderName, end.HeaderValue = "Authorization", "Bearer "+token
+	}
+	if p.AuthType == "header" && len(p.HeaderSecret) > 0 {
+		value, err := s.secrets.Open(p.HeaderSecret)
+		if err != nil {
+			return errSecretKeyMissing
+		}
+		end.HeaderValue = string(value)
+	}
+	tools, err := plugins.ListTools(ctx, end)
+	if err != nil {
+		slog.WarnContext(ctx, "plugin tools could not be listed", "plugin", p.Slug, "error", err)
+		return httpx.NewError(http.StatusBadGateway, "plugin_unreachable", fmt.Sprintf("the service could not be listed: %v", err))
+	}
+	return s.storePluginTools(ctx, p.ID, tools)
+}
+
+// autoFetchPluginTools lists the tools of a plugin just added or whose
+// service changed, so an administrator need not ask: one that acts as each
+// person waits for the administrator's own connection (PluginOAuthCallback).
+// A service that cannot be listed now leaves the save as it is, to be
+// fetched by hand.
+func (s *Server) autoFetchPluginTools(r *http.Request, p sqlc.Plugin) {
+	if p.McpUrl == nil || *p.McpUrl == "" || p.AuthType == "oauth" {
+		return
+	}
+	_ = s.fetchPluginTools(r.Context(), p, auth.MustUser(r.Context()).ID, pluginRedirectURI(r))
+}
+
+// storePluginTools keeps the tools a service listed: new ones added, the
+// descriptions of known ones updated (their permissions as an administrator
+// set them), gone ones removed.
+func (s *Server) storePluginTools(ctx context.Context, pluginID uuid.UUID, tools []plugins.Tool) error {
+	names := make([]string, 0, len(tools))
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		q := s.q.WithTx(tx)
+		for _, t := range tools {
+			names = append(names, t.Name)
+			if err := q.UpsertPluginTool(ctx, sqlc.UpsertPluginToolParams{
+				PluginID: pluginID, Name: t.Name, Title: t.Title, Description: t.Description, InputSchema: t.InputSchema,
+				ReadOnly: t.ReadOnly, Destructive: t.Destructive,
+			}); err != nil {
+				return err
+			}
+		}
+		if err := q.DeletePluginToolsExcept(ctx, sqlc.DeletePluginToolsExceptParams{PluginID: pluginID, Names: names}); err != nil {
+			return err
+		}
+		return q.MarkPluginToolsFetched(ctx, pluginID)
+	})
+}
+
+// ListBuiltinPluginTools lists, at start, the tools of the built-in plugins
+// whose service runs inside OpenChat (plugins.LocalScheme): there is nothing
+// for an administrator to set up first, so switching one on is enough, and a
+// new release's tools reach it without anyone fetching them.
+func (s *Server) ListBuiltinPluginTools(ctx context.Context) {
+	for _, b := range plugins.Builtins {
+		key := b.Key
+		id, err := s.q.GetBuiltinPluginID(ctx, &key)
+		if err != nil {
+			continue
+		}
+		p, err := s.q.GetPlugin(ctx, id)
+		if err != nil || p.McpUrl == nil || !plugins.IsLocal(*p.McpUrl) {
+			continue
+		}
+		tools, err := plugins.ListTools(ctx, plugins.Endpoint{URL: *p.McpUrl, Version: s.cfg.Version})
+		if err == nil {
+			err = s.storePluginTools(ctx, p.ID, tools)
+		}
+		if err != nil {
+			slog.WarnContext(ctx, "list a built-in plugin's tools", "plugin", p.Slug, "error", err)
+		}
+	}
 }
 
 func (s *Server) UpdateAdminPluginTool(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID, toolName string) {
@@ -475,4 +537,12 @@ func (s *Server) UpdateAdminPluginTool(w http.ResponseWriter, r *http.Request, p
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ptrString is an optional column's text, empty when NULL.
+func ptrString(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
 }

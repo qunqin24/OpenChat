@@ -1305,7 +1305,7 @@ func (s *Server) deliverReports(ctx context.Context, parentID uuid.UUID) {
 	if latest, err := s.q.GetLatestRun(ctx, parentID); err == nil && latest.Status == sqlc.RunStatusAwaitingInput {
 		return // the answer's run takes them
 	}
-	choice, err := s.chooseRun(ctx, conv, nil, nil, nil)
+	choice, err := s.chooseRun(ctx, conv, nil, nil, nil, nil)
 	if err != nil {
 		slog.DebugContext(ctx, "deliver sub-agent reports: no model", "error", err, "conversation_id", parentID)
 		return

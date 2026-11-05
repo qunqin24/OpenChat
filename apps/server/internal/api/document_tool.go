@@ -132,13 +132,14 @@ func (s *Server) DocumentTools(ctx context.Context) []agent.Tool {
 
 // ServerTools is every tool that works through the server, for the runner. A
 // sub-agent's run gets only the writing blocks, to read, and the plugins its
-// launch named: no tasks, and no sub-agents of its own.
+// launch named: no tasks, no browser, and no sub-agents of its own.
 func (s *Server) ServerTools(ctx context.Context) []agent.Tool {
 	if scope, ok := agent.ScopeFrom(ctx); ok && scope.Subagent() {
 		return append(s.DocumentTools(ctx), s.PluginTools(ctx)...)
 	}
 	tools := append(s.TaskTools(ctx), s.DocumentTools(ctx)...)
 	tools = append(tools, s.SubagentTools(ctx)...)
+	tools = append(tools, s.BrowserTools(ctx)...)
 	tools = append(tools, s.ImageTools(ctx)...)
 	return append(tools, s.PluginTools(ctx)...)
 }

@@ -1,0 +1,35 @@
+# The browser tool's Chromium (后台 → 浏览器, docs/design/browser-plan.md).
+# Add this file to the others to run it:
+#
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.browser.yml \
+#     --env-file deploy/.env up -d
+#
+# then turn the browser on in 后台 → 浏览器; its defaults are this file's
+# addresses. browserd is only on an internal network with no way out: the
+# only thing it reaches is OpenChat, whose proxy (:8188, never published)
+# carries every page to public addresses only. OpenChat takes the proxy's
+# connections from browserd's address alone.
+services:
+  browserd:
+    image: ${BROWSERD_IMAGE:-chromedp/headless-shell:latest}
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    restart: unless-stopped
+    # Chromium needs more shared memory than Docker's 64 MB for most pages.
+    shm_size: 1gb
+    networks:
+      - browser
+    expose:
+      - "9222"
+
+  openchat:
+    networks:
+      - default
+      - browser
+
+networks:
+  browser:
+    internal: true

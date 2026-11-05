@@ -19,6 +19,7 @@ func toConversation(row sqlc.Conversation) Conversation {
 		Model:           row.Model,
 		ReasoningEffort: &effort,
 		WebSearch:       row.WebSearch,
+		Browser:         row.Browser,
 		Temporary:       row.Temporary,
 		CreatedAt:       row.CreatedAt.Time,
 		UpdatedAt:       row.UpdatedAt.Time,

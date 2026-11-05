@@ -330,8 +330,9 @@ func (s *Store) files(ctx context.Context, q *sqlc.Queries, version uuid.UUID) (
 // Save creates a skill (id nil) or saves a new version of one. checked is the
 // hash that content moderation passed, or the site's own hash (an
 // administrator's skill is not checked); nil leaves the version to be checked
-// when a conversation would take it.
-func (s *Store) Save(ctx context.Context, owner, id *uuid.UUID, p Parsed, checked *string, by uuid.UUID) (Skill, error) {
+// when a conversation would take it. by is who wrote it; nil for OpenChat's
+// own (a built-in plugin's, plugins.EnsureBuiltinSkills).
+func (s *Store) Save(ctx context.Context, owner, id *uuid.UUID, p Parsed, checked *string, by *uuid.UUID) (Skill, error) {
 	var saved uuid.UUID
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
@@ -379,7 +380,7 @@ func (s *Store) Save(ctx context.Context, owner, id *uuid.UUID, p Parsed, checke
 			saved = *id
 		}
 		version, err := q.CreateSkillVersion(ctx, sqlc.CreateSkillVersionParams{
-			SkillID: saved, Description: p.Description, ContentHash: p.Hash, Checked: checked, CreatedBy: &by,
+			SkillID: saved, Description: p.Description, ContentHash: p.Hash, Checked: checked, CreatedBy: by,
 		})
 		if err != nil {
 			return err

@@ -207,6 +207,33 @@ func (e BatchEventType) Valid() bool {
 	}
 }
 
+// Defines values for BrowserProgressStatus.
+const (
+	BrowserProgressStatusDenied  BrowserProgressStatus = "denied"
+	BrowserProgressStatusDone    BrowserProgressStatus = "done"
+	BrowserProgressStatusFailed  BrowserProgressStatus = "failed"
+	BrowserProgressStatusRunning BrowserProgressStatus = "running"
+	BrowserProgressStatusWaiting BrowserProgressStatus = "waiting"
+)
+
+// Valid indicates whether the value is a known member of the BrowserProgressStatus enum.
+func (e BrowserProgressStatus) Valid() bool {
+	switch e {
+	case BrowserProgressStatusDenied:
+		return true
+	case BrowserProgressStatusDone:
+		return true
+	case BrowserProgressStatusFailed:
+		return true
+	case BrowserProgressStatusRunning:
+		return true
+	case BrowserProgressStatusWaiting:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BulkSkipReason.
 const (
 	NotFound BulkSkipReason = "not_found"
@@ -2230,7 +2257,8 @@ type AnswerQuestionRequest struct {
 		Other    *string  `json:"other,omitempty"`
 		Selected []string `json:"selected"`
 	} `json:"answers"`
-	Model *string `json:"model,omitempty"`
+	Browser *bool   `json:"browser,omitempty"`
+	Model   *string `json:"model,omitempty"`
 
 	// ReasoningEffort How hard a reasoning model thinks. `auto` sends nothing and leaves the
 	// model at its own default. The other values are the levels providers
@@ -2361,6 +2389,105 @@ type BatchEvent struct {
 
 // BatchEventType defines model for BatchEvent.Type.
 type BatchEventType string
+
+// BrowserActionLog defines model for BrowserActionLog.
+type BrowserActionLog struct {
+	Action         string              `json:"action"`
+	ConversationId *openapi_types.UUID `json:"conversationId,omitempty"`
+	CreatedAt      time.Time           `json:"createdAt"`
+	Id             int64               `json:"id"`
+
+	// Outcome `allowed`, `granted` (the site was allowed earlier), `denied`, `no_answer`, `unattended` or `failed`.
+	Outcome   string              `json:"outcome"`
+	Site      string              `json:"site"`
+	Target    string              `json:"target"`
+	UserEmail *string             `json:"userEmail,omitempty"`
+	UserId    *openapi_types.UUID `json:"userId,omitempty"`
+	UserName  *string             `json:"userName,omitempty"`
+}
+
+// BrowserActionLogPage defines model for BrowserActionLogPage.
+type BrowserActionLogPage struct {
+	Items []BrowserActionLog `json:"items"`
+	Limit int                `json:"limit"`
+
+	// NextCursor Absent on the last page.
+	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// BrowserProgress What a browser call is doing, as `ToolSlot.progress` and, once
+// finished, the tool result's `details`.
+type BrowserProgress struct {
+	// Action The tool's action: open, snapshot, find, click, type, select, press, scroll, back, wait, screenshot or read.
+	Action string `json:"action"`
+
+	// ConfirmationId While `waiting`, what answerPluginConfirmation takes.
+	ConfirmationId *openapi_types.UUID `json:"confirmationId,omitempty"`
+	Error          *string             `json:"error,omitempty"`
+	Image          *ToolImage          `json:"image,omitempty"`
+
+	// Reason Why it needs asking, while `waiting` (`submit`, `password_form`, `payment`, `words`, `model`).
+	Reason *string `json:"reason,omitempty"`
+
+	// Site The site an action that needs asking is on.
+	Site   *string               `json:"site,omitempty"`
+	Status BrowserProgressStatus `json:"status"`
+
+	// Target The element acted on, as the snapshot names it (`button "Buy now"`).
+	Target *string `json:"target,omitempty"`
+
+	// Text What a find or wait looked for
+	Text  *string `json:"text,omitempty"`
+	Title *string `json:"title,omitempty"`
+
+	// Url The page's address after the action (or the one asked for
+	Url *string `json:"url,omitempty"`
+}
+
+// BrowserProgressStatus defines model for BrowserProgress.Status.
+type BrowserProgressStatus string
+
+// BrowserSettings defines model for BrowserSettings.
+type BrowserSettings struct {
+	// Enabled Whether administrators are offered the browser (the only ones, for now).
+	Enabled bool `json:"enabled"`
+
+	// Endpoint The browser's CDP address (`http://browserd:9222`), or `exec:<path>` to start a local Chromium.
+	Endpoint string `json:"endpoint"`
+
+	// MaxSessions Browser sessions open at once
+	MaxSessions int `json:"maxSessions"`
+
+	// ProxyListen Where OpenChat listens for the browser's traffic (`:8188`). Every page goes through it.
+	ProxyListen string `json:"proxyListen"`
+
+	// ProxySources Networks besides the browser's own address (found from `endpoint`)
+	// and loopback that may use the proxy, as CIDR.
+	ProxySources []string `json:"proxySources"`
+
+	// ProxyUrl The proxy as the browser reaches it (`http://openchat:8188`).
+	ProxyUrl string `json:"proxyUrl"`
+
+	// Sessions Sessions open now.
+	Sessions int `json:"sessions"`
+}
+
+// BrowserTestRequest defines model for BrowserTestRequest.
+type BrowserTestRequest struct {
+	Url string `json:"url"`
+}
+
+// BrowserTestResult defines model for BrowserTestResult.
+type BrowserTestResult struct {
+	Error     *string `json:"error,omitempty"`
+	LatencyMs int64   `json:"latencyMs"`
+	Ok        bool    `json:"ok"`
+
+	// Preview The start of the page's snapshot.
+	Preview *string `json:"preview,omitempty"`
+	Title   *string `json:"title,omitempty"`
+	Url     *string `json:"url,omitempty"`
+}
 
 // BuiltinSkill defines model for BuiltinSkill.
 type BuiltinSkill struct {
@@ -2702,6 +2829,9 @@ type ChatFeatures struct {
 	// AvatarUploads Whether the account settings offer uploading a picture.
 	AvatarUploads bool `json:"avatarUploads"`
 
+	// Browser Whether the caller may open the browser in a conversation (Browser settings; administrators only for now).
+	Browser *bool `json:"browser,omitempty"`
+
 	// DeepResearch Whether the caller can start a deep research (`@` → 深度研究). Absent
 	// when deep research is off or web search is unavailable.
 	DeepResearch *DeepResearchAllowance `json:"deepResearch,omitempty"`
@@ -2878,6 +3008,11 @@ type ContextUsage struct {
 
 // Conversation defines model for Conversation.
 type Conversation struct {
+	// Browser Whether the person opened the browser for this conversation (the
+	// composer's "+" menu): its runs are offered the browser tool, and web
+	// search with it. Off by default; has no effect for someone the
+	// browser is not offered to (`ChatFeatures.browser`).
+	Browser   bool               `json:"browser"`
 	CreatedAt time.Time          `json:"createdAt"`
 	Id        openapi_types.UUID `json:"id"`
 
@@ -3000,7 +3135,9 @@ type CreateChannelRequest struct {
 
 // CreateConversationRequest defines model for CreateConversationRequest.
 type CreateConversationRequest struct {
-	Model *string `json:"model,omitempty"`
+	// Browser Ignored for someone the browser is not offered to.
+	Browser *bool   `json:"browser,omitempty"`
+	Model   *string `json:"model,omitempty"`
 
 	// ReasoningEffort How hard a reasoning model thinks. `auto` sends nothing and leaves the
 	// model at its own default. The other values are the levels providers
@@ -3016,7 +3153,10 @@ type CreateConversationRequest struct {
 // CreateMessageRequest defines model for CreateMessageRequest.
 type CreateMessageRequest struct {
 	AttachmentIds *[]openapi_types.UUID `json:"attachmentIds,omitempty"`
-	Content       string                `json:"content"`
+
+	// Browser As webSearch. Ignored for someone the browser is not offered to.
+	Browser *bool  `json:"browser,omitempty"`
+	Content string `json:"content"`
 
 	// ConversationIds Other conversations of yours to refer to, not this one. Each is read
 	// for the model, up to its last message now, whenever the context is
@@ -3239,6 +3379,7 @@ type EditMessageRequest struct {
 	// content moderation refused (it carries none of its own); any other
 	// message keeps its own files and takes none.
 	AttachmentIds *[]openapi_types.UUID `json:"attachmentIds,omitempty"`
+	Browser       *bool                 `json:"browser,omitempty"`
 	Content       string                `json:"content"`
 
 	// ConversationIds As in createMessage, and like attachmentIds only for a refused message.
@@ -4268,7 +4409,8 @@ type ReasoningPartType string
 
 // RegenerateRequest defines model for RegenerateRequest.
 type RegenerateRequest struct {
-	Model *string `json:"model,omitempty"`
+	Browser *bool   `json:"browser,omitempty"`
+	Model   *string `json:"model,omitempty"`
 
 	// ReasoningEffort How hard a reasoning model thinks. `auto` sends nothing and leaves the
 	// model at its own default. The other values are the levels providers
@@ -4990,7 +5132,7 @@ type ToolSlot struct {
 	MessageId *openapi_types.UUID `json:"messageId,omitempty"`
 	Name      string              `json:"name"`
 
-	// Progress What the running call last reported, for the page (`PluginCodeProgress` for `plugin_code` and directly listed plugin tools).
+	// Progress What the running call last reported, for the page (`PluginCodeProgress` for `plugin_code` and directly listed plugin tools, `BrowserProgress` for `browser`).
 	Progress interface{} `json:"progress,omitempty"`
 
 	// Status `awaiting` is a question for the user: nothing runs, and the run ends on it.
@@ -5072,6 +5214,16 @@ type TranscriptChangedEvent struct {
 // TranscriptChangedEventType defines model for TranscriptChangedEvent.Type.
 type TranscriptChangedEventType string
 
+// UpdateBrowserSettingsRequest Only the fields present are changed.
+type UpdateBrowserSettingsRequest struct {
+	Enabled      *bool     `json:"enabled,omitempty"`
+	Endpoint     *string   `json:"endpoint,omitempty"`
+	MaxSessions  *int      `json:"maxSessions,omitempty"`
+	ProxyListen  *string   `json:"proxyListen,omitempty"`
+	ProxySources *[]string `json:"proxySources,omitempty"`
+	ProxyUrl     *string   `json:"proxyUrl,omitempty"`
+}
+
 // UpdateChannelRequest Only the fields present are changed. An absent `apiKey` keeps the
 // stored one; an empty string clears it. There is no way to read a key
 // back, so a form that wants to leave it alone must omit the field.
@@ -5099,6 +5251,9 @@ type UpdateChannelRequest struct {
 
 // UpdateConversationRequest defines model for UpdateConversationRequest.
 type UpdateConversationRequest struct {
+	// Browser Takes effect at the conversation's next run: a run keeps the tools it started with.
+	Browser *bool `json:"browser,omitempty"`
+
 	// Model The model the conversation's next run uses.
 	Model *string `json:"model,omitempty"`
 
@@ -5792,6 +5947,12 @@ type TaskId = openapi_types.UUID
 // RateLimited defines model for RateLimited.
 type RateLimited = Error
 
+// ListBrowserActionsParams defines parameters for ListBrowserActions.
+type ListBrowserActionsParams struct {
+	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
 // ListCatalogModelsParams defines parameters for ListCatalogModels.
 type ListCatalogModelsParams struct {
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
@@ -6000,6 +6161,12 @@ type PluginOAuthCallbackParams struct {
 
 // UpdatePasskeySettingsJSONRequestBody defines body for UpdatePasskeySettings for application/json ContentType.
 type UpdatePasskeySettingsJSONRequestBody = UpdatePasskeySettingsRequest
+
+// UpdateBrowserSettingsJSONRequestBody defines body for UpdateBrowserSettings for application/json ContentType.
+type UpdateBrowserSettingsJSONRequestBody = UpdateBrowserSettingsRequest
+
+// TestBrowserJSONRequestBody defines body for TestBrowser for application/json ContentType.
+type TestBrowserJSONRequestBody = BrowserTestRequest
 
 // CreateChannelJSONRequestBody defines body for CreateChannel for application/json ContentType.
 type CreateChannelJSONRequestBody = CreateChannelRequest
@@ -7134,6 +7301,18 @@ type ServerInterface interface {
 	// UpdatePasskeySettings Change passkey settings
 	// (PATCH /admin/authentication/passkeys)
 	UpdatePasskeySettings(w http.ResponseWriter, r *http.Request)
+	// GetBrowserSettings Browser settings
+	// (GET /admin/browser)
+	GetBrowserSettings(w http.ResponseWriter, r *http.Request)
+	// UpdateBrowserSettings Change browser settings
+	// (PATCH /admin/browser)
+	UpdateBrowserSettings(w http.ResponseWriter, r *http.Request)
+	// ListBrowserActions Browser actions that needed asking, newest first
+	// (GET /admin/browser/actions)
+	ListBrowserActions(w http.ResponseWriter, r *http.Request, params ListBrowserActionsParams)
+	// TestBrowser Open one page in the browser with the current settings
+	// (POST /admin/browser/test)
+	TestBrowser(w http.ResponseWriter, r *http.Request)
 	// GetCatalogStatus Catalogue freshness
 	// (GET /admin/catalog)
 	GetCatalogStatus(w http.ResponseWriter, r *http.Request)
@@ -7653,6 +7832,30 @@ func (_ Unimplemented) GetPasskeySettings(w http.ResponseWriter, r *http.Request
 // UpdatePasskeySettings Change passkey settings
 // (PATCH /admin/authentication/passkeys)
 func (_ Unimplemented) UpdatePasskeySettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetBrowserSettings Browser settings
+// (GET /admin/browser)
+func (_ Unimplemented) GetBrowserSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateBrowserSettings Change browser settings
+// (PATCH /admin/browser)
+func (_ Unimplemented) UpdateBrowserSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListBrowserActions Browser actions that needed asking, newest first
+// (GET /admin/browser/actions)
+func (_ Unimplemented) ListBrowserActions(w http.ResponseWriter, r *http.Request, params ListBrowserActionsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// TestBrowser Open one page in the browser with the current settings
+// (POST /admin/browser/test)
+func (_ Unimplemented) TestBrowser(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8692,6 +8895,94 @@ func (siw *ServerInterfaceWrapper) UpdatePasskeySettings(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdatePasskeySettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetBrowserSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetBrowserSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBrowserSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateBrowserSettings operation middleware
+func (siw *ServerInterfaceWrapper) UpdateBrowserSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateBrowserSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListBrowserActions operation middleware
+func (siw *ServerInterfaceWrapper) ListBrowserActions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListBrowserActionsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListBrowserActions(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestBrowser operation middleware
+func (siw *ServerInterfaceWrapper) TestBrowser(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestBrowser(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13303,6 +13594,27 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/admin/moderation/events", wrapper.ListModerationEvents)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/browser", wrapper.GetBrowserSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/admin/browser", wrapper.UpdateBrowserSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/browser/test", wrapper.TestBrowser)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/image-generation", wrapper.GetImageGenerationSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/admin/image-generation", wrapper.UpdateImageGenerationSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/image-generation/test", wrapper.TestImageGeneration)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/browser/actions", wrapper.ListBrowserActions)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/plugin-calls", wrapper.ListPluginCalls)
 	})
 	r.Group(func(r chi.Router) {
@@ -13352,15 +13664,6 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/admin/web-search/test", wrapper.TestWebSearch)
-	})
-	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/admin/image-generation", wrapper.GetImageGenerationSettings)
-	})
-	r.Group(func(r chi.Router) {
-		r.Patch(options.BaseURL+"/admin/image-generation", wrapper.UpdateImageGenerationSettings)
-	})
-	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/admin/image-generation/test", wrapper.TestImageGeneration)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/image-search", wrapper.GetImageSearchSettings)

@@ -90,7 +90,9 @@ RETURNING id;
 -- name: ListSnapshotSkills :many
 -- What a new conversation of this person may use: the site's skills that are
 -- on, then the skills of the plugins they installed that may be used now
--- (on, theirs to see), then their own that are on, each at its current version.
+-- (on, theirs to see, and with a tool that is not blocked unless they have no
+-- service: a skill about tools the run lacks sends the model looking for
+-- them), then their own that are on, each at its current version.
 SELECT s.id, s.owner_id, s.plugin_id, s.name, v.id AS version_id, v.description, v.content_hash, v.checked, v.blocked
 FROM skills s
 JOIN skill_versions v ON v.id = s.current_version_id
@@ -104,7 +106,9 @@ WHERE s.enabled
                WHERE i.user_id = sqlc.arg('user_id')
                  AND p.id = s.plugin_id
                  AND p.enabled
-                 AND (p.audience = 'all' OR u.role = 'admin')))
+                 AND (p.audience = 'all' OR u.role = 'admin')
+                 AND (p.mcp_url IS NULL OR p.mcp_url = ''
+                   OR EXISTS (SELECT 1 FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked'))))
 ORDER BY s.owner_id NULLS FIRST, s.plugin_id NULLS FIRST, s.updated_at DESC, s.id;
 
 -- name: GetSkillVersionFor :one

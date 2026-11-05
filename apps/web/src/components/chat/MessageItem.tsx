@@ -11,12 +11,14 @@ import { turnText, type Turn } from '@openchat/chat-core/transcript'
 import { CopiedIcon, CopyIcon, EditIcon, RegenerateIcon } from './ActionIcons'
 import AskUserCard, { PreparingLine } from './AskUserCard'
 import ResearchPlanCard from './ResearchPlanCard'
+import BrowserConfirmCard from './BrowserConfirmCard'
 import PluginConfirmCard from './PluginConfirmCard'
 import { parsePlan, planDecisionOf, RESEARCH_PLAN } from '@openchat/chat-core/research-plan'
 import { MEMORY_TOOL, memoryChangeOf } from '@openchat/chat-core/memory-tool'
 import { TASK_TOOL, taskChangeOf } from '@openchat/chat-core/task-tool'
 import { DOCUMENT_TOOL, documentChangeOf, documentOpOf } from '@openchat/chat-core/document-tool'
 import { launchesOf, SUBAGENT_TOOL } from '@openchat/chat-core/subagents'
+import { BROWSER_TOOL, browserProgressOf } from '@openchat/chat-core/browser-tool'
 import { IMAGE_TOOL, imageRequestOf, picturesOf } from '@openchat/chat-core/image-tool'
 import { isPluginTool, pluginProgressOf, waitingCalls } from '@openchat/chat-core/plugin-code'
 import { SubagentLaunchLine } from './SubagentLines'
@@ -488,6 +490,17 @@ export function AssistantTurn({
               )
             }
             if (pending) return null
+          }
+          if (part.name === BROWSER_TOOL) {
+            // An action waiting for the person to allow it is a card, as a
+            // plugin call's is; otherwise a step with the page it left.
+            const result = turn.results[part.id]
+            const progress = live?.progress[part.id]
+            const waiting = !result && running ? browserProgressOf(undefined, progress) : null
+            if (waiting?.status === 'waiting' && waiting.confirmationId && conversationId) {
+              return <BrowserConfirmCard key={key} conversationId={conversationId} progress={waiting} />
+            }
+            return { key, step: { call: part, result, status: toolStatus(part.id), progress, conversationId } }
           }
           if (isPluginTool(part.name)) {
             // A call waiting for the person to allow it is a card in the

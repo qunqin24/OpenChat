@@ -56,7 +56,10 @@ export function IconPicker({ slug, onPick }: { slug: string; onPick: (icon: Bran
 
   return (
     <div className="flex gap-2">
-      <Popover open={open} onOpenChange={openPicker}>
+      {/* Modal: the picker sits in the plugin's Sheet, whose scroll lock
+          swallows the wheel over anything outside it, the list portalled to
+          <body> included; a modal popover is a scroll layer of its own. */}
+      <Popover open={open} onOpenChange={openPicker} modal>
         <PopoverTrigger asChild>
           <Button type="button" variant="outline" className="flex-1 justify-between font-normal">
             <span className={slug ? '' : 'text-muted-foreground'}>{slug || t('admin.plugins.icon-none')}</span>

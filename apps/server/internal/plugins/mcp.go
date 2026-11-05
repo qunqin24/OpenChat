@@ -69,6 +69,14 @@ func ListTools(ctx context.Context, end Endpoint) ([]Tool, error) {
 
 // connect opens a session; timeout bounds each HTTP request of it.
 func connect(ctx context.Context, end Endpoint, timeout time.Duration) (*mcp.ClientSession, error) {
+	version := end.Version
+	if version == "" {
+		version = "dev"
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "OpenChat", Version: version}, nil)
+	if IsLocal(end.URL) {
+		return connectLocal(ctx, client, end, version)
+	}
 	httpClient := &http.Client{Timeout: timeout}
 	if end.HeaderValue != "" {
 		httpClient.Transport = withHeader{name: end.HeaderName, value: end.HeaderValue, next: http.DefaultTransport}
@@ -81,11 +89,6 @@ func connect(ctx context.Context, end Endpoint, timeout time.Duration) (*mcp.Cli
 		DisableStandaloneSSE: true,
 		MaxRetries:           -1,
 	}
-	version := end.Version
-	if version == "" {
-		version = "dev"
-	}
-	client := mcp.NewClient(&mcp.Implementation{Name: "OpenChat", Version: version}, nil)
 	session, err := client.Connect(ctx, transport, nil)
 	if err != nil {
 		return nil, fmt.Errorf("connecting: %w", err)

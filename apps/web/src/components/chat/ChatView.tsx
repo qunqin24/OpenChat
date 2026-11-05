@@ -266,6 +266,25 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     [conversationId, updateSettings, userId],
   )
 
+  // The browser ("+" → 浏览器), for whoever it is offered to, with a model that
+  // calls tools: kept by the conversation, as a draft until its first message.
+  // A new chat starts with it closed.
+  const canBrowse = (features.data?.browser ?? false) && (modelById.get(modelId)?.toolCall ?? true)
+  const [draftBrowser, setDraftBrowser] = useState(false)
+  const [draftFor, setDraftFor] = useState(conversationId)
+  if (draftFor !== conversationId) {
+    setDraftFor(conversationId)
+    setDraftBrowser(false)
+  }
+  const browser = conversationId ? (conversation.data?.browser ?? false) : draftBrowser
+  const pickBrowser = useCallback(
+    (next: boolean) => {
+      if (conversationId) updateSettings.mutate({ conversationId, browser: next })
+      else setDraftBrowser(next)
+    },
+    [conversationId, updateSettings],
+  )
+
   // Pictures an answer gives by address come through the server, for this
   // conversation only; described ones are found by it (found-image.ts).
   const images = useMemo(
@@ -385,6 +404,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
       model: modelId || undefined,
       reasoningEffort: canThink ? effort : undefined,
       webSearch: canSearch ? webSearch : undefined,
+      browser: canBrowse ? browser : undefined,
     })
   }
 
@@ -396,6 +416,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
       model: modelId || undefined,
       reasoningEffort: canThink ? effort : undefined,
       webSearch: canSearch ? webSearch : undefined,
+      browser: canBrowse ? browser : undefined,
     })
   }
 
@@ -420,6 +441,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
         model: modelId || undefined,
         reasoningEffort: canThink ? effort : undefined,
         webSearch: canSearch ? webSearch : undefined,
+        browser: canBrowse ? browser : undefined,
       },
       // Refused (content moderation, a limit): the question is back as it was,
       // and the field reopens with the words that were typed.
@@ -804,6 +826,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
           model: modelId || undefined,
           reasoningEffort: canThink ? effort : undefined,
           webSearch: canSearch ? webSearch : undefined,
+          browser: canBrowse ? browser : undefined,
         },
         {
           onSuccess: () => attachments.release(taken),
@@ -826,6 +849,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
           model: modelId || undefined,
           reasoningEffort: canThink ? effort : undefined,
           webSearch: canSearch ? webSearch : undefined,
+          browser: canBrowse ? browser : undefined,
           attachmentIds,
           conversationIds,
         },
@@ -854,6 +878,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
         ...(modelId ? { model: modelId } : {}),
         ...(canThink && effort !== 'auto' ? { reasoningEffort: effort } : {}),
         ...(canSearch && !webSearch ? { webSearch: false } : {}),
+        ...(canBrowse && browser ? { browser: true } : {}),
         ...(temporaryChat ? { temporary: true } : {}),
       })
     } catch {
@@ -886,6 +911,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
         model: modelId || undefined,
         reasoningEffort: canThink ? effort : undefined,
         webSearch: canSearch ? webSearch : undefined,
+        browser: canBrowse ? browser : undefined,
         attachmentIds,
         conversationIds,
       })
@@ -948,6 +974,8 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     temporaryChat,
     unpost,
     webSearch,
+    browser,
+    canBrowse,
   ])
 
   // A choice picked in the last answer (genui/choices.tsx): sent as the
@@ -968,6 +996,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
           model: modelId || undefined,
           reasoningEffort: canThink ? effort : undefined,
           webSearch: canSearch ? webSearch : undefined,
+          browser: canBrowse ? browser : undefined,
         },
         {
           // Not taken: the message goes to the composer, to send again or change.
@@ -979,7 +1008,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
         },
       )
     },
-    [canSearch, canThink, capacityRefused, conversationId, effort, modelId, post, revising, sendMessage, unpost, webSearch, working],
+    [browser, canBrowse, canSearch, canThink, capacityRefused, conversationId, effort, modelId, post, revising, sendMessage, unpost, webSearch, working],
   )
 
   // What was sent after each reply, for its Choices blocks to mark the choice
@@ -1043,6 +1072,11 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
               onPick: () => setPickedResearch(true),
               onUnpick: () => setPickedResearch(false),
             }
+          : undefined
+      }
+      browser={
+        canBrowse && !revising && !editingPlan
+          ? { open: browser, onOpen: () => pickBrowser(true), onClose: () => pickBrowser(false) }
           : undefined
       }
       plan={editingPlan ? { title: editingPlan.title, onStop: () => setRevisingPlan(null) } : undefined}

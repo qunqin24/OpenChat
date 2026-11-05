@@ -1,5 +1,5 @@
 import type { ConversationReference, LibraryFile } from '@openchat/api-client'
-import { Camera, Check, ChevronLeft, ChevronRight, LibraryBig, MessagesSquare, Paperclip, Plus, Search, Telescope } from 'lucide-react'
+import { Camera, Check, ChevronLeft, ChevronRight, Globe, LibraryBig, MessagesSquare, Paperclip, Plus, Search, Telescope } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -29,7 +29,7 @@ type View = 'main' | 'library' | 'conversations'
  * The composer's "+": ways to attach, after
  * OpenWebUI's - a file from the disk, a screenshot, a file already sent (the
  * library), or another conversation - each with a word on what it does, as
- * ChatGPT's menu has it, and deep research. Skills have a list of their own, typed for with /. The library and the
+ * ChatGPT's menu has it, deep research, and the browser. Skills have a list of their own, typed for with /. The library and the
  * conversations, as there, turn the menu itself into a list to
  * pick from (a way back, a search field, the list) rather than open a second
  * menu beside it. The files end in a File for `onAdd`
@@ -48,6 +48,7 @@ export function AttachMenu({
   onAdd,
   onRefer,
   research,
+  onOpenBrowser,
 }: {
   disabled: boolean
   /** The model takes no files: what attaches is shown but cannot be picked. */
@@ -65,6 +66,8 @@ export function AttachMenu({
   onRefer: (reference: ConversationReference) => void
   /** Deep research, when it is offered: what the line says, and whether this month's are used up. */
   research?: { desc: string; blocked: boolean; onPick: () => void }
+  /** Opens the browser for the conversation, when it is offered and closed. */
+  onOpenBrowser?: () => void
 }) {
   const { t } = useTranslation()
   const [view, setView] = useState<View>('main')
@@ -167,6 +170,13 @@ export function AttachMenu({
                 <Telescope aria-hidden="true" />
                 <span className="n-at-title">{t('chat.attach.research')}</span>
                 <span className="n-at-desc">{research.desc}</span>
+              </DropdownMenuItem>
+            )}
+            {onOpenBrowser && (
+              <DropdownMenuItem onSelect={onOpenBrowser}>
+                <Globe aria-hidden="true" />
+                <span className="n-at-title">{t('chat.attach.browser')}</span>
+                <span className="n-at-desc">{t('chat.attach.browser-desc')}</span>
               </DropdownMenuItem>
             )}
           </div>

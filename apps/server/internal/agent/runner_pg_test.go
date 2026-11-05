@@ -817,3 +817,46 @@ func TestRunLastRoundCallIsRefused(t *testing.T) {
 	f.assertTranscript("user go", "assistant:tool_calls call:echo", "tool result:succeeded",
 		"assistant:tool_calls call:echo", "tool result:failed")
 }
+
+// orderedTool records the order its calls ran in, and whether two overlapped.
+type orderedTool struct {
+	echoTool
+	mu      sync.Mutex
+	seen    []string
+	running atomic.Int32
+	overlap atomic.Bool
+}
+
+func (*orderedTool) Sequential() bool { return true }
+func (o *orderedTool) Execute(ctx context.Context, args json.RawMessage) (ToolResult, error) {
+	if o.running.Add(1) > 1 {
+		o.overlap.Store(true)
+	}
+	defer o.running.Add(-1)
+	// The first call is the slowest: run together, it would finish last.
+	var in struct{ N int }
+	_ = json.Unmarshal(args, &in)
+	time.Sleep(time.Duration(3-in.N) * 30 * time.Millisecond)
+	o.mu.Lock()
+	o.seen = append(o.seen, string(args))
+	o.mu.Unlock()
+	return ToolResult{Content: "ok"}, nil
+}
+
+// A sequential tool's calls of one round run one at a time, in the order the
+// model made them.
+func TestRunSequentialToolKeepsCallOrder(t *testing.T) {
+	tool := &orderedTool{echoTool: echoTool{name: "browser"}}
+	calls := script(t, fake.Script{Model: "m", FinishReason: "tool_calls", Steps: []fake.Step{
+		{Kind: fake.StepToolCall, ToolCallID: "c1", ToolName: "browser", Chunks: []string{`{"N":0}`}},
+		{Kind: fake.StepToolCall, ToolCallID: "c2", ToolName: "browser", Chunks: []string{`{"N":1}`}},
+		{Kind: fake.StepToolCall, ToolCallID: "c3", ToolName: "browser", Chunks: []string{`{"N":2}`}},
+	}})
+	f := newFixture(t, []Tool{tool}, calls, answer(t, "done"))
+	run := f.admit("browse")
+	f.runner.Start(run.ID)
+	f.waitFor(run.ID, sqlc.RunStatusCompleted)
+	if got := strings.Join(tool.seen, " "); got != `{"N":0} {"N":1} {"N":2}` || tool.overlap.Load() {
+		t.Fatalf("ran %s, overlapping %v", got, tool.overlap.Load())
+	}
+}

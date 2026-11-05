@@ -210,6 +210,10 @@ func (s *Server) PluginOAuthCallback(w http.ResponseWriter, r *http.Request, par
 		return
 	}
 	slog.InfoContext(ctx, "plugin account connected", "plugin", p.Slug)
+	// An administrator's first connection is what its tools are listed with.
+	if !p.ToolsFetchedAt.Valid && user.Role == sqlc.UserRoleAdmin && p.McpUrl != nil && *p.McpUrl != "" {
+		_ = s.fetchPluginTools(ctx, p, user.ID, pending.RedirectUri)
+	}
 	back(url.Values{"connected": {p.Slug}})
 }
 

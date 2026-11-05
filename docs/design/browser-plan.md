@@ -1,6 +1,6 @@
 # 浏览器工具：方案
 
-> 状态：**方案，未实现**（2026-11-03）。2026-11-03 已定：第一期只给管理员；自建 `browserd` 容器；用户在「+」菜单里手动开；`web_fetch` 不加浏览器读取。§10 还有两条待定。相关：[web-tools.md](web-tools.md)（`web_search`/`web_fetch`）、[sandbox-plan.md](sandbox-plan.md)（§7 的「浏览器容器」就是这里）、[plugins-plan.md](plugins-plan.md)（确认卡片、CodeMode、工具图片）。
+> 状态：**第一期已实现**（2026-11-03）：`internal/browser`（会话、快照、出站代理）、`api/browser.go`（后台设置、自检、操作记录）、`api/browser_tool.go`（工具与确认）、`deploy/docker-compose.browser.yml`。与方案的出入见 §11。2026-11-03 已定：第一期只给管理员；自建 `browserd` 容器；用户在「+」菜单里手动开；`web_fetch` 不加浏览器读取。§10 还有两条待定。相关：[web-tools.md](web-tools.md)（`web_search`/`web_fetch`）、[sandbox-plan.md](sandbox-plan.md)（§7 的「浏览器容器」就是这里）、[plugins-plan.md](plugins-plan.md)（确认卡片、CodeMode、工具图片）。
 
 ## 0. 结论先行
 
@@ -129,3 +129,20 @@ openchat ──CDP(websocket，内部网络)──▶ browserd（headless Chromi
 
 1. **有后果的动作的确认**：按 §4（模型标注 + 服务端兜底规则）；「本对话里这个网站都允许」要不要？方案按「要」写。
 2. **登录**：第一期遇到登录就停下来告诉用户（不支持登录后的操作），第二期做接管。方案按此写。
+
+## 11. 第一期实现记录（2026-11-03）
+
+- **代码**：`internal/browser`（`Pool` 按对话一个隔离上下文、每人同时一个；`Session` 各动作；`snapshot.go` 快照与 `ref`；`proxy.go` 出站代理）、`api/browser.go`（设置 `app_settings.browser`、代理的来源与屏蔽、`/admin/browser*`）、`api/browser_tool.go`（工具、确认规则 `askReason`、提示词说明）、迁移 `20261105034139_browser.sql`。
+- **确认规则**（`askReason`）：模型标 `consequential`；提交的是 `method=post` 的表单（站内搜索表单除外）；表单里有密码框或银行卡字段；地址像付款流程（checkout、payment、billing…）；按钮文字命中购买、发送、删除、确认等（中英文）。`type` 只在 `submit` 时检查，`press` 只在按 Enter 或模型标注时检查（看当前焦点元素）。GET 表单（搜索、筛选）不问。
+- **代理来源**：默认只认浏览器地址（`endpoint` 的主机名每 30 秒重新解析）和本机；其余网段在后台登记。代理不对外发布端口。
+- **和方案的出入**：
+  - 图片、字体没有关掉（截图要用；流量上限也未做），单 run 动作上限 60 次已做；
+  - `read` 用 `tools.PageText`（和 `web_fetch` 同一条正文抽取），分段用 `tools.TextPart`；
+  - 对话删除时不立即关掉浏览器，靠 10 分钟空闲回收；
+  - `browserd` 镜像用 `chromedp/headless-shell`，本地开发可用 `exec:<Chromium 路径>`（测试用 Playwright 装的 headless shell）。
+- **测试**：`internal/browser/browser_test.go`（各动作、代理挡本机与内网、代理检查）、`api/browser_tool_pg_test.go`（提供条件、确认的拒绝/允许/整站允许、记录、密码、无人值守、截图）、`api/browser_tool_test.go`（确认规则）。
+- **实测（Haiku 5.5）后改的三处**：
+  - 一轮里的多个浏览器动作原本和其他工具一样并发执行，顺序会乱，`ref` 随之过期。现在 `browser` 实现 `agent.SequentialTool`，按调用顺序逐个跑。
+  - 动作后原本只等 `readyState`，单页应用的内容还没取回就拍了快照。现在再等网络安静：没有进行中的请求并持续 0.5 秒，最多 5 秒。
+  - run 中途关浏览器会让工具列表和提示词变化、思考块签名失效。现在有没有 `browser` 在 run 的第一次请求时定下。
+- **还没测**：`deploy/docker-compose.browser.yml` 里的 `chromedp/headless-shell` 容器（实测用的是本机 Playwright 的 headless shell，经同一个代理）。

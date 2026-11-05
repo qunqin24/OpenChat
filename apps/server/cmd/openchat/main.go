@@ -97,6 +97,10 @@ func run() error {
 	if err := plugins.EnsureBuiltins(ctx, queries); err != nil {
 		return err
 	}
+	// And the skills they come with.
+	if err := plugins.EnsureBuiltinSkills(ctx, pool); err != nil {
+		return err
+	}
 
 	// The agent layer: runs execute here, in the background, and outlive the
 	// requests that start them.
@@ -142,6 +146,11 @@ func run() error {
 	// Before the listener opens, so a server started with debug logging on logs
 	// its own startup in detail — which is when you want it most.
 	server.LoadSettings(ctx)
+	// The built-in plugins that run here list their tools themselves.
+	server.ListBuiltinPluginTools(ctx)
+	// The browser tool's proxy listens, if an administrator turned it on.
+	server.StartBrowser(ctx)
+	defer server.CloseBrowser()
 	// Deliberately not waited on: the model catalogue comes from a third party,
 	// and a boot that blocked on it would be a boot somebody else can hold up.
 	server.StartCatalogRefresh(ctx)

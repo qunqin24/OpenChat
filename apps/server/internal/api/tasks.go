@@ -415,7 +415,7 @@ func (s *Server) startTaskRun(ctx context.Context, user sqlc.User, task sqlc.Sch
 	if err := requireRevised(ctx, s.q, conv.ID); err != nil {
 		return sqlc.Run{}, err
 	}
-	choice, err := s.chooseRun(ctx, conv, nil, nil, nil)
+	choice, err := s.chooseRun(ctx, conv, nil, nil, nil, nil)
 	if err != nil {
 		return sqlc.Run{}, err
 	}

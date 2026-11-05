@@ -26,8 +26,6 @@ export const adminKeys = {
   webSearch: () => [...adminKeys.all, 'web-search'] as const,
   webFetch: () => [...adminKeys.all, 'web-fetch'] as const,
   imageSearch: () => [...adminKeys.all, 'image-search'] as const,
-  imageGeneration: () => [...adminKeys.all, 'image-generation'] as const,
-  imageModels: () => [...adminKeys.all, 'image-generation', 'models'] as const,
   passkeys: () => [...adminKeys.all, 'passkeys'] as const,
   storage: () => [...adminKeys.all, 'storage'] as const,
   storageQuota: () => [...adminKeys.all, 'storage-quota'] as const,
@@ -38,6 +36,10 @@ export const adminKeys = {
   pluginTools: (id: string) => [...adminKeys.all, 'plugins', id, 'tools'] as const,
   pluginSkills: (id: string) => [...adminKeys.all, 'plugins', id, 'skills'] as const,
   pluginCalls: (filters: object) => [...adminKeys.all, 'plugin-calls', filters] as const,
+  browser: () => [...adminKeys.all, 'browser'] as const,
+  imageGeneration: () => [...adminKeys.all, 'image-generation'] as const,
+  imageModels: () => [...adminKeys.all, 'image-generation', 'models'] as const,
+  browserActions: (page: object) => [...adminKeys.all, 'browser', 'actions', page] as const,
 }
 
 export function useAdminDashboard(range: DashboardRange) {

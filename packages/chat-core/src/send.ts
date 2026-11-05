@@ -55,13 +55,16 @@ export interface RunChoice {
   model?: string
   reasoningEffort?: ReasoningEffort
   webSearch?: boolean
+  /** The browser open in the conversation ("+" → 浏览器), where it is offered. */
+  browser?: boolean
 }
 
 /** The choice as a request body has it: only what was set. */
-export const choiceBody = ({ model, reasoningEffort, webSearch }: RunChoice) => ({
+export const choiceBody = ({ model, reasoningEffort, webSearch, browser }: RunChoice) => ({
   ...(model ? { model } : {}),
   ...(reasoningEffort ? { reasoningEffort } : {}),
   ...(webSearch !== undefined ? { webSearch } : {}),
+  ...(browser !== undefined ? { browser } : {}),
 })
 
 /**

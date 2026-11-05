@@ -108,7 +108,7 @@ func (s *Server) RegenerateAnswer(w http.ResponseWriter, r *http.Request, conver
 		httpx.Fail(w, r, err)
 		return
 	}
-	choice, err := s.chooseRun(ctx, conv, body.Model, body.ReasoningEffort, body.WebSearch)
+	choice, err := s.chooseRun(ctx, conv, body.Model, body.ReasoningEffort, body.WebSearch, body.Browser)
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
@@ -223,7 +223,7 @@ func (s *Server) EditMessage(w http.ResponseWriter, r *http.Request, conversatio
 		httpx.Fail(w, r, errReferencesNotEditable)
 		return
 	}
-	choice, err := s.chooseRun(ctx, conv, body.Model, body.ReasoningEffort, body.WebSearch)
+	choice, err := s.chooseRun(ctx, conv, body.Model, body.ReasoningEffort, body.WebSearch, body.Browser)
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return

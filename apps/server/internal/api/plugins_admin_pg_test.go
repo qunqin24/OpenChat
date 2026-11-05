@@ -76,6 +76,12 @@ func TestAdminPlugins(t *testing.T) {
 	if bytes.Contains(stored, []byte("sekret")) {
 		t.Fatal("the header value is stored in the clear")
 	}
+	// Its tools were listed as it was added, without asking.
+	var listed int
+	_ = pool.QueryRow(ctx, "SELECT count(*) FROM plugin_tools WHERE plugin_id = $1", created.Id).Scan(&listed)
+	if listed != 2 {
+		t.Fatalf("listed %d tools on adding, want 2", listed)
+	}
 
 	rec = httptest.NewRecorder()
 	s.RefreshAdminPluginTools(rec, req(""), created.Id)

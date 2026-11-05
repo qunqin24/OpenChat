@@ -51,7 +51,7 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 - 新增模型请求路径：先构造 `llm.Request`（带 `User`），`Begin(Call{InputEstimate: llm.EstimateInput(req)})` → `Reserve` → `Stream` → `End`；`partialStream` 在 `Reserve` 之后才创建；新 kind 要加 `usage_logs_kind` 约束。
 - 挑模型走 `pickChannel(ctx, modelID, asker)`，容量检查在它里面，别绕开：用户请求传 `askerFrom(ctx)`，服务端任务建 `asker{staff: true, …}`（`admin` 只在替管理员办事时为真，`ignoreCap` 只用于「能不能答」的校验）。渠道按优先级、同级按权重选（`servingOrder`），模型还没输出就失败的 run 自动换渠道（`failover`），别改回只取第一个。
 - 从 App（bearer token）发起的 run 记 `runs.from_app`（`chooseRun` 读 `auth.FromApp`），系统提示词因此多一节 `phoneGuide`；新的起 run 路径经 `chooseRun` 自然带上，服务端自己起的不带。
-- 同一次回复里的工具调用并发执行（`agent.Options.ToolConcurrency`，默认 10）：新工具必须能与其他工具同时运行。
+- 同一次回复里的工具调用并发执行（`agent.Options.ToolConcurrency`，默认 10）：新工具必须能与其他工具同时运行。作用于同一份状态、必须按顺序来的工具（如 `browser`）实现 `agent.SequentialTool`：它在一轮里的调用按模型给的顺序逐个跑，别的工具照常并发。
 - 容量上限按请求的 `model_id`（不是 `served_model`）、金额全程 `numeric` 在 SQL 里比较，不经 float。
 - 读用户上传文件并发给模型必须走 `agent.attachmentResolver`（SHA-256 收据），别自己 `Read`；本地 `PUT` 用 `Local.PutNew`，写一次。
 - 文本文件一律以 `text/plain` 存（前端按扩展名认，`TEXT_EXTENSIONS`），发给模型时是文字（`llm.FileBlock`，经 `modelTakes`），不是 UTF-8 就不发；它的字随消息一起审并记 SHA-256 收据（`attachmentTexts`）。超过 `llm.InlineTextBytes` 且模型能调工具时只发概览卡（`agent.fileCard`），模型用 `file_read`/`file_search`（`agent/files.go`）按需读：只认本对话非 `blocked` 用户消息里的文件，必须经 `attachmentResolver.one` 核对收据，不再审。
@@ -150,10 +150,11 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 
 插件 = 技能 + 远程 MCP 服务，管理员在后台添加，用户在侧栏「插件」页安装（`api/plugins.go`、`api/plugins_admin.go`、`internal/plugins`）。
 
-- 只接远程 Streamable HTTP（官方 Go SDK），不跑 stdio；管理员填的地址可以是内网（不过 `GuardedClient`）。
+- 只接远程 Streamable HTTP（官方 Go SDK），不跑 stdio；管理员填的地址可以是内网（不过 `GuardedClient`）。没有现成服务的内置插件在进程里跑：地址是 `openchat:<名字>`（`plugins.LocalScheme`，`plugins/local.go` 登记），内存里连接；arXiv 就是这样（`plugins/arxiv`，进程内每 3 秒至多一个对 arXiv 的请求，按 arXiv 的使用条款，别去掉），OpenAlex、天气（Open-Meteo）、维基百科、Hacker News 也是（共用 `plugins/localkit`：经 `GuardedClient`、自报 User-Agent、每个服务一个进程级的请求间隔；插件的请求头值作为 `Options.Secret` 传给服务，OpenAlex 用它当 API key）。新的进程内服务只放只读、公开、免账号或管理员一个 key 就够的接口，别做要绕过人机验证的。
 - 凭证（统一请求头的值，以后的个人令牌）经 `internal/secrets` 加密入库。密钥首次启动时自动生成在数据目录 `data/secret.key`（0600，已 gitignore），设了 `OPENCHAT_SECRET_KEY` 就用它；绝不存进数据库、绝不随响应返回或写日志。拿不到密钥时相关功能 409 `secret_key_missing`，其他照常。
 - 用户能看到的插件 = 启用的、面向所有人或面向管理员且本人是管理员的；看不到的一律 404。
-- 工具权限三档 `allow`/`confirm`/`blocked`；重新拉取工具只更新描述，不动管理员设过的权限。
+- 工具权限三档 `allow`/`confirm`/`blocked`；重新拉取工具只更新描述，不动管理员设过的权限。工具自动拉取：添加插件、改了地址或认证时（`autoFetchPluginTools`），要账号的插件在管理员第一次连上账号时，进程内的内置插件每次启动时（`ListBuiltinPluginTools`）；拉不到不影响保存，后台仍可手动拉。
+- 内置插件带的技能放在 `plugins/builtin_skills/<键>/<技能>/`，启动时写进插件（`EnsureBuiltinSkills`）：没写过的补上，管理员没改过的随新版本更新，改过或删掉的不动。插件的技能只在它有没被禁用的工具（或本来就是纯技能插件）时进对话快照。
 - 每人授权（OAuth 2.1 + PKCE）：`connect` 发起、`/plugins/oauth/callback` 收尾，state 一次性且只认发起人，令牌加密存在本人的 `plugin_installs` 行；取令牌一律走 `pluginToken`（会刷新、刷新失败标 `needs_reconnect`），别直接读列。服务返回的授权地址只跟 https 或同主机。
 - 对话里调插件走 CodeMode（`api/plugin_code.go`、`internal/codemode`）：模型只有一个 `plugin_code`，写 JS 调 `tools.<短名>.<工具>()`，脚本在 goja 里跑，只注入 `tools`、`search`、`console`，不给 `fetch`、定时器、模块；时长、调用次数、并发、输出、内存都有上限（共享服务器，别去掉）。开了「直接列出」（`plugins.direct_tools`）的插件工具按 `<短名>__<工具>` 逐个给模型，走同一个 `pluginHost.Call`。
 - 每次调用都现查 `GetUsablePluginTool`（权限、安装、连接）、按 `inputSchema` 校验，再取令牌；需确认的停在调用处等 `AnswerPluginConfirmation`（run 不结束，`codemode.Pause` 停表，最多 10 分钟），子 Agent 和没有调用 id 的直接拒绝。审计只写 `plugin_calls`，绝不记参数和结果。
@@ -177,6 +178,17 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 - 模型用错工具，改提示词或工具描述，不要在服务端改写它的输出。
 
 细节：[联网：搜索与读网页](docs/design/web-tools.md)。
+
+## 浏览器
+
+`browser` 工具驱动一个 headless Chromium（`internal/browser`，`api/browser.go`、`browser_tool.go`）：用户在「+」菜单打开（`conversations.browser`），第一期只给管理员（`browserOffered`），子 Agent、深度研究不给；开着时 run 也有联网（`runChoice.browserOn`）。有没有 `browser` 在 run 的第一次请求时定下、存在 `Scope.State`，到 run 结束不变（中途变了工具或提示词，模型的思考块签名会失效、请求被拒），中途关掉只影响下一个 run。
+
+- 浏览器的一切流量只经 `browser.Proxy`：拨号时查公网地址（`tools.PublicAddress`）、屏蔽站点、本站域名，只放 80/443；只收 `browserd` 地址和后台登记网段的连接。新建浏览器上下文一律带 `ProxyServer` 和 `<-loopback>`，别绕开。
+- 快照的 `ref` 只在最新一份快照里有效（`Session.keep`），旧的报 `ErrStaleRef`；动作结果附新快照，超过 `SnapshotLimit` 截断，用 `find`/子树看其余。
+- 会改东西的动作先问人（`askReason`：模型标 `consequential`、提交 POST 表单、带密码或银行卡的表单、付款页、按钮文字），走 `plugin_confirmations`（`site` 不为空、`plugin_id` 为空）和 `pluginWaits`，「本对话这个网站都允许」记 `browser_site_grants`；无人值守直接拒。每次都记 `browser_actions`，不记输入的文字。
+- 模型永不在密码框里输入（`ErrPassword`）；不下载、不上传。
+
+细节：[浏览器工具](docs/design/browser-plan.md)。
 
 ## 图片生成
 
