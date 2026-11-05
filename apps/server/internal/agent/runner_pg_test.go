@@ -696,8 +696,8 @@ func TestRunWithoutWebIsOfferedNoWebTools(t *testing.T) {
 	on := f.admit("search, please")
 	f.runner.Start(on.ID)
 	f.waitFor(on.ID, sqlc.RunStatusCompleted)
-	if n := len(f.models.lastReq.Tools); n != 2 {
-		t.Fatalf("web on: %d tools offered, want both", n)
+	if tools := ownTools(f.models.lastReq.Tools); len(tools) != 2 {
+		t.Fatalf("web on: offered %+v, want both", tools)
 	}
 
 	off := f.admit("no web this time")
@@ -706,7 +706,7 @@ func TestRunWithoutWebIsOfferedNoWebTools(t *testing.T) {
 	}
 	f.runner.Start(off.ID)
 	f.waitFor(off.ID, sqlc.RunStatusCompleted)
-	if tools := f.models.lastReq.Tools; len(tools) != 1 || tools[0].Name != "calc" {
+	if tools := ownTools(f.models.lastReq.Tools); len(tools) != 1 || tools[0].Name != "calc" {
 		t.Fatalf("web off: offered %+v, want only calc", tools)
 	}
 }
@@ -741,8 +741,8 @@ func TestRunLastRoundKeepsTheToolsAndForbidsCalling(t *testing.T) {
 	if last.Options.ToolChoice != llm.ToolChoiceNone {
 		t.Errorf("last request tool choice = %q, want none", last.Options.ToolChoice)
 	}
-	if len(last.Tools) != 1 || last.Tools[0].Name != "echo" {
-		t.Errorf("last request tools = %+v, want the same list as the first", last.Tools)
+	if names(last.Tools) != names(first.Tools) || !strings.Contains(names(last.Tools), "echo") {
+		t.Errorf("last request tools = %s, want the same list as the first (%s)", names(last.Tools), names(first.Tools))
 	}
 	if first.Messages[0].Text() != last.Messages[0].Text() {
 		t.Errorf("system prompt changed between rounds: %q then %q", first.Messages[0].Text(), last.Messages[0].Text())
@@ -759,12 +759,14 @@ func TestRunLastRoundKeepsTheToolsAndForbidsCalling(t *testing.T) {
 }
 
 // The turn note is asked once per run and rides on the run's own input, the
-// same on every request of the run; it is never stored.
+// same on every request of the run - and of every later run, which find it on
+// the run (runs.turn_note), never in the transcript.
 func TestRunTurnNoteRidesOnItsInput(t *testing.T) {
 	echo := &echoTool{name: "echo", replay: true}
 	f := newFixture(t, []Tool{echo},
 		toolCall(t, "c1", "echo", `{}`),
-		answer(t, "done"))
+		answer(t, "done"),
+		answer(t, "again done"))
 	var asked atomic.Int32
 	f.runner.SetTurnNote(func(ctx context.Context) (string, error) {
 		if _, ok := ScopeFrom(ctx); !ok {
@@ -795,6 +797,22 @@ func TestRunTurnNoteRidesOnItsInput(t *testing.T) {
 		}
 	}
 	f.assertTranscript("user go", "assistant:tool_calls call:echo", "tool result:succeeded", "assistant:stop done")
+
+	// The next run is told its own note, and the first input keeps its own.
+	next := f.admit("again")
+	f.runner.Start(next.ID)
+	f.waitFor(next.ID, sqlc.RunStatusCompleted)
+	var inputs []string
+	for _, m := range f.models.lastReq.Messages {
+		if m.Role == llm.RoleUser {
+			inputs = append(inputs, m.Text())
+		}
+	}
+	if len(inputs) != 2 || !strings.HasSuffix(inputs[0], "go\n\n<note 1>") || !strings.HasSuffix(inputs[1], "again\n\n<note 2>") {
+		t.Errorf("the next run's inputs read %q", inputs)
+	}
+	f.assertTranscript("user go", "assistant:tool_calls call:echo", "tool result:succeeded", "assistant:stop done",
+		"user again", "assistant:stop again done")
 }
 
 // A model that calls a tool on the last round regardless of the choice it was
@@ -859,4 +877,24 @@ func TestRunSequentialToolKeepsCallOrder(t *testing.T) {
 	if got := strings.Join(tool.seen, " "); got != `{"N":0} {"N":1} {"N":2}` || tool.overlap.Load() {
 		t.Fatalf("ran %s, overlapping %v", got, tool.overlap.Load())
 	}
+}
+
+// ownTools is a request's tools without the file tools every run that calls
+// tools is offered.
+func ownTools(tools []llm.Tool) []llm.Tool {
+	var out []llm.Tool
+	for _, tool := range tools {
+		if tool.Name != ToolFileRead && tool.Name != ToolFileSearch {
+			out = append(out, tool)
+		}
+	}
+	return out
+}
+
+func names(tools []llm.Tool) string {
+	var out []string
+	for _, tool := range tools {
+		out = append(out, tool.Name)
+	}
+	return strings.Join(out, ",")
 }

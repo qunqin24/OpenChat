@@ -23,6 +23,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -135,14 +136,43 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, emit func(llm.Even
 	// response it can attribute, even when there is no content in it.
 	empty := llm.ModelResponse{Provider: c.cfg.Provider, Model: req.Model}
 
-	body, err := buildBody(req, c.cfg)
+	body, end, err := buildRequest(req, c.cfg, false)
 	if err != nil {
 		return empty, err
 	}
+	if end.left > 0 {
+		slog.InfoContext(ctx, "anthropic: thinking blocks left out, the conversation before them having changed", "left_out", end.left)
+	}
+	resp, err := c.open(ctx, req, body)
+	if err != nil && thinkingRefused(err) {
+		// A thinking block the check in binding.go let through was refused
+		// anyway - one recorded before it, or one another organisation
+		// issued, through a channel the run failed over from. Nothing was
+		// generated or billed, so the request goes again once without any.
+		slog.WarnContext(ctx, "anthropic: a thinking block was refused; sending the request without them", "error", err)
+		if body, end, err = buildRequest(req, c.cfg, true); err != nil {
+			return empty, err
+		}
+		resp, err = c.open(ctx, req, body)
+	}
+	if err != nil {
+		return empty, err
+	}
+	defer resp.Body.Close()
+	out, err := decode(ctx, resp.Body, c.cfg, req.Model, emit)
+	// Each thinking block records the conversation it was given, so that it
+	// is sent back only while that still holds (binding.go).
+	out.Message.Parts = end.bind(out.Message.Parts)
+	// A failure reported inside the stream is the provider's text too.
+	return out, llm.Scrub(err, c.cfg.APIKey)
+}
 
+// open POSTs body and returns the response only when it is a 200; the caller
+// closes it.
+func (c *Client) open(ctx context.Context, req llm.Request, body []byte) (*http.Response, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
 	if err != nil {
-		return empty, llm.Errorf(llm.ErrorTransport, err, "anthropic: building the request")
+		return nil, llm.Errorf(llm.ErrorTransport, err, "anthropic: building the request")
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "text/event-stream")
@@ -163,18 +193,15 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, emit func(llm.Even
 		// Cancelled before the model said anything: there is nothing to keep,
 		// and this is a stop rather than a failure.
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return empty, ctxErr
+			return nil, ctxErr
 		}
-		return empty, llm.Errorf(llm.ErrorTransport, err, "anthropic: calling the endpoint")
+		return nil, llm.Errorf(llm.ErrorTransport, err, "anthropic: calling the endpoint")
 	}
-	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
-		return empty, llm.Scrub(statusError(resp), c.cfg.APIKey)
+		defer resp.Body.Close()
+		return nil, llm.Scrub(statusError(resp), c.cfg.APIKey)
 	}
-	out, err := decode(ctx, resp.Body, c.cfg, req.Model, emit)
-	// A failure reported inside the stream is the provider's text too.
-	return out, llm.Scrub(err, c.cfg.APIKey)
+	return resp, nil
 }
 
 func (c *Client) version() string {

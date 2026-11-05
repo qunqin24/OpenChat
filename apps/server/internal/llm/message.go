@@ -90,6 +90,14 @@ type ReasoningPart struct {
 	// round trip or the next turn loses the model's own context.
 	Redacted []byte
 
+	// Binding is what the adapter that issued the block needs to tell, on
+	// replay, whether the block is still valid where it is being sent: the
+	// Anthropic adapter records there the conversation that came before it,
+	// since the API refuses a block whose earlier conversation changed.
+	// Opaque, prefixed with its version, and empty on rows written before it
+	// was recorded. Never sent to a provider or a browser.
+	Binding string
+
 	// DurationMS is how long the model spent on this block, from its first
 	// token to its last, measured by us as it streamed. Nil when nobody timed
 	// it: rows written before it was recorded, and replies that did not stream.

@@ -411,7 +411,7 @@ func (q *Queries) GetConversationKind(ctx context.Context, id uuid.UUID) (GetCon
 }
 
 const getLatestRun = `-- name: GetLatestRun :one
-SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, from_app, research, unattended
+SELECT id, conversation_id, user_id, input_message_id, request_id, model_id, channel_id, status, checkpoint, live, version, cancel_requested, error_code, created_at, updated_at, finished_at, reasoning_effort, web_search, continues, from_app, research, unattended, turn_note
 FROM runs
 WHERE conversation_id = $1
 ORDER BY created_at DESC, id DESC
@@ -444,6 +444,7 @@ func (q *Queries) GetLatestRun(ctx context.Context, conversationID uuid.UUID) (R
 		&i.FromApp,
 		&i.Research,
 		&i.Unattended,
+		&i.TurnNote,
 	)
 	return i, err
 }
@@ -944,7 +945,7 @@ func (q *Queries) ListSubagentLatestReports(ctx context.Context, parentID uuid.U
 }
 
 const listSubagentLatestRuns = `-- name: ListSubagentLatestRuns :many
-SELECT DISTINCT ON (runs.conversation_id) runs.id, runs.conversation_id, runs.user_id, runs.input_message_id, runs.request_id, runs.model_id, runs.channel_id, runs.status, runs.checkpoint, runs.live, runs.version, runs.cancel_requested, runs.error_code, runs.created_at, runs.updated_at, runs.finished_at, runs.reasoning_effort, runs.web_search, runs.continues, runs.from_app, runs.research, runs.unattended
+SELECT DISTINCT ON (runs.conversation_id) runs.id, runs.conversation_id, runs.user_id, runs.input_message_id, runs.request_id, runs.model_id, runs.channel_id, runs.status, runs.checkpoint, runs.live, runs.version, runs.cancel_requested, runs.error_code, runs.created_at, runs.updated_at, runs.finished_at, runs.reasoning_effort, runs.web_search, runs.continues, runs.from_app, runs.research, runs.unattended, runs.turn_note
 FROM runs
          JOIN conversations c ON c.id = runs.conversation_id
 WHERE c.parent_id = $1
@@ -984,6 +985,7 @@ func (q *Queries) ListSubagentLatestRuns(ctx context.Context, parentID *uuid.UUI
 			&i.FromApp,
 			&i.Research,
 			&i.Unattended,
+			&i.TurnNote,
 		); err != nil {
 			return nil, err
 		}

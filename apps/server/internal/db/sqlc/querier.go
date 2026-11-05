@@ -720,6 +720,10 @@ type Querier interface {
 	// A referenced conversation as ListTranscript takes it, up to when it was
 	// referenced: what came after is not what the message referred to.
 	ListTranscriptUpTo(ctx context.Context, arg ListTranscriptUpToParams) ([]Message, error)
+	// The notes told with a conversation's inputs, by input message: where a
+	// message was answered more than once, the latest run's, which is the one
+	// whose reply is kept.
+	ListTurnNotes(ctx context.Context, conversationID uuid.UUID) ([]ListTurnNotesRow, error)
 	// Calling plugin tools from conversations (api/plugin_code.go).
 	// The tools a person's runs may call: of the plugins they installed that are
 	// on and theirs to see, connected when they act as the person, not blocked.
@@ -865,6 +869,10 @@ type Querier interface {
 	// request that failed produced nothing, so the next one is made there instead.
 	// Guarded on `running` like every other step.
 	MoveRunChannel(ctx context.Context, arg MoveRunChannelParams) error
+	// A run's turn note told the model of this version of a document.
+	NoteDocumentVersion(ctx context.Context, arg NoteDocumentVersionParams) error
+	// The latest version of a document a kept turn note told the model of, 0 none.
+	NotedDocumentVersion(ctx context.Context, documentID uuid.UUID) (int32, error)
 	PluginToolGranted(ctx context.Context, arg PluginToolGrantedParams) (bool, error)
 	// Keeps the newest versions of a skill, the current one among them; a
 	// conversation that started with an older one finds it gone and is told so.
@@ -959,6 +967,8 @@ type Querier interface {
 	// A client registered on the fly (RFC 7591), unless an administrator gave one meanwhile.
 	SetPluginRegisteredClient(ctx context.Context, arg SetPluginRegisteredClientParams) error
 	SetPluginToolPermission(ctx context.Context, arg SetPluginToolPermissionParams) (int64, error)
+	// The note a run's model was told with its input, asked once (agent.TurnNote).
+	SetRunTurnNote(ctx context.Context, arg SetRunTurnNoteParams) error
 	// Upsert, so a setting added after this database was created still writes.
 	SetSetting(ctx context.Context, arg SetSettingParams) error
 	SetSkillEnabled(ctx context.Context, arg SetSkillEnabledParams) (uuid.UUID, error)

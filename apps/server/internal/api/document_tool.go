@@ -270,7 +270,11 @@ func (t DocumentTool) update(ctx context.Context, scope agent.Scope, doc sqlc.Do
 	case args.Content != nil:
 		// Written from what the model last knew: over a version of the
 		// person's it has not been shown, that would undo their changes.
-		if latest.Source == "user" && latest.Version > documentSeen(ctx, doc.ID) {
+		known, err := t.s.documentKnown(ctx, doc.ID)
+		if err != nil {
+			return agent.ToolResult{}, err
+		}
+		if latest.Source == "user" && latest.Version > known {
 			return agent.ToolResult{}, t.unseenEdits(ctx, doc, latest)
 		}
 		content = *args.Content

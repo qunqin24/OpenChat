@@ -136,12 +136,12 @@ func TestBuildBodyReplaysSignedThinkingAndDropsWhatCannotBeVerified(t *testing.T
 		Model: "claude-sonnet-4-5",
 		Messages: []llm.Message{
 			llm.TextMessage(llm.RoleUser, "hello"),
-			{Role: llm.RoleAssistant, Parts: []llm.Part{
+			answer(t, nil, []llm.Message{llm.TextMessage(llm.RoleUser, "hello")},
 				llm.ReasoningPart{Text: "signed thought", Signature: "sig-abc"},
 				llm.ReasoningPart{Text: "unsigned thought"},
 				llm.ReasoningPart{Redacted: []byte("encrypted-blob")},
 				llm.TextPart{Text: "the answer"},
-			}},
+			),
 		},
 	}, Config{})
 
@@ -474,10 +474,10 @@ func TestBuildBodyReplaysSignatureOnlyThinking(t *testing.T) {
 		Model: "claude-opus-5-5",
 		Messages: []llm.Message{
 			llm.TextMessage(llm.RoleUser, "hello"),
-			{Role: llm.RoleAssistant, Parts: []llm.Part{
+			answer(t, nil, []llm.Message{llm.TextMessage(llm.RoleUser, "hello")},
 				llm.ReasoningPart{Signature: "sig-only"},
 				llm.TextPart{Text: "the answer"},
-			}},
+			),
 		},
 	}, Config{})
 	if err != nil {

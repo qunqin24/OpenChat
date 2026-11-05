@@ -314,9 +314,10 @@ func TestBlockedMessageIsNotSearchedOrExported(t *testing.T) {
 // A summary never covers, ends at or keeps a refused message.
 func TestBlockedMessageAndCompaction(t *testing.T) {
 	t.Run("a run compresses", func(t *testing.T) {
-		long := strings.Repeat("lorem ipsum ", 120)
+		// The file tools every request is offered take a third of the window.
+		long := strings.Repeat("lorem ipsum ", 180)
 		b := newBlocking(t)
-		b.compressesOnItsOwn(1200)
+		b.compressesOnItsOwn(1800)
 		blockedBy(t, b.askHarness)
 		b.send("short question")
 		// Refused messages as long as a window: none of it is the model's to read.

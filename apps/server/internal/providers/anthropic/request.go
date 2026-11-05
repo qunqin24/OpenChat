@@ -72,18 +72,31 @@ var efforts = map[llm.ReasoningEffort]bool{
 }
 
 func buildBody(req llm.Request, cfg Config) ([]byte, error) {
+	body, _, err := buildRequest(req, cfg, false)
+	return body, err
+}
+
+// buildRequest is the request's body, and where it leaves off for binding the
+// response's thinking blocks (binding.go). dropThinking sends none of the
+// conversation's thinking blocks, for the retry after one was refused.
+func buildRequest(req llm.Request, cfg Config, dropThinking bool) ([]byte, binder, error) {
 	if req.Model == "" {
-		return nil, llm.Errorf(llm.ErrorProvider, nil, "anthropic: the request names no model")
+		return nil, binder{}, llm.Errorf(llm.ErrorProvider, nil, "anthropic: the request names no model")
 	}
 
 	system, messages, err := convertMessages(req.Messages)
 	if err != nil {
-		return nil, err
+		return nil, binder{}, err
 	}
+	var tools []map[string]any
+	if len(req.Tools) > 0 {
+		tools = convertTools(req.Tools)
+	}
+	messages, end := keepValidThinking(system, tools, messages, dropThinking)
 	if len(messages) == 0 {
 		// A system prompt on its own is not a turn. Sending it produces a
 		// confusing 400 a long way from here.
-		return nil, llm.Errorf(llm.ErrorProvider, nil, "anthropic: the request has no messages for the model to answer")
+		return nil, binder{}, llm.Errorf(llm.ErrorProvider, nil, "anthropic: the request has no messages for the model to answer")
 	}
 
 	maxTokens := cfg.MaxTokens
@@ -107,7 +120,7 @@ func buildBody(req llm.Request, cfg Config) ([]byte, error) {
 		maxTokens = *req.Options.MaxTokens
 	}
 	if maxTokens <= 0 {
-		return nil, llm.Errorf(llm.ErrorProvider, nil, "anthropic: max_tokens must be positive, got %d", maxTokens)
+		return nil, binder{}, llm.Errorf(llm.ErrorProvider, nil, "anthropic: max_tokens must be positive, got %d", maxTokens)
 	}
 
 	body := map[string]any{
@@ -130,7 +143,7 @@ func buildBody(req llm.Request, cfg Config) ([]byte, error) {
 		body["metadata"] = map[string]any{"user_id": req.User}
 	}
 	if len(req.Tools) > 0 {
-		body["tools"] = convertTools(req.Tools)
+		body["tools"] = tools
 		if choice := convertToolChoice(req.Options.ToolChoice); choice != nil {
 			body["tool_choice"] = choice
 		}
@@ -139,7 +152,7 @@ func buildBody(req llm.Request, cfg Config) ([]byte, error) {
 	opts := req.Options
 	thinking, outputConfig, err := convertThinking(opts.Reasoning, maxTokens, req.Model)
 	if err != nil {
-		return nil, err
+		return nil, binder{}, err
 	}
 	if thinking != nil {
 		body["thinking"] = thinking
@@ -165,11 +178,12 @@ func buildBody(req llm.Request, cfg Config) ([]byte, error) {
 
 	for key, value := range opts.Extra {
 		if reservedKeys[key] {
-			return nil, llm.Errorf(llm.ErrorProvider, nil, "anthropic: option %q would overwrite a request field", key)
+			return nil, binder{}, llm.Errorf(llm.ErrorProvider, nil, "anthropic: option %q would overwrite a request field", key)
 		}
 		body[key] = value
 	}
-	return json.Marshal(body)
+	encoded, err := json.Marshal(body)
+	return encoded, end, err
 }
 
 // convertThinking translates the reasoning request into this API's fields.
@@ -305,11 +319,7 @@ func convertMessages(messages []llm.Message) (string, []wireMessage, error) {
 		if len(out) == 0 && role == "assistant" {
 			return "", nil, llm.Errorf(llm.ErrorProvider, nil, "anthropic: a conversation cannot open with an assistant turn")
 		}
-		if last := len(out) - 1; last >= 0 && out[last].Role == role {
-			out[last].Content = append(out[last].Content, blocks...)
-			continue
-		}
-		out = append(out, wireMessage{Role: role, Content: blocks})
+		out = appendMessage(out, role, blocks)
 	}
 
 	return system.String(), out, nil
@@ -362,13 +372,13 @@ func convertAssistant(message llm.Message) ([]wireContentBlock, error) {
 			// more now that a signed block needs no text to be sent.
 			case llm.ForeignSignature(p.Signature):
 			case len(p.Redacted) > 0:
-				blocks = append(blocks, wireContentBlock{Type: "redacted_thinking", Data: string(p.Redacted)})
+				blocks = append(blocks, wireContentBlock{Type: "redacted_thinking", Data: string(p.Redacted), binding: p.Binding})
 			case p.Signature != "":
 				// Replayed whenever it is signed, text or not: the current
 				// models omit the text by default and send the signature alone,
 				// and a block in the history must come back exactly as it left.
 				// Dropping it is a 400 in a tool loop and a changed prefix after.
-				blocks = append(blocks, wireContentBlock{Type: "thinking", Thinking: &p.Text, Signature: p.Signature})
+				blocks = append(blocks, wireContentBlock{Type: "thinking", Thinking: &p.Text, Signature: p.Signature, binding: p.Binding})
 			}
 		case llm.ToolCallPart:
 			if p.ID == "" {

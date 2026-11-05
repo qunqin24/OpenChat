@@ -174,6 +174,28 @@ func TestDocuments(t *testing.T) {
 		if note, err := server.DocumentNote(next); err != nil || note != "" {
 			t.Errorf("a note with nothing to tell: %v %q", err, note)
 		}
+
+		// A later run, which has been shown nothing itself, is not told it
+		// again: the note that told it stays in the history.
+		for range 2 {
+			now = latestOf().Versions
+			body, _ = json.Marshal(map[string]any{"title": "Leave request", "content": now[len(now)-1].Content + "\n\nSee you.", "baseVersion": len(now)})
+			if rec := save(alice, id, string(body)); rec.Code != http.StatusOK {
+				t.Fatalf("save: %d %s", rec.Code, rec.Body)
+			}
+			told := agent.WithScope(ctx, agent.Scope{RunID: run.ID, UserID: alice.ID, ConversationID: conv.ID, State: &agent.RunState{}})
+			if note, err := server.DocumentNote(told); err != nil || strings.Count(note, "+ See you.") != 1 {
+				t.Fatalf("note: %v %q", err, note)
+			}
+			later := agent.WithScope(ctx, agent.Scope{RunID: run.ID, UserID: alice.ID, ConversationID: conv.ID, State: &agent.RunState{}})
+			if note, err := server.DocumentNote(later); err != nil || note != "" {
+				t.Errorf("told again: %v %q", err, note)
+			}
+		}
+		later := agent.WithScope(ctx, agent.Scope{RunID: run.ID, UserID: alice.ID, ConversationID: conv.ID, State: &agent.RunState{}})
+		if _, err := tool.Execute(later, json.RawMessage(rewrite)); err != nil {
+			t.Errorf("a rewrite over what an earlier note told: %v", err)
+		}
 	})
 
 	t.Run("the conversation lists its documents for its owner only", func(t *testing.T) {

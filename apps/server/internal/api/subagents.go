@@ -1527,10 +1527,14 @@ func (s *Server) SubagentNote(ctx context.Context) (string, error) {
 	return b.String(), nil
 }
 
-// TurnNote is every run's turn note: the writing blocks the person edited, and
-// the conversation's sub-agents.
+// TurnNote is every run's turn note: that the message came from the phone app,
+// the writing blocks the person edited, the conversation's sub-agents and its
+// plugins.
 func (s *Server) TurnNote(ctx context.Context) (string, error) {
 	var notes []string
+	if scope, ok := agent.ScopeFrom(ctx); ok && scope.FromApp && !scope.Subagent() {
+		notes = append(notes, phoneGuide)
+	}
 	for _, note := range []agent.TurnNote{s.DocumentNote, s.SubagentNote, s.PluginNote} {
 		text, err := note(ctx)
 		if err != nil {

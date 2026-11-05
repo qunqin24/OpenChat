@@ -114,6 +114,9 @@ type execution struct {
 	// says it has been. Used by the run loop only.
 	note  string
 	noted bool
+	// earlier is the turn notes of the conversation's other inputs, read
+	// once: they do not change while the run goes. Used by the run loop only.
+	earlier []sqlc.ListTurnNotesRow
 }
 
 // change is the body of one commit. It runs inside the transaction, may append
@@ -417,14 +420,14 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 	}
 	// A long text file is shown as a card and read with the file tools, by a
 	// model that can call them; to one that cannot, it goes whole (files.go).
-	cards := false
-	if callsTools {
-		if cards, err = r.hasLongFiles(ctx, ex.run.ConversationID); err != nil {
-			return false, err
-		}
-		if cards {
-			offered = append(offered, r.fileTools()...)
-		}
+	// The tools are offered whether or not the conversation holds a long file
+	// yet: a tool list that grew when the first one was attached would change
+	// what every earlier reply was given, which invalidates the thinking blocks
+	// sent back (providers/anthropic/binding.go) and the provider's cache. A
+	// sub-agent's conversation holds no files of the person's.
+	cards := callsTools && ex.parent == nil
+	if cards {
+		offered = append(offered, r.fileTools()...)
 	}
 	system := r.opts.SystemPrompt(ctx, r.now(), offered)
 
@@ -442,6 +445,8 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 	if err != nil {
 		return false, err
 	}
+	// The turn notes are part of what is measured: they go with every request.
+	rows = ex.withNote(ctx, rows)
 	// Before every request - the first, and each after a tool round - the
 	// context is compressed if it has grown too large for the window. A failed
 	// compression is the request going out as it is.
@@ -456,9 +461,10 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 		if summary, rows, err = LoadContextRows(ctx, r.q, ex.run.ConversationID, r.opts.HistoryLimit); err != nil {
 			return false, err
 		}
+		rows = ex.withNote(ctx, rows)
 		ex.noteCompressed(system, offered, summary, rows)
 	}
-	messages, err := BuildRequestContext(summary, ex.withNote(ctx, rows), ex.location(ctx))
+	messages, err := BuildRequestContext(summary, rows, ex.location(ctx))
 	if err != nil {
 		return false, err
 	}
@@ -584,40 +590,102 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 // a key that stopped working, a relay that is down or rate-limited, a provider
 // error - except a context too long for the model, which every channel of it
 // would refuse alike.
-// withNote is rows with the run's turn note added to its input message, the
-// note asked for at the run's first request and the same on every request
-// after it, so the run's requests share their prefix. A note that cannot be
-// had is left out: it is help, not part of the conversation.
+// withNote is rows with each run's turn note added to its input message.
+//
+// A run asks for its note at its first request and keeps it on the run
+// (runs.turn_note), and every later request - its own and later runs' - adds
+// the same note to the same message. A note added for one run and gone from
+// the next would change what every later reply was given, which invalidates
+// the thinking blocks sent back (providers/anthropic/binding.go) and the
+// provider's cache. A run that continues another (an answered ask_user, a
+// started research) has the same input and keeps its note rather than asking
+// again. A note that cannot be had is left out: it is help, not part of the
+// conversation.
 func (ex *execution) withNote(ctx context.Context, rows []sqlc.Message) []sqlc.Message {
-	if !ex.noted {
-		if hook := ex.r.turnNote.Load(); hook != nil {
-			ex.noted = true
-			note, err := (*hook)(ctx)
-			if err != nil && ctx.Err() == nil {
-				ex.logger().Warn("turn note", "error", err)
+	notes := map[uuid.UUID]string{}
+	if ex.earlier == nil {
+		earlier, err := ex.r.q.ListTurnNotes(ctx, ex.run.ConversationID)
+		if err != nil {
+			if ctx.Err() == nil {
+				ex.logger().Warn("turn notes", "error", err)
 			}
-			ex.note = note
+			earlier = nil
+		} else if earlier == nil {
+			earlier = []sqlc.ListTurnNotesRow{}
+		}
+		ex.earlier = earlier
+	}
+	earlier := ex.earlier
+	for _, n := range earlier {
+		if n.TurnNote != nil && n.InputMessageID != ex.run.InputMessageID {
+			notes[n.InputMessageID] = *n.TurnNote
 		}
 	}
-	if ex.note == "" {
+	if !ex.noted {
+		ex.noted = true
+		ex.note = ex.askNote(ctx, earlier)
+	}
+	if ex.note != "" {
+		notes[ex.run.InputMessageID] = ex.note
+	}
+	if len(notes) == 0 {
 		return rows
 	}
+	out := slices.Clone(rows)
 	for i, row := range rows {
-		if row.ID != ex.run.InputMessageID || row.Role != sqlc.MessageRoleUser {
+		note := notes[row.ID]
+		if note == "" || row.Role != sqlc.MessageRoleUser {
 			continue
 		}
 		parts, err := DecodeParts(row.Parts)
 		if err != nil {
-			return rows // BuildContext reports it
+			continue // BuildContext reports it
 		}
 		if len(parts) == 0 && row.Content != "" {
 			parts = llm.Parts{llm.TextPart{Text: row.Content}}
 		}
-		out := slices.Clone(rows)
-		out[i].Parts = EncodeParts(append(slices.Clone([]llm.Part(parts)), llm.TextPart{Text: "\n\n" + ex.note})) // apart from what they wrote
-		return out
+		out[i].Parts = EncodeParts(append(slices.Clone([]llm.Part(parts)), llm.TextPart{Text: "\n\n" + note})) // apart from what they wrote
 	}
-	return rows
+	return out
+}
+
+// askNote is the run's turn note, kept on the run: the one it kept, if a
+// process before this one asked; otherwise the hook's. A run continuing
+// another shares its input, so it keeps the note that input already has and
+// adds what the hook says now after it, if anything - so a note with nothing
+// new changes nothing that came before.
+func (ex *execution) askNote(ctx context.Context, earlier []sqlc.ListTurnNotesRow) string {
+	if ex.run.TurnNote != nil {
+		return *ex.run.TurnNote
+	}
+	var inherited string
+	if ex.run.Continues != nil {
+		for _, n := range earlier {
+			if n.InputMessageID == ex.run.InputMessageID && n.TurnNote != nil {
+				inherited = *n.TurnNote
+			}
+		}
+	}
+	var fresh string
+	if hook := ex.r.turnNote.Load(); hook != nil {
+		var err error
+		if fresh, err = (*hook)(ctx); err != nil && ctx.Err() == nil {
+			ex.logger().Warn("turn note", "error", err)
+		}
+	}
+	note := inherited
+	switch {
+	case fresh == "":
+	case note == "":
+		note = fresh
+	default:
+		note += "\n\n" + fresh
+	}
+	if err := ex.r.q.SetRunTurnNote(ctx, sqlc.SetRunTurnNoteParams{ID: ex.run.ID, TurnNote: &note}); err != nil && ctx.Err() == nil {
+		ex.logger().Warn("keep turn note", "error", err)
+	}
+	ex.run.TurnNote = &note
+	return note
 }
 
 func failsOver(err error) bool {

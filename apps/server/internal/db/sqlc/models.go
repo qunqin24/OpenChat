@@ -753,6 +753,13 @@ type Run struct {
 	FromApp         bool               `json:"from_app"`
 	Research        bool               `json:"research"`
 	Unattended      bool               `json:"unattended"`
+	TurnNote        *string            `json:"turn_note"`
+}
+
+type RunDocumentNote struct {
+	RunID      uuid.UUID `json:"run_id"`
+	DocumentID uuid.UUID `json:"document_id"`
+	Version    int32     `json:"version"`
 }
 
 type ScheduledTask struct {

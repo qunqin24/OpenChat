@@ -25,7 +25,10 @@ import (
 //
 // What a run has been shown is kept in its agent.RunState: the version of each
 // document it wrote, read, or was told about. A run resumed after a restart
-// has forgotten it, and is refused one rewrite too many at worst.
+// has forgotten it, and is refused one rewrite too many at worst. What earlier
+// runs' notes told is kept too (run_document_notes): those notes stay in the
+// history (runs.turn_note), so a version one of them told is known to every
+// later run, and is neither told again nor refused.
 
 const (
 	// maxDocumentDiff bounds the changes shown of one document; past it, the
@@ -54,13 +57,32 @@ func sawDocument(ctx context.Context, id uuid.UUID, version int32) {
 	}
 }
 
+// documentKnown is the latest version of a document the model has been
+// shown: in this run, or in a kept turn note of an earlier one.
+func (s *Server) documentKnown(ctx context.Context, id uuid.UUID) (int32, error) {
+	told, err := s.q.NotedDocumentVersion(ctx, id)
+	return max(told, documentSeen(ctx, id)), err
+}
+
 // documentBase is what the model last knew of a document before latest: the
-// version this run was shown, or else the last one a model wrote.
+// latest of the version it was shown (documentKnown) and the last one a model
+// wrote.
 func (s *Server) documentBase(ctx context.Context, doc sqlc.Document) (sqlc.DocumentVersion, error) {
-	if seen := documentSeen(ctx, doc.ID); seen > 0 {
-		return s.q.GetDocumentVersion(ctx, sqlc.GetDocumentVersionParams{DocumentID: doc.ID, Version: seen})
+	known, err := s.documentKnown(ctx, doc.ID)
+	if err != nil {
+		return sqlc.DocumentVersion{}, err
 	}
-	return s.q.LatestModelDocumentVersion(ctx, doc.ID)
+	wrote, err := s.q.LatestModelDocumentVersion(ctx, doc.ID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return sqlc.DocumentVersion{}, err
+	}
+	if known > wrote.Version {
+		return s.q.GetDocumentVersion(ctx, sqlc.GetDocumentVersionParams{DocumentID: doc.ID, Version: known})
+	}
+	if wrote.Version == 0 {
+		return wrote, pgx.ErrNoRows
+	}
+	return wrote, nil
 }
 
 // DocumentNote is the turn note (agent.TurnNote) about the documents of the
@@ -95,9 +117,13 @@ func (s *Server) DocumentNote(ctx context.Context) (string, error) {
 		edited = edited[len(edited)-maxNotedDocuments:]
 	}
 
+	// Told is what this note tells of: kept with the run, so a later run's
+	// note starts from it instead of telling the same changes again.
+	told := func(id uuid.UUID, version int32) error {
+		sawDocument(ctx, id, version)
+		return s.q.NoteDocumentVersion(ctx, sqlc.NoteDocumentVersionParams{RunID: scope.RunID, DocumentID: id, Version: version})
+	}
 	var b strings.Builder
-	b.WriteString("<document-edits>\nThe user edited these writing blocks themselves since your last version of them. " +
-		"Each now holds their text: build on it, and keep their changes unless they ask otherwise.\n")
 	for _, d := range edited {
 		doc, err := s.q.GetDocument(ctx, sqlc.GetDocumentParams{ID: d.ID, UserID: user.ID})
 		if err != nil {
@@ -117,21 +143,32 @@ func (s *Server) DocumentNote(ctx context.Context) (string, error) {
 		case err != nil:
 			return "", err
 		}
-		fmt.Fprintf(&b, "\n%q (id %s), now version %d", latest.Title, d.ID, latest.Version)
 		base, err := s.documentBase(ctx, doc)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return "", err
 		}
+		if base.Version >= latest.Version {
+			// Told already, in a note the history still carries.
+			sawDocument(ctx, d.ID, latest.Version)
+			continue
+		}
+		fmt.Fprintf(&b, "\n%q (id %s), now version %d", latest.Title, d.ID, latest.Version)
 		diff, fits := documentDiff(base, latest)
 		if !fits {
 			fmt.Fprintf(&b, ", from your version %d: the changes are too long to show here. Read it (op=read) before changing it.\n", base.Version)
-			continue
+		} else {
+			fmt.Fprintf(&b, ", from your version %d:\n%s", base.Version, diff)
 		}
-		fmt.Fprintf(&b, ", from your version %d:\n%s", base.Version, diff)
-		sawDocument(ctx, d.ID, latest.Version)
+		if err := told(d.ID, latest.Version); err != nil {
+			return "", err
+		}
 	}
-	b.WriteString("</document-edits>")
-	return b.String(), nil
+	if b.Len() == 0 {
+		return "", nil
+	}
+	return "<document-edits>\nThe user edited these writing blocks themselves since your last version of them. " +
+		"Each now holds their text: build on it, and keep their changes unless they ask otherwise.\n" +
+		b.String() + "</document-edits>", nil
 }
 
 // documentDiff is how after differs from before, paragraph by paragraph: each

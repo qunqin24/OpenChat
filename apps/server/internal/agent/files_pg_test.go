@@ -116,20 +116,14 @@ func TestFileToolsReadOnlyCheckedFiles(t *testing.T) {
 		return fileTool{r: f.runner}.Execute(WithScope(ctx, scope), []byte(args))
 	}
 
-	// A refused message's file is not there, and offers no tools.
+	// A refused message's file is not there.
 	f.attachText(blobs, "refused.md", longMarkdown(), sqlc.MessageStatusBlocked, "")
-	if long, err := f.runner.hasLongFiles(ctx, f.conv); err != nil || long {
-		t.Fatalf("a refused file offers the tools: %v %v", long, err)
-	}
 	if _, err := read(`{"file":"refused.md"}`); err == nil {
 		t.Error("a refused message's file was read")
 	}
 
 	// A file written again after it was checked is not read.
 	f.attachText(blobs, "changed.md", longMarkdown(), sqlc.MessageStatusComplete, strings.Repeat("0", 64))
-	if long, _ := f.runner.hasLongFiles(ctx, f.conv); !long {
-		t.Error("a long file offers no tools")
-	}
 	if _, err := read(`{"file":"changed.md"}`); err == nil || !strings.Contains(err.Error(), "changed after it was checked") {
 		t.Errorf("a changed file: %v", err)
 	}

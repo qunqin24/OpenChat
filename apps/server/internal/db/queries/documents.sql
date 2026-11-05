@@ -77,3 +77,15 @@ WHERE document_id = sqlc.arg('document_id')
   AND source = 'model'
 ORDER BY version DESC
 LIMIT 1;
+
+-- name: NoteDocumentVersion :exec
+-- A run's turn note told the model of this version of a document.
+INSERT INTO run_document_notes (run_id, document_id, version)
+VALUES ($1, $2, $3)
+ON CONFLICT (run_id, document_id) DO UPDATE SET version = GREATEST(run_document_notes.version, excluded.version);
+
+-- name: NotedDocumentVersion :one
+-- The latest version of a document a kept turn note told the model of, 0 none.
+SELECT coalesce(max(version), 0)::int AS version
+FROM run_document_notes
+WHERE document_id = $1;

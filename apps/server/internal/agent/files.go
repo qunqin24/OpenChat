@@ -28,9 +28,11 @@ import (
 // range of lines, and file_search, the lines holding a phrase. The way a
 // coding agent reads a repository, and Open WebUI's native mode reads files.
 //
-// The tools are offered only to a request whose conversation holds such a
-// file and whose model calls tools; the attachment resolver makes cards only
-// then, and sends the file whole otherwise. What they read is what the card
+// The tools are offered to every request whose model calls tools (not a
+// sub-agent's), whether or not the conversation holds such a file yet, so
+// the tool list does not change the first time one is attached; the
+// attachment resolver makes cards only then, and sends the file whole
+// otherwise. What they read is what the card
 // stands for: the files of the person's own messages in this conversation,
 // never a refused one's, through the same resolver - so the same receipt -
 // as a file sent whole. The file's words were checked by content moderation
@@ -69,26 +71,6 @@ const (
 // fileTools are the tools that read the long text files of a conversation.
 func (r *Runner) fileTools() []Tool {
 	return []Tool{fileTool{r: r}, fileTool{r: r, search: true}}
-}
-
-// hasLongFiles reports whether the conversation holds a file whose words are
-// too long to send whole: a text file, or a document by the length of the
-// words read out of it when it was sent (AttachmentPart.TextSize).
-func (r *Runner) hasLongFiles(ctx context.Context, conversationID uuid.UUID) (bool, error) {
-	files, err := r.conversationFiles(ctx, conversationID)
-	if err != nil {
-		return false, err
-	}
-	for _, file := range files {
-		size := file.TextSize
-		if file.MediaType == llm.TextMediaType {
-			size = file.Size
-		}
-		if size > llm.InlineTextBytes {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 type fileTool struct {

@@ -153,7 +153,7 @@ func TestAskUserOnTheLastRoundIsRefused(t *testing.T) {
 	runner.Start(run.ID)
 	f.waitFor(run.ID, sqlc.RunStatusCompleted)
 	last := f.models.reqs[len(f.models.reqs)-1]
-	if last.Options.ToolChoice != llm.ToolChoiceNone || len(last.Tools) != 2 {
+	if last.Options.ToolChoice != llm.ToolChoiceNone || len(ownTools(last.Tools)) != 2 {
 		t.Fatalf("last request: tool choice %q with %d tools", last.Options.ToolChoice, len(last.Tools))
 	}
 	f.assertTranscript("user go", "assistant:tool_calls call:echo", "tool result:succeeded",

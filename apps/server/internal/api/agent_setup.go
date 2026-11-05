@@ -103,8 +103,10 @@ func NewModalities(pool *pgxpool.Pool) func(ctx context.Context, modelID string)
 // NewSystemPrompt builds the system prompt of every request.
 //
 // It changes only when an administrator turns the interface components or
-// image search on or off, the tools change, or the conversation moves between
-// the phone app and a browser (phoneGuide, for runs started from the app). The date is not in it: a prompt that changed every
+// image search on or off, or the tools change. That a message came from the
+// phone app is not in it either but in the message's turn note (phoneGuide),
+// so moving between the app and a browser changes nothing that came before.
+// The date is not in it: a prompt that changed every
 // midnight would defeat the provider's prompt cache and invalidate the thinking
 // blocks replayed against the prefix, so the date rides on the user messages
 // instead (agent.BuildContext) and the prompt only explains the notation.
@@ -134,9 +136,6 @@ func NewSystemPrompt(pool *pgxpool.Pool) func(context.Context, time.Time, []agen
 		prompt := basePrompt(offered)
 		if offersTool(offered, toolImageGenerate) {
 			prompt += imageGuide
-		}
-		if scope, ok := agent.ScopeFrom(ctx); ok && scope.FromApp {
-			prompt += "\n\n" + phoneGuide
 		}
 		if section := personalPrompt(ctx, notes, offered); section != "" {
 			prompt += "\n\n" + section
@@ -170,19 +169,24 @@ func NewSystemPrompt(pool *pgxpool.Pool) func(context.Context, time.Time, []agen
 	}
 }
 
-// phoneGuide is added for a run started from the phone app. Answers laid out
-// for the web page - wide tables, long code lines, deep lists - had to be
-// scrolled sideways or read a few words a line on a phone. It follows the
-// Formatting section and narrows it; it does not change what an answer says.
-const phoneGuide = "## Reading on a phone\n" +
-	"The user is on the OpenChat phone app: your answer is read on a narrow screen, about 30 characters of " +
-	"Chinese or 45 of English to a line. Lay it out for that:\n" +
+// phoneGuide is the turn note of a run started from the phone app (TurnNote).
+// Answers laid out for the web page - wide tables, long code lines, deep
+// lists - had to be scrolled sideways or read a few words a line on a phone.
+// It narrows the Formatting section for the answer to this message; it does
+// not change what an answer says. A note on the message rather than a section
+// of the system prompt: the prompt would change whenever the person moved
+// between the app and a browser, and with it what every earlier reply was
+// given (agent.withNote).
+const phoneGuide = "<phone-app>\n" +
+	"This message was sent from the OpenChat phone app: your answer to it is read on a narrow screen, about 30 " +
+	"characters of Chinese or 45 of English to a line. Lay it out for that:\n" +
 	"- Keep paragraphs to two or three sentences, and lead with the answer.\n" +
 	"- Prefer a list to a table. Use a table only for data that really is a grid, with at most three short " +
 	"columns; a wider one has to be scrolled sideways.\n" +
 	"- Keep headings short, and lists at most two levels deep.\n" +
 	"- In code, keep lines short where the language allows; long lines also scroll sideways.\n" +
-	"- Do not mention this note or that the user is on a phone."
+	"- Do not mention this note or that the user is on a phone.\n" +
+	"</phone-app>"
 
 // personalPrompt renders the conversation's snapshot. A failure leaves the
 // section out rather than the request unanswered; the next request tries again.

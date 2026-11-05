@@ -131,6 +131,11 @@ type wireContentBlock struct {
 	IsError bool   `json:"is_error,omitempty"`
 
 	Source *wireSource `json:"source,omitempty"`
+
+	// binding is a thinking block's record of the conversation before it
+	// (llm.ReasoningPart.Binding), read when the request is assembled to tell
+	// whether the block may go (binding.go). Never sent.
+	binding string
 }
 
 // wireSource is how image and document blocks carry their bytes.

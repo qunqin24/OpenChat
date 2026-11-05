@@ -34,6 +34,9 @@ type partJSON struct {
 	Signature string `json:"signature,omitempty"`
 	Redacted  []byte `json:"redacted,omitempty"`
 
+	// reasoning
+	Binding string `json:"binding,omitempty"`
+
 	// tool_call
 	ID           string          `json:"id,omitempty"`
 	Name         string          `json:"name,omitempty"`
@@ -79,7 +82,7 @@ func toPartJSON(part Part) partJSON {
 	case TextPart:
 		return partJSON{Type: PartText, Text: p.Text, Phase: p.Phase, Signature: p.Signature}
 	case ReasoningPart:
-		return partJSON{Type: PartReasoning, Text: p.Text, Signature: p.Signature, Redacted: p.Redacted, DurationMS: p.DurationMS}
+		return partJSON{Type: PartReasoning, Text: p.Text, Signature: p.Signature, Redacted: p.Redacted, Binding: p.Binding, DurationMS: p.DurationMS}
 	case ToolCallPart:
 		return partJSON{Type: PartToolCall, ID: p.ID, Name: p.Name, Arguments: p.Arguments, RawArguments: p.RawArguments, Signature: p.Signature}
 	case ToolResultPart:
@@ -97,7 +100,7 @@ func (raw partJSON) part() (Part, error) {
 	case PartText:
 		return TextPart{Text: raw.Text, Phase: raw.Phase, Signature: raw.Signature}, nil
 	case PartReasoning:
-		return ReasoningPart{Text: raw.Text, Signature: raw.Signature, Redacted: raw.Redacted, DurationMS: raw.DurationMS}, nil
+		return ReasoningPart{Text: raw.Text, Signature: raw.Signature, Redacted: raw.Redacted, Binding: raw.Binding, DurationMS: raw.DurationMS}, nil
 	case PartToolCall:
 		return ToolCallPart{ID: raw.ID, Name: raw.Name, Arguments: raw.Arguments, RawArguments: raw.RawArguments, Signature: raw.Signature}, nil
 	case PartToolResult:

@@ -101,3 +101,19 @@ WHERE id = sqlc.arg('id')
   AND conversation_id = sqlc.arg('conversation_id')
   AND status = 'running'
 RETURNING *;
+
+-- name: SetRunTurnNote :exec
+-- The note a run's model was told with its input, asked once (agent.TurnNote).
+UPDATE runs
+SET turn_note = $2
+WHERE id = $1;
+
+-- name: ListTurnNotes :many
+-- The notes told with a conversation's inputs, by input message: where a
+-- message was answered more than once, the latest run's, which is the one
+-- whose reply is kept.
+SELECT DISTINCT ON (input_message_id) input_message_id, turn_note
+FROM runs
+WHERE conversation_id = $1
+  AND turn_note IS NOT NULL
+ORDER BY input_message_id, created_at DESC;

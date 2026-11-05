@@ -307,6 +307,38 @@ func (q *Queries) LockDocument(ctx context.Context, arg LockDocumentParams) (Doc
 	return i, err
 }
 
+const noteDocumentVersion = `-- name: NoteDocumentVersion :exec
+INSERT INTO run_document_notes (run_id, document_id, version)
+VALUES ($1, $2, $3)
+ON CONFLICT (run_id, document_id) DO UPDATE SET version = GREATEST(run_document_notes.version, excluded.version)
+`
+
+type NoteDocumentVersionParams struct {
+	RunID      uuid.UUID `json:"run_id"`
+	DocumentID uuid.UUID `json:"document_id"`
+	Version    int32     `json:"version"`
+}
+
+// A run's turn note told the model of this version of a document.
+func (q *Queries) NoteDocumentVersion(ctx context.Context, arg NoteDocumentVersionParams) error {
+	_, err := q.db.Exec(ctx, noteDocumentVersion, arg.RunID, arg.DocumentID, arg.Version)
+	return err
+}
+
+const notedDocumentVersion = `-- name: NotedDocumentVersion :one
+SELECT coalesce(max(version), 0)::int AS version
+FROM run_document_notes
+WHERE document_id = $1
+`
+
+// The latest version of a document a kept turn note told the model of, 0 none.
+func (q *Queries) NotedDocumentVersion(ctx context.Context, documentID uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, notedDocumentVersion, documentID)
+	var version int32
+	err := row.Scan(&version)
+	return version, err
+}
+
 const setDocumentVersionChecked = `-- name: SetDocumentVersionChecked :exec
 UPDATE document_versions
 SET checked = $1
