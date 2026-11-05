@@ -135,7 +135,7 @@ func (c *ImageClient) one(ctx context.Context, req llm.ImageRequest) (llm.Genera
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return llm.GeneratedImage{}, nil, "", statusError(resp)
+		return llm.GeneratedImage{}, nil, "", llm.Scrub(statusError(resp), c.cfg.APIKey)
 	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxImageResponseBytes+1))
 	if err != nil {

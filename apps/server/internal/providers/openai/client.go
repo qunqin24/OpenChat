@@ -12,7 +12,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -207,7 +206,9 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, emit func(llm.Even
 	}
 	defer resp.Body.Close()
 
-	return decode(ctx, resp.Body, c.cfg, req.Model, emit)
+	out, err := decode(ctx, resp.Body, c.cfg, req.Model, emit)
+	// A failure reported inside the stream is the provider's text too.
+	return out, scrub(err, c.cfg.APIKey)
 }
 
 // openStream POSTs body and returns the response only when it is a 200; the
@@ -250,17 +251,7 @@ func openStream(ctx context.Context, client *http.Client, endpoint string, cfg C
 // scrub removes the credential from an error built out of a provider's own
 // words. A gateway that echoes the Authorization header back in its error
 // message would otherwise carry the key into logs and, eventually, a browser.
-func scrub(err error, secret string) error {
-	if secret == "" {
-		return err
-	}
-	var modelErr *llm.Error
-	if errors.As(err, &modelErr) {
-		modelErr.Message = strings.ReplaceAll(modelErr.Message, secret, "[redacted]")
-		modelErr.Code = strings.ReplaceAll(modelErr.Code, secret, "[redacted]")
-	}
-	return err
-}
+func scrub(err error, secret string) error { return llm.Scrub(err, secret) }
 
 // statusError maps a failed response onto a category the run layer can act on.
 // It keeps the provider's own message and code — support will ask for them —

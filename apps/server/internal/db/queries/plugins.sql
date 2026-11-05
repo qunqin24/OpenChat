@@ -203,10 +203,13 @@ WHERE user_id = $1
   AND plugin_id = $2;
 
 -- name: MarkPluginNeedsReconnect :exec
+-- The refresh token the server refused condemns the install only while it is
+-- still the stored one: a refresh elsewhere may have rotated it meanwhile.
 UPDATE plugin_installs
 SET needs_reconnect = true
 WHERE user_id = $1
-  AND plugin_id = $2;
+  AND plugin_id = $2
+  AND refresh_token = sqlc.arg(refresh_token)::bytea;
 
 -- name: FillBuiltinPluginScopes :exec
 -- A built-in plugin's scopes, for a row made before the definition had them.

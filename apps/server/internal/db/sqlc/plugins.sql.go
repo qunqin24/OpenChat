@@ -1285,15 +1285,19 @@ UPDATE plugin_installs
 SET needs_reconnect = true
 WHERE user_id = $1
   AND plugin_id = $2
+  AND refresh_token = $3::bytea
 `
 
 type MarkPluginNeedsReconnectParams struct {
-	UserID   uuid.UUID `json:"user_id"`
-	PluginID uuid.UUID `json:"plugin_id"`
+	UserID       uuid.UUID `json:"user_id"`
+	PluginID     uuid.UUID `json:"plugin_id"`
+	RefreshToken []byte    `json:"refresh_token"`
 }
 
+// The refresh token the server refused condemns the install only while it is
+// still the stored one: a refresh elsewhere may have rotated it meanwhile.
 func (q *Queries) MarkPluginNeedsReconnect(ctx context.Context, arg MarkPluginNeedsReconnectParams) error {
-	_, err := q.db.Exec(ctx, markPluginNeedsReconnect, arg.UserID, arg.PluginID)
+	_, err := q.db.Exec(ctx, markPluginNeedsReconnect, arg.UserID, arg.PluginID, arg.RefreshToken)
 	return err
 }
 

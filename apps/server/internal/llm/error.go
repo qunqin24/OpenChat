@@ -3,6 +3,7 @@ package llm
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // ErrorKind is the category a failure falls into. The run layer retries, gives
@@ -81,4 +82,21 @@ func Errorf(kind ErrorKind, cause error, format string, args ...any) *Error {
 func IsKind(err error, kind ErrorKind) bool {
 	var e *Error
 	return errors.As(err, &e) && e.Kind == kind
+}
+
+// Scrub removes a credential from an error built out of a provider's own
+// words: a gateway that echoes the request back in its error message — before
+// the stream or inside it — would otherwise carry the key into logs and,
+// eventually, a browser. Every adapter passes the errors it builds from what
+// the provider said through here.
+func Scrub(err error, secret string) error {
+	if err == nil || secret == "" {
+		return err
+	}
+	var modelErr *Error
+	if errors.As(err, &modelErr) {
+		modelErr.Message = strings.ReplaceAll(modelErr.Message, secret, "[redacted]")
+		modelErr.Code = strings.ReplaceAll(modelErr.Code, secret, "[redacted]")
+	}
+	return err
 }

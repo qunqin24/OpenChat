@@ -32,10 +32,14 @@ type fakeOAuthService struct {
 	mu        sync.Mutex
 	challenge string
 	grants    []string
+	// rotate makes a refresh hand out a new refresh token and refuse the
+	// spent one from then on, as servers that rotate them do.
+	rotate bool
+	spent  map[string]bool
 }
 
 func newFakeOAuthService(t *testing.T) *fakeOAuthService {
-	f := &fakeOAuthService{}
+	f := &fakeOAuthService{spent: map[string]bool{}}
 	server := mcp.NewServer(&mcp.Implementation{Name: "svc", Version: "1"}, nil)
 	server.AddTool(&mcp.Tool{Name: "whoami", InputSchema: map[string]any{"type": "object"}, Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}},
 		func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) { return &mcp.CallToolResult{}, nil })
@@ -79,11 +83,17 @@ func newFakeOAuthService(t *testing.T) *fakeOAuthService {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"access_token":"tok-1","refresh_token":"ref-1","token_type":"bearer","expires_in":3600}`))
 		case "refresh_token":
-			if r.Form.Get("refresh_token") != "ref-1" {
+			used := r.Form.Get("refresh_token")
+			if used != "ref-1" || f.spent[used] {
 				http.Error(w, `{"error":"invalid_grant"}`, http.StatusBadRequest)
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
+			if f.rotate {
+				f.spent[used] = true
+				_, _ = w.Write([]byte(`{"access_token":"tok-2","refresh_token":"ref-2","token_type":"bearer","expires_in":3600}`))
+				return
+			}
 			_, _ = w.Write([]byte(`{"access_token":"tok-2","token_type":"bearer","expires_in":3600}`))
 		}
 	})
@@ -190,6 +200,60 @@ func TestPluginOAuthConnect(t *testing.T) {
 	token, err := s.pluginToken(ctx, admin.ID, p, "https://chat.test"+pluginCallbackPath)
 	if err != nil || token != "tok-2" {
 		t.Fatalf("refresh: %q %v (grants %v)", token, err, svc.grants)
+	}
+
+	// Several tool calls at once with a token about to run out refresh it
+	// once, against a server that rotates refresh tokens and refuses a spent
+	// one, and the connection stays good.
+	svc.mu.Lock()
+	svc.rotate, svc.grants = true, nil
+	svc.mu.Unlock()
+	expire := func() {
+		t.Helper()
+		if _, err := pool.Exec(ctx, `UPDATE plugin_installs SET token_expires_at = now() WHERE user_id = $1 AND plugin_id = $2`, admin.ID, pluginID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	expire()
+	var wg sync.WaitGroup
+	errs := make([]error, 5)
+	for i := range errs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			token, err := s.pluginToken(ctx, admin.ID, p, "https://chat.test"+pluginCallbackPath)
+			if err == nil && token != "tok-2" {
+				err = fmt.Errorf("token %q", token)
+			}
+			errs[i] = err
+		}()
+	}
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			t.Fatalf("a concurrent call: %v (grants %v)", err, svc.grants)
+		}
+	}
+	if len(svc.grants) != 1 {
+		t.Fatalf("refreshed %d times, want once", len(svc.grants))
+	}
+	var marked bool
+	if err := pool.QueryRow(ctx, `SELECT needs_reconnect FROM plugin_installs WHERE user_id = $1 AND plugin_id = $2`, admin.ID, pluginID).Scan(&marked); err != nil || marked {
+		t.Fatalf("needs_reconnect = %v (%v) after a good refresh", marked, err)
+	}
+
+	// A refresh token the server refuses while it is still the stored one
+	// does mark the install.
+	stale, _ := box.Seal([]byte("ref-1"))
+	if _, err := pool.Exec(ctx, `UPDATE plugin_installs SET token_expires_at = now(), refresh_token = $3 WHERE user_id = $1 AND plugin_id = $2`,
+		admin.ID, pluginID, stale); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pluginToken(ctx, admin.ID, p, "https://chat.test"+pluginCallbackPath); err != errPluginNotConnected {
+		t.Fatalf("a refused refresh: %v", err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT needs_reconnect FROM plugin_installs WHERE user_id = $1 AND plugin_id = $2`, admin.ID, pluginID).Scan(&marked); err != nil || !marked {
+		t.Fatalf("needs_reconnect = %v (%v) after a refused refresh", marked, err)
 	}
 }
 

@@ -47,6 +47,10 @@ type Server struct {
 	// pluginWaits holds, by confirmation id, the channel a plugin call that
 	// waits for the person to allow it listens on (plugin_code.go).
 	pluginWaits sync.Map
+	// pluginRefreshes holds, by person and plugin, the one-slot channel a token
+	// refresh holds while it runs (pluginToken), so concurrent tool calls do
+	// not each spend the same refresh token.
+	pluginRefreshes sync.Map
 	// avatars holds the read URLs issued for account pictures.
 	avatars avatarCache
 	// usage is the ledger of model requests, for the ones the server makes

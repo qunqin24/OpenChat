@@ -1018,3 +1018,27 @@ func TestIsSummaryRefusal(t *testing.T) {
 		t.Error("an auth failure was read as a summary refusal")
 	}
 }
+
+func TestChatClientKeepsTheKeyOutOfInBandErrors(t *testing.T) {
+	client, err := New(Config{
+		BaseURL: "https://gateway.test/v1",
+		APIKey:  "sk-secret-key-123",
+		HTTPClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			// A 200 stream whose only frame is a failure that echoes the key.
+			body := `data: {"error":{"message":"invalid key sk-secret-key-123","code":"sk-secret-key-123"}}` + "\n\n"
+			return respond(http.StatusOK, "text/event-stream", body), nil
+		})},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.Stream(context.Background(), llm.Request{
+		Model: "m", Messages: []llm.Message{llm.TextMessage(llm.RoleUser, "hi")},
+	}, (&llmtest.Recorder{}).Emit)
+	if err == nil {
+		t.Fatal("want the stream's failure")
+	}
+	if strings.Contains(err.Error(), "sk-secret-key-123") || !strings.Contains(err.Error(), "[redacted]") {
+		t.Errorf("error = %v", err)
+	}
+}

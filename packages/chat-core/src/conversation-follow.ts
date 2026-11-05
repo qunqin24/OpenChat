@@ -125,11 +125,16 @@ export async function followConversation(options: FollowOptions): Promise<void> 
   }
 
   let attempt = 0
+  // Whether a snapshot has arrived before: every later one follows a dropped
+  // connection, and what happened while it was down is only in the list.
+  let reconnecting = false
   while (!controller.signal.aborted) {
     try {
       for await (const event of options.events(controller.signal)) {
         attempt = 0
         if (event.type === 'snapshot') {
+          const again = reconnecting
+          reconnecting = true
           const held = store.getState().live[conversationId]?.run
           if (held && !event.run) {
             // The run we were showing ended while we were away: its rows are
@@ -153,6 +158,14 @@ export async function followConversation(options: FollowOptions): Promise<void> 
           if (held && event.run) {
             if (held.run.id !== event.run.id) void catchUp()
             else if (event.run.status !== 'running') void catchUp(event.run.id)
+          } else if (!held && again) {
+            // Idle when the connection dropped: a run started and finished
+            // elsewhere meanwhile, or rows were deleted, and none of it was
+            // announced here. The newest page says what it left behind, and
+            // the summary may have moved with it. (The first snapshot needs
+            // none of this: the page has just read the list itself.)
+            void catchUp()
+            invalidate(queryKeys.conversations.compaction(conversationId))
           }
           continue
         }

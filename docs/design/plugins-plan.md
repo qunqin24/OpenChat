@@ -79,7 +79,8 @@
 - 客户端：管理员填的 Client ID/Secret（Secret 加密保存），没填且服务器有 `registration_endpoint` 就当场动态注册并存下来（`oauth_registered`），都没有就 409 `plugin_oauth_unconfigured`。GitHub 不支持动态注册，必须在 GitHub 上注册 OAuth App，回调地址填后台显示的 `<站点>/api/v1/plugins/oauth/callback`。还没做 Client ID Metadata Document（要有固定的公网地址）。
 - 授权地址带 PKCE（S256）、`state`、`resource`（RFC 8707）和管理员设的 scope；`state` 只存 SHA-256，PKCE verifier 加密保存，10 分钟有效、只能用一次、只能由发起的那个人取（`plugin_oauth_states`，清扫循环删过期的）。
 - 回调 `GET /plugins/oauth/callback`：取走 state，有 `iss` 时核对是不是同一个授权服务器（RFC 9207），换取令牌，加密存进这个人的安装记录（`plugin_installs.access_token`/`refresh_token`/`token_expires_at`），装上插件，跳回 `/plugins?connected=<短名>`；失败跳回 `?connect_error=<原因代码>`，页面按代码显示，不回显服务器的原话。
-- 令牌快过期时用 refresh token 换新的；刷新被拒就标记 `needs_reconnect`，插件页提示重新连接。
+- 令牌快过期时用 refresh token 换新的；刷新被拒就标记 `needs_reconnect`，插件页提示重新连接。同一人同一插件的刷新在进程内排队（`takePluginRefresh`），拿到号后重读安装记录，别人刚换过就直接用新的：会轮换 refresh token 的服务拒绝用过的旧令牌，并发的工具调用各自刷新会把好好的连接标成失效。标记只在被拒的 refresh token 仍是库里那份时生效（`MarkPluginNeedsReconnect` 带上它），网络失败不标。
+- 发现、注册、换令牌、刷新的请求都走 `plugins.httpClient`：管理员填的服务地址那个 host:port 照原样连（可以是内网），其余地址是别的服务器说的，每次拨号都只连公网地址（同 `GuardedClient`），每一跳重定向也要满足「https，或服务自己的主机」，不读环境代理。
 - 后台「拉取工具」对每人授权的插件用管理员自己的连接（先在插件页装上），没连接就 409 `plugin_not_connected`。
 
 **加密存储**（2026-11-03 定，同日改为自动生成密钥）：

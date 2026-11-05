@@ -19,7 +19,7 @@
 ## 改写与重新生成的显示、转录分页与交接
 
 - 没有版本翻页器。改写和重新生成从点击起就把要删的行藏起来（store 的 `replacing`：`{from}` 是被改的提问及其后，`{after}` 是最后一条提问之后；`buildTurns` 用它），服务端接受后用 `truncateTranscript` 把这些行从缓存里去掉，再让 `replacing` 结束；run 的输入已在列表里（重新生成）时 `buildTurns` 也会藏掉它后面不属于这个 run 的行。
-- 对话记录从尾部分页：`GET .../messages` 首页是最新的一页（页内仍是旧→新），`before` 取更早的页；`hooks/use-messages.ts` 是 `useInfiniteQuery`（`pages[0]` 最新），`ChatView` 只渲染最后 20 个 turn，滚到顶部再多画 20 个，画到已加载的最旧处才请求更早一页。run 结束只用 `refreshNewestMessages` 重取最新一页并拼接（交接逻辑在 `chat-core/src/hand-over.ts`，有测试：只有刷新**确认成功**——`refreshConfirmed`，兜底的 `refetchQueries` 也要 `throwOnError`——之后才 `settle` 本地的 live 副本；失败时答案留在屏幕上，隔几秒重试，之后任何一次成功的刷新、重连后的 snapshot 都会放手），不要对该键 `invalidateQueries`（会按游标重下所有已展开的页）。
+- 对话记录从尾部分页：`GET .../messages` 首页是最新的一页（页内仍是旧→新），`before` 取更早的页；`hooks/use-messages.ts` 是 `useInfiniteQuery`（`pages[0]` 最新），`ChatView` 只渲染最后 20 个 turn，滚到顶部再多画 20 个，画到已加载的最旧处才请求更早一页。run 结束只用 `refreshNewestMessages` 重取最新一页并拼接（交接逻辑在 `chat-core/src/hand-over.ts`，有测试：只有刷新**确认成功**——`refreshConfirmed`，兜底的 `refetchQueries` 也要 `throwOnError`——之后才 `settle` 本地的 live 副本；失败时答案留在屏幕上，隔几秒重试，之后任何一次成功的刷新、重连后的 snapshot 都会放手；断线时对话空闲、重连的 snapshot 也没有 run，同样重取最新一页，因为断线期间别处跑完的回复不会再推过来），不要对该键 `invalidateQueries`（会按游标重下所有已展开的页）。
 
 ## 发送、outbox 与已结束的 run
 

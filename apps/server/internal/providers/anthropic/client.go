@@ -170,9 +170,11 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, emit func(llm.Even
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return empty, statusError(resp)
+		return empty, llm.Scrub(statusError(resp), c.cfg.APIKey)
 	}
-	return decode(ctx, resp.Body, c.cfg, req.Model, emit)
+	out, err := decode(ctx, resp.Body, c.cfg, req.Model, emit)
+	// A failure reported inside the stream is the provider's text too.
+	return out, llm.Scrub(err, c.cfg.APIKey)
 }
 
 func (c *Client) version() string {

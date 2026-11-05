@@ -61,7 +61,7 @@ func (s *Server) pluginClient(ctx context.Context, p sqlc.Plugin, redirectURI st
 		if found.Server.RegistrationEndpoint == "" {
 			return plugins.Client{}, errPluginOAuthUnconfigured
 		}
-		id, secret, err := plugins.Register(ctx, found.Server, redirectURI)
+		id, secret, err := plugins.Register(ctx, found, redirectURI)
 		if err != nil {
 			slog.WarnContext(ctx, "plugin client registration failed", "plugin", p.Slug, "error", err)
 			return plugins.Client{}, errPluginOAuthUnconfigured
@@ -239,26 +239,31 @@ func (s *Server) saveTokens(ctx context.Context, userID, pluginID openapi_types.
 }
 
 // pluginToken is a person's access token for a plugin, refreshed when it is
-// about to run out. A refresh the server refuses marks the install for
-// reconnecting.
+// about to run out. Refreshes of one person's plugin take turns, and each
+// re-reads the install once it has its turn: a server that rotates refresh
+// tokens refuses the old one, so a second call refreshing with what it read
+// before the first finished would fail and wrongly mark a good connection.
+// A refresh the server refuses marks the install for reconnecting, and only
+// while the refresh token it refused is still the stored one.
 func (s *Server) pluginToken(ctx context.Context, userID openapi_types.UUID, p sqlc.Plugin, redirectURI string) (string, error) {
-	install, err := s.q.GetPluginInstall(ctx, sqlc.GetPluginInstallParams{UserID: userID, PluginID: p.ID})
-	if errors.Is(err, pgx.ErrNoRows) || (err == nil && len(install.AccessToken) == 0) {
-		return "", errPluginNotConnected
-	}
+	install, err := s.pluginInstall(ctx, userID, p.ID)
 	if err != nil {
 		return "", err
 	}
-	if install.NeedsReconnect {
-		return "", errPluginNotConnected
+	if !needsRefresh(install) {
+		return s.accessToken(install)
 	}
-	fresh := !install.TokenExpiresAt.Valid || time.Until(install.TokenExpiresAt.Time) > time.Minute
-	if fresh || len(install.RefreshToken) == 0 {
-		access, err := s.secrets.Open(install.AccessToken)
-		if err != nil {
-			return "", errSecretKeyMissing
-		}
-		return string(access), nil
+	release, err := s.takePluginRefresh(ctx, userID, p.ID)
+	if err != nil {
+		return "", err
+	}
+	defer release()
+	// Another call may have refreshed while this one waited.
+	if install, err = s.pluginInstall(ctx, userID, p.ID); err != nil {
+		return "", err
+	}
+	if !needsRefresh(install) {
+		return s.accessToken(install)
 	}
 	refresh, err := s.secrets.Open(install.RefreshToken)
 	if err != nil {
@@ -270,12 +275,63 @@ func (s *Server) pluginToken(ctx context.Context, userID openapi_types.UUID, p s
 	}
 	token, err := client.Refresh(ctx, string(refresh))
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return "", ctxErr
+		}
 		slog.WarnContext(ctx, "plugin token refresh failed", "plugin", p.Slug, "error", err)
-		_ = s.q.MarkPluginNeedsReconnect(ctx, sqlc.MarkPluginNeedsReconnectParams{UserID: userID, PluginID: p.ID})
+		// Only the server's refusal says the grant is gone; a network failure
+		// says nothing about it.
+		var refused *oauth2.RetrieveError
+		if !errors.As(err, &refused) {
+			return "", httpx.NewError(http.StatusBadGateway, "plugin_unreachable", "the plugin's sign-in server could not be reached")
+		}
+		_ = s.q.MarkPluginNeedsReconnect(ctx, sqlc.MarkPluginNeedsReconnectParams{UserID: userID, PluginID: p.ID, RefreshToken: install.RefreshToken})
+		// Another server may have rotated the token meanwhile: use what it got.
+		if now, err := s.pluginInstall(ctx, userID, p.ID); err == nil && !needsRefresh(now) {
+			return s.accessToken(now)
+		}
 		return "", errPluginNotConnected
 	}
 	if err := s.saveTokens(ctx, userID, p.ID, token); err != nil {
 		return "", err
 	}
 	return token.AccessToken, nil
+}
+
+// pluginInstall is a person's connected install of a plugin; one that is not
+// connected, or needs reconnecting, is errPluginNotConnected.
+func (s *Server) pluginInstall(ctx context.Context, userID, pluginID openapi_types.UUID) (sqlc.PluginInstall, error) {
+	install, err := s.q.GetPluginInstall(ctx, sqlc.GetPluginInstallParams{UserID: userID, PluginID: pluginID})
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && (len(install.AccessToken) == 0 || install.NeedsReconnect)) {
+		return sqlc.PluginInstall{}, errPluginNotConnected
+	}
+	return install, err
+}
+
+// needsRefresh is whether an install's access token is about to run out and
+// it has a refresh token to renew it with.
+func needsRefresh(install sqlc.PluginInstall) bool {
+	return install.TokenExpiresAt.Valid && time.Until(install.TokenExpiresAt.Time) <= time.Minute &&
+		len(install.RefreshToken) > 0
+}
+
+func (s *Server) accessToken(install sqlc.PluginInstall) (string, error) {
+	access, err := s.secrets.Open(install.AccessToken)
+	if err != nil {
+		return "", errSecretKeyMissing
+	}
+	return string(access), nil
+}
+
+// takePluginRefresh waits for the turn to refresh a person's plugin token and
+// returns how to give it back. Waiting ends with the request.
+func (s *Server) takePluginRefresh(ctx context.Context, userID, pluginID openapi_types.UUID) (func(), error) {
+	slot, _ := s.pluginRefreshes.LoadOrStore(userID.String()+"/"+pluginID.String(), make(chan struct{}, 1))
+	turn := slot.(chan struct{})
+	select {
+	case turn <- struct{}{}:
+		return func() { <-turn }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }

@@ -131,4 +131,30 @@ describe('followConversation', () => {
     controller.abort()
     await done
   })
+
+  it('catches up after reconnecting while idle, and only then', async () => {
+    const q = user('q')
+    const a = assistant('a', run('r1').id)
+    const fresh: MessagePage = { items: [q, a], olderCursor: null }
+    const fetchNewest = vi.fn(async () => fresh)
+    let connections = 0
+    const { queryClient, controller, done } = setup({
+      events: async function* (signal) {
+        connections++
+        // Idle both times; a reply was written elsewhere while the first
+        // connection was down.
+        yield { type: 'snapshot', messages: [] } as ConversationEvent
+        if (connections === 1) throw new Error('dropped')
+        await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve()))
+      },
+      fetchNewest,
+    })
+    await tick()
+    await tick()
+    expect(connections).toBe(2)
+    expect(fetchNewest).toHaveBeenCalledOnce()
+    expect(queryClient.getQueryData<TranscriptPages>(queryKeys.messages.list(conversationId))?.pages[0]).toEqual(fresh)
+    controller.abort()
+    await done
+  })
 })

@@ -822,6 +822,8 @@ type Querier interface {
 	MarkMemoriesModerated(ctx context.Context, arg MarkMemoriesModeratedParams) error
 	MarkMemoryEventUndone(ctx context.Context, arg MarkMemoryEventUndoneParams) (MemoryEvent, error)
 	MarkModerationSanction(ctx context.Context, arg MarkModerationSanctionParams) error
+	// The refresh token the server refused condemns the install only while it is
+	// still the stored one: a refresh elsewhere may have rotated it meanwhile.
 	MarkPluginNeedsReconnect(ctx context.Context, arg MarkPluginNeedsReconnectParams) error
 	MarkPluginToolsFetched(ctx context.Context, id uuid.UUID) error
 	MarkReportsDelivered(ctx context.Context, arg MarkReportsDeliveredParams) error
