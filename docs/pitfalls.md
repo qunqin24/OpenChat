@@ -46,3 +46,15 @@
 - `RequireAdmin` 必须挂在 `Require` 之内：它假设上下文里已有用户。
 - 给自助端点加参数前先想：`UpdateOwnProfile` 刻意没有 role / disabled 字段，那是权限边界，不是遗漏。
 - `.env` 不入库；新的密钥只以占位形式进 `.env.example`。
+
+## 模型服务商
+
+- **Sonnet 5.5 / Opus 5.5 在工具结果之后会扣住正文，再一次发出（Anthropic 的已知问题，2026-11 未修）**：对话最后一条是 `tool_result` 时（联网搜索、读网页之后写回答那一轮最常见），上游先停 5~10 秒、一个字节都不发，然后在零点几秒到两秒内把 1,000 多字一起发来；页面上就是「停住，然后一大段突然冒出来」。
+  - 触发条件只看当前这一轮：工具调用在更早、已经答完的轮次里不触发；把同样的内容当普通文字发，就正常流式。
+  - 关不掉：`thinking` 设 `between_tools`、`effort: "low"`、`display: "omitted"` 都一样。
+  - 只有这两个模型：同一请求换 Sonnet 5、Haiku 5.5 是正常流式。Bedrock 上一样，与中转无关。
+  - 上报：[anthropics/anthropic-sdk-python#1960](https://github.com/anthropics/anthropic-sdk-python/issues/1960)、[anthropics/claude-code#96439](https://github.com/anthropics/claude-code/issues/96439)。
+  - 排查经过：先怀疑过中转、OpenResty、浏览器到服务端的网络、思考摘要，都排除了。证据是在 Anthropic 适配器读 HTTP 响应体的地方记录每次 `Read` 的时间：数据进来时就已经成块。之后把那次请求原样发给官方，并逐项改动（工具结果改成文字、关思考、降低思考强度、换模型）。
+  - 怎么认：服务端日志 `model stream paused`（上游停 3 秒以上才记，`agent/execution.go` 的 `noticePause`），以及用量里 `first_token_ms` 很大、而输出 token 多得不像那点时间写得出来。
+  - **别在我们这边「修」**：把工具轮改写成普通文字能绕开它，但会让网页内容以用户的名义出现在上下文里（提示注入更容易），还会改掉之前的消息、让思考块签名失效（AGENTS.md 的思考块一节）。能做的只在显示上：停住时显示「仍在生成…」，到的一大段按之前的速度流出（[聊天页与前端约定](design/frontend-chat.md)的「流式文字的显现」）。
+- 上游在回答中途停几秒、再一次补发，其他模型也会有（2026-11 线上 GPT-6.1 Terra 停过 9.4 秒和 12 秒），只是没有固定的触发条件。看到「一大段冒出来」，先查 `model stream paused` 日志，再去怀疑我们的推送和显示。
