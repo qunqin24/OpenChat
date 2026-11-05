@@ -61,9 +61,13 @@ type State struct {
 	// LastError survives until a refresh succeeds, because the snapshot it
 	// failed to replace is still the one being served and that is worth saying.
 	LastError string `json:"lastError,omitempty"`
+	// Supplement is the supplementVersion the snapshot was written with. A
+	// different one means the snapshot lacks entries this build adds.
+	Supplement string `json:"supplement,omitempty"`
 }
 
-// Stale reports whether the snapshot is old enough to be worth replacing.
+// Stale reports whether the snapshot is worth replacing: old enough, or
+// written before this build's supplement.
 func (s State) Stale(now time.Time) bool {
-	return now.Sub(s.FetchedAt) >= StaleAfter
+	return now.Sub(s.FetchedAt) >= StaleAfter || s.Supplement != supplementVersion
 }

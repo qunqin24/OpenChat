@@ -1,0 +1,25 @@
+{
+  "openai": {
+    "models": {
+      "chat-latest": {
+        "id": "chat-latest",
+        "name": "Chat Latest",
+        "description": "Latest Instant model used in ChatGPT; the snapshot behind it is updated regularly",
+        "family": "gpt",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [{ "type": "effort", "values": ["medium"] }],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-04-20",
+        "release_date": "2026-05-05",
+        "last_updated": "2026-05-05",
+        "modalities": { "input": ["text", "image"], "output": ["text"] },
+        "open_weights": false,
+        "limit": { "context": 400000, "input": 272000, "output": 128000 },
+        "cost": { "input": 5, "output": 30, "cache_read": 0.5 }
+      }
+    }
+  }
+}

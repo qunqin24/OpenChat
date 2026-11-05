@@ -120,7 +120,7 @@ func TestSyncLeavesModelSettingsAlone(t *testing.T) {
 
 func TestNotModifiedKeepsSnapshot(t *testing.T) {
 	store := &fakeStore{
-		state:     State{FetchedAt: time.Now().Add(-48 * time.Hour), ETag: `"v1"`},
+		state:     State{FetchedAt: time.Now().Add(-48 * time.Hour), ETag: `"v1"`, Supplement: supplementVersion},
 		providers: []Provider{{ID: "anthropic"}},
 	}
 
@@ -143,7 +143,7 @@ func TestNotModifiedKeepsSnapshot(t *testing.T) {
 
 func TestRefreshIfStaleSkipsAFreshSnapshot(t *testing.T) {
 	fetches := 0
-	store := &fakeStore{state: State{FetchedAt: time.Now().Add(-time.Hour)}}
+	store := &fakeStore{state: State{FetchedAt: time.Now().Add(-time.Hour), Supplement: supplementVersion}}
 	s := syncer(t, store, func(w http.ResponseWriter, r *http.Request) {
 		fetches++
 		_, _ = w.Write(fixture(t))

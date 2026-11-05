@@ -191,6 +191,10 @@ const FAMILY_ICONS: Record<string, string> = {
   gpt: 'openai',
   o: 'openai',
   codex: 'openai',
+  // OpenAI's `chat-latest`, for the places that only have the id (the usage
+  // log): its root is `chat`. Other vendors' chat models put their brand first
+  // (`deepseek-chat`), so nothing else lands here.
+  chat: 'openai',
   qwen: 'qwen-color',
   // Z.ai's mark on a disc (scripts/model-icons), as Z.ai shows it as an avatar.
   glm: 'zai-disc',

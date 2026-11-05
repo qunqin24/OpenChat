@@ -37,7 +37,14 @@ func (s *Syncer) Refresh(ctx context.Context) (State, error) {
 		return State{}, err
 	}
 
-	result, fetchErr := s.client.Fetch(ctx, state.ETag)
+	// A snapshot written without this build's supplement has to be rewritten
+	// even if upstream has not changed, so a 304 is not an answer worth asking
+	// for.
+	etag := state.ETag
+	if state.Supplement != supplementVersion {
+		etag = ""
+	}
+	result, fetchErr := s.client.Fetch(ctx, etag)
 	if fetchErr != nil {
 		fetchErr = fmt.Errorf("%w: %w", ErrUpstream, fetchErr)
 		state.LastError = fetchErr.Error()
@@ -51,7 +58,7 @@ func (s *Syncer) Refresh(ctx context.Context) (State, error) {
 	// replace, but the check did happen, so the snapshot is as fresh as if it
 	// had been rewritten.
 	if !result.NotModified {
-		if err := s.store.Replace(ctx, result.Providers); err != nil {
+		if err := s.store.Replace(ctx, withSupplement(result.Providers)); err != nil {
 			// Deliberately not recorded as a last error: the failure is ours,
 			// and the place the note would go is the database that just refused
 			// a write.
@@ -59,15 +66,16 @@ func (s *Syncer) Refresh(ctx context.Context) (State, error) {
 		}
 	}
 
-	state = State{FetchedAt: s.now(), ETag: result.ETag}
+	state = State{FetchedAt: s.now(), ETag: result.ETag, Supplement: supplementVersion}
 	if err := s.store.SaveState(ctx, state); err != nil {
 		return state, err
 	}
 	return state, nil
 }
 
-// RefreshIfStale refreshes only when the snapshot is missing or older than
-// StaleAfter, and reports the state either way.
+// RefreshIfStale refreshes only when the snapshot is missing, older than
+// StaleAfter, or written before this build's supplement, and reports the state
+// either way.
 func (s *Syncer) RefreshIfStale(ctx context.Context) (State, error) {
 	state, err := s.store.LoadState(ctx)
 	if err != nil {

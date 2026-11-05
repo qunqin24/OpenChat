@@ -66,6 +66,8 @@
 
 模型的名称、上下文长度、价格、能力等元数据来自 models.dev（`internal/catalog`），存成本地快照，市场卡片和模型设置只读快照，不实时请求。快照超过一天（`catalog.StaleAfter`）才更新：启动时查一次，之后每小时查一次（`StartCatalogRefresh`，`catalogCheckEvery`），过期才去拉，请求带 ETag，没变时 models.dev 只回 304。以前只在启动时查，服务不重启快照就一直不更新。拉取失败不影响服务，快照保持原样，原因记在设置项 `catalog_state`（`app_settings` 里的一条 JSON，不是表的列）的 `lastError` 字段，下一次检查重试。
 
+models.dev 漏掉的模型（如 OpenAI 的 `chat-latest`：它只以别的写法收在中转和 Azure 下，`openai` 下没有）补在 `internal/catalog/supplement.json`，格式照抄 models.dev，数字取自厂商自己的模型页。每次刷新写快照前并进去（`withSupplement`），只补上游在同一厂商下没有的 id，上游收录后以上游为准，届时删掉补充条目。快照状态记下补充文件的哈希（`catalog_state.supplement`），对不上就算过期、并且不带 ETag 重拉，所以新版本上线后启动时就会补上，不用等一天。
+
 模型市场标题行右侧（和渠道、用户页的主按钮同一位置）是一行简短状态加「刷新目录」按钮（`catalog-status-line.tsx`）：平时只写「目录更新于 …」，过期、从未获取、刷新失败时换成对应的话并变色；失败原因和「来自 models.dev、每天自动更新」放在悬停提示里，不占页面。按钮立即拉一次（`POST /admin/catalog`，不看是否过期）。这两样在 `478c312`（模型覆盖设置）里被一起删掉过，接口留着、前端没有入口，之后恢复。
 
 模型设置的「恢复默认」删掉这个模型的整行覆盖（`DELETE /admin/models/{id}/settings` → `DeleteModelOverride`）：类型、推理、工具、输入模态、上下文/输入/输出长度回到快照里的值（models.dev 没有这个模型时按 id 推断：含 `rerank`/`embed` 的是重排/嵌入，其余是文本，工具开），**同时**清掉 models.dev 里没有的管理员设置——「向普通用户开放」回到开、容量上限和统计周期清空、管理员豁免关闭。已花费的统计不受影响（`usage_logs` 不动）。
