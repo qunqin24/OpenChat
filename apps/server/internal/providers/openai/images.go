@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
@@ -216,37 +217,51 @@ func (c *ImageClient) picture(ctx context.Context, item wireImageItem) ([]byte, 
 func imageFields(req llm.ImageRequest, sendUser bool) map[string]any {
 	fields := map[string]any{"model": req.Model, "prompt": req.Prompt, "n": max(req.Count, 1)}
 	id := strings.ToLower(req.Model)
-	gptImage := strings.Contains(id, "gpt-image") || strings.Contains(id, "chatgpt-image")
+	exact := req.Width > 0 && req.Height > 0
+	// The shape asked for: the exact size's, else the aspect.
+	shape := req.Aspect
+	if exact {
+		shape = llm.NearestAspect(req.Width, req.Height, llm.Aspects)
+	}
 	switch {
-	case gptImage:
-		// Always base64; the parameter itself is refused.
-		fields["size"] = map[llm.Aspect]string{llm.AspectSquare: "1024x1024", llm.AspectLandscape: "1536x1024",
-			llm.AspectPortrait: "1024x1536"}[req.Aspect]
-		if req.Aspect == llm.AspectAuto || fields["size"] == "" {
+	case strings.Contains(id, "gpt-image") || strings.Contains(id, "chatgpt-image"):
+		// Always base64; the parameter itself is refused. An exact size goes
+		// as asked - the newer models take any within their limits, and one
+		// that does not says so, for the model to try a shape instead.
+		switch {
+		case exact:
+			fields["size"] = fmt.Sprintf("%dx%d", req.Width, req.Height)
+		case shape == llm.AspectAuto:
 			fields["size"] = "auto"
+		default:
+			fields["size"] = classicSize(shape, "1024x1024", "1536x1024", "1024x1536")
 		}
 	case strings.Contains(id, "dall-e-3"):
 		fields["response_format"] = "b64_json"
-		fields["size"] = map[llm.Aspect]string{llm.AspectLandscape: "1792x1024", llm.AspectPortrait: "1024x1792"}[req.Aspect]
-		if fields["size"] == "" {
-			fields["size"] = "1024x1024"
-		}
+		fields["size"] = classicSize(shape, "1024x1024", "1792x1024", "1024x1792")
 	case strings.Contains(id, "grok"):
+		// Takes a ratio, not a size.
 		fields["response_format"] = "b64_json"
-		if ratio := map[llm.Aspect]string{llm.AspectSquare: "1:1", llm.AspectLandscape: "3:2", llm.AspectPortrait: "2:3"}[req.Aspect]; ratio != "" {
-			fields["aspect_ratio"] = ratio
+		if shape != llm.AspectAuto {
+			fields["aspect_ratio"] = string(shape)
 		}
 	case strings.Contains(id, "seedream"):
 		fields["response_format"] = "b64_json"
-		fields["size"] = map[llm.Aspect]string{llm.AspectLandscape: "2496x1664", llm.AspectPortrait: "1664x2496"}[req.Aspect]
-		if fields["size"] == "" {
+		switch {
+		case exact:
+			fields["size"] = fmt.Sprintf("%dx%d", req.Width, req.Height)
+		case shape == llm.AspectAuto:
 			fields["size"] = "2048x2048"
+		default:
+			fields["size"] = sizeOfArea(shape, 2048*2048)
 		}
 	default:
 		fields["response_format"] = "b64_json"
-		if size := map[llm.Aspect]string{llm.AspectSquare: "1024x1024", llm.AspectLandscape: "1536x1024",
-			llm.AspectPortrait: "1024x1536"}[req.Aspect]; size != "" {
-			fields["size"] = size
+		switch {
+		case exact:
+			fields["size"] = fmt.Sprintf("%dx%d", req.Width, req.Height)
+		case shape != llm.AspectAuto:
+			fields["size"] = classicSize(shape, "1024x1024", "1536x1024", "1024x1536")
 		}
 	}
 	if sendUser && req.User != "" {
@@ -260,6 +275,28 @@ func imageFields(req llm.ImageRequest, sendUser bool) map[string]any {
 		fields[name] = value
 	}
 	return fields
+}
+
+// classicSize is the size of a model with three: square, landscape, portrait.
+func classicSize(shape llm.Aspect, square, wide, tall string) string {
+	switch {
+	case shape.Wide():
+		return wide
+	case shape.Tall():
+		return tall
+	}
+	return square
+}
+
+// sizeOfArea is shape at about area pixels, both sides a multiple of 16.
+func sizeOfArea(shape llm.Aspect, area int) string {
+	ratio := shape.Ratio()
+	if ratio <= 0 {
+		ratio = 1
+	}
+	width := int(math.Round(math.Sqrt(float64(area)*ratio)/16)) * 16
+	height := int(math.Round(math.Sqrt(float64(area)/ratio)/16)) * 16
+	return fmt.Sprintf("%dx%d", width, height)
 }
 
 // editBody is the multipart form /images/edits takes: the fields as strings,

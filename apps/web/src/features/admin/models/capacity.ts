@@ -21,6 +21,18 @@ export function parseCapacity(raw: string): CapacityInput {
   return value > 0 && value <= MAX_CAPACITY ? { ok: true, value } : { ok: false }
 }
 
+/**
+ * Reads an image model's price per picture: empty is none (bill by tokens),
+ * else 0 to 100 dollars with at most six decimals, as the server keeps it.
+ */
+export function parseImagePrice(raw: string): CapacityInput {
+  const text = raw.trim()
+  if (text === '') return { ok: true, value: null }
+  if (!new RegExp(`^\\d+(\\.\\d{1,${MAX_DECIMALS}})?$`).test(text)) return { ok: false }
+  const value = Number(text)
+  return value >= 0 && value <= 100 ? { ok: true, value } : { ok: false }
+}
+
 /** A cap as the field shows it: no trailing zeros, nothing for no cap. */
 export function capacityText(value: number | null | undefined): string {
   return value == null ? '' : String(Number(value.toFixed(MAX_DECIMALS)))

@@ -1,4 +1,4 @@
-import { AlarmClock, BookOpen, Brain, ChevronRight, FileSearch, FileText, Globe, NotebookPen, Puzzle, Search, TriangleAlert, Wrench } from 'lucide-react'
+import { AlarmClock, BookOpen, Brain, ChevronRight, FileSearch, FileText, Globe, NotebookPen, Puzzle, Search, TriangleAlert, Wrench, Image as ImageIcon } from 'lucide-react'
 import { Collapsible } from 'radix-ui'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -278,6 +278,7 @@ function stepIcon(name: string) {
   if (name === 'skill') return <BookOpen aria-hidden="true" />
   if (name === 'scheduled_tasks') return <AlarmClock aria-hidden="true" />
   if (name === 'document') return <NotebookPen aria-hidden="true" />
+  if (name === 'image_generate') return <ImageIcon aria-hidden="true" />
   if (name.startsWith('subagent')) return <SubagentsIcon />
   return <Wrench aria-hidden="true" />
 }

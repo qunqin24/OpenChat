@@ -75,6 +75,9 @@ import { gapLabel, timeGaps } from '@openchat/chat-core/time-gap'
 import AskSelection from './AskSelection'
 import { TemporaryBar, TemporaryToggle } from './TemporaryChat'
 import Welcome, { WelcomeStarters } from './Welcome'
+import { usePictureRefs } from '@/stores/picture-ref-store'
+import { imageRefMessage } from '@openchat/chat-core/image-ref'
+import { pictureSrc } from '@openchat/chat-core/image-tool'
 
 /** Distance from the bottom, in px, still counted as "parked at the tail". */
 const BOTTOM_SLACK = 24
@@ -182,6 +185,9 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
   // Other conversations the message is to refer to ("+" → 引用其他对话): not
   // files, so nothing goes up; the server reads them when the model is asked.
   const [references, setReferences] = useState<ConversationReference[]>([])
+  // Pictures picked with 「拿来改」 (GeneratedImages) for this conversation's next message.
+  const pictureRefs = usePictureRefs()
+  const pickedPictures = conversationId && pictureRefs.conversationId === conversationId ? pictureRefs.pictures : []
   // Skills picked with / for the message being written.
   const [pickedSkills, setPickedSkills] = useState<string[]>([])
   // Deep research picked in the "+" menu for it.
@@ -729,7 +735,9 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     const picked = revising ? [] : pickedSkills
     const research = !revising && pickedResearch && Boolean(allowance)
     const unpicked = quoted ? quoteMessage(quoted, typed) : typed
-    const content = skillMessage(picked, unpicked, research)
+    // Pictures picked to change come after the skills (chat-core/src/image-ref.ts).
+    const pictured = revising ? [] : pickedPictures
+    const content = skillMessage(picked, imageRefMessage(pictured.map((p) => p.handle), unpicked), research)
     // An answer is being made, or a message is on its way: one at a time, as the
     // server says (`conversation_busy`). Read from the store, not from this
     // render, so a second Enter in the same moment finds the first.
@@ -754,11 +762,13 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
       setReferences((current) => (current.length > 0 ? current : referred))
       setPickedSkills((current) => (current.length > 0 ? current : picked))
       if (research) setPickedResearch(true)
+      if (conversationId) for (const picture of pictured) usePictureRefs.getState().add(conversationId, picture)
     }
     setInput('')
     setReferences([])
     setPickedSkills([])
     setPickedResearch(false)
+    if (pictured.length > 0) usePictureRefs.getState().clear()
     // Out of the box at once, as the text is: the message shows them now. Back
     // in the box if the send fails.
     const taken = attachments.take()
@@ -1016,6 +1026,14 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
       onSend={() => void handleSend()}
       onStop={handleStop}
       note={revising ? t('chat.revise.label') : undefined}
+      pictures={
+        pickedPictures.length > 0 && !revising
+          ? {
+              items: pickedPictures.map((p) => ({ id: p.id, handle: p.handle, src: pictureSrc(API_BASE_URL, p.id) })),
+              onRemove: pictureRefs.remove,
+            }
+          : undefined
+      }
       research={
         allowance && !revising && !editingPlan
           ? {

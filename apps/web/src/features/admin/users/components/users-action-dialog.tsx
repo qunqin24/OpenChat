@@ -51,6 +51,16 @@ function storageChange(gigabytes: string, current: number | undefined): { storag
   return bytes === current ? {} : { storageQuotaBytes: bytes }
 }
 
+/**
+ * The daily picture allowance a save sets, if any: blank gives the account the
+ * site's again (-1), a number its own (0 is no limit).
+ */
+function imageDailyChange(text: string, current: number | undefined): { imageDaily?: number } {
+  if (text === '') return current === undefined ? {} : { imageDaily: -1 }
+  const daily = Number(text)
+  return daily === current ? {} : { imageDaily: daily }
+}
+
 type UsersActionDialogProps = {
   /** Absent in create mode. */
   user?: User
@@ -128,6 +138,11 @@ function UserForm({
         .string()
         .trim()
         .refine((value) => value === '' || (Number.isFinite(Number(value)) && Number(value) >= 0), t('admin.users.form.storage-invalid')),
+      // Pictures a day, or blank for the site's (admin → 图片生成); 0 is no limit.
+      imageDaily: z
+        .string()
+        .trim()
+        .refine((value) => value === '' || (/^\d+$/.test(value) && Number(value) <= 100000), t('admin.users.form.image-daily-invalid')),
       password: z.string(),
       confirmPassword: z.string(),
     })
@@ -169,6 +184,7 @@ function UserForm({
       enabled: !user?.disabled,
       approve: false,
       storageGb: user?.storageQuotaBytes == null ? '' : String(Number((user.storageQuotaBytes / GIB).toFixed(2))),
+      imageDaily: user?.imageDaily == null ? '' : String(user.imageDaily),
       password: '',
       confirmPassword: '',
     },
@@ -195,6 +211,7 @@ function UserForm({
           ...(user.pending && values.approve ? { approved: true } : {}),
           ...(values.password ? { password: values.password } : {}),
           ...storageChange(values.storageGb, user.storageQuotaBytes),
+          ...imageDailyChange(values.imageDaily, user.imageDaily),
         })
         toast.success(t('admin.users.updated'))
       } else {
@@ -349,6 +366,28 @@ function UserForm({
                     </div>
                     <FormDescription className="col-span-4 col-start-3 text-xs">
                       {t('admin.users.form.storage-hint', { used: formatSize(user.storageUsedBytes ?? 0) })}
+                    </FormDescription>
+                    <FormMessage className="col-span-4 col-start-3" />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {isEdit && user.role !== 'admin' && (
+              <FormField
+                control={form.control}
+                name="imageDaily"
+                render={({ field }) => (
+                  <FormItem className="grid grid-cols-6 items-center gap-x-4 gap-y-1 space-y-0">
+                    <FormLabel className="col-span-2">{t('admin.users.form.image-daily')}</FormLabel>
+                    <div className="col-span-4 flex items-center gap-2">
+                      <FormControl>
+                        <Input type="number" inputMode="numeric" step="1" min={0} className="w-32" placeholder={t('admin.users.form.image-daily-default')} {...field} />
+                      </FormControl>
+                      <span className="text-muted-foreground text-sm">{t('admin.users.form.image-daily-unit')}</span>
+                    </div>
+                    <FormDescription className="col-span-4 col-start-3 text-xs">
+                      {t('admin.users.form.image-daily-hint', { count: user.imagesToday ?? 0 })}
                     </FormDescription>
                     <FormMessage className="col-span-4 col-start-3" />
                   </FormItem>

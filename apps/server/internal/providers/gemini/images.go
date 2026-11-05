@@ -88,8 +88,8 @@ func (c *ImageClient) one(ctx context.Context, req llm.ImageRequest) (llm.Genera
 		parts = append(parts, map[string]any{"inlineData": wireBlob{MIMEType: picture.MediaType, Data: base64.StdEncoding.EncodeToString(picture.Data)}})
 	}
 	config := map[string]any{"responseModalities": []string{"TEXT", "IMAGE"}}
-	if ratio := map[llm.Aspect]string{llm.AspectSquare: "1:1", llm.AspectLandscape: "3:2", llm.AspectPortrait: "2:3"}[req.Aspect]; ratio != "" {
-		config["imageConfig"] = map[string]any{"aspectRatio": ratio}
+	if image := imageConfig(req); len(image) > 0 {
+		config["imageConfig"] = image
 	}
 	body := map[string]any{
 		"contents":         []map[string]any{{"role": "user", "parts": parts}},
@@ -173,6 +173,30 @@ func (c *ImageClient) one(ctx context.Context, req llm.ImageRequest) (llm.Genera
 	}
 	return llm.GeneratedImage{}, usage, payload.ModelVersion,
 		&llm.Error{Kind: llm.ErrorProvider, Code: reason, Message: "gemini images: the model made no picture"}
+}
+
+// imageConfig is the shape and resolution asked for, as this API takes them:
+// a ratio (every one of llm.Aspects is one of its own), and, for an exact
+// size, the tier that covers its longer side. A model without tiers (the 2.5
+// image model) refuses the tier, and the model is told so.
+func imageConfig(req llm.ImageRequest) map[string]any {
+	out := map[string]any{}
+	shape := req.Aspect
+	if req.Width > 0 && req.Height > 0 {
+		shape = llm.NearestAspect(req.Width, req.Height, llm.Aspects)
+		switch side := max(req.Width, req.Height); {
+		case side <= 1024:
+			out["imageSize"] = "1K"
+		case side <= 2048:
+			out["imageSize"] = "2K"
+		default:
+			out["imageSize"] = "4K"
+		}
+	}
+	if shape != llm.AspectAuto {
+		out["aspectRatio"] = string(shape)
+	}
+	return out
 }
 
 type wireImageResponse struct {

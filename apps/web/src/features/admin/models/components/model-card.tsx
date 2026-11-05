@@ -35,7 +35,7 @@ const CAPABILITIES = [
 ] as const
 
 /** Override fields that show on the card in their own way, not as "customised". */
-const OWN_BADGE = new Set(['adminOnly', 'capacity', 'capacityPeriod', 'capacityAdminExempt'])
+const OWN_BADGE = new Set(['adminOnly', 'capacity', 'capacityPeriod', 'capacityAdminExempt', 'imagePrice'])
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (

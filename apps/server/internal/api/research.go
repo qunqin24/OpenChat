@@ -81,6 +81,7 @@ func splitResearch(content string) (bool, string) {
 func personWords(content string) string {
 	_, rest := splitResearch(content)
 	_, rest = skills.SplitMentions(rest)
+	_, rest = splitImageRefs(rest)
 	return rest
 }
 

@@ -21,6 +21,7 @@ import { Route as AuthedTasksRouteImport } from './routes/_authed.tasks'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAuthenticationRouteImport } from './routes/admin.authentication'
 import { Route as AdminChannelsRouteImport } from './routes/admin.channels'
+import { Route as AdminImageGenerationRouteImport } from './routes/admin.image-generation'
 import { Route as AdminImageSearchRouteImport } from './routes/admin.image-search'
 import { Route as AdminModelsRouteImport } from './routes/admin.models'
 import { Route as AdminModerationLogsRouteImport } from './routes/admin.moderation-logs'
@@ -97,6 +98,11 @@ const AdminAuthenticationRoute = AdminAuthenticationRouteImport.update({
 const AdminChannelsRoute = AdminChannelsRouteImport.update({
   id: '/channels',
   path: '/channels',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminImageGenerationRoute = AdminImageGenerationRouteImport.update({
+  id: '/image-generation',
+  path: '/image-generation',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminImageSearchRoute = AdminImageSearchRouteImport.update({
@@ -207,6 +213,7 @@ export interface FileRoutesByFullPath {
   '/tasks': typeof AuthedTasksRoute
   '/admin/authentication': typeof AdminAuthenticationRoute
   '/admin/channels': typeof AdminChannelsRoute
+  '/admin/image-generation': typeof AdminImageGenerationRoute
   '/admin/image-search': typeof AdminImageSearchRoute
   '/admin/models': typeof AdminModelsRoute
   '/admin/moderation-logs': typeof AdminModerationLogsRoute
@@ -237,6 +244,7 @@ export interface FileRoutesByTo {
   '/tasks': typeof AuthedTasksRoute
   '/admin/authentication': typeof AdminAuthenticationRoute
   '/admin/channels': typeof AdminChannelsRoute
+  '/admin/image-generation': typeof AdminImageGenerationRoute
   '/admin/image-search': typeof AdminImageSearchRoute
   '/admin/models': typeof AdminModelsRoute
   '/admin/moderation-logs': typeof AdminModerationLogsRoute
@@ -269,6 +277,7 @@ export interface FileRoutesById {
   '/_authed/tasks': typeof AuthedTasksRoute
   '/admin/authentication': typeof AdminAuthenticationRoute
   '/admin/channels': typeof AdminChannelsRoute
+  '/admin/image-generation': typeof AdminImageGenerationRoute
   '/admin/image-search': typeof AdminImageSearchRoute
   '/admin/models': typeof AdminModelsRoute
   '/admin/moderation-logs': typeof AdminModerationLogsRoute
@@ -303,6 +312,7 @@ export interface FileRouteTypes {
     | '/tasks'
     | '/admin/authentication'
     | '/admin/channels'
+    | '/admin/image-generation'
     | '/admin/image-search'
     | '/admin/models'
     | '/admin/moderation-logs'
@@ -333,6 +343,7 @@ export interface FileRouteTypes {
     | '/tasks'
     | '/admin/authentication'
     | '/admin/channels'
+    | '/admin/image-generation'
     | '/admin/image-search'
     | '/admin/models'
     | '/admin/moderation-logs'
@@ -364,6 +375,7 @@ export interface FileRouteTypes {
     | '/_authed/tasks'
     | '/admin/authentication'
     | '/admin/channels'
+    | '/admin/image-generation'
     | '/admin/image-search'
     | '/admin/models'
     | '/admin/moderation-logs'
@@ -480,6 +492,13 @@ declare module '@tanstack/react-router' {
       path: '/channels'
       fullPath: '/admin/channels'
       preLoaderRoute: typeof AdminChannelsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/image-generation': {
+      id: '/admin/image-generation'
+      path: '/image-generation'
+      fullPath: '/admin/image-generation'
+      preLoaderRoute: typeof AdminImageGenerationRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/image-search': {
@@ -670,6 +689,7 @@ const AdminSettingsRouteWithChildren = AdminSettingsRoute._addFileChildren(
 interface AdminRouteChildren {
   AdminAuthenticationRoute: typeof AdminAuthenticationRoute
   AdminChannelsRoute: typeof AdminChannelsRoute
+  AdminImageGenerationRoute: typeof AdminImageGenerationRoute
   AdminImageSearchRoute: typeof AdminImageSearchRoute
   AdminModelsRoute: typeof AdminModelsRoute
   AdminModerationLogsRoute: typeof AdminModerationLogsRoute
@@ -687,6 +707,7 @@ interface AdminRouteChildren {
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAuthenticationRoute: AdminAuthenticationRoute,
   AdminChannelsRoute: AdminChannelsRoute,
+  AdminImageGenerationRoute: AdminImageGenerationRoute,
   AdminImageSearchRoute: AdminImageSearchRoute,
   AdminModelsRoute: AdminModelsRoute,
   AdminModerationLogsRoute: AdminModerationLogsRoute,

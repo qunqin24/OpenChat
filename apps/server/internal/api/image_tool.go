@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -95,6 +96,7 @@ type imageTool struct{ s *Server }
 type imageToolArgs struct {
 	Prompt string   `json:"prompt"`
 	Aspect string   `json:"aspect"`
+	Size   string   `json:"size"`
 	Count  int      `json:"count"`
 	Images []string `json:"images"`
 }
@@ -104,6 +106,7 @@ type imageToolArgs struct {
 type ImageToolDetails struct {
 	Prompt string             `json:"prompt"`
 	Aspect string             `json:"aspect"`
+	Size   string             `json:"size,omitempty"`
 	Model  string             `json:"model,omitempty"`
 	Images []ImageToolPicture `json:"images"`
 }
@@ -121,6 +124,7 @@ type imageProgress struct {
 	Phase  string `json:"phase"`
 	Count  int    `json:"count"`
 	Aspect string `json:"aspect"`
+	Size   string `json:"size,omitempty"`
 	Prompt string `json:"prompt"`
 }
 
@@ -135,12 +139,16 @@ func (imageTool) Definition() llm.Tool {
 			"conversation: the user's pictures are labelled [Image img_…], yours are in your earlier results) in " +
 			"images, and describe the whole result in prompt. The pictures are shown to the user as they are " +
 			"made; afterwards, say briefly what you made and offer to adjust it. Do not repeat them as Markdown " +
-			"images or links, and do not describe each one at length.",
+			"images or links, and do not describe each one at length. Give the shape with aspect; when the user " +
+			"asks for a resolution or exact pixel size (1920x1080, 4K, a 512x512 avatar), put it in size as " +
+			"WIDTHxHEIGHT and the image model is asked for it - some models make only certain sizes and may refuse " +
+			"or round it; the result says what was actually made.",
 		Parameters: json.RawMessage(`{
   "type": "object",
   "properties": {
     "prompt": {"type": "string", "description": "The whole picture, described in full."},
-    "aspect": {"type": "string", "enum": ["auto", "square", "landscape", "portrait"], "description": "The shape. Default auto."},
+    "aspect": {"type": "string", "enum": ["auto", "1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "21:9"], "description": "The shape, width:height. Default auto."},
+    "size": {"type": "string", "description": "An exact size in pixels, WIDTHxHEIGHT (each side 256 to 4096), only when the user asks for a resolution or size. Overrides aspect."},
     "count": {"type": "integer", "minimum": 1, "description": "How many pictures. Default 1; ask for more only when the user wants options."},
     "images": {"type": "array", "items": {"type": "string"}, "description": "Ids of pictures in this conversation to edit or combine."}
   },
@@ -187,6 +195,18 @@ func (t imageTool) Execute(ctx context.Context, raw json.RawMessage) (agent.Tool
 		return agent.ToolResult{}, agent.Errorf("invalid arguments: at most %d pictures per call", config.MaxPerCall)
 	}
 	aspect := llm.ParseAspect(args.Aspect)
+	var width, height int
+	if size := strings.TrimSpace(args.Size); size != "" {
+		var ok bool
+		if width, height, ok = llm.ParseSize(size); !ok {
+			return agent.ToolResult{}, agent.Errorf("invalid arguments: size is WIDTHxHEIGHT, each side %d to %d", llm.MinSide, llm.MaxSide)
+		}
+		aspect = llm.NearestAspect(width, height, llm.Aspects)
+	}
+	sizeText := ""
+	if width > 0 {
+		sizeText = fmt.Sprintf("%dx%d", width, height)
+	}
 
 	// The run's own limit, counted before anything is paid for and given back
 	// when nothing is made.
@@ -251,11 +271,11 @@ func (t imageTool) Execute(ctx context.Context, raw json.RawMessage) (agent.Tool
 		}
 	}()
 
-	_ = agent.ReportProgress(ctx, imageProgress{Phase: "generating", Count: count, Aspect: string(aspect), Prompt: prompt})
+	_ = agent.ReportProgress(ctx, imageProgress{Phase: "generating", Count: count, Aspect: string(aspect), Size: sizeText, Prompt: prompt})
 	runID := scope.RunID
 	result, err := s.makePictures(ctx, pictureJob{
 		user: user, modelID: config.Model, who: asker{staff: admin, admin: admin},
-		req:   llm.ImageRequest{Prompt: prompt, Count: count, Aspect: aspect, Images: sources},
+		req:   llm.ImageRequest{Prompt: prompt, Count: count, Aspect: aspect, Width: width, Height: height, Images: sources},
 		runID: &runID, conversationID: &conversationID,
 	})
 	if err != nil {
@@ -277,7 +297,7 @@ func (t imageTool) Execute(ctx context.Context, raw json.RawMessage) (agent.Tool
 	kept = true
 	s.finishImageRequest(ctx, requestID, "done", len(pictures))
 
-	details := ImageToolDetails{Prompt: prompt, Aspect: string(aspect), Model: result.model, Images: pictures}
+	details := ImageToolDetails{Prompt: prompt, Aspect: string(aspect), Size: sizeText, Model: result.model, Images: pictures}
 	ids := make([]uuid.UUID, 0, len(pictures))
 	var b strings.Builder
 	fmt.Fprintf(&b, "Made %d picture%s, shown to the user above your reply:", len(pictures), plural(len(pictures)))
@@ -286,6 +306,9 @@ func (t imageTool) Execute(ctx context.Context, raw json.RawMessage) (agent.Tool
 		fmt.Fprintf(&b, " %s (%d×%d)", p.Handle, p.Width, p.Height)
 	}
 	b.WriteString(". Do not repeat them as Markdown or links. To change one, call image_generate again with its id in images and a full prompt.")
+	if width > 0 && len(pictures) > 0 && (pictures[0].Width != width || pictures[0].Height != height) {
+		fmt.Fprintf(&b, " The image model made %d×%d rather than the %d×%d asked for; tell the user.", pictures[0].Width, pictures[0].Height, width, height)
+	}
 	if len(pictures) < count {
 		fmt.Fprintf(&b, " (%d of the %d asked for were made.)", len(pictures), count)
 	}
@@ -490,7 +513,26 @@ const imageGuide = "\n\n## Pictures\n" +
 	"initiative. Pictures the user sent are labelled [Image img_…] in their messages; to change or build on one, pass " +
 	"its id in images and describe the whole picture wanted in prompt. When the user asks to change a picture you made, " +
 	"edit that picture (its id is in your earlier result) rather than starting over, unless they want something new. " +
-	"After the pictures are made, reply in a sentence or two; they are already shown to the user."
+	"After the pictures are made, reply in a sentence or two; they are already shown to the user. " +
+	"A user message may begin with lines like <image-ref id=\"img_ab12cd34\"/>: the user picked those pictures " +
+	"(\"edit this\") for this message, so change them as the message asks, passing their ids in images."
+
+// imageRefLine is a picture the person picked for a message with 「拿来改」,
+// at its start (chat-core/src/image-ref.ts).
+var imageRefLine = regexp.MustCompile(`^<image-ref id="(img_[0-9a-f]{8})"/>\n`)
+
+// splitImageRefs is the pictures a message picked, and the rest of it.
+func splitImageRefs(content string) ([]string, string) {
+	var handles []string
+	for {
+		match := imageRefLine.FindStringSubmatch(content)
+		if match == nil {
+			return handles, content
+		}
+		handles = append(handles, match[1])
+		content = content[len(match[0]):]
+	}
+}
 
 // ViewFile redirects to where one of the caller's files is shown from.
 func (s *Server) ViewFile(w http.ResponseWriter, r *http.Request, fileId FileId) {

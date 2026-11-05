@@ -42,6 +42,8 @@ interface ComposerProps {
    * as cards in a row, each with its own remove.
    */
   quotes?: { title: string; passage: string; fromAnswer?: boolean; onRemove: () => void }[]
+  /** Pictures picked with 「拿来改」 for this message: thumbnails above the box, each with its remove. */
+  pictures?: { items: { id: string; handle: string; src: string }[]; onRemove: (handle: string) => void }
   /**
    * Skills picked for the message: typed for with / (a list of them, filtered
    * by what follows the /). The ones picked lead the box's text, and are sent as
@@ -99,6 +101,7 @@ export function Composer({
   toolsSlot,
   note,
   quotes,
+  pictures,
   skills,
   research,
   plan,
@@ -248,6 +251,24 @@ export function Composer({
             onShow={showQuote}
             onRemove={(i) => quotes[i]?.onRemove()}
           />
+        )}
+        {pictures && pictures.items.length > 0 && (
+          <div className="n-picture-refs" aria-label={t('chat.picture.ref-label')}>
+            {pictures.items.map((picture) => (
+              <span key={picture.handle} className="n-picture-ref">
+                <img src={picture.src} alt="" />
+                <button
+                  type="button"
+                  className="n-picture-ref-remove"
+                  aria-label={t('chat.picture.ref-remove')}
+                  title={t('chat.picture.ref-remove')}
+                  onClick={() => pictures.onRemove(picture.handle)}
+                >
+                  <X aria-hidden="true" />
+                </button>
+              </span>
+            ))}
+          </div>
         )}
         {attach && (
           <AttachmentTray

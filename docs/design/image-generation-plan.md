@@ -82,12 +82,12 @@ type ImageResponse struct {
 | Anthropic | 无 | — | |
 
 - **哪些渠道能出图**：按渠道类型的协议（`WireApi`）选适配器：OpenAI 协议的类型走 `/images/*`，`gemini` 走原生；`anthropic` 类型的渠道上的图片模型在后台标「这个渠道不能出图」。渠道类型表（`GET /admin/channel-types`）加一列 `images`，模型设置里提示。
-- **比例 → 尺寸**：工具只给模型三档（加 `auto`），适配器按模型家族映射（gpt-image：1024×1024 / 1536×1024 / 1024×1536；Gemini：1:1 / 16:9 / 9:16；Seedream 等走附加参数里的默认）。管理员要别的尺寸、质量，填模型设置的附加参数，和 Open WebUI 的 `IMAGES_OPENAI_API_PARAMS` 一样。
+- **比例与分辨率 → 各家的参数**（2026-11-05 用户要求能定分辨率后加）：工具给模型两样：`aspect`（`auto` 或 1:1、3:2、2:3、4:3、3:4、16:9、9:16、21:9，也认 square/landscape/portrait）和可选的 `size`（精确像素 `WIDTHxHEIGHT`，每边 256–4096，给了就盖过 aspect）。适配器按家族换算（`providers/openai/images.go` 的 `imageFields`、`providers/gemini/images.go` 的 `imageConfig`）：gpt-image 给了 `size` 就原样传，否则按形状取 1024×1024 / 1536×1024 / 1024×1536 或 `auto`；dall-e-3 取它三种里最接近的；Grok 只收比例（`aspect_ratio`，精确尺寸换成最接近的比例）；Seedream 原样传尺寸，否则按约 2048² 的面积算；Gemini 传 `aspectRatio`，给了尺寸再按长边加 `imageSize` 1K/2K/4K（2.5 的图片模型不认档位会报错，模型照实转告）；其余 OpenAI 形状的照传。出来的实际尺寸和要的不一样时，结果里告诉模型。管理员要别的（质量等），填模型设置的附加参数（还没有后台入口）。
 - **超时**：图片请求单独的超时（默认 3 分钟，gpt-image 高质量常要 30–90 秒），不套用聊天的首 token 超时。
 
 ## 5. 给模型的工具 `image_generate`
 
-- **参数**：`prompt`（必填，完整描述，不是「改成蓝色」这种增量——提示词里写明）、`aspect`（`square|landscape|portrait|auto`）、`count`（1 到后台的每次上限，默认 1）、`images`（可选，原图 id 列表，有就是编辑）。描述写英文（AGENTS.md「写给模型的文字一律英文」）。
+- **参数**：`prompt`（必填，完整描述，不是「改成蓝色」这种增量——提示词里写明）、`aspect`（比例，见 §4）、`size`（可选，精确像素）、`count`（1 到后台的每次上限，默认 1）、`images`（可选，原图 id 列表，有就是编辑）。描述写英文（AGENTS.md「写给模型的文字一律英文」）。
 - **原图 id**：生成的图在结果里给 id；用户发的图片在上下文里也要有 id，`agent.BuildContext` 在每张用户图片前加一行 `[Image img_ab12cd34: cat.png]`（**不论这个 run 有没有图片工具都加**，这样同一对话的历史字节稳定；上线后各对话的提示缓存失效一次）。id 是附件 uuid 的前缀，只在本对话里解析：本对话非 `blocked` 的用户消息里的图片、本对话生成的图片，读字节一律经 `attachmentResolver.one`（所有者 + SHA-256 收据），对不上就报错给模型。
 - **执行顺序**（`api/image_tool.go`，一次调用）：
   1. 读设置、取 `Scope`；子 Agent 不会拿到这个工具（§9），兜底再拒一次；定时任务的 run（`runs.unattended`）照常执行——这个工具不需要用户确认；

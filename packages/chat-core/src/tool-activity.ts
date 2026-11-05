@@ -102,6 +102,7 @@ export function stepLabel(t: T, step: ToolActivityStep, running: boolean): strin
   if (step.call.name === 'skill') return skillStepLabel(t, step, args, running)
   if (step.call.name === 'scheduled_tasks') return running ? t('tasks.step-running') : t('tasks.step')
   if (step.call.name === 'document') return documentStepLabel(t, step, args, running)
+  if (step.call.name === 'image_generate') return running ? t('chat.picture.making') : t('chat.picture.step')
   if (step.call.name.startsWith('subagent')) return subagentStepLabel(t, step, args, running)
   if (isPluginTool(step.call.name)) {
     const progress = pluginProgressOf(step.result?.details, step.progress)

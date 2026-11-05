@@ -81,7 +81,7 @@ func TestImagesUserOnlyWhenTheChannelSendsIt(t *testing.T) {
 	if _, ok := fields["user"]; ok {
 		t.Error("user sent on a channel that does not send it")
 	}
-	if fields["response_format"] != "b64_json" || fields["size"] != "1664x2496" {
+	if fields["response_format"] != "b64_json" || fields["size"] != "1680x2512" {
 		t.Errorf("fields = %v", fields)
 	}
 	// A null in the operator's parameters removes a field.
@@ -175,5 +175,34 @@ func TestImagesRefusesWhatIsNotAPicture(t *testing.T) {
 	_, err := newImageClient(t, server, false).Generate(context.Background(), llm.ImageRequest{Model: "gpt-image-2", Prompt: "x", Count: 1})
 	if !llm.IsKind(err, llm.ErrorProtocol) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestImagesSizesPerFamily(t *testing.T) {
+	cases := []struct {
+		model  string
+		aspect llm.Aspect
+		w, h   int
+		field  string
+		want   string
+	}{
+		// An exact size goes as asked to the models that take sizes.
+		{"gpt-image-2", llm.AspectAuto, 1920, 1080, "size", "1920x1080"},
+		{"seedream-4", llm.AspectAuto, 2560, 1440, "size", "2560x1440"},
+		{"some-relay-model", llm.AspectAuto, 800, 600, "size", "800x600"},
+		// A ratio becomes the family's own size for it.
+		{"gpt-image-2", llm.AspectWide, 0, 0, "size", "1536x1024"},
+		{"gpt-image-2", llm.AspectAuto, 0, 0, "size", "auto"},
+		{"dall-e-3", llm.AspectTall, 0, 0, "size", "1024x1792"},
+		{"seedream-4", llm.AspectWide, 0, 0, "size", "2736x1536"},
+		// Grok takes a ratio: an exact size becomes the nearest one.
+		{"grok-imagine-image", llm.AspectAuto, 1920, 1080, "aspect_ratio", "16:9"},
+		{"grok-imagine-image", llm.Aspect4x3, 0, 0, "aspect_ratio", "4:3"},
+	}
+	for _, c := range cases {
+		fields := imageFields(llm.ImageRequest{Model: c.model, Prompt: "x", Aspect: c.aspect, Width: c.w, Height: c.h}, false)
+		if fields[c.field] != c.want {
+			t.Errorf("%s %s %dx%d: %s = %v, want %s", c.model, c.aspect, c.w, c.h, c.field, fields[c.field], c.want)
+		}
 	}
 }

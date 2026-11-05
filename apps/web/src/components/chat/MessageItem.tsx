@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next'
 import type { ChatModel, Message, MessagePart } from '@openchat/api-client'
-import { Telescope } from 'lucide-react'
+import { Image as ImageIcon, Telescope } from 'lucide-react'
 import { isValidElement, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -17,14 +17,17 @@ import { MEMORY_TOOL, memoryChangeOf } from '@openchat/chat-core/memory-tool'
 import { TASK_TOOL, taskChangeOf } from '@openchat/chat-core/task-tool'
 import { DOCUMENT_TOOL, documentChangeOf, documentOpOf } from '@openchat/chat-core/document-tool'
 import { launchesOf, SUBAGENT_TOOL } from '@openchat/chat-core/subagents'
+import { IMAGE_TOOL, imageRequestOf, picturesOf } from '@openchat/chat-core/image-tool'
 import { isPluginTool, pluginProgressOf, waitingCalls } from '@openchat/chat-core/plugin-code'
 import { SubagentLaunchLine } from './SubagentLines'
 import { parseQuotes, quoteMessage } from '@openchat/chat-core/document-selection'
 import { parseSkills, skillMessage } from '@openchat/chat-core/skill-mention'
+import { imageRefMessage, parseImageRefs } from '@openchat/chat-core/image-ref'
 import MemoryChip from './MemoryChip'
 import { SentQuotes } from './QuoteBlock'
 import TaskChip from './TaskChip'
 import DocumentCard from './DocumentCard'
+import GeneratedImages from './GeneratedImages'
 import MessageAttachments from './MessageAttachments'
 import { AnswerText } from './AnswerText'
 import CompactionDivider from './CompactionDivider'
@@ -93,7 +96,9 @@ export function UserMessage({
   // above the words, and editing changes the words only.
   // Skills picked with / come first (chat-core/src/skill-mention.ts): shown
   // at the start of its words, kept as they were when the message is edited.
-  const { names: skills, rest, research } = parseSkills(message.content)
+  const { names: skills, rest: afterSkills, research } = parseSkills(message.content)
+  // Pictures picked with 「拿来改」 follow the skills (chat-core/src/image-ref.ts).
+  const { handles: pictures, rest } = parseImageRefs(afterSkills)
   const quoted = parseQuotes(rest)
   const words = quoted ? quoted.request : rest
   const draft = typed ?? restoredDraft ?? null
@@ -122,7 +127,7 @@ export function UserMessage({
             onEdit &&
             ((content) => {
               closeField()
-              onEdit(skillMessage(skills, quoted ? quoteMessage(quoted.quotes, content) : content, research))
+              onEdit(skillMessage(skills, imageRefMessage(pictures, quoted ? quoteMessage(quoted.quotes, content) : content), research))
             })
           }
         />
@@ -149,6 +154,12 @@ export function UserMessage({
         {skills.map((name) => (
           <span key={name} className="n-skill-token is-sent">
             /{name}{' '}
+          </span>
+        ))}
+        {pictures.map((handle, i) => (
+          <span key={handle} className="n-skill-token is-picture is-sent" title={handle}>
+            <ImageIcon aria-hidden="true" />
+            {t('chat.picture.ref-token', { count: i + 1 })}{' '}
           </span>
         ))}
         {words}
@@ -459,6 +470,25 @@ export function AssistantTurn({
             // kept; a list, or a call that failed, is a step.
             const change = taskChangeOf(turn.results[part.id])
             if (change) return <TaskChip key={key} change={change} />
+          }
+          if (part.name === IMAGE_TOOL) {
+            // Pictures are the reply itself: the placeholder while they are
+            // made, the pictures once they are. A call that made none is a
+            // failed step, as any other.
+            const result = turn.results[part.id]
+            const pending = !result && (streaming || running)
+            if (picturesOf(result).length > 0 || (pending && imageRequestOf(part)?.prompt)) {
+              return (
+                <GeneratedImages
+                  key={key}
+                  call={part}
+                  result={result}
+                  working={live?.tools[part.id] === 'running'}
+                  conversationId={conversationId}
+                />
+              )
+            }
+            if (pending) return null
           }
           if (isPluginTool(part.name)) {
             // A call waiting for the person to allow it is a card in the

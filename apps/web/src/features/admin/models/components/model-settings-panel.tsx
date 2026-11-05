@@ -39,7 +39,7 @@ import {
 import { Switch } from '@/components/shadcn/ui/switch'
 import { cn } from '@/lib/utils'
 import { PanelSection } from '../../channels/components/panel-section'
-import { capacityText, formatMoney, parseCapacity, PERIODS, usedRatio } from '../capacity'
+import { capacityText, formatMoney, parseCapacity, parseImagePrice, PERIODS, usedRatio } from '../capacity'
 import { formatSyncedAt } from '../format'
 import {
   useResetModelCapacity,
@@ -162,6 +162,7 @@ function SettingsForm({ model, onOpenChange }: Omit<ModelSettingsPanelProps, 'op
       .refine((value) => parseCapacity(value).ok, { message: t('admin.models.settings.capacity-invalid') }),
     capacityPeriod: z.enum(PERIODS),
     capacityAdminExempt: z.boolean(),
+    imagePrice: z.string().refine((value) => parseImagePrice(value).ok, { message: t('admin.models.settings.image-price-invalid') }),
     kind: z.enum(['text', 'image', 'embedding', 'rerank']),
     reasoning: z.boolean(),
     toolCall: z.boolean(),
@@ -180,6 +181,7 @@ function SettingsForm({ model, onOpenChange }: Omit<ModelSettingsPanelProps, 'op
       capacity: capacityText(override.capacity),
       capacityPeriod: override.capacityPeriod ?? 'total',
       capacityAdminExempt: override.capacityAdminExempt ?? true,
+      imagePrice: capacityText(override.imagePrice),
       kind: settings.kind,
       reasoning: settings.reasoning,
       toolCall: settings.toolCall,
@@ -198,6 +200,8 @@ function SettingsForm({ model, onOpenChange }: Omit<ModelSettingsPanelProps, 'op
   const capacityPeriod = useWatch({ control: form.control, name: 'capacityPeriod' })
   const capacityExempt = useWatch({ control: form.control, name: 'capacityAdminExempt' })
   const capped = capacityField.trim() !== '' && parseCapacity(capacityField).ok
+  const kind = useWatch({ control: form.control, name: 'kind' })
+  const imagePrice = useWatch({ control: form.control, name: 'imagePrice' })
 
   // A model the catalogue gives no levels can still be vouched for: the
   // operator picks from every level, and they are sent as efforts.
@@ -218,7 +222,10 @@ function SettingsForm({ model, onOpenChange }: Omit<ModelSettingsPanelProps, 'op
     }
     const efforts = EFFORTS.filter((e) => values.reasoningEfforts.includes(e))
     const cap = parseCapacity(values.capacity)
+    const each = parseImagePrice(values.imagePrice)
     return {
+      // Only an image model is billed by the picture.
+      imagePrice: values.kind === 'image' && each.ok ? each.value : null,
       adminOnly: !values.forMembers,
       // The period and the exemption mean nothing without a cap; the server
       // writes their defaults back when there is none.
@@ -401,6 +408,27 @@ function SettingsForm({ model, onOpenChange }: Omit<ModelSettingsPanelProps, 'op
             </PanelSection>
 
             <PanelSection title={t('admin.models.settings.section-capacity')}>
+              {kind === 'image' && (
+                <FormField
+                  control={form.control}
+                  name="imagePrice"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FieldLabel modified={field.value.trim() !== ''}>{t('admin.models.settings.image-price')}</FieldLabel>
+                      <FormControl>
+                        <Input
+                          inputMode="decimal"
+                          className="w-[200px]"
+                          placeholder={t('admin.models.settings.image-price-placeholder')}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>{t('admin.models.settings.image-price-hint')}</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
               <FormField
                 control={form.control}
                 name="capacity"
@@ -463,7 +491,7 @@ function SettingsForm({ model, onOpenChange }: Omit<ModelSettingsPanelProps, 'op
               {/* Without a price the ledger logs no cost, so nothing ever counts
                   against the cap. Said whether or not a cap is set yet: this is
                   the moment to find out, not after it failed to stop anything. */}
-              {(model.inputCost === undefined || model.outputCost === undefined) && (
+              {(model.inputCost === undefined || model.outputCost === undefined) && !(kind === 'image' && imagePrice.trim() !== '') && (
                 <p className="text-muted-foreground rounded-lg border border-dashed p-3 text-xs">
                   {t('admin.models.settings.capacity-no-price')}
                 </p>

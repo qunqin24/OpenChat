@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { capacityText, formatMoney, parseCapacity, usedRatio } from './capacity'
+import { parseImagePrice } from './capacity'
 
 describe('parseCapacity', () => {
   it('reads empty as no cap', () => {
@@ -60,5 +61,18 @@ describe('usedRatio', () => {
     expect(usedRatio(30, 20)).toBe(1)
     expect(usedRatio(0, 20)).toBe(0)
     expect(usedRatio(5, 0)).toBe(0)
+  })
+})
+
+describe('parseImagePrice', () => {
+  it('takes nothing, zero and up to six decimals', () => {
+    expect(parseImagePrice('')).toEqual({ ok: true, value: null })
+    expect(parseImagePrice('0')).toEqual({ ok: true, value: 0 })
+    expect(parseImagePrice('0.039')).toEqual({ ok: true, value: 0.039 })
+  })
+  it('refuses the rest', () => {
+    expect(parseImagePrice('0.0000001').ok).toBe(false)
+    expect(parseImagePrice('101').ok).toBe(false)
+    expect(parseImagePrice('1,5').ok).toBe(false)
   })
 })

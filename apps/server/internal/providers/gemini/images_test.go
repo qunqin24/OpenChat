@@ -92,3 +92,17 @@ func TestImagesNoPictureIsAnError(t *testing.T) {
 		t.Fatalf("code = %v", err)
 	}
 }
+
+func TestImagesConfigTakesShapeAndTier(t *testing.T) {
+	got := imageConfig(llm.ImageRequest{Width: 3840, Height: 2160})
+	if got["aspectRatio"] != "16:9" || got["imageSize"] != "4K" {
+		t.Fatalf("4K wide: %v", got)
+	}
+	got = imageConfig(llm.ImageRequest{Aspect: llm.Aspect3x4})
+	if got["aspectRatio"] != "3:4" || got["imageSize"] != nil {
+		t.Fatalf("3:4: %v", got)
+	}
+	if got := imageConfig(llm.ImageRequest{Aspect: llm.AspectAuto}); len(got) != 0 {
+		t.Fatalf("auto: %v", got)
+	}
+}

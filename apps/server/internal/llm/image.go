@@ -6,7 +6,10 @@ import (
 	"image"
 	_ "image/jpeg" // registered for DecodeConfig
 	_ "image/png"
+	"math"
 	"net/http"
+	"slices"
+	"strconv"
 	"strings"
 
 	_ "golang.org/x/image/webp"
@@ -20,28 +23,96 @@ type ImageClient interface {
 	Generate(ctx context.Context, req ImageRequest) (ImageResponse, error)
 }
 
-// Aspect is the shape asked for, in words every image API can be mapped from.
-// The adapter turns it into the model family's own sizes.
+// Aspect is the shape asked for, as a width:height ratio every image API can
+// be mapped from, or auto. The adapter turns it into the model family's own
+// sizes or ratios.
 type Aspect string
 
 const (
 	AspectAuto      Aspect = "auto"
-	AspectSquare    Aspect = "square"
-	AspectLandscape Aspect = "landscape"
-	AspectPortrait  Aspect = "portrait"
+	AspectSquare    Aspect = "1:1"
+	AspectLandscape Aspect = "3:2"
+	AspectPortrait  Aspect = "2:3"
+	Aspect4x3       Aspect = "4:3"
+	Aspect3x4       Aspect = "3:4"
+	AspectWide      Aspect = "16:9"
+	AspectTall      Aspect = "9:16"
+	AspectUltrawide Aspect = "21:9"
 )
 
-// ParseAspect reads a tool argument, defaulting to auto for anything else.
+// Aspects are the ratios a model may ask for, besides auto.
+var Aspects = []Aspect{AspectSquare, AspectLandscape, AspectPortrait, Aspect4x3, Aspect3x4, AspectWide, AspectTall, AspectUltrawide}
+
+// ParseAspect reads a tool argument: a ratio of Aspects, or one of the words
+// square, landscape and portrait (3:2 and 2:3); auto for anything else.
 func ParseAspect(s string) Aspect {
-	switch Aspect(strings.ToLower(strings.TrimSpace(s))) {
-	case AspectSquare:
+	value := Aspect(strings.ToLower(strings.TrimSpace(s)))
+	switch value {
+	case "square":
 		return AspectSquare
-	case AspectLandscape:
+	case "landscape":
 		return AspectLandscape
-	case AspectPortrait:
+	case "portrait":
 		return AspectPortrait
 	}
+	if slices.Contains(Aspects, value) {
+		return value
+	}
 	return AspectAuto
+}
+
+// Ratio is width over height; 0 for auto.
+func (a Aspect) Ratio() float64 {
+	w, h, ok := strings.Cut(string(a), ":")
+	if !ok {
+		return 0
+	}
+	wn, err1 := strconv.Atoi(w)
+	hn, err2 := strconv.Atoi(h)
+	if err1 != nil || err2 != nil || hn == 0 {
+		return 0
+	}
+	return float64(wn) / float64(hn)
+}
+
+// Wide says the shape is landscape, Tall portrait; neither for square or auto.
+func (a Aspect) Wide() bool { return a.Ratio() > 1.05 }
+func (a Aspect) Tall() bool { r := a.Ratio(); return r > 0 && r < 0.95 }
+
+// NearestAspect is the one of choices closest in shape to width × height.
+func NearestAspect(width, height int, choices []Aspect) Aspect {
+	if width <= 0 || height <= 0 || len(choices) == 0 {
+		return AspectAuto
+	}
+	want := math.Log(float64(width) / float64(height))
+	best, gap := choices[0], math.Inf(1)
+	for _, choice := range choices {
+		if d := math.Abs(math.Log(choice.Ratio()) - want); d < gap {
+			best, gap = choice, d
+		}
+	}
+	return best
+}
+
+// MinSide and MaxSide bound an exact size a model may ask for.
+const (
+	MinSide = 256
+	MaxSide = 4096
+)
+
+// ParseSize reads an exact size like "1920x1080". ok is false for anything
+// else, or for a side outside MinSide..MaxSide.
+func ParseSize(s string) (width, height int, ok bool) {
+	w, h, found := strings.Cut(strings.ToLower(strings.ReplaceAll(strings.TrimSpace(s), "×", "x")), "x")
+	if !found {
+		return 0, 0, false
+	}
+	width, err1 := strconv.Atoi(strings.TrimSpace(w))
+	height, err2 := strconv.Atoi(strings.TrimSpace(h))
+	if err1 != nil || err2 != nil || width < MinSide || height < MinSide || width > MaxSide || height > MaxSide {
+		return 0, 0, false
+	}
+	return width, height, true
 }
 
 // ImageInput is a picture to edit, already read and checked by the caller
@@ -60,6 +131,10 @@ type ImageRequest struct {
 	// Count is how many pictures to make, at least one.
 	Count  int
 	Aspect Aspect
+	// Width and Height are an exact size asked for, zero when none: the
+	// adapter sends it where the model takes sizes, and else the nearest
+	// shape (and, for Gemini, the resolution tier) it does take.
+	Width, Height int
 	// User is the end-user identifier every model request carries
 	// (end_user.go); an adapter sends it only where its channel says to.
 	User string
@@ -113,7 +188,7 @@ func PictureTokens(model string, aspect Aspect) int {
 	id := strings.ToLower(model)
 	switch {
 	case strings.Contains(id, "gpt-image"), strings.Contains(id, "chatgpt-image"):
-		if aspect == AspectLandscape || aspect == AspectPortrait {
+		if aspect.Wide() || aspect.Tall() {
 			return 1568
 		}
 		return 1056
