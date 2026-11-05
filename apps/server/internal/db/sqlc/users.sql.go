@@ -840,6 +840,24 @@ func (q *Queries) SetUserAvatar(ctx context.Context, arg SetUserAvatarParams) (U
 	return i, err
 }
 
+const setUserImageDaily = `-- name: SetUserImageDaily :exec
+UPDATE users
+SET image_daily = $1,
+    updated_at  = now()
+WHERE id = $2
+`
+
+type SetUserImageDailyParams struct {
+	ImageDaily *int32    `json:"image_daily"`
+	ID         uuid.UUID `json:"id"`
+}
+
+// An account's own daily allowance of generated pictures; NULL is the site's.
+func (q *Queries) SetUserImageDaily(ctx context.Context, arg SetUserImageDailyParams) error {
+	_, err := q.db.Exec(ctx, setUserImageDaily, arg.ImageDaily, arg.ID)
+	return err
+}
+
 const setUserStorageQuota = `-- name: SetUserStorageQuota :exec
 UPDATE users
 SET storage_quota_bytes = $1,

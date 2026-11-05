@@ -132,6 +132,9 @@ func NewSystemPrompt(pool *pgxpool.Pool) func(context.Context, time.Time, []agen
 			return prompt
 		}
 		prompt := basePrompt(offered)
+		if offersTool(offered, toolImageGenerate) {
+			prompt += imageGuide
+		}
 		if scope, ok := agent.ScopeFrom(ctx); ok && scope.FromApp {
 			prompt += "\n\n" + phoneGuide
 		}

@@ -139,6 +139,7 @@ func (s *Server) ServerTools(ctx context.Context) []agent.Tool {
 	}
 	tools := append(s.TaskTools(ctx), s.DocumentTools(ctx)...)
 	tools = append(tools, s.SubagentTools(ctx)...)
+	tools = append(tools, s.ImageTools(ctx)...)
 	return append(tools, s.PluginTools(ctx)...)
 }
 

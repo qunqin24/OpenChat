@@ -178,6 +178,19 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 
 细节：[联网：搜索与读网页](docs/design/web-tools.md)。
 
+## 图片生成
+
+聊天模型用 `image_generate` 出图，背后是后台选定的图片模型（`model_overrides.kind = 'image'`；`api/image_tool.go`、`image_settings.go`，适配器 `providers/openai/images.go`、`providers/gemini/images.go`）。
+
+- 生成的图是用户的附件（`attachments.origin = 'generated'`、`run_id`）：写之前按实际大小过 `roomFor`，工具结果行写入时在同一个 commit 里认领（`ToolResult.Files` → `ClaimRunFiles`）；没被认领的当未认领上传，24 小时后清掉。上传的认领（`ListPendingAttachments`）不收生成的图。会删工具结果行的新路径要收 `storage_key`（`DeleteAnswerTo` 已返回）。
+- 出图请求走 `imageChannels`（kind 必须是 `image`，`admin_only`、容量、`servingOrder` 同 `pickChannel`），`Begin(Call{Kind: image, Images, ImageTokens})` → `Reserve`（含按张的输出预留）→ `Generate` → `EndImages`；填了每张价格（`model_overrides.image_price`）就按张计费。服务商的安全拒绝不换渠道（`refusal`）。
+- 提示词送审，来源 `image_prompt`，不算违规；被编辑的原图核对收据（`receiptOf`：生成的看 `attachments.sha256`，用户发的看消息零件里的摘要）。生成结果不审。
+- 张数上限三道：每次、每个 run（`Scope.State`）、每人每天（`image_requests`，`LockImageQuota` 下数，失败退回；个人配额 `users.image_daily` 盖过全站，管理员不限）。
+- 是否提供在 run 第一次请求时定下（`Scope.State`）；子 Agent、深度研究不给，定时任务给。
+- 用户发的图片在上下文里前面有一行 `[Image img_…]`（`agent.labelPictures`、`ImageHandle`），所有对话都加，别只在有工具时加。
+
+细节：[图片生成](docs/design/image-generation-plan.md)。
+
 ## 认证
 
 - HttpOnly Cookie 或 `Authorization: Bearer`（只有带 `X-OpenChat-Client: app` 且不带 `Origin` 的登录才在响应体里给 token，`SignInResult`），库里只存 token 的 SHA-256；任何「凭 token 认人」的路径都走 `auth.TokenFromRequest` + `GetSessionUser`，别另写（它还挡 `pending`）。App 的会话由 `GET /auth/session` 续期（`RenewSession`）；Android 通行密钥的来源和 `assetlinks.json` 都由后台登记的 App 得出（`android_passkeys.go`）。

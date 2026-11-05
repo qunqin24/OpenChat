@@ -959,6 +959,7 @@ const (
 	ModerationSourceAnswer       ModerationSource = "answer"
 	ModerationSourceDocument     ModerationSource = "document"
 	ModerationSourceEdit         ModerationSource = "edit"
+	ModerationSourceImagePrompt  ModerationSource = "image_prompt"
 	ModerationSourceInstructions ModerationSource = "instructions"
 	ModerationSourceMemory       ModerationSource = "memory"
 	ModerationSourceSend         ModerationSource = "send"
@@ -976,6 +977,8 @@ func (e ModerationSource) Valid() bool {
 	case ModerationSourceDocument:
 		return true
 	case ModerationSourceEdit:
+		return true
+	case ModerationSourceImagePrompt:
 		return true
 	case ModerationSourceInstructions:
 		return true
@@ -1661,25 +1664,28 @@ func (e UpdatePasskeySettingsRequestUserVerification) Valid() bool {
 
 // Defines values for UsageKind.
 const (
-	UsageKindSubagent             UsageKind = "subagent"
-	UsageKindUsageKindChat        UsageKind = "chat"
-	UsageKindUsageKindCompression UsageKind = "compression"
-	UsageKindUsageKindModeration  UsageKind = "moderation"
-	UsageKindUsageKindTitle       UsageKind = "title"
+	UsageKindChat        UsageKind = "chat"
+	UsageKindCompression UsageKind = "compression"
+	UsageKindImage       UsageKind = "image"
+	UsageKindModeration  UsageKind = "moderation"
+	UsageKindSubagent    UsageKind = "subagent"
+	UsageKindTitle       UsageKind = "title"
 )
 
 // Valid indicates whether the value is a known member of the UsageKind enum.
 func (e UsageKind) Valid() bool {
 	switch e {
+	case UsageKindChat:
+		return true
+	case UsageKindCompression:
+		return true
+	case UsageKindImage:
+		return true
+	case UsageKindModeration:
+		return true
 	case UsageKindSubagent:
 		return true
-	case UsageKindUsageKindChat:
-		return true
-	case UsageKindUsageKindCompression:
-		return true
-	case UsageKindUsageKindModeration:
-		return true
-	case UsageKindUsageKindTitle:
+	case UsageKindTitle:
 		return true
 	default:
 		return false
@@ -2646,6 +2652,10 @@ type ChatFeatures struct {
 	// when deep research is off or web search is unavailable.
 	DeepResearch *DeepResearchAllowance `json:"deepResearch,omitempty"`
 
+	// ImageGeneration Whether models may make pictures in the caller's conversations
+	// (Image generation settings, and the image model offered to them).
+	ImageGeneration *bool `json:"imageGeneration,omitempty"`
+
 	// PersonalSkills Whether people may write skills of their own (System settings).
 	PersonalSkills bool `json:"personalSkills"`
 
@@ -3284,6 +3294,53 @@ type Health struct {
 // HealthStatus defines model for Health.Status.
 type HealthStatus string
 
+// ImageGenerationSettings defines model for ImageGenerationSettings.
+type ImageGenerationSettings struct {
+	// Daily Pictures a person may make a day (0 is no limit), unless their own
+	// allowance says otherwise (`UpdateUserRequest.imageDaily`).
+	// Administrators have no daily limit.
+	Daily int `json:"daily"`
+
+	// Enabled Whether models may make pictures, in everyone's conversations
+	// (scheduled tasks' included; sub-agents' and deep research's not).
+	Enabled bool `json:"enabled"`
+
+	// MaxPerCall Pictures one call may ask for
+	MaxPerCall int `json:"maxPerCall"`
+
+	// MaxPerRun Pictures one answer may make
+	MaxPerRun int `json:"maxPerRun"`
+
+	// Model The image model the pictures are made with; empty when none is chosen.
+	Model string `json:"model"`
+
+	// ModelPriced Whether the chosen model has a price (per picture, or per token in
+	// the catalogue). Without one its pictures cost nothing in the logs
+	// and a spending cap never trips.
+	ModelPriced bool `json:"modelPriced"`
+}
+
+// ImageGenerationTestRequest defines model for ImageGenerationTestRequest.
+type ImageGenerationTestRequest struct {
+	Prompt string `json:"prompt"`
+}
+
+// ImageGenerationTestResult defines model for ImageGenerationTestResult.
+type ImageGenerationTestResult struct {
+	// Cost What it cost in USD, when the model has a price.
+	Cost       *float64 `json:"cost,omitempty"`
+	DurationMs int64    `json:"durationMs"`
+
+	// Error Why not
+	Error  *string `json:"error,omitempty"`
+	Height *int    `json:"height,omitempty"`
+
+	// Image The picture as a data URL, when it was made.
+	Image *string `json:"image,omitempty"`
+	Ok    bool    `json:"ok"`
+	Width *int    `json:"width,omitempty"`
+}
+
 // ImageSearchHit defines model for ImageSearchHit.
 type ImageSearchHit struct {
 	Creator    *string `json:"creator,omitempty"`
@@ -3611,8 +3668,14 @@ type ModelOverride struct {
 	// to now; before any reset it is the first request ever logged);
 	// `monthly` and `daily` start over at the beginning of each calendar
 	// month or day in the server's time zone (`TZ`). Absent is `total`.
-	CapacityPeriod  *CapacityPeriod  `json:"capacityPeriod,omitempty"`
-	ContextLimit    *int64           `json:"contextLimit,omitempty"`
+	CapacityPeriod *CapacityPeriod `json:"capacityPeriod,omitempty"`
+	ContextLimit   *int64          `json:"contextLimit,omitempty"`
+
+	// ImagePrice For an image model: USD per picture (at most six decimals). Set, a
+	// picture is billed at it even where the provider reports tokens;
+	// null bills by tokens at the catalogue's prices. Not a catalogue
+	// figure.
+	ImagePrice      *float64         `json:"imagePrice,omitempty"`
 	InputLimit      *int64           `json:"inputLimit,omitempty"`
 	InputModalities *[]InputModality `json:"inputModalities,omitempty"`
 	Kind            *ModelKind       `json:"kind,omitempty"`
@@ -3677,7 +3740,8 @@ type ModerationEvent struct {
 	// saved it (`task`), or as it was about to be sent or a model wrote it
 	// (`task_run`, logged but not counted as a strike); the person's text
 	// of a writing block as a model was about to read it (`document`); a
-	// person's skill as they saved it (`skill`).
+	// person's skill as they saved it (`skill`); the prompt a model wrote
+	// for a picture (`image_prompt`, logged but not counted as a strike).
 	Source ModerationSource `json:"source"`
 
 	// UserDisabled Whether the account is disabled now; null once it is deleted.
@@ -3759,7 +3823,8 @@ type ModerationSettings struct {
 // saved it (`task`), or as it was about to be sent or a model wrote it
 // (`task_run`, logged but not counted as a strike); the person's text
 // of a writing block as a model was about to read it (`document`); a
-// person's skill as they saved it (`skill`).
+// person's skill as they saved it (`skill`); the prompt a model wrote
+// for a picture (`image_prompt`, logged but not counted as a strike).
 type ModerationSource string
 
 // MySkillList defines model for MySkillList.
@@ -4976,6 +5041,15 @@ type UpdateDocumentRequest struct {
 	Title       string `json:"title"`
 }
 
+// UpdateImageGenerationSettingsRequest Only the fields present are changed.
+type UpdateImageGenerationSettingsRequest struct {
+	Daily      *int    `json:"daily,omitempty"`
+	Enabled    *bool   `json:"enabled,omitempty"`
+	MaxPerCall *int    `json:"maxPerCall,omitempty"`
+	MaxPerRun  *int    `json:"maxPerRun,omitempty"`
+	Model      *string `json:"model,omitempty"`
+}
+
 // UpdateImageSearchSettingsRequest Only the fields present are changed.
 type UpdateImageSearchSettingsRequest struct {
 	Enabled *bool `json:"enabled,omitempty"`
@@ -5149,6 +5223,10 @@ type UpdateUserRequest struct {
 	DisabledNote *string              `json:"disabledNote,omitempty"`
 	Email        *openapi_types.Email `json:"email,omitempty"`
 
+	// ImageDaily How many pictures this account's image requests may make a day (0 is
+	// no limit); -1 gives it the site's default again.
+	ImageDaily *int `json:"imageDaily,omitempty"`
+
 	// Name A username. `@` is excluded so that a username can never be spelled
 	// like an email address: sign-in accepts either, and if the two could
 	// collide, one account's username would shadow another's address.
@@ -5222,7 +5300,8 @@ type Usage struct {
 // conversation's context summary, made with the conversation's own model;
 // `moderation` is a request that has a model classify a message
 // (`ModerationSettings.mode` `model`); `subagent` is a model request of a
-// sub-agent's run, logged on the conversation it works for.
+// sub-agent's run, logged on the conversation it works for; `image` is a
+// request to an image model for pictures (the image tool).
 type UsageKind string
 
 // UsageLog defines model for UsageLog.
@@ -5270,6 +5349,13 @@ type UsageLog struct {
 	FirstTokenMs *int64             `json:"firstTokenMs,omitempty"`
 	Id           openapi_types.UUID `json:"id"`
 
+	// ImagePrice USD per picture, when the request was billed by the picture.
+	ImagePrice *float64 `json:"imagePrice,omitempty"`
+
+	// Images For an `image` request, the pictures it was billed for: the ones
+	// kept, or, stopped before it answered, the ones it asked for.
+	Images *int `json:"images,omitempty"`
+
 	// InputPrice USD per million tokens.
 	InputPrice *float64 `json:"inputPrice,omitempty"`
 
@@ -5281,7 +5367,8 @@ type UsageLog struct {
 	// conversation's context summary, made with the conversation's own model;
 	// `moderation` is a request that has a model classify a message
 	// (`ModerationSettings.mode` `model`); `subagent` is a model request of a
-	// sub-agent's run, logged on the conversation it works for.
+	// sub-agent's run, logged on the conversation it works for; `image` is a
+	// request to an image model for pictures (the image tool).
 	Kind UsageKind `json:"kind"`
 
 	// Model The model id the request asked for.
@@ -5372,8 +5459,15 @@ type User struct {
 	DisabledReason *DisabledReason     `json:"disabledReason,omitempty"`
 	Email          openapi_types.Email `json:"email"`
 	Id             openapi_types.UUID  `json:"id"`
-	LastSeenAt     *time.Time          `json:"lastSeenAt,omitempty"`
-	Name           string              `json:"name"`
+
+	// ImageDaily The account's own daily allowance of generated pictures (0 is no
+	// limit); absent when it has the site's (`ImageGenerationSettings.daily`).
+	ImageDaily *int `json:"imageDaily,omitempty"`
+
+	// ImagesToday Pictures its image requests have taken today. Given in `listUsers`.
+	ImagesToday *int       `json:"imagesToday,omitempty"`
+	LastSeenAt  *time.Time `json:"lastSeenAt,omitempty"`
+	Name        string     `json:"name"`
 
 	// Pending Registered while approval was required and not yet approved. Such
 	// an account cannot sign in. It can also be `disabled` (rejected).
@@ -5825,6 +5919,12 @@ type AddChannelModelJSONRequestBody AddChannelModelJSONBody
 
 // UpdateChannelModelJSONRequestBody defines body for UpdateChannelModel for application/json ContentType.
 type UpdateChannelModelJSONRequestBody UpdateChannelModelJSONBody
+
+// UpdateImageGenerationSettingsJSONRequestBody defines body for UpdateImageGenerationSettings for application/json ContentType.
+type UpdateImageGenerationSettingsJSONRequestBody = UpdateImageGenerationSettingsRequest
+
+// TestImageGenerationJSONRequestBody defines body for TestImageGeneration for application/json ContentType.
+type TestImageGenerationJSONRequestBody = ImageGenerationTestRequest
 
 // UpdateImageSearchSettingsJSONRequestBody defines body for UpdateImageSearchSettings for application/json ContentType.
 type UpdateImageSearchSettingsJSONRequestBody = UpdateImageSearchSettingsRequest
@@ -6986,6 +7086,15 @@ type ServerInterface interface {
 	// GetAdminDashboard Operating figures from the usage ledger
 	// (GET /admin/dashboard)
 	GetAdminDashboard(w http.ResponseWriter, r *http.Request, params GetAdminDashboardParams)
+	// GetImageGenerationSettings Image generation settings
+	// (GET /admin/image-generation)
+	GetImageGenerationSettings(w http.ResponseWriter, r *http.Request)
+	// UpdateImageGenerationSettings Change image generation settings
+	// (PATCH /admin/image-generation)
+	UpdateImageGenerationSettings(w http.ResponseWriter, r *http.Request)
+	// TestImageGeneration Make one picture with the current settings
+	// (POST /admin/image-generation/test)
+	TestImageGeneration(w http.ResponseWriter, r *http.Request)
 	// GetImageSearchSettings Image search settings
 	// (GET /admin/image-search)
 	GetImageSearchSettings(w http.ResponseWriter, r *http.Request)
@@ -7313,6 +7422,9 @@ type ServerInterface interface {
 	// GetFileText The words of one of your documents
 	// (GET /files/{fileId}/text)
 	GetFileText(w http.ResponseWriter, r *http.Request, fileId FileId, params GetFileTextParams)
+	// ViewFile See one of your files
+	// (GET /files/{fileId}/view)
+	ViewFile(w http.ResponseWriter, r *http.Request, fileId FileId)
 	// GetHealth Liveness probe
 	// (GET /healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -7541,6 +7653,24 @@ func (_ Unimplemented) UpdateChannelModel(w http.ResponseWriter, r *http.Request
 // GetAdminDashboard Operating figures from the usage ledger
 // (GET /admin/dashboard)
 func (_ Unimplemented) GetAdminDashboard(w http.ResponseWriter, r *http.Request, params GetAdminDashboardParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetImageGenerationSettings Image generation settings
+// (GET /admin/image-generation)
+func (_ Unimplemented) GetImageGenerationSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateImageGenerationSettings Change image generation settings
+// (PATCH /admin/image-generation)
+func (_ Unimplemented) UpdateImageGenerationSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// TestImageGeneration Make one picture with the current settings
+// (POST /admin/image-generation/test)
+func (_ Unimplemented) TestImageGeneration(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8195,6 +8325,12 @@ func (_ Unimplemented) GetFileDownload(w http.ResponseWriter, r *http.Request, f
 // GetFileText The words of one of your documents
 // (GET /files/{fileId}/text)
 func (_ Unimplemented) GetFileText(w http.ResponseWriter, r *http.Request, fileId FileId, params GetFileTextParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ViewFile See one of your files
+// (GET /files/{fileId}/view)
+func (_ Unimplemented) ViewFile(w http.ResponseWriter, r *http.Request, fileId FileId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8889,6 +9025,48 @@ func (siw *ServerInterfaceWrapper) GetAdminDashboard(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetAdminDashboard(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetImageGenerationSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetImageGenerationSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetImageGenerationSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateImageGenerationSettings operation middleware
+func (siw *ServerInterfaceWrapper) UpdateImageGenerationSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateImageGenerationSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestImageGeneration operation middleware
+func (siw *ServerInterfaceWrapper) TestImageGeneration(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestImageGeneration(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11838,6 +12016,32 @@ func (siw *ServerInterfaceWrapper) GetFileText(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// ViewFile operation middleware
+func (siw *ServerInterfaceWrapper) ViewFile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "fileId" -------------
+	var fileId FileId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "fileId", chi.URLParam(r, "fileId"), &fileId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fileId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ViewFile(w, r, fileId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetHealth operation middleware
 func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Request) {
 
@@ -13054,6 +13258,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/admin/web-search/test", wrapper.TestWebSearch)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/image-generation", wrapper.GetImageGenerationSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/admin/image-generation", wrapper.UpdateImageGenerationSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/image-generation/test", wrapper.TestImageGeneration)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/image-search", wrapper.GetImageSearchSettings)
 	})
 	r.Group(func(r chi.Router) {
@@ -13319,6 +13532,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/files/{fileId}/download", wrapper.GetFileDownload)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/files/{fileId}/view", wrapper.ViewFile)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/files/{fileId}/text", wrapper.GetFileText)

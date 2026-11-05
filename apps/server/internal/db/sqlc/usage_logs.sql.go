@@ -18,7 +18,7 @@ INSERT INTO usage_logs (created_at, kind, status, error_code, error_message,
                         model_id, served_model,
                         input_tokens, output_tokens, reasoning_tokens, cache_read_tokens, cache_write_tokens,
                         input_price, output_price, cache_read_price, cache_write_price, cost,
-                        streamed, first_token_ms, duration_ms, estimated)
+                        streamed, first_token_ms, duration_ms, estimated, images, image_price)
 VALUES ($1, $2, $3, $4, $5,
         (SELECT id FROM users WHERE id = $6::uuid),
         (SELECT id FROM conversations WHERE id = $7::uuid),
@@ -31,7 +31,8 @@ VALUES ($1, $2, $3, $4, $5,
         round(($19::double precision)::numeric, 10), round(($20::double precision)::numeric, 10),
         round(($21::double precision)::numeric, 10), round(($22::double precision)::numeric, 10),
         round(($23::double precision)::numeric, 10),
-        $24, $25, $26, $27)
+        $24, $25, $26, $27,
+        $28, round(($29::double precision)::numeric, 10))
 RETURNING id
 `
 
@@ -63,6 +64,8 @@ type InsertUsageLogParams struct {
 	FirstTokenMs     *int32             `json:"first_token_ms"`
 	DurationMs       int32              `json:"duration_ms"`
 	Estimated        bool               `json:"estimated"`
+	Images           int32              `json:"images"`
+	ImagePrice       *float64           `json:"image_price"`
 }
 
 // Prices and cost arrive as double precision and are stored as numeric rounded
@@ -106,6 +109,8 @@ func (q *Queries) InsertUsageLog(ctx context.Context, arg InsertUsageLogParams) 
 		arg.FirstTokenMs,
 		arg.DurationMs,
 		arg.Estimated,
+		arg.Images,
+		arg.ImagePrice,
 	)
 	var id uuid.UUID
 	err := row.Scan(&id)
@@ -170,7 +175,9 @@ SELECT l.id,
        l.cost,
        l.first_token_ms,
        l.duration_ms,
-       l.estimated
+       l.estimated,
+       l.images,
+       l.image_price
 FROM usage_logs l
          LEFT JOIN users u ON u.id = l.user_id
 WHERE ($1::timestamptz IS NULL
@@ -230,6 +237,8 @@ type ListUsageLogsRow struct {
 	FirstTokenMs     *int32             `json:"first_token_ms"`
 	DurationMs       int32              `json:"duration_ms"`
 	Estimated        bool               `json:"estimated"`
+	Images           int32              `json:"images"`
+	ImagePrice       pgtype.Numeric     `json:"image_price"`
 }
 
 // Newest first, by keyset on (created_at, id): the order of usage_logs_created_idx,
@@ -290,6 +299,8 @@ func (q *Queries) ListUsageLogs(ctx context.Context, arg ListUsageLogsParams) ([
 			&i.FirstTokenMs,
 			&i.DurationMs,
 			&i.Estimated,
+			&i.Images,
+			&i.ImagePrice,
 		); err != nil {
 			return nil, err
 		}
@@ -386,13 +397,14 @@ SELECT c.name                                                     AS channel_nam
        (m.raw -> 'cost' ->> 'input')::numeric       AS input_price,
        (m.raw -> 'cost' ->> 'output')::numeric      AS output_price,
        (m.raw -> 'cost' ->> 'cache_read')::numeric  AS cache_read_price,
-       (m.raw -> 'cost' ->> 'cache_write')::numeric AS cache_write_price
+       (m.raw -> 'cost' ->> 'cache_write')::numeric AS cache_write_price,
+       (SELECT o.image_price FROM model_overrides o WHERE o.model_id = $1) AS image_price
 FROM (SELECT 1) one
-         LEFT JOIN channels c ON c.id = $1::uuid
-         LEFT JOIN users u ON u.id = $2::uuid
+         LEFT JOIN channels c ON c.id = $2::uuid
+         LEFT JOIN users u ON u.id = $3::uuid
          LEFT JOIN LATERAL (SELECT cm.raw
                             FROM catalog_models cm
-                            WHERE cm.model_id = $3
+                            WHERE cm.model_id = $1
                             ORDER BY (cm.raw -> 'cost' ->> 'input') IS NOT NULL DESC,
                                      (cm.provider_id = c.type::text) DESC,
                                      cm.provider_id
@@ -400,9 +412,9 @@ FROM (SELECT 1) one
 `
 
 type UsagePricingParams struct {
+	ModelID   string     `json:"model_id"`
 	ChannelID *uuid.UUID `json:"channel_id"`
 	UserID    *uuid.UUID `json:"user_id"`
-	ModelID   string     `json:"model_id"`
 }
 
 type UsagePricingRow struct {
@@ -412,6 +424,7 @@ type UsagePricingRow struct {
 	OutputPrice     pgtype.Numeric `json:"output_price"`
 	CacheReadPrice  pgtype.Numeric `json:"cache_read_price"`
 	CacheWritePrice pgtype.Numeric `json:"cache_write_price"`
+	ImagePrice      pgtype.Numeric `json:"image_price"`
 }
 
 // What a request needs to be priced and labelled: the channel's current name,
@@ -421,12 +434,13 @@ type UsagePricingRow struct {
 // request's own channel decides which provider's entry wins -- the same model
 // id is priced differently by different providers -- and an entry that
 // actually carries a price beats one that does not. An operator's overrides
-// (model_overrides) have no price columns, so the catalogue is the only source.
+// (model_overrides) have no token prices, so the catalogue is the only source
+// for those; the per-picture price of an image model is the operator's alone.
 // Always one row: a request whose channel or model is unknown gets NULLs.
 // Also the name of the account it is for, kept with the row in
 // case the account is deleted before the request ends.
 func (q *Queries) UsagePricing(ctx context.Context, arg UsagePricingParams) (UsagePricingRow, error) {
-	row := q.db.QueryRow(ctx, usagePricing, arg.ChannelID, arg.UserID, arg.ModelID)
+	row := q.db.QueryRow(ctx, usagePricing, arg.ModelID, arg.ChannelID, arg.UserID)
 	var i UsagePricingRow
 	err := row.Scan(
 		&i.ChannelName,
@@ -435,6 +449,7 @@ func (q *Queries) UsagePricing(ctx context.Context, arg UsagePricingParams) (Usa
 		&i.OutputPrice,
 		&i.CacheReadPrice,
 		&i.CacheWritePrice,
+		&i.ImagePrice,
 	)
 	return i, err
 }

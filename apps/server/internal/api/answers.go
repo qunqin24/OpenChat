@@ -128,6 +128,8 @@ func (s *Server) RegenerateAnswer(w http.ResponseWriter, r *http.Request, conver
 	// their runs going now are stopped once it is gone.
 	subagents := s.runningSubagents(ctx, conversationId)
 	var run sqlc.Run
+	// The pictures the answer's image calls made go with it (cleanup.go).
+	var keys []string
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
 		if _, err := lockLive(ctx, q, conversationId); err != nil {
@@ -148,7 +150,8 @@ func (s *Server) RegenerateAnswer(w http.ResponseWriter, r *http.Request, conver
 		if err != nil {
 			return err
 		}
-		if err := q.DeleteAnswerTo(ctx, sqlc.DeleteAnswerToParams{ConversationID: conversationId, InputID: input.ID}); err != nil {
+		keys, err = q.DeleteAnswerTo(ctx, sqlc.DeleteAnswerToParams{ConversationID: conversationId, InputID: input.ID})
+		if err != nil {
 			return err
 		}
 		run, err = createRun(ctx, q, conv, user.ID, input.ID, requestID, choice)
@@ -159,6 +162,7 @@ func (s *Server) RegenerateAnswer(w http.ResponseWriter, r *http.Request, conver
 		return
 	}
 	s.cancelGoneRuns(context.WithoutCancel(ctx), subagents)
+	s.removeFiles(context.WithoutCancel(ctx), keys)
 	// Other tabs hold the answer that was just deleted.
 	s.startRun(conversationId, run, input, agent.TranscriptChanged{})
 	s.subagentsChanged(conversationId)

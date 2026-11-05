@@ -337,3 +337,22 @@ func (s *Server) refusedForCapacity(ctx context.Context, modelID string, who ask
 	}
 	return nil
 }
+
+// imagePriceParam is an image model's price per picture as stored: whole
+// millionths of a dollar, like a cap, so it is billed without a float tail.
+func imagePriceParam(price *float64) (pgtype.Numeric, error) {
+	if price == nil {
+		return pgtype.Numeric{}, nil
+	}
+	invalid := httpx.NewFieldError("imagePrice", "invalid_image_price", "a price per picture is 0 to 100 dollars, with at most six decimals")
+	value := *price
+	if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 || value > 100 {
+		return pgtype.Numeric{}, invalid
+	}
+	scaled := value * math.Pow10(capacityMicros)
+	micros := math.Round(scaled)
+	if math.Abs(scaled-micros) > 1e-3 {
+		return pgtype.Numeric{}, invalid
+	}
+	return pgtype.Numeric{Int: big.NewInt(int64(micros)), Exp: -capacityMicros, Valid: true}, nil
+}

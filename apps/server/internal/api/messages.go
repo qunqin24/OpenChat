@@ -758,6 +758,7 @@ func (s *Server) GetChatFeatures(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, err)
 		return
 	}
+	imagesOn := s.imageGenerationFor(r.Context(), auth.MustUser(r.Context()))
 	traces, err := s.tracesOn(r.Context())
 	if err != nil {
 		httpx.Fail(w, r, err)
@@ -787,14 +788,15 @@ func (s *Server) GetChatFeatures(w http.ResponseWriter, r *http.Request) {
 		research = &contract
 	}
 	httpx.JSON(w, http.StatusOK, ChatFeatures{
-		Skills:         skillsOn,
-		PersonalSkills: personalSkills,
-		Subagents:      &subagents,
-		DeepResearch:   research,
-		WebSearch:      config.Enabled && config.searcher(key) != nil,
-		AvatarUploads:  avatars,
-		ScheduledTasks: tasks,
-		RequestTraces:  traces && isStaff(r.Context()),
+		Skills:          skillsOn,
+		PersonalSkills:  personalSkills,
+		Subagents:       &subagents,
+		DeepResearch:    research,
+		WebSearch:       config.Enabled && config.searcher(key) != nil,
+		AvatarUploads:   avatars,
+		ScheduledTasks:  tasks,
+		RequestTraces:   traces && isStaff(r.Context()),
+		ImageGeneration: &imagesOn,
 	})
 }
 

@@ -36,6 +36,26 @@ func (q *Queries) AttachToMessage(ctx context.Context, arg AttachToMessageParams
 	return result.RowsAffected(), nil
 }
 
+const claimRunFiles = `-- name: ClaimRunFiles :exec
+UPDATE attachments
+SET message_id = $1
+WHERE id = ANY ($2::uuid[])
+  AND run_id = $3
+  AND message_id IS NULL
+`
+
+type ClaimRunFilesParams struct {
+	MessageID *uuid.UUID  `json:"message_id"`
+	Ids       []uuid.UUID `json:"ids"`
+	RunID     *uuid.UUID  `json:"run_id"`
+}
+
+// Hands the files a tool stored in a run to the row that holds its result.
+func (q *Queries) ClaimRunFiles(ctx context.Context, arg ClaimRunFilesParams) error {
+	_, err := q.db.Exec(ctx, claimRunFiles, arg.MessageID, arg.Ids, arg.RunID)
+	return err
+}
+
 const createAttachment = `-- name: CreateAttachment :one
 INSERT INTO attachments (user_id, storage_key, filename, content_type, size_bytes)
 VALUES ($1, $2, $3, $4, $5)
@@ -75,6 +95,66 @@ func (q *Queries) CreateAttachment(ctx context.Context, arg CreateAttachmentPara
 		&i.Height,
 	)
 	return i, err
+}
+
+const createGeneratedImage = `-- name: CreateGeneratedImage :one
+INSERT INTO attachments (user_id, storage_key, filename, content_type, size_bytes, origin, run_id, sha256, width, height)
+VALUES ($1, $2, $3, $4, $5,
+        'generated', $6, $7, $8, $9)
+RETURNING id, message_id, storage_key, filename, content_type, size_bytes, created_at, user_id, origin, run_id, sha256, width, height
+`
+
+type CreateGeneratedImageParams struct {
+	UserID      *uuid.UUID `json:"user_id"`
+	StorageKey  string     `json:"storage_key"`
+	Filename    string     `json:"filename"`
+	ContentType string     `json:"content_type"`
+	SizeBytes   int64      `json:"size_bytes"`
+	RunID       *uuid.UUID `json:"run_id"`
+	Sha256      *string    `json:"sha256"`
+	Width       *int32     `json:"width"`
+	Height      *int32     `json:"height"`
+}
+
+// A picture the image tool made, stored for the person, not yet on a row.
+func (q *Queries) CreateGeneratedImage(ctx context.Context, arg CreateGeneratedImageParams) (Attachment, error) {
+	row := q.db.QueryRow(ctx, createGeneratedImage,
+		arg.UserID,
+		arg.StorageKey,
+		arg.Filename,
+		arg.ContentType,
+		arg.SizeBytes,
+		arg.RunID,
+		arg.Sha256,
+		arg.Width,
+		arg.Height,
+	)
+	var i Attachment
+	err := row.Scan(
+		&i.ID,
+		&i.MessageID,
+		&i.StorageKey,
+		&i.Filename,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.CreatedAt,
+		&i.UserID,
+		&i.Origin,
+		&i.RunID,
+		&i.Sha256,
+		&i.Width,
+		&i.Height,
+	)
+	return i, err
+}
+
+const deleteAttachment = `-- name: DeleteAttachment :exec
+DELETE FROM attachments WHERE id = $1
+`
+
+func (q *Queries) DeleteAttachment(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteAttachment, id)
+	return err
 }
 
 const deleteLibraryFile = `-- name: DeleteLibraryFile :one
@@ -184,6 +264,41 @@ func (q *Queries) GetLibraryFile(ctx context.Context, arg GetLibraryFileParams) 
 	return i, err
 }
 
+const getOwnAttachment = `-- name: GetOwnAttachment :one
+SELECT a.id, a.message_id, a.storage_key, a.filename, a.content_type, a.size_bytes, a.created_at, a.user_id, a.origin, a.run_id, a.sha256, a.width, a.height
+FROM attachments a
+WHERE a.id = $1
+  AND a.user_id = $2
+  AND a.message_id IS NOT NULL
+`
+
+type GetOwnAttachmentParams struct {
+	ID     uuid.UUID  `json:"id"`
+	UserID *uuid.UUID `json:"user_id"`
+}
+
+// One of the caller's files, wherever it is, for viewing.
+func (q *Queries) GetOwnAttachment(ctx context.Context, arg GetOwnAttachmentParams) (Attachment, error) {
+	row := q.db.QueryRow(ctx, getOwnAttachment, arg.ID, arg.UserID)
+	var i Attachment
+	err := row.Scan(
+		&i.ID,
+		&i.MessageID,
+		&i.StorageKey,
+		&i.Filename,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.CreatedAt,
+		&i.UserID,
+		&i.Origin,
+		&i.RunID,
+		&i.Sha256,
+		&i.Width,
+		&i.Height,
+	)
+	return i, err
+}
+
 const listAttachmentsByMessages = `-- name: ListAttachmentsByMessages :many
 SELECT id, message_id, storage_key, filename, content_type, size_bytes, created_at, user_id, origin, run_id, sha256, width, height
 FROM attachments
@@ -262,6 +377,83 @@ func (q *Queries) ListAttachmentsForUser(ctx context.Context, arg ListAttachment
 			&i.Sha256,
 			&i.Width,
 			&i.Height,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listConversationImages = `-- name: ListConversationImages :many
+SELECT a.id, a.message_id, a.storage_key, a.filename, a.content_type, a.size_bytes, a.created_at, a.user_id, a.origin, a.run_id, a.sha256, a.width, a.height, m.role AS message_role, m.parts AS message_parts
+FROM attachments a
+         JOIN messages m ON m.id = a.message_id
+         JOIN conversations c ON c.id = m.conversation_id
+WHERE m.conversation_id = $1
+  AND c.user_id = $2
+  AND a.user_id = $2
+  AND m.status <> 'blocked'
+  AND a.content_type LIKE 'image/%'
+  AND (a.origin = 'generated' OR (m.role = 'user' AND m.origin IS NULL))
+ORDER BY a.created_at DESC, a.id DESC
+LIMIT 200
+`
+
+type ListConversationImagesParams struct {
+	ConversationID uuid.UUID  `json:"conversation_id"`
+	UserID         *uuid.UUID `json:"user_id"`
+}
+
+type ListConversationImagesRow struct {
+	ID           uuid.UUID          `json:"id"`
+	MessageID    *uuid.UUID         `json:"message_id"`
+	StorageKey   string             `json:"storage_key"`
+	Filename     string             `json:"filename"`
+	ContentType  string             `json:"content_type"`
+	SizeBytes    int64              `json:"size_bytes"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UserID       *uuid.UUID         `json:"user_id"`
+	Origin       *string            `json:"origin"`
+	RunID        *uuid.UUID         `json:"run_id"`
+	Sha256       *string            `json:"sha256"`
+	Width        *int32             `json:"width"`
+	Height       *int32             `json:"height"`
+	MessageRole  MessageRole        `json:"message_role"`
+	MessageParts []byte             `json:"message_parts"`
+}
+
+// The pictures the image tool may be asked to edit: the images in this
+// conversation's own messages that moderation did not refuse - the person's
+// uploads and the pictures made here - newest first.
+func (q *Queries) ListConversationImages(ctx context.Context, arg ListConversationImagesParams) ([]ListConversationImagesRow, error) {
+	rows, err := q.db.Query(ctx, listConversationImages, arg.ConversationID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListConversationImagesRow{}
+	for rows.Next() {
+		var i ListConversationImagesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.MessageID,
+			&i.StorageKey,
+			&i.Filename,
+			&i.ContentType,
+			&i.SizeBytes,
+			&i.CreatedAt,
+			&i.UserID,
+			&i.Origin,
+			&i.RunID,
+			&i.Sha256,
+			&i.Width,
+			&i.Height,
+			&i.MessageRole,
+			&i.MessageParts,
 		); err != nil {
 			return nil, err
 		}
@@ -431,6 +623,7 @@ FROM attachments
 WHERE id = ANY ($1::uuid[])
   AND user_id = $2
   AND message_id IS NULL
+  AND origin IS NULL
 ORDER BY created_at, id
 `
 
@@ -439,7 +632,8 @@ type ListPendingAttachmentsParams struct {
 	UserID *uuid.UUID  `json:"user_id"`
 }
 
-// The caller's own uploads that no message has claimed yet.
+// The caller's own uploads that no message has claimed yet. A picture the
+// image tool made is not an upload: a message cannot claim it.
 func (q *Queries) ListPendingAttachments(ctx context.Context, arg ListPendingAttachmentsParams) ([]Attachment, error) {
 	rows, err := q.db.Query(ctx, listPendingAttachments, arg.Ids, arg.UserID)
 	if err != nil {

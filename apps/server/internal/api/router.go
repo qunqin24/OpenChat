@@ -182,6 +182,7 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 			r.Get("/files", wrapper.ListFiles)
 			r.Delete("/files/{fileId}", wrapper.DeleteFile)
 			r.Get("/files/{fileId}/download", wrapper.GetFileDownload)
+			r.Get("/files/{fileId}/view", wrapper.ViewFile)
 			r.Get("/files/{fileId}/text", wrapper.GetFileText)
 
 			// ---- admin ---------------------------------------------------
@@ -220,6 +221,9 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 				r.Get("/admin/image-search", wrapper.GetImageSearchSettings)
 				r.Patch("/admin/image-search", wrapper.UpdateImageSearchSettings)
 				r.Post("/admin/image-search/test", wrapper.TestImageSearch)
+				r.Get("/admin/image-generation", wrapper.GetImageGenerationSettings)
+				r.Patch("/admin/image-generation", wrapper.UpdateImageGenerationSettings)
+				r.Post("/admin/image-generation/test", wrapper.TestImageGeneration)
 				r.Get("/admin/storage", wrapper.GetStorageSettings)
 				r.Patch("/admin/storage", wrapper.UpdateStorageSettings)
 				r.Get("/admin/storage/quota", wrapper.GetStorageQuota)

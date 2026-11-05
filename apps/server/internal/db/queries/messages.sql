@@ -142,13 +142,15 @@ SELECT a.storage_key
 FROM attachments a
 WHERE a.message_id IN (SELECT id FROM gone);
 
--- name: DeleteAnswerTo :exec
+-- name: DeleteAnswerTo :many
 -- Deletes the answer to a question: every run on it - the ones that carry on
 -- after a question the model asked included - and every row that follows it.
 -- A question is only regenerated while it is the last one, so what follows it
 -- is its answer - and the messages moderation refused since, and the
 -- sub-agents' reports delivered since, which are user rows but not questions.
--- Files hang on user messages that were sent, so neither has any to hand back.
+-- A refused message and a report carry no files, but a tool's result can: the
+-- pictures the image tool made hang on it. Their storage keys come back in the
+-- same statement, for the caller to delete once this commits (cleanup.go).
 -- A report whose row goes is pending again (subagent_reports, ON DELETE SET
 -- NULL), and the new answer receives it.
 WITH rows AS (
@@ -158,10 +160,11 @@ WITH rows AS (
             AND messages.conversation_id = sqlc.arg('conversation_id')
             AND (messages.role <> 'user' OR messages.status = 'blocked' OR messages.origin IS NOT NULL)
             AND (messages.created_at, messages.id) > (question.created_at, question.id)
-        RETURNING messages.id)
-DELETE
-FROM runs
-WHERE runs.input_message_id = sqlc.arg('input_id');
+        RETURNING messages.id),
+     files AS (SELECT a.storage_key FROM attachments a WHERE a.message_id IN (SELECT id FROM rows)),
+     gone_runs AS (DELETE FROM runs WHERE runs.input_message_id = sqlc.arg('input_id') RETURNING runs.id)
+SELECT storage_key
+FROM files;
 
 -- name: MoveAttachments :exec
 -- Hands the files of one message to another: an edited question's files go to

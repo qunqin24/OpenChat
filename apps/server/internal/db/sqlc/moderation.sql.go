@@ -16,7 +16,7 @@ const countUserStrikes = `-- name: CountUserStrikes :one
 SELECT count(*)::bigint
 FROM moderation_events e
 WHERE e.user_id = $1
-  AND e.source NOT IN ('snapshot', 'task_run')
+  AND e.source NOT IN ('snapshot', 'task_run', 'image_prompt')
   AND e.created_at > now() - make_interval(hours => $2::int)
   AND e.created_at > COALESCE((SELECT max(s.created_at)
                                FROM moderation_events s
@@ -34,7 +34,8 @@ type CountUserStrikesParams struct {
 // fresh start, instead of the next message setting the same punishment off.
 // A refusal at snapshot time is not a strike: it is old text being left out of
 // a conversation, not something the person is sending now. Nor is a task's
-// prompt checked as it is about to be sent, or as a model wrote it (task_run).
+// prompt checked as it is about to be sent, or as a model wrote it (task_run),
+// nor the prompt a model wrote for a picture (image_prompt).
 func (q *Queries) CountUserStrikes(ctx context.Context, arg CountUserStrikesParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countUserStrikes, arg.UserID, arg.WindowHours)
 	var column_1 int64
@@ -279,7 +280,7 @@ SELECT count(DISTINCT e.id)::bigint                                       AS str
 FROM moderation_events e
          LEFT JOIN LATERAL unnest(e.categories) AS c ON true
 WHERE e.user_id = $1
-  AND e.source NOT IN ('snapshot', 'task_run')
+  AND e.source NOT IN ('snapshot', 'task_run', 'image_prompt')
   AND e.created_at <= $2::timestamptz + interval '1 second'
   AND e.created_at > $2::timestamptz - make_interval(hours => $3::int)
 `

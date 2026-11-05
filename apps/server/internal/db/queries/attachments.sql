@@ -4,12 +4,14 @@ VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: ListPendingAttachments :many
--- The caller's own uploads that no message has claimed yet.
+-- The caller's own uploads that no message has claimed yet. A picture the
+-- image tool made is not an upload: a message cannot claim it.
 SELECT *
 FROM attachments
 WHERE id = ANY (sqlc.arg('ids')::uuid[])
   AND user_id = sqlc.arg('user_id')
   AND message_id IS NULL
+  AND origin IS NULL
 ORDER BY created_at, id;
 
 -- name: AttachToMessage :execrows
@@ -158,3 +160,46 @@ UPDATE attachments
 SET size_bytes = sqlc.arg('size_bytes')
 WHERE id = sqlc.arg('id')
   AND message_id IS NULL;
+
+-- name: ClaimRunFiles :exec
+-- Hands the files a tool stored in a run to the row that holds its result.
+UPDATE attachments
+SET message_id = sqlc.arg('message_id')
+WHERE id = ANY (sqlc.arg('ids')::uuid[])
+  AND run_id = sqlc.arg('run_id')
+  AND message_id IS NULL;
+
+-- name: CreateGeneratedImage :one
+-- A picture the image tool made, stored for the person, not yet on a row.
+INSERT INTO attachments (user_id, storage_key, filename, content_type, size_bytes, origin, run_id, sha256, width, height)
+VALUES (sqlc.arg('user_id'), sqlc.arg('storage_key'), sqlc.arg('filename'), sqlc.arg('content_type'), sqlc.arg('size_bytes'),
+        'generated', sqlc.arg('run_id'), sqlc.arg('sha256'), sqlc.arg('width'), sqlc.arg('height'))
+RETURNING *;
+
+-- name: DeleteAttachment :exec
+DELETE FROM attachments WHERE id = $1;
+
+-- name: ListConversationImages :many
+-- The pictures the image tool may be asked to edit: the images in this
+-- conversation's own messages that moderation did not refuse - the person's
+-- uploads and the pictures made here - newest first.
+SELECT a.*, m.role AS message_role, m.parts AS message_parts
+FROM attachments a
+         JOIN messages m ON m.id = a.message_id
+         JOIN conversations c ON c.id = m.conversation_id
+WHERE m.conversation_id = sqlc.arg('conversation_id')
+  AND c.user_id = sqlc.arg('user_id')
+  AND a.user_id = sqlc.arg('user_id')
+  AND m.status <> 'blocked'
+  AND a.content_type LIKE 'image/%'
+  AND (a.origin = 'generated' OR (m.role = 'user' AND m.origin IS NULL))
+ORDER BY a.created_at DESC, a.id DESC
+LIMIT 200;
+
+-- name: GetOwnAttachment :one
+-- One of the caller's files, wherever it is, for viewing.
+SELECT a.*
+FROM attachments a
+WHERE a.id = sqlc.arg('id')
+  AND a.user_id = sqlc.arg('user_id')
+  AND a.message_id IS NOT NULL;

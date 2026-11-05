@@ -100,6 +100,17 @@ func (r *SpendReserver) Reserve(ctx context.Context, call usage.Call) (func(), e
 		// USD per million tokens is micro-dollars per token.
 		micros = int64(math.Ceil(float64(call.InputEstimate) * numberOf(prices.InputPrice)))
 	}
+	// A picture's cost is almost all output and known in advance, so an image
+	// request holds its pictures too: at the operator's price per picture,
+	// which is what it is billed at, or else at the expected tokens each.
+	if call.Kind == usage.KindImage && call.Images > 0 {
+		switch {
+		case prices.ImagePrice.Valid:
+			micros = int64(math.Ceil(float64(call.Images) * numberOf(prices.ImagePrice) * 1_000_000))
+		case prices.OutputPrice.Valid:
+			micros += int64(math.Ceil(float64(call.Images*call.ImageTokens) * numberOf(prices.OutputPrice)))
+		}
+	}
 	if micros <= 0 {
 		return nothing, nil
 	}

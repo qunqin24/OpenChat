@@ -161,7 +161,7 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (M
 	return i, err
 }
 
-const deleteAnswerTo = `-- name: DeleteAnswerTo :exec
+const deleteAnswerTo = `-- name: DeleteAnswerTo :many
 WITH rows AS (
     DELETE FROM messages
         USING messages question
@@ -169,10 +169,11 @@ WITH rows AS (
             AND messages.conversation_id = $2
             AND (messages.role <> 'user' OR messages.status = 'blocked' OR messages.origin IS NOT NULL)
             AND (messages.created_at, messages.id) > (question.created_at, question.id)
-        RETURNING messages.id)
-DELETE
-FROM runs
-WHERE runs.input_message_id = $1
+        RETURNING messages.id),
+     files AS (SELECT a.storage_key FROM attachments a WHERE a.message_id IN (SELECT id FROM rows)),
+     gone_runs AS (DELETE FROM runs WHERE runs.input_message_id = $1 RETURNING runs.id)
+SELECT storage_key
+FROM files
 `
 
 type DeleteAnswerToParams struct {
@@ -185,12 +186,29 @@ type DeleteAnswerToParams struct {
 // A question is only regenerated while it is the last one, so what follows it
 // is its answer - and the messages moderation refused since, and the
 // sub-agents' reports delivered since, which are user rows but not questions.
-// Files hang on user messages that were sent, so neither has any to hand back.
+// A refused message and a report carry no files, but a tool's result can: the
+// pictures the image tool made hang on it. Their storage keys come back in the
+// same statement, for the caller to delete once this commits (cleanup.go).
 // A report whose row goes is pending again (subagent_reports, ON DELETE SET
 // NULL), and the new answer receives it.
-func (q *Queries) DeleteAnswerTo(ctx context.Context, arg DeleteAnswerToParams) error {
-	_, err := q.db.Exec(ctx, deleteAnswerTo, arg.InputID, arg.ConversationID)
-	return err
+func (q *Queries) DeleteAnswerTo(ctx context.Context, arg DeleteAnswerToParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, deleteAnswerTo, arg.InputID, arg.ConversationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var storage_key string
+		if err := rows.Scan(&storage_key); err != nil {
+			return nil, err
+		}
+		items = append(items, storage_key)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const deleteTranscriptFrom = `-- name: DeleteTranscriptFrom :many

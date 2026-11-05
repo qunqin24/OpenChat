@@ -40,7 +40,8 @@ func (s *Server) UpdateModelSettings(w http.ResponseWriter, r *http.Request, mod
 	// the model follows the catalogue the way an untouched one does.
 	if params.Kind == nil && params.Reasoning == nil && params.ToolCall == nil &&
 		params.InputModalities == nil && params.ContextLimit == nil && params.InputLimit == nil &&
-		params.OutputLimit == nil && params.ReasoningEfforts == nil && !params.AdminOnly && !params.Capacity.Valid {
+		params.OutputLimit == nil && params.ReasoningEfforts == nil && !params.AdminOnly && !params.Capacity.Valid &&
+		!params.ImagePrice.Valid {
 		if err := s.q.DeleteModelOverride(r.Context(), modelId); err != nil {
 			httpx.Fail(w, r, err)
 			return
@@ -84,6 +85,9 @@ func overrideParams(modelID string, body ModelOverride) (sqlc.SaveModelOverrideP
 		return params, err
 	}
 	params.Capacity, params.CapacityPeriod, params.CapacityAdminExempt = limit, &period, &exempt
+	if params.ImagePrice, err = imagePriceParam(body.ImagePrice); err != nil {
+		return params, err
+	}
 	if body.Kind != nil {
 		if !body.Kind.Valid() {
 			return params, invalid("invalid_kind", "unknown model kind: "+string(*body.Kind))
@@ -134,6 +138,7 @@ func toModelOverride(row sqlc.ModelOverride) ModelOverride {
 	if row.AdminOnly {
 		out.AdminOnly = &row.AdminOnly
 	}
+	out.ImagePrice = numberPtr(row.ImagePrice)
 	if rule, ok := capacityOf(row); ok {
 		limit, period, exempt := numberOf(rule.limit), rule.period, rule.exempt
 		out.Capacity, out.CapacityPeriod, out.CapacityAdminExempt = &limit, &period, &exempt

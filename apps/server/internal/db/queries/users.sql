@@ -294,3 +294,10 @@ UPDATE users
 SET storage_quota_bytes = sqlc.narg('storage_quota_bytes'),
     updated_at          = now()
 WHERE id = sqlc.arg('id');
+
+-- name: SetUserImageDaily :exec
+-- An account's own daily allowance of generated pictures; NULL is the site's.
+UPDATE users
+SET image_daily = sqlc.narg('image_daily'),
+    updated_at  = now()
+WHERE id = sqlc.arg('id');

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
+
 	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
@@ -43,6 +45,11 @@ type ToolResult struct {
 	// Images are pictures the tool answered with, already stored: the model is
 	// shown them after the result (BuildContext).
 	Images []llm.ToolImage
+	// Files are attachment rows the tool stored for the person in this run
+	// (unclaimed, run_id = the run): the result's row claims them in the
+	// commit that writes it, so they live and die with it. A file whose row is
+	// never written is an unclaimed upload, swept after a day.
+	Files []uuid.UUID
 }
 
 // ToolError is an error whose message is meant for the model. Anything else a

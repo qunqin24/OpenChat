@@ -89,6 +89,10 @@ func (s *Server) user(ctx context.Context, row sqlc.User) User {
 		user.LastSeenAt = &seen
 	}
 	user.StorageQuotaBytes = row.StorageQuotaBytes
+	if row.ImageDaily != nil {
+		daily := int(*row.ImageDaily)
+		user.ImageDaily = &daily
+	}
 	if row.DisabledAt.Valid && row.DisabledReason != nil {
 		reason := DisabledReason(*row.DisabledReason)
 		user.DisabledReason = &reason

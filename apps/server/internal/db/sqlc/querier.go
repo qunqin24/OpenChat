@@ -90,6 +90,8 @@ type Querier interface {
 	// transaction that delivers them ends. Only a background sub-agent's: a
 	// foreground one's is taken by the call waiting for it (TakeReportForTool).
 	ClaimPendingReports(ctx context.Context, parentID uuid.UUID) ([]SubagentReport, error)
+	// Hands the files a tool stored in a run to the row that holds its result.
+	ClaimRunFiles(ctx context.Context, arg ClaimRunFilesParams) error
 	CountAdmins(ctx context.Context) (int64, error)
 	CountCatalogModels(ctx context.Context) (int64, error)
 	CountCatalogProviders(ctx context.Context) (int64, error)
@@ -128,7 +130,8 @@ type Querier interface {
 	// fresh start, instead of the next message setting the same punishment off.
 	// A refusal at snapshot time is not a strike: it is old text being left out of
 	// a conversation, not something the person is sending now. Nor is a task's
-	// prompt checked as it is about to be sent, or as a model wrote it (task_run).
+	// prompt checked as it is about to be sent, or as a model wrote it (task_run),
+	// nor the prompt a model wrote for a picture (image_prompt).
 	CountUserStrikes(ctx context.Context, arg CountUserStrikesParams) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
 	CountUsersFiltered(ctx context.Context, arg CountUsersFilteredParams) (int64, error)
@@ -141,6 +144,8 @@ type Querier interface {
 	// Writing blocks (api/documents.go). Every statement names the owner, so
 	// another person's document reads as missing.
 	CreateDocument(ctx context.Context, arg CreateDocumentParams) (Document, error)
+	// A picture the image tool made, stored for the person, not yet on a row.
+	CreateGeneratedImage(ctx context.Context, arg CreateGeneratedImageParams) (Attachment, error)
 	CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error)
 	CreatePlugin(ctx context.Context, arg CreatePluginParams) (Plugin, error)
 	CreatePluginConfirmation(ctx context.Context, arg CreatePluginConfirmationParams) (PluginConfirmation, error)
@@ -170,10 +175,13 @@ type Querier interface {
 	// A question is only regenerated while it is the last one, so what follows it
 	// is its answer - and the messages moderation refused since, and the
 	// sub-agents' reports delivered since, which are user rows but not questions.
-	// Files hang on user messages that were sent, so neither has any to hand back.
+	// A refused message and a report carry no files, but a tool's result can: the
+	// pictures the image tool made hang on it. Their storage keys come back in the
+	// same statement, for the caller to delete once this commits (cleanup.go).
 	// A report whose row goes is pending again (subagent_reports, ON DELETE SET
 	// NULL), and the new answer receives it.
-	DeleteAnswerTo(ctx context.Context, arg DeleteAnswerToParams) error
+	DeleteAnswerTo(ctx context.Context, arg DeleteAnswerToParams) ([]string, error)
+	DeleteAttachment(ctx context.Context, id uuid.UUID) error
 	// A sign-in whose password turned out right gives its slot back: only failures
 	// count.
 	DeleteAuthAttempt(ctx context.Context, id int64) error
@@ -261,6 +269,9 @@ type Querier interface {
 	// A conversation's sub-agents with this name, newest first: the main agent
 	// addresses them by the names it gave.
 	FindSubagentsByName(ctx context.Context, arg FindSubagentsByNameParams) ([]Conversation, error)
+	// A request done keeps what it made (it may be fewer than it asked for); a
+	// failed one gives its share back.
+	FinishImageRequest(ctx context.Context, arg FinishImageRequestParams) error
 	FinishMessage(ctx context.Context, arg FinishMessageParams) (Message, error)
 	// Terminal. Live state is cleared in the same statement: whatever it held has
 	// already been written as messages by the commit that calls this.
@@ -365,6 +376,8 @@ type Querier interface {
 	GetMessage(ctx context.Context, id uuid.UUID) (Message, error)
 	GetModelOverride(ctx context.Context, modelID string) (ModelOverride, error)
 	GetModerationEvent(ctx context.Context, id uuid.UUID) (ModerationEvent, error)
+	// One of the caller's files, wherever it is, for viewing.
+	GetOwnAttachment(ctx context.Context, arg GetOwnAttachmentParams) (Attachment, error)
 	// One skill of a person (owner_id) or of the site (NULL): anyone else's is not
 	// found.
 	GetOwnedSkill(ctx context.Context, arg GetOwnedSkillParams) (GetOwnedSkillRow, error)
@@ -444,6 +457,9 @@ type Querier interface {
 	// its runs, so cheap and outside any transaction.
 	HasPendingReports(ctx context.Context, parentID uuid.UUID) (bool, error)
 	HasSubagentInbox(ctx context.Context, conversationID uuid.UUID) (bool, error)
+	// How many pictures a person's requests have taken since a moment: the ones
+	// under way and the ones done, not the ones that failed.
+	ImagesSince(ctx context.Context, arg ImagesSinceParams) (int64, error)
 	InsertAuthAttempt(ctx context.Context, arg InsertAuthAttemptParams) (int64, error)
 	// A built-in plugin, unless it was made before (or its short name is taken).
 	// Starts switched off: it needs an administrator's setup before anyone can use it.
@@ -453,6 +469,7 @@ type Querier interface {
 	// The next version of a document. The caller holds the document's row lock
 	// (LockDocument), so two changes at once are numbered one after the other.
 	InsertDocumentVersion(ctx context.Context, arg InsertDocumentVersionParams) (DocumentVersion, error)
+	InsertImageRequest(ctx context.Context, arg InsertImageRequestParams) (uuid.UUID, error)
 	InsertMemory(ctx context.Context, arg InsertMemoryParams) (UserMemory, error)
 	InsertMemoryEvent(ctx context.Context, arg InsertMemoryEventParams) (MemoryEvent, error)
 	InsertModerationEvent(ctx context.Context, arg InsertModerationEventParams) (ModerationEvent, error)
@@ -544,6 +561,10 @@ type Querier interface {
 	ListChannelsServingModels(ctx context.Context, modelIds []string) ([]ListChannelsServingModelsRow, error)
 	// A conversation's documents, each at its latest version.
 	ListConversationDocuments(ctx context.Context, arg ListConversationDocumentsParams) ([]ListConversationDocumentsRow, error)
+	// The pictures the image tool may be asked to edit: the images in this
+	// conversation's own messages that moderation did not refuse - the person's
+	// uploads and the pictures made here - newest first.
+	ListConversationImages(ctx context.Context, arg ListConversationImagesParams) ([]ListConversationImagesRow, error)
 	// The person's messages in a conversation that carry files read as words -
 	// text files, Word, Excel and PDF - oldest first: what the file tools
 	// (agent/files.go) look files up in. A refused message's files are never read
@@ -598,7 +619,8 @@ type Querier interface {
 	// Passkeys and the WebAuthn ceremonies that make and use them (api/passkeys.go).
 	// Every statement about a person's passkeys names the person.
 	ListPasskeys(ctx context.Context, userID uuid.UUID) ([]ListPasskeysRow, error)
-	// The caller's own uploads that no message has claimed yet.
+	// The caller's own uploads that no message has claimed yet. A picture the
+	// image tool made is not an upload: a message cannot claim it.
 	ListPendingAttachments(ctx context.Context, arg ListPendingAttachmentsParams) ([]Attachment, error)
 	// The caller's pinned conversations, the latest pinned first: shown above the
 	// rest of the list whatever their age, so not paged with it.
@@ -727,6 +749,9 @@ type Querier interface {
 	LockConversation(ctx context.Context, id uuid.UUID) (Conversation, error)
 	// A document of the person's, locked for a change, with its conversation.
 	LockDocument(ctx context.Context, arg LockDocumentParams) (Document, error)
+	// Serialises one person's image requests against their daily allowance, for
+	// the transaction that counts and takes a share of it.
+	LockImageQuota(ctx context.Context, userID uuid.UUID) error
 	// Serialises writers of one person's list for the length of the transaction, so
 	// two adds at the cap cannot both pass the count.
 	LockMemoryList(ctx context.Context, userID string) error
@@ -933,6 +958,8 @@ type Querier interface {
 	// UpdateOwnProfile on purpose: the picture is its own endpoint, with its own
 	// checks, and the profile form has no business with it.
 	SetUserAvatar(ctx context.Context, arg SetUserAvatarParams) (User, error)
+	// An account's own daily allowance of generated pictures; NULL is the site's.
+	SetUserImageDaily(ctx context.Context, arg SetUserImageDailyParams) error
 	SetUserStorageQuota(ctx context.Context, arg SetUserStorageQuotaParams) error
 	SetUserTimeZone(ctx context.Context, arg SetUserTimeZoneParams) error
 	// Whether another skill of the same owner (or of the site) has this name.
@@ -1043,7 +1070,8 @@ type Querier interface {
 	// request's own channel decides which provider's entry wins -- the same model
 	// id is priced differently by different providers -- and an entry that
 	// actually carries a price beats one that does not. An operator's overrides
-	// (model_overrides) have no price columns, so the catalogue is the only source.
+	// (model_overrides) have no token prices, so the catalogue is the only source
+	// for those; the per-picture price of an image model is the operator's alone.
 	// Always one row: a request whose channel or model is unknown gets NULLs.
 	// Also the name of the account it is for, kept with the row in
 	// case the account is deleted before the request ends.
@@ -1055,6 +1083,8 @@ type Querier interface {
 	// yet, in kept or temporary conversations alike - all of it is stored.
 	UserStorageByKind(ctx context.Context, userID *uuid.UUID) ([]UserStorageByKindRow, error)
 	UserStorageUsed(ctx context.Context, userID *uuid.UUID) (int64, error)
+	// ImagesSince for a page of accounts at once, for the users list.
+	UsersImagesSince(ctx context.Context, arg UsersImagesSinceParams) ([]UsersImagesSinceRow, error)
 	// The admin users table's column: what each of a page of accounts keeps.
 	UsersStorageUsed(ctx context.Context, userIds []uuid.UUID) ([]UsersStorageUsedRow, error)
 	WriteConversationSnapshot(ctx context.Context, arg WriteConversationSnapshotParams) error

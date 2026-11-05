@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -76,11 +77,22 @@ func (s *Server) ListUsers(w http.ResponseWriter, r *http.Request, params ListUs
 			usedBy[*row.UserID] = row.Bytes
 		}
 	}
+	pictures, err := s.q.UsersImagesSince(r.Context(), sqlc.UsersImagesSinceParams{UserIds: ids, Since: startOfDay(time.Now())})
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	picturesBy := make(map[uuid.UUID]int, len(pictures))
+	for _, row := range pictures {
+		picturesBy[row.UserID] = int(row.Images)
+	}
 	items := make([]User, 0, len(rows))
 	for _, row := range rows {
 		user := s.user(r.Context(), row)
 		bytes := usedBy[row.ID]
 		user.StorageUsedBytes = &bytes
+		today := picturesBy[row.ID]
+		user.ImagesToday = &today
 		items = append(items, user)
 	}
 
@@ -153,7 +165,8 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, userId opena
 		return
 	}
 	if body.Role == nil && body.Disabled == nil && body.Name == nil &&
-		body.Email == nil && body.Password == nil && body.Approved == nil && body.StorageQuotaBytes == nil {
+		body.Email == nil && body.Password == nil && body.Approved == nil && body.StorageQuotaBytes == nil &&
+		body.ImageDaily == nil {
 		httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "nothing_to_update", "no changes were given"))
 		return
 	}
@@ -241,6 +254,11 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, userId opena
 
 		if body.StorageQuotaBytes != nil {
 			if err := setUserQuota(r.Context(), q, userId, *body.StorageQuotaBytes); err != nil {
+				return err
+			}
+		}
+		if body.ImageDaily != nil {
+			if err := setUserImageDaily(r.Context(), q, userId, *body.ImageDaily); err != nil {
 				return err
 			}
 		}

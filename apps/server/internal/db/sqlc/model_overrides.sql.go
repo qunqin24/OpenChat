@@ -223,12 +223,12 @@ func (q *Queries) ResetModelCapacity(ctx context.Context, arg ResetModelCapacity
 const saveModelOverride = `-- name: SaveModelOverride :one
 INSERT INTO model_overrides (model_id, kind, reasoning, tool_call, input_modalities,
                              context_limit, input_limit, output_limit, reasoning_efforts, admin_only,
-                             capacity, capacity_period, capacity_admin_exempt)
+                             capacity, capacity_period, capacity_admin_exempt, image_price)
 VALUES ($1, $2, $3, $4,
         $5::text[], $6, $7,
         $8, $9::text[], $10,
         $11::numeric, coalesce($12::text, 'total'),
-        coalesce($13::boolean, true))
+        coalesce($13::boolean, true), $14::numeric)
 ON CONFLICT (model_id) DO UPDATE
     SET kind              = excluded.kind,
         reasoning         = excluded.reasoning,
@@ -244,6 +244,7 @@ ON CONFLICT (model_id) DO UPDATE
         capacity              = excluded.capacity,
         capacity_period       = excluded.capacity_period,
         capacity_admin_exempt = excluded.capacity_admin_exempt,
+        image_price           = excluded.image_price,
         updated_at        = now()
 RETURNING model_id, kind, reasoning, tool_call, input_modalities, context_limit, input_limit, output_limit, reasoning_efforts, updated_at, admin_only, capacity, capacity_period, capacity_admin_exempt, capacity_since, image_price
 `
@@ -262,6 +263,7 @@ type SaveModelOverrideParams struct {
 	Capacity            pgtype.Numeric `json:"capacity"`
 	CapacityPeriod      *string        `json:"capacity_period"`
 	CapacityAdminExempt *bool          `json:"capacity_admin_exempt"`
+	ImagePrice          pgtype.Numeric `json:"image_price"`
 }
 
 // Replaces the whole override: the settings panel always sends every field,
@@ -282,6 +284,7 @@ func (q *Queries) SaveModelOverride(ctx context.Context, arg SaveModelOverridePa
 		arg.Capacity,
 		arg.CapacityPeriod,
 		arg.CapacityAdminExempt,
+		arg.ImagePrice,
 	)
 	var i ModelOverride
 	err := row.Scan(

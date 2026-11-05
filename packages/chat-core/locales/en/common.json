@@ -1517,7 +1517,8 @@
         "task": "Scheduled task saved",
         "task_run": "Scheduled task, before it ran",
         "document": "Writing block, before a model read it",
-        "skill": "Skill saved"
+        "skill": "Skill saved",
+        "image_prompt": "Picture prompt a model wrote"
       },
       "sanction": {
         "disabled": "Account disabled"
@@ -1598,7 +1599,8 @@
       "no-duration": "The provider rejected the request at once; no time was spent",
       "no-account": "No account",
       "deleted-user": "Deleted account: {{name}}",
-      "kind-subagent": "Sub-agent"
+      "kind-subagent": "Sub-agent",
+      "kind-image": "Image generation"
     },
     "skills": {
       "title": "Skills",

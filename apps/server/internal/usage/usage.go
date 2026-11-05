@@ -42,6 +42,9 @@ const (
 	// KindModeration is the request that has a model classify a message for
 	// content moderation (api/moderation.go).
 	KindModeration Kind = "moderation"
+	// KindImage is a request to an image model for pictures, made by the
+	// image tool (api/image_tool.go).
+	KindImage Kind = "image"
 )
 
 // Status is how a request ended.
@@ -124,6 +127,12 @@ type Call struct {
 	// stopped or broke before the usage frame - and is what a Reserver holds
 	// back for it. Zero when the caller did not estimate.
 	InputEstimate int
+	// Images is how many pictures an image request asks for, and ImageTokens
+	// what one is expected to cost in output tokens (llm.PictureTokens): a
+	// Reserver holds back that much, and a request stopped before it answered
+	// is billed for it.
+	Images      int
+	ImageTokens int
 	// Request is the request as it is sent, for a trace (Tracer). Nil offers
 	// none. Only its messages, tools and options are kept; files are kept as
 	// the references they are in the message, never their bytes.
@@ -272,6 +281,59 @@ func (m *Meter) End(ctx context.Context, resp llm.ModelResponse, err error) {
 	}
 
 	usage, estimated := m.settle(ctx, resp, err)
+	m.write(ctx, row, usage, estimated, resp, ended)
+}
+
+// EndImages writes the row of an image request. images is how many pictures
+// were kept. A request that made pictures but reported nothing is billed for
+// them at the expected tokens each; one stopped while it was being made is
+// billed for every picture it asked for, since the provider goes on making
+// them; one refused before it started costs nothing.
+func (m *Meter) EndImages(ctx context.Context, resp llm.ImageResponse, images int, err error) {
+	defer m.Release()
+	if m.rec == nil || m.rec.q == nil {
+		return
+	}
+	ended := m.clock()
+	row := sqlc.InsertUsageLogParams{
+		CreatedAt:      pgtype.Timestamptz{Time: m.started, Valid: true},
+		Kind:           string(m.call.Kind),
+		Status:         string(StatusOK),
+		UserID:         owner(m.call.UserID),
+		ConversationID: m.call.ConversationID,
+		RunID:          m.call.RunID,
+		ChannelID:      m.call.ChannelID,
+		ModelID:        m.call.ModelID,
+		ServedModel:    resp.ServedModel,
+		DurationMs:     millis(ended.Sub(m.started)),
+	}
+	cancelled := ctx.Err() != nil
+	if err != nil && !cancelled {
+		code, message := describe(err)
+		row.Status = string(StatusError)
+		row.ErrorCode = &code
+		row.ErrorMessage = &message
+	}
+	usage, estimated := resp.Usage, false
+	billed := images
+	if usage == nil {
+		switch {
+		case images > 0:
+			usage, estimated = &llm.Usage{InputTokens: m.call.InputEstimate, OutputTokens: images * m.call.ImageTokens}, true
+		case cancelled:
+			billed = max(m.call.Images, 1)
+			usage, estimated = &llm.Usage{InputTokens: m.call.InputEstimate, OutputTokens: billed * m.call.ImageTokens}, true
+		}
+	} else if cancelled && images == 0 {
+		billed = max(m.call.Images, 1)
+	}
+	row.Images = int32(clampInt(billed))
+	m.write(ctx, row, usage, estimated, llm.ModelResponse{Model: resp.ServedModel}, ended)
+}
+
+// write fills in the usage, prices and cost of a row and records it, with its
+// trace.
+func (m *Meter) write(ctx context.Context, row sqlc.InsertUsageLogParams, usage *llm.Usage, estimated bool, resp llm.ModelResponse, ended time.Time) {
 	row.Estimated = estimated
 	if usage != nil {
 		row.InputTokens = int32(clampInt(usage.InputTokens))
@@ -457,6 +519,15 @@ func (m *Meter) price(ctx context.Context, row *sqlc.InsertUsageLogParams, usage
 		Input: row.InputPrice, Output: row.OutputPrice,
 		CacheRead: row.CacheReadPrice, CacheWrite: row.CacheWritePrice,
 	})
+	// An image model with a price per picture is billed by the picture, even
+	// where the provider reported tokens: the operator set it to be exact.
+	if Kind(row.Kind) == KindImage {
+		if each := number(p.ImagePrice); each != nil {
+			row.ImagePrice = each
+			cost := float64(row.Images) * *each
+			row.Cost = &cost
+		}
+	}
 }
 
 // Prices are USD per million tokens. A nil price is one the catalogue did not

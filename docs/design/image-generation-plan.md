@@ -1,6 +1,6 @@
 # 图片生成：方案
 
-> 状态：**第 0 期已实现**（2026-11-05：`catalog.DefaultKind` 先读 models.dev 的 `type`，`ListServedModels`、`ModelProfile`、`ListCatalogModelsForChannel` 带出 `model_type`），第一期进行中。§16 的十一个问题都已由用户拍板（2026-11-05）并落到正文，没有待定的问题。第一期的前端先出 2–3 个草图。相关：[usage-and-limits.md](usage-and-limits.md)（账本、预留、容量上限）、[storage-and-files.md](storage-and-files.md)（存储、配额、收据、清理、库）、[moderation.md](moderation.md)、[plugins-plan.md](plugins-plan.md)（`tool_images`、工具进度）、[conversations.md](conversations.md)（改写/重新生成删行）。
+> 状态：**第 0 期已实现**（2026-11-05：`catalog.DefaultKind` 先读 models.dev 的 `type`，`ListServedModels`、`ModelProfile`、`ListCatalogModelsForChannel` 带出 `model_type`）。**第一期后端已实现**（2026-11-05：迁移、`llm.ImageClient` 与两个适配器、`usage.Meter.EndImages` 与按张计价和预留、`image_generate` 工具、存图与认领、`DeleteAnswerTo` 收 key、提示词审核、三道张数上限与个人配额、后台接口 `/admin/image-generation`、`/files/{id}/view`、契约；与方案的出入见 §17），前端未做。§16 的十一个问题都已由用户拍板（2026-11-05）并落到正文，没有待定的问题。第一期的前端先出 2–3 个草图。相关：[usage-and-limits.md](usage-and-limits.md)（账本、预留、容量上限）、[storage-and-files.md](storage-and-files.md)（存储、配额、收据、清理、库）、[moderation.md](moderation.md)、[plugins-plan.md](plugins-plan.md)（`tool_images`、工具进度）、[conversations.md](conversations.md)（改写/重新生成删行）。
 
 ## 0. 结论先行
 
@@ -243,3 +243,13 @@ type ImageResponse struct {
 11. **按人设配额**：第一期就做，照存储配额的套路，后台用户编辑里改（§6 迁移、§8、§11、§12）。
 
 目前没有待定的问题。
+
+## 17. 第一期后端实现记录（2026-11-05）
+
+与上文的出入：
+
+- **页面拿图不走附件列表，走 `details` + 查看地址**：事件流里的消息不带附件（`MessageAppended` 只有行），所以工具结果的 `details.images` 给出每张图的附件 id、句柄（`img_…`）、类型和宽高，页面用 `GET /files/{id}/view`（302 到短期签名地址，只认本人、挂在消息上的文件，临时对话的也行）画图。`ToolResultPart` 的契约没有加字段。
+- **原图 id 就是附件 uuid 的前 8 位十六进制**（`agent.ImageHandle`），在本对话里按 `ListConversationImages`（本对话非 `blocked`、用户自己发的或本对话生成的图片）解析。
+- **运营者的按模型附加参数（`Extra`）还没有后台入口**：适配器支持（`null` 删字段），设置里暂时没有。
+- **出图请求的超时**是 4 分钟（`imageRequestTimeout`），适配器的响应头超时 5 分钟。
+- 测试：适配器 8 个（httptest），`TestImageTool`（带库：提供条件、出图、存储与收据、按张计价、认领、按句柄编辑、每天配额、`DeleteAnswerTo` 交回 key）。

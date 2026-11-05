@@ -140,6 +140,11 @@ func (s *Server) toUsageLog(ctx context.Context, row sqlc.ListUsageLogsRow) Usag
 		Cost:             numberPtr(row.Cost),
 		DurationMs:       int64(row.DurationMs),
 		Estimated:        row.Estimated,
+		ImagePrice:       numberPtr(row.ImagePrice),
+	}
+	if row.Images > 0 {
+		images := int(row.Images)
+		out.Images = &images
 	}
 	if row.FirstTokenMs != nil {
 		ms := int64(*row.FirstTokenMs)

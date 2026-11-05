@@ -34,11 +34,12 @@ RETURNING *;
 -- fresh start, instead of the next message setting the same punishment off.
 -- A refusal at snapshot time is not a strike: it is old text being left out of
 -- a conversation, not something the person is sending now. Nor is a task's
--- prompt checked as it is about to be sent, or as a model wrote it (task_run).
+-- prompt checked as it is about to be sent, or as a model wrote it (task_run),
+-- nor the prompt a model wrote for a picture (image_prompt).
 SELECT count(*)::bigint
 FROM moderation_events e
 WHERE e.user_id = sqlc.arg('user_id')
-  AND e.source NOT IN ('snapshot', 'task_run')
+  AND e.source NOT IN ('snapshot', 'task_run', 'image_prompt')
   AND e.created_at > now() - make_interval(hours => sqlc.arg('window_hours')::int)
   AND e.created_at > COALESCE((SELECT max(s.created_at)
                                FROM moderation_events s
@@ -94,6 +95,6 @@ SELECT count(DISTINCT e.id)::bigint                                       AS str
 FROM moderation_events e
          LEFT JOIN LATERAL unnest(e.categories) AS c ON true
 WHERE e.user_id = sqlc.arg('user_id')
-  AND e.source NOT IN ('snapshot', 'task_run')
+  AND e.source NOT IN ('snapshot', 'task_run', 'image_prompt')
   AND e.created_at <= sqlc.arg('until')::timestamptz + interval '1 second'
   AND e.created_at > sqlc.arg('until')::timestamptz - make_interval(hours => sqlc.arg('window_hours')::int);

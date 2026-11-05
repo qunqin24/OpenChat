@@ -980,15 +980,25 @@ func (ex *execution) runCall(ctx context.Context, slot ToolSlot, tool Tool) erro
 		}
 	}
 	result.DurationMS = &elapsed
-	return ex.recordResult(slot.CallID, result)
+	var files []uuid.UUID
+	if execErr == nil && ctx.Err() == nil {
+		files = out.Files
+	}
+	return ex.recordResult(slot.CallID, result, files...)
 }
 
-// recordResult writes a call's result row and marks its slot done.
-func (ex *execution) recordResult(callID string, result llm.ToolResultPart) error {
+// recordResult writes a call's result row and marks its slot done, claiming
+// the files the call stored onto the row.
+func (ex *execution) recordResult(callID string, result llm.ToolResultPart, files ...uuid.UUID) error {
 	return ex.commit(func(ctx context.Context, q *sqlc.Queries) ([]Event, *finish, error) {
 		msg, err := ex.appendMessage(ctx, q, toolRow(result))
 		if err != nil {
 			return nil, nil, err
+		}
+		if len(files) > 0 {
+			if err := q.ClaimRunFiles(ctx, sqlc.ClaimRunFilesParams{MessageID: &msg.ID, RunID: &ex.run.ID, Ids: files}); err != nil {
+				return nil, nil, err
+			}
 		}
 		id := msg.ID
 		ex.setSlot(callID, func(s *ToolSlot) {

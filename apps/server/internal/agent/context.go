@@ -2,7 +2,10 @@ package agent
 
 import (
 	"fmt"
+	"strings"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin24/openchat/apps/server/internal/llm"
@@ -156,6 +159,7 @@ func BuildContextIn(rows []sqlc.Message, loc *time.Location) ([]llm.Message, err
 				}
 				msg = llm.TextMessage(llm.Role(row.Role), row.Content)
 			}
+			msg.Parts = labelPictures(msg.Parts)
 			if row.Role == sqlc.MessageRoleUser && row.CreatedAt.Valid {
 				at := row.CreatedAt.Time.In(loc)
 				day := at.Format(time.DateOnly)
@@ -179,6 +183,44 @@ func BuildContextIn(rows []sqlc.Message, loc *time.Location) ([]llm.Message, err
 	}
 	flush()
 	return out, nil
+}
+
+// labelPictures puts a picture's handle before each picture a person sent,
+// so the model can name it to the image tool ("make this one blue"). Every
+// conversation gets the labels, with or without the tool, so its history
+// reads the same from one request to the next.
+func labelPictures(parts []llm.Part) []llm.Part {
+	var out []llm.Part
+	for i, part := range parts {
+		file, ok := part.(llm.AttachmentPart)
+		if !ok || !strings.HasPrefix(file.MediaType, "image/") {
+			if out != nil {
+				out = append(out, part)
+			}
+			continue
+		}
+		id, err := uuid.Parse(file.Ref)
+		if err != nil {
+			if out != nil {
+				out = append(out, part)
+			}
+			continue
+		}
+		if out == nil {
+			out = append(make([]llm.Part, 0, len(parts)+2), parts[:i]...)
+		}
+		out = append(out, llm.TextPart{Text: fmt.Sprintf("[Image %s: %s]", ImageHandle(id), file.Filename)}, part)
+	}
+	if out == nil {
+		return parts
+	}
+	return out
+}
+
+// ImageHandle is how a picture is named to the model: short, and only
+// meaningful within its conversation, where the image tool looks it up.
+func ImageHandle(id uuid.UUID) string {
+	return "img_" + strings.ReplaceAll(id.String(), "-", "")[:8]
 }
 
 // toolPictures introduces a result's pictures and refers to each.

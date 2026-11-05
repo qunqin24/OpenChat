@@ -1214,6 +1214,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/image-generation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Image generation settings */
+        get: operations["getImageGenerationSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change image generation settings
+         * @description Takes effect for the runs that start after it. 400
+         *     `invalid_image_settings` for a limit out of range, or a model that is
+         *     not an image model served by a channel that can make pictures.
+         */
+        patch: operations["updateImageGenerationSettings"];
+        trace?: never;
+    };
+    "/admin/image-generation/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make one picture with the current settings
+         * @description Makes one picture with the image model, as the image tool would, in no
+         *     conversation; its cost is logged like any other image request. A
+         *     picture that could not be made is a 200 with `ok: false`.
+         */
+        post: operations["testImageGeneration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/image-search": {
         parameters: {
             query?: never;
@@ -2970,6 +3015,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/files/{fileId}/view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fileId: components["parameters"]["FileId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * See one of your files
+         * @description Redirects to a short-lived address the file is shown from (not saved).
+         *     What a reply's generated pictures are drawn from, so their address
+         *     never goes stale in a page left open. Only the caller's own files on a
+         *     message; 404 otherwise.
+         */
+        get: operations["viewFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/files/{fileId}/text": {
         parameters: {
             query?: never;
@@ -4148,6 +4218,11 @@ export interface components {
              */
             requestTraces: boolean;
             webSearch: boolean;
+            /**
+             * @description Whether models may make pictures in the caller's conversations
+             *     (Image generation settings, and the image model offered to them).
+             */
+            imageGeneration?: boolean;
             /** @description Whether models may launch sub-agents (Sub-agent settings). */
             subagents?: boolean;
             /** @description Whether scheduled tasks are on (System settings); off, `/tasks` is 404. */
@@ -4773,6 +4848,13 @@ export interface components {
              * @description What its files take, in bytes. Given in `listUsers`.
              */
             storageUsedBytes?: number;
+            /**
+             * @description The account's own daily allowance of generated pictures (0 is no
+             *     limit); absent when it has the site's (`ImageGenerationSettings.daily`).
+             */
+            imageDaily?: number;
+            /** @description Pictures its image requests have taken today. Given in `listUsers`. */
+            imagesToday?: number;
         };
         UserPage: {
             items: components["schemas"]["User"][];
@@ -4787,10 +4869,11 @@ export interface components {
          *     conversation's context summary, made with the conversation's own model;
          *     `moderation` is a request that has a model classify a message
          *     (`ModerationSettings.mode` `model`); `subagent` is a model request of a
-         *     sub-agent's run, logged on the conversation it works for.
+         *     sub-agent's run, logged on the conversation it works for; `image` is a
+         *     request to an image model for pictures (the image tool).
          * @enum {string}
          */
-        UsageKind: "chat" | "title" | "compression" | "moderation" | "subagent";
+        UsageKind: "chat" | "title" | "compression" | "moderation" | "subagent" | "image";
         /**
          * @description A user stopping a reply is `ok`; only a failed request is `error`.
          * @enum {string}
@@ -4874,6 +4957,16 @@ export interface components {
              *     high. Whatever the provider did report is kept as it is.
              */
             estimated: boolean;
+            /**
+             * @description For an `image` request, the pictures it was billed for: the ones
+             *     kept, or, stopped before it answered, the ones it asked for.
+             */
+            images?: number;
+            /**
+             * Format: double
+             * @description USD per picture, when the request was billed by the picture.
+             */
+            imagePrice?: number | null;
             /**
              * Format: int64
              * @description Request start to the first content, reasoning or tool-call delta.
@@ -5009,6 +5102,11 @@ export interface components {
              * @description How much this account may keep in files, in bytes; -1 gives it the default again.
              */
             storageQuotaBytes?: number;
+            /**
+             * @description How many pictures this account's image requests may make a day (0 is
+             *     no limit); -1 gives it the site's default again.
+             */
+            imageDaily?: number;
             name?: components["schemas"]["Username"];
             /** Format: email */
             email?: string;
@@ -5167,6 +5265,14 @@ export interface components {
              *     everyone.
              */
             capacityAdminExempt?: boolean;
+            /**
+             * Format: double
+             * @description For an image model: USD per picture (at most six decimals). Set, a
+             *     picture is billed at it even where the provider reports tokens;
+             *     null bills by tokens at the catalogue's prices. Not a catalogue
+             *     figure.
+             */
+            imagePrice?: number | null;
             kind?: components["schemas"]["ModelKind"] | null;
             reasoning?: boolean | null;
             toolCall?: boolean | null;
@@ -5433,10 +5539,11 @@ export interface components {
          *     saved it (`task`), or as it was about to be sent or a model wrote it
          *     (`task_run`, logged but not counted as a strike); the person's text
          *     of a writing block as a model was about to read it (`document`); a
-         *     person's skill as they saved it (`skill`).
+         *     person's skill as they saved it (`skill`); the prompt a model wrote
+         *     for a picture (`image_prompt`, logged but not counted as a strike).
          * @enum {string}
          */
-        ModerationSource: "send" | "edit" | "answer" | "instructions" | "memory" | "snapshot" | "task" | "task_run" | "document" | "skill";
+        ModerationSource: "send" | "edit" | "answer" | "instructions" | "memory" | "snapshot" | "task" | "task_run" | "document" | "skill" | "image_prompt";
         /**
          * @description What a blocked message set off, when it reached the strike threshold.
          * @enum {string}
@@ -5539,6 +5646,58 @@ export interface components {
             /** @description Absent on the last page. */
             nextCursor?: string;
             limit: number;
+        };
+        ImageGenerationSettings: {
+            /**
+             * @description Whether models may make pictures, in everyone's conversations
+             *     (scheduled tasks' included; sub-agents' and deep research's not).
+             */
+            enabled: boolean;
+            /** @description The image model the pictures are made with; empty when none is chosen. */
+            model: string;
+            /** @description Pictures one call may ask for */
+            maxPerCall: number;
+            /** @description Pictures one answer may make */
+            maxPerRun: number;
+            /**
+             * @description Pictures a person may make a day (0 is no limit), unless their own
+             *     allowance says otherwise (`UpdateUserRequest.imageDaily`).
+             *     Administrators have no daily limit.
+             */
+            daily: number;
+            /**
+             * @description Whether the chosen model has a price (per picture, or per token in
+             *     the catalogue). Without one its pictures cost nothing in the logs
+             *     and a spending cap never trips.
+             */
+            modelPriced: boolean;
+        };
+        /** @description Only the fields present are changed. */
+        UpdateImageGenerationSettingsRequest: {
+            enabled?: boolean;
+            model?: string;
+            maxPerCall?: number;
+            maxPerRun?: number;
+            daily?: number;
+        };
+        ImageGenerationTestRequest: {
+            prompt: string;
+        };
+        ImageGenerationTestResult: {
+            ok: boolean;
+            /** Format: int64 */
+            durationMs: number;
+            /** @description The picture as a data URL, when it was made. */
+            image?: string;
+            width?: number;
+            height?: number;
+            /**
+             * Format: double
+             * @description What it cost in USD, when the model has a price.
+             */
+            cost?: number | null;
+            /** @description Why not */
+            error?: string;
         };
         ImageSearchSettings: {
             /**
@@ -8063,6 +8222,77 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    getImageGenerationSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageGenerationSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateImageGenerationSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateImageGenerationSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageGenerationSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    testImageGeneration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImageGenerationTestRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageGenerationTestResult"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     getImageSearchSettings: {
         parameters: {
             query?: never;
@@ -10176,6 +10406,27 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["FileDownload"];
                 };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    viewFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fileId: components["parameters"]["FileId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description to where the file is shown from */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Error"];
         };

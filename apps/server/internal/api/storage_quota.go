@@ -153,3 +153,20 @@ func setUserQuota(ctx context.Context, q *sqlc.Queries, userID uuid.UUID, bytes 
 	}
 	return nil
 }
+
+// setUserImageDaily gives an account its own daily allowance of generated
+// pictures (0 is no limit), or the site's again for -1.
+func setUserImageDaily(ctx context.Context, q *sqlc.Queries, userID uuid.UUID, daily int) error {
+	if daily < -1 || daily > 100000 {
+		return httpx.NewFieldError("imageDaily", "invalid_image_daily", "a daily allowance is 0 (no limit) to 100000 pictures")
+	}
+	var own *int32
+	if daily >= 0 {
+		n := int32(daily)
+		own = &n
+	}
+	if err := q.SetUserImageDaily(ctx, sqlc.SetUserImageDailyParams{ID: userID, ImageDaily: own}); err != nil {
+		return fmt.Errorf("set image allowance: %w", err)
+	}
+	return nil
+}
