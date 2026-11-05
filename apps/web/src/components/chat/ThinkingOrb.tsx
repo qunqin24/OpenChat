@@ -92,14 +92,17 @@ export function CompactingLine() {
  * as the reasoning toggle, so the line carries on into it unchanged when the
  * model starts to think.
  */
-/** The model at work, or a failed request being tried again. */
-export function ThinkingLine({ retrying = false }: { retrying?: boolean }) {
+/**
+ * The model at work, a failed request being tried again, or an answer that
+ * stopped coming part-way through and is still being written (`writing`).
+ */
+export function ThinkingLine({ retrying = false, writing = false }: { retrying?: boolean; writing?: boolean }) {
   const { t } = useTranslation()
   return (
     <div className="n-thinking" role="status">
       <ThinkingOrb look={retrying ? RETRYING : WORKING} />
       <span className="n-reasoning-live" data-motion="essential">
-        {t(retrying ? 'chat.retrying' : 'chat.reasoning.live')}
+        {t(retrying ? 'chat.retrying' : writing ? 'chat.still-writing' : 'chat.reasoning.live')}
       </span>
     </div>
   )

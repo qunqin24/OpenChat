@@ -39,6 +39,8 @@ import RefusalCard from './RefusalCard'
 import ToolActivity from './ToolActivity'
 import type { ActivityItem, ActivityNote, ToolActivityStep, ToolStatus } from '@openchat/chat-core/tool-activity'
 import { processSpan, processThinking, type ReplyEntryKind } from '@openchat/chat-core/reply-process'
+import { mayStallWriting } from '@openchat/chat-core/arrival'
+import { useStillWriting } from '@/hooks/use-still-writing'
 
 function CopyButton({ content }: { content: string }) {
   const { t } = useTranslation()
@@ -603,6 +605,11 @@ export function AssistantTurn({
         thoughtStreaming: isFoldBlock(tail) && tail.fold.kind === 'reasoning' && tail.key.startsWith(`${partialKey}:`),
       })
     : false
+  // The answer stopped coming part-way through: a provider now and then goes
+  // quiet for seconds, and with nothing moving that reads as the page hung.
+  const partialSize = (turn.partial ?? []).reduce((size, part) => size + ('text' in part ? part.text.length : 1), 0)
+  const mayStall = running && mayStallWriting(turn.partial?.at(-1), toolRunning || compacting || retrying || thinking !== false)
+  const stillWriting = useStillWriting(partialSize, mayStall)
   const blocks: ReactNode[] = []
   const after: ReactNode[] = []
   const items: ActivityItem[] = []
@@ -644,7 +651,8 @@ export function AssistantTurn({
       {compacting ? (
         <CompactingLine />
       ) : (
-        (waiting || retrying) && span === null && <ThinkingLine retrying={retrying} />
+        ((waiting || retrying) && span === null && <ThinkingLine retrying={retrying} />) ||
+        (stillWriting && <ThinkingLine writing />)
       )}
 
       {!running && (text || onRegenerate) && (

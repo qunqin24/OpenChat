@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { ARRIVAL_FADE_MS, MAX_BATCH_CHARS, MAX_SWEEP_MS, coverOpacity, nextArrivals, noArrivals, type ArrivalState } from './arrival'
+import { ARRIVAL_FADE_MS, MAX_BATCH_CHARS, MAX_CATCH_UP_MS, coverOpacity, mayStallWriting, nextArrivals, noArrivals, type ArrivalState } from './arrival'
 
 /** The text a stream of renders adds, `chars` at a time every `every` ms from 0. */
 function stream(renders: number, chars: number, every: number): ArrivalState {
@@ -40,7 +40,7 @@ describe('nextArrivals', () => {
     })
   })
 
-  it('sweeps a batch in over about the gap batches come apart, however big', () => {
+  it('sweeps a batch of a steady stream in over about the gap batches come apart, however big', () => {
     for (const size of [40, 1200]) {
       const state = stream(20, size, 50)
       const arrived = 20 * 50
@@ -55,23 +55,43 @@ describe('nextArrivals', () => {
     expect(state.batches.find((b) => b.start === 39 * 150)?.born).toBe(40 * 50)
   })
 
-  it('sweeps a batch after a long pause in no more than MAX_SWEEP_MS', () => {
+  it('lets a burst after a pause flow in at the speed text came before it', () => {
+    // 3 characters a ms, then 1500 at once after five seconds: about 500ms.
     let state = stream(20, 150, 50)
-    state = nextArrivals(state, (state.shown ?? 0) + 1500, 20 * 50 + 5000)
-    expect(lastBorn(state) - (20 * 50 + 5000)).toBeLessThan(MAX_SWEEP_MS)
+    const arrived = 20 * 50 + 5000
+    state = nextArrivals(state, (state.shown ?? 0) + 1500, arrived)
+    expect(lastBorn(state) - arrived).toBeGreaterThan(450)
+    expect(lastBorn(state) - arrived).toBeLessThan(500)
+    expect(state.rate).toBeCloseTo(3)
   })
 
-  it('never queues batches that come close together', () => {
+  it('has a burst in by MAX_CATCH_UP_MS, however slowly text came before it', () => {
+    let state = stream(20, 2, 50)
+    const arrived = 20 * 50 + 9000
+    state = nextArrivals(state, (state.shown ?? 0) + 1500, arrived)
+    expect(lastBorn(state) - arrived).toBeGreaterThan(MAX_CATCH_UP_MS - 50)
+    expect(lastBorn(state) - arrived).toBeLessThan(MAX_CATCH_UP_MS)
+  })
+
+  it('lets a burst split over renders that come close together follow on as one, in on time', () => {
     let state = stream(10, 150, 50)
-    for (let i = 1; i <= 10; i++) state = nextArrivals(state, (state.shown ?? 0) + 300, 1000 + i)
-    // Queued, ten sweeps of the gap estimate would run to about 2000.
-    expect(lastBorn(state)).toBeLessThanOrEqual(1010 + MAX_SWEEP_MS)
+    for (let i = 1; i <= 10; i++) state = nextArrivals(state, (state.shown ?? 0) + 300, 5000 + i)
+    // 3000 characters at 3 a ms, none of the renders counted as speed.
+    expect(state.rate).toBeCloseTo(3)
+    expect(lastBorn(state)).toBeGreaterThan(5000 + 900)
+    expect(lastBorn(state)).toBeLessThanOrEqual(5010 + MAX_CATCH_UP_MS)
     for (let i = 1; i < state.batches.length; i++) expect(state.batches[i]!.born).toBeGreaterThanOrEqual(state.batches[i - 1]!.born)
+  })
+
+  it('never has a batch in later than MAX_CATCH_UP_MS after it arrives', () => {
+    let state = stream(10, 1, 50)
+    for (let i = 1; i <= 4; i++) state = nextArrivals(state, (state.shown ?? 0) + 3000, 5000 + i * 1000)
+    expect(lastBorn(state)).toBeLessThanOrEqual(9000 + MAX_CATCH_UP_MS)
   })
 
   it('lets a piece go once it has faded in', () => {
     const state = nextArrivals(nextArrivals(noArrivals, 10, 0), 20, 0)
-    expect(nextArrivals(state, 20, MAX_SWEEP_MS + ARRIVAL_FADE_MS).batches).toEqual([])
+    expect(nextArrivals(state, 20, MAX_CATCH_UP_MS + ARRIVAL_FADE_MS).batches).toEqual([])
   })
 
   it('just shows text that grew where nothing may fade, and what was still to come', () => {
@@ -92,5 +112,15 @@ describe('coverOpacity', () => {
     expect(coverOpacity(0, ARRIVAL_FADE_MS / 2)).toBeCloseTo(0.5)
     expect(coverOpacity(0, ARRIVAL_FADE_MS)).toBe(0)
     expect(coverOpacity(0, ARRIVAL_FADE_MS * 2)).toBe(0)
+  })
+})
+
+describe('mayStallWriting', () => {
+  it('is an answer whose last part is text, with nothing else saying the model works', () => {
+    expect(mayStallWriting({ type: 'text', text: '如果你只想' }, false)).toBe(true)
+    expect(mayStallWriting({ type: 'text', text: '如果你只想' }, true)).toBe(false)
+    expect(mayStallWriting({ type: 'text', text: '  ' }, false)).toBe(false)
+    expect(mayStallWriting({ type: 'tool_call' }, false)).toBe(false)
+    expect(mayStallWriting(undefined, false)).toBe(false)
   })
 })

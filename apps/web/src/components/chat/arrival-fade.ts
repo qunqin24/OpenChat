@@ -5,7 +5,7 @@ import { coverOpacity, nextArrivals, noArrivals, type ArrivalBatch as Batch, typ
 
 /**
  * Text fades in as it arrives: whatever one render adds is one batch, laid out
- * at once and swept in top to bottom over about the gap before the next, a
+ * at once and swept in top to bottom at the speed text has been coming, a
  * piece at a time, each piece fading in over ARRIVAL_FADE_MS
  * (chat-core/arrival.ts).
  *
@@ -14,7 +14,7 @@ import { coverOpacity, nextArrivals, noArrivals, type ArrivalBatch as Batch, typ
  * still to come or fading, in the colour of the surface behind that text,
  * opaque until the piece is due and then going clear: on a plain surface that
  * is the text's own fade. So the elements are the lines of the last
- * MAX_SWEEP_MS + ARRIVAL_FADE_MS at most, however long the answer - unlike
+ * MAX_CATCH_UP_MS + ARRIVAL_FADE_MS at most, however long the answer - unlike
  * v1.1.0's Streamdown `animated`, which gave every character a fading element
  * and never took one back, and took long reasoning to 90% of a core - and
  * React keeps the text it rendered.

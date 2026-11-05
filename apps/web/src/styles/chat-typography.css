@@ -560,21 +560,11 @@
 }
 
 /* MarkdownTable replaces Streamdown's nested frames with one scroller, drawn
-   in chat-table.css; the copy button floats over its top right on hover. */
+   in chat-table.css. */
 .chat-ui .n-md-table {
   position: relative;
   max-width: 100%;
   margin: 12px 0;
-}
-.chat-ui .n-md-table-copy {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  opacity: 0;
-  transition: opacity 150ms ease;
-}
-.chat-ui .n-md-table:is(:hover, :focus-within) .n-md-table-copy {
-  opacity: 1;
 }
 
 .chat-ui .n-markdown hr {

@@ -90,6 +90,7 @@
       "open": "Open the conversation “{{title}}”"
     },
     "retrying": "The request failed; retrying…",
+    "still-writing": "Still writing…",
     "reasoning": {
       "live": "Thinking…",
       "done": "Reasoning",

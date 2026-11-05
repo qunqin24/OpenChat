@@ -30,7 +30,14 @@ export function useFileDrop(onFiles: (files: File[]) => void) {
       preventFileNavigation(event)
       reset()
     }
+    // A picture on the page is not dragged: Chrome and Safari carry a dragged
+    // image as a file, so it opened the drop overlay over the chat it came
+    // from, and dropped, attached it.
+    const preventImageDrag = (event: DragEvent) => {
+      if (event.target instanceof HTMLImageElement) event.preventDefault()
+    }
 
+    window.addEventListener('dragstart', preventImageDrag, true)
     window.addEventListener('dragover', preventFileNavigation, true)
     window.addEventListener('drop', handleWindowDrop, true)
     window.addEventListener('dragend', reset)
@@ -38,6 +45,7 @@ export function useFileDrop(onFiles: (files: File[]) => void) {
     window.addEventListener('keydown', handleKey)
     document.addEventListener('visibilitychange', handleVisibility)
     return () => {
+      window.removeEventListener('dragstart', preventImageDrag, true)
       window.removeEventListener('dragover', preventFileNavigation, true)
       window.removeEventListener('drop', handleWindowDrop, true)
       window.removeEventListener('dragend', reset)

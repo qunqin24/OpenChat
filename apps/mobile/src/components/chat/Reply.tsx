@@ -14,10 +14,12 @@ import type { Refusal } from '@openchat/chat-core/moderation-refusal'
 import { launchesOf, SUBAGENT_TOOL } from '@openchat/chat-core/subagents'
 import { TASK_TOOL, taskChangeOf } from '@openchat/chat-core/task-tool'
 import { describeSchedule } from '@openchat/chat-core/tasks'
+import { mayStallWriting } from '@openchat/chat-core/arrival'
 import { processSpan, processThinking, type ReplyEntryKind } from '@openchat/chat-core/reply-process'
 import type { ActivityItem, ActivityNote, ToolActivityStep, ToolStatus } from '@openchat/chat-core/tool-activity'
 import { turnText, type AssistantTurn } from '@openchat/chat-core/transcript'
 
+import { useStillWriting } from '@/hooks/still-writing'
 import { useColors } from '@/theme'
 import { ActivityLine } from './Activity'
 import { DocumentCard } from './DocumentCard'
@@ -268,6 +270,11 @@ export function Reply({ turn, model, modelId, onRegenerate, askingCallId, onOpen
         thoughtStreaming: isFoldBlock(tail) && tail.fold.kind === 'reasoning' && tail.key.startsWith(`${partialKey}:`),
       })
     : false
+  // The answer stopped coming part-way through (the web's AssistantTurn has
+  // the same): with nothing moving, a provider's pause reads as the app hung.
+  const partialSize = (turn.partial ?? []).reduce((size, part) => size + ('text' in part ? part.text.length : 1), 0)
+  const mayStall = running && mayStallWriting(turn.partial?.at(-1), toolRunning || compacting || retrying || thinking !== false)
+  const stillWriting = useStillWriting(partialSize, mayStall)
   const blocks: ReactNode[] = []
   const after: ReactNode[] = []
   const items: ActivityItem[] = []
@@ -294,6 +301,8 @@ export function Reply({ turn, model, modelId, onRegenerate, askingCallId, onOpen
         <QuietLine text={t('chat.compaction.running')} pulse />
       ) : (waiting || retrying) && span === null ? (
         <QuietLine text={retrying ? t('chat.retrying') : ''} pulse />
+      ) : stillWriting ? (
+        <QuietLine text={t('chat.still-writing')} pulse />
       ) : null}
       {!running && (text || onRegenerate) ? (
         <View style={styles.actions}>

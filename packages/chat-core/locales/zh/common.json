@@ -90,6 +90,7 @@
       "open": "打开对话「{{title}}」"
     },
     "retrying": "请求失败，正在重试…",
+    "still-writing": "仍在生成…",
     "reasoning": {
       "live": "正在思考…",
       "done": "思考过程",
