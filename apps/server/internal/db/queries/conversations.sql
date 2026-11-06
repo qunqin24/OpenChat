@@ -17,16 +17,21 @@ WHERE id = sqlc.arg('id')
   AND deleted_at IS NULL;
 
 -- name: ListConversations :many
-SELECT *
-FROM conversations
-WHERE user_id = sqlc.arg('user_id')
-  AND deleted_at IS NULL
-  AND kind = 'chat'
+SELECT c.*
+FROM conversations c
+WHERE c.user_id = sqlc.arg('user_id')
+  AND c.deleted_at IS NULL
+  AND c.kind = 'chat'
   -- A temporary conversation is not history: it is reached by its link, once.
-  AND NOT temporary
+  AND NOT c.temporary
+  -- Nor is a scheduled task's, made with the task, until its first run puts
+  -- something in it (that run's createRun moves it to the top); the tasks
+  -- page still opens it.
+  AND (EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.id)
+    OR NOT EXISTS (SELECT 1 FROM scheduled_tasks t WHERE t.conversation_id = c.id))
   AND (sqlc.narg('cursor_updated_at')::timestamptz IS NULL
-    OR (updated_at, id) < (sqlc.narg('cursor_updated_at')::timestamptz, sqlc.narg('cursor_id')::uuid))
-ORDER BY updated_at DESC, id DESC
+    OR (c.updated_at, c.id) < (sqlc.narg('cursor_updated_at')::timestamptz, sqlc.narg('cursor_id')::uuid))
+ORDER BY c.updated_at DESC, c.id DESC
 LIMIT sqlc.arg('row_limit');
 
 -- name: SearchConversations :many
@@ -56,6 +61,9 @@ WHERE c.user_id = sqlc.arg('user_id')
   AND c.deleted_at IS NULL
   AND c.kind = 'chat'
   AND NOT c.temporary
+  -- A task's conversation before its first run, as in ListConversations.
+  AND (EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.id)
+    OR NOT EXISTS (SELECT 1 FROM scheduled_tasks t WHERE t.conversation_id = c.id))
   AND (c.title ILIKE sqlc.arg('pattern')::text OR hit.id IS NOT NULL)
   AND (sqlc.narg('cursor_updated_at')::timestamptz IS NULL
     OR (c.updated_at, c.id) < (sqlc.narg('cursor_updated_at')::timestamptz, sqlc.narg('cursor_id')::uuid))

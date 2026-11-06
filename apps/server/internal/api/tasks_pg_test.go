@@ -104,6 +104,25 @@ func TestScheduledTasks(t *testing.T) {
 	}
 
 	var first Task
+	// Whether the task's conversation is in the sidebar's list and its search.
+	listed := func(conversationID uuid.UUID) (inList, found bool) {
+		t.Helper()
+		rows, err := q.ListConversations(ctx, sqlc.ListConversationsParams{UserID: &alice.ID, RowLimit: 100})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, row := range rows {
+			inList = inList || row.ID == conversationID
+		}
+		hits, err := q.SearchConversations(ctx, sqlc.SearchConversationsParams{Pattern: "%早报%", UserID: &alice.ID, RowLimit: 100})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, hit := range hits {
+			found = found || hit.ID == conversationID
+		}
+		return inList, found
+	}
 	t.Run("a task gets its own conversation and its next time", func(t *testing.T) {
 		rec := create(alice, daily)
 		if rec.Code != http.StatusCreated {
@@ -120,6 +139,10 @@ func TestScheduledTasks(t *testing.T) {
 		conv, err := q.GetConversation(ctx, sqlc.GetConversationParams{ID: first.ConversationId, UserID: &alice.ID})
 		if err != nil || conv.Title != "早报" || conv.Model == nil || *conv.Model != modelID {
 			t.Errorf("conversation = %+v, %v", conv, err)
+		}
+		// Empty until the task first runs, so not in the sidebar yet.
+		if inList, found := listed(first.ConversationId); inList || found {
+			t.Errorf("before its first run: listed %v, found by search %v", inList, found)
 		}
 	})
 
@@ -210,6 +233,9 @@ func TestScheduledTasks(t *testing.T) {
 		rows, _ := q.ListTranscript(ctx, first.ConversationId)
 		if len(rows) < 2 || rows[0].Role != sqlc.MessageRoleUser || rows[0].Content != "Summarise the news." {
 			t.Errorf("transcript = %+v", rows)
+		}
+		if inList, found := listed(first.ConversationId); !inList || !found {
+			t.Errorf("after its first run: listed %v, found by search %v", inList, found)
 		}
 	})
 

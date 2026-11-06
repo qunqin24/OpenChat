@@ -158,16 +158,21 @@ func (q *Queries) GetConversation(ctx context.Context, arg GetConversationParams
 }
 
 const listConversations = `-- name: ListConversations :many
-SELECT id, user_id, title, model, created_at, updated_at, deleted_at, reasoning_effort, web_search, memory_snapshot, temporary, kind, parent_id, launched_by, launch_call_id, background, stopped_by_user, pinned_at, skills, plugin_catalog, plugins, browser
-FROM conversations
-WHERE user_id = $1
-  AND deleted_at IS NULL
-  AND kind = 'chat'
+SELECT c.id, c.user_id, c.title, c.model, c.created_at, c.updated_at, c.deleted_at, c.reasoning_effort, c.web_search, c.memory_snapshot, c.temporary, c.kind, c.parent_id, c.launched_by, c.launch_call_id, c.background, c.stopped_by_user, c.pinned_at, c.skills, c.plugin_catalog, c.plugins, c.browser
+FROM conversations c
+WHERE c.user_id = $1
+  AND c.deleted_at IS NULL
+  AND c.kind = 'chat'
   -- A temporary conversation is not history: it is reached by its link, once.
-  AND NOT temporary
+  AND NOT c.temporary
+  -- Nor is a scheduled task's, made with the task, until its first run puts
+  -- something in it (that run's createRun moves it to the top); the tasks
+  -- page still opens it.
+  AND (EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.id)
+    OR NOT EXISTS (SELECT 1 FROM scheduled_tasks t WHERE t.conversation_id = c.id))
   AND ($2::timestamptz IS NULL
-    OR (updated_at, id) < ($2::timestamptz, $3::uuid))
-ORDER BY updated_at DESC, id DESC
+    OR (c.updated_at, c.id) < ($2::timestamptz, $3::uuid))
+ORDER BY c.updated_at DESC, c.id DESC
 LIMIT $4
 `
 
@@ -410,6 +415,9 @@ WHERE c.user_id = $2
   AND c.deleted_at IS NULL
   AND c.kind = 'chat'
   AND NOT c.temporary
+  -- A task's conversation before its first run, as in ListConversations.
+  AND (EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.id)
+    OR NOT EXISTS (SELECT 1 FROM scheduled_tasks t WHERE t.conversation_id = c.id))
   AND (c.title ILIKE $1::text OR hit.id IS NOT NULL)
   AND ($3::timestamptz IS NULL
     OR (c.updated_at, c.id) < ($3::timestamptz, $4::uuid))

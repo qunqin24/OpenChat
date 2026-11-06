@@ -6,7 +6,7 @@
 
 - 表 `scheduled_tasks`（迁移 `20261027013302_scheduled_tasks.sql`）：标题、指令 `prompt`、周期（`kind` = once/daily/weekly/monthly，`run_at` / `minute_of_day` / `weekdays`（0 = 周日）/ `month_day`，`time_zone`）、`enabled`、`next_run_at`、上次运行 `last_run_at` / `last_run_id` / `last_error`。
 - 状态由列推出：`enabled = false` 是暂停；`enabled` 且 `next_run_at IS NULL` 是一次性任务已跑完（completed）；其余是 active。
-- 每个任务一个专属对话（创建任务时新建，标题同任务名，模型取请求里的或默认模型）。对话被软删除，任务就从列表消失；硬删除时级联删任务。删任务不删对话。
+- 每个任务一个专属对话（创建任务时新建，标题同任务名，模型取请求里的或默认模型）。第一次运行之前对话是空的，不进侧栏的对话列表和搜索（`ListConversations`、`SearchConversations`），任务页的「打开对话」照常能进；第一次运行经 `createRun` 更新时间，对话随之排到最前。对话被软删除，任务就从列表消失；硬删除时级联删任务。删任务不删对话。
 - 每人最多 `maxEnabledTasks`（10）个「还会运行」的任务；新建和恢复时在一个事务里先 `LockTaskOwner`（advisory lock）再数，不会两个请求同时钻空子。
 - 后台 → 系统「定时任务」开关（`scheduled_tasks`，默认开）。关闭时 `/tasks` 全部 404、`ChatFeatures.scheduledTasks = false`（侧栏入口消失）、不给模型工具、调度器不跑；任务保留。
 - 路由只在登录分组，工具对临时对话不提供。
