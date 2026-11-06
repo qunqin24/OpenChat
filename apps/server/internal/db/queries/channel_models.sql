@@ -204,3 +204,15 @@ WHERE c.id = sqlc.arg('channel_id')
   AND cm.model_id = sqlc.arg('model_id')
   AND c.enabled
   AND cm.enabled;
+
+-- name: ModelServedByChannelTypes :one
+-- Whether a channel of one of these types may answer a run of this model:
+-- enabled, offering it. A run may move to any of its channels (failover), so
+-- what one of them cannot carry is not sent to the model at all.
+SELECT EXISTS (SELECT 1
+               FROM channel_models cm
+                        JOIN channels c ON c.id = cm.channel_id
+               WHERE cm.model_id = sqlc.arg('model_id')
+                 AND cm.enabled
+                 AND c.enabled
+                 AND c.type::text = ANY (sqlc.arg('types')::text[]))::boolean;

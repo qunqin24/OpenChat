@@ -122,9 +122,10 @@ func (q *Queries) CreateBrowserConfirmation(ctx context.Context, arg CreateBrows
 
 const createPlugin = `-- name: CreatePlugin :one
 INSERT INTO plugins (slug, name, description, about, category, icon_text, icon_color, featured, enabled, audience,
-                     mcp_url, auth_type, header_name, header_secret, sort, icon_slug, icon_path, direct_tools)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-RETURNING id, slug, name, description, about, category, icon_text, icon_color, featured, enabled, audience, mcp_url, auth_type, sort, created_at, updated_at, header_name, header_secret, tools_fetched_at, builtin, icon_slug, icon_path, oauth_client_id, oauth_client_secret, oauth_scopes, oauth_registered, direct_tools
+                     mcp_url, auth_type, header_name, header_secret, sort, icon_slug, icon_path, direct_tools, token_url,
+                     icon_ink)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+RETURNING id, slug, name, description, about, category, icon_text, icon_color, featured, enabled, audience, mcp_url, auth_type, sort, created_at, updated_at, header_name, header_secret, tools_fetched_at, builtin, icon_slug, icon_path, oauth_client_id, oauth_client_secret, oauth_scopes, oauth_registered, direct_tools, token_url, icon_ink
 `
 
 type CreatePluginParams struct {
@@ -146,6 +147,8 @@ type CreatePluginParams struct {
 	IconSlug     string  `json:"icon_slug"`
 	IconPath     string  `json:"icon_path"`
 	DirectTools  bool    `json:"direct_tools"`
+	TokenUrl     string  `json:"token_url"`
+	IconInk      string  `json:"icon_ink"`
 }
 
 func (q *Queries) CreatePlugin(ctx context.Context, arg CreatePluginParams) (Plugin, error) {
@@ -168,6 +171,8 @@ func (q *Queries) CreatePlugin(ctx context.Context, arg CreatePluginParams) (Plu
 		arg.IconSlug,
 		arg.IconPath,
 		arg.DirectTools,
+		arg.TokenUrl,
+		arg.IconInk,
 	)
 	var i Plugin
 	err := row.Scan(
@@ -198,6 +203,8 @@ func (q *Queries) CreatePlugin(ctx context.Context, arg CreatePluginParams) (Plu
 		&i.OauthScopes,
 		&i.OauthRegistered,
 		&i.DirectTools,
+		&i.TokenUrl,
+		&i.IconInk,
 	)
 	return i, err
 }
@@ -384,8 +391,9 @@ const fillBuiltinPluginIcon = `-- name: FillBuiltinPluginIcon :exec
 UPDATE plugins
 SET icon_slug  = $1,
     icon_path  = $2,
-    icon_color = CASE WHEN icon_color = '' OR icon_slug = '' THEN $3 ELSE icon_color END
-WHERE builtin = $4
+    icon_color = CASE WHEN icon_color = '' OR icon_slug = '' THEN $3 ELSE icon_color END,
+    icon_ink   = CASE WHEN icon_color = '' OR icon_slug = '' THEN $4 ELSE icon_ink END
+WHERE builtin = $5
   AND icon_path = ''
 `
 
@@ -393,6 +401,7 @@ type FillBuiltinPluginIconParams struct {
 	IconSlug  string  `json:"icon_slug"`
 	IconPath  string  `json:"icon_path"`
 	IconColor string  `json:"icon_color"`
+	IconInk   string  `json:"icon_ink"`
 	Builtin   *string `json:"builtin"`
 }
 
@@ -403,6 +412,7 @@ func (q *Queries) FillBuiltinPluginIcon(ctx context.Context, arg FillBuiltinPlug
 		arg.IconSlug,
 		arg.IconPath,
 		arg.IconColor,
+		arg.IconInk,
 		arg.Builtin,
 	)
 	return err
@@ -451,7 +461,7 @@ func (q *Queries) GetConversationPluginCatalog(ctx context.Context, id uuid.UUID
 }
 
 const getPlugin = `-- name: GetPlugin :one
-SELECT id, slug, name, description, about, category, icon_text, icon_color, featured, enabled, audience, mcp_url, auth_type, sort, created_at, updated_at, header_name, header_secret, tools_fetched_at, builtin, icon_slug, icon_path, oauth_client_id, oauth_client_secret, oauth_scopes, oauth_registered, direct_tools
+SELECT id, slug, name, description, about, category, icon_text, icon_color, featured, enabled, audience, mcp_url, auth_type, sort, created_at, updated_at, header_name, header_secret, tools_fetched_at, builtin, icon_slug, icon_path, oauth_client_id, oauth_client_secret, oauth_scopes, oauth_registered, direct_tools, token_url, icon_ink
 FROM plugins
 WHERE id = $1
 `
@@ -487,12 +497,14 @@ func (q *Queries) GetPlugin(ctx context.Context, id uuid.UUID) (Plugin, error) {
 		&i.OauthScopes,
 		&i.OauthRegistered,
 		&i.DirectTools,
+		&i.TokenUrl,
+		&i.IconInk,
 	)
 	return i, err
 }
 
 const getPluginInstall = `-- name: GetPluginInstall :one
-SELECT user_id, plugin_id, created_at, access_token, refresh_token, token_expires_at, needs_reconnect
+SELECT user_id, plugin_id, created_at, access_token, refresh_token, token_expires_at, needs_reconnect, token_for
 FROM plugin_installs
 WHERE user_id = $1
   AND plugin_id = $2
@@ -514,6 +526,7 @@ func (q *Queries) GetPluginInstall(ctx context.Context, arg GetPluginInstallPara
 		&i.RefreshToken,
 		&i.TokenExpiresAt,
 		&i.NeedsReconnect,
+		&i.TokenFor,
 	)
 	return i, err
 }
@@ -551,6 +564,7 @@ SELECT p.id          AS plugin_id,
        p.direct_tools,
        p.icon_text,
        p.icon_color,
+       p.icon_ink,
        p.icon_path,
        t.name,
        t.title,
@@ -568,7 +582,8 @@ WHERE i.user_id = $1
   AND p.enabled
   AND (p.audience = 'all' OR u.role = 'admin')
   AND coalesce(p.mcp_url, '') <> ''
-  AND (p.auth_type <> 'oauth' OR (i.access_token IS NOT NULL AND NOT i.needs_reconnect))
+  AND (p.auth_type NOT IN ('oauth', 'token') OR (i.access_token IS NOT NULL AND NOT i.needs_reconnect
+                                                   AND i.token_for = p.auth_type || ' ' || coalesce(p.mcp_url, '')))
   AND t.permission <> 'blocked'
 `
 
@@ -586,6 +601,7 @@ type GetUsablePluginToolRow struct {
 	DirectTools       bool      `json:"direct_tools"`
 	IconText          string    `json:"icon_text"`
 	IconColor         string    `json:"icon_color"`
+	IconInk           string    `json:"icon_ink"`
 	IconPath          string    `json:"icon_path"`
 	Name              string    `json:"name"`
 	Title             string    `json:"title"`
@@ -608,6 +624,7 @@ func (q *Queries) GetUsablePluginTool(ctx context.Context, arg GetUsablePluginTo
 		&i.DirectTools,
 		&i.IconText,
 		&i.IconColor,
+		&i.IconInk,
 		&i.IconPath,
 		&i.Name,
 		&i.Title,
@@ -620,9 +637,12 @@ func (q *Queries) GetUsablePluginTool(ctx context.Context, arg GetUsablePluginTo
 }
 
 const getUserPlugin = `-- name: GetUserPlugin :one
-SELECT p.id, p.slug, p.name, p.description, p.about, p.category, p.icon_text, p.icon_color, p.featured, p.enabled, p.audience, p.mcp_url, p.auth_type, p.sort, p.created_at, p.updated_at, p.header_name, p.header_secret, p.tools_fetched_at, p.builtin, p.icon_slug, p.icon_path, p.oauth_client_id, p.oauth_client_secret, p.oauth_scopes, p.oauth_registered, p.direct_tools,
+SELECT p.id, p.slug, p.name, p.description, p.about, p.category, p.icon_text, p.icon_color, p.featured, p.enabled, p.audience, p.mcp_url, p.auth_type, p.sort, p.created_at, p.updated_at, p.header_name, p.header_secret, p.tools_fetched_at, p.builtin, p.icon_slug, p.icon_path, p.oauth_client_id, p.oauth_client_secret, p.oauth_scopes, p.oauth_registered, p.direct_tools, p.token_url, p.icon_ink,
        (i.user_id IS NOT NULL)::boolean AS installed,
-       coalesce(i.needs_reconnect, false)::boolean AS needs_reconnect,
+       -- A token got for the plugin as it was before an administrator
+       -- changed its address or sign-in needs connecting again too.
+       (coalesce(i.needs_reconnect, false) OR
+        (i.access_token IS NOT NULL AND i.token_for IS DISTINCT FROM p.auth_type || ' ' || coalesce(p.mcp_url, '')))::boolean AS needs_reconnect,
        (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked' AND t.read_only)::bigint     AS read_tools,
        (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked' AND NOT t.read_only)::bigint AS write_tools,
        (SELECT count(*) FROM skills s WHERE s.plugin_id = p.id AND s.enabled)::bigint AS skills
@@ -667,6 +687,8 @@ type GetUserPluginRow struct {
 	OauthScopes       string             `json:"oauth_scopes"`
 	OauthRegistered   bool               `json:"oauth_registered"`
 	DirectTools       bool               `json:"direct_tools"`
+	TokenUrl          string             `json:"token_url"`
+	IconInk           string             `json:"icon_ink"`
 	Installed         bool               `json:"installed"`
 	NeedsReconnect    bool               `json:"needs_reconnect"`
 	ReadTools         int64              `json:"read_tools"`
@@ -706,6 +728,8 @@ func (q *Queries) GetUserPlugin(ctx context.Context, arg GetUserPluginParams) (G
 		&i.OauthScopes,
 		&i.OauthRegistered,
 		&i.DirectTools,
+		&i.TokenUrl,
+		&i.IconInk,
 		&i.Installed,
 		&i.NeedsReconnect,
 		&i.ReadTools,
@@ -750,8 +774,8 @@ func (q *Queries) GrantPluginTool(ctx context.Context, arg GrantPluginToolParams
 
 const insertBuiltinPlugin = `-- name: InsertBuiltinPlugin :execrows
 INSERT INTO plugins (builtin, slug, name, description, about, category, icon_text, icon_color, mcp_url, auth_type,
-                     enabled, sort, icon_slug, icon_path, oauth_scopes, header_name)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11, $12, $13, $14, $15)
+                     enabled, sort, icon_slug, icon_path, oauth_scopes, header_name, token_url, icon_ink)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11, $12, $13, $14, $15, $16, $17)
 ON CONFLICT DO NOTHING
 `
 
@@ -771,6 +795,8 @@ type InsertBuiltinPluginParams struct {
 	IconPath    string  `json:"icon_path"`
 	OauthScopes string  `json:"oauth_scopes"`
 	HeaderName  string  `json:"header_name"`
+	TokenUrl    string  `json:"token_url"`
+	IconInk     string  `json:"icon_ink"`
 }
 
 // A built-in plugin, unless it was made before (or its short name is taken).
@@ -792,6 +818,8 @@ func (q *Queries) InsertBuiltinPlugin(ctx context.Context, arg InsertBuiltinPlug
 		arg.IconPath,
 		arg.OauthScopes,
 		arg.HeaderName,
+		arg.TokenUrl,
+		arg.IconInk,
 	)
 	if err != nil {
 		return 0, err
@@ -816,7 +844,7 @@ func (q *Queries) InstallPlugin(ctx context.Context, arg InstallPluginParams) er
 }
 
 const listAdminPlugins = `-- name: ListAdminPlugins :many
-SELECT p.id, p.slug, p.name, p.description, p.about, p.category, p.icon_text, p.icon_color, p.featured, p.enabled, p.audience, p.mcp_url, p.auth_type, p.sort, p.created_at, p.updated_at, p.header_name, p.header_secret, p.tools_fetched_at, p.builtin, p.icon_slug, p.icon_path, p.oauth_client_id, p.oauth_client_secret, p.oauth_scopes, p.oauth_registered, p.direct_tools,
+SELECT p.id, p.slug, p.name, p.description, p.about, p.category, p.icon_text, p.icon_color, p.featured, p.enabled, p.audience, p.mcp_url, p.auth_type, p.sort, p.created_at, p.updated_at, p.header_name, p.header_secret, p.tools_fetched_at, p.builtin, p.icon_slug, p.icon_path, p.oauth_client_id, p.oauth_client_secret, p.oauth_scopes, p.oauth_registered, p.direct_tools, p.token_url, p.icon_ink,
        (SELECT count(*) FROM plugin_installs i WHERE i.plugin_id = p.id)::bigint                       AS installs,
        (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id)::bigint                          AS tools,
        (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked')::bigint AS tools_on
@@ -852,6 +880,8 @@ type ListAdminPluginsRow struct {
 	OauthScopes       string             `json:"oauth_scopes"`
 	OauthRegistered   bool               `json:"oauth_registered"`
 	DirectTools       bool               `json:"direct_tools"`
+	TokenUrl          string             `json:"token_url"`
+	IconInk           string             `json:"icon_ink"`
 	Installs          int64              `json:"installs"`
 	Tools             int64              `json:"tools"`
 	ToolsOn           int64              `json:"tools_on"`
@@ -896,6 +926,8 @@ func (q *Queries) ListAdminPlugins(ctx context.Context) ([]ListAdminPluginsRow, 
 			&i.OauthScopes,
 			&i.OauthRegistered,
 			&i.DirectTools,
+			&i.TokenUrl,
+			&i.IconInk,
 			&i.Installs,
 			&i.Tools,
 			&i.ToolsOn,
@@ -1093,6 +1125,7 @@ SELECT p.id          AS plugin_id,
        p.direct_tools,
        p.icon_text,
        p.icon_color,
+       p.icon_ink,
        p.icon_path,
        t.name,
        t.title,
@@ -1108,7 +1141,8 @@ WHERE i.user_id = $1
   AND p.enabled
   AND (p.audience = 'all' OR u.role = 'admin')
   AND coalesce(p.mcp_url, '') <> ''
-  AND (p.auth_type <> 'oauth' OR (i.access_token IS NOT NULL AND NOT i.needs_reconnect))
+  AND (p.auth_type NOT IN ('oauth', 'token') OR (i.access_token IS NOT NULL AND NOT i.needs_reconnect
+                                                   AND i.token_for = p.auth_type || ' ' || coalesce(p.mcp_url, '')))
   AND t.permission <> 'blocked'
 ORDER BY p.slug, t.name
 `
@@ -1121,6 +1155,7 @@ type ListUsablePluginToolsRow struct {
 	DirectTools       bool      `json:"direct_tools"`
 	IconText          string    `json:"icon_text"`
 	IconColor         string    `json:"icon_color"`
+	IconInk           string    `json:"icon_ink"`
 	IconPath          string    `json:"icon_path"`
 	Name              string    `json:"name"`
 	Title             string    `json:"title"`
@@ -1150,6 +1185,7 @@ func (q *Queries) ListUsablePluginTools(ctx context.Context, userID uuid.UUID) (
 			&i.DirectTools,
 			&i.IconText,
 			&i.IconColor,
+			&i.IconInk,
 			&i.IconPath,
 			&i.Name,
 			&i.Title,
@@ -1170,9 +1206,12 @@ func (q *Queries) ListUsablePluginTools(ctx context.Context, userID uuid.UUID) (
 
 const listUserPlugins = `-- name: ListUserPlugins :many
 
-SELECT p.id, p.slug, p.name, p.description, p.about, p.category, p.icon_text, p.icon_color, p.featured, p.enabled, p.audience, p.mcp_url, p.auth_type, p.sort, p.created_at, p.updated_at, p.header_name, p.header_secret, p.tools_fetched_at, p.builtin, p.icon_slug, p.icon_path, p.oauth_client_id, p.oauth_client_secret, p.oauth_scopes, p.oauth_registered, p.direct_tools,
+SELECT p.id, p.slug, p.name, p.description, p.about, p.category, p.icon_text, p.icon_color, p.featured, p.enabled, p.audience, p.mcp_url, p.auth_type, p.sort, p.created_at, p.updated_at, p.header_name, p.header_secret, p.tools_fetched_at, p.builtin, p.icon_slug, p.icon_path, p.oauth_client_id, p.oauth_client_secret, p.oauth_scopes, p.oauth_registered, p.direct_tools, p.token_url, p.icon_ink,
        (i.user_id IS NOT NULL)::boolean AS installed,
-       coalesce(i.needs_reconnect, false)::boolean AS needs_reconnect,
+       -- A token got for the plugin as it was before an administrator
+       -- changed its address or sign-in needs connecting again too.
+       (coalesce(i.needs_reconnect, false) OR
+        (i.access_token IS NOT NULL AND i.token_for IS DISTINCT FROM p.auth_type || ' ' || coalesce(p.mcp_url, '')))::boolean AS needs_reconnect,
        (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked' AND t.read_only)::bigint     AS read_tools,
        (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked' AND NOT t.read_only)::bigint AS write_tools,
        (SELECT count(*) FROM skills s WHERE s.plugin_id = p.id AND s.enabled)::bigint AS skills
@@ -1216,6 +1255,8 @@ type ListUserPluginsRow struct {
 	OauthScopes       string             `json:"oauth_scopes"`
 	OauthRegistered   bool               `json:"oauth_registered"`
 	DirectTools       bool               `json:"direct_tools"`
+	TokenUrl          string             `json:"token_url"`
+	IconInk           string             `json:"icon_ink"`
 	Installed         bool               `json:"installed"`
 	NeedsReconnect    bool               `json:"needs_reconnect"`
 	ReadTools         int64              `json:"read_tools"`
@@ -1264,6 +1305,8 @@ func (q *Queries) ListUserPlugins(ctx context.Context, arg ListUserPluginsParams
 			&i.OauthScopes,
 			&i.OauthRegistered,
 			&i.DirectTools,
+			&i.TokenUrl,
+			&i.IconInk,
 			&i.Installed,
 			&i.NeedsReconnect,
 			&i.ReadTools,
@@ -1298,6 +1341,27 @@ type MarkPluginNeedsReconnectParams struct {
 // still the stored one: a refresh elsewhere may have rotated it meanwhile.
 func (q *Queries) MarkPluginNeedsReconnect(ctx context.Context, arg MarkPluginNeedsReconnectParams) error {
 	_, err := q.db.Exec(ctx, markPluginNeedsReconnect, arg.UserID, arg.PluginID, arg.RefreshToken)
+	return err
+}
+
+const markPluginTokenRefused = `-- name: MarkPluginTokenRefused :exec
+UPDATE plugin_installs
+SET needs_reconnect = true
+WHERE user_id = $1
+  AND plugin_id = $2
+  AND access_token = $3::bytea
+`
+
+type MarkPluginTokenRefusedParams struct {
+	UserID      uuid.UUID `json:"user_id"`
+	PluginID    uuid.UUID `json:"plugin_id"`
+	AccessToken []byte    `json:"access_token"`
+}
+
+// A person's own token the service refused, while it is still the stored one:
+// they must give another.
+func (q *Queries) MarkPluginTokenRefused(ctx context.Context, arg MarkPluginTokenRefusedParams) error {
+	_, err := q.db.Exec(ctx, markPluginTokenRefused, arg.UserID, arg.PluginID, arg.AccessToken)
 	return err
 }
 
@@ -1392,13 +1456,16 @@ func (q *Queries) RecordPluginCall(ctx context.Context, arg RecordPluginCallPara
 }
 
 const savePluginTokens = `-- name: SavePluginTokens :exec
-INSERT INTO plugin_installs (user_id, plugin_id, access_token, refresh_token, token_expires_at, needs_reconnect)
-VALUES ($1, $2, $3, $4, $5, false)
+INSERT INTO plugin_installs (user_id, plugin_id, access_token, refresh_token, token_expires_at, needs_reconnect, token_for)
+VALUES ($1, $2, $3, $4, $5, false, $6)
 ON CONFLICT (user_id, plugin_id) DO UPDATE
     SET access_token     = excluded.access_token,
-        refresh_token    = coalesce(excluded.refresh_token, plugin_installs.refresh_token),
+        refresh_token    = CASE
+                               WHEN plugin_installs.token_for IS DISTINCT FROM excluded.token_for THEN excluded.refresh_token
+                               ELSE coalesce(excluded.refresh_token, plugin_installs.refresh_token) END,
         token_expires_at = excluded.token_expires_at,
-        needs_reconnect  = false
+        needs_reconnect  = false,
+        token_for        = excluded.token_for
 `
 
 type SavePluginTokensParams struct {
@@ -1407,9 +1474,12 @@ type SavePluginTokensParams struct {
 	AccessToken    []byte             `json:"access_token"`
 	RefreshToken   []byte             `json:"refresh_token"`
 	TokenExpiresAt pgtype.Timestamptz `json:"token_expires_at"`
+	TokenFor       *string            `json:"token_for"`
 }
 
-// A person's tokens after connecting or refreshing: the install is made, or brought up to date.
+// A person's tokens after connecting or refreshing: the install is made, or
+// brought up to date. token_for is the plugin's '<auth_type> <mcp_url>' the
+// tokens were got from; a refresh token from another one is not kept.
 func (q *Queries) SavePluginTokens(ctx context.Context, arg SavePluginTokensParams) error {
 	_, err := q.db.Exec(ctx, savePluginTokens,
 		arg.UserID,
@@ -1417,6 +1487,7 @@ func (q *Queries) SavePluginTokens(ctx context.Context, arg SavePluginTokensPara
 		arg.AccessToken,
 		arg.RefreshToken,
 		arg.TokenExpiresAt,
+		arg.TokenFor,
 	)
 	return err
 }
@@ -1579,14 +1650,16 @@ SET slug          = $2,
     mcp_url       = $12,
     auth_type     = $13,
     header_name   = $14,
-    header_secret = CASE WHEN $19::boolean THEN $20::bytea ELSE header_secret END,
+    header_secret = CASE WHEN $21::boolean THEN $22::bytea ELSE header_secret END,
     sort          = $15,
     icon_slug     = $16,
     icon_path     = $17,
     direct_tools  = $18,
+    token_url     = $19,
+    icon_ink      = $20,
     updated_at    = now()
 WHERE id = $1
-RETURNING id, slug, name, description, about, category, icon_text, icon_color, featured, enabled, audience, mcp_url, auth_type, sort, created_at, updated_at, header_name, header_secret, tools_fetched_at, builtin, icon_slug, icon_path, oauth_client_id, oauth_client_secret, oauth_scopes, oauth_registered, direct_tools
+RETURNING id, slug, name, description, about, category, icon_text, icon_color, featured, enabled, audience, mcp_url, auth_type, sort, created_at, updated_at, header_name, header_secret, tools_fetched_at, builtin, icon_slug, icon_path, oauth_client_id, oauth_client_secret, oauth_scopes, oauth_registered, direct_tools, token_url, icon_ink
 `
 
 type UpdatePluginParams struct {
@@ -1608,6 +1681,8 @@ type UpdatePluginParams struct {
 	IconSlug     string    `json:"icon_slug"`
 	IconPath     string    `json:"icon_path"`
 	DirectTools  bool      `json:"direct_tools"`
+	TokenUrl     string    `json:"token_url"`
+	IconInk      string    `json:"icon_ink"`
 	SetSecret    bool      `json:"set_secret"`
 	HeaderSecret []byte    `json:"header_secret"`
 }
@@ -1633,6 +1708,8 @@ func (q *Queries) UpdatePlugin(ctx context.Context, arg UpdatePluginParams) (Plu
 		arg.IconSlug,
 		arg.IconPath,
 		arg.DirectTools,
+		arg.TokenUrl,
+		arg.IconInk,
 		arg.SetSecret,
 		arg.HeaderSecret,
 	)
@@ -1665,6 +1742,8 @@ func (q *Queries) UpdatePlugin(ctx context.Context, arg UpdatePluginParams) (Plu
 		&i.OauthScopes,
 		&i.OauthRegistered,
 		&i.DirectTools,
+		&i.TokenUrl,
+		&i.IconInk,
 	)
 	return i, err
 }

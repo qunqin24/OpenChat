@@ -68,6 +68,8 @@ func TestOnlyOneQueryTogglesAModel(t *testing.T) {
 		"ServingChannels":   true,
 		"FirstServedModel":  true,
 		"GetServingChannel": true,
+		// What a model's channels can carry (servedModalities).
+		"ModelServedByChannelTypes": true,
 	}
 
 	for name, body := range namedChannelModelQueries(t) {

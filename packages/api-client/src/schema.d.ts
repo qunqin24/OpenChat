@@ -2434,6 +2434,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/{pluginId}/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Connect with the caller's own token
+         * @description For a plugin that takes each person's token (`authType: token`):
+         *     connects to the service with it, and when the service takes it seals
+         *     it on the caller's install, installing the plugin. 422
+         *     `plugin_token_refused` when the service refuses it; 409
+         *     `secret_key_missing` without the sealing key; 502
+         *     `plugin_unreachable` when the service cannot be reached.
+         */
+        put: operations["setPluginToken"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/oauth/callback": {
         parameters: {
             query?: never;
@@ -4014,6 +4041,8 @@ export interface components {
             name: string;
             iconText: string;
             iconColor: string;
+            /** @description The glyph's colour (CSS); empty draws it dark or white, whichever reads on iconColor. */
+            iconInk: string;
             iconPath: string;
         };
         AnswerPluginConfirmationRequest: {
@@ -4753,6 +4782,8 @@ export interface components {
             category?: string;
             iconText?: string;
             iconColor?: string;
+            /** @description The glyph's colour (CSS); empty draws it dark or white, whichever reads on iconColor. */
+            iconInk?: string;
             /** @description The Simple Icons slug of its icon; empty for none. */
             iconSlug?: string;
             /** @description That icon's SVG path data (24 x 24), commands and numbers only (400 `invalid_plugin` otherwise). */
@@ -4763,8 +4794,15 @@ export interface components {
             audience?: "all" | "admins";
             /** @description The MCP service's Streamable HTTP address; empty for a plugin of skills only. May be on the internal network. */
             mcpUrl?: string;
-            /** @enum {string} */
-            authType?: "none" | "header" | "oauth";
+            /**
+             * @description `none`; `header`, the administrator's value for everyone; `oauth`,
+             *     each person signs in; `token`, each person pastes a token of their
+             *     own, sent as `Authorization: Bearer`.
+             * @enum {string}
+             */
+            authType?: "none" | "header" | "oauth" | "token";
+            /** @description For `token`, the https page where a person gets theirs; empty for none. */
+            tokenUrl?: string;
             headerName?: string;
             /** @description Write-only, stored sealed. Absent keeps the stored one; empty removes it. */
             headerValue?: string;
@@ -4789,6 +4827,8 @@ export interface components {
             category: string;
             iconText: string;
             iconColor: string;
+            /** @description The glyph's colour (CSS); empty draws it dark or white, whichever reads on iconColor. */
+            iconInk: string;
             iconSlug: string;
             iconPath: string;
             featured: boolean;
@@ -4797,7 +4837,8 @@ export interface components {
             audience: "all" | "admins";
             mcpUrl: string;
             /** @enum {string} */
-            authType: "none" | "header" | "oauth";
+            authType: "none" | "header" | "oauth" | "token";
+            tokenUrl: string;
             headerName: string;
             /** @description Whether a header value is stored. Never sent back. */
             headerSet: boolean;
@@ -4860,14 +4901,19 @@ export interface components {
             iconText: string;
             /** @description The mark's colour (CSS), empty for the default. */
             iconColor: string;
+            /** @description The glyph's colour (CSS); empty draws it dark or white, whichever reads on iconColor. */
+            iconInk: string;
             /** @description Its brand icon's SVG path (Simple Icons, 24 x 24), drawn instead of iconText; empty for none. */
             iconPath: string;
             /**
              * @description How it reaches its service: no account, one the administrator
-             *     set up for everyone (`header`), or each person's own (`oauth`).
+             *     set up for everyone (`header`), or each person's own: signed in
+             *     (`oauth`) or a token they paste (`token`).
              * @enum {string}
              */
-            authType: "none" | "header" | "oauth";
+            authType: "none" | "header" | "oauth" | "token";
+            /** @description For `token`, the page where a person gets theirs; empty for none. */
+            tokenUrl: string;
             /** @description Tools it offers that only read. */
             readTools: number;
             /** @description Tools it offers that may change things; the model asks before calling those the administrator did not allow outright. */
@@ -4875,7 +4921,7 @@ export interface components {
             /** @description Skills it brings. */
             skills: number;
             installed: boolean;
-            /** @description The caller's account for it stopped working (its token could not be refreshed); connecting again mends it. */
+            /** @description The caller's account for it stopped working (its token could not be refreshed, or the service refused the token they gave); connecting again mends it. */
             needsReconnect: boolean;
         };
         TaskList: {
@@ -6151,7 +6197,7 @@ export interface components {
          *     carries the full table.
          * @enum {string}
          */
-        ChannelType: "openai" | "anthropic" | "gemini" | "openrouter" | "deepseek" | "siliconflow" | "moonshot" | "zhipu" | "dashscope" | "volcengine" | "minimax" | "xai" | "groq" | "ollama" | "mistral" | "stepfun" | "hunyuan" | "qianfan" | "mimo" | "together" | "fireworks" | "nvidia" | "modelscope" | "cerebras" | "opencode-go" | "lmstudio" | "openai-compatible";
+        ChannelType: "openai" | "anthropic" | "gemini" | "openrouter" | "deepseek" | "siliconflow" | "moonshot" | "zhipu" | "dashscope" | "volcengine" | "minimax" | "xai" | "groq" | "ollama" | "mistral" | "stepfun" | "hunyuan" | "qianfan" | "mimo" | "together" | "fireworks" | "nvidia" | "modelscope" | "cerebras" | "opencode-go" | "command-code" | "lmstudio" | "openai-compatible";
         /**
          * @description The protocol a channel type speaks. Three adapters serve every type.
          * @enum {string}
@@ -9874,6 +9920,35 @@ export interface operations {
                     "application/json": {
                         authorizeUrl: string;
                     };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setPluginToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pluginId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                };
+            };
+        };
+        responses: {
+            /** @description connected and installed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plugin"];
                 };
             };
             default: components["responses"]["Error"];

@@ -31,6 +31,10 @@ func TestRequestsGoOutOnTheRightProtocol(t *testing.T) {
 		{"opencode-go", "chat", "Grok-4.7", wireResponses},
 		{"opencode-go", "responses", "glm-5.3", wireOpenAI},
 		{"opencode-go", "chat", "kimi-k3", wireOpenAI},
+		// So does Command Code.
+		{"command-code", "chat", "claude-haiku-5-5", wireAnthropic},
+		{"command-code", "chat", "gpt-6.1-sol", wireResponses},
+		{"command-code", "responses", "deepseek/deepseek-v4-flash", wireOpenAI},
 	} {
 		got, ok := wireForModel(tc.kind, tc.format, tc.model)
 		if !ok || got != tc.want {
@@ -45,8 +49,8 @@ func TestRequestsGoOutOnTheRightProtocol(t *testing.T) {
 func TestOnlyTheOpenAIProtocolOffersAFormatChoice(t *testing.T) {
 	for _, def := range channelTypes {
 		want := def.WireApi == wireOpenAI && def.Route == nil
-		if def.ID == "opencode-go" && want {
-			t.Error("OpenCode Go routes per model, so it offers no format choice")
+		if (def.ID == "opencode-go" || def.ID == "command-code") && want {
+			t.Errorf("%s routes per model, so it offers no format choice", def.ID)
 		}
 		if (def.ID == "anthropic" || def.ID == "gemini") && want {
 			t.Errorf("%s offers a format choice", def.ID)
@@ -76,11 +80,41 @@ func TestOpenCodeGoRoutesEveryModelItsTableNames(t *testing.T) {
 	}
 }
 
+// TestCommandCodeRoutesEveryModelToAnEndpointItLists is a sample of
+// api.commandcode.ai/provider/v1/models as of 2026-11-06, each model with the
+// endpoints its supported_endpoints field names. The route has to land on one
+// of them; "/chat/completions"-only models are why the open ones are not sent
+// to Responses.
+func TestCommandCodeRoutesEveryModelToAnEndpointItLists(t *testing.T) {
+	path := map[string]string{wireAnthropic: "/messages", wireResponses: "/responses", wireOpenAI: "/chat/completions"}
+	both := []string{"/chat/completions", "/responses"}
+	chat := []string{"/chat/completions"}
+	models := map[string][]string{
+		"claude-sonnet-5-5": {"/messages"}, "claude-opus-4-8": {"/messages"}, "claude-haiku-4-5-20251001": {"/messages"},
+		"gpt-6.1-sol": both, "gpt-5.3-codex": both, "gpt-5.4-mini": both,
+		"deepseek/deepseek-v4-flash": both, "deepseek/deepseek-v4-flash-fast": chat,
+		"moonshotai/Kimi-K3": both, "zai-org/GLM-5.3": chat, "z-ai/glm-5.3-flash": chat,
+		"minimax/minimax-m3.1-flash": chat, "MiniMaxAI/MiniMax-M3": both, "Qwen/Qwen3.8-Flash": chat,
+		"google/gemini-3.7-flash": chat, "meituan/LongCat-2.0": chat, "tencent/hy4-preview": chat,
+		"xai/grok-4.7": both, "meta/muse-spark-1.3": both, "stealth/crouton-alpha": chat,
+	}
+	for model, served := range models {
+		got := path[commandCodeRoute(model)]
+		found := false
+		for _, endpoint := range served {
+			found = found || endpoint == got
+		}
+		if !found {
+			t.Errorf("%s routes to %s, which serves only %v", model, got, served)
+		}
+	}
+}
+
 func TestChannelTypesCarryTheirVendorsQuirks(t *testing.T) {
 	// Reasoning goes back to the vendors that read it, in the field they read
 	// it from, and to nobody else: most endpoints reject their own
 	// reasoning_content coming back in.
-	for _, id := range []ChannelType{"deepseek", "moonshot", "zhipu", "dashscope", "opencode-go", "mimo", "volcengine", "minimax"} {
+	for _, id := range []ChannelType{"deepseek", "moonshot", "zhipu", "dashscope", "opencode-go", "command-code", "mimo", "volcengine", "minimax"} {
 		if !compatFor(id).EchoReasoning {
 			t.Errorf("%s does not echo reasoning", id)
 		}

@@ -152,10 +152,11 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 插件 = 技能 + 远程 MCP 服务，管理员在后台添加，用户在侧栏「插件」页安装（`api/plugins.go`、`api/plugins_admin.go`、`internal/plugins`）。
 
 - 只接远程 Streamable HTTP（官方 Go SDK），不跑 stdio；管理员填的地址可以是内网（不过 `GuardedClient`）。没有现成服务的内置插件在进程里跑：地址是 `openchat:<名字>`（`plugins.LocalScheme`，`plugins/local.go` 登记），内存里连接；arXiv 就是这样（`plugins/arxiv`，进程内每 3 秒至多一个对 arXiv 的请求，按 arXiv 的使用条款，别去掉），OpenAlex、天气（Open-Meteo）、维基百科、Hacker News 也是（共用 `plugins/localkit`：经 `GuardedClient`、自报 User-Agent、每个服务一个进程级的请求间隔；插件的请求头值作为 `Options.Secret` 传给服务，OpenAlex 用它当 API key）。新的进程内服务只放只读、公开、免账号或管理员一个 key 就够的接口，别做要绕过人机验证的。
-- 凭证（统一请求头的值，以后的个人令牌）经 `internal/secrets` 加密入库。密钥首次启动时自动生成在数据目录 `data/secret.key`（0600，已 gitignore），设了 `OPENCHAT_SECRET_KEY` 就用它；绝不存进数据库、绝不随响应返回或写日志。拿不到密钥时相关功能 409 `secret_key_missing`，其他照常。
+- 凭证（统一请求头的值、每人的 OAuth 令牌和自己填的令牌）经 `internal/secrets` 加密入库。密钥首次启动时自动生成在数据目录 `data/secret.key`（0600，已 gitignore），设了 `OPENCHAT_SECRET_KEY` 就用它；绝不存进数据库、绝不随响应返回或写日志。拿不到密钥时相关功能 409 `secret_key_missing`，其他照常。
 - 用户能看到的插件 = 启用的、面向所有人或面向管理员且本人是管理员的；看不到的一律 404。
 - 工具权限三档 `allow`/`confirm`/`blocked`；重新拉取工具只更新描述，不动管理员设过的权限。工具自动拉取：添加插件、改了地址或认证时（`autoFetchPluginTools`），要账号的插件在管理员第一次连上账号时，进程内的内置插件每次启动时（`ListBuiltinPluginTools`）；拉不到不影响保存，后台仍可手动拉。
 - 内置插件带的技能放在 `plugins/builtin_skills/<键>/<技能>/`，启动时写进插件（`EnsureBuiltinSkills`）：没写过的补上，管理员没改过的随新版本更新，改过或删掉的不动。插件的技能只在它有没被禁用的工具（或本来就是纯技能插件）时进对话快照。
+- 每人自己填令牌（认证方式 `token`，`api/plugins_token.go`，如麦当劳）：保存前先用它连一次服务，被拒（`plugins.ErrRefused`）不存；存在安装记录的 `access_token`、没有刷新，调用时被拒就标 `needs_reconnect`。判断「以本人身份」一律用 `actsAsPerson`（oauth 或 token），别只比 `oauth`。个人的令牌绑定在取得它时的认证方式和地址上（`plugin_installs.token_for`），新的取令牌或列工具的路径要经 `pluginInstall`/`tokenFor`；连服务只跟同源重定向，`plugins` 包出口的错误先脱敏（`scrub.go`），别绕开。
 - 每人授权（OAuth 2.1 + PKCE）：`connect` 发起、`/plugins/oauth/callback` 收尾，state 一次性且只认发起人，令牌加密存在本人的 `plugin_installs` 行；取令牌一律走 `pluginToken`（会刷新、刷新失败标 `needs_reconnect`），别直接读列。服务返回的授权地址只跟 https 或同主机。
 - 对话里调插件走 CodeMode（`api/plugin_code.go`、`internal/codemode`）：模型只有一个 `plugin_code`，写 JS 调 `tools.<短名>.<工具>()`，脚本在 goja 里跑，只注入 `tools`、`search`、`console`，不给 `fetch`、定时器、模块；时长、调用次数、并发、输出、内存都有上限（共享服务器，别去掉）。开了「直接列出」（`plugins.direct_tools`）的插件工具按 `<短名>__<工具>` 逐个给模型，走同一个 `pluginHost.Call`。
 - 每次调用都现查 `GetUsablePluginTool`（权限、安装、连接）、按 `inputSchema` 校验，再取令牌；需确认的停在调用处等 `AnswerPluginConfirmation`（run 不结束，`codemode.Pause` 停表，最多 10 分钟），子 Agent 和没有调用 id 的直接拒绝。审计只写 `plugin_calls`，绝不记参数和结果。

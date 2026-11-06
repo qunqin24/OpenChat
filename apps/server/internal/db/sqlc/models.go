@@ -41,6 +41,7 @@ const (
 	ChannelTypeCerebras         ChannelType = "cerebras"
 	ChannelTypeLmstudio         ChannelType = "lmstudio"
 	ChannelTypeOpencodeGo       ChannelType = "opencode-go"
+	ChannelTypeCommandCode      ChannelType = "command-code"
 	ChannelTypeOpenaiCompatible ChannelType = "openai-compatible"
 )
 
@@ -645,6 +646,8 @@ type Plugin struct {
 	OauthScopes       string             `json:"oauth_scopes"`
 	OauthRegistered   bool               `json:"oauth_registered"`
 	DirectTools       bool               `json:"direct_tools"`
+	TokenUrl          string             `json:"token_url"`
+	IconInk           string             `json:"icon_ink"`
 }
 
 type PluginCall struct {
@@ -685,6 +688,7 @@ type PluginInstall struct {
 	RefreshToken   []byte             `json:"refresh_token"`
 	TokenExpiresAt pgtype.Timestamptz `json:"token_expires_at"`
 	NeedsReconnect bool               `json:"needs_reconnect"`
+	TokenFor       *string            `json:"token_for"`
 }
 
 type PluginOauthState struct {

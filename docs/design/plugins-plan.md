@@ -1,6 +1,6 @@
 # 插件（技能 + MCP）：方案
 
-> 状态：第一期进行中。已做：插件目录与安装（`api/plugins.go`）；侧栏「插件」页；后台「插件」页（增删改、启停、图标、MCP 地址与认证方式、OAuth 应用、拉取工具、按工具三档权限，`api/plugins_admin.go`）；内置插件（GitHub、Notion 等）；`internal/secrets`（密钥自动生成在 `data/secret.key`）；`internal/plugins`（官方 Go SDK 列工具；OAuth 发现、动态注册、PKCE、换取与刷新令牌）；每人连接账号（`api/plugins_oauth.go`）。插件技能（`skills.plugin_id`，后台插件的「技能」页签）；子 Agent 与研究员点名插件（`conversations.plugins`，只给始终允许的工具）；定时任务的 run 无人值守（`runs.unattended`，需确认的调用立即拒绝）；工具返回的图片（`tool_images`，§6）；后台「插件调用」日志页；对话里调用插件工具（CodeMode，§6：`plugin_code`、`internal/codemode`、目录快照与轮次说明、直接列出开关、确认卡片、`plugin_calls` 审计）。还没做：Client ID Metadata Document；手机 App 的确认卡片（App 上触发的需确认调用照常等，10 分钟后按没回应处理）。
+> 状态：第一期进行中。已做：插件目录与安装（`api/plugins.go`）；侧栏「插件」页；后台「插件」页（增删改、启停、图标、MCP 地址与认证方式、OAuth 应用、拉取工具、按工具三档权限，`api/plugins_admin.go`）；内置插件（GitHub、Notion、麦当劳、瑞幸等）；每人填自己的令牌（`token`）；`internal/secrets`（密钥自动生成在 `data/secret.key`）；`internal/plugins`（官方 Go SDK 列工具；OAuth 发现、动态注册、PKCE、换取与刷新令牌）；每人连接账号（`api/plugins_oauth.go`）。插件技能（`skills.plugin_id`，后台插件的「技能」页签）；子 Agent 与研究员点名插件（`conversations.plugins`，只给始终允许的工具）；定时任务的 run 无人值守（`runs.unattended`，需确认的调用立即拒绝）；工具返回的图片（`tool_images`，§6）；后台「插件调用」日志页；对话里调用插件工具（CodeMode，§6：`plugin_code`、`internal/codemode`、目录快照与轮次说明、直接列出开关、确认卡片、`plugin_calls` 审计）。还没做：Client ID Metadata Document；手机 App 的确认卡片（App 上触发的需确认调用照常等，10 分钟后按没回应处理）。
 
 ## 0. 结论先行
 
@@ -41,6 +41,7 @@
 - **内置插件**定义在 `internal/plugins/builtin.go`，每次启动时补上库里还没有的（`plugins.builtin` 记定义的键），**默认关闭**：要等管理员把自己那部分配好（比如 GitHub 的 OAuth App）再打开。管理员可以改、可以关，不能删（409 `plugin_builtin`）；短名已被管理员自己的插件占用时跳过。
 - 第一个内置插件是 **GitHub**：官方托管的 MCP 服务 `https://api.githubcopilot.com/mcp/`，每人用自己的账号授权。实测它的受保护资源元数据指向 `https://github.com/login/oauth`，GitHub 不支持动态注册客户端，所以管理员要先在 GitHub 上注册一个 OAuth App（回调地址指向本站），等账号授权做好后在后台填 client ID 和 secret。
 - 第二个内置插件是 **arXiv**（2026-11-03）：arXiv 没有官方 MCP 服务，就在 OpenChat 进程里跑一个（`internal/plugins/arxiv`）。地址写成 `openchat:arxiv`（`plugins.LocalScheme`），连接时不走网络，用 SDK 的内存传输（`plugins/local.go`）；后台列表的「服务」显示「OpenChat 内置」。三个只读工具：`search_papers`（关键词或 arXiv 检索语法，可按分类、日期过滤，按相关度/提交/更新排序）、`get_paper`（完整元数据）、`read_paper`（全文，先读 arXiv 生成的 HTML，没有就读 PDF，按段续读，最近读过的缓存 30 分钟）。不需要账号，管理员打开、拉取工具即可。按 arXiv 的使用条款，进程内所有对 arXiv 的请求排队，每 3 秒至多一个。arXiv 的检索很朴素：普通词逐个必须出现、常用词不入索引，所以去掉常用词、保留引号里的短语，工具说明让模型优先用引号短语或 `ti:`。
+- **图形颜色**（2026-11-06，`plugins.icon_ink`）：图标默认按底色自动选黑或白，品牌色不是这两种时（麦当劳红底黄拱门）由管理员填，空着照旧。Notion 的图形本身是白底黑框，底色得是白的，画在黑底上就反了。
 - **内置插件带技能**（2026-11-03）：GitHub 的 `github-work`、arXiv 的 `arxiv-research`，文件在 `internal/plugins/builtin_skills/<键>/<技能>/`，随二进制发布，启动时写进插件的技能（`EnsureBuiltinSkills`，`app_settings.builtin_plugin_skills` 记每个技能上次发布的哈希：没写过的补上；内容仍是上次发布那版的更新到新版；管理员改过的、删掉的都不动）。插件的技能只在插件有未禁用的工具时进快照：实测一个启用了却没拉取工具的 arXiv，模型读了技能找不到工具，转去网页搜索。
 - **工具自动拉取**（2026-11-03）：添加插件、改了地址或认证时自动拉一次；要账号的插件在管理员第一次连上自己的账号时拉；进程内的内置插件每次启动时拉。拉不到不影响保存。
 - **Notion**（2026-11-06）：官方托管的 MCP 服务 `https://mcp.notion.com/mcp`，每人用自己的账号授权、选工作区。实测它的受保护资源元数据指向 `https://mcp.notion.com` 自己，有 `registration_endpoint`，所以不用注册 OAuth App：第一个连接的人当场动态注册，之后共用这个客户端；只有一个 scope `default`，不填。工具名带连字符（`notion-search`、`notion-fetch`……），CodeMode 目录按 `tools.notion["notion-search"]` 写出。带技能 `notion-work`：先搜后读、数据库先读结构再查、改页面用定点替换并看 `warnings`、注意速率限制。
@@ -83,6 +84,24 @@
 - 令牌快过期时用 refresh token 换新的；刷新被拒就标记 `needs_reconnect`，插件页提示重新连接。同一人同一插件的刷新在进程内排队（`takePluginRefresh`），拿到号后重读安装记录，别人刚换过就直接用新的：会轮换 refresh token 的服务拒绝用过的旧令牌，并发的工具调用各自刷新会把好好的连接标成失效。标记只在被拒的 refresh token 仍是库里那份时生效（`MarkPluginNeedsReconnect` 带上它），网络失败不标。
 - 发现、注册、换令牌、刷新的请求都走 `plugins.httpClient`：管理员填的服务地址那个 host:port 照原样连（可以是内网），其余地址是别的服务器说的，每次拨号都只连公网地址（同 `GuardedClient`），每一跳重定向也要满足「https，或服务自己的主机」，不读环境代理。
 - 后台「拉取工具」对每人授权的插件用管理员自己的连接（先在插件页装上），没连接就 409 `plugin_not_connected`。
+
+**每人填自己的令牌**（2026-11-06，`api/plugins_token.go`，认证方式 `token`）：有的服务不走 OAuth，而是给每个人发一个自己账号的令牌（麦当劳中国：在 open.mcd.cn 用手机号登录申请 MCP Token）。管理员用「统一请求头」填自己的令牌，所有人就都以管理员的麦当劳账号点餐、领券，所以单独做一种。
+
+- 插件页的弹窗里粘贴令牌（旁边链到管理员填的申请页 `plugins.token_url`，只放行 https）→ `PUT /plugins/{id}/token`：先用它连一次服务、列工具；服务回 401/403 就 422 `plugin_token_refused`，不保存；连不上 502 `plugin_unreachable`。令牌只收可见 ASCII、不带空格，最多 4000 字。
+- 通过的令牌加密存在本人安装记录的 `access_token`，没有 refresh token、没有过期时间，所以 `pluginToken` 不会去刷新；调用时以 `Authorization: Bearer` 发送。和 OAuth 一样，没有令牌不能安装（409 `plugin_needs_account`），能用的工具只算有令牌、没失效的安装；管理员第一次填令牌时顺手存下工具列表。
+- 调用时服务回 401/403（`plugins.ErrRefused`，`refusalWatch` 看每个 HTTP 响应）就把安装标成 `needs_reconnect`（`MarkPluginTokenRefused`，只在被拒的仍是库里那份时），插件页提示换一个新令牌，模型被告知让用户去插件页更换。
+- 第一个用它的内置插件是**麦当劳**（`https://mcp.mcd.cn`，github.com/M-China/mcd-mcp-server）：只在中国大陆可用，30 多个工具（门店、菜单、算价、下单给支付链接、取消、领券、积分、商城、抽奖、营养、活动日历），每个令牌每分钟 600 次。带技能 `mcdonalds-ordering`：菜单和价格只信服务，下单前先 `calculate-price` 并让用户确认，只给支付链接、由用户自己付款，花积分、抽奖、一键领券都先说清楚。实测假令牌在 `initialize` 就回 401，认作被拒。
+
+- 第二个是**瑞幸咖啡**（`https://gwmcp.lkcoffee.com/order/user/mcp`，地址取自瑞幸 AI 开放平台 open.lkcoffee.com 自己给的配置）：在那里登录、复制 Token，Token 有有效期，过期后服务回 401，插件页提示换新的。8 个工具：找门店（要经纬度）、搜商品、商品详情、切换规格（返回新的 SKU）、预览订单、下单（自提，返回付款二维码）、查订单、取消订单。带技能 `luckin-ordering`：不猜用户位置，问清地点再换成坐标；规格和 SKU 只用工具当次返回的；先预览、确认后用预览里的券下单；超时不重试，先让用户在 App 里核实。实测假令牌同样在 `initialize` 回 401。
+
+**凭证只给它所属的服务**（2026-11-06，审查后补）：
+
+- 连接服务只跟同源的重定向（`plugins.sameOrigin`：协议、主机、端口都不变，不从 https 降到 http）。请求头在每一跳都会重新带上，跟去别的主机就等于把令牌交出去。
+- 安装记录的令牌绑定拿到它时插件的认证方式和地址（`plugin_installs.token_for` = `'<auth_type> <mcp_url>'`）。管理员改了地址或认证方式，旧令牌既不发给新服务、也不拿去新服务的授权服务器刷新（`pluginInstall` 认不出就当没连接），插件页显示需要重新连接；可用工具的查询同样比对。
+- 服务的报错可能回显令牌：`plugins` 包出口（列工具、调用、调用失败时给模型的说明）先把请求头的值和 Bearer 后的令牌换成 `[redacted]`（`scrub.go`），再进日志或交给模型。
+- 只有 401 算令牌失效（`ErrRefused`，标 `needs_reconnect`）；403 是这一次不被允许（`ErrForbidden`，如缺 scope），只结束这次调用，其余工具照常。保存令牌时 401、403 都算不接受。
+- 动态注册并发时（两个人同时第一次连 Notion），只有先存下的那个客户端留下，后来的注册完重读插件、用库里那个，否则它的授权码在回调里换不了令牌。
+- 浏览器的查询缓存（`lib/query-persist.ts`）只存读到的数据，不存写请求：断网时点「连接」的写请求会暂停、连同粘贴的令牌留在 variables 里，默认会被一起存进 localStorage。
 
 **加密存储**（2026-11-03 定，同日改为自动生成密钥）：
 

@@ -140,6 +140,27 @@ describe('persistQueryCache', () => {
     expect(stored()?.owner).toBe('user-1')
   })
 
+  it('never stores a write, not even one paused offline with a token in it', async () => {
+    const m = await load()
+    const c = client()
+    m.adoptQueryCache(c, 'user-1')
+    m.persistQueryCache(c)
+    // As TanStack Query keeps a mutation sent while offline: paused, its
+    // variables held for a retry.
+    c.getMutationCache().build(
+      c,
+      { mutationKey: ['plugin-token'], mutationFn: async () => undefined },
+      {
+        context: undefined, data: undefined, error: null, failureCount: 0, failureReason: null,
+        isPaused: true, status: 'pending', variables: { token: 'secret-token' }, submittedAt: 1,
+      },
+    )
+    c.setQueryData(queryKeys.models.list(), [])
+    vi.advanceTimersByTime(1000)
+    expect(store.get(KEY)).toBeDefined()
+    expect(store.get(KEY)).not.toContain('secret-token')
+  })
+
   it('survives storage that refuses to be written', async () => {
     const m = await load()
     vi.stubGlobal('localStorage', {

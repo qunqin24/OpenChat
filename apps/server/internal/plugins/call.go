@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -42,6 +43,7 @@ type Conn struct {
 	end     Endpoint
 	mu      sync.Mutex
 	session *mcp.ClientSession
+	refused atomic.Int32
 }
 
 // Open prepares a connection; nothing is sent until the first call.
@@ -53,7 +55,7 @@ func (c *Conn) Call(ctx context.Context, name string, args json.RawMessage) (Res
 	defer cancel()
 	session, err := c.open(ctx)
 	if err != nil {
-		return Result{}, err
+		return Result{}, scrub(err, c.end)
 	}
 	var arguments any = map[string]any{}
 	if len(args) > 0 {
@@ -61,7 +63,16 @@ func (c *Conn) Call(ctx context.Context, name string, args json.RawMessage) (Res
 	}
 	out, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: arguments})
 	if err != nil {
-		return Result{}, fmt.Errorf("calling %s: %w", name, err)
+		return Result{}, scrub(refusal(fmt.Errorf("calling %s: %w", name, err), &c.refused), c.end)
+	}
+	if out.IsError {
+		// Why it failed goes to the model: without the credential, should
+		// the service quote it.
+		for _, content := range out.Content {
+			if text, ok := content.(*mcp.TextContent); ok {
+				text.Text = scrubText(text.Text, c.end)
+			}
+		}
 	}
 	return toResult(out), nil
 }
@@ -82,7 +93,7 @@ func (c *Conn) open(ctx context.Context) (*mcp.ClientSession, error) {
 	if c.session != nil {
 		return c.session, nil
 	}
-	session, err := connect(ctx, c.end, CallTimeout)
+	session, err := connect(ctx, c.end, CallTimeout, &c.refused)
 	if err != nil {
 		return nil, err
 	}

@@ -36,6 +36,8 @@ type fakeOAuthService struct {
 	// spent one from then on, as servers that rotate them do.
 	rotate bool
 	spent  map[string]bool
+	// onRegister runs as a client registers, before it is answered.
+	onRegister func()
 }
 
 func newFakeOAuthService(t *testing.T) *fakeOAuthService {
@@ -65,6 +67,9 @@ func newFakeOAuthService(t *testing.T) *fakeOAuthService {
 		})
 	})
 	mux.HandleFunc("/oauth/register", func(w http.ResponseWriter, r *http.Request) {
+		if f.onRegister != nil {
+			f.onRegister()
+		}
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(map[string]any{"client_id": "dyn-1", "client_secret": "dyn-secret"})
 	})
@@ -257,3 +262,40 @@ func TestPluginOAuthConnect(t *testing.T) {
 	}
 }
 
+
+// Two people connecting first at once each register a client; the one stored
+// first stays, and the other must use it too, or the code it comes back with
+// is for a client the callback does not know.
+func TestPluginClientAfterConcurrentRegistration(t *testing.T) {
+	pool := agentTestPool(t)
+	ctx := context.Background()
+	q := sqlc.New(pool)
+	raw := make([]byte, 32)
+	_, _ = rand.Read(raw)
+	box, _ := secrets.New(base64.StdEncoding.EncodeToString(raw))
+	s := &Server{pool: pool, q: q, cfg: &config.Config{}, secrets: box}
+	svc := newFakeOAuthService(t)
+	tag := strings.ReplaceAll(uuid.NewString()[:8], "-", "")
+	var pluginID uuid.UUID
+	if err := pool.QueryRow(ctx, `INSERT INTO plugins (slug, name, mcp_url, auth_type) VALUES ($1, 'Svc', $2, 'oauth') RETURNING id`,
+		"reg-"+tag, svc.srv.URL+"/mcp").Scan(&pluginID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = pool.Exec(context.Background(), "DELETE FROM plugins WHERE id = $1", pluginID) })
+	// The other person's registration is stored while this one's is on its way.
+	winner, _ := box.Seal([]byte("winner-secret"))
+	svc.onRegister = func() {
+		if _, err := pool.Exec(ctx, `UPDATE plugins SET oauth_client_id = 'winner', oauth_client_secret = $2, oauth_registered = true WHERE id = $1`,
+			pluginID, winner); err != nil {
+			t.Error(err)
+		}
+	}
+	p, _ := q.GetPlugin(ctx, pluginID)
+	client, err := s.pluginClient(ctx, p, "https://chat.test"+pluginCallbackPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if client.ClientID != "winner" || client.ClientSecret != "winner-secret" {
+		t.Fatalf("used client %q (secret %q), want the stored one", client.ClientID, client.ClientSecret)
+	}
+}

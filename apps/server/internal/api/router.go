@@ -128,6 +128,7 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 			// Plugins: the catalogue the caller may see, and their own installs.
 			r.Get("/plugins", wrapper.ListPlugins)
 			r.Post("/plugins/{pluginId}/connect", wrapper.ConnectPlugin)
+			r.Put("/plugins/{pluginId}/token", wrapper.SetPluginToken)
 			r.Get("/plugins/oauth/callback", wrapper.PluginOAuthCallback)
 			r.Post("/plugins/{pluginId}/install", wrapper.InstallPlugin)
 			r.Delete("/plugins/{pluginId}/install", wrapper.UninstallPlugin)

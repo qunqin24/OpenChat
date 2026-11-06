@@ -75,8 +75,17 @@ func (s *Server) pluginClient(ctx context.Context, p sqlc.Plugin, redirectURI st
 		if err := s.q.SetPluginRegisteredClient(ctx, sqlc.SetPluginRegisteredClientParams{ID: p.ID, OauthClientID: id, OauthClientSecret: sealed}); err != nil {
 			return plugins.Client{}, err
 		}
-		client.ClientID, client.ClientSecret = id, secret
-		return client, nil
+		// Two people connecting first at once each register one, and only
+		// the first stored stays (the update keeps an id already there): use
+		// that one, as the callback will, or the other's code is for a
+		// client it does not know.
+		if p, err = s.q.GetPlugin(ctx, p.ID); err != nil {
+			return plugins.Client{}, err
+		}
+		client.ClientID = p.OauthClientID
+		if client.ClientID == "" {
+			return plugins.Client{}, errPluginOAuthUnconfigured
+		}
 	}
 	if len(p.OauthClientSecret) > 0 {
 		secret, err := s.secrets.Open(p.OauthClientSecret)
@@ -204,7 +213,7 @@ func (s *Server) PluginOAuthCallback(w http.ResponseWriter, r *http.Request, par
 		back(url.Values{"connect_error": {"exchange"}, "plugin": {p.Slug}})
 		return
 	}
-	if err := s.saveTokens(ctx, user.ID, p.ID, token); err != nil {
+	if err := s.saveTokens(ctx, user.ID, p, token); err != nil {
 		slog.ErrorContext(ctx, "plugin tokens could not be saved", "plugin", p.Slug, "error", err)
 		back(url.Values{"connect_error": {"key"}, "plugin": {p.Slug}})
 		return
@@ -217,8 +226,9 @@ func (s *Server) PluginOAuthCallback(w http.ResponseWriter, r *http.Request, par
 	back(url.Values{"connected": {p.Slug}})
 }
 
-// saveTokens seals a person's tokens on their install, making it.
-func (s *Server) saveTokens(ctx context.Context, userID, pluginID openapi_types.UUID, token *oauth2.Token) error {
+// saveTokens seals a person's tokens on their install, making it, bound to
+// the plugin as it is (tokenFor).
+func (s *Server) saveTokens(ctx context.Context, userID openapi_types.UUID, p sqlc.Plugin, token *oauth2.Token) error {
 	access, err := s.secrets.Seal([]byte(token.AccessToken))
 	if err != nil {
 		return err
@@ -234,7 +244,8 @@ func (s *Server) saveTokens(ctx context.Context, userID, pluginID openapi_types.
 		expires = pgtype.Timestamptz{Time: token.Expiry, Valid: true}
 	}
 	return s.q.SavePluginTokens(ctx, sqlc.SavePluginTokensParams{
-		UserID: userID, PluginID: pluginID, AccessToken: access, RefreshToken: refresh, TokenExpiresAt: expires,
+		UserID: userID, PluginID: p.ID, AccessToken: access, RefreshToken: refresh, TokenExpiresAt: expires,
+		TokenFor: tokenFor(p),
 	})
 }
 
@@ -246,7 +257,7 @@ func (s *Server) saveTokens(ctx context.Context, userID, pluginID openapi_types.
 // A refresh the server refuses marks the install for reconnecting, and only
 // while the refresh token it refused is still the stored one.
 func (s *Server) pluginToken(ctx context.Context, userID openapi_types.UUID, p sqlc.Plugin, redirectURI string) (string, error) {
-	install, err := s.pluginInstall(ctx, userID, p.ID)
+	install, err := s.pluginInstall(ctx, userID, p)
 	if err != nil {
 		return "", err
 	}
@@ -259,7 +270,7 @@ func (s *Server) pluginToken(ctx context.Context, userID openapi_types.UUID, p s
 	}
 	defer release()
 	// Another call may have refreshed while this one waited.
-	if install, err = s.pluginInstall(ctx, userID, p.ID); err != nil {
+	if install, err = s.pluginInstall(ctx, userID, p); err != nil {
 		return "", err
 	}
 	if !needsRefresh(install) {
@@ -287,25 +298,35 @@ func (s *Server) pluginToken(ctx context.Context, userID openapi_types.UUID, p s
 		}
 		_ = s.q.MarkPluginNeedsReconnect(ctx, sqlc.MarkPluginNeedsReconnectParams{UserID: userID, PluginID: p.ID, RefreshToken: install.RefreshToken})
 		// Another server may have rotated the token meanwhile: use what it got.
-		if now, err := s.pluginInstall(ctx, userID, p.ID); err == nil && !needsRefresh(now) {
+		if now, err := s.pluginInstall(ctx, userID, p); err == nil && !needsRefresh(now) {
 			return s.accessToken(now)
 		}
 		return "", errPluginNotConnected
 	}
-	if err := s.saveTokens(ctx, userID, p.ID, token); err != nil {
+	if err := s.saveTokens(ctx, userID, p, token); err != nil {
 		return "", err
 	}
 	return token.AccessToken, nil
 }
 
 // pluginInstall is a person's connected install of a plugin; one that is not
-// connected, or needs reconnecting, is errPluginNotConnected.
-func (s *Server) pluginInstall(ctx context.Context, userID, pluginID openapi_types.UUID) (sqlc.PluginInstall, error) {
-	install, err := s.q.GetPluginInstall(ctx, sqlc.GetPluginInstallParams{UserID: userID, PluginID: pluginID})
-	if errors.Is(err, pgx.ErrNoRows) || (err == nil && (len(install.AccessToken) == 0 || install.NeedsReconnect)) {
+// connected, needs reconnecting, or holds tokens got from the plugin before an
+// administrator changed its address or sign-in, is errPluginNotConnected:
+// those tokens go to no other service, nor to the new one's sign-in server.
+func (s *Server) pluginInstall(ctx context.Context, userID openapi_types.UUID, p sqlc.Plugin) (sqlc.PluginInstall, error) {
+	install, err := s.q.GetPluginInstall(ctx, sqlc.GetPluginInstallParams{UserID: userID, PluginID: p.ID})
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && (len(install.AccessToken) == 0 || install.NeedsReconnect ||
+		install.TokenFor == nil || *install.TokenFor != *tokenFor(p))) {
 		return sqlc.PluginInstall{}, errPluginNotConnected
 	}
 	return install, err
+}
+
+// tokenFor is what a person's tokens for a plugin are good for: how it signs
+// in and where its service is, as the installs record it (token_for).
+func tokenFor(p sqlc.Plugin) *string {
+	v := p.AuthType + " " + ptrString(p.McpUrl)
+	return &v
 }
 
 // needsRefresh is whether an install's access token is about to run out and

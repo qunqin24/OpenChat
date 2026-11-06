@@ -466,7 +466,7 @@ function ChannelForm({
 
               {/* Only on the OpenAI protocol, which has two request formats; the
                   others have one, and a gateway that routes per model (OpenCode
-                  Go) chooses for itself. */}
+                  Go, Command Code) chooses for itself. */}
               {selected?.apiFormatChoice && (
                 <FormField
                   control={form.control}

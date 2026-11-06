@@ -155,6 +155,8 @@ const BRAND_ICONS: Record<string, string> = {
   gemini: 'gemini-color',
   openrouter: 'openrouter-color',
   opencode: 'opencode',
+  // Command Code's own mark (scripts/model-icons): Lobe has none.
+  commandcode: 'commandcode',
   deepseek: 'deepseek-color',
   siliconcloud: 'siliconcloud-color',
   moonshot: 'moonshot',
@@ -233,9 +235,14 @@ const FAMILY_ICONS: Record<string, string> = {
  * Upstream families read `claude-opus`, `gemini-flash-lite`, `qwen3.6` — a
  * brand with a variant glued on. Everything from the first hyphen or digit is
  * that variant, so the root is what is left.
+ *
+ * A gateway's model id names its maker first (`z-ai/glm-5.3-flash`,
+ * `moonshotai/Kimi-K3` on OpenRouter or Command Code), and the usage log has
+ * only that id to go on: the family is what follows the last slash.
  */
 function familyRoot(family: string): string {
-  const [head = ''] = family.toLowerCase().split('-')
+  const name = family.slice(family.lastIndexOf('/') + 1)
+  const [head = ''] = name.toLowerCase().split('-')
   return head.replace(/[\d.].*$/, '')
 }
 

@@ -55,11 +55,14 @@ func invalidPlugin(field, message string) error {
 // pluginRow is a plugin's stored fields as the input sets them.
 type pluginRow struct {
 	slug, name, description, about, category, iconText, iconColor string
+	iconInk                                                       string
 	iconSlug, iconPath                                            string
 	featured, enabled, directTools                                bool
 	audience, authType, headerName                                string
-	mcpURL                                                        *string
-	sort                                                          int32
+	// tokenURL is where a person gets their own token (authType token).
+	tokenURL string
+	mcpURL   *string
+	sort     int32
 	// secret is the sealed header value to store, when setSecret.
 	secret    []byte
 	setSecret bool
@@ -79,7 +82,7 @@ func (s *Server) pluginInput(body AdminPluginInput) (pluginRow, error) {
 	}
 	row := pluginRow{
 		slug: strings.TrimSpace(body.Slug), name: strings.TrimSpace(body.Name), description: str(body.Description),
-		about: str(body.About), category: str(body.Category), iconText: str(body.IconText), iconColor: str(body.IconColor),
+		about: str(body.About), category: str(body.Category), iconText: str(body.IconText), iconColor: str(body.IconColor), iconInk: str(body.IconInk),
 		iconSlug: str(body.IconSlug), iconPath: str(body.IconPath),
 		enabled: true, audience: "all", authType: "none", headerName: "Authorization",
 	}
@@ -111,8 +114,8 @@ func (s *Server) pluginInput(body AdminPluginInput) (pluginRow, error) {
 		return row, invalidPlugin("name", "the name must be 1 to 60 characters")
 	case row.audience != "all" && row.audience != "admins":
 		return row, invalidPlugin("audience", "audience must be all or admins")
-	case row.authType != "none" && row.authType != "header" && row.authType != "oauth":
-		return row, invalidPlugin("authType", "authType must be none, header or oauth")
+	case row.authType != "none" && row.authType != "header" && row.authType != "oauth" && row.authType != "token":
+		return row, invalidPlugin("authType", "authType must be none, header, oauth or token")
 	case !iconSlug.MatchString(row.iconSlug):
 		return row, invalidPlugin("iconSlug", "not a Simple Icons slug")
 	case len(row.iconPath) > maxIconPath || !iconPath.MatchString(row.iconPath):
@@ -127,6 +130,14 @@ func (s *Server) pluginInput(body AdminPluginInput) (pluginRow, error) {
 			return row, invalidPlugin("mcpUrl", "the MCP address must be an http or https URL")
 		}
 		row.mcpURL = &address
+	}
+	if address := str(body.TokenUrl); address != "" {
+		// Shown to people as a link: https only, like the addresses services hand back.
+		u, err := url.Parse(address)
+		if err != nil || u.Scheme != "https" || u.Host == "" || len(address) > 2000 {
+			return row, invalidPlugin("tokenUrl", "the token page must be an https URL")
+		}
+		row.tokenURL = address
 	}
 	row.oauthClientID, row.oauthScopes = str(body.OauthClientId), str(body.OauthScopes)
 	if body.OauthClientSecret != nil {
@@ -167,13 +178,13 @@ func validHeaderName(name string) bool {
 func toAdminPlugin(p sqlc.Plugin, installs, tools, toolsOn int64) AdminPlugin {
 	out := AdminPlugin{
 		Id: p.ID, Slug: p.Slug, Name: p.Name, Description: p.Description, About: p.About, Category: p.Category,
-		IconText: p.IconText, IconColor: p.IconColor, Featured: p.Featured, Enabled: p.Enabled,
+		IconText: p.IconText, IconColor: p.IconColor, IconInk: p.IconInk, Featured: p.Featured, Enabled: p.Enabled,
 		Audience: AdminPluginAudience(p.Audience), AuthType: AdminPluginAuthType(p.AuthType), HeaderName: p.HeaderName,
 		IconSlug: p.IconSlug, IconPath: p.IconPath,
 		HeaderSet: len(p.HeaderSecret) > 0, Sort: int(p.Sort), Installs: int(installs), Tools: int(tools), ToolsOn: int(toolsOn),
 		Builtin:       p.Builtin != nil,
 		OauthClientId: p.OauthClientID, OauthSecretSet: len(p.OauthClientSecret) > 0, OauthScopes: p.OauthScopes,
-		OauthRegistered: p.OauthRegistered, DirectTools: p.DirectTools,
+		OauthRegistered: p.OauthRegistered, DirectTools: p.DirectTools, TokenUrl: p.TokenUrl,
 	}
 	if p.McpUrl != nil {
 		out.McpUrl = *p.McpUrl
@@ -202,12 +213,12 @@ func (s *Server) adminPlugin(ctx context.Context, id openapi_types.UUID) (AdminP
 func adminRowPlugin(r sqlc.ListAdminPluginsRow) sqlc.Plugin {
 	return sqlc.Plugin{
 		ID: r.ID, Slug: r.Slug, Name: r.Name, Description: r.Description, About: r.About, Category: r.Category,
-		IconText: r.IconText, IconColor: r.IconColor, Featured: r.Featured, Enabled: r.Enabled, Audience: r.Audience,
+		IconText: r.IconText, IconColor: r.IconColor, IconInk: r.IconInk, Featured: r.Featured, Enabled: r.Enabled, Audience: r.Audience,
 		McpUrl: r.McpUrl, AuthType: r.AuthType, Sort: r.Sort, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 		HeaderName: r.HeaderName, HeaderSecret: r.HeaderSecret, ToolsFetchedAt: r.ToolsFetchedAt, Builtin: r.Builtin,
 		OauthClientID: r.OauthClientID, OauthClientSecret: r.OauthClientSecret, OauthScopes: r.OauthScopes,
 		OauthRegistered: r.OauthRegistered, DirectTools: r.DirectTools,
-		IconSlug: r.IconSlug, IconPath: r.IconPath,
+		IconSlug: r.IconSlug, IconPath: r.IconPath, TokenUrl: r.TokenUrl,
 	}
 }
 
@@ -238,9 +249,9 @@ func (s *Server) CreateAdminPlugin(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := s.q.CreatePlugin(ctx, sqlc.CreatePluginParams{
 		Slug: in.slug, Name: in.name, Description: in.description, About: in.about, Category: in.category,
-		IconText: in.iconText, IconColor: in.iconColor, Featured: in.featured, Enabled: in.enabled, Audience: in.audience,
+		IconText: in.iconText, IconColor: in.iconColor, IconInk: in.iconInk, Featured: in.featured, Enabled: in.enabled, Audience: in.audience,
 		McpUrl: in.mcpURL, AuthType: in.authType, HeaderName: in.headerName, HeaderSecret: in.secret, Sort: in.sort,
-		IconSlug: in.iconSlug, IconPath: in.iconPath, DirectTools: in.directTools,
+		IconSlug: in.iconSlug, IconPath: in.iconPath, DirectTools: in.directTools, TokenUrl: in.tokenURL,
 	})
 	if err != nil {
 		httpx.Fail(w, r, slugErr(err))
@@ -283,9 +294,9 @@ func (s *Server) UpdateAdminPlugin(w http.ResponseWriter, r *http.Request, plugi
 	}
 	p, err := s.q.UpdatePlugin(ctx, sqlc.UpdatePluginParams{
 		ID: pluginId, Slug: in.slug, Name: in.name, Description: in.description, About: in.about, Category: in.category,
-		IconText: in.iconText, IconColor: in.iconColor, Featured: in.featured, Enabled: in.enabled, Audience: in.audience,
+		IconText: in.iconText, IconColor: in.iconColor, IconInk: in.iconInk, Featured: in.featured, Enabled: in.enabled, Audience: in.audience,
 		McpUrl: in.mcpURL, AuthType: in.authType, HeaderName: in.headerName, SetSecret: in.setSecret, HeaderSecret: in.secret,
-		Sort: in.sort, IconSlug: in.iconSlug, IconPath: in.iconPath, DirectTools: in.directTools,
+		Sort: in.sort, IconSlug: in.iconSlug, IconPath: in.iconPath, DirectTools: in.directTools, TokenUrl: in.tokenURL,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		httpx.Fail(w, r, errPluginNotFound)
@@ -433,7 +444,7 @@ func (s *Server) RefreshAdminPluginTools(w http.ResponseWriter, r *http.Request,
 // their own connection, made on the plugins page like anyone's.
 func (s *Server) fetchPluginTools(ctx context.Context, p sqlc.Plugin, admin uuid.UUID, redirectURI string) error {
 	end := plugins.Endpoint{URL: *p.McpUrl, HeaderName: p.HeaderName, Version: s.cfg.Version}
-	if p.AuthType == "oauth" {
+	if actsAsPerson(p.AuthType) {
 		token, err := s.pluginToken(ctx, admin, p, redirectURI)
 		if err != nil {
 			return err
@@ -457,11 +468,12 @@ func (s *Server) fetchPluginTools(ctx context.Context, p sqlc.Plugin, admin uuid
 
 // autoFetchPluginTools lists the tools of a plugin just added or whose
 // service changed, so an administrator need not ask: one that acts as each
-// person waits for the administrator's own connection (PluginOAuthCallback).
+// person waits for the administrator's own connection (PluginOAuthCallback,
+// SetPluginToken).
 // A service that cannot be listed now leaves the save as it is, to be
 // fetched by hand.
 func (s *Server) autoFetchPluginTools(r *http.Request, p sqlc.Plugin) {
-	if p.McpUrl == nil || *p.McpUrl == "" || p.AuthType == "oauth" {
+	if p.McpUrl == nil || *p.McpUrl == "" || actsAsPerson(p.AuthType) {
 		return
 	}
 	_ = s.fetchPluginTools(r.Context(), p, auth.MustUser(r.Context()).ID, pluginRedirectURI(r))

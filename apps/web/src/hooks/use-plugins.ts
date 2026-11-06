@@ -40,6 +40,23 @@ export function useConnectPlugin() {
   })
 }
 
+/**
+ * Connects with the person's own token, for a plugin that takes one
+ * (api/plugins_token.go): the server tries it on the service, keeps it sealed
+ * and installs the plugin.
+ */
+export function useSetPluginToken() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, token }: { id: string; token: string }): Promise<Plugin> =>
+      unwrap(await api.PUT('/plugins/{pluginId}/token', { params: { path: { pluginId: id } }, body: { token } })),
+    onSuccess: (plugin) =>
+      queryClient.setQueryData<PluginList>(queryKeys.plugins.list(), (held) =>
+        held && { ...held, items: held.items.map((item) => (item.id === plugin.id ? plugin : item)) },
+      ),
+  })
+}
+
 export function useUninstallPlugin() {
   const queryClient = useQueryClient()
   return useMutation({

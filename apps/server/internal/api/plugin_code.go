@@ -58,13 +58,13 @@ var errConfirmationGone = httpx.NewError(http.StatusConflict, "confirmation_gone
 
 // usableTool is a plugin tool a person's runs may call now.
 type usableTool struct {
-	PluginID                             uuid.UUID
-	Slug, PluginName, PluginDescription  string
-	DirectTools                          bool
-	IconText, IconColor, IconPath        string
-	Name, Title, Description, Permission string
-	InputSchema                          json.RawMessage
-	ReadOnly                             bool
+	PluginID                               uuid.UUID
+	Slug, PluginName, PluginDescription    string
+	DirectTools                            bool
+	IconText, IconColor, IconInk, IconPath string
+	Name, Title, Description, Permission   string
+	InputSchema                            json.RawMessage
+	ReadOnly                               bool
 }
 
 func (t usableTool) code() codemode.Tool {
@@ -72,7 +72,7 @@ func (t usableTool) code() codemode.Tool {
 }
 
 func (t usableTool) badge() PluginBadge {
-	return PluginBadge{Slug: t.Slug, Name: t.PluginName, IconText: t.IconText, IconColor: t.IconColor, IconPath: t.IconPath}
+	return PluginBadge{Slug: t.Slug, Name: t.PluginName, IconText: t.IconText, IconColor: t.IconColor, IconInk: t.IconInk, IconPath: t.IconPath}
 }
 
 func (s *Server) usablePluginTools(ctx context.Context, userID uuid.UUID) ([]usableTool, error) {
@@ -88,7 +88,7 @@ func listUsablePluginTools(ctx context.Context, q *sqlc.Queries, userID uuid.UUI
 	for i, r := range rows {
 		out[i] = usableTool{
 			PluginID: r.PluginID, Slug: r.Slug, PluginName: r.PluginName, PluginDescription: r.PluginDescription,
-			DirectTools: r.DirectTools, IconText: r.IconText, IconColor: r.IconColor, IconPath: r.IconPath,
+			DirectTools: r.DirectTools, IconText: r.IconText, IconColor: r.IconColor, IconInk: r.IconInk, IconPath: r.IconPath,
 			Name: r.Name, Title: r.Title, Description: r.Description, Permission: r.Permission,
 			InputSchema: json.RawMessage(r.InputSchema), ReadOnly: r.ReadOnly,
 		}
@@ -363,8 +363,11 @@ type pluginHost struct {
 	report context.Context
 	known  map[string]usableTool
 
-	mu      sync.Mutex
-	conns   map[uuid.UUID]*plugins.Conn
+	mu    sync.Mutex
+	conns map[uuid.UUID]*plugins.Conn
+	// sealed is the person's own token each `token` plugin was opened with,
+	// as stored: the one to condemn if the service refuses it.
+	sealed  map[uuid.UUID][]byte
 	calls   []PluginCallProgress
 	plugins map[string]PluginBadge
 	order   []string
@@ -376,7 +379,8 @@ type pluginHost struct {
 func (s *Server) newPluginHost(ctx context.Context, scope agent.Scope) *pluginHost {
 	return &pluginHost{
 		s: s, scope: scope, callID: agent.ToolCallID(ctx), report: ctx,
-		known: map[string]usableTool{}, conns: map[uuid.UUID]*plugins.Conn{}, plugins: map[string]PluginBadge{},
+		known: map[string]usableTool{}, conns: map[uuid.UUID]*plugins.Conn{}, sealed: map[uuid.UUID][]byte{},
+		plugins: map[string]PluginBadge{},
 	}
 }
 
@@ -492,6 +496,14 @@ func (h *pluginHost) Call(ctx context.Context, call codemode.Call) (any, error) 
 		slog.WarnContext(ctx, "plugin call", "plugin", known.Slug, "tool", row.Name, "error", err)
 		if ctx.Err() != nil {
 			return fail(PluginCallProgressStatusFailed, "cancelled", errors.New("the call was stopped"))
+		}
+		if errors.Is(err, plugins.ErrRefused) && h.refusedToken(ctx, row.PluginID) {
+			return fail(PluginCallProgressStatusFailed, "not_connected", fmt.Errorf("%s refused the user's token: ask them to give a new one on the Plugins page", known.PluginName))
+		}
+		// 403: this call is not allowed with the user's account or token,
+		// which leaves the connection and its other tools as they are.
+		if errors.Is(err, plugins.ErrForbidden) {
+			return fail(PluginCallProgressStatusFailed, "failed", fmt.Errorf("%s does not allow %s with the user's account; their other %s tools still work", known.PluginName, row.Name, known.PluginName))
 		}
 		return fail(PluginCallProgressStatusFailed, "failed", fmt.Errorf("%s did not answer the call (%s)", known.PluginName, shortError(err)))
 	}
@@ -663,7 +675,20 @@ func (h *pluginHost) conn(ctx context.Context, pluginID uuid.UUID) (*plugins.Con
 		return nil, errPluginNoService
 	}
 	end := plugins.Endpoint{URL: *p.McpUrl, HeaderName: p.HeaderName, Version: h.s.cfg.Version}
+	var sealed []byte
 	switch p.AuthType {
+	case "token":
+		// The person's own, as they gave it: nothing to refresh.
+		install, err := h.s.pluginInstall(ctx, h.scope.UserID, p)
+		if err != nil {
+			return nil, err
+		}
+		token, err := h.s.accessToken(install)
+		if err != nil {
+			return nil, err
+		}
+		sealed = install.AccessToken
+		end.HeaderName, end.HeaderValue = "Authorization", "Bearer "+token
 	case "oauth":
 		// No redirect address: a refresh does not need one, and a plugin
 		// that registers its client on the fly registered it when the
@@ -689,7 +714,28 @@ func (h *pluginHost) conn(ctx context.Context, pluginID uuid.UUID) (*plugins.Con
 	}
 	c := plugins.Open(end)
 	h.conns[pluginID] = c
+	if sealed != nil {
+		h.sealed[pluginID] = sealed
+	}
 	return c, nil
+}
+
+// refusedToken marks the person's own token for a plugin as refused, so the
+// plugins page asks them for another; false for a plugin not opened with one.
+func (h *pluginHost) refusedToken(ctx context.Context, pluginID uuid.UUID) bool {
+	h.mu.Lock()
+	sealed := h.sealed[pluginID]
+	h.mu.Unlock()
+	if sealed == nil {
+		return false
+	}
+	err := h.s.q.MarkPluginTokenRefused(context.WithoutCancel(ctx), sqlc.MarkPluginTokenRefusedParams{
+		UserID: h.scope.UserID, PluginID: pluginID, AccessToken: sealed,
+	})
+	if err != nil {
+		slog.WarnContext(ctx, "mark a refused plugin token", "error", err)
+	}
+	return true
 }
 
 // audit records the call for the administrators: never its input or result.

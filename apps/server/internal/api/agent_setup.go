@@ -96,7 +96,7 @@ func NewModalities(pool *pgxpool.Pool) func(ctx context.Context, modelID string)
 		if err != nil {
 			return nil, err
 		}
-		return settings.InputModalities, nil
+		return servedModalities(ctx, q, modelID, settings.InputModalities)
 	}
 }
 

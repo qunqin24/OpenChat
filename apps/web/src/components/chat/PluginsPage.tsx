@@ -1,11 +1,11 @@
 import { isOpenChatError, type Plugin } from '@openchat/api-client'
 import { Check, ExternalLink, Lock, Plus, Puzzle, X } from 'lucide-react'
 import { Dialog } from 'radix-ui'
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useId, useState, type CSSProperties, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { useConnectPlugin, useInstallPlugin, usePlugins, useUninstallPlugin } from '@/hooks/use-plugins'
+import { useConnectPlugin, useInstallPlugin, usePlugins, useSetPluginToken, useUninstallPlugin } from '@/hooks/use-plugins'
 import { cn } from '@/lib/utils'
 import { SidebarToggle } from './ChatShell'
 import PluginMark from './PluginMark'
@@ -151,15 +151,22 @@ function tint(plugin: Plugin): CSSProperties | undefined {
  * What a plugin can do, before it is installed - what it reads, what it may
  * change and that it asks first, the skills it brings, and for one that acts
  * as the person, that it connects their own account - and the way to install
- * or uninstall it.
+ * or uninstall it. One that takes the person's own token asks for it here.
  */
 function PluginDialog({ host, plugin, onClose }: { host: HTMLElement | null; plugin?: Plugin; onClose: () => void }) {
   const { t } = useTranslation()
   const install = useInstallPlugin()
   const connect = useConnectPlugin()
   const uninstall = useUninstallPlugin()
-  const busy = install.isPending || uninstall.isPending || connect.isPending
-  const account = plugin?.authType === 'oauth'
+  const setToken = useSetPluginToken()
+  const busy = install.isPending || uninstall.isPending || connect.isPending || setToken.isPending
+  const oauth = plugin?.authType === 'oauth'
+  const token = plugin?.authType === 'token'
+  const account = oauth || token
+  // Asked for straight away until there is one that works; once there is,
+  // only when the person chooses to replace it.
+  const [replacing, setReplacing] = useState<string | null>(null)
+  const asking = token && (!plugin?.installed || plugin.needsReconnect || replacing === plugin.id)
 
   // One that acts as the person is installed by connecting their account.
   const doConnect = (p: Plugin) =>
@@ -173,6 +180,27 @@ function PluginDialog({ host, plugin, onClose }: { host: HTMLElement | null; plu
               : t('plugins.error'),
         ),
     })
+
+  const doSetToken = (p: Plugin, value: string) =>
+    setToken.mutate(
+      { id: p.id, token: value },
+      {
+        onSuccess: () => {
+          toast.success(t('plugins.token-saved-toast', { name: p.name }))
+          onClose()
+        },
+        onError: (error) =>
+          toast.error(
+            isOpenChatError(error) && error.code === 'plugin_token_refused'
+              ? t('plugins.token-refused', { name: p.name })
+              : isOpenChatError(error) && error.code === 'invalid_token'
+                ? t('plugins.token-invalid')
+                : isOpenChatError(error) && error.code === 'plugin_unreachable'
+                  ? t('plugins.unreachable', { name: p.name })
+                  : t('plugins.error'),
+          ),
+      },
+    )
 
   const doInstall = (p: Plugin) =>
     install.mutate(p.id, {
@@ -207,10 +235,14 @@ function PluginDialog({ host, plugin, onClose }: { host: HTMLElement | null; plu
                   {plugin.installed ? plugin.name : t('plugins.install-title', { name: plugin.name })}
                 </Dialog.Title>
                 <Dialog.Description className="n-plugin-dialog-about">
-                  {account ? t('plugins.account-about', { name: plugin.name }) : plugin.about || plugin.description}
+                  {account ? t(token ? 'plugins.token-about' : 'plugins.account-about', { name: plugin.name }) : plugin.about || plugin.description}
                 </Dialog.Description>
                 {account && (plugin.about || plugin.description) && <p className="n-plugin-dialog-about">{plugin.about || plugin.description}</p>}
-                {plugin.needsReconnect && <p className="n-plugin-dialog-about is-warning">{t('plugins.needs-reconnect', { name: plugin.name })}</p>}
+                {plugin.needsReconnect && (
+                  <p className="n-plugin-dialog-about is-warning">
+                    {t(token ? 'plugins.needs-new-token' : 'plugins.needs-reconnect', { name: plugin.name })}
+                  </p>
+                )}
                 <ul className="n-plugin-points">
                   {plugin.readTools > 0 && (
                     <li><Check aria-hidden="true" /><span>{t('plugins.point-read', { count: plugin.readTools })}</span></li>
@@ -225,29 +257,45 @@ function PluginDialog({ host, plugin, onClose }: { host: HTMLElement | null; plu
                     <li><Lock aria-hidden="true" /><span>{t('plugins.point-token')}</span></li>
                   )}
                 </ul>
-                <div className="n-plugin-dialog-foot">
-                  {plugin.installed ? (
-                    <>
-                      <button type="button" className="n-plugin-btn is-quiet" disabled={busy} onClick={() => doUninstall(plugin)}>
-                        {t('plugins.uninstall')}
-                      </button>
-                      {account && (
-                        <button type="button" className="n-plugin-btn is-quiet" disabled={busy} onClick={() => doConnect(plugin)}>
-                          {t('plugins.reconnect')}
+                {asking ? (
+                  <TokenForm
+                    key={plugin.id}
+                    plugin={plugin}
+                    busy={busy}
+                    onSubmit={(value) => doSetToken(plugin, value)}
+                    onCancel={plugin.installed && !plugin.needsReconnect ? () => setReplacing(null) : undefined}
+                    onUninstall={plugin.installed ? () => doUninstall(plugin) : undefined}
+                  />
+                ) : (
+                  <div className="n-plugin-dialog-foot">
+                    {plugin.installed ? (
+                      <>
+                        <button type="button" className="n-plugin-btn is-quiet" disabled={busy} onClick={() => doUninstall(plugin)}>
+                          {t('plugins.uninstall')}
                         </button>
-                      )}
-                      <Dialog.Close className="n-plugin-btn is-primary">{t('plugins.done')}</Dialog.Close>
-                    </>
-                  ) : (
-                    <>
-                      <Dialog.Close className="n-plugin-btn is-quiet">{t('plugins.cancel')}</Dialog.Close>
-                      <button type="button" className="n-plugin-btn is-primary" disabled={busy} onClick={() => (account ? doConnect(plugin) : doInstall(plugin))}>
-                        {account && <ExternalLink aria-hidden="true" />}
-                        {account ? t('plugins.authorize', { name: plugin.name }) : t('plugins.install')}
-                      </button>
-                    </>
-                  )}
-                </div>
+                        {oauth && (
+                          <button type="button" className="n-plugin-btn is-quiet" disabled={busy} onClick={() => doConnect(plugin)}>
+                            {t('plugins.reconnect')}
+                          </button>
+                        )}
+                        {token && (
+                          <button type="button" className="n-plugin-btn is-quiet" disabled={busy} onClick={() => setReplacing(plugin.id)}>
+                            {t('plugins.token-replace')}
+                          </button>
+                        )}
+                        <Dialog.Close className="n-plugin-btn is-primary">{t('plugins.done')}</Dialog.Close>
+                      </>
+                    ) : (
+                      <>
+                        <Dialog.Close className="n-plugin-btn is-quiet">{t('plugins.cancel')}</Dialog.Close>
+                        <button type="button" className="n-plugin-btn is-primary" disabled={busy} onClick={() => (oauth ? doConnect(plugin) : doInstall(plugin))}>
+                          {oauth && <ExternalLink aria-hidden="true" />}
+                          {oauth ? t('plugins.authorize', { name: plugin.name }) : t('plugins.install')}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </Dialog.Content>
@@ -255,4 +303,82 @@ function PluginDialog({ host, plugin, onClose }: { host: HTMLElement | null; plu
       </Dialog.Portal>
     </Dialog.Root>
   )
+}
+
+/**
+ * The person's own token for a plugin that takes one: where to get it, the
+ * field to paste it in, and connecting with it. It is tried on the service
+ * before it is kept, so a wrong one is said here.
+ */
+function TokenForm({
+  plugin,
+  busy,
+  onSubmit,
+  onCancel,
+  onUninstall,
+}: {
+  plugin: Plugin
+  busy: boolean
+  onSubmit: (token: string) => void
+  /** Back to the dialog as it was; without it, the dialog closes. */
+  onCancel?: () => void
+  /** For one installed: whose token stopped working may be removed instead. */
+  onUninstall?: () => void
+}) {
+  const { t } = useTranslation()
+  const id = useId()
+  const [value, setValue] = useState('')
+  const submit = (event: FormEvent) => {
+    event.preventDefault()
+    if (value.trim()) onSubmit(value.trim())
+  }
+  return (
+    <form className="n-plugin-token" onSubmit={submit}>
+      <div className="n-plugin-token-head">
+        <label className="n-plugin-token-label" htmlFor={`${id}-token`}>{t('plugins.token-label', { name: plugin.name })}</label>
+        {isHttpsUrl(plugin.tokenUrl) && (
+          <a className="n-plugin-token-link" href={plugin.tokenUrl} target="_blank" rel="noopener noreferrer">
+            {t('plugins.token-get')}
+            <ExternalLink aria-hidden="true" />
+          </a>
+        )}
+      </div>
+      <input
+        id={`${id}-token`}
+        className="n-plugin-token-input"
+        type="password"
+        autoComplete="off"
+        spellCheck={false}
+        placeholder={t('plugins.token-placeholder')}
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+      />
+      <div className="n-plugin-dialog-foot">
+        {onUninstall && (
+          <button type="button" className="n-plugin-btn is-quiet" disabled={busy} onClick={onUninstall}>
+            {t('plugins.uninstall')}
+          </button>
+        )}
+        {onCancel ? (
+          <button type="button" className="n-plugin-btn is-quiet" disabled={busy} onClick={onCancel}>
+            {t('plugins.cancel')}
+          </button>
+        ) : (
+          <Dialog.Close className="n-plugin-btn is-quiet">{t('plugins.cancel')}</Dialog.Close>
+        )}
+        <button type="submit" className="n-plugin-btn is-primary" disabled={busy || !value.trim()}>
+          {t('plugins.token-connect')}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+/** Only an https page is offered as a link: the address is an administrator's. */
+function isHttpsUrl(address: string): boolean {
+  try {
+    return new URL(address).protocol === 'https:'
+  } catch {
+    return false
+  }
 }

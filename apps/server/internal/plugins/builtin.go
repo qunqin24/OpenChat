@@ -20,6 +20,9 @@ type Builtin struct {
 	Category    string
 	IconText    string
 	IconColor   string
+	// IconInk is the glyph's colour where the brand's is not the dark or
+	// white its background would choose; empty for that choice.
+	IconInk string
 	// IconSlug and IconPath are its Simple Icons icon (simpleicons.org, CC0),
 	// the path copied from simple-icons@16.36.0.
 	IconSlug string
@@ -32,7 +35,10 @@ type Builtin struct {
 	HeaderName string
 	// OAuthScopes are what is asked for when a person connects.
 	OAuthScopes string
-	Sort        int32
+	// TokenURL is where a person gets their own token, for a plugin that
+	// takes one (AuthType "token").
+	TokenURL string
+	Sort     int32
 }
 
 // Builtins are the plugins every server starts with.
@@ -67,9 +73,10 @@ var Builtins = []Builtin{
 		About: "Notion 官方的 MCP 服务：在工作区里搜索和阅读页面与数据库，新建和修改页面，" +
 			"查询和整理数据库，读写评论。每个人用自己的 Notion 账号授权、选择授权哪个工作区，" +
 			"只能看到和改动这个账号本来就能访问的内容。",
-		Category:  "效率",
-		IconText:  "N",
-		IconColor: "#000000",
+		Category: "效率",
+		IconText: "N",
+		// Its mark is a black outline on white: drawn on black it reverses.
+		IconColor: "#FFFFFF",
 		IconSlug:  "notion",
 		IconPath:  "M4.459 4.208c.746.606 1.026.56 2.428.466l13.215-.793c.28 0 .047-.28-.046-.326L17.86 1.968c-.42-.326-.981-.7-2.055-.607L3.01 2.295c-.466.046-.56.28-.374.466zm.793 3.08v13.904c0 .747.373 1.027 1.214.98l14.523-.84c.841-.046.935-.56.935-1.167V6.354c0-.606-.233-.933-.748-.887l-15.177.887c-.56.047-.747.327-.747.933zm14.337.745c.093.42 0 .84-.42.888l-.7.14v10.264c-.608.327-1.168.514-1.635.514-.748 0-.935-.234-1.495-.933l-4.577-7.186v6.952L12.21 19s0 .84-1.168.84l-3.222.186c-.093-.186 0-.653.327-.746l.84-.233V9.854L7.822 9.76c-.094-.42.14-1.026.793-1.073l3.456-.233 4.764 7.279v-6.44l-1.215-.139c-.093-.514.28-.887.747-.933zM1.936 1.035l13.31-.98c1.634-.14 2.055-.047 3.082.7l4.249 2.986c.7.513.934.653.934 1.213v16.378c0 1.026-.373 1.634-1.68 1.726l-15.458.934c-.98.047-1.448-.093-1.962-.747l-3.129-4.06c-.56-.747-.793-1.306-.793-1.96V2.667c0-.839.374-1.54 1.447-1.632z",
 		// Notion's hosted server (developers.notion.com/docs/mcp). Its
@@ -144,6 +151,58 @@ var Builtins = []Builtin{
 		Sort:     30,
 	},
 	{
+		Key:         "mcdonalds",
+		Slug:        "mcdonalds",
+		Name:        "麦当劳",
+		Description: "点麦乐送和到店取餐，领优惠券，查积分和订单",
+		About: "麦当劳中国官方的 MCP 服务，只在中国大陆（不含港澳台）可用：查附近门店和菜单、算价格、" +
+			"下外送或到店取餐的订单（下单后给出支付链接，由你自己付款）、取消订单，领「麦麦省」优惠券、" +
+			"查自己的券和积分、积分兑换和抽奖，查餐品营养和当月活动。每个人用自己的麦当劳账号：" +
+			"在 open.mcd.cn/mcp 用手机号登录、申请 MCP Token，粘贴到这里。",
+		Category: "生活",
+		IconText: "M",
+		// The golden arches on McDonald's red, as its brand has them.
+		IconColor: "#DA291C",
+		IconInk:   "#FFC72C",
+		IconSlug:  "mcdonalds",
+		IconPath:  "M17.243 3.006c2.066 0 3.742 8.714 3.742 19.478H24c0-11.588-3.042-20.968-6.766-20.968-2.127 0-4.007 2.81-5.248 7.227-1.241-4.416-3.121-7.227-5.231-7.227C3.031 1.516 0 10.888 0 22.476h3.014c0-10.763 1.658-19.47 3.724-19.47 2.066 0 3.741 8.05 3.741 17.98h2.997c0-9.93 1.684-17.98 3.75-17.98Z",
+		// McDonald's China's hosted server (github.com/M-China/mcd-mcp-server).
+		// No OAuth: each person applies for a token for their own account at
+		// open.mcd.cn and it goes as `Authorization: Bearer`, 600 calls a
+		// minute per token.
+		MCPURL:   "https://mcp.mcd.cn",
+		AuthType: "token",
+		TokenURL: "https://open.mcd.cn/mcp",
+		Sort:     33,
+	},
+	{
+		Key:         "luckin",
+		Slug:        "luckin",
+		Name:        "瑞幸咖啡",
+		Description: "找附近门店、选咖啡和规格、下单自提、查订单",
+		About: "瑞幸咖啡官方的 MCP 服务，只在中国大陆可用：按位置找附近门店，搜索饮品、选温度甜度等规格，" +
+			"看优惠后的价格，下自提订单（下单后给出付款二维码，由你自己付款），查询和取消订单。" +
+			"每个人用自己的瑞幸账号：在 open.lkcoffee.com 登录、复制 Token，粘贴到这里；Token 有有效期，过期后换一个新的。",
+		Category: "生活",
+		IconText: "瑞",
+		// Not in Simple Icons: its logo's deer emblem (Wikipedia's
+		// File:Luckin_Coffee_Logo.svg, a trademark, used to name the
+		// service) in its blue on white. A badge of its own, it is drawn at
+		// about 80% of the tile, past the 24 x 24 box the glyphs keep to.
+		IconColor: "#FFFFFF",
+		IconInk:   "#0022AB",
+		IconSlug:  "luckin",
+		IconPath:  "M19.521 5.37C19.32 5.231 19.119 5.098 18.913 4.969C18.573 5.569 18.167 6.128 17.701 6.635C18.341 6.264 18.95 5.841 19.521 5.37ZM13.688 10.287C14.268 10.329 14.842 10.433 15.4 10.599C16.062 10.238 16.2 10.426 16.2 10.426C16.349 10.7 16.349 11.032 16.2 11.306C16.26 11.625 16.118 11.948 15.841 12.116C15.841 12.062 15.841 11.671 15.164 11.854C14.487 12.037 14.218 12.348 13.693 12.2C13.918 12.414 14.245 12.475 14.532 12.358C15.022 12.166 15.591 11.834 15.827 12.121L15.827 12.121C15.998 12.867 15.258 13.213 12.604 13.821C11.004 14.192 10.641 16.12 10.695 17.148C10.828 20.375 13.339 20.81 16.582 21.067C19.526 21.299 21.743 22.772 22.268 25.268C27.015 19.46 26.196 10.877 20.438 6.086C17.989 8.184 14.917 9.402 11.706 9.546C12.327 9.89 12.995 10.139 13.688 10.287ZM5.102 6.951C4.656 6.52 4.257 6.043 3.91 5.528C3.734 5.656 3.557 5.79 3.385 5.928C3.941 6.326 4.526 6.68 5.137 6.986L5.102 6.951ZM9.478 8.306C10.007 8.371 10.54 8.404 11.073 8.404L11.313 8.404C12.004 8.395 12.693 8.329 13.374 8.207C15.371 7.64 17.064 6.3 18.083 4.48C13.848 2.257 8.763 2.445 4.7 4.974C5.011 5.432 5.366 5.857 5.76 6.245C6.788 7.263 8.075 7.976 9.478 8.306L9.478 8.306ZM7.217 11.676C8.007 10.836 8.649 11.217 8.649 11.217C8.489 10.968 8.18 10.864 7.904 10.965C7.258 11.282 6.562 11.482 5.848 11.558C4.803 11.558 2.654 10.208 2.782 9.872C2.831 9.739 3.38 9.556 3.93 9.418C5.485 9.022 8.223 9.912 8.223 9.912C8.407 9.724 8.612 9.56 8.836 9.423C8.877 9.419 8.918 9.419 8.958 9.423C6.627 9.071 4.415 8.152 2.517 6.744C-0.778 9.894 -2.285 14.499 -1.496 19.006C-0.706 23.513 2.275 27.32 6.442 29.143C2.007 23.756 5.524 13.475 7.217 11.676ZM3.356 0.704C3.333 -0.393 3.539 -1.482 3.959 -2.494C4.003 -2.724 3.881 -2.954 3.665 -3.044C3.45 -3.134 3.202 -3.059 3.071 -2.864C1.927 -0.102 2.238 3.056 3.9 5.538C4.16 5.35 4.42 5.172 4.69 5.004C3.843 3.731 3.379 2.237 3.356 0.704ZM19.972 1.821C20.05 1.63 20.001 1.411 19.851 1.271C19.701 1.131 19.48 1.1 19.297 1.193C19.115 1.286 19.008 1.483 19.03 1.688C18.891 2.67 18.57 3.617 18.083 4.48C18.363 4.628 18.643 4.787 18.913 4.974C19.457 3.998 19.816 2.929 19.972 1.821L19.972 1.821ZM23.249 2.894C23.361 2.721 23.372 2.502 23.28 2.319C23.188 2.136 23.005 2.016 22.802 2.005C22.598 1.994 22.404 2.094 22.293 2.266C21.535 3.44 20.6 4.487 19.521 5.37C19.845 5.597 20.159 5.834 20.463 6.086C21.541 5.165 22.48 4.089 23.249 2.894L23.249 2.894ZM-1.879 -4.574C-1.884 -4.888 -2.137 -5.14 -2.448 -5.143L-2.448 -5.143C-2.764 -5.135 -3.015 -4.873 -3.012 -4.555C-2.929 0.18 -1.015 4.109 2.512 6.719C2.787 6.457 3.071 6.185 3.385 5.963C0.025 3.546 -1.8 -0.121 -1.879 -4.574Z",
+		// Luckin Coffee's hosted server, as its AI open platform
+		// (open.lkcoffee.com) configures it: each person logs in there and
+		// copies a token for their own account, sent as `Authorization:
+		// Bearer`; it runs out after a while.
+		MCPURL:   "https://gwmcp.lkcoffee.com/order/user/mcp",
+		AuthType: "token",
+		TokenURL: "https://open.lkcoffee.com/mcp",
+		Sort:     34,
+	},
+	{
 		Key:         "wikipedia",
 		Slug:        "wikipedia",
 		Name:        "维基百科",
@@ -189,6 +248,7 @@ func EnsureBuiltins(ctx context.Context, q *sqlc.Queries) error {
 			Builtin: &key, Slug: b.Slug, Name: b.Name, Description: b.Description, About: b.About,
 			Category: b.Category, IconText: b.IconText, IconColor: b.IconColor, McpUrl: &url, AuthType: b.AuthType,
 			Sort: b.Sort, IconSlug: b.IconSlug, IconPath: b.IconPath, OauthScopes: b.OAuthScopes, HeaderName: b.HeaderName,
+			TokenUrl: b.TokenURL, IconInk: b.IconInk,
 		})
 		if err != nil {
 			return err
@@ -203,7 +263,7 @@ func EnsureBuiltins(ctx context.Context, q *sqlc.Queries) error {
 		}
 		if b.IconPath != "" {
 			if err := q.FillBuiltinPluginIcon(ctx, sqlc.FillBuiltinPluginIconParams{
-				Builtin: &key, IconSlug: b.IconSlug, IconPath: b.IconPath, IconColor: b.IconColor,
+				Builtin: &key, IconSlug: b.IconSlug, IconPath: b.IconPath, IconColor: b.IconColor, IconInk: b.IconInk,
 			}); err != nil {
 				return err
 			}

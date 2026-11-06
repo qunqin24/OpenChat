@@ -56,6 +56,7 @@ const (
 	AdminPluginAuthTypeHeader AdminPluginAuthType = "header"
 	AdminPluginAuthTypeNone   AdminPluginAuthType = "none"
 	AdminPluginAuthTypeOauth  AdminPluginAuthType = "oauth"
+	AdminPluginAuthTypeToken  AdminPluginAuthType = "token"
 )
 
 // Valid indicates whether the value is a known member of the AdminPluginAuthType enum.
@@ -66,6 +67,8 @@ func (e AdminPluginAuthType) Valid() bool {
 	case AdminPluginAuthTypeNone:
 		return true
 	case AdminPluginAuthTypeOauth:
+		return true
+	case AdminPluginAuthTypeToken:
 		return true
 	default:
 		return false
@@ -95,6 +98,7 @@ const (
 	AdminPluginInputAuthTypeHeader AdminPluginInputAuthType = "header"
 	AdminPluginInputAuthTypeNone   AdminPluginInputAuthType = "none"
 	AdminPluginInputAuthTypeOauth  AdminPluginInputAuthType = "oauth"
+	AdminPluginInputAuthTypeToken  AdminPluginInputAuthType = "token"
 )
 
 // Valid indicates whether the value is a known member of the AdminPluginInputAuthType enum.
@@ -105,6 +109,8 @@ func (e AdminPluginInputAuthType) Valid() bool {
 	case AdminPluginInputAuthTypeNone:
 		return true
 	case AdminPluginInputAuthTypeOauth:
+		return true
+	case AdminPluginInputAuthTypeToken:
 		return true
 	default:
 		return false
@@ -331,6 +337,7 @@ func (e ChannelRegionId) Valid() bool {
 const (
 	ChannelTypeAnthropic        ChannelType = "anthropic"
 	ChannelTypeCerebras         ChannelType = "cerebras"
+	ChannelTypeCommandCode      ChannelType = "command-code"
 	ChannelTypeDashscope        ChannelType = "dashscope"
 	ChannelTypeDeepseek         ChannelType = "deepseek"
 	ChannelTypeFireworks        ChannelType = "fireworks"
@@ -364,6 +371,8 @@ func (e ChannelType) Valid() bool {
 	case ChannelTypeAnthropic:
 		return true
 	case ChannelTypeCerebras:
+		return true
+	case ChannelTypeCommandCode:
 		return true
 	case ChannelTypeDashscope:
 		return true
@@ -1148,6 +1157,7 @@ const (
 	PluginAuthTypeHeader PluginAuthType = "header"
 	PluginAuthTypeNone   PluginAuthType = "none"
 	PluginAuthTypeOauth  PluginAuthType = "oauth"
+	PluginAuthTypeToken  PluginAuthType = "token"
 )
 
 // Valid indicates whether the value is a known member of the PluginAuthType enum.
@@ -1158,6 +1168,8 @@ func (e PluginAuthType) Valid() bool {
 	case PluginAuthTypeNone:
 		return true
 	case PluginAuthTypeOauth:
+		return true
+	case PluginAuthTypeToken:
 		return true
 	default:
 		return false
@@ -2138,12 +2150,15 @@ type AdminPlugin struct {
 	HeaderName  string `json:"headerName"`
 
 	// HeaderSet Whether a header value is stored. Never sent back.
-	HeaderSet bool               `json:"headerSet"`
-	IconColor string             `json:"iconColor"`
-	IconPath  string             `json:"iconPath"`
-	IconSlug  string             `json:"iconSlug"`
-	IconText  string             `json:"iconText"`
-	Id        openapi_types.UUID `json:"id"`
+	HeaderSet bool   `json:"headerSet"`
+	IconColor string `json:"iconColor"`
+
+	// IconInk The glyph's colour (CSS); empty draws it dark or white, whichever reads on iconColor.
+	IconInk  string             `json:"iconInk"`
+	IconPath string             `json:"iconPath"`
+	IconSlug string             `json:"iconSlug"`
+	IconText string             `json:"iconText"`
+	Id       openapi_types.UUID `json:"id"`
 
 	// Installs How many people installed it.
 	Installs      int    `json:"installs"`
@@ -2159,6 +2174,7 @@ type AdminPlugin struct {
 	OauthSecretSet bool   `json:"oauthSecretSet"`
 	Slug           string `json:"slug"`
 	Sort           int    `json:"sort"`
+	TokenUrl       string `json:"tokenUrl"`
 
 	// Tools Tools last listed by its service.
 	Tools          int        `json:"tools"`
@@ -2176,8 +2192,12 @@ type AdminPluginAuthType string
 
 // AdminPluginInput defines model for AdminPluginInput.
 type AdminPluginInput struct {
-	About       *string                   `json:"about,omitempty"`
-	Audience    *AdminPluginInputAudience `json:"audience,omitempty"`
+	About    *string                   `json:"about,omitempty"`
+	Audience *AdminPluginInputAudience `json:"audience,omitempty"`
+
+	// AuthType `none`; `header`, the administrator's value for everyone; `oauth`,
+	// each person signs in; `token`, each person pastes a token of their
+	// own, sent as `Authorization: Bearer`.
 	AuthType    *AdminPluginInputAuthType `json:"authType,omitempty"`
 	Category    *string                   `json:"category,omitempty"`
 	Description *string                   `json:"description,omitempty"`
@@ -2191,6 +2211,9 @@ type AdminPluginInput struct {
 	// HeaderValue Write-only, stored sealed. Absent keeps the stored one; empty removes it.
 	HeaderValue *string `json:"headerValue,omitempty"`
 	IconColor   *string `json:"iconColor,omitempty"`
+
+	// IconInk The glyph's colour (CSS); empty draws it dark or white, whichever reads on iconColor.
+	IconInk *string `json:"iconInk,omitempty"`
 
 	// IconPath That icon's SVG path data (24 x 24), commands and numbers only (400 `invalid_plugin` otherwise).
 	IconPath *string `json:"iconPath,omitempty"`
@@ -2215,12 +2238,17 @@ type AdminPluginInput struct {
 	// Slug Lowercase letters, digits and single hyphens; the prefix of its tool names.
 	Slug string `json:"slug"`
 	Sort *int   `json:"sort,omitempty"`
+
+	// TokenUrl For `token`, the https page where a person gets theirs; empty for none.
+	TokenUrl *string `json:"tokenUrl,omitempty"`
 }
 
 // AdminPluginInputAudience defines model for AdminPluginInput.Audience.
 type AdminPluginInputAudience string
 
-// AdminPluginInputAuthType defines model for AdminPluginInput.AuthType.
+// AdminPluginInputAuthType `none`; `header`, the administrator's value for everyone; `oauth`,
+// each person signs in; `token`, each person pastes a token of their
+// own, sent as `Authorization: Bearer`.
 type AdminPluginInputAuthType string
 
 // AdminPluginList defines model for AdminPluginList.
@@ -4219,7 +4247,8 @@ type Plugin struct {
 	About string `json:"about"`
 
 	// AuthType How it reaches its service: no account, one the administrator
-	// set up for everyone (`header`), or each person's own (`oauth`).
+	// set up for everyone (`header`), or each person's own: signed in
+	// (`oauth`) or a token they paste (`token`).
 	AuthType PluginAuthType `json:"authType"`
 
 	// Category The administrator's grouping (办公, 开发…); empty for none.
@@ -4232,6 +4261,9 @@ type Plugin struct {
 	// IconColor The mark's colour (CSS), empty for the default.
 	IconColor string `json:"iconColor"`
 
+	// IconInk The glyph's colour (CSS); empty draws it dark or white, whichever reads on iconColor.
+	IconInk string `json:"iconInk"`
+
 	// IconPath Its brand icon's SVG path (Simple Icons, 24 x 24), drawn instead of iconText; empty for none.
 	IconPath string `json:"iconPath"`
 
@@ -4241,7 +4273,7 @@ type Plugin struct {
 	Installed bool               `json:"installed"`
 	Name      string             `json:"name"`
 
-	// NeedsReconnect The caller's account for it stopped working (its token could not be refreshed); connecting again mends it.
+	// NeedsReconnect The caller's account for it stopped working (its token could not be refreshed, or the service refused the token they gave); connecting again mends it.
 	NeedsReconnect bool `json:"needsReconnect"`
 
 	// ReadTools Tools it offers that only read.
@@ -4253,21 +4285,28 @@ type Plugin struct {
 	// Slug The prefix of the plugin's tool names.
 	Slug string `json:"slug"`
 
+	// TokenUrl For `token`, the page where a person gets theirs; empty for none.
+	TokenUrl string `json:"tokenUrl"`
+
 	// WriteTools Tools it offers that may change things; the model asks before calling those the administrator did not allow outright.
 	WriteTools int `json:"writeTools"`
 }
 
 // PluginAuthType How it reaches its service: no account, one the administrator
-// set up for everyone (`header`), or each person's own (`oauth`).
+// set up for everyone (`header`), or each person's own: signed in
+// (`oauth`) or a token they paste (`token`).
 type PluginAuthType string
 
 // PluginBadge defines model for PluginBadge.
 type PluginBadge struct {
 	IconColor string `json:"iconColor"`
-	IconPath  string `json:"iconPath"`
-	IconText  string `json:"iconText"`
-	Name      string `json:"name"`
-	Slug      string `json:"slug"`
+
+	// IconInk The glyph's colour (CSS); empty draws it dark or white, whichever reads on iconColor.
+	IconInk  string `json:"iconInk"`
+	IconPath string `json:"iconPath"`
+	IconText string `json:"iconText"`
+	Name     string `json:"name"`
+	Slug     string `json:"slug"`
 }
 
 // PluginCallLog defines model for PluginCallLog.
@@ -6159,6 +6198,11 @@ type PluginOAuthCallbackParams struct {
 	Iss   *string `form:"iss,omitempty" json:"iss,omitempty"`
 }
 
+// SetPluginTokenJSONBody defines parameters for SetPluginToken.
+type SetPluginTokenJSONBody struct {
+	Token string `json:"token"`
+}
+
 // UpdatePasskeySettingsJSONRequestBody defines body for UpdatePasskeySettings for application/json ContentType.
 type UpdatePasskeySettingsJSONRequestBody = UpdatePasskeySettingsRequest
 
@@ -6335,6 +6379,9 @@ type SetMySkillEnabledJSONRequestBody = SkillEnabledRequest
 
 // UpdateMySkillJSONRequestBody defines body for UpdateMySkill for application/json ContentType.
 type UpdateMySkillJSONRequestBody = SkillRequest
+
+// SetPluginTokenJSONRequestBody defines body for SetPluginToken for application/json ContentType.
+type SetPluginTokenJSONRequestBody SetPluginTokenJSONBody
 
 // CreateTaskJSONRequestBody defines body for CreateTask for application/json ContentType.
 type CreateTaskJSONRequestBody = CreateTaskRequest
@@ -7802,6 +7849,9 @@ type ServerInterface interface {
 	// InstallPlugin Install a plugin
 	// (POST /plugins/{pluginId}/install)
 	InstallPlugin(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID)
+	// SetPluginToken Connect with the caller's own token
+	// (PUT /plugins/{pluginId}/token)
+	SetPluginToken(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID)
 	// ListTasks List your scheduled tasks
 	// (GET /tasks)
 	ListTasks(w http.ResponseWriter, r *http.Request)
@@ -8834,6 +8884,12 @@ func (_ Unimplemented) UninstallPlugin(w http.ResponseWriter, r *http.Request, p
 // InstallPlugin Install a plugin
 // (POST /plugins/{pluginId}/install)
 func (_ Unimplemented) InstallPlugin(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SetPluginToken Connect with the caller's own token
+// (PUT /plugins/{pluginId}/token)
+func (_ Unimplemented) SetPluginToken(w http.ResponseWriter, r *http.Request, pluginId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -13197,6 +13253,32 @@ func (siw *ServerInterfaceWrapper) InstallPlugin(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// SetPluginToken operation middleware
+func (siw *ServerInterfaceWrapper) SetPluginToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "pluginId" -------------
+	var pluginId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "pluginId", chi.URLParam(r, "pluginId"), &pluginId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pluginId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetPluginToken(w, r, pluginId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListTasks operation middleware
 func (siw *ServerInterfaceWrapper) ListTasks(w http.ResponseWriter, r *http.Request) {
 
@@ -13823,6 +13905,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/plugins/{pluginId}/connect", wrapper.ConnectPlugin)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/plugins/{pluginId}/token", wrapper.SetPluginToken)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/plugins/oauth/callback", wrapper.PluginOAuthCallback)

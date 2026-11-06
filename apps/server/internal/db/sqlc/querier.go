@@ -829,6 +829,9 @@ type Querier interface {
 	// The refresh token the server refused condemns the install only while it is
 	// still the stored one: a refresh elsewhere may have rotated it meanwhile.
 	MarkPluginNeedsReconnect(ctx context.Context, arg MarkPluginNeedsReconnectParams) error
+	// A person's own token the service refused, while it is still the stored one:
+	// they must give another.
+	MarkPluginTokenRefused(ctx context.Context, arg MarkPluginTokenRefusedParams) error
 	MarkPluginToolsFetched(ctx context.Context, id uuid.UUID) error
 	MarkReportsDelivered(ctx context.Context, arg MarkReportsDeliveredParams) error
 	// What a snapshot-time check found, recorded only while the version still has
@@ -840,6 +843,10 @@ type Querier interface {
 	// channels names wins — so the levels a run accepts are the levels the picker
 	// showed. No rows when the catalogue does not know the model.
 	ModelProfile(ctx context.Context, modelID string) (ModelProfileRow, error)
+	// Whether a channel of one of these types may answer a run of this model:
+	// enabled, offering it. A run may move to any of its channels (failover), so
+	// what one of them cannot carry is not sent to the model at all.
+	ModelServedByChannelTypes(ctx context.Context, arg ModelServedByChannelTypesParams) (bool, error)
 	// What each model has cost since the start of its window, and whether that has
 	// reached its capacity, for a set of models at once. The three arrays go
 	// together by position. A NULL `since` counts from the beginning (a total cap
@@ -915,7 +922,9 @@ type Querier interface {
 	// and a field it sends as null goes back to following the catalogue. A cap's
 	// period and exemption left out (NULL) are their defaults, total and exempt.
 	SaveModelOverride(ctx context.Context, arg SaveModelOverrideParams) (ModelOverride, error)
-	// A person's tokens after connecting or refreshing: the install is made, or brought up to date.
+	// A person's tokens after connecting or refreshing: the install is made, or
+	// brought up to date. token_for is the plugin's '<auth_type> <mcp_url>' the
+	// tokens were got from; a refresh token from another one is not kept.
 	SavePluginTokens(ctx context.Context, arg SavePluginTokensParams) error
 	// One step of a run: a new checkpoint, new live state, or both. Guarded on
 	// `running` so nothing can resurrect a run that already finished.

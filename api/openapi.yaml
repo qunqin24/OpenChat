@@ -2842,6 +2842,40 @@ paths:
                   authorizeUrl: { type: string }
         default: { $ref: "#/components/responses/Error" }
 
+  /plugins/{pluginId}/token:
+    parameters:
+      - name: pluginId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [plugins]
+      summary: Connect with the caller's own token
+      description: |
+        For a plugin that takes each person's token (`authType: token`):
+        connects to the service with it, and when the service takes it seals
+        it on the caller's install, installing the plugin. 422
+        `plugin_token_refused` when the service refuses it; 409
+        `secret_key_missing` without the sealing key; 502
+        `plugin_unreachable` when the service cannot be reached.
+      operationId: setPluginToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string, minLength: 1, maxLength: 4000 }
+      responses:
+        "200":
+          description: connected and installed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Plugin" }
+        default: { $ref: "#/components/responses/Error" }
+
   /plugins/oauth/callback:
     get:
       tags: [plugins]
@@ -4765,12 +4799,15 @@ components:
 
     PluginBadge:
       type: object
-      required: [slug, name, iconText, iconColor, iconPath]
+      required: [slug, name, iconText, iconColor, iconInk, iconPath]
       properties:
         slug: { type: string }
         name: { type: string }
         iconText: { type: string }
         iconColor: { type: string }
+        iconInk:
+          type: string
+          description: The glyph's colour (CSS); empty draws it dark or white, whichever reads on iconColor.
         iconPath: { type: string }
 
     AnswerPluginConfirmationRequest:
@@ -5649,6 +5686,10 @@ components:
         category: { type: string, maxLength: 30 }
         iconText: { type: string, maxLength: 4 }
         iconColor: { type: string, maxLength: 30 }
+        iconInk:
+          type: string
+          maxLength: 30
+          description: The glyph's colour (CSS); empty draws it dark or white, whichever reads on iconColor.
         iconSlug:
           type: string
           maxLength: 64
@@ -5664,7 +5705,17 @@ components:
           type: string
           maxLength: 2000
           description: The MCP service's Streamable HTTP address; empty for a plugin of skills only. May be on the internal network.
-        authType: { type: string, enum: [none, header, oauth] }
+        authType:
+          type: string
+          enum: [none, header, oauth, token]
+          description: |
+            `none`; `header`, the administrator's value for everyone; `oauth`,
+            each person signs in; `token`, each person pastes a token of their
+            own, sent as `Authorization: Bearer`.
+        tokenUrl:
+          type: string
+          maxLength: 2000
+          description: For `token`, the https page where a person gets theirs; empty for none.
         headerName: { type: string, maxLength: 100 }
         headerValue:
           type: string
@@ -5689,7 +5740,7 @@ components:
 
     AdminPlugin:
       type: object
-      required: [id, slug, name, description, about, category, iconText, iconColor, iconSlug, iconPath, featured, enabled, audience, mcpUrl, authType, headerName, headerSet, oauthClientId, oauthSecretSet, oauthScopes, oauthRegistered, directTools, sort, installs, tools, toolsOn, builtin]
+      required: [id, slug, name, description, about, category, iconText, iconColor, iconInk, iconSlug, iconPath, featured, enabled, audience, mcpUrl, authType, tokenUrl, headerName, headerSet, oauthClientId, oauthSecretSet, oauthScopes, oauthRegistered, directTools, sort, installs, tools, toolsOn, builtin]
       properties:
         directTools: { type: boolean }
         id: { type: string, format: uuid }
@@ -5700,13 +5751,17 @@ components:
         category: { type: string }
         iconText: { type: string }
         iconColor: { type: string }
+        iconInk:
+          type: string
+          description: The glyph's colour (CSS); empty draws it dark or white, whichever reads on iconColor.
         iconSlug: { type: string }
         iconPath: { type: string }
         featured: { type: boolean }
         enabled: { type: boolean }
         audience: { type: string, enum: [all, admins] }
         mcpUrl: { type: string }
-        authType: { type: string, enum: [none, header, oauth] }
+        authType: { type: string, enum: [none, header, oauth, token] }
+        tokenUrl: { type: string }
         headerName: { type: string }
         headerSet:
           type: boolean
@@ -5773,7 +5828,7 @@ components:
 
     Plugin:
       type: object
-      required: [id, slug, name, description, about, category, featured, iconText, iconColor, iconPath, authType, readTools, writeTools, skills, installed, needsReconnect]
+      required: [id, slug, name, description, about, category, featured, iconText, iconColor, iconInk, iconPath, authType, tokenUrl, readTools, writeTools, skills, installed, needsReconnect]
       properties:
         id: { type: string, format: uuid }
         slug:
@@ -5796,15 +5851,22 @@ components:
         iconColor:
           type: string
           description: The mark's colour (CSS), empty for the default.
+        iconInk:
+          type: string
+          description: The glyph's colour (CSS); empty draws it dark or white, whichever reads on iconColor.
         iconPath:
           type: string
           description: Its brand icon's SVG path (Simple Icons, 24 x 24), drawn instead of iconText; empty for none.
         authType:
           type: string
-          enum: [none, header, oauth]
+          enum: [none, header, oauth, token]
           description: |
             How it reaches its service: no account, one the administrator
-            set up for everyone (`header`), or each person's own (`oauth`).
+            set up for everyone (`header`), or each person's own: signed in
+            (`oauth`) or a token they paste (`token`).
+        tokenUrl:
+          type: string
+          description: For `token`, the page where a person gets theirs; empty for none.
         readTools:
           type: integer
           description: Tools it offers that only read.
@@ -5817,7 +5879,7 @@ components:
         installed: { type: boolean }
         needsReconnect:
           type: boolean
-          description: The caller's account for it stopped working (its token could not be refreshed); connecting again mends it.
+          description: The caller's account for it stopped working (its token could not be refreshed, or the service refused the token they gave); connecting again mends it.
 
     TaskList:
       type: object
@@ -7400,7 +7462,7 @@ components:
         choosing a protocol is a question the operator should not have to
         answer, so the type answers it for them. `GET /admin/channel-types`
         carries the full table.
-      enum: [openai, anthropic, gemini, openrouter, deepseek, siliconflow, moonshot, zhipu, dashscope, volcengine, minimax, xai, groq, ollama, mistral, stepfun, hunyuan, qianfan, mimo, together, fireworks, nvidia, modelscope, cerebras, opencode-go, lmstudio, openai-compatible]
+      enum: [openai, anthropic, gemini, openrouter, deepseek, siliconflow, moonshot, zhipu, dashscope, volcengine, minimax, xai, groq, ollama, mistral, stepfun, hunyuan, qianfan, mimo, together, fireworks, nvidia, modelscope, cerebras, opencode-go, command-code, lmstudio, openai-compatible]
 
     WireApi:
       type: string

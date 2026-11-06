@@ -448,6 +448,31 @@ func (q *Queries) ListChannelModels(ctx context.Context, channelID uuid.UUID) ([
 	return items, nil
 }
 
+const modelServedByChannelTypes = `-- name: ModelServedByChannelTypes :one
+SELECT EXISTS (SELECT 1
+               FROM channel_models cm
+                        JOIN channels c ON c.id = cm.channel_id
+               WHERE cm.model_id = $1
+                 AND cm.enabled
+                 AND c.enabled
+                 AND c.type::text = ANY ($2::text[]))::boolean
+`
+
+type ModelServedByChannelTypesParams struct {
+	ModelID string   `json:"model_id"`
+	Types   []string `json:"types"`
+}
+
+// Whether a channel of one of these types may answer a run of this model:
+// enabled, offering it. A run may move to any of its channels (failover), so
+// what one of them cannot carry is not sent to the model at all.
+func (q *Queries) ModelServedByChannelTypes(ctx context.Context, arg ModelServedByChannelTypesParams) (bool, error) {
+	row := q.db.QueryRow(ctx, modelServedByChannelTypes, arg.ModelID, arg.Types)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const servingChannels = `-- name: ServingChannels :many
 SELECT c.id, c.priority, c.weight
 FROM channel_models cm

@@ -13,7 +13,7 @@ const tr = t.t.bind(t) as Parameters<typeof pluginStepLabel>[0]
 
 const progress = (calls: PluginCodeProgress['calls']): PluginCodeProgress => ({
   calls,
-  plugins: [{ slug: 'github', name: 'GitHub', iconText: '', iconColor: '#181717', iconPath: '' }],
+  plugins: [{ slug: 'github', name: 'GitHub', iconText: '', iconColor: '#181717', iconInk: '', iconPath: '' }],
 })
 
 describe('plugin calls', () => {

@@ -6,7 +6,10 @@
 -- what tools it offers that are not blocked.
 SELECT p.*,
        (i.user_id IS NOT NULL)::boolean AS installed,
-       coalesce(i.needs_reconnect, false)::boolean AS needs_reconnect,
+       -- A token got for the plugin as it was before an administrator
+       -- changed its address or sign-in needs connecting again too.
+       (coalesce(i.needs_reconnect, false) OR
+        (i.access_token IS NOT NULL AND i.token_for IS DISTINCT FROM p.auth_type || ' ' || coalesce(p.mcp_url, '')))::boolean AS needs_reconnect,
        (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked' AND t.read_only)::bigint     AS read_tools,
        (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked' AND NOT t.read_only)::bigint AS write_tools,
        (SELECT count(*) FROM skills s WHERE s.plugin_id = p.id AND s.enabled)::bigint AS skills
@@ -20,7 +23,10 @@ ORDER BY p.featured DESC, p.sort, p.name;
 -- One plugin as ListUserPlugins has it; no row when the person may not see it.
 SELECT p.*,
        (i.user_id IS NOT NULL)::boolean AS installed,
-       coalesce(i.needs_reconnect, false)::boolean AS needs_reconnect,
+       -- A token got for the plugin as it was before an administrator
+       -- changed its address or sign-in needs connecting again too.
+       (coalesce(i.needs_reconnect, false) OR
+        (i.access_token IS NOT NULL AND i.token_for IS DISTINCT FROM p.auth_type || ' ' || coalesce(p.mcp_url, '')))::boolean AS needs_reconnect,
        (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked' AND t.read_only)::bigint     AS read_tools,
        (SELECT count(*) FROM plugin_tools t WHERE t.plugin_id = p.id AND t.permission <> 'blocked' AND NOT t.read_only)::bigint AS write_tools,
        (SELECT count(*) FROM skills s WHERE s.plugin_id = p.id AND s.enabled)::bigint AS skills
@@ -58,8 +64,9 @@ WHERE id = $1;
 
 -- name: CreatePlugin :one
 INSERT INTO plugins (slug, name, description, about, category, icon_text, icon_color, featured, enabled, audience,
-                     mcp_url, auth_type, header_name, header_secret, sort, icon_slug, icon_path, direct_tools)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                     mcp_url, auth_type, header_name, header_secret, sort, icon_slug, icon_path, direct_tools, token_url,
+                     icon_ink)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
 RETURNING *;
 
 -- name: UpdatePlugin :one
@@ -83,6 +90,8 @@ SET slug          = $2,
     icon_slug     = $16,
     icon_path     = $17,
     direct_tools  = $18,
+    token_url     = $19,
+    icon_ink      = $20,
     updated_at    = now()
 WHERE id = $1
 RETURNING *;
@@ -135,8 +144,8 @@ WHERE plugin_id = $1
 -- A built-in plugin, unless it was made before (or its short name is taken).
 -- Starts switched off: it needs an administrator's setup before anyone can use it.
 INSERT INTO plugins (builtin, slug, name, description, about, category, icon_text, icon_color, mcp_url, auth_type,
-                     enabled, sort, icon_slug, icon_path, oauth_scopes, header_name)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11, $12, $13, $14, $15)
+                     enabled, sort, icon_slug, icon_path, oauth_scopes, header_name, token_url, icon_ink)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11, $12, $13, $14, $15, $16, $17)
 ON CONFLICT DO NOTHING;
 
 -- name: FillBuiltinPluginIcon :exec
@@ -145,7 +154,8 @@ ON CONFLICT DO NOTHING;
 UPDATE plugins
 SET icon_slug  = sqlc.arg('icon_slug'),
     icon_path  = sqlc.arg('icon_path'),
-    icon_color = CASE WHEN icon_color = '' OR icon_slug = '' THEN sqlc.arg('icon_color') ELSE icon_color END
+    icon_color = CASE WHEN icon_color = '' OR icon_slug = '' THEN sqlc.arg('icon_color') ELSE icon_color END,
+    icon_ink   = CASE WHEN icon_color = '' OR icon_slug = '' THEN sqlc.arg('icon_ink') ELSE icon_ink END
 WHERE builtin = sqlc.arg('builtin')
   AND icon_path = '';
 
@@ -187,20 +197,34 @@ FROM plugin_oauth_states
 WHERE created_at <= now() - interval '10 minutes';
 
 -- name: SavePluginTokens :exec
--- A person's tokens after connecting or refreshing: the install is made, or brought up to date.
-INSERT INTO plugin_installs (user_id, plugin_id, access_token, refresh_token, token_expires_at, needs_reconnect)
-VALUES ($1, $2, $3, $4, $5, false)
+-- A person's tokens after connecting or refreshing: the install is made, or
+-- brought up to date. token_for is the plugin's '<auth_type> <mcp_url>' the
+-- tokens were got from; a refresh token from another one is not kept.
+INSERT INTO plugin_installs (user_id, plugin_id, access_token, refresh_token, token_expires_at, needs_reconnect, token_for)
+VALUES ($1, $2, $3, $4, $5, false, sqlc.arg(token_for))
 ON CONFLICT (user_id, plugin_id) DO UPDATE
     SET access_token     = excluded.access_token,
-        refresh_token    = coalesce(excluded.refresh_token, plugin_installs.refresh_token),
+        refresh_token    = CASE
+                               WHEN plugin_installs.token_for IS DISTINCT FROM excluded.token_for THEN excluded.refresh_token
+                               ELSE coalesce(excluded.refresh_token, plugin_installs.refresh_token) END,
         token_expires_at = excluded.token_expires_at,
-        needs_reconnect  = false;
+        needs_reconnect  = false,
+        token_for        = excluded.token_for;
 
 -- name: GetPluginInstall :one
 SELECT *
 FROM plugin_installs
 WHERE user_id = $1
   AND plugin_id = $2;
+
+-- name: MarkPluginTokenRefused :exec
+-- A person's own token the service refused, while it is still the stored one:
+-- they must give another.
+UPDATE plugin_installs
+SET needs_reconnect = true
+WHERE user_id = $1
+  AND plugin_id = $2
+  AND access_token = sqlc.arg(access_token)::bytea;
 
 -- name: MarkPluginNeedsReconnect :exec
 -- The refresh token the server refused condemns the install only while it is
@@ -230,6 +254,7 @@ SELECT p.id          AS plugin_id,
        p.direct_tools,
        p.icon_text,
        p.icon_color,
+       p.icon_ink,
        p.icon_path,
        t.name,
        t.title,
@@ -245,7 +270,8 @@ WHERE i.user_id = $1
   AND p.enabled
   AND (p.audience = 'all' OR u.role = 'admin')
   AND coalesce(p.mcp_url, '') <> ''
-  AND (p.auth_type <> 'oauth' OR (i.access_token IS NOT NULL AND NOT i.needs_reconnect))
+  AND (p.auth_type NOT IN ('oauth', 'token') OR (i.access_token IS NOT NULL AND NOT i.needs_reconnect
+                                                   AND i.token_for = p.auth_type || ' ' || coalesce(p.mcp_url, '')))
   AND t.permission <> 'blocked'
 ORDER BY p.slug, t.name;
 
@@ -259,6 +285,7 @@ SELECT p.id          AS plugin_id,
        p.direct_tools,
        p.icon_text,
        p.icon_color,
+       p.icon_ink,
        p.icon_path,
        t.name,
        t.title,
@@ -276,7 +303,8 @@ WHERE i.user_id = sqlc.arg('user_id')
   AND p.enabled
   AND (p.audience = 'all' OR u.role = 'admin')
   AND coalesce(p.mcp_url, '') <> ''
-  AND (p.auth_type <> 'oauth' OR (i.access_token IS NOT NULL AND NOT i.needs_reconnect))
+  AND (p.auth_type NOT IN ('oauth', 'token') OR (i.access_token IS NOT NULL AND NOT i.needs_reconnect
+                                                   AND i.token_for = p.auth_type || ' ' || coalesce(p.mcp_url, '')))
   AND t.permission <> 'blocked';
 
 -- name: GetConversationPluginCatalog :one

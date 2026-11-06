@@ -1,11 +1,15 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
+	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin24/openchat/apps/server/internal/httpx"
+	"github.com/qunqin24/openchat/apps/server/internal/llm"
 	"github.com/qunqin24/openchat/apps/server/internal/providers/openai"
 )
 
@@ -55,6 +59,10 @@ type channelTypeDef struct {
 	// custom endpoint — a flag here is a claim about a named vendor, never a
 	// guess about an operator's relay.
 	Compat openai.Compat `json:"-"`
+	// TextAndImages marks an endpoint whose messages carry text and pictures
+	// only, refusing a file or document part - a PDF sent whole. Such a
+	// channel's models get a PDF's words instead (servedModalities).
+	TextAndImages bool `json:"-"`
 	// Gateway is what a gateway asks every client to send: its own user agent,
 	// and the conversation's id in a session header. Nil sends neither.
 	Gateway *gatewayIdentity `json:"-"`
@@ -198,6 +206,20 @@ var channelTypes = []channelTypeDef{
 		Doc: "https://opencode.ai/auth", Route: openCodeRoute,
 		Compat:  openai.Compat{EchoReasoning: true},
 		Gateway: &gatewayIdentity{UserAgent: "OpenChat/1.0", SessionHeader: "x-opencode-session"}},
+	// Command Code's Provider API, the same idea under one base URL and one
+	// key: Claude answers on Messages only, everything else on Chat
+	// Completions and most of it on Responses too. Its models list says which
+	// for each (`supported_endpoints`, commandcode.ai/docs/provider-api); the
+	// route is a summary of it. The open models are the ones that want their
+	// reasoning handed back, and get no vendor thinking controls, for the
+	// reason OpenCode Go gets none: nothing says which fields it forwards.
+	{ID: "command-code", Label: "Command Code", WireApi: "openai", Group: Platform,
+		Endpoint: "https://api.commandcode.ai/provider/v1", KeyHint: "…", IconID: "commandcode",
+		Doc: "https://commandcode.ai/studio/", Route: commandCodeRoute,
+		Compat: openai.Compat{EchoReasoning: true},
+		// "Text and images. Audio, file, and document parts are rejected by
+		// the schema" (commandcode.ai/docs/provider, FAQs), on every endpoint.
+		TextAndImages: true},
 
 	// Servers the operator runs. A local one answers without a credential, which
 	// is what `KeyOptional` records.
@@ -222,6 +244,24 @@ func openCodeRoute(modelID string) string {
 	case strings.HasPrefix(id, "claude-"), strings.HasPrefix(id, "minimax-"), strings.HasPrefix(id, "qwen3."):
 		return wireAnthropic
 	case strings.HasPrefix(id, "gpt-"), strings.HasPrefix(id, "grok-"), strings.HasPrefix(id, "muse-spark-"):
+		return wireResponses
+	default:
+		return wireOpenAI
+	}
+}
+
+// commandCodeRoute is which API Command Code serves a model on: Claude on
+// Messages (it serves Claude nowhere else), GPT on Responses (every GPT it
+// lists has it, and it is where OpenAI's reasoning carries over between
+// turns), and the rest on Chat Completions, which every other model it lists
+// answers on — some of them on nothing else. Its ids are bare for Claude and
+// GPT (`claude-haiku-5-5`, `gpt-6.1-sol`) and `maker/model` for the rest.
+func commandCodeRoute(modelID string) string {
+	id := strings.ToLower(modelID)
+	switch {
+	case strings.HasPrefix(id, "claude-"):
+		return wireAnthropic
+	case strings.HasPrefix(id, "gpt-"):
 		return wireResponses
 	default:
 		return wireOpenAI
@@ -292,6 +332,36 @@ func (s *Server) ListChannelTypes(w http.ResponseWriter, r *http.Request) {
 		out = append(out, info)
 	}
 	httpx.JSON(w, http.StatusOK, out)
+}
+
+// textAndImagesTypes are the channel types that take no file parts.
+func textAndImagesTypes() []string {
+	var out []string
+	for _, def := range channelTypes {
+		if def.TextAndImages {
+			out = append(out, string(def.ID))
+		}
+	}
+	return out
+}
+
+// servedModalities is what a model may be sent besides text, as its settings
+// say, less a PDF whole when a channel that may answer it takes no file parts:
+// the PDF then goes as its words (the same as for a model that does not read
+// PDFs), which every channel takes.
+func servedModalities(ctx context.Context, q *sqlc.Queries, modelID string, modalities []string) ([]string, error) {
+	if !slices.Contains(modalities, llm.ModalityPDF) {
+		return modalities, nil
+	}
+	types := textAndImagesTypes()
+	if len(types) == 0 {
+		return modalities, nil
+	}
+	served, err := q.ModelServedByChannelTypes(ctx, sqlc.ModelServedByChannelTypesParams{ModelID: modelID, Types: types})
+	if err != nil || !served {
+		return modalities, err
+	}
+	return slices.DeleteFunc(slices.Clone(modalities), func(m string) bool { return m == llm.ModalityPDF }), nil
 }
 
 // compatFor is how a channel type's Chat Completions requests differ from the

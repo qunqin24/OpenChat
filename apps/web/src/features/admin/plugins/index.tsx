@@ -229,15 +229,15 @@ export function AdminPlugins() {
 
 export default AdminPlugins
 
-function Mark({ plugin }: { plugin: Pick<AdminPlugin, 'iconText' | 'iconColor' | 'iconPath' | 'name'> }) {
+function Mark({ plugin }: { plugin: Pick<AdminPlugin, 'iconText' | 'iconColor' | 'iconInk' | 'iconPath' | 'name'> }) {
   return (
     <span
       aria-hidden="true"
       className="bg-foreground text-background grid size-9 shrink-0 place-items-center rounded-lg text-sm font-semibold"
-      style={plugin.iconColor ? { background: plugin.iconColor, color: glyphColor(plugin.iconColor) } : undefined}
+      style={plugin.iconColor ? { background: plugin.iconColor, color: plugin.iconInk || glyphColor(plugin.iconColor) } : undefined}
     >
       {plugin.iconPath ? (
-        <svg viewBox="0 0 24 24" className="size-5" fill="currentColor">
+        <svg viewBox="0 0 24 24" className="size-5" fill="currentColor" overflow="visible">
           <path d={plugin.iconPath} />
         </svg>
       ) : (
@@ -255,9 +255,14 @@ function hostOf(address: string): string {
   }
 }
 
-/** A plugin as the form sends it back, the header's value left as it is. */
+/**
+ * A plugin as the form sends it back, the header's value left as it is. The
+ * update replaces the whole plugin, so a field left out here is wiped by a mere
+ * switch on or off (tokenUrl was): `satisfies` makes leaving one out a type
+ * error, all but the two secrets, which are kept by being absent.
+ */
 function inputOf(plugin: AdminPlugin): AdminPluginInput {
-  return {
+  const input = {
     slug: plugin.slug,
     name: plugin.name,
     description: plugin.description,
@@ -265,6 +270,7 @@ function inputOf(plugin: AdminPlugin): AdminPluginInput {
     category: plugin.category,
     iconText: plugin.iconText,
     iconColor: plugin.iconColor,
+    iconInk: plugin.iconInk,
     iconSlug: plugin.iconSlug,
     iconPath: plugin.iconPath,
     featured: plugin.featured,
@@ -276,9 +282,11 @@ function inputOf(plugin: AdminPlugin): AdminPluginInput {
     // Sent back as they are, so switching it on or off keeps its OAuth client.
     oauthClientId: plugin.oauthRegistered ? '' : plugin.oauthClientId,
     oauthScopes: plugin.oauthScopes,
+    tokenUrl: plugin.tokenUrl,
     directTools: plugin.directTools,
     sort: plugin.sort,
-  }
+  } satisfies Required<Omit<AdminPluginInput, 'headerValue' | 'oauthClientSecret'>>
+  return input
 }
 
 function PluginEditor({ plugin, secretKeySet, onSaved }: { plugin: AdminPlugin | null; secretKeySet: boolean; onSaved: (p: AdminPlugin) => void }) {
@@ -333,6 +341,7 @@ function SettingsForm({ plugin, secretKeySet, onSaved }: { plugin: AdminPlugin |
     category: z.string().max(30),
     iconText: z.string().max(4),
     iconColor: z.string().max(30),
+    iconInk: z.string().max(30),
     iconSlug: z.string(),
     iconPath: z.string(),
     featured: z.boolean(),
@@ -342,7 +351,12 @@ function SettingsForm({ plugin, secretKeySet, onSaved }: { plugin: AdminPlugin |
       .trim()
       // openchat:<name> is a built-in's service that runs inside OpenChat (plugins.LocalScheme).
       .refine((v) => v === '' || /^https?:\/\/\S+$/.test(v) || /^openchat:[a-z0-9-]+$/.test(v), t('admin.plugins.url-rule')),
-    authType: z.enum(['none', 'header', 'oauth']),
+    authType: z.enum(['none', 'header', 'oauth', 'token']),
+    tokenUrl: z
+      .string()
+      .trim()
+      .max(2000)
+      .refine((v) => v === '' || /^https:\/\/\S+$/.test(v), t('admin.plugins.token-url-rule')),
     headerName: z.string().trim().max(100),
     headerValue: z.string(),
     oauthClientId: z.string().trim().max(300),
@@ -363,12 +377,14 @@ function SettingsForm({ plugin, secretKeySet, onSaved }: { plugin: AdminPlugin |
       category: plugin?.category ?? '',
       iconText: plugin?.iconText ?? '',
       iconColor: plugin?.iconColor ?? '',
+      iconInk: plugin?.iconInk ?? '',
       iconSlug: plugin?.iconSlug ?? '',
       iconPath: plugin?.iconPath ?? '',
       featured: plugin?.featured ?? false,
       audience: plugin?.audience ?? 'all',
       mcpUrl: plugin?.mcpUrl ?? '',
       authType: plugin?.authType ?? 'none',
+      tokenUrl: plugin?.tokenUrl ?? '',
       headerName: plugin?.headerName || 'Authorization',
       headerValue: '',
       // One registered on the fly is the server's, not a field to edit.
@@ -382,12 +398,16 @@ function SettingsForm({ plugin, secretKeySet, onSaved }: { plugin: AdminPlugin |
   const authType = useWatch({ control: form.control, name: 'authType' })
   // Where the service sends people back: what its OAuth app is registered with.
   const callbackURL = `${window.location.origin}/api/v1/plugins/oauth/callback`
-  const preview = useWatch({ control: form.control, name: ['iconText', 'iconColor', 'name', 'iconPath', 'iconSlug'] })
-  // A picked icon brings its brand colour; clearing it keeps the colour.
+  const preview = useWatch({ control: form.control, name: ['iconText', 'iconColor', 'name', 'iconPath', 'iconSlug', 'iconInk'] })
+  // A picked icon brings its brand colour, and the ink that colour chooses
+  // until one is given; clearing it keeps both.
   const pickIcon = (icon: BrandIcon | null) => {
     form.setValue('iconSlug', icon?.slug ?? '', { shouldDirty: true })
     form.setValue('iconPath', icon?.path ?? '', { shouldDirty: true })
-    if (icon) form.setValue('iconColor', `#${icon.hex}`, { shouldDirty: true })
+    if (icon) {
+      form.setValue('iconColor', `#${icon.hex}`, { shouldDirty: true })
+      form.setValue('iconInk', '', { shouldDirty: true })
+    }
   }
 
   const submit = (values: Values) => {
@@ -420,7 +440,7 @@ function SettingsForm({ plugin, secretKeySet, onSaved }: { plugin: AdminPlugin |
     )
   }
 
-  const text = (name: 'name' | 'slug' | 'description' | 'category' | 'iconText' | 'iconColor' | 'mcpUrl' | 'headerName' | 'sort', label: string, hint?: string, placeholder?: string) => (
+  const text = (name: 'name' | 'slug' | 'description' | 'category' | 'iconText' | 'iconColor' | 'iconInk' | 'mcpUrl' | 'tokenUrl' | 'headerName' | 'sort', label: string, hint?: string, placeholder?: string) => (
     <FormField
       control={form.control}
       name={name}
@@ -443,14 +463,15 @@ function SettingsForm({ plugin, secretKeySet, onSaved }: { plugin: AdminPlugin |
         {/* The mark beside the icon picker, level with its box; the colour,
             and the letters drawn when there is no icon, under it. */}
         <div className="flex items-end gap-3">
-          <Mark plugin={{ iconText: preview[0], iconColor: preview[1], name: preview[2] || '?', iconPath: preview[3] }} />
+          <Mark plugin={{ iconText: preview[0], iconColor: preview[1], iconInk: preview[5], name: preview[2] || '?', iconPath: preview[3] }} />
           <div className="grid flex-1 gap-2">
             <FormLabel>{t('admin.plugins.icon')}</FormLabel>
             <IconPicker slug={preview[4]} onPick={pickIcon} />
           </div>
         </div>
-        <div className="grid grid-cols-2 items-start gap-3">
+        <div className="grid grid-cols-3 items-start gap-3">
           {text('iconColor', t('admin.plugins.icon-color'), undefined, '#181717')}
+          {text('iconInk', t('admin.plugins.icon-ink'), t('admin.plugins.icon-ink-hint'), '#FFC72C')}
           {text('iconText', t('admin.plugins.icon-text'), t('admin.plugins.icon-text-hint'), 'GH')}
         </div>
         <p className="text-muted-foreground -mt-2 text-xs">{t('admin.plugins.icon-credit')}</p>
@@ -534,6 +555,7 @@ function SettingsForm({ plugin, secretKeySet, onSaved }: { plugin: AdminPlugin |
                   <SelectItem value="none">{t('admin.plugins.auth-none')}</SelectItem>
                   <SelectItem value="header">{t('admin.plugins.auth-header')}</SelectItem>
                   <SelectItem value="oauth">{t('admin.plugins.auth-oauth')}</SelectItem>
+                  <SelectItem value="token">{t('admin.plugins.auth-token')}</SelectItem>
                 </SelectContent>
               </Select>
               <FormDescription>{t(`admin.plugins.auth-${authType}-hint`)}</FormDescription>
@@ -563,6 +585,8 @@ function SettingsForm({ plugin, secretKeySet, onSaved }: { plugin: AdminPlugin |
             />
           </div>
         )}
+
+        {authType === 'token' && text('tokenUrl', t('admin.plugins.token-url'), t('admin.plugins.token-url-hint'), 'https://')}
 
         {authType === 'oauth' && (
           <div className="space-y-4">
@@ -684,7 +708,7 @@ function ToolsPanel({ plugin }: { plugin: AdminPlugin }) {
         <p className="text-muted-foreground text-sm">
           {!plugin.mcpUrl
             ? t('admin.plugins.tools-no-service')
-            : plugin.authType === 'oauth'
+            : plugin.authType === 'oauth' || plugin.authType === 'token'
               ? t('admin.plugins.tools-oauth')
               : fetched
                 ? t('admin.plugins.tools-fetched', {

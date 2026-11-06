@@ -52,7 +52,10 @@ export function restoreQueryCache(client: QueryClient) {
     // as fresh and never checked — a reload right after a change would show
     // the page as it was before it.
     for (const query of stored.state.queries) query.state.dataUpdatedAt = 0
-    hydrate(client, stored.state)
+    // Reads only: a cache saved before writes were kept out may still hold a
+    // paused one, and its variables (a pasted plugin token, say) are not to
+    // come back - the next save drops them from storage too.
+    hydrate(client, { ...stored.state, mutations: [] })
     restoredOwner = stored.owner
   } catch {
     // Unreadable or blocked: start from the network.
@@ -131,6 +134,10 @@ function save(client: QueryClient) {
 
   const write = (withTranscripts: boolean) => {
     const state = dehydrate(client, {
+      // Never a write. By default a paused one (sent offline) is kept, with
+      // its variables - a plugin token pasted on the plugins page, a message -
+      // in plain text in storage; nothing here would resume it anyway.
+      shouldDehydrateMutation: () => false,
       shouldDehydrateQuery: (query) => {
         if (query.state.status !== 'success') return false
         if (always.some((prefix) => isKey(query, prefix))) return true

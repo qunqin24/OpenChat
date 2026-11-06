@@ -30,11 +30,17 @@ var (
 func toPlugin(row sqlc.ListUserPluginsRow) Plugin {
 	return Plugin{
 		Id: row.ID, Slug: row.Slug, Name: row.Name, Description: row.Description, About: row.About,
-		Category: row.Category, Featured: row.Featured, IconText: row.IconText, IconColor: row.IconColor,
+		Category: row.Category, Featured: row.Featured, IconText: row.IconText, IconColor: row.IconColor, IconInk: row.IconInk,
 		IconPath: row.IconPath,
 		AuthType: PluginAuthType(row.AuthType), ReadTools: int(row.ReadTools), WriteTools: int(row.WriteTools),
-		Skills: int(row.Skills), Installed: row.Installed, NeedsReconnect: row.NeedsReconnect,
+		Skills: int(row.Skills), Installed: row.Installed, NeedsReconnect: row.NeedsReconnect, TokenUrl: row.TokenUrl,
 	}
+}
+
+// actsAsPerson is whether a plugin reaches its service as each person, with
+// their own account there: signed in (oauth) or with a token they gave.
+func actsAsPerson(authType string) bool {
+	return authType == "oauth" || authType == "token"
 }
 
 func (s *Server) ListPlugins(w http.ResponseWriter, r *http.Request) {
@@ -66,8 +72,9 @@ func (s *Server) InstallPlugin(w http.ResponseWriter, r *http.Request, pluginId 
 		return
 	}
 	// Installing one that acts as the person is connecting their account
-	// (ConnectPlugin), which makes the install; it is not installed half-way.
-	if plugin.AuthType == "oauth" && !plugin.Installed {
+	// (ConnectPlugin, SetPluginToken), which makes the install; it is not
+	// installed half-way.
+	if actsAsPerson(plugin.AuthType) && !plugin.Installed {
 		httpx.Fail(w, r, errPluginNeedsAccount)
 		return
 	}

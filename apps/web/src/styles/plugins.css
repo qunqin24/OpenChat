@@ -291,6 +291,58 @@
   gap: 8px;
 }
 
+/* The person's own token, for a plugin that takes one (TokenForm): the field
+   as the task dialog's, with where to get one beside its label. */
+.chat-ui .n-plugin-token-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 6px;
+}
+
+.chat-ui .n-plugin-token-label {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.chat-ui .n-plugin-token-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--n-text-2);
+  font-size: 12px;
+  line-height: 16px;
+  text-decoration: none;
+}
+
+.chat-ui .n-plugin-token-link:hover {
+  color: var(--n-text);
+}
+
+.chat-ui .n-plugin-token-link svg {
+  width: 12px;
+  height: 12px;
+}
+
+.chat-ui .n-plugin-token-input {
+  width: 100%;
+  min-height: 38px;
+  margin: 0 0 18px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--n-hover);
+  color: var(--n-text);
+  font: inherit;
+  outline: none;
+}
+
+.chat-ui .n-plugin-token-input:focus-visible {
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--n-text) 30%, transparent);
+}
+
 /* An account that stopped working: said above what the plugin does. */
 .chat-ui .n-plugin-dialog-about.is-warning {
   color: var(--n-err);

@@ -489,6 +489,10 @@ func (s *Server) admitAttachments(ctx context.Context, userID uuid.UUID, modelID
 	if err != nil {
 		return nil, nil, err
 	}
+	// As its channels can carry them: a PDF whole only where every one can.
+	if settings.InputModalities, err = servedModalities(ctx, s.q, modelID, settings.InputModalities); err != nil {
+		return nil, nil, err
+	}
 	for _, file := range files {
 		if !modelTakes(settings.InputModalities, file.ContentType) {
 			return nil, nil, errAttachmentUnsupported
