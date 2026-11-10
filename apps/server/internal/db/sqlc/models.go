@@ -128,7 +128,6 @@ type MemorySource string
 const (
 	MemorySourceUser  MemorySource = "user"
 	MemorySourceModel MemorySource = "model"
-	MemorySourceAuto  MemorySource = "auto"
 )
 
 func (e *MemorySource) Scan(src interface{}) error {
@@ -909,7 +908,6 @@ type User struct {
 	InstructionsAbout            string             `json:"instructions_about"`
 	InstructionsStyle            string             `json:"instructions_style"`
 	MemoryEnabled                bool               `json:"memory_enabled"`
-	MemoryLearn                  bool               `json:"memory_learn"`
 	AvatarKey                    *string            `json:"avatar_key"`
 	Pending                      bool               `json:"pending"`
 	InstructionsAboutCheckedHash *string            `json:"instructions_about_checked_hash"`

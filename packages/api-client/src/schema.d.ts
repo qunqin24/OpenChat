@@ -4247,11 +4247,10 @@ export interface components {
             chatHistoryEnabled?: boolean;
         };
         /**
-         * @description Who wrote it: `user` by hand, `model` with its memory tool, `auto` is
-         *     reserved for learning from conversations (not offered yet).
+         * @description Who wrote it: `user` by hand, `model` with its memory tool.
          * @enum {string}
          */
-        MemorySource: "user" | "model" | "auto";
+        MemorySource: "user" | "model";
         Memory: {
             /** Format: uuid */
             id: string;

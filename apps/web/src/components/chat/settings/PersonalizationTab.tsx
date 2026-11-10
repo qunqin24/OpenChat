@@ -151,14 +151,6 @@ function Loaded({ host }: { host: HTMLElement | null }) {
           )}
         </div>
 
-        <div className={cn('n-settings-line', 'is-disabled')}>
-          <div className="n-settings-small-label">
-            {t('settings.personalization.learn')}
-            <span className="n-settings-badge">{t('settings.personalization.soon')}</span>
-          </div>
-          <ToggleSwitch checked={false} disabled aria-label={t('settings.personalization.learn')} />
-        </div>
-
         <hr className="n-settings-rule" />
 
         <div className="n-settings-line">

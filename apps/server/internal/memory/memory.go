@@ -67,7 +67,6 @@ type Source = sqlc.MemorySource
 const (
 	SourceUser  = sqlc.MemorySourceUser
 	SourceModel = sqlc.MemorySourceModel
-	SourceAuto  = sqlc.MemorySourceAuto
 )
 
 // Store reads and writes a person's memory.

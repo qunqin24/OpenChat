@@ -178,7 +178,6 @@
   line-height: 17px;
 }
 .chat-ui .n-settings-line { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.chat-ui .n-settings-line.is-disabled { margin-top: 14px; opacity: 0.6; }
 .chat-ui .n-settings-line .n-settings-subheading { margin-bottom: 0; }
 .chat-ui .n-settings-rule { margin: 16px 0; border: 0; border-top: 1px solid var(--n-line); }
 .chat-ui .n-settings-field { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }

@@ -788,7 +788,6 @@ func (e MemoryEventOp) Valid() bool {
 
 // Defines values for MemorySource.
 const (
-	MemorySourceAuto  MemorySource = "auto"
 	MemorySourceModel MemorySource = "model"
 	MemorySourceUser  MemorySource = "user"
 )
@@ -796,8 +795,6 @@ const (
 // Valid indicates whether the value is a known member of the MemorySource enum.
 func (e MemorySource) Valid() bool {
 	switch e {
-	case MemorySourceAuto:
-		return true
 	case MemorySourceModel:
 		return true
 	case MemorySourceUser:
@@ -3685,8 +3682,7 @@ type Memory struct {
 	CreatedAt      time.Time           `json:"createdAt"`
 	Id             openapi_types.UUID  `json:"id"`
 
-	// Source Who wrote it: `user` by hand, `model` with its memory tool, `auto` is
-	// reserved for learning from conversations (not offered yet).
+	// Source Who wrote it: `user` by hand, `model` with its memory tool.
 	Source    MemorySource `json:"source"`
 	UpdatedAt time.Time    `json:"updatedAt"`
 }
@@ -3701,8 +3697,7 @@ type MemoryEvent struct {
 	MemoryId       openapi_types.UUID  `json:"memoryId"`
 	Op             MemoryEventOp       `json:"op"`
 
-	// Source Who wrote it: `user` by hand, `model` with its memory tool, `auto` is
-	// reserved for learning from conversations (not offered yet).
+	// Source Who wrote it: `user` by hand, `model` with its memory tool.
 	Source   MemorySource `json:"source"`
 	UndoneAt *time.Time   `json:"undoneAt,omitempty"`
 }
@@ -3727,8 +3722,7 @@ type MemoryRequest struct {
 	Content string `json:"content"`
 }
 
-// MemorySource Who wrote it: `user` by hand, `model` with its memory tool, `auto` is
-// reserved for learning from conversations (not offered yet).
+// MemorySource Who wrote it: `user` by hand, `model` with its memory tool.
 type MemorySource string
 
 // Message One immutable transcript row: a user's input, one model response, or

@@ -1984,8 +1984,6 @@
       "chat-history": "Reference chat history",
       "chat-history-description": "New chats know what you've talked about recently, and can look through your earlier conversations when needed. Temporary chats are left out.",
       "chat-history-admin-off": "An administrator has turned reference chat history off: no new chat is given recent conversations or can look through earlier ones for now.",
-      "learn": "Learn from conversations",
-      "soon": "Coming soon",
       "memory-description": "Add memories with Manage below to make the model more helpful and tailored to you. The model also keeps notes worth remembering on its own as you chat, tells you in its reply, and you can undo it."
     },
     "refused": {
@@ -2003,7 +2001,6 @@
       "edit": "Edit",
       "delete": "Delete",
       "source-model": "Added by model",
-      "source-auto": "Automatic",
       "recent": "Recently changed by the model",
       "op-add": "Added",
       "op-update": "Updated",

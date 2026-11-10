@@ -5000,9 +5000,8 @@ components:
     MemorySource:
       type: string
       description: |
-        Who wrote it: `user` by hand, `model` with its memory tool, `auto` is
-        reserved for learning from conversations (not offered yet).
-      enum: [user, model, auto]
+        Who wrote it: `user` by hand, `model` with its memory tool.
+      enum: [user, model]
 
     Memory:
       type: object
