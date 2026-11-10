@@ -214,6 +214,7 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 - 标题只有检查过才给模型看（`Store.TitleChecked`，哈希在 `conversations.title_checked_hash`）：模型起的写入时记为已检查，用户改的在取快照时和指令、记忆一起审。新增把标题放进提示词或工具结果的路径照此；其余读到的内容不审。
 - 新的软删除对话路径必须在事务开头、锁任何对话行之前取 `LockRecentChats`，并在同一事务里 `RemoveFromRecentChats`；保存带清单的快照只走 `Store.saveSnapshot`（同一把锁）。别改回各锁各的行：互相列着对方的对话同时删除会死锁。
 - `chat_history` 不给子 Agent 和深度研究的任何阶段，定时任务的 run 可以用；这个 run 里搜到过的对话记在 `Scope.State`，默认不再返回。搜索是子串匹配加 Go 里排序，不要引入向量库或全文检索引擎。
+- 改提示词、工具说明、清单或搜索的预算，前后各跑一遍评测（`go run ./cmd/evalhistory`，真实模型，需要 `make ser`），比较通过率。
 
 细节：[参考聊天记录](docs/design/chat-history-plan.md)。
 

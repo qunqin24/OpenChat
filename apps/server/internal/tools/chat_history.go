@@ -110,7 +110,8 @@ func (ChatHistory) Definition() llm.Tool {
 			"words or short phrases, matched as text anywhere in a message, ignoring case; give the user's own " +
 			"words and spellings, and alternatives rather than a long sentence). It returns the best few matches, " +
 			"each with the messages around it, and the id of each conversation. Optional from and to (YYYY-MM-DD, " +
-			"both included) restrict it to a period. Conversations a search already returned in this run are left " +
+			"both included) restrict it to a period: leave them out unless the user said when it was, because a " +
+			"guessed period misses everything outside it. Conversations a search already returned in this run are left " +
 			"out of the next one so that it finds new ones; set include_seen to true to get them again. " +
 			"op=read opens one conversation and returns its messages in order (conversation: a reference such as " +
 			"c3 from the list of recent conversations, or an id from a search result; offset: where to start, " +
@@ -303,7 +304,7 @@ func (h ChatHistory) search(ctx context.Context, scope agent.Scope, args ChatHis
 	}
 	details := ChatHistoryDetails{Op: "search", Keywords: keywords, From: strings.TrimSpace(args.From), To: strings.TrimSpace(args.To)}
 	if len(rows) == 0 {
-		return agent.ToolResult{Content: noMatches(keywords, len(skip) > 0), Details: details}, nil
+		return agent.ToolResult{Content: noMatches(keywords, len(skip) > 0, fromAt.Valid || toAt.Valid), Details: details}, nil
 	}
 
 	corpus, err := h.Q.HistoryCorpusStats(ctx, sqlc.HistoryCorpusStatsParams{UserID: &user, CurrentID: scope.ConversationID})
@@ -394,7 +395,7 @@ func (h ChatHistory) search(ctx context.Context, scope agent.Scope, args ChatHis
 		found = append(found, sp.ConversationID)
 	}
 	if blocks == 0 {
-		return agent.ToolResult{Content: noMatches(keywords, len(skip) > 0), Details: details}, nil
+		return agent.ToolResult{Content: noMatches(keywords, len(skip) > 0, fromAt.Valid || toAt.Valid), Details: details}, nil
 	}
 	seen.add(found...)
 	// One entry per conversation on the page, however many stretches it has.
@@ -408,8 +409,14 @@ func (h ChatHistory) search(ctx context.Context, scope agent.Scope, args ChatHis
 	return agent.ToolResult{Content: wrapResult(head, out.String()), Details: details}, nil
 }
 
-func noMatches(keywords []string, skipped bool) string {
+// noMatches says what to try next: a search narrowed by a period the user may
+// never have named is the first thing to widen.
+func noMatches(keywords []string, skipped, period bool) string {
 	text := "No messages in the user's earlier conversations contain " + quoteAll(keywords) + "."
+	if period {
+		text = "No messages in that period contain " + quoteAll(keywords) + ". Unless the user said when it was, " +
+			"search again without from and to before concluding it is not there."
+	}
 	if skipped {
 		text += " Conversations returned by earlier searches in this run were left out; set include_seen to true to " +
 			"search them too."
