@@ -77,7 +77,7 @@ OPENCHAT_IMAGE=ghcr.io/qunqin24/openchat:1.0.0
 | --- | --- | --- |
 | `DATABASE_URL` | 本机开发库 | Postgres 连接串。Compose 里指向 `postgres` 服务 |
 | `HTTP_ADDR` | `:8080` | 监听地址 |
-| `CORS_ORIGINS` | `http://localhost:5173` | 允许的跨域来源，逗号分隔。网页和 API 同源时用不到；Compose 里设为 `https://<DOMAIN>` |
+| `CORS_ORIGINS` | `http://localhost:5173` | 本站网页的来源，逗号分隔。不只管跨域：通行密钥固定了 RP ID 而没列来源时拿它们当可信来源，浏览器工具也据此不访问本站。应当是用户实际打开的地址；Compose 里设为 `https://<DOMAIN>` |
 | `SHUTDOWN_TIMEOUT` | `15s` | 收到停止信号后等待请求结束的时间 |
 | `LOG_FILE` | 空（不写文件） | 日志副本的文件路径，JSON 行。镜像把它设为 `/app/data/logs/openchat.log`，在数据卷里，更新镜像后也还在。Compose 不从 `deploy/.env` 转发它；要改，在 `deploy/docker-compose.yml` 的 `openchat` 服务 `environment` 里写 |
 | `LOG_FILE_MAX_MB` | `20` | 日志文件写到多少 MB 就换新文件。Compose 从 `deploy/.env` 转发，没写就是 20 |

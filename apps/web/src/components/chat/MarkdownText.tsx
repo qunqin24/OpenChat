@@ -28,20 +28,3 @@ export function Markdown({ text, streaming = false, fresh = false }: { text: str
     </div>
   )
 }
-
-/**
- * Plain text shown the way an answer's Markdown is - each batch fading in as
- * it arrives - for what is not drawn as Markdown: the model's thinking and
- * notes inside the activity line.
- */
-export function PlainReveal({ text }: { text: string; streaming?: boolean }) {
-  const content = useRef<HTMLSpanElement>(null)
-  const layer = useRef<HTMLSpanElement>(null)
-  useArrivalFade(content, layer, text)
-  return (
-    <span className="n-reveal-plain">
-      <span ref={content}>{text}</span>
-      <span ref={layer} className="n-arrival" aria-hidden="true" />
-    </span>
-  )
-}

@@ -1,6 +1,6 @@
 import type { ContextSummary, Message, MessagePart, ToolResultPart } from '@openchat/api-client'
 
-import { ASK_USER } from './ask-user'
+import { ASK_USER, parseQuestions, type AskQuestion } from './ask-user'
 import { RESEARCH_PLAN } from './research-plan'
 import type { LiveRun } from './run-state'
 import { isReportRow, parseReports, type ReportNotice } from './subagents'
@@ -290,6 +290,43 @@ export function turnText(turn: AssistantTurn): string {
  */
 export function pendingQuestion(turns: Turn[], busy: boolean): string | null {
   return pendingCall(turns, busy, ASK_USER)
+}
+
+/**
+ * The questions of the call the conversation is waiting on (pendingQuestion),
+ * or null when there is none or its arguments are not questions.
+ */
+export function askedQuestions(turns: Turn[], callId: string | null): { callId: string; questions: AskQuestion[] } | null {
+  if (!callId) return null
+  for (const turn of turns) {
+    if (turn.kind !== 'assistant') continue
+    for (const response of turn.responses) {
+      for (const part of response.parts) {
+        if (part.type === 'tool_call' && part.id === callId) {
+          const questions = parseQuestions(part.arguments)
+          return questions ? { callId, questions } : null
+        }
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * What the person sent after each reply, by the reply's turn key, for its
+ * Choices blocks to mark the choice it was. `outgoing` is a message on its way,
+ * which follows the last reply.
+ */
+export function sentAfterReplies(turns: Turn[], outgoing?: string): Map<string, { next?: string }> {
+  const byTurn = new Map<string, { next?: string }>()
+  let next = outgoing
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const turn = turns[i]
+    if (!turn) continue
+    if (turn.kind === 'user') next = turn.message.content
+    else if (turn.kind === 'assistant') byTurn.set(turn.key, { next })
+  }
+  return byTurn
 }
 
 /** The research plan the conversation is waiting on, by call id, as pendingQuestion. */

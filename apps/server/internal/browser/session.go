@@ -30,10 +30,10 @@ type Session struct {
 	cancel context.CancelFunc
 	user   uuid.UUID
 
-	mu      sync.Mutex
-	used    time.Time
-	refs    map[string]cdp.BackendNodeID
-	labels  map[string]string
+	mu     sync.Mutex
+	used   time.Time
+	refs   map[string]cdp.BackendNodeID
+	labels map[string]string
 
 	// What the page does on its own, from its events: apart from mu, which
 	// an action holds while the page may be waiting on a dialog.
@@ -358,11 +358,9 @@ type Element struct {
 	Tag      string `json:"tag"`
 	Type     string `json:"type"`
 	Text     string `json:"text"`
-	InForm   bool   `json:"inForm"`
 	Password bool   `json:"password"`
 	// Payment: its form asks for a card.
-	Payment bool   `json:"payment"`
-	Href    string `json:"href"`
+	Payment bool `json:"payment"`
 	// FormMethod is its form's method, get or post; empty outside a form.
 	FormMethod string `json:"formMethod"`
 	// Search: its form is a search (role=search, or a search box in it).
@@ -377,12 +375,10 @@ const describe = `function() {
     tag: (el.tagName || '').toLowerCase(),
     type: (el.type || el.getAttribute && el.getAttribute('type') || '').toLowerCase(),
     text,
-    inForm: !!form,
     password: !!(form && form.querySelector('input[type=password]')) || (el.type || '').toLowerCase() === 'password',
     payment: !!(form && form.querySelector('input[autocomplete^="cc-"], input[name*="card" i], input[name*="cvv" i], input[name*="cvc" i]')),
     formMethod: form ? (form.getAttribute('method') || 'get').toLowerCase() : '',
     search: !!(form && (form.getAttribute('role') === 'search' || (form.closest && form.closest('[role=search]')) || form.querySelector('input[type=search]'))),
-    href: el.href || '',
   };
 }`
 

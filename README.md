@@ -155,7 +155,7 @@ make setup   # 安装依赖，创建 .env
 make up      # docker compose 起 Postgres + MinIO（有自己的 Postgres 可以跳过）
 make ser     # API，:8080，启动时自动迁移
 make web     # Vite，:5173，/api 代理到 :8080
-make check   # lint + test + build，也就是 CI 跑的那一套
+make check   # lint + test + build（CI 还会另查生成的代码是否最新）
 ```
 
 打开 `http://localhost:5173`。`make help` 列出全部命令。

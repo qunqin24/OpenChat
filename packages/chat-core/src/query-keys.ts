@@ -2,7 +2,6 @@
  * One place for every query key, so invalidation never has to guess at a shape.
  */
 export const queryKeys = {
-  health: ['health'] as const,
   conversations: {
     all: ['conversations'] as const,
     list: () => [...queryKeys.conversations.all, 'list'] as const,

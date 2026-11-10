@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 
-import { parseQuotes } from '@openchat/chat-core/document-selection'
+import { parseUserMessage, rewordUserMessage } from '@openchat/chat-core/user-message'
 
 import { Button } from '@/components/Button'
 import { useColors } from '@/theme'
@@ -22,9 +22,11 @@ interface Props {
 }
 
 /**
- * The person's message, at the right in a bubble. A passage of a writing
- * block it asks about comes wrapped in `<document-selection>`: shown as the
- * request, the passage quoted above it. Copy and edit sit under it.
+ * The person's message, at the right in a bubble. What was picked for it
+ * travels in its text (chat-core/src/user-message.ts): the passages it asks
+ * about are quoted above it, and deep research, skills and pictures picked on
+ * the web lead its words as they do there. Copy and edit sit under it, and
+ * work on the words alone; an edit keeps the rest.
  */
 export function UserBubble({ message, onEdit, refused, onEditStart }: Props) {
   const { t } = useTranslation()
@@ -32,8 +34,8 @@ export function UserBubble({ message, onEdit, refused, onEditStart }: Props) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [copied, setCopied] = useState(false)
-  const quoted = parseQuotes(message.content)
-  const request = quoted ? quoted.request : message.content
+  const parsed = parseUserMessage(message.content)
+  const { research, skills, pictures, quotes, words } = parsed
 
   if (editing && onEdit) {
     return (
@@ -55,7 +57,7 @@ export function UserBubble({ message, onEdit, refused, onEditStart }: Props) {
               disabled={!draft.trim()}
               onPress={() => {
                 setEditing(false)
-                onEdit(draft.trim())
+                onEdit(rewordUserMessage(parsed, draft.trim()))
               }}
             />
           </View>
@@ -66,7 +68,7 @@ export function UserBubble({ message, onEdit, refused, onEditStart }: Props) {
 
   return (
     <View style={styles.wrap}>
-      {quoted?.quotes.map((quote, i) => (
+      {quotes.map((quote, i) => (
         <Text key={i} style={[styles.quote, { color: colors.text3, borderLeftColor: colors.line }]} numberOfLines={3}>
           {quote.passage}
         </Text>
@@ -74,7 +76,18 @@ export function UserBubble({ message, onEdit, refused, onEditStart }: Props) {
       <MessageAttachments items={message.attachments ?? []} removed={message.removedAttachments} references={message.references} />
       <View style={[styles.bubble, { backgroundColor: refused ? colors.errFill : colors.bubble }]}>
         <Text style={[styles.text, { color: colors.text }]} selectable>
-          {request}
+          {research ? <Text style={{ color: colors.info }}>{t('chat.research.token')} </Text> : null}
+          {skills.map((name) => (
+            <Text key={name} style={{ color: colors.info }}>
+              /{name}{' '}
+            </Text>
+          ))}
+          {pictures.map((handle, i) => (
+            <Text key={handle} style={{ color: colors.info }}>
+              {t('chat.picture.ref-token', { count: i + 1 })}{' '}
+            </Text>
+          ))}
+          {words}
         </Text>
       </View>
       {!refused ? (
@@ -84,7 +97,7 @@ export function UserBubble({ message, onEdit, refused, onEditStart }: Props) {
             style={styles.action}
             accessibilityLabel={t('chat.copy')}
             onPress={() =>
-              void Clipboard.setStringAsync(request).then(() => {
+              void Clipboard.setStringAsync(words).then(() => {
                 setCopied(true)
                 setTimeout(() => setCopied(false), 1500)
               })
@@ -98,7 +111,7 @@ export function UserBubble({ message, onEdit, refused, onEditStart }: Props) {
               style={styles.action}
               accessibilityLabel={t('chat.edit')}
               onPress={() => {
-                setDraft(request)
+                setDraft(words)
                 setEditing(true)
                 onEditStart?.()
               }}

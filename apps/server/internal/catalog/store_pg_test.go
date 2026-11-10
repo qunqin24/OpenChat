@@ -81,8 +81,8 @@ func TestPgStoreReplace(t *testing.T) {
 		t.Fatalf("second replace: %v", err)
 	}
 
-	providers, err := q.CountCatalogProviders(ctx)
-	if err != nil {
+	var providers int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM catalog_providers").Scan(&providers); err != nil {
 		t.Fatalf("count providers: %v", err)
 	}
 	models, err := q.CountCatalogModels(ctx)
@@ -185,7 +185,6 @@ func TestPgListServedModelsFilters(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	provider := "openai"
 	search := "MINI"
 	enabled := true
 	disabled := false
@@ -196,11 +195,7 @@ func TestPgListServedModelsFilters(t *testing.T) {
 		want   int
 	}{
 		{"unfiltered", sqlc.ListServedModelsParams{}, 5},
-		{"by provider", sqlc.ListServedModelsParams{ProviderID: &provider}, 2},
 		{"search is case insensitive", sqlc.ListServedModelsParams{Search: &search}, 1},
-		{"capabilities are all-of", sqlc.ListServedModelsParams{
-			RequireReasoning: true, RequireToolCall: true,
-		}, 1},
 		{"enabled", sqlc.ListServedModelsParams{Enabled: &enabled}, 4},
 		{"disabled channels", sqlc.ListServedModelsParams{Enabled: &disabled}, 1},
 	}
@@ -219,13 +214,8 @@ func TestPgListServedModelsFilters(t *testing.T) {
 			}
 
 			total, err := q.CountServedModels(ctx, sqlc.CountServedModelsParams{
-				Search:                  params.Search,
-				ProviderID:              params.ProviderID,
-				RequireReasoning:        params.RequireReasoning,
-				RequireToolCall:         params.RequireToolCall,
-				RequireAttachment:       params.RequireAttachment,
-				RequireStructuredOutput: params.RequireStructuredOutput,
-				Enabled:                 params.Enabled,
+				Search:  params.Search,
+				Enabled: params.Enabled,
 			})
 			if err != nil {
 				t.Fatalf("count: %v", err)

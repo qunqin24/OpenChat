@@ -53,7 +53,6 @@ type Querier interface {
 	// two rows written by one commit would tie and fall back to ordering by a
 	// random uuid.
 	AppendEntry(ctx context.Context, arg AppendEntryParams) (Message, error)
-	AppendMessageContent(ctx context.Context, arg AppendMessageContentParams) (Message, error)
 	// Claims uploads for a message. Only the caller's own, only unclaimed ones: the
 	// row count is how the caller notices that an id did not qualify.
 	AttachToMessage(ctx context.Context, arg AttachToMessageParams) (int64, error)
@@ -97,7 +96,6 @@ type Querier interface {
 	ConversationBrowser(ctx context.Context, id uuid.UUID) (bool, error)
 	CountAdmins(ctx context.Context) (int64, error)
 	CountCatalogModels(ctx context.Context) (int64, error)
-	CountCatalogProviders(ctx context.Context) (int64, error)
 	// One grouped read for the whole channel list rather than a count per channel.
 	// Channels with nothing enabled are absent rather than zero, which is the same
 	// answer a caller reading a map gets for free.
@@ -107,7 +105,6 @@ type Querier interface {
 	CountEnabledTasks(ctx context.Context, userID uuid.UUID) (int64, error)
 	// How many sub-agents one run has launched.
 	CountLaunchedSubagents(ctx context.Context, launchedBy *uuid.UUID) (int64, error)
-	CountMemories(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountOwnedSkills(ctx context.Context, arg CountOwnedSkillsParams) (int64, error)
 	CountPasskeys(ctx context.Context) (int64, error)
 	// A conversation's sub-agents launched before this one that are still
@@ -136,7 +133,6 @@ type Querier interface {
 	// prompt checked as it is about to be sent, or as a model wrote it (task_run),
 	// nor the prompt a model wrote for a picture (image_prompt).
 	CountUserStrikes(ctx context.Context, arg CountUserStrikesParams) (int64, error)
-	CountUsers(ctx context.Context) (int64, error)
 	CountUsersFiltered(ctx context.Context, arg CountUsersFilteredParams) (int64, error)
 	CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (Attachment, error)
 	// The browser tool (api/browser_tool.go).
@@ -241,7 +237,6 @@ type Querier interface {
 	// launched it stopped, or the person cancelled it: it never did anything.
 	DeleteQueuedSubagent(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteSession(ctx context.Context, tokenHash []byte) error
-	DeleteSessionsForUsers(ctx context.Context, userIds []uuid.UUID) error
 	// Models the endpoint stopped listing. Scoped to `source = 'fetched'`: a manual
 	// row was never the endpoint's to mention, so its absence says nothing about
 	// it.
@@ -277,12 +272,9 @@ type Querier interface {
 	// A request done keeps what it made (it may be fewer than it asked for); a
 	// failed one gives its share back.
 	FinishImageRequest(ctx context.Context, arg FinishImageRequestParams) error
-	FinishMessage(ctx context.Context, arg FinishMessageParams) (Message, error)
 	// Terminal. Live state is cleared in the same statement: whatever it held has
 	// already been written as messages by the commit that calls this.
 	FinishRun(ctx context.Context, arg FinishRunParams) (Run, error)
-	// What a conversation that never picked a model is answered with.
-	FirstServedModel(ctx context.Context) (string, error)
 	GetActiveRun(ctx context.Context, conversationID uuid.UUID) (Run, error)
 	// What the local storage driver's handlers know a file by. The signature in
 	// the URL is what authorises the request, so there is no owner to check.
@@ -381,7 +373,6 @@ type Querier interface {
 	GetMemoryEventForUpdate(ctx context.Context, arg GetMemoryEventForUpdateParams) (MemoryEvent, error)
 	GetMessage(ctx context.Context, id uuid.UUID) (Message, error)
 	GetModelOverride(ctx context.Context, modelID string) (ModelOverride, error)
-	GetModerationEvent(ctx context.Context, id uuid.UUID) (ModerationEvent, error)
 	// One of the caller's files, wherever it is, for viewing.
 	GetOwnAttachment(ctx context.Context, arg GetOwnAttachmentParams) (Attachment, error)
 	// One skill of a person (owner_id) or of the site (NULL): anyone else's is not
@@ -428,7 +419,6 @@ type Querier interface {
 	GetSubagentInput(ctx context.Context, conversationID uuid.UUID) (Message, error)
 	// The plugins a sub-agent may use (its launch named them), by short name.
 	GetSubagentPlugins(ctx context.Context, arg GetSubagentPluginsParams) ([]string, error)
-	GetSubagentReport(ctx context.Context, runID uuid.UUID) (SubagentReport, error)
 	// The skills a sub-agent may open (its launch named them), from its own
 	// conversation's row.
 	GetSubagentSkills(ctx context.Context, arg GetSubagentSkillsParams) ([]string, error)
@@ -550,10 +540,6 @@ type Querier interface {
 	// protocol describes a direct connection correctly; for a relay any row is
 	// equally arbitrary, and an arbitrary context limit beats none.
 	ListCatalogModelsForChannel(ctx context.Context, arg ListCatalogModelsForChannelParams) ([]ListCatalogModelsForChannelRow, error)
-	// The model count comes from the same read as the provider: the picker shows
-	// both, and a provider with no models is worth showing as empty rather than
-	// hiding.
-	ListCatalogProviders(ctx context.Context) ([]ListCatalogProvidersRow, error)
 	// Ordered by id rather than by name: the id is what gets sent to the endpoint
 	// and what the operator recognises, and a display name is often absent.
 	ListChannelModels(ctx context.Context, channelID uuid.UUID) ([]ChannelModel, error)
@@ -1044,7 +1030,6 @@ type Querier interface {
 	TouchConversation(ctx context.Context, id uuid.UUID) error
 	// A sign-in with it: the credential's new sign count and flags, and when.
 	TouchPasskey(ctx context.Context, arg TouchPasskeyParams) error
-	TouchSession(ctx context.Context, id uuid.UUID) error
 	TouchUserSeen(ctx context.Context, id uuid.UUID) error
 	UninstallPlugin(ctx context.Context, arg UninstallPluginParams) (int64, error)
 	// Every editable field in one statement, so a partial edit cannot half-apply.

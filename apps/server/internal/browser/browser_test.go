@@ -118,7 +118,7 @@ func TestSessionActions(t *testing.T) {
 
 	// What a ref points at, for the confirmation rules.
 	el, err := s.Describe(ctx, ref(t, page.Snapshot, `button "Sign in"`))
-	if err != nil || !el.InForm || !el.Password || el.Type != "submit" {
+	if err != nil || !el.Password || el.Type != "submit" {
 		t.Fatalf("describe: %+v %v", el, err)
 	}
 

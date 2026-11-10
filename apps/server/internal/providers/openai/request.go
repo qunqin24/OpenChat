@@ -8,21 +8,6 @@ import (
 	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
-// reservedKeys are the request fields Options.Extra may not touch. A compat
-// configuration is allowed to add vendor knobs; it is not allowed to quietly
-// redirect the request to another model, another history or another tool list
-// than the one the run layer authorised.
-var reservedKeys = map[string]bool{
-	"model":          true,
-	"messages":       true,
-	"stream":         true,
-	"stream_options": true,
-	"tools":          true,
-	"tool_choice":    true,
-	// The end-user identifier is the server's to set, from the request.
-	"safety_identifier": true,
-}
-
 func buildBody(req llm.Request, cfg Config) ([]byte, error) {
 	if req.Model == "" {
 		return nil, llm.Errorf(llm.ErrorProvider, nil, "openai: the request names no model")
@@ -38,11 +23,9 @@ func buildBody(req llm.Request, cfg Config) ([]byte, error) {
 		"messages": messages,
 		"stream":   true,
 	}
-	if !cfg.Compat.OmitStreamOptions {
-		// Without this the trailing usage chunk never arrives and every
-		// streamed turn looks free.
-		body["stream_options"] = map[string]any{"include_usage": true}
-	}
+	// Without this the trailing usage chunk never arrives and every streamed
+	// turn looks free.
+	body["stream_options"] = map[string]any{"include_usage": true}
 	if len(req.Tools) > 0 {
 		body["tools"] = convertTools(req.Tools)
 		if req.Options.ToolChoice != llm.ToolChoiceAuto {
@@ -55,12 +38,6 @@ func buildBody(req llm.Request, cfg Config) ([]byte, error) {
 	}
 
 	opts := req.Options
-	if opts.Temperature != nil {
-		body["temperature"] = *opts.Temperature
-	}
-	if opts.TopP != nil {
-		body["top_p"] = *opts.TopP
-	}
 	if opts.MaxTokens != nil {
 		if cfg.Compat.MaxCompletionTokens {
 			body["max_completion_tokens"] = *opts.MaxTokens
@@ -68,17 +45,7 @@ func buildBody(req llm.Request, cfg Config) ([]byte, error) {
 			body["max_tokens"] = *opts.MaxTokens
 		}
 	}
-	if len(opts.Stop) > 0 {
-		body["stop"] = opts.Stop
-	}
 	for key, value := range thinkingFields(req.Model, opts.Reasoning, cfg.Compat.Thinking) {
-		body[key] = value
-	}
-
-	for key, value := range opts.Extra {
-		if reservedKeys[key] {
-			return nil, llm.Errorf(llm.ErrorProvider, nil, "openai: option %q would overwrite a request field", key)
-		}
 		body[key] = value
 	}
 	return json.Marshal(body)

@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next'
 import { ConfigDrawer } from '@/components/shadcn/config-drawer'
 import { Header } from '@/components/shadcn/layout/header'
 import { Main } from '@/components/shadcn/layout/main'
-import { ProfileDropdown } from '@/components/shadcn/profile-dropdown'
 import { Search } from '@/components/shadcn/search'
 import { Separator } from '@/components/shadcn/ui/separator'
 import { SidebarNav } from './components/sidebar-nav'
@@ -43,7 +42,6 @@ export function Settings() {
       <Header fixed>
         <Search className="me-auto" />
         <ConfigDrawer />
-        <ProfileDropdown />
       </Header>
 
       <Main fixed>

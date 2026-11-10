@@ -227,7 +227,7 @@ func statusError(resp *http.Response) error {
 	if err.Message == "" {
 		// Not JSON we recognise — a proxy's error page, most likely. A clipped
 		// copy is what makes that diagnosable at all.
-		err.Message = http.StatusText(resp.StatusCode) + ": " + clip(string(body))
+		err.Message = http.StatusText(resp.StatusCode) + ": " + llm.ClipBody(string(body))
 	}
 
 	// The status is more trustworthy than the error type for the categories
@@ -272,13 +272,4 @@ func isContextLength(e wireError) bool {
 	return strings.Contains(lowered, "prompt is too long") ||
 		strings.Contains(lowered, "maximum context length") ||
 		strings.Contains(lowered, "context length exceeded")
-}
-
-func clip(s string) string {
-	const max = 256
-	s = strings.TrimSpace(s)
-	if len(s) <= max {
-		return s
-	}
-	return s[:max] + "…"
 }

@@ -57,7 +57,7 @@ make migrate                        # 本地应用（make ser 启动时也会自
 
 ## 加后台表格/页面
 
-参照 `features/admin/users/`：服务端分页，`use-table-url-state` 同步 URL，`getRowId` 用记录 id，列名进 `meta.title`，所有字符串走 `t()`。数据 hook 放 `features/admin/use-admin.ts`，key 用 `adminKeys`。游标分页的表格用 `DataTableCursorPagination`（例：使用日志）。
+参照 `features/admin/users/`：服务端分页，`getRowId` 用记录 id，列名进 `meta.title`，所有字符串走 `t()`。数据 hook 放 `features/admin/use-admin.ts`，key 用 `adminKeys`。游标分页的表格用 `DataTableCursorPagination`（例：使用日志）。
 
 ## 搬一个 shadcn 组件
 
@@ -77,7 +77,7 @@ make migrate                        # 本地应用（make ser 启动时也会自
 ## 常见验证命令
 
 ```bash
-make check                                  # lint + test + build，CI 跑的全套
+make check                                  # lint + test + build（CI 另查生成码是否最新、go test -race、迁移顺序）
 make generate                               # sqlc + openapi + genui 目录，全部重新生成
 cd apps/server && go test -race ./...       # CI 用 -race
 pnpm -r typecheck && pnpm --filter @openchat/web lint

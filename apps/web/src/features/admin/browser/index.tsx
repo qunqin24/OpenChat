@@ -13,7 +13,6 @@ import { DataTableCursorPagination } from '@/components/shadcn/data-table'
 import { Header } from '@/components/shadcn/layout/header'
 import { Main } from '@/components/shadcn/layout/main'
 import { LongText } from '@/components/shadcn/long-text'
-import { ProfileDropdown } from '@/components/shadcn/profile-dropdown'
 import { Search } from '@/components/shadcn/search'
 import { Alert, AlertDescription, AlertTitle } from '@/components/shadcn/ui/alert'
 import { Badge } from '@/components/shadcn/ui/badge'
@@ -72,7 +71,6 @@ export function BrowserSettingsPage() {
       <Header fixed>
         <Search className="me-auto" />
         <ConfigDrawer />
-        <ProfileDropdown />
       </Header>
 
       <Main className="flex flex-1 flex-col">

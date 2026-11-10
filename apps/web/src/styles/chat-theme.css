@@ -322,22 +322,6 @@
 .chat-ui .n-actions.always > * {
   opacity: 1;
 }
-.chat-ui .n-suggest-head {
-  display: flex;
-  align-items: center;
-}
-.chat-ui .n-suggest {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-}
-.chat-ui .n-suggest > * {
-  position: relative;
-}
 .chat-ui .n-composer-dock {
   position: relative;
   flex-shrink: 0;

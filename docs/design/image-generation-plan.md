@@ -1,6 +1,6 @@
 # 图片生成：方案
 
-> 状态：**第 0 期已实现**（2026-11-05：`catalog.DefaultKind` 先读 models.dev 的 `type`，`ListServedModels`、`ModelProfile`、`ListCatalogModelsForChannel` 带出 `model_type`）。**第一期后端已实现**（2026-11-05：迁移、`llm.ImageClient` 与两个适配器、`usage.Meter.EndImages` 与按张计价和预留、`image_generate` 工具、存图与认领、`DeleteAnswerTo` 收 key、提示词审核、三道张数上限与个人配额、后台接口 `/admin/image-generation`、`/files/{id}/view`、契约；与方案的出入见 §17），前端未做。§16 的十一个问题都已由用户拍板（2026-11-05）并落到正文，没有待定的问题。第一期的前端先出 2–3 个草图。相关：[usage-and-limits.md](usage-and-limits.md)（账本、预留、容量上限）、[storage-and-files.md](storage-and-files.md)（存储、配额、收据、清理、库）、[moderation.md](moderation.md)、[plugins-plan.md](plugins-plan.md)（`tool_images`、工具进度）、[conversations.md](conversations.md)（改写/重新生成删行）。
+> 状态：**第 0 期已实现**（2026-11-05：`catalog.DefaultKind` 先读 models.dev 的 `type`，`ListServedModels`、`ModelProfile`、`ListCatalogModelsForChannel` 带出 `model_type`）。**第一期后端已实现**（2026-11-05：迁移、`llm.ImageClient` 与两个适配器、`usage.Meter.EndImages` 与按张计价和预留、`image_generate` 工具、存图与认领、`DeleteAnswerTo` 收 key、提示词审核、三道张数上限与个人配额、后台接口 `/admin/image-generation`、`/files/{id}/view`、契约；与方案的出入见 §17）。**第一期前端已实现**（回复里的图与「拿来改」、后台「图片生成」页），随 v1.5.0 发布。§16 的十一个问题都已由用户拍板（2026-11-05）并落到正文，没有待定的问题。相关：[usage-and-limits.md](usage-and-limits.md)（账本、预留、容量上限）、[storage-and-files.md](storage-and-files.md)（存储、配额、收据、清理、库）、[moderation.md](moderation.md)、[plugins-plan.md](plugins-plan.md)（`tool_images`、工具进度）、[conversations.md](conversations.md)（改写/重新生成删行）。
 
 ## 0. 结论先行
 
@@ -186,11 +186,11 @@ type ImageResponse struct {
 - 迁移：`make migration name=image_generation`（§6 列的列和表、三个 CHECK 约束）。
 - 目录：`internal/catalog/settings.go`（`DefaultKind` 读 `raw.type`）、`store.go`；测试。
 - `internal/llm/image.go`（`ImageClient`、`ImageRequest/Response`、比例映射、每张 token 估计）。
-- `internal/providers/openai/images.go`、`internal/providers/gemini/images.go` + 测试（`testdata` 里放录下的响应）；`providers/fake` 加假图片客户端。
+- `internal/providers/openai/images.go`、`internal/providers/gemini/images.go` + 测试（`testdata` 里放录下的响应）。
 - `internal/usage/usage.go`（`Call.Images`、`settle` 的图片估算、按张计价）、`internal/api/spend_reserve.go`（输出预留）。
 - `internal/api/image_tool.go`（工具）、`image_settings.go`（后台设置、测试按钮）、`model_resolver.go`（`pickImageChannel`）、`model_settings.go`（每张价格）、`admin.go` 的 `UpdateUser`（个人每天配额）、`document_tool.go` 的 `ServerTools`（挂上 `ImageTools`，子 Agent 分支不加）、`agent_setup.go`（系统提示词一节）、`mapping.go`（`generatedImages`）、`messages.go` 的 `attachmentsFor` 同类签名、`admitAttachments`（排除生成的图）、`usage_logs.go`（筛选）。
 - `internal/agent`：`tools.go`（`ToolResult.Generated`）、`execution.go`（写工具结果行时认领）、`context.go`（用户图片前的 id 行）、`attachments.go`（按短 id 解析）。
-- 查询：`queries/attachments.sql`（插入生成的图、认领、按短 id 找）、`queries/messages.sql`（`DeleteAnswerTo` 返回 key）、`queries/image_requests.sql`、`queries/usage.sql`。
+- 查询：`queries/attachments.sql`（插入生成的图、认领、按短 id 找）、`queries/messages.sql`（`DeleteAnswerTo` 返回 key）、`queries/image_requests.sql`、`queries/usage_logs.sql`。
 - 前端：`packages/chat-core`（转录类型、`image-ref` 行的拆解与测试、语言文件）、`apps/web/src/components/chat/GeneratedImages.tsx`、`ToolActivity.tsx`、`MessageItem.tsx`、`Composer.tsx`（「拿来改」芯片）、`LibraryPage.tsx`（生成标记与筛选）、`features/admin/`（图片生成页、模型设置、用户编辑里的每天配额、使用日志）；`apps/mobile`（显示与占位）。
 - 文档：本文改成实现记录；`AGENTS.md` 加「图片生成」一节；`docs/design/README.md` 索引。
 

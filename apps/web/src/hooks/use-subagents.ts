@@ -1,4 +1,4 @@
-import { isOpenChatError, type Subagent, type SubagentDetail, type SubagentList } from '@openchat/api-client'
+import { isOpenChatError, type SubagentDetail, type SubagentList } from '@openchat/api-client'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -80,11 +80,6 @@ export function useSubagentAction(conversationId: string) {
       )
     },
   })
-}
-
-/** A sub-agent by id from the conversation's list, if it is there yet. */
-export function subagentById(list: Subagent[] | undefined, id: string): Subagent | undefined {
-  return list?.find((a) => a.id === id)
 }
 
 /** How long, as the lines say it: "3 分 12 秒" / "3m 12s". */

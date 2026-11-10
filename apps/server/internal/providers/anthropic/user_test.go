@@ -50,12 +50,3 @@ func TestMetadataUserIDFollowsTheChannelSwitch(t *testing.T) {
 		t.Error("no identifier: metadata was sent")
 	}
 }
-
-func TestExtraCannotOverwriteMetadata(t *testing.T) {
-	max := 10
-	req := llm.Request{Model: "claude-haiku-5-5", Messages: []llm.Message{llm.TextMessage(llm.RoleUser, "hi")},
-		Options: llm.Options{MaxTokens: &max, Extra: map[string]any{"metadata": map[string]any{"user_id": "x"}}}}
-	if _, err := buildBody(req, Config{BaseURL: "http://x"}); err == nil {
-		t.Error("Extra overwrote metadata")
-	}
-}

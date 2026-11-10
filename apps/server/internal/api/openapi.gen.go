@@ -1262,13 +1262,13 @@ func (e ReasoningEffort) Valid() bool {
 
 // Defines values for ReasoningPartType.
 const (
-	ReasoningPartTypeReasoning ReasoningPartType = "reasoning"
+	Reasoning ReasoningPartType = "reasoning"
 )
 
 // Valid indicates whether the value is a known member of the ReasoningPartType enum.
 func (e ReasoningPartType) Valid() bool {
 	switch e {
-	case ReasoningPartTypeReasoning:
+	case Reasoning:
 		return true
 	default:
 		return false
@@ -1583,13 +1583,13 @@ func (e TitleChangedEventType) Valid() bool {
 
 // Defines values for ToolCallPartType.
 const (
-	ToolCallPartTypeToolCall ToolCallPartType = "tool_call"
+	ToolCall ToolCallPartType = "tool_call"
 )
 
 // Valid indicates whether the value is a known member of the ToolCallPartType enum.
 func (e ToolCallPartType) Valid() bool {
 	switch e {
-	case ToolCallPartTypeToolCall:
+	case ToolCall:
 		return true
 	default:
 		return false
@@ -1989,30 +1989,6 @@ const (
 func (e OpenChatClient) Valid() bool {
 	switch e {
 	case OpenChatClientApp:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ListCatalogModelsParamsCapability.
-const (
-	ListCatalogModelsParamsCapabilityAttachment       ListCatalogModelsParamsCapability = "attachment"
-	ListCatalogModelsParamsCapabilityReasoning        ListCatalogModelsParamsCapability = "reasoning"
-	ListCatalogModelsParamsCapabilityStructuredOutput ListCatalogModelsParamsCapability = "structuredOutput"
-	ListCatalogModelsParamsCapabilityToolCall         ListCatalogModelsParamsCapability = "toolCall"
-)
-
-// Valid indicates whether the value is a known member of the ListCatalogModelsParamsCapability enum.
-func (e ListCatalogModelsParamsCapability) Valid() bool {
-	switch e {
-	case ListCatalogModelsParamsCapabilityAttachment:
-		return true
-	case ListCatalogModelsParamsCapabilityReasoning:
-		return true
-	case ListCatalogModelsParamsCapabilityStructuredOutput:
-		return true
-	case ListCatalogModelsParamsCapabilityToolCall:
 		return true
 	default:
 		return false
@@ -2627,21 +2603,6 @@ type CatalogModelPage struct {
 	Total int64          `json:"total"`
 }
 
-// CatalogProvider defines model for CatalogProvider.
-type CatalogProvider struct {
-	Doc *string `json:"doc,omitempty"`
-
-	// Env Environment variables upstream documents for this provider's key.
-	Env *[]string `json:"env,omitempty"`
-
-	// Id Examples: anthropic
-	Id         string `json:"id"`
-	ModelCount int    `json:"modelCount"`
-
-	// Name Examples: Anthropic
-	Name string `json:"name"`
-}
-
 // CatalogStatus defines model for CatalogStatus.
 type CatalogStatus struct {
 	// FetchedAt Absent when nothing has ever been fetched.
@@ -2649,9 +2610,8 @@ type CatalogStatus struct {
 
 	// LastError Why the most recent refresh failed, if it did. The snapshot it
 	// failed to replace is still the one being served.
-	LastError     *string `json:"lastError,omitempty"`
-	ModelCount    int     `json:"modelCount"`
-	ProviderCount int     `json:"providerCount"`
+	LastError  *string `json:"lastError,omitempty"`
+	ModelCount int     `json:"modelCount"`
 
 	// Stale Whether the snapshot is old enough to be worth refreshing.
 	Stale bool `json:"stale"`
@@ -5998,18 +5958,11 @@ type ListCatalogModelsParams struct {
 	Page  *int   `form:"page,omitempty" json:"page,omitempty"`
 
 	// Search Matches against model id, name and family.
-	Search     *string `form:"search,omitempty" json:"search,omitempty"`
-	ProviderId *string `form:"providerId,omitempty" json:"providerId,omitempty"`
-
-	// Capability Only models with all of these.
-	Capability *[]ListCatalogModelsParamsCapability `form:"capability,omitempty" json:"capability,omitempty"`
+	Search *string `form:"search,omitempty" json:"search,omitempty"`
 
 	// Enabled Whether at least one channel with this model selected is enabled.
 	Enabled *bool `form:"enabled,omitempty" json:"enabled,omitempty"`
 }
-
-// ListCatalogModelsParamsCapability defines parameters for ListCatalogModels.
-type ListCatalogModelsParamsCapability string
 
 // AddChannelModelJSONBody defines parameters for AddChannelModel.
 type AddChannelModelJSONBody struct {
@@ -7369,9 +7322,6 @@ type ServerInterface interface {
 	// ListCatalogModels The models this installation serves
 	// (GET /admin/catalog/models)
 	ListCatalogModels(w http.ResponseWriter, r *http.Request, params ListCatalogModelsParams)
-	// ListCatalogProviders Providers in the catalogue
-	// (GET /admin/catalog/providers)
-	ListCatalogProviders(w http.ResponseWriter, r *http.Request)
 	// ListChannelTypes The vendors a channel can be
 	// (GET /admin/channel-types)
 	ListChannelTypes(w http.ResponseWriter, r *http.Request)
@@ -7924,12 +7874,6 @@ func (_ Unimplemented) RefreshCatalog(w http.ResponseWriter, r *http.Request) {
 // ListCatalogModels The models this installation serves
 // (GET /admin/catalog/models)
 func (_ Unimplemented) ListCatalogModels(w http.ResponseWriter, r *http.Request, params ListCatalogModelsParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// ListCatalogProviders Providers in the catalogue
-// (GET /admin/catalog/providers)
-func (_ Unimplemented) ListCatalogProviders(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9124,32 +9068,6 @@ func (siw *ServerInterfaceWrapper) ListCatalogModels(w http.ResponseWriter, r *h
 		return
 	}
 
-	// ------------- Optional query parameter "providerId" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "providerId", r.URL.Query(), &params.ProviderId, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "providerId"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "providerId", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "capability" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", false, false, "capability", r.URL.Query(), &params.Capability, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "capability"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "capability", Err: err})
-		}
-		return
-	}
-
 	// ------------- Optional query parameter "enabled" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "enabled", r.URL.Query(), &params.Enabled, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
@@ -9165,20 +9083,6 @@ func (siw *ServerInterfaceWrapper) ListCatalogModels(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListCatalogModels(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListCatalogProviders operation middleware
-func (siw *ServerInterfaceWrapper) ListCatalogProviders(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListCatalogProviders(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13581,9 +13485,6 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/admin/catalog", wrapper.RefreshCatalog)
-	})
-	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/admin/catalog/providers", wrapper.ListCatalogProviders)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/catalog/models", wrapper.ListCatalogModels)

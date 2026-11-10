@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { ASK_USER } from './ask-user'
 import { assistant, id, liveRun, run, summary, text, toolCallRow, toolResultRow, user } from './testing'
-import { buildTurns, isRefusedTurn, pendingQuestion, refusedTail, sentTurns, turnText, type AssistantTurn } from './transcript'
+import { askedQuestions, buildTurns, isRefusedTurn, pendingQuestion, refusedTail, sentAfterReplies, sentTurns, turnText, type AssistantTurn } from './transcript'
 
 const assistantTurns = (turns: ReturnType<typeof buildTurns>) =>
   turns.filter((t): t is AssistantTurn => t.kind === 'assistant')
@@ -244,6 +244,36 @@ describe('pendingQuestion', () => {
 
   it('is null when the last turn is the user’s', () => {
     expect(pendingQuestion(buildTurns([user('q')], null), false)).toBeNull()
+  })
+})
+
+describe('askedQuestions', () => {
+  const questions = [{ question: 'Which one?', header: 'Pick', options: [{ label: 'A' }, { label: 'B' }], multiSelect: false }]
+  const asked = (args?: Record<string, unknown>) =>
+    buildTurns([user('q'), toolCallRow('ask', id('r1'), 'call-ask', ASK_USER, args)], null)
+
+  it('reads the questions of the call the conversation waits on', () => {
+    expect(askedQuestions(asked({ questions }), 'call-ask')).toEqual({ callId: 'call-ask', questions })
+  })
+
+  it('is null with no call, another call, or arguments that are not questions', () => {
+    expect(askedQuestions(asked({ questions }), null)).toBeNull()
+    expect(askedQuestions(asked({ questions }), 'call-other')).toBeNull()
+    expect(askedQuestions(asked(), 'call-ask')).toBeNull()
+  })
+})
+
+describe('sentAfterReplies', () => {
+  const turns = buildTurns([user('q1'), assistant('a1', id('r1')), user('q2'), assistant('a2', id('r2'))], null)
+
+  it('gives each reply the message that followed it', () => {
+    const sent = sentAfterReplies(turns)
+    expect(sent.get(id('r1'))).toEqual({ next: 'q2' })
+    expect(sent.get(id('r2'))).toEqual({ next: undefined })
+  })
+
+  it('counts a message on its way as what followed the last reply', () => {
+    expect(sentAfterReplies(turns, 'q3').get(id('r2'))).toEqual({ next: 'q3' })
   })
 })
 

@@ -56,7 +56,7 @@ func (s *Server) GetConversationContext(w http.ResponseWriter, r *http.Request, 
 // newer summary it is the provider's count as it is.
 func (s *Server) afterCompaction(r *http.Request, conversationID uuid.UUID, latest sqlc.LatestContextTokensRow) (int64, bool, error) {
 	ctx := r.Context()
-	summary, rows, err := agent.LoadContextRows(ctx, s.q, conversationID, contextHistoryLimit)
+	summary, rows, err := agent.LoadContextRows(ctx, s.q, conversationID, agent.HistoryLimit)
 	if err != nil {
 		return 0, false, err
 	}
@@ -66,7 +66,7 @@ func (s *Server) afterCompaction(r *http.Request, conversationID uuid.UUID, late
 	// What the latest request carried of the transcript, roughly: every row
 	// written by the time it was logged. (Under an earlier summary it carried
 	// less; the fixed part then comes out smaller, never below nothing.)
-	all, err := s.q.ListMessagesAfter(ctx, sqlc.ListMessagesAfterParams{ConversationID: conversationID, RowLimit: contextHistoryLimit})
+	all, err := s.q.ListMessagesAfter(ctx, sqlc.ListMessagesAfterParams{ConversationID: conversationID, RowLimit: agent.HistoryLimit})
 	if err != nil {
 		return 0, false, err
 	}
@@ -83,7 +83,3 @@ func (s *Server) afterCompaction(r *http.Request, conversationID uuid.UUID, late
 	fixed := max(latest.Tokens-int64(carried), 0)
 	return min(fixed+int64(now), latest.Tokens), true, nil
 }
-
-// contextHistoryLimit bounds the rows read for the estimate, as a run's own
-// HistoryLimit bounds a request.
-const contextHistoryLimit = 2000

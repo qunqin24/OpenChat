@@ -414,14 +414,13 @@ type traceTool struct {
 }
 
 type traceOptions struct {
-	MaxTokens   *int     `json:"maxTokens,omitempty"`
-	Temperature *float64 `json:"temperature,omitempty"`
-	ToolChoice  string   `json:"toolChoice,omitempty"`
-	Reasoning   string   `json:"reasoning,omitempty"`
+	MaxTokens  *int   `json:"maxTokens,omitempty"`
+	ToolChoice string `json:"toolChoice,omitempty"`
+	Reasoning  string `json:"reasoning,omitempty"`
 }
 
 func traceOptionsOf(o llm.Options) traceOptions {
-	out := traceOptions{MaxTokens: o.MaxTokens, Temperature: o.Temperature, ToolChoice: string(o.ToolChoice)}
+	out := traceOptions{MaxTokens: o.MaxTokens, ToolChoice: string(o.ToolChoice)}
 	if o.Reasoning != nil {
 		out.Reasoning = string(o.Reasoning.Effort)
 	}

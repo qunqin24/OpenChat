@@ -309,14 +309,6 @@ func TestBuildBodyRefusesWhatItCannotFaithfullySend(t *testing.T) {
 			name: "no model at all",
 			req:  llm.Request{Messages: []llm.Message{llm.TextMessage(llm.RoleUser, "hi")}},
 		},
-		{
-			name: "an extra option that would retarget the request",
-			req: llm.Request{
-				Model:    "m",
-				Messages: []llm.Message{llm.TextMessage(llm.RoleUser, "hi")},
-				Options:  llm.Options{Extra: map[string]any{"model": "something-else"}},
-			},
-		},
 	}
 
 	for _, tc := range tests {
@@ -328,18 +320,12 @@ func TestBuildBodyRefusesWhatItCannotFaithfullySend(t *testing.T) {
 	}
 }
 
-func TestBuildBodyPassesVendorKnobsThrough(t *testing.T) {
-	temperature := 0.0
+func TestBuildBodySendsToolChoiceAndEffort(t *testing.T) {
 	body, err := buildBody(llm.Request{
 		Model:    "deepseek-reasoner",
 		Messages: []llm.Message{llm.TextMessage(llm.RoleUser, "hi")},
 		Tools:    []llm.Tool{{Name: "search", Description: "find notes"}},
-		Options: llm.Options{
-			Temperature: &temperature,
-			ToolChoice:  llm.ToolChoiceRequired,
-			Reasoning:   &llm.ReasoningOptions{Effort: llm.EffortHigh},
-			Extra:       map[string]any{"top_k": 40},
-		},
+		Options:  llm.Options{ToolChoice: llm.ToolChoiceRequired, Reasoning: &llm.ReasoningOptions{Effort: llm.EffortHigh}},
 	}, Config{})
 	if err != nil {
 		t.Fatalf("buildBody: %v", err)
@@ -349,19 +335,11 @@ func TestBuildBodyPassesVendorKnobsThrough(t *testing.T) {
 	if err := json.Unmarshal(body, &sent); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	// A deliberate zero has to survive, or "be deterministic" silently becomes
-	// "use whatever the provider defaults to".
-	if sent["temperature"] != float64(0) {
-		t.Errorf("temperature = %v, want an explicit 0", sent["temperature"])
-	}
 	if sent["tool_choice"] != "required" {
 		t.Errorf("tool_choice = %v", sent["tool_choice"])
 	}
 	if sent["reasoning_effort"] != "high" {
 		t.Errorf("reasoning_effort = %v", sent["reasoning_effort"])
-	}
-	if sent["top_k"] != float64(40) {
-		t.Errorf("top_k = %v", sent["top_k"])
 	}
 
 	tools := sent["tools"].([]any)

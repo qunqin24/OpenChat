@@ -7,8 +7,6 @@ import type { Message, Subagent, ToolCallPart, ToolResultPart } from '@openchat/
  */
 
 export const SUBAGENT_TOOL = 'subagent'
-export const SUBAGENT_MESSAGE_TOOL = 'subagent_message'
-export const SUBAGENT_STOP_TOOL = 'subagent_stop'
 
 export type ReportState = 'completed' | 'failed' | 'cancelled'
 

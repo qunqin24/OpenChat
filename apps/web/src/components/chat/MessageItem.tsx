@@ -22,9 +22,7 @@ import { BROWSER_TOOL, browserProgressOf } from '@openchat/chat-core/browser-too
 import { IMAGE_TOOL, imageRequestOf, picturesOf } from '@openchat/chat-core/image-tool'
 import { isPluginTool, pluginProgressOf, waitingCalls } from '@openchat/chat-core/plugin-code'
 import { SubagentLaunchLine } from './SubagentLines'
-import { parseQuotes, quoteMessage } from '@openchat/chat-core/document-selection'
-import { parseSkills, skillMessage } from '@openchat/chat-core/skill-mention'
-import { imageRefMessage, parseImageRefs } from '@openchat/chat-core/image-ref'
+import { parseUserMessage, rewordUserMessage } from '@openchat/chat-core/user-message'
 import MemoryChip from './MemoryChip'
 import { SentQuotes } from './QuoteBlock'
 import TaskChip from './TaskChip'
@@ -96,15 +94,11 @@ export function UserMessage({
 }) {
   const { t } = useTranslation()
   const [typed, setTyped] = useState<string | null>(null)
-  // A request about a quoted passage of a writing block: the passage is a card
-  // above the words, and editing changes the words only.
-  // Skills picked with / come first (chat-core/src/skill-mention.ts): shown
-  // at the start of its words, kept as they were when the message is edited.
-  const { names: skills, rest: afterSkills, research } = parseSkills(message.content)
-  // Pictures picked with 「拿来改」 follow the skills (chat-core/src/image-ref.ts).
-  const { handles: pictures, rest } = parseImageRefs(afterSkills)
-  const quoted = parseQuotes(rest)
-  const words = quoted ? quoted.request : rest
+  // What was picked for the message travels in its text (chat-core/src/
+  // user-message.ts): the passages are a card above the words, deep research,
+  // skills and pictures lead them, and editing changes the words only.
+  const parsed = parseUserMessage(message.content)
+  const { research, skills, pictures, quotes, words } = parsed
   const draft = typed ?? restoredDraft ?? null
   const files = (message.attachments?.length || message.removedAttachments?.length || message.references?.length) ? (
     <MessageAttachments
@@ -131,7 +125,7 @@ export function UserMessage({
             onEdit &&
             ((content) => {
               closeField()
-              onEdit(skillMessage(skills, imageRefMessage(pictures, quoted ? quoteMessage(quoted.quotes, content) : content), research))
+              onEdit(rewordUserMessage(parsed, content))
             })
           }
         />
@@ -145,8 +139,8 @@ export function UserMessage({
       {files}
       <div className="n-bubble">
         {/* The passages it asks about come first, inside the bubble (QuoteBlock). */}
-        {quoted && (
-          <SentQuotes quotes={quoted.quotes.map((q) => ({ title: q.title, passage: q.passage, fromAnswer: !q.documentId }))} />
+        {quotes.length > 0 && (
+          <SentQuotes quotes={quotes.map((q) => ({ title: q.title, passage: q.passage, fromAnswer: !q.documentId }))} />
         )}
         {/* Deep research and the skills picked for it lead its words, as they did in the box. */}
         {research && (

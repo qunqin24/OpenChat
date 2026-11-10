@@ -34,8 +34,6 @@ import { Route as AdminStorageRouteImport } from './routes/admin.storage'
 import { Route as AdminUsageLogsRouteImport } from './routes/admin.usage-logs'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminWebSearchRouteImport } from './routes/admin.web-search'
-import { Route as DevGenuiRouteImport } from './routes/dev.genui'
-import { Route as DevLoadingRouteImport } from './routes/dev.loading'
 import { Route as AuthedChatIndexRouteImport } from './routes/_authed._chat.index'
 import { Route as AdminSettingsIndexRouteImport } from './routes/admin.settings.index'
 import { Route as AdminSettingsAccountRouteImport } from './routes/admin.settings.account'
@@ -166,16 +164,6 @@ const AdminWebSearchRoute = AdminWebSearchRouteImport.update({
   path: '/web-search',
   getParentRoute: () => AdminRoute,
 } as any)
-const DevGenuiRoute = DevGenuiRouteImport.update({
-  id: '/dev/genui',
-  path: '/dev/genui',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DevLoadingRoute = DevLoadingRouteImport.update({
-  id: '/dev/loading',
-  path: '/dev/loading',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AuthedChatIndexRoute = AuthedChatIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -232,8 +220,6 @@ export interface FileRoutesByFullPath {
   '/admin/usage-logs': typeof AdminUsageLogsRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/web-search': typeof AdminWebSearchRoute
-  '/dev/genui': typeof DevGenuiRoute
-  '/dev/loading': typeof DevLoadingRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/settings/account': typeof AdminSettingsAccountRoute
   '/admin/settings/appearance': typeof AdminSettingsAppearanceRoute
@@ -263,8 +249,6 @@ export interface FileRoutesByTo {
   '/admin/usage-logs': typeof AdminUsageLogsRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/web-search': typeof AdminWebSearchRoute
-  '/dev/genui': typeof DevGenuiRoute
-  '/dev/loading': typeof DevLoadingRoute
   '/admin': typeof AdminIndexRoute
   '/admin/settings/account': typeof AdminSettingsAccountRoute
   '/admin/settings/appearance': typeof AdminSettingsAppearanceRoute
@@ -298,8 +282,6 @@ export interface FileRoutesById {
   '/admin/usage-logs': typeof AdminUsageLogsRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/web-search': typeof AdminWebSearchRoute
-  '/dev/genui': typeof DevGenuiRoute
-  '/dev/loading': typeof DevLoadingRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/settings/account': typeof AdminSettingsAccountRoute
   '/admin/settings/appearance': typeof AdminSettingsAppearanceRoute
@@ -334,8 +316,6 @@ export interface FileRouteTypes {
     | '/admin/usage-logs'
     | '/admin/users'
     | '/admin/web-search'
-    | '/dev/genui'
-    | '/dev/loading'
     | '/admin/'
     | '/admin/settings/account'
     | '/admin/settings/appearance'
@@ -365,8 +345,6 @@ export interface FileRouteTypes {
     | '/admin/usage-logs'
     | '/admin/users'
     | '/admin/web-search'
-    | '/dev/genui'
-    | '/dev/loading'
     | '/admin'
     | '/admin/settings/account'
     | '/admin/settings/appearance'
@@ -399,8 +377,6 @@ export interface FileRouteTypes {
     | '/admin/usage-logs'
     | '/admin/users'
     | '/admin/web-search'
-    | '/dev/genui'
-    | '/dev/loading'
     | '/admin/'
     | '/admin/settings/account'
     | '/admin/settings/appearance'
@@ -416,8 +392,6 @@ export interface RootRouteChildren {
   DisabledRoute: typeof DisabledRoute
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
-  DevGenuiRoute: typeof DevGenuiRoute
-  DevLoadingRoute: typeof DevLoadingRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -597,20 +571,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminWebSearchRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/dev/genui': {
-      id: '/dev/genui'
-      path: '/dev/genui'
-      fullPath: '/dev/genui'
-      preLoaderRoute: typeof DevGenuiRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dev/loading': {
-      id: '/dev/loading'
-      path: '/dev/loading'
-      fullPath: '/dev/loading'
-      preLoaderRoute: typeof DevLoadingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_authed/_chat/': {
       id: '/_authed/_chat/'
       path: '/'
@@ -751,8 +711,6 @@ const rootRouteChildren: RootRouteChildren = {
   DisabledRoute: DisabledRoute,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
-  DevGenuiRoute: DevGenuiRoute,
-  DevLoadingRoute: DevLoadingRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -82,43 +82,6 @@ func (q *Queries) AppendEntry(ctx context.Context, arg AppendEntryParams) (Messa
 	return i, err
 }
 
-const appendMessageContent = `-- name: AppendMessageContent :one
-UPDATE messages
-SET content    = content || $1::text,
-    updated_at = now()
-WHERE id = $2
-RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, origin
-`
-
-type AppendMessageContentParams struct {
-	Delta string    `json:"delta"`
-	ID    uuid.UUID `json:"id"`
-}
-
-func (q *Queries) AppendMessageContent(ctx context.Context, arg AppendMessageContentParams) (Message, error) {
-	row := q.db.QueryRow(ctx, appendMessageContent, arg.Delta, arg.ID)
-	var i Message
-	err := row.Scan(
-		&i.ID,
-		&i.ConversationID,
-		&i.Role,
-		&i.Content,
-		&i.Status,
-		&i.Metadata,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Parts,
-		&i.StopReason,
-		&i.Model,
-		&i.Provider,
-		&i.Usage,
-		&i.ErrorCode,
-		&i.RunID,
-		&i.Origin,
-	)
-	return i, err
-}
-
 const createMessage = `-- name: CreateMessage :one
 INSERT INTO messages (conversation_id, role, content, status)
 VALUES ($1, $2, $3, $4)
@@ -261,45 +224,6 @@ func (q *Queries) DeleteTranscriptFrom(ctx context.Context, arg DeleteTranscript
 		return nil, err
 	}
 	return items, nil
-}
-
-const finishMessage = `-- name: FinishMessage :one
-UPDATE messages
-SET content    = $1,
-    status     = $2,
-    updated_at = now()
-WHERE id = $3
-RETURNING id, conversation_id, role, content, status, metadata, created_at, updated_at, parts, stop_reason, model, provider, usage, error_code, run_id, origin
-`
-
-type FinishMessageParams struct {
-	Content string        `json:"content"`
-	Status  MessageStatus `json:"status"`
-	ID      uuid.UUID     `json:"id"`
-}
-
-func (q *Queries) FinishMessage(ctx context.Context, arg FinishMessageParams) (Message, error) {
-	row := q.db.QueryRow(ctx, finishMessage, arg.Content, arg.Status, arg.ID)
-	var i Message
-	err := row.Scan(
-		&i.ID,
-		&i.ConversationID,
-		&i.Role,
-		&i.Content,
-		&i.Status,
-		&i.Metadata,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Parts,
-		&i.StopReason,
-		&i.Model,
-		&i.Provider,
-		&i.Usage,
-		&i.ErrorCode,
-		&i.RunID,
-		&i.Origin,
-	)
-	return i, err
 }
 
 const getInput = `-- name: GetInput :one

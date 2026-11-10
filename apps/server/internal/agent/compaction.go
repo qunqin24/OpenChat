@@ -702,7 +702,7 @@ func (ex *execution) recoverContextLength(ctx context.Context, client llm.ModelC
 	}
 	ex.compression.forced = true
 
-	summary, rows, err := LoadContextRows(ctx, ex.r.q, ex.run.ConversationID, ex.r.opts.HistoryLimit)
+	summary, rows, err := LoadContextRows(ctx, ex.r.q, ex.run.ConversationID, HistoryLimit)
 	if err != nil {
 		return false, err
 	}
@@ -711,7 +711,7 @@ func (ex *execution) recoverContextLength(ctx context.Context, client llm.ModelC
 		return false, err
 	}
 	ex.logger().Info("model refused the request for its length; compressed the context and trying again", "attempt", ex.cp.Attempt)
-	if summary, rows, err = LoadContextRows(ctx, ex.r.q, ex.run.ConversationID, ex.r.opts.HistoryLimit); err != nil {
+	if summary, rows, err = LoadContextRows(ctx, ex.r.q, ex.run.ConversationID, HistoryLimit); err != nil {
 		return false, err
 	}
 	ex.noteCompressed(system, offered, summary, rows)

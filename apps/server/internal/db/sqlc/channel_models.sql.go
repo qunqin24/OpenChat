@@ -209,24 +209,6 @@ func (q *Queries) DeleteStaleChannelModels(ctx context.Context, arg DeleteStaleC
 	return result.RowsAffected(), nil
 }
 
-const firstServedModel = `-- name: FirstServedModel :one
-SELECT cm.model_id
-FROM channel_models cm
-         JOIN channels c ON c.id = cm.channel_id
-WHERE cm.enabled
-  AND c.enabled
-ORDER BY c.priority DESC, c.created_at, cm.model_id
-LIMIT 1
-`
-
-// What a conversation that never picked a model is answered with.
-func (q *Queries) FirstServedModel(ctx context.Context) (string, error) {
-	row := q.db.QueryRow(ctx, firstServedModel)
-	var model_id string
-	err := row.Scan(&model_id)
-	return model_id, err
-}
-
 const getChannelModel = `-- name: GetChannelModel :one
 SELECT channel_id, model_id, display_name, source, enabled, fetched_at, created_at
 FROM channel_models

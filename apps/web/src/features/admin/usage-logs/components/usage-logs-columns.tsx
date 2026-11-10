@@ -64,7 +64,6 @@ export function usageLogsColumns(t: TFunction<'common'>): ColumnDef<UsageLog>[] 
           </div>
         )
       },
-      enableSorting: false,
       enableHiding: false,
     },
     {
@@ -93,7 +92,6 @@ export function usageLogsColumns(t: TFunction<'common'>): ColumnDef<UsageLog>[] 
           </div>
         )
       },
-      enableSorting: false,
     },
     {
       id: 'user',
@@ -120,7 +118,6 @@ export function usageLogsColumns(t: TFunction<'common'>): ColumnDef<UsageLog>[] 
           </div>
         )
       },
-      enableSorting: false,
     },
     {
       id: 'model',
@@ -145,7 +142,6 @@ export function usageLogsColumns(t: TFunction<'common'>): ColumnDef<UsageLog>[] 
           </div>
         )
       },
-      enableSorting: false,
     },
     {
       id: 'speed',
@@ -159,7 +155,6 @@ export function usageLogsColumns(t: TFunction<'common'>): ColumnDef<UsageLog>[] 
           </span>
         )
       },
-      enableSorting: false,
     },
     {
       id: 'tokens',
@@ -188,7 +183,6 @@ export function usageLogsColumns(t: TFunction<'common'>): ColumnDef<UsageLog>[] 
           </div>
         )
       },
-      enableSorting: false,
     },
     {
       id: 'cost',
@@ -217,7 +211,6 @@ export function usageLogsColumns(t: TFunction<'common'>): ColumnDef<UsageLog>[] 
           </span>
         )
       },
-      enableSorting: false,
     },
     {
       id: 'timing',
@@ -251,7 +244,6 @@ export function usageLogsColumns(t: TFunction<'common'>): ColumnDef<UsageLog>[] 
           </div>
         )
       },
-      enableSorting: false,
     },
     {
       id: 'details',
@@ -284,7 +276,6 @@ export function usageLogsColumns(t: TFunction<'common'>): ColumnDef<UsageLog>[] 
           </Tooltip>
         )
       },
-      enableSorting: false,
     },
   ]
 }

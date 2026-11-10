@@ -44,7 +44,6 @@ export function channelsColumns(
         />
       ),
       meta: { className: 'w-10' },
-      enableSorting: false,
       enableHiding: false,
     },
     {
@@ -58,7 +57,6 @@ export function channelsColumns(
           {row.original.name}
         </LongText>
       ),
-      enableSorting: false,
       enableHiding: false,
     },
     {
@@ -84,7 +82,6 @@ export function channelsColumns(
           <span className="text-sm">{byId.get(row.original.type)?.label ?? row.original.type}</span>
         </span>
       ),
-      enableSorting: false,
     },
     {
       accessorKey: 'modelCount',
@@ -105,7 +102,6 @@ export function channelsColumns(
           {row.original.modelCount}
         </span>
       ),
-      enableSorting: false,
     },
     {
       // Where a run of a model several channels offer goes: the highest
@@ -125,7 +121,6 @@ export function channelsColumns(
           )}
         </span>
       ),
-      enableSorting: false,
     },
     {
       accessorKey: 'spent',
@@ -146,7 +141,6 @@ export function channelsColumns(
           </span>
         )
       },
-      enableSorting: false,
     },
     {
       accessorKey: 'baseUrl',
@@ -162,7 +156,6 @@ export function channelsColumns(
           {row.original.baseUrl || byId.get(row.original.type)?.endpoint || '—'}
         </LongText>
       ),
-      enableSorting: false,
     },
     {
       id: 'key',
@@ -186,7 +179,6 @@ export function channelsColumns(
         ) : (
           <Badge variant="secondary">{t('admin.channels.api-key-none')}</Badge>
         ),
-      enableSorting: false,
     },
     {
       accessorKey: 'enabled',
@@ -195,13 +187,11 @@ export function channelsColumns(
         <DataTableColumnHeader column={column} title={t('admin.channels.enabled')} />
       ),
       cell: ({ row }) => <ChannelEnabledSwitch channel={row.original} />,
-      enableSorting: false,
     },
     {
       id: 'actions',
       cell: ({ row }) => <ChannelsRowActions channel={row.original} />,
       meta: { className: 'w-12 text-end' },
-      enableSorting: false,
       enableHiding: false,
     },
   ]

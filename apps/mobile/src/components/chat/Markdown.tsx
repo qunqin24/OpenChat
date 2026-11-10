@@ -4,7 +4,7 @@ import { Check, Copy, Table2 as TableIcon } from 'lucide-react-native'
 import { marked, type Token, type Tokens } from 'marked'
 import { createContext, memo, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native'
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View, type TextStyle } from 'react-native'
 import Animated, { FadeIn } from 'react-native-reanimated'
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 
@@ -44,11 +44,6 @@ export function Markdown({ text, fresh = false }: { text: string; streaming?: bo
       </View>
     </SharedPacing.Provider>
   )
-}
-
-/** Plain text that fades in as it arrives, for what is not Markdown (notes in the activity line). */
-export function PlainText({ text, style }: { text: string; style?: StyleProp<TextStyle> }) {
-  return <FadingText style={style}>{text}</FadingText>
 }
 
 /** Whether the block being drawn arrived while the reader watched. */

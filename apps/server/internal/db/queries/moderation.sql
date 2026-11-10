@@ -51,11 +51,6 @@ UPDATE moderation_events
 SET sanction = sqlc.arg('sanction')
 WHERE id = sqlc.arg('id');
 
--- name: GetModerationEvent :one
-SELECT *
-FROM moderation_events
-WHERE id = $1;
-
 -- name: ListModerationEvents :many
 -- Newest first, by keyset on (created_at, id): the order of
 -- moderation_events_created_idx. The account's name and whether it is disabled

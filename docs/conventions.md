@@ -87,7 +87,7 @@ code 用 snake_case。前端要给用户看的 code 要在 `features/auth/http.t
 
 ### 表单与表格
 
-- 登录注册页手写校验（`components/auth/validation.ts`），校验器返回 locale key 而不是文字。
+- 登录注册页手写校验（`chat-core/src/auth-validation.ts`，网页和 App 共用），校验器返回 locale key 而不是文字。
 - 后台表单用 react-hook-form + zod（`ui/form.tsx` 一套）。zod schema 在组件内构建：错误消息要 `t()`，且规则可能依赖组件状态（`users-action-dialog` 的密码规则取决于新建还是编辑）。监听字段用 `useWatch`，不用 `form.watch()`（源码注释的理由：后者每次返回新函数，React compiler 没法围着它做 memo）。
 - 服务端的字段错误进表单：后台直接调 `/admin/...` 的表单读 `OpenChatError.field`，按字段挑译文再 `form.setError(field, ...)`（`users-action-dialog.tsx`，译文不取服务端 `message`）；设置页的资料、密码表单走 `features/auth` 的 `AuthFieldError.field` 和 `key`。没有字段的错误走 toast。
 - 后台表格是服务端分页：`getRowId` 必须是记录 id，选中状态才能挺过重新获取；列的译名要同时放在 header 渲染里和 `meta.title`（列显隐菜单读不到 header，会回退成裸列 id）；表格状态与 URL 同步靠 `hooks/use-table-url-state.ts`。

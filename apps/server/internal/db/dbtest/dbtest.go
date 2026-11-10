@@ -22,22 +22,11 @@ import (
 	"github.com/qunqin24/openchat/apps/server/internal/db"
 )
 
-// URLVar names the server the database-backed tests run on. The older
-// per-suite names are still read, so a setup that has one of them keeps
-// working; they all mean the same thing now.
+// URLVar names the server the database-backed tests run on.
 const URLVar = "TEST_DATABASE_URL"
 
-var legacyVars = []string{"AGENT_TEST_DATABASE_URL", "CHANNEL_TEST_DATABASE_URL", "CATALOG_TEST_DATABASE_URL"}
-
 // URL is the server's address from the environment, or "" when none is set.
-func URL() string {
-	for _, name := range append([]string{URLVar}, legacyVars...) {
-		if v := os.Getenv(name); v != "" {
-			return v
-		}
-	}
-	return ""
-}
+func URL() string { return os.Getenv(URLVar) }
 
 // Pool returns a migrated pool on the database named <name in the URL>_<pkg>,
 // created on first use. The URL is only the address of a server (and the

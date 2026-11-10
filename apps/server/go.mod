@@ -9,11 +9,15 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.4
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.113.1
 	github.com/aws/smithy-go v1.28.1
+	github.com/chromedp/cdproto v0.159.0
+	github.com/chromedp/chromedp v0.21.1
 	github.com/descope/virtualwebauthn v1.0.5
+	github.com/dop251/goja v0.0.0-20261102223426-a177d211bf60
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/go-chi/cors v1.2.2
 	github.com/go-shiori/dom v0.0.0-20230515143342-73569d674e1c
 	github.com/go-webauthn/webauthn v0.18.2
+	github.com/google/jsonschema-go v0.4.3
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/joho/godotenv v1.5.1
@@ -51,13 +55,10 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.38.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.43.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.50.0 // indirect
-	github.com/chromedp/cdproto v0.159.0 // indirect
-	github.com/chromedp/chromedp v0.21.1 // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/cubicdaiya/gonp v1.0.4 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dlclark/regexp2/v2 v2.11.0 // indirect
-	github.com/dop251/goja v0.0.0-20261102223426-a177d211bf60 // indirect
 	github.com/dprotaso/go-yit v0.0.0-20220510233725-9ba8df137936 // indirect
 	github.com/fatih/structtag v1.2.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.4 // indirect
@@ -73,7 +74,6 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/cel-go v0.28.0 // indirect
 	github.com/google/go-tpm v0.9.8 // indirect
-	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/google/pprof v0.0.0-20230207041349-798e818bf904 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/itlightning/dateparse v0.2.1 // indirect

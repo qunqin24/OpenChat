@@ -3,7 +3,9 @@ package llm_test
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
@@ -57,32 +59,6 @@ func TestToolCallIsOnlyExecutableWhenItsArgumentsAreComplete(t *testing.T) {
 	}
 }
 
-func TestTheFourEndingsStayDistinct(t *testing.T) {
-	// The design draft's requirement, written down where a future edit that
-	// aliases two of them will trip over it: a finished block, a finished
-	// response, a tool request that implies another turn, and a finished Run
-	// are four different facts.
-	endings := []llm.EventType{
-		llm.EventPartEnd,
-		llm.EventResponseEnd,
-		llm.EventToolCallsRequested,
-		llm.EventRunEnd,
-	}
-
-	seen := map[llm.EventType]bool{}
-	for _, ending := range endings {
-		if seen[ending] {
-			t.Errorf("%q is used for two different endings", ending)
-		}
-		seen[ending] = true
-	}
-	for _, ending := range endings {
-		if want := ending == llm.EventRunEnd; ending.TerminatesRun() != want {
-			t.Errorf("%q.TerminatesRun() = %v, want %v — only the Run's own end is terminal", ending, !want, want)
-		}
-	}
-}
-
 func TestPartEndCarriesTheToolIdentityFromThePart(t *testing.T) {
 	// part_start may go out before the provider has sent an id, so part_end is
 	// the event a consumer can key on.
@@ -94,23 +70,6 @@ func TestPartEndCarriesTheToolIdentityFromThePart(t *testing.T) {
 	}
 	if ev.ToolCallID != "call_late" || ev.ToolName != "search_notes" {
 		t.Errorf("tool identity = %q / %q", ev.ToolCallID, ev.ToolName)
-	}
-}
-
-func TestRunStatusTerminality(t *testing.T) {
-	tests := map[llm.RunStatus]bool{
-		llm.RunPending:     false,
-		llm.RunRunning:     false,
-		llm.RunCompleted:   true,
-		llm.RunFailed:      true,
-		llm.RunCancelled:   true,
-		llm.RunInterrupted: true,
-	}
-
-	for status, want := range tests {
-		if got := status.Terminal(); got != want {
-			t.Errorf("%q.Terminal() = %v, want %v", status, got, want)
-		}
 	}
 }
 
@@ -126,5 +85,20 @@ func TestErrorKeepsItsCauseInspectable(t *testing.T) {
 	}
 	if !errors.Is(err, cause) {
 		t.Error("the cause is no longer reachable, so nothing above can tell what broke")
+	}
+}
+
+func TestClipBodyNeverCutsACharacterInHalf(t *testing.T) {
+	// 255 bytes of ASCII, then three-byte characters: byte 256 falls inside one.
+	body := strings.Repeat("a", 255) + strings.Repeat("错", 10)
+	got := llm.ClipBody("  " + body + "\n")
+	if !utf8.ValidString(got) {
+		t.Fatalf("clipped text is not valid UTF-8: %q", got)
+	}
+	if want := strings.Repeat("a", 255) + "…"; got != want {
+		t.Errorf("clipped = %q, want the cut moved back to the character boundary", got)
+	}
+	if short := llm.ClipBody(" rate limited \n"); short != "rate limited" {
+		t.Errorf("short body = %q, want it trimmed and whole", short)
 	}
 }

@@ -75,9 +75,4 @@ type ModelResponse struct {
 	// Usage is nil when the provider reported nothing. Nil and zero are
 	// different facts: an unreported turn was not a free one.
 	Usage *Usage
-
-	// Metadata holds provider-native leftovers worth keeping — tool namespaces,
-	// routing hints, reasoning details a specific vendor needs echoed back.
-	// Keys are owned by the adapter that wrote them; nothing generic reads it.
-	Metadata map[string]any
 }

@@ -90,17 +90,6 @@ func (q *Queries) DeleteSession(ctx context.Context, tokenHash []byte) error {
 	return err
 }
 
-const deleteSessionsForUsers = `-- name: DeleteSessionsForUsers :exec
-DELETE
-FROM sessions
-WHERE user_id = ANY ($1::uuid[])
-`
-
-func (q *Queries) DeleteSessionsForUsers(ctx context.Context, userIds []uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteSessionsForUsers, userIds)
-	return err
-}
-
 const deleteUserSessions = `-- name: DeleteUserSessions :exec
 DELETE
 FROM sessions
@@ -238,16 +227,5 @@ type RenewSessionParams struct {
 // its own expiry and is not renewed.
 func (q *Queries) RenewSession(ctx context.Context, arg RenewSessionParams) error {
 	_, err := q.db.Exec(ctx, renewSession, arg.Ttl, arg.ID, arg.RenewBelow)
-	return err
-}
-
-const touchSession = `-- name: TouchSession :exec
-UPDATE sessions
-SET last_used_at = now()
-WHERE id = $1
-`
-
-func (q *Queries) TouchSession(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, touchSession, id)
 	return err
 }

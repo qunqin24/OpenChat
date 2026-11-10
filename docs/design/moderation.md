@@ -50,7 +50,7 @@
 ## 用户标识（上游请求里的 end-user id）
 
 - 每个发往模型的请求带 `llm.Request.User`：`HMAC-SHA256(密钥, 用户 id)`，十六进制取前 32 位。密钥 `end_user_key` 在 `app_settings`，首次使用时生成（`InsertSettingIfMissing`，和 `storage_signing_key` 一路），**没有任何接口读或写它**；不含邮箱，别人拿不到密钥就反推不出 id。
-- 线上字段：OpenAI Chat Completions 和 Responses 是 `safety_identifier`，Anthropic 是 `metadata.user_id`，Gemini 没有这个字段所以不发。这几个键在 `Options.Extra` 里是保留键。
+- 线上字段：OpenAI Chat Completions 和 Responses 是 `safety_identifier`，Anthropic 是 `metadata.user_id`，Gemini 没有这个字段所以不发。
 - 第三方兼容端点可能拒绝不认识的字段，所以每个渠道有开关「发送用户标识」（`channels.send_user_id`，渠道表单里可改）：新建时 base URL（空则取该渠道类型的默认地址）的主机是 `api.openai.com` / `api.anthropic.com` 就默认开，否则关；迁移按同样规则给已有渠道回填。适配器只在开关开着且请求带标识时才发（`Config.SendUser`）。
 - 传到哪：run 的每次请求（`Options.EndUser`）、标题（含按需标题）、上下文压缩（只在 run 内）、模型审核的请求。新写会用模型的路径也要带上 `User`。
 

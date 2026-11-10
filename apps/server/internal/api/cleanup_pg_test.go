@@ -190,6 +190,29 @@ func TestCleanupWorksOffABacklogInBatches(t *testing.T) {
 	}
 }
 
+func TestCleanupDeletesExpiredSessionsAndKeepsLiveOnes(t *testing.T) {
+	f := newCleanupFixture(t)
+	f.exec(`INSERT INTO sessions (user_id, token_hash, expires_at) VALUES ($1, $2, now() - interval '1 minute')`,
+		f.user, []byte("expired-"+f.user.String()))
+	f.exec(`INSERT INTO sessions (user_id, token_hash, expires_at) VALUES ($1, $2, now() + interval '1 hour')`,
+		f.user, []byte("live-"+f.user.String()))
+
+	f.server.CleanupNow(context.Background())
+
+	var expired, live int
+	if err := f.pool.QueryRow(context.Background(),
+		`SELECT count(*) FILTER (WHERE expires_at <= now()), count(*) FILTER (WHERE expires_at > now())
+		 FROM sessions WHERE user_id = $1`, f.user).Scan(&expired, &live); err != nil {
+		t.Fatal(err)
+	}
+	if expired != 0 {
+		t.Errorf("%d expired session(s) survived the pass", expired)
+	}
+	if live != 1 {
+		t.Errorf("live sessions = %d, want the unexpired one kept", live)
+	}
+}
+
 func TestCleanupRemovesUnclaimedUploads(t *testing.T) {
 	f := newCleanupFixture(t)
 

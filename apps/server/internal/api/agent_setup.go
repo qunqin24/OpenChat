@@ -386,7 +386,7 @@ func basePrompt(offered []agent.Tool) string {
 		names[tool.Definition().Name] = true
 	}
 	if len(offered) > 0 {
-		// The calls of one response run at once (agent.Options.ToolConcurrency),
+		// The calls of one response run at once (agent.ToolConcurrency),
 		// and every round costs the whole conversation sent again; smaller
 		// models tended to call one tool per round unless told (after
 		// OpenCode's "Tool Use - Parallelism").

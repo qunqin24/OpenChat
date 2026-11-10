@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next'
 import { ConfigDrawer } from '@/components/shadcn/config-drawer'
 import { Header } from '@/components/shadcn/layout/header'
 import { Main } from '@/components/shadcn/layout/main'
-import { ProfileDropdown } from '@/components/shadcn/profile-dropdown'
 import { Search } from '@/components/shadcn/search'
 import { CatalogStatusLine } from './components/catalog-status-line'
 import { ModelsGrid } from './components/models-grid'
@@ -65,7 +64,6 @@ export function Models() {
       <Header fixed>
         <Search className="me-auto" />
         <ConfigDrawer />
-        <ProfileDropdown />
       </Header>
 
       <Main className="flex flex-1 flex-col gap-4 sm:gap-6">

@@ -1,28 +1,13 @@
 import { type LinkProps } from '@tanstack/react-router'
 
-type User = {
-  id: string
-  name: string
-  email: string
-}
-
-type BaseNavItem = {
+// Upstream (satnaing/shadcn-admin) also has collapsible items with children and
+// a badge per item. This panel's navigation is one flat list, so only the link
+// is kept; NavGroup and CommandMenu draw nothing else.
+type NavItem = {
   title: string
-  badge?: string
+  url: LinkProps['to'] | (string & {})
   icon?: React.ElementType
 }
-
-type NavLink = BaseNavItem & {
-  url: LinkProps['to'] | (string & {})
-  items?: never
-}
-
-type NavCollapsible = BaseNavItem & {
-  items: (BaseNavItem & { url: LinkProps['to'] | (string & {}) })[]
-  url?: never
-}
-
-type NavItem = NavCollapsible | NavLink
 
 type NavGroup = {
   title: string
@@ -30,8 +15,7 @@ type NavGroup = {
 }
 
 type SidebarData = {
-  user: User
   navGroups: NavGroup[]
 }
 
-export type { SidebarData, NavGroup, NavItem, NavCollapsible, NavLink }
+export type { SidebarData, NavGroup, NavItem }

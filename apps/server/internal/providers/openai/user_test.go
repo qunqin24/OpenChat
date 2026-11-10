@@ -56,15 +56,3 @@ func TestSafetyIdentifierFollowsTheChannelSwitch(t *testing.T) {
 		}
 	}
 }
-
-// A vendor knob may not overwrite the identifier.
-func TestExtraCannotOverwriteTheSafetyIdentifier(t *testing.T) {
-	req := llm.Request{Model: "m", Messages: []llm.Message{llm.TextMessage(llm.RoleUser, "hi")},
-		Options: llm.Options{Extra: map[string]any{"safety_identifier": "x"}}}
-	if _, err := buildBody(req, Config{BaseURL: "http://x"}); err == nil {
-		t.Error("chat: Extra overwrote safety_identifier")
-	}
-	if _, err := buildResponsesBody(req, Config{BaseURL: "http://x"}); err == nil {
-		t.Error("responses: Extra overwrote safety_identifier")
-	}
-}

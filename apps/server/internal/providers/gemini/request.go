@@ -9,22 +9,6 @@ import (
 	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
-// reservedKeys are the request fields Options.Extra may not touch. A vendor
-// knob is welcome; quietly redirecting the request to another history, another
-// system prompt or another tool list than the one the run layer authorised is
-// not. The model is not listed because it is not in the body at all on this
-// protocol — it is in the URL, where Extra cannot reach it.
-var reservedKeys = map[string]bool{
-	"contents":           true,
-	"systemInstruction":  true,
-	"system_instruction": true,
-	"tools":              true,
-	"toolConfig":         true,
-	"tool_config":        true,
-	"generationConfig":   true,
-	"generation_config":  true,
-}
-
 // levels are the thinking levels this API accepts. Gemini 3 models take a
 // level; Gemini 2.5 models take a budget instead, and which one a model takes
 // is the catalogue's to say — the caller sends one or the other. A budget is
@@ -69,17 +53,8 @@ func buildBody(req llm.Request) ([]byte, error) {
 
 	opts := req.Options
 	generation := map[string]any{}
-	if opts.Temperature != nil {
-		generation["temperature"] = *opts.Temperature
-	}
-	if opts.TopP != nil {
-		generation["topP"] = *opts.TopP
-	}
 	if opts.MaxTokens != nil {
 		generation["maxOutputTokens"] = *opts.MaxTokens
-	}
-	if len(opts.Stop) > 0 {
-		generation["stopSequences"] = opts.Stop
 	}
 	if r := opts.Reasoning; r != nil {
 		// includeThoughts is what makes the thoughts arrive at all. Without it
@@ -96,13 +71,6 @@ func buildBody(req llm.Request) ([]byte, error) {
 	}
 	if len(generation) > 0 {
 		body["generationConfig"] = generation
-	}
-
-	for key, value := range opts.Extra {
-		if reservedKeys[key] {
-			return nil, llm.Errorf(llm.ErrorProvider, nil, "gemini: option %q would overwrite a request field", key)
-		}
-		body[key] = value
 	}
 	return json.Marshal(body)
 }

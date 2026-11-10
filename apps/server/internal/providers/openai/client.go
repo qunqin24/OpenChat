@@ -35,15 +35,6 @@ const maxErrorBodyBytes = 8 << 10
 // them are inferred from the URL, because guessing would mean rewriting a
 // deployment the operator configured on purpose.
 type Compat struct {
-	// OmitStreamOptions drops stream_options.include_usage, which a few
-	// gateways reject outright. The cost is that the turn reports no usage.
-	OmitStreamOptions bool
-
-	// InferFinishReason accepts a stream that ends without saying why, and
-	// concludes tool_calls or stop from what arrived. Off by default: see
-	// assembler.finishReason.
-	InferFinishReason bool
-
 	// EchoReasoning replays the thinking of earlier turns to the model, in the
 	// assistant message's `reasoning_content` field (never in `content`).
 	// Off by default because most endpoints on this protocol reject their own
@@ -269,7 +260,7 @@ func statusError(resp *http.Response) error {
 	if err.Message == "" {
 		// Not JSON we recognise — a proxy's error page, most likely. A clipped
 		// copy is what makes that diagnosable at all.
-		err.Message = http.StatusText(resp.StatusCode) + ": " + clip(string(body))
+		err.Message = http.StatusText(resp.StatusCode) + ": " + llm.ClipBody(string(body))
 	}
 
 	switch {
@@ -296,13 +287,4 @@ func isContextLength(e wireError) bool {
 	}
 	lowered := strings.ToLower(e.Message)
 	return strings.Contains(lowered, "maximum context length") || strings.Contains(lowered, "context length exceeded")
-}
-
-func clip(s string) string {
-	const max = 256
-	s = strings.TrimSpace(s)
-	if len(s) <= max {
-		return s
-	}
-	return s[:max] + "…"
 }

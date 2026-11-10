@@ -28,11 +28,6 @@ WHERE s.token_hash = sqlc.arg('token_hash')
   AND users.disabled_at IS NOT NULL
   AND NOT users.pending;
 
--- name: TouchSession :exec
-UPDATE sessions
-SET last_used_at = now()
-WHERE id = $1;
-
 -- name: RenewSession :exec
 -- An app's session (a bearer token) is renewed when it asks who it is
 -- (getSession) and has less than renew_below left: back to ttl from now. So
@@ -59,11 +54,6 @@ WHERE user_id = $1;
 DELETE
 FROM sessions
 WHERE expires_at <= now();
-
--- name: DeleteSessionsForUsers :exec
-DELETE
-FROM sessions
-WHERE user_id = ANY (sqlc.arg('user_ids')::uuid[]);
 
 -- name: DeleteOtherUserSessions :exec
 -- Used when someone changes their own password: every session issued under the

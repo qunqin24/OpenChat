@@ -49,10 +49,6 @@ WHERE (lower(email) = lower(sqlc.arg('identifier')::text)
 ORDER BY (lower(email) = lower(sqlc.arg('identifier')::text)) DESC
 LIMIT 1;
 
--- name: CountUsers :one
-SELECT count(*)
-FROM users;
-
 -- name: TouchUserSeen :exec
 UPDATE users
 SET last_seen_at = now()

@@ -631,29 +631,6 @@ func (q *Queries) GetSubagentPlugins(ctx context.Context, arg GetSubagentPlugins
 	return plugins, err
 }
 
-const getSubagentReport = `-- name: GetSubagentReport :one
-SELECT run_id, conversation_id, parent_id, state, report, duration_ms, via_tool, delivered_message_id, created_at
-FROM subagent_reports
-WHERE run_id = $1
-`
-
-func (q *Queries) GetSubagentReport(ctx context.Context, runID uuid.UUID) (SubagentReport, error) {
-	row := q.db.QueryRow(ctx, getSubagentReport, runID)
-	var i SubagentReport
-	err := row.Scan(
-		&i.RunID,
-		&i.ConversationID,
-		&i.ParentID,
-		&i.State,
-		&i.Report,
-		&i.DurationMs,
-		&i.ViaTool,
-		&i.DeliveredMessageID,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
 const getSubagentSkills = `-- name: GetSubagentSkills :one
 SELECT COALESCE(skills, '{}')::text[] AS skills
 FROM conversations

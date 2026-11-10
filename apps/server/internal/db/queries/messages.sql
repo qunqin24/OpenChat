@@ -3,21 +3,6 @@ INSERT INTO messages (conversation_id, role, content, status)
 VALUES ($1, $2, $3, $4)
 RETURNING *;
 
--- name: AppendMessageContent :one
-UPDATE messages
-SET content    = content || sqlc.arg('delta')::text,
-    updated_at = now()
-WHERE id = sqlc.arg('id')
-RETURNING *;
-
--- name: FinishMessage :one
-UPDATE messages
-SET content    = sqlc.arg('content'),
-    status     = sqlc.arg('status'),
-    updated_at = now()
-WHERE id = sqlc.arg('id')
-RETURNING *;
-
 -- name: ListMessages :many
 -- A page of the transcript from its end: the newest rows, or with a cursor the
 -- rows older than it. Newest first, so the limit keeps the end; the caller

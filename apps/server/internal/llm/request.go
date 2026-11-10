@@ -82,25 +82,14 @@ type ReasoningOptions struct {
 	Budget int
 }
 
-// Options are the sampling knobs.
-//
-// The numeric ones are pointers so that "leave the provider's default alone"
-// and "I deliberately want zero" stay different requests — temperature 0 is a
-// very real choice, and a plain float64 cannot express the absence of one.
+// Options are what a caller may ask of one request beyond its content.
+// Sampling (temperature, top_p) is left at each provider's default.
 type Options struct {
-	Temperature *float64
-	TopP        *float64
-	MaxTokens   *int
-	Stop        []string
-	ToolChoice  ToolChoice
+	// MaxTokens is nil to leave the provider's default alone.
+	MaxTokens  *int
+	ToolChoice ToolChoice
 
 	// Reasoning is nil when the caller has no opinion, which is not the same as
 	// asking a reasoning model to stop thinking.
 	Reasoning *ReasoningOptions
-
-	// Extra carries vendor knobs a compat configuration passes through
-	// verbatim. Adapters must refuse to let it overwrite the fields above: a
-	// stray extra key that silently retargets the model or the tool list turns
-	// a configuration typo into a different request than the one we authorised.
-	Extra map[string]any
 }

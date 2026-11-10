@@ -70,11 +70,6 @@ FROM user_memories
 WHERE user_id = $1
 ORDER BY created_at, id;
 
--- name: CountMemories :one
-SELECT count(*)
-FROM user_memories
-WHERE user_id = $1;
-
 -- name: GetMemory :one
 SELECT *
 FROM user_memories

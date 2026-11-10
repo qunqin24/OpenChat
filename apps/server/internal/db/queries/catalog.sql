@@ -17,27 +17,9 @@ INSERT INTO catalog_models (provider_id, model_id, name, description, family,
                             release_date, knowledge, input_modalities, output_modalities, raw)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18);
 
--- name: CountCatalogProviders :one
-SELECT count(*)
-FROM catalog_providers;
-
 -- name: CountCatalogModels :one
 SELECT count(*)
 FROM catalog_models;
-
--- name: ListCatalogProviders :many
--- The model count comes from the same read as the provider: the picker shows
--- both, and a provider with no models is worth showing as empty rather than
--- hiding.
-SELECT p.id,
-       p.name,
-       p.doc,
-       p.env,
-       count(m.model_id) AS model_count
-FROM catalog_providers p
-         LEFT JOIN catalog_models m ON m.provider_id = p.id
-GROUP BY p.id
-ORDER BY p.name;
 
 -- name: ListServedModels :many
 -- The models this installation actually serves -- the whole of what the model
@@ -153,13 +135,6 @@ WHERE (sqlc.narg('search')::text IS NULL
     OR s.display_name ILIKE '%' || sqlc.narg('search')::text || '%'
     OR m.name ILIKE '%' || sqlc.narg('search')::text || '%'
     OR m.family ILIKE '%' || sqlc.narg('search')::text || '%')
-  -- A model the catalogue does not list has no brand to filter on, so asking
-  -- for one excludes it, exactly as a capability filter does.
-  AND (sqlc.narg('provider_id')::text IS NULL OR m.provider_id = sqlc.narg('provider_id')::text)
-  AND (NOT sqlc.arg('require_reasoning')::boolean OR coalesce(m.reasoning, false))
-  AND (NOT sqlc.arg('require_tool_call')::boolean OR coalesce(m.tool_call, false))
-  AND (NOT sqlc.arg('require_attachment')::boolean OR coalesce(m.attachment, false))
-  AND (NOT sqlc.arg('require_structured_output')::boolean OR coalesce(m.structured_output, false))
   AND (sqlc.narg('enabled')::boolean IS NULL OR coalesce(s.enabled, false) = sqlc.narg('enabled')::boolean)
 -- By name rather than by brand: half these rows can have no brand to group
 -- under, and sorting on an empty one would herd every uncatalogued model into a
@@ -197,13 +172,6 @@ WHERE (sqlc.narg('search')::text IS NULL
     OR s.display_name ILIKE '%' || sqlc.narg('search')::text || '%'
     OR m.name ILIKE '%' || sqlc.narg('search')::text || '%'
     OR m.family ILIKE '%' || sqlc.narg('search')::text || '%')
-  -- A model the catalogue does not list has no brand to filter on, so asking
-  -- for one excludes it, exactly as a capability filter does.
-  AND (sqlc.narg('provider_id')::text IS NULL OR m.provider_id = sqlc.narg('provider_id')::text)
-  AND (NOT sqlc.arg('require_reasoning')::boolean OR coalesce(m.reasoning, false))
-  AND (NOT sqlc.arg('require_tool_call')::boolean OR coalesce(m.tool_call, false))
-  AND (NOT sqlc.arg('require_attachment')::boolean OR coalesce(m.attachment, false))
-  AND (NOT sqlc.arg('require_structured_output')::boolean OR coalesce(m.structured_output, false))
   AND (sqlc.narg('enabled')::boolean IS NULL OR coalesce(s.enabled, false) = sqlc.narg('enabled')::boolean);
 
 -- name: GetCatalogModel :one

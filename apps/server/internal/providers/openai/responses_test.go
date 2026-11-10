@@ -59,7 +59,7 @@ func jsonEq(t *testing.T, name string, got any, want string) {
 }
 
 func TestResponsesBodyEnvelope(t *testing.T) {
-	temp, topP, max := 0.2, 0.9, 512
+	max := 512
 	sent := buildResponses(t, llm.Request{
 		Model: "gpt-5",
 		Messages: []llm.Message{
@@ -72,8 +72,7 @@ func TestResponsesBodyEnvelope(t *testing.T) {
 			{Name: "ping"},
 		},
 		Options: llm.Options{
-			Temperature: &temp, TopP: &topP, MaxTokens: &max,
-			Stop:       []string{"END"},
+			MaxTokens:  &max,
 			ToolChoice: llm.ToolChoiceRequired,
 			Reasoning:  &llm.ReasoningOptions{Effort: llm.EffortHigh},
 		},
@@ -95,8 +94,8 @@ func TestResponsesBodyEnvelope(t *testing.T) {
 	if sent["tool_choice"] != "required" {
 		t.Errorf("tool_choice = %v", sent["tool_choice"])
 	}
-	if sent["max_output_tokens"] != float64(512) || sent["temperature"] != 0.2 || sent["top_p"] != 0.9 {
-		t.Errorf("sampling = %v", sent)
+	if sent["max_output_tokens"] != float64(512) {
+		t.Errorf("max_output_tokens = %v", sent["max_output_tokens"])
 	}
 	jsonEq(t, "reasoning", sent["reasoning"], `{"effort":"high","summary":"auto"}`)
 	for _, key := range []string{"max_tokens", "stop", "messages", "stream_options"} {
@@ -108,31 +107,10 @@ func TestResponsesBodyEnvelope(t *testing.T) {
 
 func TestResponsesBodyOmitsWhatWasNotAsked(t *testing.T) {
 	sent := buildResponsesWith(t, llm.Request{Model: "m", Messages: []llm.Message{llm.TextMessage(llm.RoleUser, "hi")}}, Config{})
-	for _, key := range []string{"instructions", "tools", "tool_choice", "reasoning", "include", "max_output_tokens", "temperature", "top_p"} {
+	for _, key := range []string{"instructions", "tools", "tool_choice", "reasoning", "include", "max_output_tokens"} {
 		if _, ok := sent[key]; ok {
 			t.Errorf("%s was sent without being asked for", key)
 		}
-	}
-}
-
-func TestResponsesBodyExtraCannotOverwriteReservedFields(t *testing.T) {
-	for _, key := range []string{"model", "input", "instructions", "stream", "tools", "tool_choice", "store", "include"} {
-		_, err := buildResponsesBody(llm.Request{
-			Model:    "m",
-			Messages: []llm.Message{llm.TextMessage(llm.RoleUser, "hi")},
-			Options:  llm.Options{Extra: map[string]any{key: "x"}},
-		}, Config{})
-		if err == nil {
-			t.Errorf("Extra[%q] was allowed to overwrite a request field", key)
-		}
-	}
-	sent := buildResponses(t, llm.Request{
-		Model:    "m",
-		Messages: []llm.Message{llm.TextMessage(llm.RoleUser, "hi")},
-		Options:  llm.Options{Extra: map[string]any{"service_tier": "flex"}},
-	})
-	if sent["service_tier"] != "flex" {
-		t.Errorf("a vendor knob was dropped: %v", sent)
 	}
 }
 

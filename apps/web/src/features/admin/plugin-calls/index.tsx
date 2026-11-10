@@ -11,7 +11,6 @@ import { DataTableCursorPagination } from '@/components/shadcn/data-table'
 import { Header } from '@/components/shadcn/layout/header'
 import { Main } from '@/components/shadcn/layout/main'
 import { LongText } from '@/components/shadcn/long-text'
-import { ProfileDropdown } from '@/components/shadcn/profile-dropdown'
 import { Search } from '@/components/shadcn/search'
 import { Badge } from '@/components/shadcn/ui/badge'
 import { Button } from '@/components/shadcn/ui/button'
@@ -88,7 +87,6 @@ export function PluginCalls() {
       <Header fixed>
         <Search className="me-auto" />
         <ConfigDrawer />
-        <ProfileDropdown />
       </Header>
 
       <Main className="flex flex-1 flex-col gap-4 sm:gap-6">

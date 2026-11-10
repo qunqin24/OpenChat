@@ -24,7 +24,7 @@ import {
 import { useAdminUsers } from '@/features/admin/use-admin'
 import { useSession } from '@/features/auth/use-auth'
 import { cn } from '@/lib/utils'
-import { roles, statuses } from '../data/data'
+import { statuses } from '../data/data'
 import { UsersBulkActions } from './data-table-bulk-actions'
 import { usersColumns } from './users-columns'
 
@@ -91,15 +91,6 @@ export function UsersTable() {
         searchPlaceholder={t('admin.users.search')}
         searchKey="name"
         filters={[
-          {
-            columnId: 'role',
-            title: t('admin.users.role'),
-            options: roles.map((role) => ({
-              label: t(`admin.users.role-${role.value}`),
-              value: role.value,
-              icon: role.icon,
-            })),
-          },
           {
             columnId: 'status',
             title: t('admin.users.status'),

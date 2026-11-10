@@ -22,8 +22,6 @@ import "context"
 //     boundary worth keeping — a clean finish or a cancellation. A stream that
 //     broke mid-frame has no trustworthy boundary, so it gets no such event and
 //     the caller decides what the partial content is worth.
-//   - Never emit EventToolCallsRequested or EventRunEnd. The tool loop and the
-//     Run belong to the layer above; a provider cannot see either.
 //   - Return ctx.Err() on cancellation, with the partial response and
 //     FinishCancelled set, so callers can tell a stop from a failure without
 //     inspecting strings.

@@ -16,7 +16,6 @@ interface UIState {
   libraryView: LibraryView
   setTheme: (theme: Theme) => void
   toggleSidebar: () => void
-  setSidebarOpen: (open: boolean) => void
   setSidebarWidth: (width: number) => void
   setSidebarChatsOpen: (open: boolean) => void
   setLibraryView: (view: LibraryView) => void
@@ -32,7 +31,6 @@ export const useUIStore = create<UIState>()(
       libraryView: 'grid',
       setTheme: (theme) => set({ theme }),
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
-      setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
       setSidebarWidth: (width) => {
         if (!Number.isFinite(width)) return
         set({ sidebarWidth: Math.min(SIDEBAR_WIDTH.max, Math.max(SIDEBAR_WIDTH.min, width)) })

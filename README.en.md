@@ -156,7 +156,7 @@ make setup   # install dependencies, create .env
 make up      # Postgres + MinIO through docker compose (skip it if you have your own Postgres)
 make ser     # the API on :8080, migrates on start
 make web     # Vite on :5173, proxies /api to :8080
-make check   # lint + test + build, the same as CI
+make check   # lint + test + build (CI also checks that generated code is up to date)
 ```
 
 Open `http://localhost:5173`. `make help` lists every command.

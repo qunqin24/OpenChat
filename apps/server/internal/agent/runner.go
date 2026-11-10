@@ -82,21 +82,9 @@ type Options struct {
 	// database write of the whole response so far, and a fast model's text
 	// sent only with them comes in blocks (docs/design/frontend-chat.md).
 	PublishInterval time.Duration
-	// HistoryLimit is how many transcript rows a request is built from: a
-	// safety cap and no more. What keeps a request within the model's window is
-	// compression (Compression); a cap that bit would move the start of the
-	// history with every new row, and with it the prefix a provider caches.
-	HistoryLimit int32
 	// Compression, when set, compresses a request that nears the model's
 	// window before it is made. Nil never compresses on its own.
 	Compression *Compression
-	// ToolConcurrency bounds the calls of one round running at once. The
-	// prompt asks for independent calls in one round (api/agent_setup.go), so
-	// a round of searches and page reads should mostly run together; the bound
-	// is there for the services they reach.
-	ToolConcurrency int
-	// RequestOptions are passed to every model request.
-	RequestOptions llm.Options
 	// Blobs reads the files users attached. Without it a request goes out
 	// with a note where each file would be.
 	Blobs Blobs
@@ -144,14 +132,21 @@ func (o Options) withDefaults() Options {
 	if o.PublishInterval <= 0 {
 		o.PublishInterval = 50 * time.Millisecond
 	}
-	if o.HistoryLimit <= 0 {
-		o.HistoryLimit = 2000
-	}
-	if o.ToolConcurrency <= 0 {
-		o.ToolConcurrency = 10
-	}
 	return o
 }
+
+const (
+	// HistoryLimit is how many transcript rows a request is built from: a
+	// safety cap and no more. What keeps a request within the model's window is
+	// compression (Options.Compression); a cap that bit would move the start of
+	// the history with every new row, and with it the prefix a provider caches.
+	HistoryLimit = 2000
+	// ToolConcurrency bounds the calls of one round running at once. The
+	// prompt asks for independent calls in one round (api/agent_setup.go), so
+	// a round of searches and page reads should mostly run together; the bound
+	// is there for the services they reach.
+	ToolConcurrency = 10
+)
 
 // Causes a run's context can end with. errShutdown is the process going away:
 // it is not a decision about the run, so nothing terminal is written and the

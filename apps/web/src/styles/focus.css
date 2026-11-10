@@ -32,10 +32,6 @@
   border-radius: 8px;
 }
 
-.chat-ui .n-suggest:focus-visible {
-  border-radius: 10px;
-}
-
 .chat-ui .n-icon-btn:focus-visible,
 .n-auth-reveal:focus-visible {
   border-radius: 999px;

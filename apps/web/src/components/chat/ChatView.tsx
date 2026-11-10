@@ -36,9 +36,9 @@ import { acceptAttribute, acceptsOf, TEXT_TYPE } from '@openchat/chat-core/attac
 import { isRunning } from '@openchat/chat-core/run-state'
 import { composerMode, reviseDraft } from '@openchat/chat-core/revise'
 import { returnableFiles, startWroteNothing } from '@openchat/chat-core/start-failure'
-import { buildTurns, pendingPlan, pendingQuestion, regenerable } from '@openchat/chat-core/transcript'
+import { askedQuestions, buildTurns, pendingPlan, pendingQuestion, regenerable, sentAfterReplies } from '@openchat/chat-core/transcript'
 import { turnOutline } from '@openchat/chat-core/outline'
-import { parseQuestions, type AskAnswer } from '@openchat/chat-core/ask-user'
+import type { AskAnswer } from '@openchat/chat-core/ask-user'
 import { useChatStore } from '@/stores/chat-store'
 import AskUserDock from './AskUserDock'
 import CompactionDivider from './CompactionDivider'
@@ -373,21 +373,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
 
   // The question the last reply ended on, if nobody has answered or written past it.
   const askingCallId = useMemo(() => pendingQuestion(turns, superseded), [turns, superseded])
-  const asking = useMemo(() => {
-    if (!askingCallId) return null
-    for (const turn of turns) {
-      if (turn.kind !== 'assistant') continue
-      for (const response of turn.responses) {
-        for (const part of response.parts) {
-          if (part.type === 'tool_call' && part.id === askingCallId) {
-            const questions = parseQuestions(part.arguments)
-            return questions ? { callId: askingCallId, questions } : null
-          }
-        }
-      }
-    }
-    return null
-  }, [askingCallId, turns])
+  const asking = useMemo(() => askedQuestions(turns, askingCallId), [askingCallId, turns])
   // The panel put away for this question (Skip, ✕ or Escape); the line in the
   // reply brings it back.
   const [dismissedCallId, setDismissedCallId] = useState<string | null>(null)
@@ -1013,17 +999,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
 
   // What was sent after each reply, for its Choices blocks to mark the choice
   // it was (genui/choices.tsx). Only the last answer's can send (below).
-  const sentAfter = useMemo(() => {
-    const byTurn = new Map<string, ChoicesActions>()
-    let next: string | undefined = outgoing?.content
-    for (let i = turns.length - 1; i >= 0; i--) {
-      const turn = turns[i]
-      if (!turn) continue
-      if (turn.kind === 'user') next = turn.message.content
-      else if (turn.kind === 'assistant') byTurn.set(turn.key, { next })
-    }
-    return byTurn
-  }, [outgoing, turns])
+  const sentAfter = useMemo(() => sentAfterReplies(turns, outgoing?.content), [outgoing, turns])
   const canPick = !working && !outgoing && !revising
 
   const handleStop = useCallback(() => {

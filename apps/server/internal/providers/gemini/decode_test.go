@@ -256,9 +256,6 @@ func TestStreamPutsAFunctionCallSignatureOnTheCallItself(t *testing.T) {
 	if ended.Signature != calls[0].Signature {
 		t.Errorf("part_end signature = %q", ended.Signature)
 	}
-	if resp.Metadata != nil {
-		t.Errorf("metadata = %v, signatures no longer live there", resp.Metadata)
-	}
 }
 
 func TestStreamCombinesThoughtsIntoTheOutputTotalAndSplitsOutTheCache(t *testing.T) {

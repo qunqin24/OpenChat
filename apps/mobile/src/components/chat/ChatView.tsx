@@ -10,7 +10,7 @@ import Animated, { useAnimatedStyle } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 
-import { parseQuestions, type AskAnswer } from '@openchat/chat-core/ask-user'
+import type { AskAnswer } from '@openchat/chat-core/ask-user'
 import { greetingLines, pickGreeting } from '@openchat/chat-core/greeting'
 import { gapLabel, timeGaps } from '@openchat/chat-core/time-gap'
 import { quoteMessage } from '@openchat/chat-core/document-selection'
@@ -19,7 +19,7 @@ import { composerMode, reviseDraft } from '@openchat/chat-core/revise'
 import { isRunning } from '@openchat/chat-core/run-state'
 import { returnableFiles, startWroteNothing } from '@openchat/chat-core/start-failure'
 import { acceptsOf, TEXT_TYPE } from '@openchat/chat-core/attachments'
-import { buildTurns, pendingQuestion, regenerable, type AssistantTurn, type Turn } from '@openchat/chat-core/transcript'
+import { askedQuestions, buildTurns, pendingQuestion, regenerable, sentAfterReplies, type AssistantTurn, type Turn } from '@openchat/chat-core/transcript'
 
 import { useAttachments } from '@/hooks/attachments'
 import { useCompaction, useUndoCompaction } from '@/hooks/compaction'
@@ -208,21 +208,7 @@ export function ChatView({ conversationId, onCreated, onRemoved, onSettled, onGo
   const last = useMemo(() => regenerable(turns), [turns])
 
   const askingCallId = useMemo(() => pendingQuestion(turns, superseded), [turns, superseded])
-  const asking = useMemo(() => {
-    if (!askingCallId) return null
-    for (const turn of turns) {
-      if (turn.kind !== 'assistant') continue
-      for (const response of turn.responses) {
-        for (const part of response.parts) {
-          if (part.type === 'tool_call' && part.id === askingCallId) {
-            const questions = parseQuestions(part.arguments)
-            return questions ? { callId: askingCallId, questions } : null
-          }
-        }
-      }
-    }
-    return null
-  }, [askingCallId, turns])
+  const asking = useMemo(() => askedQuestions(turns, askingCallId), [askingCallId, turns])
   const [dismissedCallId, setDismissedCallId] = useState<string | null>(null)
 
   // Whether this view is still on screen: a send under way when the reader
@@ -414,17 +400,7 @@ export function ChatView({ conversationId, onCreated, onRemoved, onSettled, onGo
   }
 
   // What was sent after each reply, for its Choices to mark the choice it was.
-  const sentAfter = useMemo(() => {
-    const byTurn = new Map<string, ChoicesActions>()
-    let next: string | undefined = outgoing?.content
-    for (let i = turns.length - 1; i >= 0; i--) {
-      const turn = turns[i]
-      if (!turn) continue
-      if (turn.kind === 'user') next = turn.message.content
-      else if (turn.kind === 'assistant') byTurn.set(turn.key, { next })
-    }
-    return byTurn
-  }, [outgoing, turns])
+  const sentAfter = useMemo(() => sentAfterReplies(turns, outgoing?.content), [outgoing, turns])
   const canPick = !working && !outgoing && !revising
   const images = useMemo(() => (conversationId ? proxiedImages(conversationId) : () => null), [conversationId])
 

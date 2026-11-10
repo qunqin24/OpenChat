@@ -40,7 +40,6 @@ export function usersColumns(t: TFunction<'common'>, currentUserId?: string): Co
         />
       ),
       meta: { className: 'w-10' },
-      enableSorting: false,
       enableHiding: false,
     },
     {
@@ -81,7 +80,6 @@ export function usersColumns(t: TFunction<'common'>, currentUserId?: string): Co
           )}
         </div>
       ),
-      enableSorting: false,
     },
     {
       id: 'status',
@@ -109,7 +107,6 @@ export function usersColumns(t: TFunction<'common'>, currentUserId?: string): Co
         ) : (
           <Badge variant="outline">{t('admin.users.enabled')}</Badge>
         ),
-      enableSorting: false,
     },
     {
       id: 'storage',
@@ -121,7 +118,6 @@ export function usersColumns(t: TFunction<'common'>, currentUserId?: string): Co
           {row.original.storageQuotaBytes !== undefined && ` / ${formatSize(row.original.storageQuotaBytes)}`}
         </span>
       ),
-      enableSorting: false,
     },
     {
       accessorKey: 'lastSeenAt',
@@ -134,7 +130,6 @@ export function usersColumns(t: TFunction<'common'>, currentUserId?: string): Co
           {formatRelative(row.original.lastSeenAt ?? undefined, t) || '—'}
         </span>
       ),
-      enableSorting: false,
     },
     {
       accessorKey: 'createdAt',
@@ -147,7 +142,6 @@ export function usersColumns(t: TFunction<'common'>, currentUserId?: string): Co
           {formatRelative(row.original.createdAt, t)}
         </span>
       ),
-      enableSorting: false,
     },
     {
       id: 'actions',
@@ -155,7 +149,6 @@ export function usersColumns(t: TFunction<'common'>, currentUserId?: string): Co
         <UsersRowActions user={row.original} isSelf={row.original.id === currentUserId} />
       ),
       meta: { className: 'w-12 text-end' },
-      enableSorting: false,
       enableHiding: false,
     },
   ]

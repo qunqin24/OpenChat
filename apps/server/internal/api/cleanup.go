@@ -48,8 +48,8 @@ const (
 // StartCleanup removes what has outlived its time, in the background until ctx
 // ends: temporary chats a day after they were made, conversations a user
 // deleted once the retention is over, uploads nobody attached, files on the
-// disk that no attachment points to, and memory-log entries past their
-// retention.
+// disk that no attachment points to, sessions that have expired, and
+// memory-log entries past their retention.
 //
 // Safe with several servers on one database. Each row is removed by a single
 // DELETE with the age in its WHERE clause, and the statement hands back the
@@ -120,6 +120,10 @@ func (s *Server) CleanupNow(ctx context.Context) {
 		return len(keys), keys, err
 	})
 
+	// Sessions past their expiry: no request can use one (GetSessionUser).
+	if _, err := s.q.DeleteExpiredSessions(ctx); err != nil {
+		slog.WarnContext(ctx, "delete expired sessions", "error", err)
+	}
 	// The sign-in and sign-up attempts no limit looks at any more.
 	s.purgeAuthAttempts(ctx, now)
 	// Passkey ceremonies nobody finished.

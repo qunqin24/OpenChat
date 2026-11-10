@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import React from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { ArrowRight, ChevronRight, Laptop, Moon, Sun } from 'lucide-react'
+import { ArrowRight, Laptop, Moon, Sun } from 'lucide-react'
 import { useSearch } from '@/features/admin/context/search-provider'
 import { useTheme } from '@/features/admin/context/theme-provider'
 import {
@@ -39,38 +39,20 @@ export function CommandMenu() {
           <CommandEmpty>{t('admin.ui.command.no-results')}</CommandEmpty>
           {sidebarData.navGroups.map((group) => (
             <CommandGroup key={group.title} heading={group.title}>
-              {group.items.map((navItem, i) => {
-                if (navItem.url)
-                  return (
-                    <CommandItem
-                      key={`${navItem.url}-${i}`}
-                      value={navItem.title}
-                      onSelect={() => {
-                        runCommand(() => navigate({ to: navItem.url }))
-                      }}
-                    >
-                      <div className='flex size-4 items-center justify-center'>
-                        <ArrowRight className='size-2 text-muted-foreground/80' />
-                      </div>
-                      {navItem.title}
-                    </CommandItem>
-                  )
-
-                return navItem.items?.map((subItem, i) => (
-                  <CommandItem
-                    key={`${navItem.title}-${subItem.url}-${i}`}
-                    value={`${navItem.title}-${subItem.url}`}
-                    onSelect={() => {
-                      runCommand(() => navigate({ to: subItem.url }))
-                    }}
-                  >
-                    <div className='flex size-4 items-center justify-center'>
-                      <ArrowRight className='size-2 text-muted-foreground/80' />
-                    </div>
-                    {navItem.title} <ChevronRight /> {subItem.title}
-                  </CommandItem>
-                ))
-              })}
+              {group.items.map((navItem, i) => (
+                <CommandItem
+                  key={`${navItem.url}-${i}`}
+                  value={navItem.title}
+                  onSelect={() => {
+                    runCommand(() => navigate({ to: navItem.url }))
+                  }}
+                >
+                  <div className='flex size-4 items-center justify-center'>
+                    <ArrowRight className='size-2 text-muted-foreground/80' />
+                  </div>
+                  {navItem.title}
+                </CommandItem>
+              ))}
             </CommandGroup>
           ))}
           <CommandSeparator />

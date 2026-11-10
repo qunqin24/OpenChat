@@ -8,7 +8,6 @@
     }
   },
   "nav": {
-    "toggleSidebar": "Toggle sidebar",
     "toggleTheme": "Appearance",
     "language": "Language",
     "settings": "Settings"
@@ -21,7 +20,6 @@
     "ask-selection": "Ask about this",
     "quote-label": "From the answer",
     "quote-show": "Show this passage in the answer",
-    "quote-label-n": "From the answer · {{n}}",
     "quote-remove": "Remove the quote",
     "quote-placeholder": "Ask about the selected text",
     "link-open": "Open link",
@@ -113,8 +111,7 @@
       "ref-label": "Pictures to change",
       "ref-remove": "Leave this one",
       "viewer-title": "Generated picture",
-      "ref-token": "Picture {{count}}",
-      "ref-hint": "Say how to change it"
+      "ref-token": "Picture {{count}}"
     },
     "tool": {
       "generic": "Tool: {{name}}",
@@ -254,7 +251,6 @@
     "ask": {
       "label": "Needs your choice",
       "multi": "Pick any",
-      "other": "Other",
       "answered": "Answered",
       "skipped": "Skipped",
       "unanswered": "Not answered",
@@ -331,7 +327,6 @@
       "collapse": "Collapse the composer"
     },
     "file": {
-      "panel": "File",
       "sheets": "Sheets",
       "sheet-empty": "This sheet is empty",
       "page": "Page {{n}} of {{total}}",
@@ -344,7 +339,6 @@
       "loading": "Reading…",
       "add": "Add Files",
       "drop": "Drop images or PDFs here to attach them",
-      "upload": "Attach a file",
       "upload-all": "Add images, PDFs, Word, Excel or text files",
       "upload-image-text": "Add images, Word, Excel or text files (this model does not take PDFs)",
       "upload-pdf-text": "Add PDFs, Word, Excel or text files (this model does not take images)",
@@ -421,7 +415,6 @@
         "12-25": {"hello": "Merry Christmas, {{name}}", "gift": "Merry Christmas — may you get the gift you wanted"},
         "12-31": {"last": "Last day of the year — well done"}
       },
-      "greeting": "How can I help you today?",
       "suggestions": "Suggested",
       "items": {
         "explain": {
@@ -481,8 +474,7 @@
       "estimated": "Estimated after compression; the next answer reports the real figure"
     },
     "skills": {
-      "remove": "Remove the skill {{name}}",
-      "picked": "Skills picked for this message"
+      "remove": "Remove the skill {{name}}"
     },
     "quote-more_one": "{{count}} more passage",
     "quote-more_other": "{{count}} more passages",
@@ -658,7 +650,6 @@
       "authentication": "Authentication",
       "dashboard": "Dashboard",
       "users": "Users",
-      "manage": "Manage",
       "channels": "Channels",
       "models": "Models",
       "web-search": "Web search",
@@ -854,11 +845,9 @@
         "last-page": "Go to last page",
         "view": "View",
         "toggle-columns": "Toggle columns",
-        "filter": "Filter…",
         "reset": "Reset",
         "no-results": "No results found.",
         "clear-filters": "Clear filters",
-        "selected": "Selected",
         "page": "Page {{page}}"
       },
       "menu": {
@@ -894,7 +883,6 @@
         "select-layout": "Select layout style",
         "select-sidebar": "Select sidebar style",
         "select-direction": "Select site direction",
-        "reset-theme": "Reset theme to default",
         "reset-layout": "Reset layout options to default",
         "reset-sidebar": "Reset sidebar style to default",
         "reset-direction": "Reset text direction to default",
@@ -912,9 +900,6 @@
         "description": "Adjust the appearance and layout to suit your preferences.",
         "reset-all": "Reset all settings to default values",
         "reset-theme-aria": "Reset theme preference to default",
-        "reset-sidebar-aria": "Reset sidebar style to default",
-        "reset-layout-aria": "Reset layout options to default",
-        "reset-direction-aria": "Reset text direction to default",
         "theme-hint": "Choose between system preference, light mode, or dark mode",
         "sidebar-hint": "Choose between inset, floating, or standard sidebar layout",
         "layout-hint": "Choose between default expanded, compact icon-only, or full layout mode",
@@ -924,8 +909,7 @@
       "save": "Save",
       "show-password": "Show password",
       "hide-password": "Hide password",
-      "continue": "Continue",
-      "select": "Select"
+      "continue": "Continue"
     },
     "settings": {
       "subtitle": "Manage your account and appearance preferences.",
@@ -1207,7 +1191,6 @@
       "subtitle": "Only models selected in your configured channels appear here.",
       "none": "No matching models",
       "search": "Search name or family",
-      "enable": "Enable",
       "enabled": "Enabled",
       "context": "Context",
       "output": "Output",
@@ -2324,8 +2307,7 @@
       "response": "Output",
       "tab-calls": "Calls",
       "tab-code": "Script",
-      "search-line": "Looked for “{{query}}”, found {{count}}",
-      "error": "Error"
+      "search-line": "Looked for “{{query}}”, found {{count}}"
     },
     "confirm": {
       "title": "{{plugin}} wants to run {{tool}}",
@@ -2631,7 +2613,6 @@
     "rewriting": "Rewriting…"
   },
   "subagents": {
-    "name": "Sub-agents",
     "open": "Show sub-agents",
     "launch": {
       "started": "{{names}} started working",
@@ -2678,7 +2659,6 @@
       "show-more": "Show more",
       "show-less": "Show less",
       "stopped-by-user": "You stopped it",
-      "waiting": "Waiting…",
       "running-queued": "Running · {{count}} · {{queued}} queued",
       "queued": "Queued · waiting for a free slot",
       "cancel": "Cancel"
@@ -2749,7 +2729,6 @@
     "attach-library-hint": "Pick from files you sent before",
     "attach-conversation-hint": "Let the model read another conversation",
     "attach-web-hint": "Search and read the web when it helps",
-    "web-on": "Web search is on. Tap to turn it off",
     "code-more": "Show {{count}} more lines",
     "code-less": "Show less",
     "table": "Table",

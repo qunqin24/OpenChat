@@ -26,79 +26,14 @@
   user-select: none;
 }
 
-/* ChatPlaceholder's size-2.7 (43.2px), a full circle. */
-.chat-ui .n-welcome-avatar {
-  display: flex;
-  border-radius: 9999px;
-}
-
 /* `mt-2 mb-4` around the name and greeting; both use chat-typography's 30px. */
 .chat-ui .n-welcome-heading {
   margin: 8px 0 16px;
 }
 
-.chat-ui .n-welcome :is(.n-welcome-title, .n-welcome-sub) {
+.chat-ui .n-welcome .n-welcome-title {
   overflow: hidden;
   margin: 0;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.chat-ui .n-welcome-suggestions {
-  width: 100%;
-}
-
-/* Suggestions.svelte head: mb-1, gap-1, text-xs. */
-.chat-ui .n-welcome .n-suggest-head {
-  gap: 4px;
-  margin: 0 0 4px;
-  text-align: left;
-}
-
-.chat-ui .n-suggest-viewport {
-  height: 144px;
-}
-
-/* grid-cols-2 with no gap, kept at every width; h-36 scrolls any overflow. */
-.chat-ui .n-welcome .n-suggest-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-content: start;
-  gap: 0;
-  max-height: 144px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: none;
-}
-
-.chat-ui .n-welcome .n-suggest-grid::-webkit-scrollbar {
-  display: none;
-}
-
-/* px-2.5 py-1.5 (10/6) and rounded-lg (8px), one row per suggestion. */
-.chat-ui .n-welcome .n-suggest {
-  flex-shrink: 0;
-  width: 100%;
-  gap: 0;
-  padding: 6px 10px;
-  border-radius: 8px;
-  animation: n-suggestion-in 200ms ease both;
-}
-
-/* Upstream suggestions lift the text colour on hover, not a filled card. */
-.chat-ui .n-welcome .n-suggest::before {
-  display: none;
-}
-
-.chat-ui .n-welcome .n-suggest:focus-visible {
-  outline: none;
-  background: var(--n-hover);
-}
-
-.chat-ui .n-welcome :is(.n-suggest-title, .n-suggest-detail) {
-  display: block;
-  width: 100%;
-  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -206,10 +141,6 @@
 @keyframes n-suggestion-in {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .chat-ui .n-welcome .n-suggest { animation: none; }
 }
 
 /* OpenWebUI Chat.svelte at 0a7c15832f: no page exit or translation; ready

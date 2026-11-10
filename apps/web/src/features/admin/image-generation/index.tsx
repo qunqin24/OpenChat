@@ -12,7 +12,6 @@ import { z } from 'zod'
 import { ConfigDrawer } from '@/components/shadcn/config-drawer'
 import { Header } from '@/components/shadcn/layout/header'
 import { Main } from '@/components/shadcn/layout/main'
-import { ProfileDropdown } from '@/components/shadcn/profile-dropdown'
 import { Search } from '@/components/shadcn/search'
 import { Alert, AlertDescription, AlertTitle } from '@/components/shadcn/ui/alert'
 import { Badge } from '@/components/shadcn/ui/badge'
@@ -88,7 +87,6 @@ export function ImageGenerationPage() {
       <Header fixed>
         <Search className="me-auto" />
         <ConfigDrawer />
-        <ProfileDropdown />
       </Header>
 
       <Main className="flex flex-1 flex-col">

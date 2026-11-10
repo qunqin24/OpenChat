@@ -10,13 +10,11 @@ import { type SidebarData } from '../types'
  * is translated and `t` is only available inside a component. The shape is
  * unchanged otherwise, so NavGroup and CommandMenu consume it as before; the
  * upstream `teams` list is gone with the team switcher (see AppBrand).
- * The `user` block is a fallback — AppSidebar overrides it with the session.
  */
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
 
   return {
-    user: { id: '', name: '', email: '' },
     navGroups: [
       {
         title: t('admin.ui.nav-group.general'),

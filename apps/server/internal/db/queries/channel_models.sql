@@ -183,16 +183,6 @@ WHERE cm.model_id = sqlc.arg('model_id')
   AND c.enabled
 ORDER BY c.priority DESC, c.created_at;
 
--- name: FirstServedModel :one
--- What a conversation that never picked a model is answered with.
-SELECT cm.model_id
-FROM channel_models cm
-         JOIN channels c ON c.id = cm.channel_id
-WHERE cm.enabled
-  AND c.enabled
-ORDER BY c.priority DESC, c.created_at, cm.model_id
-LIMIT 1;
-
 -- name: GetServingChannel :one
 -- A run's pinned channel, as long as it still serves the model. Anything else
 -- — deleted, disabled, the model switched off — reads as no rows, which is

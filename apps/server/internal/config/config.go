@@ -35,10 +35,10 @@ type Config struct {
 // reporting the version it had replaced.
 var buildVersion = "dev"
 
-// Load reads configuration from the environment, applying defaults that are
-// safe for local development. It fails fast on anything that has no sane default.
-func Load() (*Config, error) {
-	c := &Config{
+// Load reads configuration from the environment. Everything has a default that
+// is safe for local development, so it cannot fail.
+func Load() *Config {
+	return &Config{
 		Env:             env("APP_ENV", "development"),
 		Version:         buildVersion,
 		HTTPAddr:        env("HTTP_ADDR", ":8080"),
@@ -49,12 +49,6 @@ func Load() (*Config, error) {
 		LogFileMB:       envInt("LOG_FILE_MAX_MB", 20),
 		LogFileKeep:     envInt("LOG_FILE_KEEP", 5),
 	}
-
-	if c.DatabaseURL == "" {
-		return nil, fmt.Errorf("config: DATABASE_URL is required")
-	}
-
-	return c, nil
 }
 
 func (c *Config) IsProduction() bool { return c.Env == "production" }

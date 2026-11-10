@@ -50,10 +50,7 @@ func run() error {
 		_ = godotenv.Load(path)
 	}
 
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
+	cfg := config.Load()
 	setupLogging(cfg)
 	logTimeZone()
 

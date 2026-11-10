@@ -34,7 +34,6 @@ func NewFieldError(field, code, message string) *APIError {
 
 var (
 	ErrNotFound     = NewError(http.StatusNotFound, "not_found", "resource not found")
-	ErrBadRequest   = NewError(http.StatusBadRequest, "bad_request", "invalid request")
 	ErrInternal     = NewError(http.StatusInternalServerError, "internal_error", "internal server error")
 	ErrUnauthorized = NewError(http.StatusUnauthorized, "unauthorized", "authentication required")
 )

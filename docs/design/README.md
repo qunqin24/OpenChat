@@ -15,7 +15,8 @@
 | [skills-plan.md](skills-plan.md) | 技能：Agent Skills 格式、站点与个人技能、版本与快照、`skill` 工具、审核、后续拓展（第一期已实现，后续分期仍是方案） |
 | [plugins-plan.md](plugins-plan.md) | 插件（技能 + MCP）：管理员添加、用户各自 OAuth 授权、令牌加密存储、写操作确认、CodeMode 调用插件工具、与子 Agent/深度研究/定时任务的关系（第一期进行中） |
 | [browser-plan.md](browser-plan.md) | 浏览器工具（第一期已实现）：独立的 headless Chromium 容器、出站代理、可访问性树快照与 `ref`、有后果的动作先确认、接管登录、分期 |
-| [image-generation-plan.md](image-generation-plan.md) | 图片生成（第 0 期已实现，第一期进行中）：`image_generate` 工具、OpenAI `/images/*` 与 Gemini 原生出图、生成的图存成附件、提示词审核、按 token/按张计费与每天张数、分期与待定 |
+| [deep-research-plan.md](deep-research-plan.md) | 深度研究（第 1 期已实现）：先出计划再研究、研究员子 Agent、免费搜索的限流与缓存、每月次数、分期 |
+| [image-generation-plan.md](image-generation-plan.md) | 图片生成（第一期已实现）：`image_generate` 工具、OpenAI `/images/*` 与 Gemini 原生出图、生成的图存成附件、提示词审核、按 token/按张计费与每天张数、分期与待定 |
 | [web-tools.md](web-tools.md) | 联网：`web_search` 的后端与设置、时间范围与限定网站、发布日期、搜索提示词、`web_fetch` 的安全检查、正文抽取成 Markdown、PDF、分段读与查找、短期缓存 |
 | [moderation.md](moderation.md) | 内容审核：检查范围、设置、日志与处罚、被拒绝的消息、指令与记忆的审核、用户标识、前端 |
 | [brand.md](brand.md) | 品牌：标志（水波）的寓意、登录页标语 |

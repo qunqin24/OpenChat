@@ -97,24 +97,19 @@ func (s *Server) RefreshCatalog(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, http.StatusOK, status)
 }
 
-// catalogStatus pairs the row counts with the refresh bookkeeping. The counts
-// come from the tables rather than from the state, so a snapshot someone
+// catalogStatus pairs the model count with the refresh bookkeeping. The count
+// comes from the table rather than from the state, so a snapshot someone
 // emptied by hand reports as empty rather than as whatever the last successful
 // fetch wrote.
 func (s *Server) catalogStatus(ctx context.Context, state catalog.State) (CatalogStatus, error) {
-	providers, err := s.q.CountCatalogProviders(ctx)
-	if err != nil {
-		return CatalogStatus{}, err
-	}
 	models, err := s.q.CountCatalogModels(ctx)
 	if err != nil {
 		return CatalogStatus{}, err
 	}
 
 	status := CatalogStatus{
-		ProviderCount: int(providers),
-		ModelCount:    int(models),
-		Stale:         state.Stale(time.Now()),
+		ModelCount: int(models),
+		Stale:      state.Stale(time.Now()),
 	}
 	if !state.FetchedAt.IsZero() {
 		fetchedAt := state.FetchedAt
@@ -125,33 +120,6 @@ func (s *Server) catalogStatus(ctx context.Context, state catalog.State) (Catalo
 		status.LastError = &lastError
 	}
 	return status, nil
-}
-
-func (s *Server) ListCatalogProviders(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.q.ListCatalogProviders(r.Context())
-	if err != nil {
-		httpx.Fail(w, r, err)
-		return
-	}
-
-	providers := make([]CatalogProvider, 0, len(rows))
-	for _, row := range rows {
-		provider := CatalogProvider{
-			Id:         row.ID,
-			Name:       row.Name,
-			ModelCount: int(row.ModelCount),
-		}
-		if row.Doc != "" {
-			doc := row.Doc
-			provider.Doc = &doc
-		}
-		if len(row.Env) > 0 {
-			env := row.Env
-			provider.Env = &env
-		}
-		providers = append(providers, provider)
-	}
-	httpx.JSON(w, http.StatusOK, providers)
 }
 
 func (s *Server) ListCatalogModels(w http.ResponseWriter, r *http.Request, params ListCatalogModelsParams) {
@@ -169,37 +137,11 @@ func (s *Server) ListCatalogModels(w http.ResponseWriter, r *http.Request, param
 		}
 	}
 
-	var providerID *string
-	if params.ProviderId != nil {
-		if trimmed := strings.TrimSpace(*params.ProviderId); trimmed != "" {
-			providerID = &trimmed
-		}
-	}
-
-	// Each capability narrows the result, so two of them mean models that have
-	// both rather than either.
-	wanted := make(map[ListCatalogModelsParamsCapability]bool)
-	if params.Capability != nil {
-		for _, capability := range *params.Capability {
-			if !capability.Valid() {
-				httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "invalid_capability",
-					"unknown capability: "+string(capability)))
-				return
-			}
-			wanted[capability] = true
-		}
-	}
-
 	filter := modelFilter{
-		Search:                  search,
-		ProviderID:              providerID,
-		RequireReasoning:        wanted[ListCatalogModelsParamsCapabilityReasoning],
-		RequireToolCall:         wanted[ListCatalogModelsParamsCapabilityToolCall],
-		RequireAttachment:       wanted[ListCatalogModelsParamsCapabilityAttachment],
-		RequireStructuredOutput: wanted[ListCatalogModelsParamsCapabilityStructuredOutput],
-		Enabled:                 params.Enabled,
-		RowLimit:                limit,
-		RowOffset:               (page - 1) * limit,
+		Search:    search,
+		Enabled:   params.Enabled,
+		RowLimit:  limit,
+		RowOffset: (page - 1) * limit,
 	}
 
 	// "Our models" means the ones a configured channel actually serves, and
@@ -271,15 +213,10 @@ func (s *Server) ListCatalogModels(w http.ResponseWriter, r *http.Request, param
 
 // modelFilter is what a listing and its count ask in common; see modelPage.
 type modelFilter struct {
-	Search                  *string
-	ProviderID              *string
-	RequireReasoning        bool
-	RequireToolCall         bool
-	RequireAttachment       bool
-	RequireStructuredOutput bool
-	Enabled                 *bool
-	RowLimit                int32
-	RowOffset               int32
+	Search    *string
+	Enabled   *bool
+	RowLimit  int32
+	RowOffset int32
 }
 
 // modelPage reads one page of served models and its total.
@@ -293,27 +230,17 @@ func (s *Server) modelPage(
 	ctx context.Context, f modelFilter,
 ) ([]sqlc.ListServedModelsRow, int64, error) {
 	total, err := s.q.CountServedModels(ctx, sqlc.CountServedModelsParams{
-		Search:                  f.Search,
-		ProviderID:              f.ProviderID,
-		RequireReasoning:        f.RequireReasoning,
-		RequireToolCall:         f.RequireToolCall,
-		RequireAttachment:       f.RequireAttachment,
-		RequireStructuredOutput: f.RequireStructuredOutput,
-		Enabled:                 f.Enabled,
+		Search:  f.Search,
+		Enabled: f.Enabled,
 	})
 	if err != nil {
 		return nil, 0, err
 	}
 	rows, err := s.q.ListServedModels(ctx, sqlc.ListServedModelsParams{
-		Search:                  f.Search,
-		ProviderID:              f.ProviderID,
-		RequireReasoning:        f.RequireReasoning,
-		RequireToolCall:         f.RequireToolCall,
-		RequireAttachment:       f.RequireAttachment,
-		RequireStructuredOutput: f.RequireStructuredOutput,
-		Enabled:                 f.Enabled,
-		RowLimit:                f.RowLimit,
-		RowOffset:               f.RowOffset,
+		Search:    f.Search,
+		Enabled:   f.Enabled,
+		RowLimit:  f.RowLimit,
+		RowOffset: f.RowOffset,
 	})
 	if err != nil {
 		return nil, 0, err

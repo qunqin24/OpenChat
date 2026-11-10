@@ -1,10 +1,4 @@
-import { Clock, ShieldCheck, User as UserIcon, UserCheck, UserX } from 'lucide-react'
-
-/** Faceted-filter options for the role column. */
-export const roles = [
-  { label: 'admin', value: 'admin', icon: ShieldCheck },
-  { label: 'user', value: 'user', icon: UserIcon },
-] as const
+import { Clock, UserCheck, UserX } from 'lucide-react'
 
 /**
  * Faceted-filter options for the status column. These are the server's

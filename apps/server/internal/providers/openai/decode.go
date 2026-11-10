@@ -467,19 +467,13 @@ func (a *assembler) finishReason() (llm.FinishReason, error) {
 		return llm.FinishContentFilter, nil
 	}
 
-	// Inference is opt-in per endpoint. A stream that simply stops is
-	// indistinguishable from one that was cut off, so guessing "stop" by
-	// default is how a truncated answer gets presented as a complete one.
-	if !a.cfg.Compat.InferFinishReason {
-		if a.rawFinish == "" {
-			return "", llm.Errorf(llm.ErrorProtocol, nil, "stream ended without a finish reason")
-		}
-		return "", llm.Errorf(llm.ErrorProtocol, nil, "unknown finish reason %q", a.rawFinish)
+	// Never inferred. A stream that simply stops is indistinguishable from
+	// one that was cut off, so guessing "stop" is how a truncated answer gets
+	// presented as a complete one.
+	if a.rawFinish == "" {
+		return "", llm.Errorf(llm.ErrorProtocol, nil, "stream ended without a finish reason")
 	}
-	if len(a.tools) > 0 {
-		return llm.FinishToolCalls, nil
-	}
-	return llm.FinishStop, nil
+	return "", llm.Errorf(llm.ErrorProtocol, nil, "unknown finish reason %q", a.rawFinish)
 }
 
 func convertUsage(u *wireUsage) *llm.Usage {

@@ -13,9 +13,10 @@ const brotli = promisify(brotliCompress)
 const gzipAsync = promisify(gzip)
 
 // Text formats worth compressing. woff and woff2 are already compressed
-// internally, and images are left to their own codecs.
+// internally, and images are left to their own codecs. Source maps are not
+// served at all (scripts/embed-web.mjs leaves them out of the binary).
 const COMPRESSIBLE = new Set([
-  '.js', '.mjs', '.css', '.html', '.svg', '.json', '.txt', '.xml', '.map',
+  '.js', '.mjs', '.css', '.html', '.svg', '.json', '.txt', '.xml',
   '.webmanifest', '.ttf', '.otf', '.wasm',
 ])
 // Below this a response fits in one packet either way.

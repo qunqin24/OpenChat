@@ -7,7 +7,7 @@ import (
 )
 
 func TestAskReason(t *testing.T) {
-	post := browser.Element{Tag: "button", FormMethod: "post", InForm: true}
+	post := browser.Element{Tag: "button", FormMethod: "post"}
 	for _, c := range []struct {
 		name    string
 		el      browser.Element
@@ -19,7 +19,7 @@ func TestAskReason(t *testing.T) {
 		{"a link", browser.Element{Tag: "a", Text: "Next page"}, "https://shop.example/", "click", false, ""},
 		{"marked by the model", browser.Element{Tag: "a"}, "https://x.example/", "click", true, "model"},
 		{"a posting form", post, "https://x.example/", "click", false, "submit"},
-		{"a search form", browser.Element{Tag: "button", FormMethod: "get", InForm: true}, "https://x.example/", "click", false, ""},
+		{"a search form", browser.Element{Tag: "button", FormMethod: "get"}, "https://x.example/", "click", false, ""},
 		{"a posting search", browser.Element{Tag: "button", FormMethod: "post", Search: true}, "https://x.example/", "click", false, ""},
 		{"a plain button in a form", browser.Element{Tag: "button", Type: "button", FormMethod: "post"}, "https://x.example/", "click", false, ""},
 		{"a sign-in form", browser.Element{Tag: "button", FormMethod: "post", Password: true}, "https://x.example/", "click", false, "password_form"},

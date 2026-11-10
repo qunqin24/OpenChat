@@ -16,22 +16,6 @@ import (
 // blob is replayed only to the model that produced it, and dropped otherwise.
 const responsesSignaturePrefix = llm.SignatureOpenAIResponses
 
-// responsesReservedKeys are the request fields Options.Extra may not touch, for
-// the same reason as reservedKeys: a vendor knob is not a way to redirect the
-// request, and store/include are what keep multi-turn reasoning stateless.
-var responsesReservedKeys = map[string]bool{
-	"model":        true,
-	"input":        true,
-	"instructions": true,
-	"stream":       true,
-	"tools":        true,
-	"tool_choice":  true,
-	"store":        true,
-	"include":      true,
-	// The end-user identifier is the server's to set, from the request.
-	"safety_identifier": true,
-}
-
 func buildResponsesBody(req llm.Request, cfg Config) ([]byte, error) {
 	return buildResponsesBodyWith(req, cfg, true)
 }
@@ -84,16 +68,9 @@ func buildResponsesBodyWith(req llm.Request, cfg Config, summary bool) ([]byte, 
 		}
 	}
 
-	if opts.Temperature != nil {
-		body["temperature"] = *opts.Temperature
-	}
-	if opts.TopP != nil {
-		body["top_p"] = *opts.TopP
-	}
 	if opts.MaxTokens != nil {
 		body["max_output_tokens"] = *opts.MaxTokens
 	}
-	// Options.Stop has no counterpart on this protocol and is dropped.
 	if thinks {
 		// The summary is the only thinking the model will show, and without
 		// asking for it a model left on its default level shows none.
@@ -107,13 +84,6 @@ func buildResponsesBodyWith(req llm.Request, cfg Config, summary bool) ([]byte, 
 		if len(reasoning) > 0 {
 			body["reasoning"] = reasoning
 		}
-	}
-
-	for key, value := range opts.Extra {
-		if responsesReservedKeys[key] {
-			return nil, llm.Errorf(llm.ErrorProvider, nil, "openai: option %q would overwrite a request field", key)
-		}
-		body[key] = value
 	}
 	return json.Marshal(body)
 }

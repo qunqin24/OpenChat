@@ -43,30 +43,6 @@ func (q *Queries) CountUserStrikes(ctx context.Context, arg CountUserStrikesPara
 	return column_1, err
 }
 
-const getModerationEvent = `-- name: GetModerationEvent :one
-SELECT id, created_at, user_id, conversation_id, source, mode, categories, excerpt, action, sanction
-FROM moderation_events
-WHERE id = $1
-`
-
-func (q *Queries) GetModerationEvent(ctx context.Context, id uuid.UUID) (ModerationEvent, error) {
-	row := q.db.QueryRow(ctx, getModerationEvent, id)
-	var i ModerationEvent
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UserID,
-		&i.ConversationID,
-		&i.Source,
-		&i.Mode,
-		&i.Categories,
-		&i.Excerpt,
-		&i.Action,
-		&i.Sanction,
-	)
-	return i, err
-}
-
 const getSettings = `-- name: GetSettings :many
 
 SELECT key, value

@@ -518,30 +518,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/admin/catalog/providers": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Providers in the catalogue
-         * @description Every provider models.dev documents, with the number of models it
-         *     carries. Reference metadata: it is what the `providerId` filter on the
-         *     served-models listing is expressed in, and it never adds a model to
-         *     that listing — membership there comes from the channels' own selected
-         *     models.
-         */
-        get: operations["listCatalogProviders"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/admin/catalog/models": {
         parameters: {
             query?: never;
@@ -5442,7 +5418,6 @@ export interface components {
              * @description Absent when nothing has ever been fetched.
              */
             fetchedAt?: string;
-            providerCount: number;
             modelCount: number;
             /** @description Whether the snapshot is old enough to be worth refreshing. */
             stale: boolean;
@@ -5451,17 +5426,6 @@ export interface components {
              *     failed to replace is still the one being served.
              */
             lastError?: string;
-        };
-        CatalogProvider: {
-            /** @example anthropic */
-            id: string;
-            /** @example Anthropic */
-            name: string;
-            modelCount: number;
-            /** Format: uri */
-            doc?: string;
-            /** @description Environment variables upstream documents for this provider's key. */
-            env?: string[];
         };
         CatalogModel: {
             providerId: string;
@@ -7335,27 +7299,6 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    listCatalogProviders: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description ok */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CatalogProvider"][];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
     listCatalogModels: {
         parameters: {
             query?: {
@@ -7363,9 +7306,6 @@ export interface operations {
                 page?: number;
                 /** @description Matches against model id, name and family. */
                 search?: string;
-                providerId?: string;
-                /** @description Only models with all of these. */
-                capability?: ("reasoning" | "toolCall" | "attachment" | "structuredOutput")[];
                 /** @description Whether at least one channel with this model selected is enabled. */
                 enabled?: boolean;
             };

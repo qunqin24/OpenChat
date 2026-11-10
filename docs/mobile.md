@@ -140,7 +140,7 @@ APP_VARIANT=development EXPO_PUBLIC_SERVER_URL=http://10.0.2.2:8080 npx expo run
   - 搜索。
   - 「最近由模型更改」默认折叠，每条可以撤销。
   - 点一条记忆打开全屏编辑器修改；垃圾桶删除前会确认；也可以清空全部。
-  - 错误文案与网页的 `use-memory-errors` 相同。
+  - 错误文案和网页是同一份（`chat-core/src/memory-errors.ts`）。
 - 数据（`data.tsx`、`hooks/my-data.ts`）：
   - 存储用量条。
   - 导出：先把 `/me/export` 下载到缓存，按服务器给的文件名改名，再交给系统分享面板（存到「文件」、云盘，或发出去）。

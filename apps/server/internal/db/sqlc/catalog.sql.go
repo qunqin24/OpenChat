@@ -24,18 +24,6 @@ func (q *Queries) CountCatalogModels(ctx context.Context) (int64, error) {
 	return count, err
 }
 
-const countCatalogProviders = `-- name: CountCatalogProviders :one
-SELECT count(*)
-FROM catalog_providers
-`
-
-func (q *Queries) CountCatalogProviders(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countCatalogProviders)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const countServedModels = `-- name: CountServedModels :one
 WITH served AS (SELECT cm.model_id,
                        bool_or(c.enabled)                                   AS enabled,
@@ -63,39 +51,19 @@ WHERE ($1::text IS NULL
     OR s.display_name ILIKE '%' || $1::text || '%'
     OR m.name ILIKE '%' || $1::text || '%'
     OR m.family ILIKE '%' || $1::text || '%')
-  -- A model the catalogue does not list has no brand to filter on, so asking
-  -- for one excludes it, exactly as a capability filter does.
-  AND ($2::text IS NULL OR m.provider_id = $2::text)
-  AND (NOT $3::boolean OR coalesce(m.reasoning, false))
-  AND (NOT $4::boolean OR coalesce(m.tool_call, false))
-  AND (NOT $5::boolean OR coalesce(m.attachment, false))
-  AND (NOT $6::boolean OR coalesce(m.structured_output, false))
-  AND ($7::boolean IS NULL OR coalesce(s.enabled, false) = $7::boolean)
+  AND ($2::boolean IS NULL OR coalesce(s.enabled, false) = $2::boolean)
 `
 
 type CountServedModelsParams struct {
-	Search                  *string `json:"search"`
-	ProviderID              *string `json:"provider_id"`
-	RequireReasoning        bool    `json:"require_reasoning"`
-	RequireToolCall         bool    `json:"require_tool_call"`
-	RequireAttachment       bool    `json:"require_attachment"`
-	RequireStructuredOutput bool    `json:"require_structured_output"`
-	Enabled                 *bool   `json:"enabled"`
+	Search  *string `json:"search"`
+	Enabled *bool   `json:"enabled"`
 }
 
 // The total behind ListServedModels; see the comments there. Counting `served`
 // rather than channel_models is what keeps a model served by three channels
 // from counting three times.
 func (q *Queries) CountServedModels(ctx context.Context, arg CountServedModelsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countServedModels,
-		arg.Search,
-		arg.ProviderID,
-		arg.RequireReasoning,
-		arg.RequireToolCall,
-		arg.RequireAttachment,
-		arg.RequireStructuredOutput,
-		arg.Enabled,
-	)
+	row := q.db.QueryRow(ctx, countServedModels, arg.Search, arg.Enabled)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -232,55 +200,6 @@ type InsertCatalogProvidersParams struct {
 	Env  []string `json:"env"`
 }
 
-const listCatalogProviders = `-- name: ListCatalogProviders :many
-SELECT p.id,
-       p.name,
-       p.doc,
-       p.env,
-       count(m.model_id) AS model_count
-FROM catalog_providers p
-         LEFT JOIN catalog_models m ON m.provider_id = p.id
-GROUP BY p.id
-ORDER BY p.name
-`
-
-type ListCatalogProvidersRow struct {
-	ID         string   `json:"id"`
-	Name       string   `json:"name"`
-	Doc        string   `json:"doc"`
-	Env        []string `json:"env"`
-	ModelCount int64    `json:"model_count"`
-}
-
-// The model count comes from the same read as the provider: the picker shows
-// both, and a provider with no models is worth showing as empty rather than
-// hiding.
-func (q *Queries) ListCatalogProviders(ctx context.Context) ([]ListCatalogProvidersRow, error) {
-	rows, err := q.db.Query(ctx, listCatalogProviders)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListCatalogProvidersRow{}
-	for rows.Next() {
-		var i ListCatalogProvidersRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.Doc,
-			&i.Env,
-			&i.ModelCount,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listChannelsServingModels = `-- name: ListChannelsServingModels :many
 SELECT cm.model_id, c.id, c.name, c.enabled
 FROM channel_models cm
@@ -411,28 +330,16 @@ WHERE ($1::text IS NULL
     OR s.display_name ILIKE '%' || $1::text || '%'
     OR m.name ILIKE '%' || $1::text || '%'
     OR m.family ILIKE '%' || $1::text || '%')
-  -- A model the catalogue does not list has no brand to filter on, so asking
-  -- for one excludes it, exactly as a capability filter does.
-  AND ($2::text IS NULL OR m.provider_id = $2::text)
-  AND (NOT $3::boolean OR coalesce(m.reasoning, false))
-  AND (NOT $4::boolean OR coalesce(m.tool_call, false))
-  AND (NOT $5::boolean OR coalesce(m.attachment, false))
-  AND (NOT $6::boolean OR coalesce(m.structured_output, false))
-  AND ($7::boolean IS NULL OR coalesce(s.enabled, false) = $7::boolean)
+  AND ($2::boolean IS NULL OR coalesce(s.enabled, false) = $2::boolean)
 ORDER BY coalesce(nullif(m.name, ''), s.display_name, s.model_id), s.model_id
-LIMIT $9 OFFSET $8
+LIMIT $4 OFFSET $3
 `
 
 type ListServedModelsParams struct {
-	Search                  *string `json:"search"`
-	ProviderID              *string `json:"provider_id"`
-	RequireReasoning        bool    `json:"require_reasoning"`
-	RequireToolCall         bool    `json:"require_tool_call"`
-	RequireAttachment       bool    `json:"require_attachment"`
-	RequireStructuredOutput bool    `json:"require_structured_output"`
-	Enabled                 *bool   `json:"enabled"`
-	RowOffset               int32   `json:"row_offset"`
-	RowLimit                int32   `json:"row_limit"`
+	Search    *string `json:"search"`
+	Enabled   *bool   `json:"enabled"`
+	RowOffset int32   `json:"row_offset"`
+	RowLimit  int32   `json:"row_limit"`
 }
 
 type ListServedModelsRow struct {
@@ -499,11 +406,6 @@ type ListServedModelsRow struct {
 func (q *Queries) ListServedModels(ctx context.Context, arg ListServedModelsParams) ([]ListServedModelsRow, error) {
 	rows, err := q.db.Query(ctx, listServedModels,
 		arg.Search,
-		arg.ProviderID,
-		arg.RequireReasoning,
-		arg.RequireToolCall,
-		arg.RequireAttachment,
-		arg.RequireStructuredOutput,
 		arg.Enabled,
 		arg.RowOffset,
 		arg.RowLimit,

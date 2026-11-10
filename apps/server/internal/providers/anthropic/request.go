@@ -8,23 +8,6 @@ import (
 	"github.com/qunqin24/openchat/apps/server/internal/llm"
 )
 
-// reservedKeys are the request fields Options.Extra may not touch. A vendor
-// knob is welcome; quietly redirecting the request to another model, another
-// history or another tool list than the one the run layer authorised is not.
-var reservedKeys = map[string]bool{
-	"model":         true,
-	"messages":      true,
-	"system":        true,
-	"stream":        true,
-	"tools":         true,
-	"tool_choice":   true,
-	"max_tokens":    true,
-	"thinking":      true,
-	"output_config": true,
-	// The end-user identifier is the server's to set, from the request.
-	"metadata": true,
-}
-
 // Two ways to ask for thinking, by model generation. Claude 4.6 and later take
 // adaptive thinking with an effort level (`output_config.effort`) and reject a
 // token budget — on the 5 family with a 400. Older models take only a budget,
@@ -161,27 +144,6 @@ func buildRequest(req llm.Request, cfg Config, dropThinking bool) ([]byte, binde
 		body["output_config"] = outputConfig
 	}
 
-	// Extended thinking fixes the sampler: this API rejects a temperature or a
-	// top_p alongside it. Dropping them is the only way both requests can be
-	// served, and it costs a preference rather than content.
-	if thinking == nil {
-		if opts.Temperature != nil {
-			body["temperature"] = *opts.Temperature
-		}
-		if opts.TopP != nil {
-			body["top_p"] = *opts.TopP
-		}
-	}
-	if len(opts.Stop) > 0 {
-		body["stop_sequences"] = opts.Stop
-	}
-
-	for key, value := range opts.Extra {
-		if reservedKeys[key] {
-			return nil, binder{}, llm.Errorf(llm.ErrorProvider, nil, "anthropic: option %q would overwrite a request field", key)
-		}
-		body[key] = value
-	}
 	encoded, err := json.Marshal(body)
 	return encoded, end, err
 }

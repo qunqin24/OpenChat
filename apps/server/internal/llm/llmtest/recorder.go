@@ -112,8 +112,6 @@ func (r *Recorder) CheckProviderInvariants(t *testing.T) {
 			if ev.Response == nil {
 				t.Errorf("event %d: response_end without a response", i)
 			}
-		case llm.EventToolCallsRequested, llm.EventRunEnd:
-			t.Errorf("event %d: %s belongs to the run layer, a provider must not emit it", i, ev.Type)
 		}
 	}
 

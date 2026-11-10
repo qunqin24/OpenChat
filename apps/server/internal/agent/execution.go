@@ -441,7 +441,7 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 	if err := ex.takeInbox(ctx); err != nil {
 		return false, err
 	}
-	summary, rows, err := LoadContextRows(ctx, r.q, ex.run.ConversationID, r.opts.HistoryLimit)
+	summary, rows, err := LoadContextRows(ctx, r.q, ex.run.ConversationID, HistoryLimit)
 	if err != nil {
 		return false, err
 	}
@@ -458,7 +458,7 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 		return false, nil // the loop decides between cancel and shutdown
 	}
 	if wrote {
-		if summary, rows, err = LoadContextRows(ctx, r.q, ex.run.ConversationID, r.opts.HistoryLimit); err != nil {
+		if summary, rows, err = LoadContextRows(ctx, r.q, ex.run.ConversationID, HistoryLimit); err != nil {
 			return false, err
 		}
 		rows = ex.withNote(ctx, rows)
@@ -475,7 +475,7 @@ func (ex *execution) generate(ctx context.Context) (done bool, err error) {
 		messages = append([]llm.Message{llm.TextMessage(llm.RoleSystem, system)}, messages...)
 	}
 
-	options := r.opts.RequestOptions
+	var options llm.Options
 	if effort := ex.run.ReasoningEffort; effort != nil {
 		options.Reasoning = &llm.ReasoningOptions{Effort: llm.ReasoningEffort(*effort)}
 	}
@@ -937,7 +937,7 @@ func (ex *execution) runTools(ctx context.Context) (bool, error) {
 
 	var (
 		wg       sync.WaitGroup
-		sem      = make(chan struct{}, r.opts.ToolConcurrency)
+		sem      = make(chan struct{}, ToolConcurrency)
 		errMu    sync.Mutex
 		firstErr error
 	)

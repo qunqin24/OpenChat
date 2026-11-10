@@ -169,11 +169,6 @@ VALUES (sqlc.arg('run_id'), sqlc.arg('conversation_id'), sqlc.arg('parent_id'), 
         sqlc.arg('report'), sqlc.arg('duration_ms'))
 ON CONFLICT (run_id) DO NOTHING;
 
--- name: GetSubagentReport :one
-SELECT *
-FROM subagent_reports
-WHERE run_id = $1;
-
 -- name: ClaimPendingReports :many
 -- The reports waiting for a conversation, oldest first, held until the
 -- transaction that delivers them ends. Only a background sub-agent's: a

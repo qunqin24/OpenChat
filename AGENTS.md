@@ -9,7 +9,7 @@ make setup      # 安装依赖，创建 .env
 make up         # docker compose 起 Postgres + MinIO（可选：DATABASE_URL 指向任意 Postgres 18 即可）
 make ser        # API :8080，启动时自动迁移
 make web        # Vite :5173，/api 代理到 :8080
-make check      # lint + test + build，即 CI
+make check      # lint + test + build（CI 另查：生成码是否最新、go test -race、迁移顺序）
 make generate   # 重新生成 sqlc、API 契约、GenUI 目录
 ```
 
@@ -46,13 +46,13 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 - 在对话里起 run 的新路径必须：`lockLive`（不是裸 `LockConversation`）、`requireRevised`、`prepareSnapshot`，并经 `createRun`（并发上限，同事务 advisory lock）。
 - 新的软删除对话路径必须在同一事务里 `CancelConversationRuns`，提交后 `runner.Cancel`，并发 `conversation_deleted`。
 - 被审核拒绝的行是 `messages.status = 'blocked'`：凡构造模型看到的内容的查询都要 `status <> 'blocked'`，只有 `ListMessages`（显示）和 `GetInput`（改写）看得见它；`agent.BuildContext`、`EstimateRow` 再各跳一次。
-- 给模型的上下文用 `LoadContextRows` + `BuildRequestContext`；压缩从不改行（摘要靠 `context_summaries` 的 `ON DELETE CASCADE` 保持一致），`HistoryLimit` 只是安全上限。
+- 给模型的上下文用 `LoadContextRows` + `BuildRequestContext`；压缩从不改行（摘要靠 `context_summaries` 的 `ON DELETE CASCADE` 保持一致），`agent.HistoryLimit` 只是安全上限。
 - 压缩只有 run 自己会做，用户没有手动入口（只留 `GET` 与撤销 `DELETE` `/conversations/{id}/compaction`），不要加回去。模型因长度拒绝（`context_too_long`）时，开着自动压缩的 run 强制压一次并重试，每个 run 至多一次（`recoverContextLength`）。
 - 新增模型请求路径：先构造 `llm.Request`（带 `User`），`Begin(Call{InputEstimate: llm.EstimateInput(req)})` → `Reserve` → `Stream` → `End`；`partialStream` 在 `Reserve` 之后才创建；新 kind 要加 `usage_logs_kind` 约束。
 - Claude 的思考块只在产生它的那段对话里有效：系统提示词、工具、之前的消息变了，API 就拒绝整个请求（400，对话从此每条都失败）。Anthropic 适配器给每个思考块记下当时的前缀指纹（`ReasoningPart.Binding`，`providers/anthropic/binding.go`），回放时对不上的不发，仍被拒就去掉全部思考重试一次。会在两次请求之间改动这些内容的新做法（换提示词、按 run 增减工具、只在一次 run 里加的说明）照样能用，代价是之前的思考丢掉、缓存失效，能只往后追加就别改前面。
 - 挑模型走 `pickChannel(ctx, modelID, asker)`，容量检查在它里面，别绕开：用户请求传 `askerFrom(ctx)`，服务端任务建 `asker{staff: true, …}`（`admin` 只在替管理员办事时为真，`ignoreCap` 只用于「能不能答」的校验）。渠道按优先级、同级按权重选（`servingOrder`），模型还没输出就失败的 run 自动换渠道（`failover`），别改回只取第一个。
 - 从 App（bearer token）发起的 run 记 `runs.from_app`（`chooseRun` 读 `auth.FromApp`），这条消息的轮次说明里因此多一段 `phoneGuide`（不放系统提示词：在 App 和网页之间换着发会改掉之前的前缀）；新的起 run 路径经 `chooseRun` 自然带上，服务端自己起的不带。
-- 同一次回复里的工具调用并发执行（`agent.Options.ToolConcurrency`，默认 10）：新工具必须能与其他工具同时运行。作用于同一份状态、必须按顺序来的工具（如 `browser`）实现 `agent.SequentialTool`：它在一轮里的调用按模型给的顺序逐个跑，别的工具照常并发。
+- 同一次回复里的工具调用并发执行（`agent.ToolConcurrency`，10 个）：新工具必须能与其他工具同时运行。作用于同一份状态、必须按顺序来的工具（如 `browser`）实现 `agent.SequentialTool`：它在一轮里的调用按模型给的顺序逐个跑，别的工具照常并发。
 - 容量上限按请求的 `model_id`（不是 `served_model`）、金额全程 `numeric` 在 SQL 里比较，不经 float。
 - 读用户上传文件并发给模型必须走 `agent.attachmentResolver`（SHA-256 收据），别自己 `Read`；本地 `PUT` 用 `Local.PutNew`，写一次。
 - 文本文件一律以 `text/plain` 存（前端按扩展名认，`TEXT_EXTENSIONS`），发给模型时是文字（`llm.FileBlock`，经 `modelTakes`），不是 UTF-8 就不发；它的字随消息一起审并记 SHA-256 收据（`attachmentTexts`）。超过 `llm.InlineTextBytes` 且模型能调工具时只发概览卡（`agent.fileCard`），模型用 `file_read`/`file_search`（`agent/files.go`）按需读：只认本对话非 `blocked` 用户消息里的文件，必须经 `attachmentResolver.one` 核对收据，不再审。
@@ -102,7 +102,7 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 - 文档和模型的版本挂在 run 上（`ON DELETE CASCADE`），回答被改写/重新生成时一起消失；用户的版本不挂 run。
 - 模型修改用定点替换，`find` 必须恰好出现一次；写入前锁文档并核对版本，用户保存也带 `baseVersion`（409 `version_conflict`）。
 - 用户写的版本在模型读取时才审（来源 `document`，算违规），模型写的直接记为已检查。
-- 选中文字「提出修改请求」发出的消息以 `<document-selection id title>` 包着原文开头（`chat-core/src/document-selection.ts`），显示、编辑、复制都要先拆开；格式改了要同步系统提示词。
+- 选中文字「提出修改请求」发出的消息以 `<document-selection id title>` 包着原文开头（`chat-core/src/document-selection.ts`），显示、编辑、复制都要先拆开（`parseUserMessage`，见「技能」）；格式改了要同步系统提示词。
 - 用户的改动经轮次说明（`DocumentNote`，`agent.TurnNote`，每个 run 算一次、挂在输入消息末尾，存在 `runs.turn_note`，之后每次请求都附回原处；续接的 run 沿用原来的、有新内容才接在后面；告诉过的版本记在 `run_document_notes`，不重复说）告诉模型；整篇重写（`content`）遇到这个 run 没看过的用户版本要拒绝并附改动，「看过」记在 `Scope.State`。新增让模型读到用户文档文本的路径照样先过 `documentText`。
 - 修改中的段落标记按卡片实例（`useId`）登记在 `document-activity-store`，不要改回按工具调用 id；面板里的弹出层画在浮条内，不用 portal。
 
@@ -116,7 +116,7 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 - 个人技能照自定义指令审：保存时审（来源 `skill`，算违规），保存时没审过的在取快照时审（`snapshot`，不算违规，被拒的版本记 `blocked` 不进快照）；站点技能是管理员的，不审。一个技能的全部文字不超过 `skills.MaxTextChars`，保证一次审得完。
 - 查询都按 owner 限定（个人 = 会话用户，站点 = 空），`/admin/skills` 碰不到任何人的个人技能；同名时个人的盖过站点的。
 - 内置技能在 `internal/skills/builtin/<name>/`（`go:embed`，启动时解析，不合法就 panic，测试会拦），管理员只能关（`builtin_skills_off`）；同名时站点盖过内置、个人盖过两者。
-- 输入框打 `/` 选的技能（附件、深度研究等在「+」里）以 `<skill name="…"/>` 行放在消息开头（`chat-core/src/skill-mention.ts`），服务端不展开，系统提示词让模型先用 `skill` 打开；显示、编辑、复制都要先 `parseSkills` 拆开。
+- 输入框打 `/` 选的技能（附件、深度研究等在「+」里）以 `<skill name="…"/>` 行放在消息开头（`chat-core/src/skill-mention.ts`），服务端不展开，系统提示词让模型先用 `skill` 打开；显示、编辑、复制都经 `parseUserMessage`/`rewordUserMessage`（`chat-core/src/user-message.ts`，技能、深度研究、图片引用、引用段落一并拆开和拼回，网页和 App 共用），别各自只拆认得的那一层。
 - 子 Agent 只能打开派它时 `skills` 参数点名的技能（`conversations.skills`，必须在主对话的清单里），读主对话快照里的版本；不点名就没有 `skill`。
 - 现在只收文本文件；脚本只是给模型看的参考，等沙箱来了才能跑。
 

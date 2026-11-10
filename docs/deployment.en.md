@@ -77,7 +77,7 @@ With Compose these are already set and need no attention. They matter when you r
 | --- | --- | --- |
 | `DATABASE_URL` | a local development database | Postgres connection string. In Compose it points at the `postgres` service |
 | `HTTP_ADDR` | `:8080` | Listen address |
-| `CORS_ORIGINS` | `http://localhost:5173` | Allowed cross-origin sources, comma-separated. Not needed while the web app and API share an origin; Compose sets it to `https://<DOMAIN>` |
+| `CORS_ORIGINS` | `http://localhost:5173` | The origins this site's pages are served from, comma-separated. More than CORS: they are the trusted origins for passkeys when an RP ID is pinned with no origins listed, and the hosts the browser tool refuses to visit. Set it to the address people actually open; Compose sets it to `https://<DOMAIN>` |
 | `SHUTDOWN_TIMEOUT` | `15s` | How long to wait for in-flight requests after a stop signal |
 | `LOG_FILE` | empty (no file) | Path of a copy of the log, as JSON lines. The image sets it to `/app/data/logs/openchat.log`, on the data volume, so it survives image updates. Compose does not forward it from `deploy/.env`; to change it, add it under the `openchat` service's `environment` in `deploy/docker-compose.yml` |
 | `LOG_FILE_MAX_MB` | `20` | Size in MB at which the log file is started over. Compose forwards it from `deploy/.env`; 20 when unset |

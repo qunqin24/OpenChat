@@ -76,7 +76,6 @@ type hit struct {
 	StoryText  string `json:"story_text"`
 	Comment    string `json:"comment_text"`
 	StoryTitle string `json:"story_title"`
-	StoryID    *int   `json:"story_id"`
 }
 
 func discussion(id string) string { return "https://news.ycombinator.com/item?id=" + id }

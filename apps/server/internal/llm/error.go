@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // ErrorKind is the category a failure falls into. The run layer retries, gives
@@ -99,4 +100,20 @@ func Scrub(err error, secret string) error {
 		modelErr.Code = strings.ReplaceAll(modelErr.Code, secret, "[redacted]")
 	}
 	return err
+}
+
+// ClipBody shortens a provider's error body to what is worth putting in an
+// error message: trimmed, and cut at 256 bytes on a character boundary (half a
+// character is not valid UTF-8, which Postgres refuses to store).
+func ClipBody(s string) string {
+	const max = 256
+	s = strings.TrimSpace(s)
+	if len(s) <= max {
+		return s
+	}
+	cut := max
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "…"
 }

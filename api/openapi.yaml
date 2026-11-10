@@ -635,27 +635,6 @@ paths:
               schema: { $ref: "#/components/schemas/CatalogStatus" }
         default: { $ref: "#/components/responses/Error" }
 
-  /admin/catalog/providers:
-    get:
-      tags: [admin]
-      summary: Providers in the catalogue
-      description: |
-        Every provider models.dev documents, with the number of models it
-        carries. Reference metadata: it is what the `providerId` filter on the
-        served-models listing is expressed in, and it never adds a model to
-        that listing — membership there comes from the channels' own selected
-        models.
-      operationId: listCatalogProviders
-      responses:
-        "200":
-          description: ok
-          content:
-            application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/CatalogProvider" }
-        default: { $ref: "#/components/responses/Error" }
-
   /admin/catalog/models:
     get:
       tags: [admin]
@@ -676,19 +655,6 @@ paths:
           in: query
           description: Matches against model id, name and family.
           schema: { type: string }
-        - name: providerId
-          in: query
-          schema: { type: string }
-        - name: capability
-          in: query
-          description: Only models with all of these.
-          style: form
-          explode: false
-          schema:
-            type: array
-            items:
-              type: string
-              enum: [reasoning, toolCall, attachment, structuredOutput]
         - name: enabled
           in: query
           description: Whether at least one channel with this model selected is enabled.
@@ -6491,13 +6457,12 @@ components:
 
     CatalogStatus:
       type: object
-      required: [providerCount, modelCount, stale]
+      required: [modelCount, stale]
       properties:
         fetchedAt:
           type: string
           format: date-time
           description: Absent when nothing has ever been fetched.
-        providerCount: { type: integer }
         modelCount: { type: integer }
         stale:
           type: boolean
@@ -6507,19 +6472,6 @@ components:
           description: |
             Why the most recent refresh failed, if it did. The snapshot it
             failed to replace is still the one being served.
-
-    CatalogProvider:
-      type: object
-      required: [id, name, modelCount]
-      properties:
-        id: { type: string, examples: ["anthropic"] }
-        name: { type: string, examples: ["Anthropic"] }
-        modelCount: { type: integer }
-        doc: { type: string, format: uri }
-        env:
-          type: array
-          description: Environment variables upstream documents for this provider's key.
-          items: { type: string }
 
     CatalogModel:
       type: object

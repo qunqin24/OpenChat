@@ -80,9 +80,3 @@ export function parseQuotes(content: string): { quotes: DocumentQuote[]; request
   }
   return quotes.length > 0 ? { quotes, request: rest } : null
 }
-
-/** A message's first quote and the rest of it, or null when it quotes nothing. */
-export function parseQuote(content: string): { quote: DocumentQuote; request: string } | null {
-  const parsed = parseQuotes(content)
-  return parsed ? { quote: parsed.quotes[0]!, request: content.slice(quoteMessage(parsed.quotes[0]!, '').length) } : null
-}

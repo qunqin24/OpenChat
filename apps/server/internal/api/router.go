@@ -254,7 +254,6 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 
 				r.Get("/admin/catalog", wrapper.GetCatalogStatus)
 				r.Post("/admin/catalog", wrapper.RefreshCatalog)
-				r.Get("/admin/catalog/providers", wrapper.ListCatalogProviders)
 				r.Get("/admin/catalog/models", wrapper.ListCatalogModels)
 
 				r.Get("/admin/channel-types", wrapper.ListChannelTypes)

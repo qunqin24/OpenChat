@@ -91,9 +91,9 @@ func toMessagePart(part llm.Part) (MessagePart, bool) {
 	case llm.TextPart:
 		err = out.FromTextPart(TextPart{Type: TextPartTypeText, Text: p.Text})
 	case llm.ReasoningPart:
-		err = out.FromReasoningPart(ReasoningPart{Type: ReasoningPartTypeReasoning, Text: p.Text, DurationMs: p.DurationMS})
+		err = out.FromReasoningPart(ReasoningPart{Type: Reasoning, Text: p.Text, DurationMs: p.DurationMS})
 	case llm.ToolCallPart:
-		call := ToolCallPart{Type: ToolCallPartTypeToolCall, Id: p.ID, Name: p.Name, RawArguments: p.RawArguments}
+		call := ToolCallPart{Type: ToolCall, Id: p.ID, Name: p.Name, RawArguments: p.RawArguments}
 		if p.Parsed() {
 			var args map[string]any
 			if json.Unmarshal(p.Arguments, &args) == nil {

@@ -11,7 +11,6 @@ import { ConfigDrawer } from '@/components/shadcn/config-drawer'
 import { Header } from '@/components/shadcn/layout/header'
 import { Main } from '@/components/shadcn/layout/main'
 import { PasswordInput } from '@/components/shadcn/password-input'
-import { ProfileDropdown } from '@/components/shadcn/profile-dropdown'
 import { Search } from '@/components/shadcn/search'
 import { Alert, AlertDescription, AlertTitle } from '@/components/shadcn/ui/alert'
 import {
@@ -84,7 +83,6 @@ export function AdminPlugins() {
       <Header fixed>
         <Search className="me-auto" />
         <ConfigDrawer />
-        <ProfileDropdown />
       </Header>
 
       <Main className="flex flex-1 flex-col">

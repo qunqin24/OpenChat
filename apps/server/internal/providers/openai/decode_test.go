@@ -252,33 +252,17 @@ func TestStreamSeparatesCachedTokensFromInput(t *testing.T) {
 	}
 }
 
-func TestStreamWithoutAFinishReasonIsAProtocolErrorUnlessCompatAllowsIt(t *testing.T) {
-	t.Run("rejected by default", func(t *testing.T) {
-		rec, resp, err := decodeFixture(t, "no_finish_reason.sse", Config{Provider: "local"})
-		if !llm.IsKind(err, llm.ErrorProtocol) {
-			t.Fatalf("error = %v, want a protocol error", err)
-		}
-		if resp.FinishReason != "" {
-			t.Errorf("finish reason = %q, want empty so nothing reads it as complete", resp.FinishReason)
-		}
-		if len(rec.OfType(llm.EventResponseEnd)) != 0 {
-			t.Error("a stream that never said why it stopped must not publish a finished response")
-		}
-	})
-
-	t.Run("inferred when the endpoint is known to omit it", func(t *testing.T) {
-		cfg := Config{Provider: "local", Compat: Compat{InferFinishReason: true}}
-		_, resp, err := decodeFixture(t, "no_finish_reason.sse", cfg)
-		if err != nil {
-			t.Fatalf("decode: %v", err)
-		}
-		if resp.FinishReason != llm.FinishStop {
-			t.Errorf("finish reason = %q, want stop", resp.FinishReason)
-		}
-		if resp.RawFinishReason != "" {
-			t.Errorf("raw finish reason = %q, want empty: we inferred it, the provider never said it", resp.RawFinishReason)
-		}
-	})
+func TestStreamWithoutAFinishReasonIsAProtocolError(t *testing.T) {
+	rec, resp, err := decodeFixture(t, "no_finish_reason.sse", Config{Provider: "local"})
+	if !llm.IsKind(err, llm.ErrorProtocol) {
+		t.Fatalf("error = %v, want a protocol error", err)
+	}
+	if resp.FinishReason != "" {
+		t.Errorf("finish reason = %q, want empty so nothing reads it as complete", resp.FinishReason)
+	}
+	if len(rec.OfType(llm.EventResponseEnd)) != 0 {
+		t.Error("a stream that never said why it stopped must not publish a finished response")
+	}
 }
 
 func TestStreamMalformedFrameIsAnErrorNotASilentTruncation(t *testing.T) {
