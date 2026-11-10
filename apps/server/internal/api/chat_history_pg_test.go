@@ -30,7 +30,9 @@ type historyFixture struct {
 func newHistoryFixture(t *testing.T) *historyFixture {
 	t.Helper()
 	h := newHistoryHarness(t)
-	return &historyFixture{memHarness: h, current: h.conversation(false), state: &agent.RunState{}, clock: time.Now().Add(-72 * time.Hour)}
+	// To the microsecond, as Postgres keeps it (Linux clocks have nanoseconds).
+	clock := time.Now().Add(-72 * time.Hour).Truncate(time.Microsecond)
+	return &historyFixture{memHarness: h, current: h.conversation(false), state: &agent.RunState{}, clock: clock}
 }
 
 func (f *historyFixture) exec(sql string, args ...any) {

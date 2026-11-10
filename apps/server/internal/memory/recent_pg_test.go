@@ -29,7 +29,9 @@ type recentFixture struct {
 func newRecentFixture(t *testing.T) *recentFixture {
 	t.Helper()
 	pool := dbtest.Pool(t, "memory")
-	f := &recentFixture{t: t, pool: pool, store: NewStore(pool), clock: time.Now().Add(-48 * time.Hour)}
+	// To the microsecond, as Postgres keeps it: a time read back is then the
+	// time written (Linux clocks have nanoseconds, macOS ones do not).
+	f := &recentFixture{t: t, pool: pool, store: NewStore(pool), clock: time.Now().Add(-48 * time.Hour).Truncate(time.Microsecond)}
 	f.user = f.newUser()
 	// The administrator's switch is shared state of the database.
 	_, _ = pool.Exec(context.Background(), "DELETE FROM app_settings WHERE key = $1", SettingChatHistory)
