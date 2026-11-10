@@ -39,7 +39,8 @@
   max-width: 100%;
   min-height: fit-content;
   border: 1px solid #fff;
-  border-radius: 2rem;
+  border-radius: calc(2rem * var(--n-squircle, 1));
+  corner-shape: squircle;
   background: color-mix(in srgb, var(--n-card) 95%, transparent);
   -webkit-backdrop-filter: blur(24px);
   backdrop-filter: blur(24px);
@@ -587,7 +588,8 @@
   min-height: 120px;
   padding: 10px 12px;
   border: 0;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--n-squircle, 1));
+  corner-shape: squircle;
   background: var(--n-hover);
   color: inherit;
   font: inherit;
@@ -731,7 +733,8 @@
   position: absolute;
   inset: var(--n-temp-band) 8px 8px;
   z-index: -1;
-  border-radius: 16px;
+  border-radius: calc(16px * var(--n-squircle, 1));
+  corner-shape: squircle;
   background: var(--n-bg);
 }
 .chat-ui .n-main.is-temporary .n-topbar { inset: var(--n-temp-band) 8px auto; }

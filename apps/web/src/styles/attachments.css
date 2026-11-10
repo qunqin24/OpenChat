@@ -187,7 +187,8 @@
   overflow: hidden;
   cursor: zoom-in;
   border: 1px solid var(--n-line);
-  border-radius: 14px;
+  border-radius: calc(14px * var(--n-squircle, 1));
+  corner-shape: squircle;
   background: var(--n-panel);
 }
 
@@ -207,7 +208,8 @@
   max-width: 280px;
   padding: 8px 14px 8px 8px;
   border: 1px solid transparent;
-  border-radius: 16px;
+  border-radius: calc(16px * var(--n-squircle, 1));
+  corner-shape: squircle;
   background: var(--n-bubble);
   color: var(--n-text);
   text-decoration: none;

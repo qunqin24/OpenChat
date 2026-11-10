@@ -67,6 +67,17 @@
   --n-sidebar-w: 260px;
   --n-column: 860px;
 }
+/* Continuous-curvature corners (Apple's squircle) on the large surfaces: the
+   composer, bubbles, cards, dialogs. Each of those rules sets
+   `corner-shape: squircle` and multiplies its radius by `--n-squircle`. At the
+   same radius a squircle reads squarer than an arc, hence the factor; a browser
+   without `corner-shape` (Safari, Firefox today) drops the declaration, never
+   gets the factor, and draws the plain radius it always did. Pills, circles and
+   radii under 14px stay ordinary arcs: a squircle flattens a pill's ends and
+   makes no visible difference on a small corner. */
+@supports (corner-shape: squircle) {
+  :root { --n-squircle: 1.75; }
+}
 .chat-ui {
   position: fixed;
   inset: 0;
@@ -277,7 +288,8 @@
 .chat-ui .n-bubble {
   max-width: 78%;
   padding: 10px 16px;
-  border-radius: 18px;
+  border-radius: calc(18px * var(--n-squircle, 1));
+  corner-shape: squircle;
   background: var(--n-bubble);
   white-space: pre-wrap;
   word-break: break-word;

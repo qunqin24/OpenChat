@@ -86,7 +86,8 @@
   min-height: 560px;
   margin: 12px 0 12px 12px;
   overflow: hidden;
-  border-radius: 24px;
+  border-radius: calc(24px * var(--n-squircle, 1));
+  corner-shape: squircle;
   background: var(--auth-panel);
   color: var(--auth-panel-ink);
   animation: n-auth-grow 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -735,7 +736,8 @@
     z-index: 1;
     margin-top: -22px;
     padding: 30px 20px 40px;
-    border-radius: 22px 22px 0 0;
+    border-radius: calc(22px * var(--n-squircle, 1)) calc(22px * var(--n-squircle, 1)) 0 0;
+    corner-shape: squircle;
     background: var(--n-bg);
   }
 
@@ -902,7 +904,8 @@
   max-width: 380px;
   margin: 20px auto 0;
   padding: 14px 16px;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--n-squircle, 1));
+  corner-shape: squircle;
   background: var(--auth-err-fill);
   color: var(--n-text);
   font-size: 14px;

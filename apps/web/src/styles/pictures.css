@@ -15,11 +15,14 @@
 .chat-ui .n-picture {
   position: relative;
   overflow: hidden;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--n-squircle, 1));
+  corner-shape: squircle;
   background: var(--n-panel);
 }
 .chat-ui .n-pictures.is-grid .n-picture {
   border-radius: 12px;
+  /* Under 14px: an ordinary arc, not the single picture's squircle. */
+  corner-shape: round;
 }
 .chat-ui .n-picture-open {
   display: block;

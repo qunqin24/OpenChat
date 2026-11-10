@@ -117,7 +117,8 @@
 .chat-ui .n-ask-dock {
   margin: 0 4px 10px;
   padding: 14px 16px 12px;
-  border-radius: 22px;
+  border-radius: calc(22px * var(--n-squircle, 1));
+  corner-shape: squircle;
   background: var(--n-card);
   box-shadow: var(--n-shadow-card);
   font-size: 15px;
