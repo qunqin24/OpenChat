@@ -13,8 +13,8 @@
 -- search cannot crowd out the two messages that hold the rare one. One pass
 -- over the person's messages finds the matches; telling which keyword a match
 -- holds reads only the matches again. The content is cut at 20000 characters
--- (the ranking and the excerpt read no more); the length is in bytes, which
--- costs nothing to know.
+-- for the ranking, `cut` saying so (a hit that is cut is read again whole for
+-- its excerpt); the length is in bytes, which costs nothing to know.
 WITH matched AS MATERIALIZED (
     SELECT m.id, m.conversation_id, m.role, m.content, m.created_at
     FROM messages m
@@ -40,7 +40,7 @@ WITH matched AS MATERIALIZED (
                        ON x.content ILIKE p.pattern
      )
 SELECT x.id, x.conversation_id, x.role, left(x.content, 20000)::text AS content,
-       octet_length(x.content)::int AS length, x.created_at
+       char_length(x.content) > 20000 AS cut, octet_length(x.content)::int AS length, x.created_at
 FROM matched x
 WHERE x.id IN (SELECT placed.id FROM placed WHERE placed.place <= sqlc.arg('per_keyword')::int)
 ORDER BY x.created_at DESC, x.id DESC;
@@ -66,7 +66,8 @@ WHERE c.user_id = sqlc.arg('user_id')
 -- The messages within two places of a hit in its conversation (counted among
 -- the searchable messages), each with its place n. A message near two hits
 -- comes once. The places are worked out without the text; only the messages
--- shown are read.
+-- shown are read, cut at 4000 characters (`cut` says so: the excerpt is 600 of
+-- them, but a quoted passage longer than that hides the person's words).
 WITH numbered AS (
     SELECT m.id, m.conversation_id,
            row_number() OVER (PARTITION BY m.conversation_id ORDER BY m.created_at, m.id)::int AS n
@@ -88,7 +89,8 @@ WITH numbered AS (
                   JOIN numbered x ON x.conversation_id = h.conversation_id AND x.n BETWEEN h.n - 2 AND h.n + 2
          WHERE h.id = ANY (sqlc.arg('hit_ids')::uuid[])
      )
-SELECT shown.id, shown.conversation_id, m.role, left(m.content, 4000)::text AS content, m.created_at, shown.n
+SELECT shown.id, shown.conversation_id, m.role, left(m.content, 4000)::text AS content,
+       char_length(m.content) > 4000 AS cut, m.created_at, shown.n
 FROM shown
          JOIN messages m ON m.id = shown.id
 ORDER BY shown.conversation_id, shown.n;
@@ -112,9 +114,12 @@ WHERE c.id = sqlc.arg('id')
 GROUP BY c.id;
 
 -- name: ListHistoryMessages :many
--- A page of a conversation's searchable messages in order. The caller has
--- checked the conversation with GetHistoryConversation.
-SELECT m.role, left(m.content, 20000)::text AS content, m.created_at
+-- A page of a conversation's searchable messages in order, each cut at `piece`
+-- characters (`cut` says so; the reader takes a cut one whole when it gets to
+-- it, ListHistoryMessageContents). The caller has checked the conversation
+-- with GetHistoryConversation.
+SELECT m.id, m.role, left(m.content, sqlc.arg('piece')::int)::text AS content,
+       char_length(m.content) > sqlc.arg('piece')::int AS cut, m.created_at
 FROM messages m
 WHERE m.conversation_id = sqlc.arg('conversation_id')
   AND m.role IN ('user', 'assistant')
@@ -123,3 +128,22 @@ WHERE m.conversation_id = sqlc.arg('conversation_id')
 ORDER BY m.created_at, m.id
 OFFSET sqlc.arg('row_offset')
 LIMIT sqlc.arg('row_limit');
+
+-- name: ListHistoryMessageContents :many
+-- Messages whole, by id, for what was cut in the queries above: a quoted
+-- passage that has to be taken off before the person's words can be read, a
+-- long message read in parts. The same messages as every query here can reach
+-- (the person's own, searchable, not the current conversation's): an id from
+-- anywhere else is simply not found.
+SELECT m.id, m.content
+FROM messages m
+         JOIN conversations c ON c.id = m.conversation_id
+WHERE m.id = ANY (sqlc.arg('ids')::uuid[])
+  AND c.user_id = sqlc.arg('user_id')
+  AND c.deleted_at IS NULL
+  AND c.kind = 'chat'
+  AND NOT c.temporary
+  AND c.id <> sqlc.arg('current_id')
+  AND m.role IN ('user', 'assistant')
+  AND m.status <> 'blocked'
+  AND m.origin IS NULL;

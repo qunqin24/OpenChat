@@ -234,6 +234,24 @@ func (s *Store) recentCandidates(ctx context.Context, userID, current uuid.UUID)
 	if err != nil {
 		return nil, err
 	}
+	// A message cut short that begins with a quoted passage is read whole:
+	// what the person said is after the passage, past where it was cut.
+	var quoted []uuid.UUID
+	for _, row := range rows {
+		if row.Cut && words.Quoted(row.Content) {
+			quoted = append(quoted, row.MessageID)
+		}
+	}
+	whole := map[uuid.UUID]string{}
+	if len(quoted) > 0 {
+		full, err := s.q.ListHistoryMessageContents(ctx, sqlc.ListHistoryMessageContentsParams{Ids: quoted, UserID: &userID, CurrentID: current})
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range full {
+			whole[m.ID] = m.Content
+		}
+	}
 	var (
 		out  []*recentCandidate
 		said []string
@@ -255,7 +273,13 @@ func (s *Store) recentCandidates(ctx context.Context, userID, current uuid.UUID)
 			}
 			out = append(out, c)
 		}
-		if text := shorten(words.Typed(row.Content)); text != "" {
+		content := row.Content
+		if full, ok := whole[row.MessageID]; ok {
+			content = full
+		} else if row.Cut && words.Quoted(content) {
+			continue // gone since: nothing to tell the passage from the words by
+		}
+		if text := shorten(words.Typed(content)); text != "" {
 			said = append(said, text)
 		}
 	}

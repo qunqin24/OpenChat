@@ -33,3 +33,18 @@ func TestTypedOrder(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestQuoted(t *testing.T) {
+	for content, want := range map[string]bool{
+		"<quote>\nan answer":                                    true,
+		"<skill name=\"x\"/>\n<document-selection id=\"d\" title=\"t\">\nx": true,
+		"<deep-research/>\n<quote>\nx":                          true,
+		"just a question":                                        false,
+		"see <quote>\nthis":                                      false,
+		"<quoted>\n":                                             false,
+	} {
+		if got := Quoted(content); got != want {
+			t.Errorf("Quoted(%q) = %v", content, got)
+		}
+	}
+}

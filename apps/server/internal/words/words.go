@@ -80,6 +80,15 @@ func StripQuotes(content string) string {
 	}
 }
 
+// Quoted says whether a message begins, after the composer's lines, with a
+// quoted passage. Only the whole of such a message tells the passage from the
+// person's words after it: one that was cut short (to bound what is read) has
+// to be read again whole before Typed.
+func Quoted(content string) bool {
+	rest := Person(content)
+	return strings.HasPrefix(rest, "<document-selection ") || strings.HasPrefix(rest, "<quote>\n")
+}
+
 // Typed is what the person typed in a message: Person with the quotes off. In
 // the order the composer builds a message: the research and skill lines, then
 // the quotes, then the request (chat-core/src/document-selection.ts is applied

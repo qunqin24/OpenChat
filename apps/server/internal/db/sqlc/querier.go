@@ -586,10 +586,19 @@ type Querier interface {
 	// The messages within two places of a hit in its conversation (counted among
 	// the searchable messages), each with its place n. A message near two hits
 	// comes once. The places are worked out without the text; only the messages
-	// shown are read.
+	// shown are read, cut at 4000 characters (`cut` says so: the excerpt is 600 of
+	// them, but a quoted passage longer than that hides the person's words).
 	ListHistoryContext(ctx context.Context, arg ListHistoryContextParams) ([]ListHistoryContextRow, error)
-	// A page of a conversation's searchable messages in order. The caller has
-	// checked the conversation with GetHistoryConversation.
+	// Messages whole, by id, for what was cut in the queries above: a quoted
+	// passage that has to be taken off before the person's words can be read, a
+	// long message read in parts. The same messages as every query here can reach
+	// (the person's own, searchable, not the current conversation's): an id from
+	// anywhere else is simply not found.
+	ListHistoryMessageContents(ctx context.Context, arg ListHistoryMessageContentsParams) ([]ListHistoryMessageContentsRow, error)
+	// A page of a conversation's searchable messages in order, each cut at `piece`
+	// characters (`cut` says so; the reader takes a cut one whole when it gets to
+	// it, ListHistoryMessageContents). The caller has checked the conversation
+	// with GetHistoryConversation.
 	ListHistoryMessages(ctx context.Context, arg ListHistoryMessagesParams) ([]ListHistoryMessagesRow, error)
 	// Sub-agents a message waits for with no run going to read it: the sweep
 	// starts the run (a process that died between the two leaves this).
@@ -656,12 +665,15 @@ type Querier interface {
 	// moderation did not refuse and that nothing but the person wrote
 	// (origin IS NULL).
 	//
+	// The content is cut at 20000 characters, and `cut` says so: a message that is
+	// cut and begins with a quoted passage is read again whole
+	// (ListHistoryMessageContents), because the person's words come after the
+	// passage and only the whole message tells the two apart.
+	//
 	// Which conversations is decided by their last activity (updated_at, the order
 	// of the sidebar, read off conversations_user_updated_idx), so that only the
 	// messages of the ones listed are read, however long the person's history is;
-	// among those, the newest last user message comes first. The content is cut
-	// at 20000 characters: more than any quote plus the request after it that
-	// matters, and no transcript is loaded whole.
+	// among those, the newest last user message comes first.
 	ListRecentChatCandidates(ctx context.Context, arg ListRecentChatCandidatesParams) ([]ListRecentChatCandidatesRow, error)
 	// The newest rows of the conversation, oldest first: the raw material of a
 	// model request. Newest, not oldest — a long conversation is answered from its
@@ -991,8 +1003,8 @@ type Querier interface {
 	// search cannot crowd out the two messages that hold the rare one. One pass
 	// over the person's messages finds the matches; telling which keyword a match
 	// holds reads only the matches again. The content is cut at 20000 characters
-	// (the ranking and the excerpt read no more); the length is in bytes, which
-	// costs nothing to know.
+	// for the ranking, `cut` saying so (a hit that is cut is read again whole for
+	// its excerpt); the length is in bytes, which costs nothing to know.
 	SearchHistoryMessages(ctx context.Context, arg SearchHistoryMessagesParams) ([]SearchHistoryMessagesRow, error)
 	// The channels a run of this model may be answered from: the enabled ones that
 	// offer it, highest priority first. Which of a priority's channels goes first

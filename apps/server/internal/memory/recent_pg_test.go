@@ -566,3 +566,23 @@ func TestSaveSnapshotDropsWhatWasDeletedSinceTheListWasRead(t *testing.T) {
 		t.Errorf("saved %+v", snap.Recent)
 	}
 }
+
+// A message that quotes a long passage is read whole before the person's words
+// are taken from it: cut short, it would lose the closing tag and the request
+// after it, and the passage (someone else's text) would be listed as theirs.
+func TestRecentReadsALongQuotedMessageWhole(t *testing.T) {
+	f := newRecentFixture(t)
+	conv, holder := f.conv("Translate"), f.conv("holder")
+	passage := strings.Repeat("PASSAGE-TEXT 虚构的个人信息。", 1500) // well past the 20000 the query reads
+	f.say(conv, "user", "<quote>\n"+passage+"\n</quote>\n\n请把上面这段翻译成英文")
+	f.say(conv, "assistant", "Here it is.")
+
+	snap := f.snapshot(holder, nil)
+	listed := f.listed(snap, conv)
+	if listed == nil {
+		t.Fatalf("not listed: %+v", snap.Recent)
+	}
+	if len(listed.Messages) != 1 || listed.Messages[0] != "请把上面这段翻译成英文" {
+		t.Errorf("listed %q", listed.Messages)
+	}
+}

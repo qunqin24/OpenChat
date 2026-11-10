@@ -512,3 +512,95 @@ func TestChatHistoryPromptSection(t *testing.T) {
 	without := prompt(ctx, time.Now(), NewToolSource(f.pool)(ctx))
 	mustNotContain(t, "prompt without the tool", without, "## Earlier conversations", "chat_history")
 }
+
+// A message longer than a whole read is read in parts, each read saying where
+// the next starts inside it; every character comes once, and what lies at its
+// very end is reached.
+func TestChatHistoryReadsALongMessageInParts(t *testing.T) {
+	f := newHistoryFixture(t)
+	target := f.chat(f.user.ID, "Plan")
+	answer := strings.Repeat("第一步，准备材料。", 3500) + "应急口令是 ZEBRA-7741。"
+	f.say(target, "user", "给我一个很长的计划")
+	f.say(target, "assistant", answer)
+	f.say(target, "user", "谢谢，收到")
+
+	var shown, pieces strings.Builder
+	offset, char := 0, 0
+	for reads := 0; ; reads++ {
+		if reads > 10 {
+			t.Fatal("never reached the end")
+		}
+		res, _ := f.mustCall(fmt.Sprintf(`{"op":"read","conversation":%q,"offset":%d,"char":%d}`, target, offset, char))
+		if size := len([]rune(res.Content)); size > 12000+1500 {
+			t.Errorf("a read returned %d characters", size)
+		}
+		shown.WriteString(res.Content)
+		pieces.WriteString(pieceOf(res.Content, 2))
+		if strings.Contains(res.Content, "End of the conversation") {
+			break
+		}
+		offset, char = nextOffset(t, res.Content), nextChar(res.Content)
+	}
+	all := shown.String()
+	if strings.Count(all, "ZEBRA-7741") != 1 {
+		t.Errorf("the end of the long answer was read %d times", strings.Count(all, "ZEBRA-7741"))
+	}
+	// Put back together, the parts are the answer, to the character.
+	if got := pieces.String(); got != answer {
+		t.Errorf("the parts make %d characters, the answer has %d", len([]rune(got)), len([]rune(answer)))
+	}
+	if strings.Count(all, "谢谢，收到") != 1 || strings.Count(all, "给我一个很长的计划") != 1 {
+		t.Error("the messages around it were not read once each")
+	}
+	if _, err := f.call(fmt.Sprintf(`{"op":"read","conversation":%q,"offset":1,"char":999999}`, target)); err == nil {
+		t.Error("a char past the end of the message was accepted")
+	}
+}
+
+// What a person asked about a long quoted passage is their words in a search
+// and a read, not the passage (which was cut short where the queries stop).
+func TestChatHistoryShowsTheWordsAfterALongQuote(t *testing.T) {
+	f := newHistoryFixture(t)
+	target := f.chat(f.user.ID, "Quote")
+	passage := strings.Repeat("QUOTED-PASSAGE ", 2000)
+	f.say(target, "user", "<quote>\n"+passage+"\n</quote>\n\n真正的请求：把它翻译成中文")
+	f.say(target, "assistant", "译文如下，关键词 KESTREL")
+
+	res, _ := f.mustCall(`{"op":"search","keywords":["KESTREL"]}`)
+	if !strings.Contains(res.Content, "真正的请求：把它翻译成中文") || strings.Contains(res.Content, "QUOTED-PASSAGE") {
+		t.Errorf("search context:\n%.600s", res.Content)
+	}
+	res, _ = f.mustCall(fmt.Sprintf(`{"op":"read","conversation":%q}`, target))
+	if !strings.Contains(res.Content, "真正的请求：把它翻译成中文") || strings.Contains(res.Content, "QUOTED-PASSAGE") {
+		t.Errorf("read:\n%.600s", res.Content)
+	}
+}
+
+func nextChar(content string) int {
+	const marker = " and char="
+	i := strings.Index(content, marker)
+	if i < 0 {
+		return 0
+	}
+	var n int
+	_, _ = fmt.Sscanf(content[i+len(marker):], "%d", &n)
+	return n
+}
+
+// pieceOf is the text a read shows of message #n: after its line's "who: ", up
+// to the next message's line or the note that ends the read.
+func pieceOf(content string, n int) string {
+	start := strings.Index(content, fmt.Sprintf("\n#%d [", n))
+	if start < 0 {
+		return ""
+	}
+	rest := content[start+1:]
+	rest = rest[strings.Index(rest, ": ")+2:]
+	end := len(rest)
+	for _, stop := range []string{fmt.Sprintf("\n#%d [", n+1), "\n\n["} {
+		if i := strings.Index(rest, stop); i >= 0 && i < end {
+			end = i
+		}
+	}
+	return rest[:end]
+}

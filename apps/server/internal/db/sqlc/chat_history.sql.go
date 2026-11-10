@@ -106,7 +106,8 @@ WITH numbered AS (
                   JOIN numbered x ON x.conversation_id = h.conversation_id AND x.n BETWEEN h.n - 2 AND h.n + 2
          WHERE h.id = ANY ($3::uuid[])
      )
-SELECT shown.id, shown.conversation_id, m.role, left(m.content, 4000)::text AS content, m.created_at, shown.n
+SELECT shown.id, shown.conversation_id, m.role, left(m.content, 4000)::text AS content,
+       char_length(m.content) > 4000 AS cut, m.created_at, shown.n
 FROM shown
          JOIN messages m ON m.id = shown.id
 ORDER BY shown.conversation_id, shown.n
@@ -123,6 +124,7 @@ type ListHistoryContextRow struct {
 	ConversationID uuid.UUID          `json:"conversation_id"`
 	Role           MessageRole        `json:"role"`
 	Content        string             `json:"content"`
+	Cut            bool               `json:"cut"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	N              int32              `json:"n"`
 }
@@ -130,7 +132,8 @@ type ListHistoryContextRow struct {
 // The messages within two places of a hit in its conversation (counted among
 // the searchable messages), each with its place n. A message near two hits
 // comes once. The places are worked out without the text; only the messages
-// shown are read.
+// shown are read, cut at 4000 characters (`cut` says so: the excerpt is 600 of
+// them, but a quoted passage longer than that hides the person's words).
 func (q *Queries) ListHistoryContext(ctx context.Context, arg ListHistoryContextParams) ([]ListHistoryContextRow, error) {
 	rows, err := q.db.Query(ctx, listHistoryContext, arg.UserID, arg.CurrentID, arg.HitIds)
 	if err != nil {
@@ -145,6 +148,7 @@ func (q *Queries) ListHistoryContext(ctx context.Context, arg ListHistoryContext
 			&i.ConversationID,
 			&i.Role,
 			&i.Content,
+			&i.Cut,
 			&i.CreatedAt,
 			&i.N,
 		); err != nil {
@@ -158,34 +162,96 @@ func (q *Queries) ListHistoryContext(ctx context.Context, arg ListHistoryContext
 	return items, nil
 }
 
-const listHistoryMessages = `-- name: ListHistoryMessages :many
-SELECT m.role, left(m.content, 20000)::text AS content, m.created_at
+const listHistoryMessageContents = `-- name: ListHistoryMessageContents :many
+SELECT m.id, m.content
 FROM messages m
-WHERE m.conversation_id = $1
+         JOIN conversations c ON c.id = m.conversation_id
+WHERE m.id = ANY ($1::uuid[])
+  AND c.user_id = $2
+  AND c.deleted_at IS NULL
+  AND c.kind = 'chat'
+  AND NOT c.temporary
+  AND c.id <> $3
+  AND m.role IN ('user', 'assistant')
+  AND m.status <> 'blocked'
+  AND m.origin IS NULL
+`
+
+type ListHistoryMessageContentsParams struct {
+	Ids       []uuid.UUID `json:"ids"`
+	UserID    *uuid.UUID  `json:"user_id"`
+	CurrentID uuid.UUID   `json:"current_id"`
+}
+
+type ListHistoryMessageContentsRow struct {
+	ID      uuid.UUID `json:"id"`
+	Content string    `json:"content"`
+}
+
+// Messages whole, by id, for what was cut in the queries above: a quoted
+// passage that has to be taken off before the person's words can be read, a
+// long message read in parts. The same messages as every query here can reach
+// (the person's own, searchable, not the current conversation's): an id from
+// anywhere else is simply not found.
+func (q *Queries) ListHistoryMessageContents(ctx context.Context, arg ListHistoryMessageContentsParams) ([]ListHistoryMessageContentsRow, error) {
+	rows, err := q.db.Query(ctx, listHistoryMessageContents, arg.Ids, arg.UserID, arg.CurrentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListHistoryMessageContentsRow{}
+	for rows.Next() {
+		var i ListHistoryMessageContentsRow
+		if err := rows.Scan(&i.ID, &i.Content); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listHistoryMessages = `-- name: ListHistoryMessages :many
+SELECT m.id, m.role, left(m.content, $1::int)::text AS content,
+       char_length(m.content) > $1::int AS cut, m.created_at
+FROM messages m
+WHERE m.conversation_id = $2
   AND m.role IN ('user', 'assistant')
   AND m.status <> 'blocked'
   AND m.origin IS NULL
 ORDER BY m.created_at, m.id
-OFFSET $2
-LIMIT $3
+OFFSET $3
+LIMIT $4
 `
 
 type ListHistoryMessagesParams struct {
+	Piece          int32     `json:"piece"`
 	ConversationID uuid.UUID `json:"conversation_id"`
 	RowOffset      int32     `json:"row_offset"`
 	RowLimit       int32     `json:"row_limit"`
 }
 
 type ListHistoryMessagesRow struct {
+	ID        uuid.UUID          `json:"id"`
 	Role      MessageRole        `json:"role"`
 	Content   string             `json:"content"`
+	Cut       bool               `json:"cut"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
-// A page of a conversation's searchable messages in order. The caller has
-// checked the conversation with GetHistoryConversation.
+// A page of a conversation's searchable messages in order, each cut at `piece`
+// characters (`cut` says so; the reader takes a cut one whole when it gets to
+// it, ListHistoryMessageContents). The caller has checked the conversation
+// with GetHistoryConversation.
 func (q *Queries) ListHistoryMessages(ctx context.Context, arg ListHistoryMessagesParams) ([]ListHistoryMessagesRow, error) {
-	rows, err := q.db.Query(ctx, listHistoryMessages, arg.ConversationID, arg.RowOffset, arg.RowLimit)
+	rows, err := q.db.Query(ctx, listHistoryMessages,
+		arg.Piece,
+		arg.ConversationID,
+		arg.RowOffset,
+		arg.RowLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +259,13 @@ func (q *Queries) ListHistoryMessages(ctx context.Context, arg ListHistoryMessag
 	items := []ListHistoryMessagesRow{}
 	for rows.Next() {
 		var i ListHistoryMessagesRow
-		if err := rows.Scan(&i.Role, &i.Content, &i.CreatedAt); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Role,
+			&i.Content,
+			&i.Cut,
+			&i.CreatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -231,7 +303,7 @@ WITH matched AS MATERIALIZED (
                        ON x.content ILIKE p.pattern
      )
 SELECT x.id, x.conversation_id, x.role, left(x.content, 20000)::text AS content,
-       octet_length(x.content)::int AS length, x.created_at
+       char_length(x.content) > 20000 AS cut, octet_length(x.content)::int AS length, x.created_at
 FROM matched x
 WHERE x.id IN (SELECT placed.id FROM placed WHERE placed.place <= $1::int)
 ORDER BY x.created_at DESC, x.id DESC
@@ -252,6 +324,7 @@ type SearchHistoryMessagesRow struct {
 	ConversationID uuid.UUID          `json:"conversation_id"`
 	Role           MessageRole        `json:"role"`
 	Content        string             `json:"content"`
+	Cut            bool               `json:"cut"`
 	Length         int32              `json:"length"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
@@ -269,8 +342,8 @@ type SearchHistoryMessagesRow struct {
 // search cannot crowd out the two messages that hold the rare one. One pass
 // over the person's messages finds the matches; telling which keyword a match
 // holds reads only the matches again. The content is cut at 20000 characters
-// (the ranking and the excerpt read no more); the length is in bytes, which
-// costs nothing to know.
+// for the ranking, `cut` saying so (a hit that is cut is read again whole for
+// its excerpt); the length is in bytes, which costs nothing to know.
 func (q *Queries) SearchHistoryMessages(ctx context.Context, arg SearchHistoryMessagesParams) ([]SearchHistoryMessagesRow, error) {
 	rows, err := q.db.Query(ctx, searchHistoryMessages,
 		arg.PerKeyword,
@@ -293,6 +366,7 @@ func (q *Queries) SearchHistoryMessages(ctx context.Context, arg SearchHistoryMe
 			&i.ConversationID,
 			&i.Role,
 			&i.Content,
+			&i.Cut,
 			&i.Length,
 			&i.CreatedAt,
 		); err != nil {

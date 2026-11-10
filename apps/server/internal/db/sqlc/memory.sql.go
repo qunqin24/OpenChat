@@ -479,7 +479,8 @@ WITH chats AS (
     LIMIT $3
 ),
      numbered AS (
-         SELECT m.conversation_id, m.created_at, left(m.content, 20000) AS content,
+         SELECT m.id, m.conversation_id, m.created_at, left(m.content, 20000) AS content,
+                char_length(m.content) > 20000                                                         AS cut,
                 row_number() OVER (PARTITION BY m.conversation_id ORDER BY m.created_at, m.id)           AS first_n,
                 row_number() OVER (PARTITION BY m.conversation_id ORDER BY m.created_at DESC, m.id DESC) AS last_n,
                 (max(m.created_at) OVER (PARTITION BY m.conversation_id))::timestamptz                    AS last_at
@@ -490,7 +491,7 @@ WITH chats AS (
            AND m.origin IS NULL
      )
 SELECT chats.id, chats.title, chats.title_checked_hash, chats.title_blocked_hash, numbered.last_at,
-       numbered.created_at AS message_at, numbered.content
+       numbered.created_at AS message_at, numbered.id AS message_id, numbered.content, numbered.cut
 FROM chats
          JOIN numbered ON numbered.conversation_id = chats.id
 WHERE numbered.first_n <= 3
@@ -511,7 +512,9 @@ type ListRecentChatCandidatesRow struct {
 	TitleBlockedHash *string            `json:"title_blocked_hash"`
 	LastAt           pgtype.Timestamptz `json:"last_at"`
 	MessageAt        pgtype.Timestamptz `json:"message_at"`
+	MessageID        uuid.UUID          `json:"message_id"`
 	Content          string             `json:"content"`
+	Cut              bool               `json:"cut"`
 }
 
 // The person's recent conversations for the list in a new conversation's
@@ -525,12 +528,15 @@ type ListRecentChatCandidatesRow struct {
 // moderation did not refuse and that nothing but the person wrote
 // (origin IS NULL).
 //
+// The content is cut at 20000 characters, and `cut` says so: a message that is
+// cut and begins with a quoted passage is read again whole
+// (ListHistoryMessageContents), because the person's words come after the
+// passage and only the whole message tells the two apart.
+//
 // Which conversations is decided by their last activity (updated_at, the order
 // of the sidebar, read off conversations_user_updated_idx), so that only the
 // messages of the ones listed are read, however long the person's history is;
-// among those, the newest last user message comes first. The content is cut
-// at 20000 characters: more than any quote plus the request after it that
-// matters, and no transcript is loaded whole.
+// among those, the newest last user message comes first.
 func (q *Queries) ListRecentChatCandidates(ctx context.Context, arg ListRecentChatCandidatesParams) ([]ListRecentChatCandidatesRow, error) {
 	rows, err := q.db.Query(ctx, listRecentChatCandidates, arg.UserID, arg.CurrentID, arg.RowLimit)
 	if err != nil {
@@ -547,7 +553,9 @@ func (q *Queries) ListRecentChatCandidates(ctx context.Context, arg ListRecentCh
 			&i.TitleBlockedHash,
 			&i.LastAt,
 			&i.MessageAt,
+			&i.MessageID,
 			&i.Content,
+			&i.Cut,
 		); err != nil {
 			return nil, err
 		}
