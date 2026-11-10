@@ -99,12 +99,40 @@ export function columnName(index: number): string {
   return name
 }
 
+/** What a cell's sides take of its column: the padding and the rule. */
+const CELL_SIDES = 22
+/** A character's width in the grid's type, as an estimate; a wide one counts twice. */
+const UNIT = 7.5
+const NARROWEST = 56
+const WIDEST = 280
+
+/** A line's length in characters, a wide one - as in Chinese - counting twice. */
+function units(line: string): number {
+  let count = 0
+  for (const char of line) count += char.codePointAt(0)! > 0x2e80 ? 2 : 1
+  return count
+}
+
+/** The length of a cell's longest line: what decides how wide it is. */
+function longestLine(cell: string): number {
+  if (!cell.includes('\n')) return units(cell)
+  let longest = 0
+  for (const line of cell.split('\n')) longest = Math.max(longest, units(line))
+  return longest
+}
+
+/** A column's width for text this many pixels wide, between a narrow and a wide bound. */
+export function columnWidth(textWidth: number): number {
+  return Math.min(WIDEST, Math.max(NARROWEST, Math.ceil(textWidth) + CELL_SIDES))
+}
+
 /**
  * Each column's width in pixels for a grid of these rows: one for every column
  * any row has, sized from the longest cell among the first rows - a wide
  * character, as in Chinese, counting twice - between a narrow and a wide
  * bound. Worked out once, so a grid that draws only the rows in view keeps its
- * columns still as it scrolls.
+ * columns still as it scrolls. An estimate from the characters: a grid that can
+ * measure text sizes its columns from widestCells and columnWidth instead.
  */
 export function columnWidths(rows: string[][], sampled = 500): number[] {
   let columns = 0
@@ -112,10 +140,58 @@ export function columnWidths(rows: string[][], sampled = 500): number[] {
   const longest: number[] = Array.from({ length: columns }, () => 0)
   for (const row of rows.slice(0, sampled)) {
     row.forEach((cell, i) => {
-      let units = 0
-      for (const char of cell) units += char.codePointAt(0)! > 0x2e80 ? 2 : 1
-      longest[i] = Math.max(longest[i] ?? 0, units)
+      longest[i] = Math.max(longest[i] ?? 0, longestLine(cell))
     })
   }
-  return longest.map((units) => Math.min(280, Math.max(56, units * 7.5 + 22)))
+  return longest.map((count) => Math.min(WIDEST, Math.max(NARROWEST, count * UNIT + CELL_SIDES)))
+}
+
+/**
+ * For every column, the few cells among the first rows that are likely the
+ * widest (the longest by their characters): what a grid measures to size the
+ * column by the type it is really drawn in, where a digit or a capital is not
+ * the width the estimate takes it for. A cell of several lines is given as its
+ * longest line.
+ */
+export function widestCells(rows: string[][], sampled = 500, each = 3): string[][] {
+  let columns = 0
+  for (const row of rows) columns = Math.max(columns, row.length)
+  const kept: { text: string; count: number }[][] = Array.from({ length: columns }, () => [])
+  for (const row of rows.slice(0, sampled)) {
+    row.forEach((cell, i) => {
+      if (!cell) return
+      const text = cell.includes('\n') ? cell.split('\n').reduce((longest, line) => (units(line) > units(longest) ? line : longest)) : cell
+      if (!text) return
+      const count = units(text)
+      const list = kept[i]!
+      if (list.length === each && count <= list[each - 1]!.count) return
+      if (list.some((one) => one.text === text)) return
+      list.push({ text, count })
+      list.sort((a, b) => b.count - a.count)
+      if (list.length > each) list.length = each
+    })
+  }
+  return kept.map((list) => list.map((one) => one.text))
+}
+
+/**
+ * How many lines each row takes when its cells wrap at their column's width,
+ * at most `most` (the grid cuts a cell there). An estimate from the
+ * characters, for where the rows that have not been drawn yet are taken to
+ * be; the grid measures the ones it draws.
+ */
+export function rowLines(rows: string[][], widths: number[], most: number): number[] {
+  return rows.map((row) => {
+    let lines = 1
+    for (let i = 0; i < row.length && lines < most; i++) {
+      const cell = row[i]!
+      const room = Math.max(1, (widths[i] ?? NARROWEST) - CELL_SIDES)
+      // Too short to wrap whatever its characters are, and on one line.
+      if (cell.length * 2 * UNIT <= room && !cell.includes('\n')) continue
+      let needed = 0
+      for (const line of cell.split('\n')) needed += Math.max(1, Math.ceil((units(line) * UNIT) / room))
+      lines = Math.max(lines, needed)
+    }
+    return Math.min(most, lines)
+  })
 }

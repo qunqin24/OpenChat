@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { columnName, columnWidths, parseDelimited, parseWorkbook } from './workbook'
+import { columnName, columnWidth, columnWidths, parseDelimited, parseWorkbook, rowLines, widestCells } from './workbook'
 
 describe('parseWorkbook', () => {
   it('reads the server text back into sheets', () => {
@@ -34,6 +34,40 @@ describe('parseWorkbook', () => {
   it('counts every column, even one that starts past the rows it samples', () => {
     const rows = [...Array.from({ length: 500 }, () => ['a']), ['a', 'b', 'c']]
     expect(columnWidths(rows)).toHaveLength(3)
+  })
+
+  it('sizes a column by its longest line, not by the whole of a cell of several', () => {
+    expect(columnWidths([['短\n这一行最长了\n短']])).toEqual([112])
+  })
+
+  it('bounds a measured width as it does an estimated one', () => {
+    expect([0, 20.2, 90, 1000].map(columnWidth)).toEqual([56, 56, 112, 280])
+  })
+
+  it('picks the likely widest cells of each column to measure', () => {
+    const rows = [['a', '一二三'], ['abcdef', ''], ['abc', 'x\n最长的一行在这里'], ['abcdef', 'y'], ['ab']]
+    expect(widestCells(rows)).toEqual([['abcdef', 'abc', 'ab'], ['最长的一行在这里', '一二三', 'y']])
+    // Only the rows it samples, and as many as asked for.
+    expect(widestCells(rows, 2, 1)).toEqual([['abcdef'], ['一二三']])
+    expect(widestCells([])).toEqual([])
+    // Nothing to measure in a cell of blank lines.
+    expect(widestCells([['\n\n', 'a']])).toEqual([[], ['a']])
+  })
+
+  it('estimates how many lines a row takes once its cells wrap', () => {
+    const widths = [97, 280]
+    const rows = [
+      ['a', 'short'],
+      // 100 characters at 7.5 in a column with 258 of room: three lines.
+      ['a', 'x'.repeat(100)],
+      // Its own line breaks count, each line at least one.
+      ['a', '第一行\n\n第三行'],
+      // The tallest cell decides, and never more than the most.
+      ['y'.repeat(40), 'z'.repeat(5000)],
+      [],
+    ]
+    expect(rowLines(rows, widths, 12)).toEqual([1, 3, 3, 12, 1])
+    expect(rowLines([['x'.repeat(100)]], [280], 2)).toEqual([2])
   })
 
   it('names columns as a spreadsheet does', () => {

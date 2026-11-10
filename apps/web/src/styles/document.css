@@ -1019,24 +1019,43 @@
 .chat-ui .n-sheet-tab.active { background: var(--n-bubble); color: var(--n-text); font-weight: 500; }
 
 .chat-ui .n-sheet-scroll {
+  position: relative;
   flex: 1;
   overflow: auto;
-}
-
-.chat-ui .n-sheet-scroll {
   contain: strict;
+  /* Grid keeps what is on screen in place itself when a row above it turns
+     out taller than it was taken for; the browser doing it too would move it
+     twice. */
+  overflow-anchor: none;
 }
 
+/* Where Grid measures text to size the columns: in the cells' type, never seen. */
+.chat-ui .n-sheet-probe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+  pointer-events: none;
+}
+
+/* Fixed layout needs a width in pixels to take effect; Grid sets it inline,
+   the sum of its columns. */
 .chat-ui .n-sheet-grid {
   table-layout: fixed;
-  width: max-content;
   border-collapse: separate;
   border-spacing: 0;
   color: var(--n-text);
   font-size: 13px;
+  line-height: 20px;
   font-variant-numeric: tabular-nums;
 }
 
+/* A row of one line; a row whose cells wrap is as tall as they make it. Grid
+   takes these numbers for the rows it has not drawn yet (ROW_HEIGHT,
+   LINE_HEIGHT in SheetView.tsx). */
 .chat-ui .n-sheet-grid tr {
   height: 32px;
 }
@@ -1050,11 +1069,23 @@
 .chat-ui .n-sheet-grid td {
   box-sizing: border-box;
   overflow: hidden;
-  padding: 4px 10px;
+  padding: 6px 10px 5px;
   border-right: 1px solid var(--n-line);
   border-bottom: 1px solid var(--n-line);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  vertical-align: top;
+}
+
+/* A cell's text: wrapped at the column's width, its own line breaks kept, and
+   cut after the most lines a cell may take (the whole of it is in the cell's
+   tooltip). */
+.chat-ui .n-sheet-cell {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--n-sheet-lines);
+  line-clamp: var(--n-sheet-lines);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .chat-ui .n-sheet-grid th {
@@ -1064,6 +1095,7 @@
   color: var(--n-text-2);
   font-size: 12px;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .chat-ui .n-sheet-grid thead th { top: 0; text-align: center; }
