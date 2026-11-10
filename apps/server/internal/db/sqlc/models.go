@@ -464,28 +464,30 @@ type ContextSummary struct {
 }
 
 type Conversation struct {
-	ID              uuid.UUID          `json:"id"`
-	UserID          *uuid.UUID         `json:"user_id"`
-	Title           string             `json:"title"`
-	Model           *string            `json:"model"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt       pgtype.Timestamptz `json:"deleted_at"`
-	ReasoningEffort *string            `json:"reasoning_effort"`
-	WebSearch       bool               `json:"web_search"`
-	MemorySnapshot  []byte             `json:"memory_snapshot"`
-	Temporary       bool               `json:"temporary"`
-	Kind            string             `json:"kind"`
-	ParentID        *uuid.UUID         `json:"parent_id"`
-	LaunchedBy      *uuid.UUID         `json:"launched_by"`
-	LaunchCallID    *string            `json:"launch_call_id"`
-	Background      bool               `json:"background"`
-	StoppedByUser   bool               `json:"stopped_by_user"`
-	PinnedAt        pgtype.Timestamptz `json:"pinned_at"`
-	Skills          []string           `json:"skills"`
-	PluginCatalog   []byte             `json:"plugin_catalog"`
-	Plugins         []string           `json:"plugins"`
-	Browser         bool               `json:"browser"`
+	ID               uuid.UUID          `json:"id"`
+	UserID           *uuid.UUID         `json:"user_id"`
+	Title            string             `json:"title"`
+	Model            *string            `json:"model"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+	ReasoningEffort  *string            `json:"reasoning_effort"`
+	WebSearch        bool               `json:"web_search"`
+	MemorySnapshot   []byte             `json:"memory_snapshot"`
+	Temporary        bool               `json:"temporary"`
+	Kind             string             `json:"kind"`
+	ParentID         *uuid.UUID         `json:"parent_id"`
+	LaunchedBy       *uuid.UUID         `json:"launched_by"`
+	LaunchCallID     *string            `json:"launch_call_id"`
+	Background       bool               `json:"background"`
+	StoppedByUser    bool               `json:"stopped_by_user"`
+	PinnedAt         pgtype.Timestamptz `json:"pinned_at"`
+	Skills           []string           `json:"skills"`
+	PluginCatalog    []byte             `json:"plugin_catalog"`
+	Plugins          []string           `json:"plugins"`
+	Browser          bool               `json:"browser"`
+	TitleCheckedHash *string            `json:"title_checked_hash"`
+	TitleBlockedHash *string            `json:"title_blocked_hash"`
 }
 
 type Document struct {
@@ -920,6 +922,7 @@ type User struct {
 	DisabledNote                 *string            `json:"disabled_note"`
 	DisabledBy                   *uuid.UUID         `json:"disabled_by"`
 	ImageDaily                   *int32             `json:"image_daily"`
+	ChatHistory                  bool               `json:"chat_history"`
 }
 
 type UserMemory struct {

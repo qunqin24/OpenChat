@@ -41,14 +41,20 @@ func (s *Server) personalization(r *http.Request) (Personalization, error) {
 	if err != nil {
 		return Personalization{}, err
 	}
+	historyAllowed, err := s.notes().ChatHistoryGlobalOn(ctx)
+	if err != nil {
+		return Personalization{}, err
+	}
 	return Personalization{
-		AboutYou:         p.InstructionsAbout,
-		ResponseStyle:    p.InstructionsStyle,
-		MemoryEnabled:    p.MemoryEnabled,
-		MemoryAllowed:    allowed,
-		InstructionLimit: memory.MaxInstructions,
-		MemoryLimit:      memory.MaxMemories,
-		MemoryLength:     memory.MaxContent,
+		AboutYou:           p.InstructionsAbout,
+		ResponseStyle:      p.InstructionsStyle,
+		MemoryEnabled:      p.MemoryEnabled,
+		MemoryAllowed:      allowed,
+		ChatHistoryEnabled: p.ChatHistory,
+		ChatHistoryAllowed: historyAllowed,
+		InstructionLimit:   memory.MaxInstructions,
+		MemoryLimit:        memory.MaxMemories,
+		MemoryLength:       memory.MaxContent,
 	}, nil
 }
 
@@ -101,6 +107,7 @@ func (s *Server) UpdatePersonalization(w http.ResponseWriter, r *http.Request) {
 		InstructionsAbout: body.AboutYou,
 		InstructionsStyle: body.ResponseStyle,
 		MemoryEnabled:     body.MemoryEnabled,
+		ChatHistory:       body.ChatHistoryEnabled,
 		AboutCheckedHash:  aboutChecked,
 		StyleCheckedHash:  styleChecked,
 	}); err != nil {

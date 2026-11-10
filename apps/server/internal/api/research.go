@@ -19,8 +19,8 @@ import (
 	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin24/openchat/apps/server/internal/httpx"
 	"github.com/qunqin24/openchat/apps/server/internal/llm"
-	"github.com/qunqin24/openchat/apps/server/internal/skills"
 	"github.com/qunqin24/openchat/apps/server/internal/tools"
+	"github.com/qunqin24/openchat/apps/server/internal/words"
 )
 
 // Deep research (深度研究, docs/design/deep-research-plan.md).
@@ -49,7 +49,7 @@ const (
 
 	// researchLine is how a message asks for a deep research: its first line
 	// (chat-core/src/skill-mention.ts writes it).
-	researchLine = "<deep-research/>"
+	researchLine = words.ResearchLine
 
 	maxPlanFeedback = 4000
 )
@@ -65,25 +65,12 @@ var (
 
 // splitResearch is whether a message asks for a deep research, and the rest
 // of it.
-func splitResearch(content string) (bool, string) {
-	if content == researchLine {
-		return true, ""
-	}
-	if rest, ok := strings.CutPrefix(content, researchLine+"\n"); ok {
-		return true, rest
-	}
-	return false, content
-}
+func splitResearch(content string) (bool, string) { return words.SplitResearch(content) }
 
 // personWords is what a person wrote in a message, without the lines the
 // composer puts before it (deep research, picked skills): for whatever reads
 // it as their words - a title, a search excerpt - rather than as instructions.
-func personWords(content string) string {
-	_, rest := splitResearch(content)
-	_, rest = skills.SplitMentions(rest)
-	_, rest = splitImageRefs(rest)
-	return rest
-}
+func personWords(content string) string { return words.Person(content) }
 
 func validResearchLimit(v *int) error {
 	if v != nil && (*v < 0 || *v > maxResearchMonthly) {

@@ -132,6 +132,33 @@ func (q *Queries) GetConversationSnapshotForUpdate(ctx context.Context, arg GetC
 	return i, err
 }
 
+const getConversationTitleCheck = `-- name: GetConversationTitleCheck :one
+SELECT title, title_checked_hash, title_blocked_hash
+FROM conversations
+WHERE id = $1
+  AND user_id = $2
+`
+
+type GetConversationTitleCheckParams struct {
+	ID     uuid.UUID  `json:"id"`
+	UserID *uuid.UUID `json:"user_id"`
+}
+
+type GetConversationTitleCheckRow struct {
+	Title            string  `json:"title"`
+	TitleCheckedHash *string `json:"title_checked_hash"`
+	TitleBlockedHash *string `json:"title_blocked_hash"`
+}
+
+// A conversation's title and the hashes recorded about it, for telling whether
+// a title may be shown to the model.
+func (q *Queries) GetConversationTitleCheck(ctx context.Context, arg GetConversationTitleCheckParams) (GetConversationTitleCheckRow, error) {
+	row := q.db.QueryRow(ctx, getConversationTitleCheck, arg.ID, arg.UserID)
+	var i GetConversationTitleCheckRow
+	err := row.Scan(&i.Title, &i.TitleCheckedHash, &i.TitleBlockedHash)
+	return i, err
+}
+
 const getMemory = `-- name: GetMemory :one
 SELECT id, user_id, content, source, conversation_id, created_at, updated_at, checked_hash, blocked_hash
 FROM user_memories
@@ -196,6 +223,7 @@ const getPersonalization = `-- name: GetPersonalization :one
 SELECT instructions_about,
        instructions_style,
        memory_enabled,
+       chat_history,
        instructions_about_checked_hash,
        instructions_about_blocked_hash,
        instructions_style_checked_hash,
@@ -208,6 +236,7 @@ type GetPersonalizationRow struct {
 	InstructionsAbout            string  `json:"instructions_about"`
 	InstructionsStyle            string  `json:"instructions_style"`
 	MemoryEnabled                bool    `json:"memory_enabled"`
+	ChatHistory                  bool    `json:"chat_history"`
 	InstructionsAboutCheckedHash *string `json:"instructions_about_checked_hash"`
 	InstructionsAboutBlockedHash *string `json:"instructions_about_blocked_hash"`
 	InstructionsStyleCheckedHash *string `json:"instructions_style_checked_hash"`
@@ -221,6 +250,7 @@ func (q *Queries) GetPersonalization(ctx context.Context, id uuid.UUID) (GetPers
 		&i.InstructionsAbout,
 		&i.InstructionsStyle,
 		&i.MemoryEnabled,
+		&i.ChatHistory,
 		&i.InstructionsAboutCheckedHash,
 		&i.InstructionsAboutBlockedHash,
 		&i.InstructionsStyleCheckedHash,
@@ -312,6 +342,41 @@ func (q *Queries) InsertMemoryEvent(ctx context.Context, arg InsertMemoryEventPa
 	return i, err
 }
 
+const listLiveConversationIDs = `-- name: ListLiveConversationIDs :many
+SELECT id
+FROM conversations
+WHERE user_id = $1
+  AND id = ANY ($2::uuid[])
+  AND deleted_at IS NULL
+`
+
+type ListLiveConversationIDsParams struct {
+	UserID *uuid.UUID  `json:"user_id"`
+	Ids    []uuid.UUID `json:"ids"`
+}
+
+// Which of these conversations of the person still exist: a list about to be
+// saved drops the ones deleted since it was read.
+func (q *Queries) ListLiveConversationIDs(ctx context.Context, arg ListLiveConversationIDsParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listLiveConversationIDs, arg.UserID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMemories = `-- name: ListMemories :many
 SELECT id, user_id, content, source, conversation_id, created_at, updated_at, checked_hash, blocked_hash
 FROM user_memories
@@ -394,6 +459,106 @@ func (q *Queries) ListMemoryEvents(ctx context.Context, arg ListMemoryEventsPara
 	return items, nil
 }
 
+const listRecentChatCandidates = `-- name: ListRecentChatCandidates :many
+WITH chats AS (
+    SELECT c.id, c.title, c.title_checked_hash, c.title_blocked_hash
+    FROM conversations c
+    WHERE c.user_id = $1
+      AND c.deleted_at IS NULL
+      AND c.kind = 'chat'
+      AND NOT c.temporary
+      AND c.id <> $2
+      AND NOT EXISTS (SELECT 1 FROM scheduled_tasks t WHERE t.conversation_id = c.id)
+      AND EXISTS (SELECT 1
+                  FROM messages m
+                  WHERE m.conversation_id = c.id
+                    AND m.role = 'user'
+                    AND m.status <> 'blocked'
+                    AND m.origin IS NULL)
+    ORDER BY c.updated_at DESC, c.id DESC
+    LIMIT $3
+),
+     numbered AS (
+         SELECT m.conversation_id, m.created_at, left(m.content, 20000) AS content,
+                row_number() OVER (PARTITION BY m.conversation_id ORDER BY m.created_at, m.id)           AS first_n,
+                row_number() OVER (PARTITION BY m.conversation_id ORDER BY m.created_at DESC, m.id DESC) AS last_n,
+                (max(m.created_at) OVER (PARTITION BY m.conversation_id))::timestamptz                    AS last_at
+         FROM messages m
+         WHERE m.conversation_id IN (SELECT id FROM chats)
+           AND m.role = 'user'
+           AND m.status <> 'blocked'
+           AND m.origin IS NULL
+     )
+SELECT chats.id, chats.title, chats.title_checked_hash, chats.title_blocked_hash, numbered.last_at,
+       numbered.created_at AS message_at, numbered.content
+FROM chats
+         JOIN numbered ON numbered.conversation_id = chats.id
+WHERE numbered.first_n <= 3
+   OR numbered.last_n <= 10
+ORDER BY numbered.last_at DESC, chats.id DESC, numbered.created_at, numbered.first_n
+`
+
+type ListRecentChatCandidatesParams struct {
+	UserID    *uuid.UUID `json:"user_id"`
+	CurrentID uuid.UUID  `json:"current_id"`
+	RowLimit  int32      `json:"row_limit"`
+}
+
+type ListRecentChatCandidatesRow struct {
+	ID               uuid.UUID          `json:"id"`
+	Title            string             `json:"title"`
+	TitleCheckedHash *string            `json:"title_checked_hash"`
+	TitleBlockedHash *string            `json:"title_blocked_hash"`
+	LastAt           pgtype.Timestamptz `json:"last_at"`
+	MessageAt        pgtype.Timestamptz `json:"message_at"`
+	Content          string             `json:"content"`
+}
+
+// The person's recent conversations for the list in a new conversation's
+// snapshot (docs/design/chat-history-plan.md 3.1), each with the user messages
+// it would show: the first three and the last ten of the ones that count, of
+// which the caller keeps the first and the last five that still have words in
+// them once the composer's lines are taken off. Their own conversations only
+// (user_id is in the statement): chats - not a sub-agent's, a temporary one, a
+// scheduled task's (that is the task's instruction, not what they typed), a
+// deleted one or the current one - with at least one user message that
+// moderation did not refuse and that nothing but the person wrote
+// (origin IS NULL).
+//
+// Which conversations is decided by their last activity (updated_at, the order
+// of the sidebar, read off conversations_user_updated_idx), so that only the
+// messages of the ones listed are read, however long the person's history is;
+// among those, the newest last user message comes first. The content is cut
+// at 20000 characters: more than any quote plus the request after it that
+// matters, and no transcript is loaded whole.
+func (q *Queries) ListRecentChatCandidates(ctx context.Context, arg ListRecentChatCandidatesParams) ([]ListRecentChatCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listRecentChatCandidates, arg.UserID, arg.CurrentID, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRecentChatCandidatesRow{}
+	for rows.Next() {
+		var i ListRecentChatCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.TitleCheckedHash,
+			&i.TitleBlockedHash,
+			&i.LastAt,
+			&i.MessageAt,
+			&i.Content,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockMemoryList = `-- name: LockMemoryList :exec
 SELECT pg_advisory_xact_lock(hashtextextended($1::text, 7))
 `
@@ -402,6 +567,21 @@ SELECT pg_advisory_xact_lock(hashtextextended($1::text, 7))
 // two adds at the cap cannot both pass the count.
 func (q *Queries) LockMemoryList(ctx context.Context, userID string) error {
 	_, err := q.db.Exec(ctx, lockMemoryList, userID)
+	return err
+}
+
+const lockRecentChats = `-- name: LockRecentChats :exec
+SELECT pg_advisory_xact_lock(hashtextextended('recent_chats:' || $1::uuid::text, 0))
+`
+
+// Serialises, per person, the two things that must not interleave: deleting
+// conversations (which takes them out of the lists in the person's other
+// conversations) and saving a new list. Without it two deletions each hold
+// their own conversation's row and wait for the other's, and a list taken just
+// before a deletion could be saved just after it, with the deleted conversation
+// still in it. Taken first in its transaction, before any conversation row.
+func (q *Queries) LockRecentChats(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, lockRecentChats, userID)
 	return err
 }
 
@@ -511,6 +691,66 @@ func (q *Queries) MarkMemoryEventUndone(ctx context.Context, arg MarkMemoryEvent
 	return i, err
 }
 
+const markTitlesModerated = `-- name: MarkTitlesModerated :exec
+UPDATE conversations c
+SET title_checked_hash = CASE WHEN d.verdict = 'ok' THEN h.hash ELSE c.title_checked_hash END,
+    title_blocked_hash = CASE WHEN d.verdict = 'blocked' THEN h.hash ELSE c.title_blocked_hash END
+FROM unnest($2::uuid[]) WITH ORDINALITY AS i (id, n)
+         JOIN unnest($3::text[]) WITH ORDINALITY AS h (hash, n) USING (n)
+         JOIN unnest($4::text[]) WITH ORDINALITY AS d (verdict, n) USING (n)
+WHERE c.user_id = $1
+  AND c.id = i.id
+  AND encode(sha256(convert_to(c.title, 'UTF8')), 'hex') = h.hash
+`
+
+type MarkTitlesModeratedParams struct {
+	UserID   *uuid.UUID  `json:"user_id"`
+	Ids      []uuid.UUID `json:"ids"`
+	Hashes   []string    `json:"hashes"`
+	Verdicts []string    `json:"verdicts"`
+}
+
+// What a snapshot-time check decided about conversation titles, as
+// MarkMemoriesModerated does about memories: recorded only where the title
+// still hashes to what was checked (a rename meanwhile is another text).
+func (q *Queries) MarkTitlesModerated(ctx context.Context, arg MarkTitlesModeratedParams) error {
+	_, err := q.db.Exec(ctx, markTitlesModerated,
+		arg.UserID,
+		arg.Ids,
+		arg.Hashes,
+		arg.Verdicts,
+	)
+	return err
+}
+
+const removeFromRecentChats = `-- name: RemoveFromRecentChats :exec
+UPDATE conversations c
+SET memory_snapshot = jsonb_set(c.memory_snapshot, '{recent}', COALESCE((
+    SELECT jsonb_agg(e.entry ORDER BY e.n)
+    FROM jsonb_array_elements(c.memory_snapshot -> 'recent') WITH ORDINALITY AS e (entry, n)
+    WHERE NOT ((e.entry ->> 'id')::uuid = ANY ($1::uuid[]))
+), '[]'::jsonb))
+WHERE c.user_id = $2
+  AND jsonb_typeof(c.memory_snapshot -> 'recent') = 'array'
+  AND EXISTS (SELECT 1
+              FROM jsonb_array_elements(c.memory_snapshot -> 'recent') AS e (entry)
+              WHERE (e.entry ->> 'id')::uuid = ANY ($1::uuid[]))
+`
+
+type RemoveFromRecentChatsParams struct {
+	Ids    []uuid.UUID `json:"ids"`
+	UserID *uuid.UUID  `json:"user_id"`
+}
+
+// Takes conversations out of the lists of recent ones in all of a person's
+// conversations' snapshots (docs/design/chat-history-plan.md 3.4), in the
+// transaction that deletes them. The other entries and their refs stay as
+// they are; only snapshots that list one of them are written.
+func (q *Queries) RemoveFromRecentChats(ctx context.Context, arg RemoveFromRecentChatsParams) error {
+	_, err := q.db.Exec(ctx, removeFromRecentChats, arg.Ids, arg.UserID)
+	return err
+}
+
 const setConversationSnapshot = `-- name: SetConversationSnapshot :one
 UPDATE conversations
 SET memory_snapshot = $1::jsonb
@@ -582,10 +822,11 @@ UPDATE users
 SET instructions_about = COALESCE($1::text, instructions_about),
     instructions_style = COALESCE($2::text, instructions_style),
     memory_enabled     = COALESCE($3::boolean, memory_enabled),
+    chat_history       = COALESCE($4::boolean, chat_history),
     instructions_about_checked_hash = CASE
         WHEN $1::text IS NULL OR $1::text = instructions_about
             THEN instructions_about_checked_hash
-        ELSE $4::text END,
+        ELSE $5::text END,
     instructions_about_blocked_hash = CASE
         WHEN $1::text IS NULL OR $1::text = instructions_about
             THEN instructions_about_blocked_hash
@@ -593,20 +834,21 @@ SET instructions_about = COALESCE($1::text, instructions_about),
     instructions_style_checked_hash = CASE
         WHEN $2::text IS NULL OR $2::text = instructions_style
             THEN instructions_style_checked_hash
-        ELSE $5::text END,
+        ELSE $6::text END,
     instructions_style_blocked_hash = CASE
         WHEN $2::text IS NULL OR $2::text = instructions_style
             THEN instructions_style_blocked_hash
         ELSE NULL END,
     updated_at         = now()
-WHERE id = $6
-RETURNING instructions_about, instructions_style, memory_enabled
+WHERE id = $7
+RETURNING instructions_about, instructions_style, memory_enabled, chat_history
 `
 
 type UpdatePersonalizationParams struct {
 	InstructionsAbout *string   `json:"instructions_about"`
 	InstructionsStyle *string   `json:"instructions_style"`
 	MemoryEnabled     *bool     `json:"memory_enabled"`
+	ChatHistory       *bool     `json:"chat_history"`
 	AboutCheckedHash  *string   `json:"about_checked_hash"`
 	StyleCheckedHash  *string   `json:"style_checked_hash"`
 	ID                uuid.UUID `json:"id"`
@@ -616,6 +858,7 @@ type UpdatePersonalizationRow struct {
 	InstructionsAbout string `json:"instructions_about"`
 	InstructionsStyle string `json:"instructions_style"`
 	MemoryEnabled     bool   `json:"memory_enabled"`
+	ChatHistory       bool   `json:"chat_history"`
 }
 
 // Its own statement, apart from UpdateOwnProfile, for the same reason that one
@@ -629,12 +872,18 @@ func (q *Queries) UpdatePersonalization(ctx context.Context, arg UpdatePersonali
 		arg.InstructionsAbout,
 		arg.InstructionsStyle,
 		arg.MemoryEnabled,
+		arg.ChatHistory,
 		arg.AboutCheckedHash,
 		arg.StyleCheckedHash,
 		arg.ID,
 	)
 	var i UpdatePersonalizationRow
-	err := row.Scan(&i.InstructionsAbout, &i.InstructionsStyle, &i.MemoryEnabled)
+	err := row.Scan(
+		&i.InstructionsAbout,
+		&i.InstructionsStyle,
+		&i.MemoryEnabled,
+		&i.ChatHistory,
+	)
 	return i, err
 }
 

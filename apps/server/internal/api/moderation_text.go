@@ -169,6 +169,8 @@ func joinPieces(pieces []memory.Piece) string {
 			b.WriteString("Custom instructions, response style:\n")
 		case memory.PieceSkill:
 			b.WriteString("Skill (instructions the user wrote for the assistant):\n")
+		case memory.PieceTitle:
+			b.WriteString("Conversation title (shown to the assistant in the user's list of recent conversations):\n")
 		default:
 			b.WriteString("Memory:\n")
 		}

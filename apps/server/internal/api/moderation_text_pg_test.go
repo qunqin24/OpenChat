@@ -23,7 +23,10 @@ import (
 
 func (h *askHarness) newConv() sqlc.Conversation {
 	h.t.Helper()
-	conv, err := h.q.CreateConversation(context.Background(), sqlc.CreateConversationParams{UserID: &h.user.ID, Title: "ask"})
+	// Untitled, as a conversation is until the server names it: a title typed by
+	// the person is unchecked, and would be asked about with the next snapshot's
+	// texts (recent_conversations_pg_test.go).
+	conv, err := h.q.CreateConversation(context.Background(), sqlc.CreateConversationParams{UserID: &h.user.ID, Title: defaultTitle})
 	if err != nil {
 		h.t.Fatal(err)
 	}

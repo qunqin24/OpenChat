@@ -20,6 +20,7 @@ import (
 	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin24/openchat/apps/server/internal/httpx"
 	"github.com/qunqin24/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/memory"
 	ledger "github.com/qunqin24/openchat/apps/server/internal/usage"
 )
 
@@ -36,7 +37,7 @@ import (
 // (SetGeneratedTitle).
 
 // defaultTitle is what a conversation is called until it is titled.
-const defaultTitle = "New chat"
+const defaultTitle = memory.DefaultTitle
 
 // settingTaskModel is the app_settings key holding the task model's id; empty
 // or absent means each conversation's own model.
@@ -118,7 +119,7 @@ func (s *Server) titleConversation(run sqlc.Run) {
 		return
 	}
 
-	conv, err = s.q.SetGeneratedTitle(ctx, sqlc.SetGeneratedTitleParams{ID: run.ConversationID, Title: title, DefaultTitle: defaultTitle})
+	conv, err = s.q.SetGeneratedTitle(ctx, sqlc.SetGeneratedTitleParams{ID: run.ConversationID, Title: title, TitleHash: memory.Hash(title), DefaultTitle: defaultTitle})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return // renamed or deleted meanwhile
 	}

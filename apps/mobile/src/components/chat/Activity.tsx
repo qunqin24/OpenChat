@@ -1,9 +1,10 @@
-import { AlarmClock, Brain, ChevronDown, ChevronRight, FileSearch, FileText, NotebookPen, Search, TriangleAlert, Workflow, Wrench } from 'lucide-react-native'
+import { AlarmClock, Brain, ChevronDown, ChevronRight, FileSearch, FileText, History, NotebookPen, Search, TriangleAlert, Workflow, Wrench } from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 
+import { CHAT_HISTORY_TOOL } from '@openchat/chat-core/chat-history-tool'
 import {
   activityHead,
   activitySegments,
@@ -355,6 +356,7 @@ function stepIcon(name: string, color: string) {
   if (name === 'file_read') return <FileText {...props} />
   if (name === 'file_search') return <FileSearch {...props} />
   if (name === 'memory') return <Brain {...props} />
+  if (name === CHAT_HISTORY_TOOL) return <History {...props} />
   if (name === 'scheduled_tasks') return <AlarmClock {...props} />
   if (name === 'document') return <NotebookPen {...props} />
   if (name.startsWith('subagent')) return <Workflow {...props} />

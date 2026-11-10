@@ -4180,6 +4180,16 @@ type Personalization struct {
 	// AboutYou Custom instructions about the user. Part of every conversation's system prompt, temporary ones included.
 	AboutYou string `json:"aboutYou"`
 
+	// ChatHistoryAllowed The administrator's switch (`SystemSettings.chatHistory`). Off, it
+	// is off for everyone whatever `chatHistoryEnabled` says.
+	ChatHistoryAllowed bool `json:"chatHistoryAllowed"`
+
+	// ChatHistoryEnabled Your own switch for referring to earlier conversations
+	// (docs/design/chat-history-plan.md). On, a new conversation is given
+	// a list of what you said in your recent ones, and the model may
+	// search and read your earlier conversations. On by default.
+	ChatHistoryEnabled bool `json:"chatHistoryEnabled"`
+
 	// InstructionLimit Characters allowed in each instructions field.
 	InstructionLimit int `json:"instructionLimit"`
 
@@ -4895,6 +4905,13 @@ type SystemSettings struct {
 	// picture already set is always allowed.
 	AvatarUploads bool `json:"avatarUploads"`
 
+	// ChatHistory The kill switch for referring to earlier conversations
+	// (docs/design/chat-history-plan.md). Off, no new conversation is
+	// given the list of the person's recent ones, conversations that have
+	// one stop using it, and the chat_history tool is not offered. On by
+	// default.
+	ChatHistory bool `json:"chatHistory"`
+
 	// CompressContext Whether a request that would fill more than half of the model's
 	// context window (65% once the conversation has a summary) is
 	// compressed first: the older part of the conversation is summarised
@@ -5359,9 +5376,10 @@ type UpdatePasskeySettingsRequestUserVerification string
 
 // UpdatePersonalizationRequest Only the fields present are changed.
 type UpdatePersonalizationRequest struct {
-	AboutYou      *string `json:"aboutYou,omitempty"`
-	MemoryEnabled *bool   `json:"memoryEnabled,omitempty"`
-	ResponseStyle *string `json:"responseStyle,omitempty"`
+	AboutYou           *string `json:"aboutYou,omitempty"`
+	ChatHistoryEnabled *bool   `json:"chatHistoryEnabled,omitempty"`
+	MemoryEnabled      *bool   `json:"memoryEnabled,omitempty"`
+	ResponseStyle      *string `json:"responseStyle,omitempty"`
 }
 
 // UpdateStorageS3Settings Only the fields present are changed.
@@ -5415,6 +5433,7 @@ type UpdateSystemSettingsRequest struct {
 	AllowRegistration *bool `json:"allowRegistration,omitempty"`
 	AskUser           *bool `json:"askUser,omitempty"`
 	AvatarUploads     *bool `json:"avatarUploads,omitempty"`
+	ChatHistory       *bool `json:"chatHistory,omitempty"`
 	CompressContext   *bool `json:"compressContext,omitempty"`
 	DebugLogging      *bool `json:"debugLogging,omitempty"`
 	DeepResearch      *bool `json:"deepResearch,omitempty"`

@@ -81,6 +81,14 @@ function Loaded({ host }: { host: HTMLElement | null }) {
     }
   }
 
+  const toggleChatHistory = async (chatHistoryEnabled: boolean) => {
+    try {
+      await update.mutateAsync({ chatHistoryEnabled })
+    } catch {
+      toast.error(t('settings.personalization.save-failed'))
+    }
+  }
+
   return (
     <form className="n-settings-tab-body" id="tab-personalization" onSubmit={(e) => void save(e)}>
       <div className="n-settings-scroll">
@@ -150,6 +158,26 @@ function Loaded({ host }: { host: HTMLElement | null }) {
           </div>
           <ToggleSwitch checked={false} disabled aria-label={t('settings.personalization.learn')} />
         </div>
+
+        <hr className="n-settings-rule" />
+
+        <div className="n-settings-line">
+          <label className="n-settings-subheading" htmlFor="chat-history-enabled">
+            {t('settings.personalization.chat-history')}
+          </label>
+          <ToggleSwitch
+            id="chat-history-enabled"
+            checked={data.chatHistoryEnabled}
+            disabled={update.isPending}
+            onCheckedChange={(on) => void toggleChatHistory(on)}
+          />
+        </div>
+        <p className="n-settings-help">{t('settings.personalization.chat-history-description')}</p>
+        {!data.chatHistoryAllowed && (
+          <p className="n-settings-callout" role="status">
+            {t('settings.personalization.chat-history-admin-off')}
+          </p>
+        )}
       </div>
 
       <div className="n-settings-foot">

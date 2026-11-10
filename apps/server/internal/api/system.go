@@ -91,6 +91,9 @@ func (s *Server) systemSettings(ctx context.Context) (SystemSettings, error) {
 	if settings.Memory, err = boolSettingOr(ctx, s.q, memory.SettingEnabled, true); err != nil {
 		return settings, err
 	}
+	if settings.ChatHistory, err = boolSettingOr(ctx, s.q, memory.SettingChatHistory, true); err != nil {
+		return settings, err
+	}
 	if settings.Skills, err = boolSettingOr(ctx, s.q, skills.SettingEnabled, true); err != nil {
 		return settings, err
 	}
@@ -267,6 +270,7 @@ func (s *Server) UpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 		{settingAllowRegistration, body.AllowRegistration, "allow registration changed"},
 		{settingRegistrationApproval, body.RegistrationApproval, "registration approval changed"},
 		{settingMaxRuns, body.MaxConcurrentRuns, "concurrent run limit changed"},
+		{memory.SettingChatHistory, body.ChatHistory, "chat history changed"},
 		{skills.SettingEnabled, body.Skills, "skills changed"},
 		{skills.SettingPersonal, body.PersonalSkills, "personal skills changed"},
 		{settingDeepResearch, body.DeepResearch, "deep research changed"},

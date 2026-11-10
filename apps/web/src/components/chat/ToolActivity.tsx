@@ -1,12 +1,15 @@
-import { AlarmClock, BookOpen, Brain, ChevronRight, FileSearch, FileText, Globe, NotebookPen, Puzzle, Search, TriangleAlert, Wrench, Image as ImageIcon } from 'lucide-react'
+import { AlarmClock, BookOpen, Brain, ChevronRight, FileSearch, FileText, Globe, History, NotebookPen, Puzzle, Search, TriangleAlert, Wrench, Image as ImageIcon } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
 import { Collapsible } from 'radix-ui'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { activityOrb, THOUGHT } from '@/lib/activity-orb'
+import { useDisplayTitle } from '@/lib/titles'
 import { API_BASE_URL } from '@/lib/api'
 import { isHttpUrl, siteName } from '@openchat/chat-core/urls'
 import { BROWSER_TOOL } from '@openchat/chat-core/browser-tool'
+import { CHAT_HISTORY_TOOL, historyHitsOf } from '@openchat/chat-core/chat-history-tool'
 import { isPluginTool } from '@openchat/chat-core/plugin-code'
 import {
   activityHead,
@@ -200,6 +203,8 @@ function renderItem(item: ActivityItem, working: boolean) {
 function Step({ step }: { step: ToolActivityStep }) {
   const { t } = useTranslation()
   const hits = searchHits(step.result)
+  const displayTitle = useDisplayTitle()
+  const conversations = step.call.name === CHAT_HISTORY_TOOL ? historyHitsOf(step.result) : []
   const fetched = step.call.name === 'web_fetch' && step.result?.status === 'succeeded'
     ? (step.result.details as { url?: string; title?: string } | undefined)
     : undefined
@@ -224,6 +229,11 @@ function Step({ step }: { step: ToolActivityStep }) {
             {hits.length > STEP_SOURCES && <span className="n-activity-more">+{hits.length - STEP_SOURCES}</span>}
           </div>
         )}
+        {conversations.map((hit) => (
+          <Link key={hit.conversationId} className="n-activity-link" to="/chat/$conversationId" params={{ conversationId: hit.conversationId }}>
+            {displayTitle(hit.title)}
+          </Link>
+        ))}
         {fetched?.url &&
           (isHttpUrl(fetched.url) ? (
             <a className="n-activity-link" href={fetched.url} target="_blank" rel="noreferrer">
@@ -278,6 +288,7 @@ function stepIcon(name: string) {
   if (name === 'file_read') return <FileText aria-hidden="true" />
   if (name === 'file_search') return <FileSearch aria-hidden="true" />
   if (name === 'memory') return <Brain aria-hidden="true" />
+  if (name === CHAT_HISTORY_TOOL) return <History aria-hidden="true" />
   if (name === 'skill') return <BookOpen aria-hidden="true" />
   if (name === 'scheduled_tasks') return <AlarmClock aria-hidden="true" />
   if (name === 'document') return <NotebookPen aria-hidden="true" />

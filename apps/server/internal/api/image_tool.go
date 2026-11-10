@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -26,6 +25,7 @@ import (
 	"github.com/qunqin24/openchat/apps/server/internal/db/sqlc"
 	"github.com/qunqin24/openchat/apps/server/internal/httpx"
 	"github.com/qunqin24/openchat/apps/server/internal/llm"
+	"github.com/qunqin24/openchat/apps/server/internal/words"
 )
 
 // The image tool (docs/design/image-generation-plan.md): a chat model makes
@@ -588,22 +588,9 @@ const imageGuide = "\n\n## Pictures\n" +
 	"A user message may begin with lines like <image-ref id=\"img_ab12cd34\"/>: the user picked those pictures " +
 	"(\"edit this\") for this message, so change them as the message asks, passing their ids in images."
 
-// imageRefLine is a picture the person picked for a message with 「拿来改」,
-// at its start (chat-core/src/image-ref.ts).
-var imageRefLine = regexp.MustCompile(`^<image-ref id="(img_[0-9a-f]{8})"/>\n`)
-
-// splitImageRefs is the pictures a message picked, and the rest of it.
-func splitImageRefs(content string) ([]string, string) {
-	var handles []string
-	for {
-		match := imageRefLine.FindStringSubmatch(content)
-		if match == nil {
-			return handles, content
-		}
-		handles = append(handles, match[1])
-		content = content[len(match[0]):]
-	}
-}
+// splitImageRefs is the pictures a message picked, and the rest of it
+// (chat-core/src/image-ref.ts).
+func splitImageRefs(content string) ([]string, string) { return words.SplitImageRefs(content) }
 
 // ViewFile redirects to where one of the caller's files is shown from.
 func (s *Server) ViewFile(w http.ResponseWriter, r *http.Request, fileId FileId) {

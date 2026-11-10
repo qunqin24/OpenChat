@@ -256,6 +256,12 @@ func (s *Server) DeleteConversation(w http.ResponseWriter, r *http.Request, conv
 	var cancelled []uuid.UUID
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
+		// First, before any conversation's row: the deletion writes to the
+		// person's other conversations (their lists of recent ones), and two
+		// deletions that each held their own row would wait for each other.
+		if err := q.LockRecentChats(ctx, user.ID); err != nil {
+			return err
+		}
 		if _, err := lockLive(ctx, q, conversationId); err != nil {
 			return err
 		}
@@ -268,6 +274,11 @@ func (s *Server) DeleteConversation(w http.ResponseWriter, r *http.Request, conv
 		}
 		if affected == 0 {
 			return httpx.ErrNotFound
+		}
+		// Out of the lists of recent conversations in the person's other
+		// conversations, in the same transaction (chat-history-plan.md 3.4).
+		if err := q.RemoveFromRecentChats(ctx, sqlc.RemoveFromRecentChatsParams{UserID: &user.ID, Ids: []uuid.UUID{conversationId}}); err != nil {
+			return err
 		}
 		cancelled, err = q.CancelConversationRuns(ctx, []uuid.UUID{conversationId})
 		return err

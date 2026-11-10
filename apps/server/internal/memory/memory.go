@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -155,6 +156,11 @@ type Snapshot struct {
 	// built-in one of the same name, and one of theirs the place of either.
 	// Empty when skills are off.
 	Skills []SnapshotSkill `json:"skills,omitempty"`
+	// Recent are the person's latest conversations, newest first, as the list in
+	// the prompt names them (recent.go). Empty for a temporary conversation and
+	// when chat history was off; conversations that are deleted later are taken
+	// out of it, in the transaction that deletes them (RemoveFromRecentChats).
+	Recent []RecentChat `json:"recent,omitempty"`
 }
 
 // SnapshotSkill is a skill as a conversation lists it.
@@ -210,6 +216,9 @@ const (
 	// PieceSkill is a person's skill: the version (Piece.ID) as one text
 	// (skills.Text).
 	PieceSkill PieceKind = "skill"
+	// PieceTitle is the title of a conversation, as the list of recent ones
+	// carries it (Piece.ID is the conversation).
+	PieceTitle PieceKind = "title"
 )
 
 // Piece is one text a snapshot would carry that nobody has checked yet: one of
@@ -241,6 +250,7 @@ type candidate struct {
 	piece Piece
 	// checked and blocked are the hashes recorded for the text.
 	checked, blocked *string
+	asked            bool   // handed to the vet, if there is one
 	out              bool   // left out of the snapshot
 	found            string // what a check made just now found: "ok", "blocked" or ""
 }
@@ -295,6 +305,7 @@ func (s *Store) EnsureSnapshot(ctx context.Context, userID, conversationID uuid.
 		case blocked != nil && *blocked == hash:
 			c.out = true
 		default:
+			c.asked = true
 			ask = append(ask, c)
 		}
 		return c
@@ -308,6 +319,25 @@ func (s *Store) EnsureSnapshot(ctx context.Context, userID, conversationID uuid.
 	offered, err := s.skillCandidates(ctx, userID, &ask, true)
 	if err != nil {
 		return Snapshot{}, err
+	}
+	// The list of recent conversations, in a conversation that may have one. A
+	// title that nobody checked is asked about with the rest.
+	var recent []*recentCandidate
+	if !state.Temporary {
+		on, err := s.ChatHistoryOn(ctx, userID)
+		if err != nil {
+			return Snapshot{}, err
+		}
+		if on {
+			if recent, err = s.recentCandidates(ctx, userID, conversationID); err != nil {
+				return Snapshot{}, err
+			}
+			for _, c := range recent {
+				if c.title != "" {
+					c.check = consider(Piece{Kind: PieceTitle, ID: c.chat.ID, Text: c.title}, c.checked, c.blocked)
+				}
+			}
+		}
 	}
 
 	if vet != nil && len(ask) > 0 {
@@ -334,6 +364,14 @@ func (s *Store) EnsureSnapshot(ctx context.Context, userID, conversationID uuid.
 		}
 		s.recordChecks(ctx, userID, about, style, listed)
 		s.recordSkillChecks(ctx, offered)
+		s.recordTitleChecks(ctx, userID, recent)
+	} else if vet == nil {
+		// Nothing to ask: a title nobody has checked is never shown to the model.
+		for _, c := range recent {
+			if c.check != nil && c.check.asked {
+				c.check.out = true
+			}
+		}
 	}
 
 	snap := Snapshot{}
@@ -349,11 +387,8 @@ func (s *Store) EnsureSnapshot(ctx context.Context, userID, conversationID uuid.
 		}
 	}
 	snap.Skills = pickSkills(offered)
-	raw, err := json.Marshal(snap)
-	if err != nil {
-		return Snapshot{}, err
-	}
-	kept, err := s.q.SetConversationSnapshot(ctx, sqlc.SetConversationSnapshotParams{ID: conversationID, UserID: &userID, Snapshot: raw})
+	snap.Recent = recentList(recent)
+	kept, err := s.saveSnapshot(ctx, userID, conversationID, snap)
 	if errors.Is(err, pgx.ErrNoRows) {
 		// Another request took it first; theirs stands.
 		state, err = s.q.GetConversationMemoryState(ctx, sqlc.GetConversationMemoryStateParams{ID: conversationID, UserID: &userID})
@@ -366,6 +401,48 @@ func (s *Store) EnsureSnapshot(ctx context.Context, userID, conversationID uuid.
 		return Snapshot{}, err
 	}
 	return decodeSnapshot(kept)
+}
+
+// saveSnapshot keeps a conversation's first snapshot (pgx.ErrNoRows when
+// another request's already stands).
+//
+// One that lists recent conversations is saved under the person's
+// LockRecentChats, without the ones deleted since the list was read: a deletion
+// takes its conversation out of every list that is saved, in its own
+// transaction and under the same lock, so a list is either saved before the
+// deletion (which then removes the entry) or after it (and does not have it).
+// Moderation was asked before this, outside the transaction.
+func (s *Store) saveSnapshot(ctx context.Context, userID, conversationID uuid.UUID, snap Snapshot) ([]byte, error) {
+	save := func(q *sqlc.Queries) ([]byte, error) {
+		raw, err := json.Marshal(snap)
+		if err != nil {
+			return nil, err
+		}
+		return q.SetConversationSnapshot(ctx, sqlc.SetConversationSnapshotParams{ID: conversationID, UserID: &userID, Snapshot: raw})
+	}
+	if len(snap.Recent) == 0 {
+		return save(s.q)
+	}
+	var kept []byte
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		q := s.q.WithTx(tx)
+		if err := q.LockRecentChats(ctx, userID); err != nil {
+			return err
+		}
+		ids := make([]uuid.UUID, len(snap.Recent))
+		for i, c := range snap.Recent {
+			ids[i] = c.ID
+		}
+		live, err := q.ListLiveConversationIDs(ctx, sqlc.ListLiveConversationIDsParams{UserID: &userID, Ids: ids})
+		if err != nil {
+			return err
+		}
+		// The refs stay as they were given: a gap, as after any deletion.
+		snap.Recent = slices.DeleteFunc(snap.Recent, func(c RecentChat) bool { return !slices.Contains(live, c.ID) })
+		kept, err = save(q)
+		return err
+	})
+	return kept, err
 }
 
 // recordChecks writes down what a snapshot-time check found out, whoever's

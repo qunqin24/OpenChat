@@ -4220,6 +4220,18 @@ export interface components {
              *     off for everyone whatever `memoryEnabled` says.
              */
             memoryAllowed: boolean;
+            /**
+             * @description Your own switch for referring to earlier conversations
+             *     (docs/design/chat-history-plan.md). On, a new conversation is given
+             *     a list of what you said in your recent ones, and the model may
+             *     search and read your earlier conversations. On by default.
+             */
+            chatHistoryEnabled: boolean;
+            /**
+             * @description The administrator's switch (`SystemSettings.chatHistory`). Off, it
+             *     is off for everyone whatever `chatHistoryEnabled` says.
+             */
+            chatHistoryAllowed: boolean;
             /** @description Characters allowed in each instructions field. */
             instructionLimit: number;
             /** @description Memories allowed per person. */
@@ -4232,6 +4244,7 @@ export interface components {
             aboutYou?: string;
             responseStyle?: string;
             memoryEnabled?: boolean;
+            chatHistoryEnabled?: boolean;
         };
         /**
          * @description Who wrote it: `user` by hand, `model` with its memory tool, `auto` is
@@ -5708,6 +5721,14 @@ export interface components {
              */
             memory: boolean;
             /**
+             * @description The kill switch for referring to earlier conversations
+             *     (docs/design/chat-history-plan.md). Off, no new conversation is
+             *     given the list of the person's recent ones, conversations that have
+             *     one stop using it, and the chat_history tool is not offered. On by
+             *     default.
+             */
+            chatHistory: boolean;
+            /**
              * @description Whether conversations list skills and models are offered the tool
              *     that reads them. On by default. Off, the skills are kept; new
              *     conversations list none and ones under way lose the tool.
@@ -5743,6 +5764,7 @@ export interface components {
             askUser?: boolean;
             compressContext?: boolean;
             memory?: boolean;
+            chatHistory?: boolean;
             skills?: boolean;
             personalSkills?: boolean;
             deepResearch?: boolean;

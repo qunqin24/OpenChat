@@ -4954,7 +4954,7 @@ components:
 
     Personalization:
       type: object
-      required: [aboutYou, responseStyle, memoryEnabled, memoryAllowed, instructionLimit, memoryLimit, memoryLength]
+      required: [aboutYou, responseStyle, memoryEnabled, memoryAllowed, chatHistoryEnabled, chatHistoryAllowed, instructionLimit, memoryLimit, memoryLength]
       properties:
         aboutYou:
           type: string
@@ -4972,6 +4972,18 @@ components:
           description: |
             The administrator's switch (`SystemSettings.memory`). Off, memory is
             off for everyone whatever `memoryEnabled` says.
+        chatHistoryEnabled:
+          type: boolean
+          description: |
+            Your own switch for referring to earlier conversations
+            (docs/design/chat-history-plan.md). On, a new conversation is given
+            a list of what you said in your recent ones, and the model may
+            search and read your earlier conversations. On by default.
+        chatHistoryAllowed:
+          type: boolean
+          description: |
+            The administrator's switch (`SystemSettings.chatHistory`). Off, it
+            is off for everyone whatever `chatHistoryEnabled` says.
         instructionLimit: { type: integer, description: Characters allowed in each instructions field. }
         memoryLimit: { type: integer, description: Memories allowed per person. }
         memoryLength: { type: integer, description: Characters allowed in one memory. }
@@ -4983,6 +4995,7 @@ components:
         aboutYou: { type: string }
         responseStyle: { type: string }
         memoryEnabled: { type: boolean }
+        chatHistoryEnabled: { type: boolean }
 
     MemorySource:
       type: string
@@ -6679,7 +6692,7 @@ components:
 
     SystemSettings:
       type: object
-      required: [debugLogging, generativeUi, askUser, compressContext, memory, skills, personalSkills, deepResearch, deepResearchMonthly, taskModel, avatarUploads, scheduledTasks, requestTraces,
+      required: [debugLogging, generativeUi, askUser, compressContext, memory, chatHistory, skills, personalSkills, deepResearch, deepResearchMonthly, taskModel, avatarUploads, scheduledTasks, requestTraces,
                  deletedRetentionDays, unsentUploadHours, orphanFileHours,
                  maxConcurrentRuns,
                  allowRegistration, registrationApproval]
@@ -6779,6 +6792,14 @@ components:
             writes memories and the memory tool is not offered; people can still
             see and delete theirs, and their custom instructions still apply.
             On by default. Administrators cannot read anyone's memories either way.
+        chatHistory:
+          type: boolean
+          description: |
+            The kill switch for referring to earlier conversations
+            (docs/design/chat-history-plan.md). Off, no new conversation is
+            given the list of the person's recent ones, conversations that have
+            one stop using it, and the chat_history tool is not offered. On by
+            default.
         skills:
           type: boolean
           description: |
@@ -6817,6 +6838,7 @@ components:
         askUser: { type: boolean }
         compressContext: { type: boolean }
         memory: { type: boolean }
+        chatHistory: { type: boolean }
         skills: { type: boolean }
         personalSkills: { type: boolean }
         deepResearch: { type: boolean }

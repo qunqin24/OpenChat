@@ -1,6 +1,7 @@
 import type { ToolCallPart, ToolResultPart } from '@openchat/api-client'
 import type { TFunction } from 'i18next'
 
+import { CHAT_HISTORY_TOOL, historyStepLabel } from './chat-history-tool'
 import { BROWSER_TOOL, browserProgressOf, browserStepLabel } from './browser-tool'
 import { isPluginTool, pluginProgressOf, pluginStepLabel } from './plugin-code'
 import { isHttpUrl, siteName } from './urls'
@@ -100,6 +101,7 @@ export function stepLabel(t: T, step: ToolActivityStep, running: boolean): strin
   }
   if (isFileTool(step.call.name)) return fileStepLabel(t, step, args, running)
   if (step.call.name === 'memory') return t('chat.memory.step')
+  if (step.call.name === CHAT_HISTORY_TOOL) return historyStepLabel(t, args, running || !step.result)
   if (step.call.name === 'skill') return skillStepLabel(t, step, args, running)
   if (step.call.name === 'scheduled_tasks') return running ? t('tasks.step-running') : t('tasks.step')
   if (step.call.name === 'document') return documentStepLabel(t, step, args, running)

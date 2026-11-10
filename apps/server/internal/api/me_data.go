@@ -202,12 +202,21 @@ func (s *Server) DeleteAllMyConversations(w http.ResponseWriter, r *http.Request
 	)
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
+		// As DeleteConversation does, and for the same reason.
+		if err := q.LockRecentChats(ctx, user.ID); err != nil {
+			return err
+		}
 		ids, err := q.LockUserConversations(ctx, &user.ID)
 		if err != nil {
 			return err
 		}
 		gone = ids
 		if deleted, err = q.SoftDeleteAllConversations(ctx, &user.ID); err != nil {
+			return err
+		}
+		// Nothing is left alive to read it, but a snapshot should not keep
+		// the words of a conversation that was deleted (chat-history-plan.md 3.4).
+		if err := q.RemoveFromRecentChats(ctx, sqlc.RemoveFromRecentChatsParams{UserID: &user.ID, Ids: ids}); err != nil {
 			return err
 		}
 		cancelled, err = q.CancelConversationRuns(ctx, ids)

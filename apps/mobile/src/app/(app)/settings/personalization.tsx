@@ -67,6 +67,9 @@ function Loaded({ data }: { data: Personalization }) {
   const toggle = (memoryEnabled: boolean) =>
     update.mutate({ memoryEnabled }, { onError: () => toast.error(t('settings.personalization.save-failed')) })
 
+  const toggleChatHistory = (chatHistoryEnabled: boolean) =>
+    update.mutate({ chatHistoryEnabled }, { onError: () => toast.error(t('settings.personalization.save-failed')) })
+
   const edit = (key: 'about' | 'style') => (value: string) => {
     setRefusal(undefined)
     setDraft((d) => ({ ...d, [key]: [...value].slice(0, data.instructionLimit).join('') }))
@@ -113,6 +116,18 @@ function Loaded({ data }: { data: Personalization }) {
         <Help>{t('settings.personalization.memory-description')}</Help>
         {!data.memoryAllowed ? <Help tone="warning">{t('settings.personalization.memory-admin-off')}</Help> : null}
         <Help>{t('settings.personalization.memory-temporary')}</Help>
+      </View>
+
+      <View style={styles.section}>
+        <Group>
+          <Row
+            label={t('settings.personalization.chat-history')}
+            chevron={false}
+            right={<Toggle value={data.chatHistoryEnabled} disabled={update.isPending} onValueChange={toggleChatHistory} />}
+          />
+        </Group>
+        <Help>{t('settings.personalization.chat-history-description')}</Help>
+        {!data.chatHistoryAllowed ? <Help tone="warning">{t('settings.personalization.chat-history-admin-off')}</Help> : null}
       </View>
     </SettingsPage>
   )

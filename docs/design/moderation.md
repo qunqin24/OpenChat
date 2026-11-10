@@ -47,6 +47,8 @@
 - **模型写的记忆不审**（模型输出，来自已审核的对话）：它们写入时就记为审核过（`By.vouched`）；用户改了其中一条就成了用户的文字，按用户的算。**判断「审核过」只看哈希，从不看 `source`**：用户改写模型写的记忆，`source` 仍是 `model`，但 `UpdateMemoryContent` 总是用调用方给的哈希换掉旧的（用户的改写没审过就是 NULL），所以这条记忆在下个快照会被审。迁移 `…_moderated_instructions_and_memories.sql` 当初把所有非 `user` 来源的记忆回填成审核过，这对「v1.0.0 之前被用户改写过的模型记忆」是错的（那时改写不改 `source`）；已发布的迁移不能改，`…_unearned_memory_checks.sql` 把所有非 `user` 来源记忆的 `checked_hash` 清掉（回填的记号和之后赚到的记号都是当前文字的哈希，分不开，所以保守地全清；代价是每人下一个快照多一次批量审核，审核关着时没有代价；`blocked_hash` 和 `user` 来源的记号不动，自定义指令当初没回填，也不动），之后模型新写的照旧在写入时记为审核过。撤销（`Undo`）恢复的旧文字不带哈希，开着审核时下个快照会审一次。
 - 已有快照的对话不重审、不重取：快照是这个对话的，改了指令或记忆只影响之后的新对话。
 
+对话标题同理：用户改的标题在取快照时一起审（`PieceTitle`），结果按哈希记在 `conversations.title_checked_hash` / `title_blocked_hash`，模型起的写入时记为已检查；没检查过的标题不进近期对话清单和 `chat_history` 的结果（[chat-history-plan.md](chat-history-plan.md) 3.2）。
+
 ## 用户标识（上游请求里的 end-user id）
 
 - 每个发往模型的请求带 `llm.Request.User`：`HMAC-SHA256(密钥, 用户 id)`，十六进制取前 32 位。密钥 `end_user_key` 在 `app_settings`，首次使用时生成（`InsertSettingIfMissing`，和 `storage_signing_key` 一路），**没有任何接口读或写它**；不含邮箱，别人拿不到密钥就反推不出 id。

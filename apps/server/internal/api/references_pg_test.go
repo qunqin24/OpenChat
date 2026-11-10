@@ -85,8 +85,12 @@ func TestAMessageReferencesAnotherConversation(t *testing.T) {
 	}
 
 	// Deleted since: the model is told it is no longer there.
-	if _, err := h.q.SoftDeleteConversation(context.Background(), sqlc.SoftDeleteConversationParams{ID: other.ID, UserID: &h.user.ID}); err != nil {
-		t.Fatal(err)
+	// Through the handler: it also takes the conversation out of the lists of
+	// recent conversations that quote it.
+	del := httptest.NewRecorder()
+	h.server.DeleteConversation(del, h.request(http.MethodDelete, ""), other.ID)
+	if del.Code != http.StatusNoContent {
+		t.Fatalf("delete: %d %s", del.Code, del.Body)
 	}
 	if rec := h.sendIn(h.conv.ID, "once more"); rec.Code != http.StatusAccepted {
 		t.Fatal(rec.Body)

@@ -2,6 +2,7 @@
 SELECT instructions_about,
        instructions_style,
        memory_enabled,
+       chat_history,
        instructions_about_checked_hash,
        instructions_about_blocked_hash,
        instructions_style_checked_hash,
@@ -20,6 +21,7 @@ UPDATE users
 SET instructions_about = COALESCE(sqlc.narg('instructions_about')::text, instructions_about),
     instructions_style = COALESCE(sqlc.narg('instructions_style')::text, instructions_style),
     memory_enabled     = COALESCE(sqlc.narg('memory_enabled')::boolean, memory_enabled),
+    chat_history       = COALESCE(sqlc.narg('chat_history')::boolean, chat_history),
     instructions_about_checked_hash = CASE
         WHEN sqlc.narg('instructions_about')::text IS NULL OR sqlc.narg('instructions_about')::text = instructions_about
             THEN instructions_about_checked_hash
@@ -38,7 +40,7 @@ SET instructions_about = COALESCE(sqlc.narg('instructions_about')::text, instruc
         ELSE NULL END,
     updated_at         = now()
 WHERE id = sqlc.arg('id')
-RETURNING instructions_about, instructions_style, memory_enabled;
+RETURNING instructions_about, instructions_style, memory_enabled, chat_history;
 
 -- name: MarkInstructionsModerated :exec
 -- What a snapshot-time check decided about the instructions, recorded only
@@ -193,3 +195,115 @@ UPDATE conversations
 SET memory_snapshot = sqlc.arg('snapshot')::jsonb
 WHERE id = sqlc.arg('id')
   AND user_id = sqlc.arg('user_id');
+
+-- name: ListRecentChatCandidates :many
+-- The person's recent conversations for the list in a new conversation's
+-- snapshot (docs/design/chat-history-plan.md 3.1), each with the user messages
+-- it would show: the first three and the last ten of the ones that count, of
+-- which the caller keeps the first and the last five that still have words in
+-- them once the composer's lines are taken off. Their own conversations only
+-- (user_id is in the statement): chats - not a sub-agent's, a temporary one, a
+-- scheduled task's (that is the task's instruction, not what they typed), a
+-- deleted one or the current one - with at least one user message that
+-- moderation did not refuse and that nothing but the person wrote
+-- (origin IS NULL).
+--
+-- Which conversations is decided by their last activity (updated_at, the order
+-- of the sidebar, read off conversations_user_updated_idx), so that only the
+-- messages of the ones listed are read, however long the person's history is;
+-- among those, the newest last user message comes first. The content is cut
+-- at 20000 characters: more than any quote plus the request after it that
+-- matters, and no transcript is loaded whole.
+WITH chats AS (
+    SELECT c.id, c.title, c.title_checked_hash, c.title_blocked_hash
+    FROM conversations c
+    WHERE c.user_id = sqlc.arg('user_id')
+      AND c.deleted_at IS NULL
+      AND c.kind = 'chat'
+      AND NOT c.temporary
+      AND c.id <> sqlc.arg('current_id')
+      AND NOT EXISTS (SELECT 1 FROM scheduled_tasks t WHERE t.conversation_id = c.id)
+      AND EXISTS (SELECT 1
+                  FROM messages m
+                  WHERE m.conversation_id = c.id
+                    AND m.role = 'user'
+                    AND m.status <> 'blocked'
+                    AND m.origin IS NULL)
+    ORDER BY c.updated_at DESC, c.id DESC
+    LIMIT sqlc.arg('row_limit')
+),
+     numbered AS (
+         SELECT m.conversation_id, m.created_at, left(m.content, 20000) AS content,
+                row_number() OVER (PARTITION BY m.conversation_id ORDER BY m.created_at, m.id)           AS first_n,
+                row_number() OVER (PARTITION BY m.conversation_id ORDER BY m.created_at DESC, m.id DESC) AS last_n,
+                (max(m.created_at) OVER (PARTITION BY m.conversation_id))::timestamptz                    AS last_at
+         FROM messages m
+         WHERE m.conversation_id IN (SELECT id FROM chats)
+           AND m.role = 'user'
+           AND m.status <> 'blocked'
+           AND m.origin IS NULL
+     )
+SELECT chats.id, chats.title, chats.title_checked_hash, chats.title_blocked_hash, numbered.last_at,
+       numbered.created_at AS message_at, numbered.content
+FROM chats
+         JOIN numbered ON numbered.conversation_id = chats.id
+WHERE numbered.first_n <= 3
+   OR numbered.last_n <= 10
+ORDER BY numbered.last_at DESC, chats.id DESC, numbered.created_at, numbered.first_n;
+
+-- name: LockRecentChats :exec
+-- Serialises, per person, the two things that must not interleave: deleting
+-- conversations (which takes them out of the lists in the person's other
+-- conversations) and saving a new list. Without it two deletions each hold
+-- their own conversation's row and wait for the other's, and a list taken just
+-- before a deletion could be saved just after it, with the deleted conversation
+-- still in it. Taken first in its transaction, before any conversation row.
+SELECT pg_advisory_xact_lock(hashtextextended('recent_chats:' || sqlc.arg('user_id')::uuid::text, 0));
+
+-- name: ListLiveConversationIDs :many
+-- Which of these conversations of the person still exist: a list about to be
+-- saved drops the ones deleted since it was read.
+SELECT id
+FROM conversations
+WHERE user_id = sqlc.arg('user_id')
+  AND id = ANY (sqlc.arg('ids')::uuid[])
+  AND deleted_at IS NULL;
+
+-- name: MarkTitlesModerated :exec
+-- What a snapshot-time check decided about conversation titles, as
+-- MarkMemoriesModerated does about memories: recorded only where the title
+-- still hashes to what was checked (a rename meanwhile is another text).
+UPDATE conversations c
+SET title_checked_hash = CASE WHEN d.verdict = 'ok' THEN h.hash ELSE c.title_checked_hash END,
+    title_blocked_hash = CASE WHEN d.verdict = 'blocked' THEN h.hash ELSE c.title_blocked_hash END
+FROM unnest(sqlc.arg('ids')::uuid[]) WITH ORDINALITY AS i (id, n)
+         JOIN unnest(sqlc.arg('hashes')::text[]) WITH ORDINALITY AS h (hash, n) USING (n)
+         JOIN unnest(sqlc.arg('verdicts')::text[]) WITH ORDINALITY AS d (verdict, n) USING (n)
+WHERE c.user_id = sqlc.arg('user_id')
+  AND c.id = i.id
+  AND encode(sha256(convert_to(c.title, 'UTF8')), 'hex') = h.hash;
+
+-- name: GetConversationTitleCheck :one
+-- A conversation's title and the hashes recorded about it, for telling whether
+-- a title may be shown to the model.
+SELECT title, title_checked_hash, title_blocked_hash
+FROM conversations
+WHERE id = sqlc.arg('id')
+  AND user_id = sqlc.arg('user_id');
+
+-- name: RemoveFromRecentChats :exec
+-- Takes conversations out of the lists of recent ones in all of a person's
+-- conversations' snapshots (docs/design/chat-history-plan.md 3.4), in the
+-- transaction that deletes them. The other entries and their refs stay as
+-- they are; only snapshots that list one of them are written.
+UPDATE conversations c
+SET memory_snapshot = jsonb_set(c.memory_snapshot, '{recent}', COALESCE((
+    SELECT jsonb_agg(e.entry ORDER BY e.n)
+    FROM jsonb_array_elements(c.memory_snapshot -> 'recent') WITH ORDINALITY AS e (entry, n)
+    WHERE NOT ((e.entry ->> 'id')::uuid = ANY (sqlc.arg('ids')::uuid[]))
+), '[]'::jsonb))
+WHERE c.user_id = sqlc.arg('user_id')
+  AND jsonb_typeof(c.memory_snapshot -> 'recent') = 'array'
+  AND EXISTS (SELECT 1
+              FROM jsonb_array_elements(c.memory_snapshot -> 'recent') AS e (entry)
+              WHERE (e.entry ->> 'id')::uuid = ANY (sqlc.arg('ids')::uuid[]));

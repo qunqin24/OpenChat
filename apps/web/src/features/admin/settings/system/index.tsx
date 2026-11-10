@@ -47,6 +47,7 @@ export function SettingsSystem() {
   const toggleGenUI = useSystemToggle('generativeUi', 'genui')
   const toggleAskUser = useSystemToggle('askUser', 'ask-user')
   const toggleMemory = useSystemToggle('memory', 'memory')
+  const toggleChatHistory = useSystemToggle('chatHistory', 'chat-history')
   // The settings dialog's skills tab reads both from the chat's features.
   const toggleSkills = useSystemToggle('skills', 'skills', [queryKeys.features, queryKeys.skills.all])
   const togglePersonalSkills = useSystemToggle('personalSkills', 'personal-skills', [queryKeys.features, queryKeys.skills.all])
@@ -151,6 +152,9 @@ export function SettingsSystem() {
           </SettingRow>
           <SettingRow id="memory" label={t('admin.settings.system.memory')} hint={t('admin.settings.system.memory-hint')}>
             {toggle('memory', data?.memory ?? true, toggleMemory)}
+          </SettingRow>
+          <SettingRow id="chat-history" label={t('admin.settings.system.chat-history')} hint={t('admin.settings.system.chat-history-hint')}>
+            {toggle('chat-history', data?.chatHistory ?? true, toggleChatHistory)}
           </SettingRow>
           <SettingRow id="skills" label={t('admin.settings.system.skills')} hint={t('admin.settings.system.skills-hint')}>
             {toggle('skills', data?.skills ?? true, toggleSkills)}
@@ -282,6 +286,7 @@ type SystemFlag =
   | 'generativeUi'
   | 'askUser'
   | 'memory'
+  | 'chatHistory'
   | 'skills'
   | 'personalSkills'
   | 'deepResearch'

@@ -182,7 +182,9 @@ SELECT browser FROM conversations WHERE id = $1;
 -- renamed in the meantime keeps their name. Not a change of activity, so the
 -- conversation keeps its place in the list.
 UPDATE conversations
-SET title = sqlc.arg('title')
+SET title = sqlc.arg('title'),
+    -- Written by the server: no one needs to moderate it (title_checked_hash).
+    title_checked_hash = sqlc.arg('title_hash')::text
 WHERE id = sqlc.arg('id')
   AND title = sqlc.arg('default_title')
   AND deleted_at IS NULL

@@ -205,6 +205,18 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 
 细节：[图片生成](docs/design/image-generation-plan.md)。
 
+## 参考聊天记录
+
+新对话的快照里带一份近期对话清单（`memory.Snapshot.Recent`，`memory/recent.go`），模型另有 `chat_history` 工具搜和读用户自己的历史对话（`tools/chat_history.go`）。开关独立于记忆：`users.chat_history` 和后台的 `chat_history`，都默认开，都开才算开（`Store.ChatHistoryAvailable`，按请求现查）。
+
+- 清单和快照一起取、之后不重排；渲染时看现在的开关，快照本身不改。临时对话没有清单、没有工具，也不出现在别人的清单和搜索里。
+- 清单和工具只读：本人的、`kind = 'chat'`、非临时、未删除、不是当前对话的对话里 `status <> 'blocked'`、`origin IS NULL` 的消息（清单只要用户消息，且不收定时任务的对话）。新增查询照此，归属写进语句。用户消息一律先过 `words.Typed`（去掉技能、深度研究、图片引用行和引用段落的包装）。
+- 标题只有检查过才给模型看（`Store.TitleChecked`，哈希在 `conversations.title_checked_hash`）：模型起的写入时记为已检查，用户改的在取快照时和指令、记忆一起审。新增把标题放进提示词或工具结果的路径照此；其余读到的内容不审。
+- 新的软删除对话路径必须在事务开头、锁任何对话行之前取 `LockRecentChats`，并在同一事务里 `RemoveFromRecentChats`；保存带清单的快照只走 `Store.saveSnapshot`（同一把锁）。别改回各锁各的行：互相列着对方的对话同时删除会死锁。
+- `chat_history` 不给子 Agent 和深度研究的任何阶段，定时任务的 run 可以用；这个 run 里搜到过的对话记在 `Scope.State`，默认不再返回。搜索是子串匹配加 Go 里排序，不要引入向量库或全文检索引擎。
+
+细节：[参考聊天记录](docs/design/chat-history-plan.md)。
+
 ## 认证
 
 - HttpOnly Cookie 或 `Authorization: Bearer`（只有带 `X-OpenChat-Client: app` 且不带 `Origin` 的登录才在响应体里给 token，`SignInResult`），库里只存 token 的 SHA-256；任何「凭 token 认人」的路径都走 `auth.TokenFromRequest` + `GetSessionUser`，别另写（它还挡 `pending`）。App 的会话由 `GET /auth/session` 续期（`RenewSession`）；Android 通行密钥的来源和 `assetlinks.json` 都由后台登记的 App 得出（`android_passkeys.go`）。

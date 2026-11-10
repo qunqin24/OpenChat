@@ -307,6 +307,9 @@ type Querier interface {
 	GetConversationPluginCatalog(ctx context.Context, id uuid.UUID) ([]byte, error)
 	// The snapshot, with the row locked: the tool adds to it as memories are saved.
 	GetConversationSnapshotForUpdate(ctx context.Context, arg GetConversationSnapshotForUpdateParams) (GetConversationSnapshotForUpdateRow, error)
+	// A conversation's title and the hashes recorded about it, for telling whether
+	// a title may be shown to the model.
+	GetConversationTitleCheck(ctx context.Context, arg GetConversationTitleCheckParams) (GetConversationTitleCheckRow, error)
 	// Per upstream, to show which one is failing or slow. A channel is its id and
 	// the name it had: deleting one keeps its history under the name, with no id.
 	GetDashboardChannels(ctx context.Context, arg GetDashboardChannelsParams) ([]GetDashboardChannelsRow, error)
@@ -346,6 +349,10 @@ type Querier interface {
 	GetDisabledSessionUser(ctx context.Context, tokenHash []byte) (GetDisabledSessionUserRow, error)
 	GetDocument(ctx context.Context, arg GetDocumentParams) (Document, error)
 	GetDocumentVersion(ctx context.Context, arg GetDocumentVersionParams) (DocumentVersion, error)
+	// A conversation the tool may read and how many searchable messages it has.
+	// Someone else's, a temporary or deleted one, a sub-agent's and the current
+	// conversation are simply not found.
+	GetHistoryConversation(ctx context.Context, arg GetHistoryConversationParams) (GetHistoryConversationRow, error)
 	// The pictures answers describe, as a search service found them (api/images.go).
 	// What a description found before: the picture, or no picture (a search that
 	// found nothing); no row for words never searched.
@@ -454,6 +461,10 @@ type Querier interface {
 	// its runs, so cheap and outside any transaction.
 	HasPendingReports(ctx context.Context, parentID uuid.UUID) (bool, error)
 	HasSubagentInbox(ctx context.Context, conversationID uuid.UUID) (bool, error)
+	// What the ranking's length normalisation and IDF need of the whole history:
+	// how many searchable messages the person has and their average size in bytes.
+	// No message's text is read for it.
+	HistoryCorpusStats(ctx context.Context, arg HistoryCorpusStatsParams) (HistoryCorpusStatsRow, error)
 	// How many pictures a person's requests have taken since a moment: the ones
 	// under way and the ones done, not the ones that failed.
 	ImagesSince(ctx context.Context, arg ImagesSinceParams) (int64, error)
@@ -572,6 +583,14 @@ type Querier interface {
 	ListConversationsWithPendingReports(ctx context.Context) ([]uuid.UUID, error)
 	// Oldest first: the panel steps through them.
 	ListDocumentVersions(ctx context.Context, documentID uuid.UUID) ([]DocumentVersion, error)
+	// The messages within two places of a hit in its conversation (counted among
+	// the searchable messages), each with its place n. A message near two hits
+	// comes once. The places are worked out without the text; only the messages
+	// shown are read.
+	ListHistoryContext(ctx context.Context, arg ListHistoryContextParams) ([]ListHistoryContextRow, error)
+	// A page of a conversation's searchable messages in order. The caller has
+	// checked the conversation with GetHistoryConversation.
+	ListHistoryMessages(ctx context.Context, arg ListHistoryMessagesParams) ([]ListHistoryMessagesRow, error)
 	// Sub-agents a message waits for with no run going to read it: the sweep
 	// starts the run (a process that died between the two leaves this).
 	ListIdleSubagentInboxes(ctx context.Context) ([]uuid.UUID, error)
@@ -583,6 +602,9 @@ type Querier interface {
 	// ones, not temporary ones, which are not history - and only the user's own,
 	// on both the file and the conversation.
 	ListLibraryFiles(ctx context.Context, arg ListLibraryFilesParams) ([]ListLibraryFilesRow, error)
+	// Which of these conversations of the person still exist: a list about to be
+	// saved drops the ones deleted since it was read.
+	ListLiveConversationIDs(ctx context.Context, arg ListLiveConversationIDsParams) ([]uuid.UUID, error)
 	// Oldest first, so a memory keeps its place in the list (and in the prompt).
 	ListMemories(ctx context.Context, userID uuid.UUID) ([]UserMemory, error)
 	ListMemoryEvents(ctx context.Context, arg ListMemoryEventsParams) ([]MemoryEvent, error)
@@ -623,6 +645,24 @@ type Querier interface {
 	// how it ended. Paged by id, which grows with time.
 	ListPluginCalls(ctx context.Context, arg ListPluginCallsParams) ([]ListPluginCallsRow, error)
 	ListPluginTools(ctx context.Context, pluginID uuid.UUID) ([]PluginTool, error)
+	// The person's recent conversations for the list in a new conversation's
+	// snapshot (docs/design/chat-history-plan.md 3.1), each with the user messages
+	// it would show: the first three and the last ten of the ones that count, of
+	// which the caller keeps the first and the last five that still have words in
+	// them once the composer's lines are taken off. Their own conversations only
+	// (user_id is in the statement): chats - not a sub-agent's, a temporary one, a
+	// scheduled task's (that is the task's instruction, not what they typed), a
+	// deleted one or the current one - with at least one user message that
+	// moderation did not refuse and that nothing but the person wrote
+	// (origin IS NULL).
+	//
+	// Which conversations is decided by their last activity (updated_at, the order
+	// of the sidebar, read off conversations_user_updated_idx), so that only the
+	// messages of the ones listed are read, however long the person's history is;
+	// among those, the newest last user message comes first. The content is cut
+	// at 20000 characters: more than any quote plus the request after it that
+	// matters, and no transcript is loaded whole.
+	ListRecentChatCandidates(ctx context.Context, arg ListRecentChatCandidatesParams) ([]ListRecentChatCandidatesRow, error)
 	// The newest rows of the conversation, oldest first: the raw material of a
 	// model request. Newest, not oldest — a long conversation is answered from its
 	// end. A message that moderation refused (status 'blocked') is not a row of the
@@ -765,6 +805,13 @@ type Querier interface {
 	// requests of one account or address cannot all count one fewer than the
 	// others, and servers sharing the database share the lock.
 	LockModerationSubject(ctx context.Context, subject string) error
+	// Serialises, per person, the two things that must not interleave: deleting
+	// conversations (which takes them out of the lists in the person's other
+	// conversations) and saving a new list. Without it two deletions each hold
+	// their own conversation's row and wait for the other's, and a list taken just
+	// before a deletion could be saved just after it, with the deleted conversation
+	// still in it. Taken first in its transaction, before any conversation row.
+	LockRecentChats(ctx context.Context, userID uuid.UUID) error
 	// Registrations take this before RegisterUser, so that "is the table empty?" is
 	// answered one registration at a time: two people registering on a fresh
 	// install cannot both be made the administrator.
@@ -823,6 +870,10 @@ type Querier interface {
 	// What a snapshot-time check found, recorded only while the version still has
 	// the hash that was checked.
 	MarkSkillVersionModerated(ctx context.Context, arg MarkSkillVersionModeratedParams) error
+	// What a snapshot-time check decided about conversation titles, as
+	// MarkMemoriesModerated does about memories: recorded only where the title
+	// still hashes to what was checked (a rename meanwhile is another text).
+	MarkTitlesModerated(ctx context.Context, arg MarkTitlesModeratedParams) error
 	// What a run needs to know about its model: how its thinking is controlled,
 	// how much it may read and write, and what it can do. The catalogue row is
 	// chosen the way ListServedModels chooses it — a provider one of the serving
@@ -891,6 +942,11 @@ type Querier interface {
 	// decision is made inside the INSERT, under the lock
 	// LockRegistration takes.
 	RegisterUser(ctx context.Context, arg RegisterUserParams) (User, error)
+	// Takes conversations out of the lists of recent ones in all of a person's
+	// conversations' snapshots (docs/design/chat-history-plan.md 3.4), in the
+	// transaction that deletes them. The other entries and their refs stay as
+	// they are; only snapshots that list one of them are written.
+	RemoveFromRecentChats(ctx context.Context, arg RemoveFromRecentChatsParams) error
 	RenamePasskey(ctx context.Context, arg RenamePasskeyParams) (RenamePasskeyRow, error)
 	// An app's session (a bearer token) is renewed when it asks who it is
 	// (getSession) and has less than renew_below left: back to ttl from now. So
@@ -922,6 +978,22 @@ type Querier interface {
 	// and not a message moderation refused, which was never sent.
 	// A conversation found by its title alone has no hit: empty strings, not NULLs.
 	SearchConversations(ctx context.Context, arg SearchConversationsParams) ([]SearchConversationsRow, error)
+	// The chat_history tool's reads (docs/design/chat-history-plan.md, section 4).
+	// Every query is the person's own, searchable conversations only: kind 'chat',
+	// not temporary, not deleted, never the one the tool is called from, and only
+	// what a person or a model said (user and assistant messages) that moderation
+	// did not refuse and that nothing but them wrote (origin IS NULL).
+	// Messages containing any of the patterns (ILIKE patterns, escaped by the
+	// caller), newest first, with their size for the ranking. Narrowed to a time
+	// range when given (to_at is exclusive) and to conversations not in skip_ids.
+	//
+	// Each keyword keeps its own newest per_keyword matches: a common word of the
+	// search cannot crowd out the two messages that hold the rare one. One pass
+	// over the person's messages finds the matches; telling which keyword a match
+	// holds reads only the matches again. The content is cut at 20000 characters
+	// (the ranking and the excerpt read no more); the length is in bytes, which
+	// costs nothing to know.
+	SearchHistoryMessages(ctx context.Context, arg SearchHistoryMessagesParams) ([]SearchHistoryMessagesRow, error)
 	// The channels a run of this model may be answered from: the enabled ones that
 	// offer it, highest priority first. Which of a priority's channels goes first
 	// is drawn by weight in Go (servingOrder); the run pins the one it starts on,
