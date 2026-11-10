@@ -44,3 +44,47 @@ export function noteBuild(response: Response) {
   watch = next.watch
   if (next.tell) listener?.()
 }
+
+/**
+ * Whether an error is a piece of the app's code that could not be fetched.
+ *
+ * The app is built in pieces that are fetched when first needed (a route, the
+ * Word and PDF views, a settings tab), each under a name that holds a hash of
+ * its content. After an upgrade the server has the new pieces only, so a page
+ * loaded before it asks for names that are gone (a connection that dropped
+ * gives the same error). Each browser words it its own way; the last is
+ * Vite's, for a stylesheet a piece needs.
+ */
+export function isChunkLoadError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
+  return /Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed|Unable to preload CSS/i.test(
+    message,
+  )
+}
+
+let pieceListener: (() => void) | null = null
+let pieceTold = false
+
+/** Who tells the reader that a piece could not be fetched (main.tsx: a toast with a reload button). */
+export function onPieceMissing(fn: () => void) {
+  pieceListener = fn
+}
+
+/**
+ * A piece of the app could not be fetched: the reader is told, once, and not
+ * at all when they already know the server was upgraded. Said as what is
+ * known - it did not load, reloading is the way out - because the same error
+ * is what a dropped connection gives.
+ */
+export function notePieceMissing() {
+  if (pieceTold || watch.told) return
+  pieceTold = true
+  pieceListener?.()
+}
+
+/** notePieceMissing for an error that is one (isChunkLoadError); says whether it was. */
+export function noteChunkError(error: unknown): boolean {
+  if (!isChunkLoadError(error)) return false
+  notePieceMissing()
+  return true
+}

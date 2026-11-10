@@ -61,6 +61,8 @@
 
 服务端在每个响应里带 `X-OpenChat-Build`：嵌进二进制的前端 `index.html` 的 SHA-256 前 12 位。`index.html` 列出了所有带哈希的资源名，所以只有前端真的变了它才变——重启、只改服务端都不变；没有嵌前端（开发时 Vite 提供页面）就不带。前端所有请求都经过 `appFetch`，它调 `noteBuild`：记住第一次看到的值，之后看到不同的值就通过 `onBuildChange` 弹一次不会自动消失的提示类通知（`toast.info`，和其他通知同一套带图标的彩色样式）「服务端已更新，请刷新页面」，带「刷新」按钮，按钮在 `toast.css` 里画成跟随通知颜色的描边小按钮（`main.tsx`）。镜像升级、服务重启后，事件流的自动重连通常是第一个发现的请求。和 Open WebUI 不同：它在 WebSocket 重连后比对版本号和部署 ID，不同就直接强制刷新页面；这里只提示，免得丢掉输入框里写了一半的消息。新增不经 `appFetch` 的网络请求时，也要调 `noteBuild`。
 
+旧页面按需加载的代码分块（路由、Word/PDF 视图、设置页的标签等，文件名带内容哈希）升级后服务器上已经没有了。加载失败（`isChunkLoadError`，各浏览器措辞不同；断网也是同一个错误，所以提示语只说「没能加载，可能是服务端已更新」）时不进路由的错误页：`vite:preloadError` 和 `ChunkBoundary`/`RouteError`（`components/StaleChunk.tsx`）都调 `notePieceMissing`，弹同一个带「刷新」按钮的提示（已经提示过升级就不再弹）；`React.lazy` 的部分包在 `ChunkBoundary` 里，原地显示一句话，页面其余部分和输入框里的草稿不动；路由的分块失败由 `defaultErrorComponent` 显示同样的话和刷新入口。别的错误照旧交给路由自己的错误页。同样不自动刷新。新增 `React.lazy` 的地方照此包一层。
+
 
 ## 模型目录（models.dev）的更新
 

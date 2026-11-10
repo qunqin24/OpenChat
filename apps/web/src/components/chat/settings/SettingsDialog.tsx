@@ -3,6 +3,7 @@ import { Dialog, Tabs } from 'radix-ui'
 import { lazy, Suspense, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { ChunkBoundary, StaleNote } from '@/components/StaleChunk'
 import { isSettingsTab, SETTINGS_TABS, useSettings, type SettingsTab } from '@/lib/settings'
 import AccountTab from './AccountTab'
 import DataTab from './DataTab'
@@ -108,14 +109,18 @@ function SettingsBody({ host }: { host: HTMLElement | null }) {
 
         <Tabs.Content value="general" className="n-settings-panel"><GeneralTab /></Tabs.Content>
         <Tabs.Content value="personalization" className="n-settings-panel">
-          <Suspense fallback={<div className="n-settings-loading" role="status"><span className="n-spinner" data-motion="essential" /></div>}>
-            <PersonalizationTab host={host} />
-          </Suspense>
+          <ChunkBoundary fallback={<StaleNote className="n-settings-none" />}>
+            <Suspense fallback={<div className="n-settings-loading" role="status"><span className="n-spinner" data-motion="essential" /></div>}>
+              <PersonalizationTab host={host} />
+            </Suspense>
+          </ChunkBoundary>
         </Tabs.Content>
         <Tabs.Content value="skills" className="n-settings-panel">
-          <Suspense fallback={<div className="n-settings-loading" role="status"><span className="n-spinner" data-motion="essential" /></div>}>
-            <SkillsTab host={host} />
-          </Suspense>
+          <ChunkBoundary fallback={<StaleNote className="n-settings-none" />}>
+            <Suspense fallback={<div className="n-settings-loading" role="status"><span className="n-spinner" data-motion="essential" /></div>}>
+              <SkillsTab host={host} />
+            </Suspense>
+          </ChunkBoundary>
         </Tabs.Content>
         <Tabs.Content value="account" className="n-settings-panel"><AccountTab /></Tabs.Content>
         <Tabs.Content value="data" className="n-settings-panel"><DataTab /></Tabs.Content>

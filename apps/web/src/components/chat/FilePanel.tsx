@@ -14,6 +14,7 @@ import { delimiterOf, parseDelimited, parseWorkbook } from '@openchat/chat-core/
 import { useFilePanel, type OpenFile } from '@/stores/file-panel-store'
 import { FileIcon } from './FileIcon'
 import { Markdown } from './MarkdownText'
+import { ChunkBoundary, StaleNote } from '@/components/StaleChunk'
 import { SheetView } from './file-views/SheetView'
 
 // The two that bring a library of their own, loaded when such a file is opened.
@@ -96,9 +97,11 @@ export function FilePanel({ file, full = false }: { file: OpenFile; full?: boole
       </header>
       <div className="n-file-panel-scroll">
         {file.contentType === DOCX_TYPE || file.contentType === PDF_TYPE ? (
-          <Suspense fallback={<p className="n-file-panel-note">{t('chat.file.loading')}</p>}>
-            {file.contentType === DOCX_TYPE ? <WordView url={file.url} /> : <PdfView url={file.url} />}
-          </Suspense>
+          <ChunkBoundary fallback={<StaleNote className="n-file-panel-note" />}>
+            <Suspense fallback={<p className="n-file-panel-note">{t('chat.file.loading')}</p>}>
+              {file.contentType === DOCX_TYPE ? <WordView url={file.url} /> : <PdfView url={file.url} />}
+            </Suspense>
+          </ChunkBoundary>
         ) : text.isError ? (
           <p className="n-file-panel-note">{t('chat.file.load-failed')}</p>
         ) : text.data === undefined ? (

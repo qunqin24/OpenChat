@@ -5,6 +5,9 @@
     "updated": {
       "message": "The server has been updated. Reload the page to use the new version.",
       "reload": "Reload"
+    },
+    "stale": {
+      "message": "Part of this page could not be loaded; the server may have been updated. Reload the page and try again."
     }
   },
   "nav": {

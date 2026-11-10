@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client'
 import { toast } from 'sonner'
 
 import i18n from '@/lib/i18n'
-import { onBuildChange } from '@/lib/build-check'
+import { notePieceMissing, onBuildChange, onPieceMissing } from '@/lib/build-check'
 import { queryClient, setErrorListener } from '@/lib/query'
 import { persistQueryCache, restoreQueryCache } from '@/lib/query-persist'
 import { preventZoom } from '@/lib/no-zoom'
@@ -50,6 +50,18 @@ onBuildChange(() =>
     action: { label: i18n.t('app.updated.reload'), onClick: () => window.location.reload() },
   }),
 )
+// A piece of the app's code could not be fetched - after an upgrade the server
+// no longer has the pieces this page was built with. Vite announces every such
+// failure here, whoever asked for the piece; the error still goes to whoever
+// did (components/StaleChunk.tsx). The same toast as above when both happen.
+onPieceMissing(() =>
+  toast.info(i18n.t('app.stale.message'), {
+    id: 'build-updated',
+    duration: Infinity,
+    action: { label: i18n.t('app.updated.reload'), onClick: () => window.location.reload() },
+  }),
+)
+window.addEventListener('vite:preloadError', notePieceMissing)
 followDeletions(queryClient)
 preventZoom()
 keepToastsInteractive()
