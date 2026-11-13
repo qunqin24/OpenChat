@@ -1,5 +1,5 @@
 import type { TFunction } from 'i18next'
-import type { ChatModel, Message, MessagePart } from '@openchat/api-client'
+import type { Message, MessagePart, ModelMark } from '@openchat/api-client'
 import { Image as ImageIcon, Telescope } from 'lucide-react'
 import { isValidElement, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -297,8 +297,8 @@ function errorText(t: TFunction<'common'>, code?: string | null) {
 
 interface AssistantTurnProps {
   turn: Extract<Turn, { kind: 'assistant' }>
-  /** The catalogue's entry for the model, for its name and mark. */
-  model?: ChatModel
+  /** The model's name and mark (`useModelMarks`). */
+  model?: ModelMark
   modelId: string
   /** The last answer only: answer again. Absent while that cannot be done. */
   onRegenerate?: () => void
@@ -692,7 +692,7 @@ function isFoldBlock(block: Block): block is FoldBlock {
  * the transcript (a `blocked` row) and the reply is drawn after it each time;
  * it is not a reply the model wrote and is never sent back to it.
  */
-export function RefusedReply({ model, modelId, refusal }: { model?: ChatModel; modelId: string; refusal: Refusal }) {
+export function RefusedReply({ model, modelId, refusal }: { model?: ModelMark; modelId: string; refusal: Refusal }) {
   const name = model?.name ?? modelId
   return (
     <div className="n-msg-assistant">
@@ -718,7 +718,7 @@ export function RefusedReply({ model, modelId, refusal }: { model?: ChatModel; m
  * header and the thinking line, exactly as a run looks before its first token,
  * so nothing shifts when the real one takes its place.
  */
-export function PendingReply({ model, modelId }: { model?: ChatModel; modelId: string }) {
+export function PendingReply({ model, modelId }: { model?: ModelMark; modelId: string }) {
   const name = model?.name ?? modelId
   return (
     <div className="n-msg-assistant">

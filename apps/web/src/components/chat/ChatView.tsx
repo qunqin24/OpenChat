@@ -10,6 +10,7 @@ import {
   chatModelsQueryOptions,
   useChatFeatures,
   useChatModels,
+  useModelMarks,
   useUpdateConversationSettings,
 } from '@/hooks/use-chat-models'
 import { useCompaction, useUndoCompaction } from '@/hooks/use-compaction'
@@ -296,6 +297,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     () => buildTurns(messages.data?.items ?? [], live?.run ?? null, replacing, summary),
     [messages.data, live, replacing, summary],
   )
+  const markOf = useModelMarks(useMemo(() => turns.map((turn) => (turn.kind === 'assistant' ? turnModel(turn) : null)), [turns]))
   // Where the person picked the conversation up again after a pause: a time
   // above their message, as the model is told it (lib/time-gap.ts).
   const gaps = useMemo(() => timeGaps(turns), [turns])
@@ -1225,7 +1227,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
                     <AssistantTurn
                       turn={turn}
                       modelId={turnModel(turn) ?? modelId}
-                      model={modelById.get(turnModel(turn) ?? modelId)}
+                      model={markOf(turnModel(turn) ?? modelId)}
                       askingCallId={askingCallId}
                       onOpenQuestion={() => setDismissedCallId(null)}
                       plan={planActions}

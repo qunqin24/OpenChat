@@ -457,6 +457,67 @@ func (q *Queries) ListServedModels(ctx context.Context, arg ListServedModelsPara
 	return items, nil
 }
 
+const modelMarks = `-- name: ModelMarks :many
+WITH wanted AS (SELECT DISTINCT unnest($1::text[]) AS model_id),
+     listed AS (SELECT cm.model_id,
+                       array_agg(DISTINCT c.type::text)         AS brands,
+                       min(nullif(cm.display_name, ''))::text   AS display_name
+                FROM channel_models cm
+                         JOIN channels c ON c.id = cm.channel_id
+                WHERE cm.model_id IN (SELECT model_id FROM wanted)
+                GROUP BY cm.model_id)
+SELECT w.model_id::text                                             AS model_id,
+       coalesce(nullif(m.name, ''), l.display_name, w.model_id)::text AS name,
+       coalesce(m.provider_id, '')::text                             AS provider_id,
+       coalesce(m.family, '')::text                                  AS family
+FROM wanted w
+         LEFT JOIN listed l ON l.model_id = w.model_id
+         LEFT JOIN LATERAL (SELECT c2.provider_id, c2.name, c2.family
+                            FROM catalog_models c2
+                            WHERE c2.model_id = w.model_id
+                            ORDER BY (c2.provider_id = ANY (coalesce(l.brands, '{}'))) DESC, c2.provider_id
+                            LIMIT 1) m ON true
+WHERE m.provider_id IS NOT NULL
+   OR l.display_name IS NOT NULL
+`
+
+type ModelMarksRow struct {
+	ModelID    string `json:"model_id"`
+	Name       string `json:"name"`
+	ProviderID string `json:"provider_id"`
+	Family     string `json:"family"`
+}
+
+// The name and brand of models whether or not anything serves them now, for
+// replies a removed model wrote. The catalogue row is chosen as
+// ListServedModels chooses it, counting every channel that still lists the
+// model (enabled or not); with no catalogue row, the name an operator gave it
+// on a channel. A model known to neither is left out.
+func (q *Queries) ModelMarks(ctx context.Context, modelIds []string) ([]ModelMarksRow, error) {
+	rows, err := q.db.Query(ctx, modelMarks, modelIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ModelMarksRow{}
+	for rows.Next() {
+		var i ModelMarksRow
+		if err := rows.Scan(
+			&i.ModelID,
+			&i.Name,
+			&i.ProviderID,
+			&i.Family,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const modelProfile = `-- name: ModelProfile :one
 SELECT coalesce(m.raw -> 'reasoning_options', '[]'::jsonb)::jsonb AS reasoning_options,
        m.output_limit,

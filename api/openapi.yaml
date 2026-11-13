@@ -3536,6 +3536,37 @@ paths:
                 items: { $ref: "#/components/schemas/ChatModel" }
         default: { $ref: "#/components/responses/Error" }
 
+  /models/marks:
+    get:
+      tags: [messages]
+      summary: Names and marks of models, served or not
+      description: |
+        The name and icon brand of each model asked for, for replies written
+        by a model `/models` no longer lists (an administrator removed or
+        turned it off). Read from the model catalogue and what the channels
+        still record; a model neither knows is left out, and the page shows
+        its id.
+      operationId: listModelMarks
+      parameters:
+        - name: ids
+          in: query
+          required: true
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 50
+            items: { type: string }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ModelMark" }
+        default: { $ref: "#/components/responses/Error" }
+
   /files:
     get:
       tags: [files]
@@ -5521,6 +5552,16 @@ components:
           format: date-time
           description: When the month's allowance starts again.
 
+    ModelMark:
+      type: object
+      required: [id, name, providerId, family]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        providerId:
+          type: string
+          description: The catalogue's brand for the model, for its icon. Empty when unknown.
+        family: { type: string }
     ChatModel:
       type: object
       required:

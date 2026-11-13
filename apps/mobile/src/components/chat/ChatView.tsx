@@ -29,7 +29,7 @@ import { useSubagentPanel } from '@/lib/subagent-panel'
 import { useConversation, useCreateConversation, useDeleteConversation } from '@/hooks/conversations'
 import { useConversationEvents } from '@/hooks/events'
 import { useMessages } from '@/hooks/messages'
-import { freshModels, useChatFeatures, useChatModels, useUpdateConversationSettings } from '@/hooks/models'
+import { freshModels, useChatFeatures, useChatModels, useModelMarks, useUpdateConversationSettings } from '@/hooks/models'
 import { useAnswerQuestion, useCancelRun, useEditMessage, useRegenerate, useSendMessage } from '@/hooks/send'
 import { useComposerPrefs } from '@/lib/composer-prefs'
 import { useDocumentQuote, useDocumentScreen } from '@/lib/documents'
@@ -203,6 +203,7 @@ export function ChatView({ conversationId, onCreated, onRemoved, onSettled, onGo
     () => buildTurns(messages.data?.items ?? [], live?.run ?? null, replacing, summary),
     [messages.data, live, replacing, summary],
   )
+  const markOf = useModelMarks(useMemo(() => turns.map((turn) => (turn.kind === 'assistant' ? turnModel(turn) : null)), [turns]))
   const mode = useMemo(() => composerMode(turns), [turns])
   const revising = mode.kind === 'revise' ? mode.message : null
   const last = useMemo(() => regenerable(turns), [turns])
@@ -483,7 +484,7 @@ export function ChatView({ conversationId, onCreated, onRemoved, onSettled, onGo
         <Reply
           turn={turn}
           modelId={id}
-          model={modelById.get(id)}
+          model={markOf(id)}
           askingCallId={askingCallId}
           onOpenQuestion={() => setDismissedCallId(null)}
           onRegenerate={turn === last?.answer && !working && !outgoing ? handleRegenerate : undefined}

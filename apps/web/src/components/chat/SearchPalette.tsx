@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useChatModels } from '@/hooks/use-chat-models'
+import { useModelMarks } from '@/hooks/use-chat-models'
 import { useConversationSearch, useRenameConversation } from '@/hooks/use-conversations'
 import { useDebounced } from '@/hooks/use-debounced'
 import { useMessages } from '@/hooks/use-messages'
@@ -314,7 +314,6 @@ function Preview({ conversationId, term }: { conversationId: string | null; term
   const { t } = useTranslation()
   const [shown, setShown] = useState(conversationId)
   const scroll = useRef<HTMLDivElement>(null)
-  const models = useChatModels()
   const messages = useMessages(shown ?? '')
 
   useEffect(() => {
@@ -323,7 +322,7 @@ function Preview({ conversationId, term }: { conversationId: string | null; term
   }, [conversationId])
 
   const turns = useMemo(() => buildTurns(messages.data?.items ?? [], null), [messages.data])
-  const modelById = useMemo(() => new Map((models.data ?? []).map((m) => [m.id, m])), [models.data])
+  const markOf = useModelMarks(useMemo(() => turns.map((turn) => (turn.kind === 'assistant' ? turnModel(turn) : null)), [turns]))
 
   // To the end, where the conversation left off — or, for a search, to the
   // first place the words appear, marked with the CSS highlight API so the
@@ -361,7 +360,7 @@ function Preview({ conversationId, term }: { conversationId: string | null; term
               turn.kind === 'reports' ? null : turn.kind === 'user' ? (
                 <UserMessage key={turn.key} message={turn.message} />
               ) : (
-                <AssistantTurn key={turn.key} turn={turn} modelId={turnModel(turn) ?? ''} model={modelById.get(turnModel(turn) ?? '')} />
+                <AssistantTurn key={turn.key} turn={turn} modelId={turnModel(turn) ?? ''} model={markOf(turnModel(turn))} />
               ),
             )}
           </div>

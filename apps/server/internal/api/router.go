@@ -172,6 +172,7 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 			// Any signed-in user: these are the models a conversation can use,
 			// not the channels behind them.
 			r.Get("/models", wrapper.ListChatModels)
+			r.Get("/models/marks", wrapper.ListModelMarks)
 			r.Get("/features", wrapper.GetChatFeatures)
 			// The microphone (speech_input.go): a recording in, text out.
 			r.Post("/transcriptions", wrapper.Transcribe)

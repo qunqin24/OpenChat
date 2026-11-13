@@ -79,6 +79,7 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 - 手机上禁止缩放（viewport、`lib/no-zoom.ts`、`html` 的 `touch-action`）、安全区由根元素/输入框/侧栏各自让开；`content-visibility` 在 WebKit 上不用（`data-webkit`，有消息变空白的 bug）。
 - 脚本触发的滚动用 `smoothScrollBehavior()`（`lib/motion.ts`）；工具结果里的链接只放行 `isHttpUrl`。
 - 满额的模型在选择器里保留但禁用（`atCapacity`）；新增挑模型的前端入口要想清楚是否绕开它。
+- 回答头部的模型名和图标经 `useModelMarks`（网页 `hooks/use-chat-models.ts`、App `hooks/models.ts`）：列表里没有的（被删或停用的模型）由 `GET /models/marks` 从模型目录补上，别直接在 `/models` 列表里找。
 - 所有面向用户的字符串走 `t()`（`zh`、`en`）；动效遵守 `prefers-reduced-motion`，加载指示器标 `data-motion="essential"`。
 - 后台表单用 react-hook-form + zod（schema 建在组件内，用 `useWatch`）；表格服务端分页，`getRowId` 用记录 id；游标分页表格用 `DataTableCursorPagination`。
 

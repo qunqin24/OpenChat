@@ -890,3 +890,26 @@ func (s *Server) signAttachments(ctx context.Context, files []sqlc.Attachment) (
 	}
 	return out, nil
 }
+
+// maxModelMarks bounds one ListModelMarks: a transcript page names a handful
+// of models at most.
+const maxModelMarks = 50
+
+// ListModelMarks names models /models no longer lists, so a reply a removed
+// model wrote keeps its name and mark rather than showing its raw id.
+func (s *Server) ListModelMarks(w http.ResponseWriter, r *http.Request, params ListModelMarksParams) {
+	if len(params.Ids) > maxModelMarks {
+		httpx.Fail(w, r, httpx.NewError(http.StatusBadRequest, "too_many_ids", "at most 50 model ids"))
+		return
+	}
+	rows, err := s.q.ModelMarks(r.Context(), params.Ids)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	out := make([]ModelMark, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, ModelMark{Id: row.ModelID, Name: row.Name, ProviderId: row.ProviderID, Family: row.Family})
+	}
+	httpx.JSON(w, http.StatusOK, out)
+}

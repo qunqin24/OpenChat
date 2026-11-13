@@ -3072,6 +3072,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/models/marks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Names and marks of models, served or not
+         * @description The name and icon brand of each model asked for, for replies written
+         *     by a model `/models` no longer lists (an administrator removed or
+         *     turned it off). Read from the model catalogue and what the channels
+         *     still record; a model neither knows is left out, and the page shows
+         *     its id.
+         */
+        get: operations["listModelMarks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/files": {
         parameters: {
             query?: never;
@@ -4649,6 +4673,13 @@ export interface components {
              * @description When the month's allowance starts again.
              */
             resetsAt: string;
+        };
+        ModelMark: {
+            id: string;
+            name: string;
+            /** @description The catalogue's brand for the model, for its icon. Empty when unknown. */
+            providerId: string;
+            family: string;
         };
         ChatModel: {
             /** @description What a conversation stores and a request names. */
@@ -10895,6 +10926,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChatModel"][];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listModelMarks: {
+        parameters: {
+            query: {
+                ids: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelMark"][];
                 };
             };
             default: components["responses"]["Error"];

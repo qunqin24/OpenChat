@@ -3884,6 +3884,16 @@ type ModelChannel struct {
 // into text (语音输入).
 type ModelKind string
 
+// ModelMark defines model for ModelMark.
+type ModelMark struct {
+	Family string `json:"family"`
+	Id     string `json:"id"`
+	Name   string `json:"name"`
+
+	// ProviderId The catalogue's brand for the model, for its icon. Empty when unknown.
+	ProviderId string `json:"providerId"`
+}
+
 // ModelOverride The operator's settings for a model. Null follows the catalogue.
 type ModelOverride struct {
 	// AdminOnly Keep the model for administrators only. Not a catalogue figure:
@@ -6273,6 +6283,11 @@ type ImportMySkillsParams struct {
 	Filename string `form:"filename" json:"filename"`
 }
 
+// ListModelMarksParams defines parameters for ListModelMarks.
+type ListModelMarksParams struct {
+	Ids []string `form:"ids" json:"ids"`
+}
+
 // PluginOAuthCallbackParams defines parameters for PluginOAuthCallback.
 type PluginOAuthCallbackParams struct {
 	State *string `form:"state,omitempty" json:"state,omitempty"`
@@ -7929,6 +7944,9 @@ type ServerInterface interface {
 	// ListChatModels The models a conversation can use
 	// (GET /models)
 	ListChatModels(w http.ResponseWriter, r *http.Request)
+	// ListModelMarks Names and marks of models, served or not
+	// (GET /models/marks)
+	ListModelMarks(w http.ResponseWriter, r *http.Request, params ListModelMarksParams)
 	// GetPicture A picture found for an answer, fetched for the reader
 	// (GET /pictures/{pictureId})
 	GetPicture(w http.ResponseWriter, r *http.Request, pictureId openapi_types.UUID)
@@ -8961,6 +8979,12 @@ func (_ Unimplemented) GetMyStorage(w http.ResponseWriter, r *http.Request) {
 // ListChatModels The models a conversation can use
 // (GET /models)
 func (_ Unimplemented) ListChatModels(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListModelMarks Names and marks of models, served or not
+// (GET /models/marks)
+func (_ Unimplemented) ListModelMarks(w http.ResponseWriter, r *http.Request, params ListModelMarksParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -13184,6 +13208,39 @@ func (siw *ServerInterfaceWrapper) ListChatModels(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// ListModelMarks operation middleware
+func (siw *ServerInterfaceWrapper) ListModelMarks(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListModelMarksParams
+
+	// ------------- Required query parameter "ids" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "ids", r.URL.Query(), &params.Ids, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "ids"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ids", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListModelMarks(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetPicture operation middleware
 func (siw *ServerInterfaceWrapper) GetPicture(w http.ResponseWriter, r *http.Request) {
 
@@ -14167,6 +14224,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/models", wrapper.ListChatModels)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/models/marks", wrapper.ListModelMarks)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/files", wrapper.ListFiles)

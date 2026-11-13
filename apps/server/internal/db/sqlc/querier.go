@@ -892,6 +892,12 @@ type Querier interface {
 	// MarkMemoriesModerated does about memories: recorded only where the title
 	// still hashes to what was checked (a rename meanwhile is another text).
 	MarkTitlesModerated(ctx context.Context, arg MarkTitlesModeratedParams) error
+	// The name and brand of models whether or not anything serves them now, for
+	// replies a removed model wrote. The catalogue row is chosen as
+	// ListServedModels chooses it, counting every channel that still lists the
+	// model (enabled or not); with no catalogue row, the name an operator gave it
+	// on a channel. A model known to neither is left out.
+	ModelMarks(ctx context.Context, modelIds []string) ([]ModelMarksRow, error)
 	// What a run needs to know about its model: how its thinking is controlled,
 	// how much it may read and write, and what it can do. The catalogue row is
 	// chosen the way ListServedModels chooses it — a provider one of the serving

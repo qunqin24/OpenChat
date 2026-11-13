@@ -70,5 +70,7 @@ export const queryKeys = {
   models: {
     all: ['models'] as const,
     list: () => [...queryKeys.models.all, 'list'] as const,
+    /** Names and marks of models the list no longer has (`missingModels`). */
+    marks: (ids: readonly string[]) => [...queryKeys.models.all, 'marks', ...ids] as const,
   },
 } as const

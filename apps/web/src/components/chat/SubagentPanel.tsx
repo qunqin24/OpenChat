@@ -3,11 +3,11 @@ import { ArrowLeft, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { useChatModels } from '@/hooks/use-chat-models'
+import { useModelMarks } from '@/hooks/use-chat-models'
 import { useDuration, useSubagent, useSubagentAction, useSubagents } from '@/hooks/use-subagents'
 import { fromSnapshot } from '@openchat/chat-core/run-state'
 import { relativeAge, tally } from '@openchat/chat-core/subagents'
-import { buildTurns } from '@openchat/chat-core/transcript'
+import { buildTurns, type AssistantTurn as Turn } from '@openchat/chat-core/transcript'
 import { cn } from '@/lib/utils'
 import { useSubagentPanel } from '@/stores/subagent-panel-store'
 import { AssistantTurn } from './MessageItem'
@@ -60,8 +60,7 @@ export function SubagentPanel({ conversationId }: { conversationId: string }) {
 }
 
 function ModelName({ id }: { id: string }) {
-  const models = useChatModels()
-  const name = models.data?.find((m) => m.id === id)?.name ?? id
+  const name = useModelMarks([id])(id)?.name ?? id
   return <span className="n-subagent-model" title={id}>{name}</span>
 }
 
@@ -157,8 +156,9 @@ function Row({ conversationId, agent, now, onPick }: { conversationId: string; a
 function SubagentView({ conversationId, subagentId }: { conversationId: string; subagentId: string }) {
   const { t } = useTranslation()
   const detail = useSubagent(conversationId, subagentId)
-  const models = useChatModels()
   const turns = useMemo(() => (detail.data ? turnsOf(detail.data) : []), [detail.data])
+  const fallback = detail.data?.subagent.model
+  const markOf = useModelMarks(useMemo(() => turns.map((turn) => (turn.kind === 'assistant' ? turnModelOf(turn, fallback) : null)), [turns, fallback]))
   if (detail.isPending) return <div className="n-subagent-empty">{t('subagents.panel.loading')}</div>
   if (!detail.data) return <div className="n-subagent-empty">{t('subagents.error.generic')}</div>
   const model = detail.data.subagent.model
@@ -172,8 +172,8 @@ function SubagentView({ conversationId, subagentId }: { conversationId: string; 
             return <AgentInput key={turn.key} message={turn.message} first={first} />
           }
           if (turn.kind !== 'assistant') return null
-          const modelId = turn.live?.run.model ?? turn.responses.find((m) => m.model)?.model ?? model
-          return <AssistantTurn key={turn.key} turn={turn} modelId={modelId} model={models.data?.find((m) => m.id === modelId)} />
+          const modelId = turnModelOf(turn, model)
+          return <AssistantTurn key={turn.key} turn={turn} modelId={modelId} model={markOf(modelId)} />
         })}
       </div>
     </div>
@@ -226,6 +226,13 @@ function InputText({ text }: { text: string }) {
 }
 
 /** The view's turns: the transcript, with the run going drawn as the chat draws one. */
+/** The model a reply was answered with: its run's, its rows', else the sub-agent's. */
+function turnModelOf(turn: Turn, fallback: string): string
+function turnModelOf(turn: Turn, fallback: string | undefined): string | undefined
+function turnModelOf(turn: Turn, fallback: string | undefined) {
+  return turn.live?.run.model ?? turn.responses.find((m) => m.model)?.model ?? fallback
+}
+
 function turnsOf(detail: SubagentDetail) {
   const run = detail.run
   const live = run

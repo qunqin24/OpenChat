@@ -7,9 +7,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { fromSnapshot } from '@openchat/chat-core/run-state'
 import { relativeAge, tally } from '@openchat/chat-core/subagents'
-import { buildTurns } from '@openchat/chat-core/transcript'
+import { buildTurns, type AssistantTurn as Turn } from '@openchat/chat-core/transcript'
 
-import { useChatModels } from '@/hooks/models'
+import { useModelMarks } from '@/hooks/models'
 import { useDuration, useSubagent, useSubagentAction, useSubagents } from '@/hooks/subagents'
 import { useSubagentPanel } from '@/lib/subagent-panel'
 import { useColors } from '@/theme'
@@ -139,8 +139,9 @@ function SubagentView({ conversationId, subagentId }: { conversationId: string; 
   const { t } = useTranslation()
   const colors = useColors()
   const detail = useSubagent(conversationId, subagentId)
-  const models = useChatModels()
   const turns = useMemo(() => (detail.data ? turnsOf(detail.data) : []), [detail.data])
+  const fallback = detail.data?.subagent.model
+  const markOf = useModelMarks(useMemo(() => turns.map((turn) => (turn.kind === 'assistant' ? turnModelOf(turn, fallback) : null)), [turns, fallback]))
   if (detail.isPending) return <Text style={[styles.empty, { color: colors.text3 }]}>{t('subagents.panel.loading')}</Text>
   if (!detail.data) return <Text style={[styles.empty, { color: colors.text3 }]}>{t('subagents.error.generic')}</Text>
   const model = detail.data.subagent.model
@@ -150,8 +151,8 @@ function SubagentView({ conversationId, subagentId }: { conversationId: string; 
       {turns.map((turn) => {
         if (turn.kind === 'user') return <AgentInput key={turn.key} message={turn.message} first={tasks++ === 0} />
         if (turn.kind !== 'assistant') return null
-        const modelId = turn.live?.run.model ?? turn.responses.find((m) => m.model)?.model ?? model
-        return <Reply key={turn.key} turn={turn} modelId={modelId} model={models.data?.find((m) => m.id === modelId)} />
+        const modelId = turnModelOf(turn, model)
+        return <Reply key={turn.key} turn={turn} modelId={modelId} model={markOf(modelId)} />
       })}
     </ScrollView>
   )
@@ -179,6 +180,13 @@ function AgentInput({ message, first }: { message: Message; first: boolean }) {
 }
 
 /** The view's turns: the transcript, with the run going drawn as the chat draws one. */
+/** The model a reply was answered with: its run's, its rows', else the sub-agent's. */
+function turnModelOf(turn: Turn, fallback: string): string
+function turnModelOf(turn: Turn, fallback: string | undefined): string | undefined
+function turnModelOf(turn: Turn, fallback: string | undefined) {
+  return turn.live?.run.model ?? turn.responses.find((m) => m.model)?.model ?? fallback
+}
+
 function turnsOf(detail: SubagentDetail) {
   const run = detail.run
   const live = run ? fromSnapshot({ type: 'snapshot', run, live: detail.live, messages: detail.messages.filter((m) => m.runId === run.id) }).run : null

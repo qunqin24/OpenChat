@@ -1,4 +1,4 @@
-import type { ChatModel, MessagePart } from '@openchat/api-client'
+import type { MessagePart, ModelMark } from '@openchat/api-client'
 import * as Clipboard from 'expo-clipboard'
 import { router } from 'expo-router'
 import { AlarmClock, Brain, Check, Copy, MessageCircleQuestion, RotateCcw } from 'lucide-react-native'
@@ -102,7 +102,7 @@ function entryKind(entry: Block): ReplyEntryKind | null {
 
 interface ReplyProps {
   turn: AssistantTurn
-  model?: ChatModel
+  model?: ModelMark
   modelId: string
   /** The last answer only: answer again. */
   onRegenerate?: () => void
@@ -365,7 +365,7 @@ function AskLine({ label, state, onOpen }: { label: string; state: 'answered' | 
 }
 
 /** A message moderation refused, answered in the model's place. */
-export function RefusedReply({ model, modelId, refusal }: { model?: ChatModel; modelId: string; refusal?: Refusal }) {
+export function RefusedReply({ model, modelId, refusal }: { model?: ModelMark; modelId: string; refusal?: Refusal }) {
   const { t } = useTranslation()
   const colors = useColors()
   return (
@@ -385,7 +385,7 @@ export function RefusedReply({ model, modelId, refusal }: { model?: ChatModel; m
 }
 
 /** The reply to a message on its way: the model's name, and that it is at work. */
-export function PendingReply({ model, modelId }: { model?: ChatModel; modelId: string }) {
+export function PendingReply({ model, modelId }: { model?: ModelMark; modelId: string }) {
   const colors = useColors()
   return (
     <View style={styles.reply}>
