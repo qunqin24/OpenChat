@@ -22,6 +22,12 @@ import (
 // `medium` is refused with "Supported values are: 'medium'", so that is the
 // only one listed.
 //
+// OpenAI's transcription models (`gpt-transcribe`, `whisper-1`) are here for
+// the same reason, and for their price: they are billed by the minute of
+// audio, which models.dev has no field for. `cost.audio_minute` is ours - USD
+// per minute, from each model's page - and is what a transcription is billed
+// at when the operator has set no price of their own (UsagePricing).
+//
 // An entry here only fills a gap: once models.dev lists the same id under the
 // same provider, upstream's entry is the one kept and this one is dead weight
 // worth deleting.

@@ -289,6 +289,7 @@ SELECT DISTINCT ON (m.model_id) m.provider_id,
        coalesce((m.raw -> 'limit' ->> 'input')::numeric::bigint, 0)::bigint AS input_limit,
        m.input_cost::double precision  AS input_cost,
        m.output_cost::double precision AS output_cost,
+       coalesce((m.raw -> 'cost' ->> 'audio_minute')::double precision, 0)::double precision AS audio_cost,
        m.release_date,
        m.knowledge,
        m.input_modalities,
@@ -326,6 +327,7 @@ type ListCatalogModelsForChannelRow struct {
 	InputLimit       int64    `json:"input_limit"`
 	InputCost        float64  `json:"input_cost"`
 	OutputCost       float64  `json:"output_cost"`
+	AudioCost        float64  `json:"audio_cost"`
 	ReleaseDate      string   `json:"release_date"`
 	Knowledge        string   `json:"knowledge"`
 	InputModalities  []string `json:"input_modalities"`
@@ -374,6 +376,7 @@ func (q *Queries) ListCatalogModelsForChannel(ctx context.Context, arg ListCatal
 			&i.InputLimit,
 			&i.InputCost,
 			&i.OutputCost,
+			&i.AudioCost,
 			&i.ReleaseDate,
 			&i.Knowledge,
 			&i.InputModalities,

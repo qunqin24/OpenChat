@@ -19,6 +19,34 @@
         "open_weights": false,
         "limit": { "context": 400000, "input": 272000, "output": 128000 },
         "cost": { "input": 5, "output": 30, "cache_read": 0.5 }
+      },
+      "gpt-transcribe": {
+        "id": "gpt-transcribe",
+        "name": "GPT-Transcribe",
+        "description": "High-accuracy speech-to-text model for file and Realtime input transcription",
+        "family": "gpt",
+        "type": "transcription",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "modalities": { "input": ["audio", "text"], "output": ["text"] },
+        "open_weights": false,
+        "cost": { "audio_minute": 0.0045 }
+      },
+      "whisper-1": {
+        "id": "whisper-1",
+        "name": "Whisper",
+        "description": "General-purpose speech recognition model",
+        "family": "whisper",
+        "type": "transcription",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "modalities": { "input": ["audio"], "output": ["text"] },
+        "open_weights": false,
+        "cost": { "audio_minute": 0.006 }
       }
     }
   }

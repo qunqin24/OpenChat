@@ -1179,6 +1179,9 @@ type Querier interface {
 	// actually carries a price beats one that does not. An operator's overrides
 	// (model_overrides) have no token prices, so the catalogue is the only source
 	// for those; the per-picture price of an image model is the operator's alone.
+	// The per-minute price of a transcription model is the operator's when they
+	// set one, else the catalogue's (`cost.audio_minute`, which only our own
+	// supplement writes), from the channel's own provider first.
 	// Always one row: a request whose channel or model is unknown gets NULLs.
 	// Also the name of the account it is for, kept with the row in
 	// case the account is deleted before the request ends.

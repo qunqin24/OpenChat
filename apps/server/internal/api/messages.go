@@ -810,6 +810,10 @@ func (s *Server) GetChatFeatures(w http.ResponseWriter, r *http.Request) {
 		contract := a.contract()
 		research = &contract
 	}
+	var speech *SpeechInputAllowance
+	if config, ok := s.speechInputFor(r.Context(), auth.MustUser(r.Context())); ok {
+		speech = &SpeechInputAllowance{MaxSeconds: config.MaxSeconds}
+	}
 	httpx.JSON(w, http.StatusOK, ChatFeatures{
 		Skills:          skillsOn,
 		PersonalSkills:  personalSkills,
@@ -821,6 +825,7 @@ func (s *Server) GetChatFeatures(w http.ResponseWriter, r *http.Request) {
 		RequestTraces:   traces && isStaff(r.Context()),
 		Browser:         &browserOn,
 		ImageGeneration: &imagesOn,
+		SpeechInput:     speech,
 	})
 }
 

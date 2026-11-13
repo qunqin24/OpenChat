@@ -59,8 +59,16 @@ func TestRefreshAddsSupplementToUpstream(t *testing.T) {
 // Once models.dev lists the model, its entry is the one kept.
 func TestUpstreamWinsOverSupplement(t *testing.T) {
 	providers := withSupplement([]Provider{{ID: "openai", Models: []Model{{ID: "chat-latest", Name: "Upstream"}}}})
-	if len(providers[0].Models) != 1 || providers[0].Models[0].Name != "Upstream" {
-		t.Errorf("models = %+v, want upstream's entry alone", providers[0].Models)
+	// The supplement's other models are added beside it; chat-latest is
+	// upstream's, once.
+	var latest []Model
+	for _, m := range providers[0].Models {
+		if m.ID == "chat-latest" {
+			latest = append(latest, m)
+		}
+	}
+	if len(latest) != 1 || latest[0].Name != "Upstream" {
+		t.Errorf("chat-latest = %+v, want upstream's entry alone", latest)
 	}
 	if got := withSupplement([]Provider{{ID: "anthropic"}}); len(got) != 1 || len(got[0].Models) != 0 {
 		t.Errorf("a provider without supplement entries changed: %+v", got)
@@ -100,4 +108,35 @@ func rawField(t *testing.T, raw []byte, key string) []byte {
 		t.Fatalf("raw entry: %v", err)
 	}
 	return fields[key]
+}
+
+// OpenAI's transcription models are ours to keep (models.dev lists neither
+// under openai) and so is their price per minute of audio, from each model's
+// page: a typo here is a wrong price on every recording.
+func TestSupplementCarriesTranscriptionModels(t *testing.T) {
+	for id, perMinute := range map[string]float64{"gpt-transcribe": 0.0045, "whisper-1": 0.006} {
+		m := findModel(supplement, "openai", id)
+		if m == nil {
+			t.Fatalf("supplement has no openai/%s", id)
+		}
+		var raw struct {
+			Type string `json:"type"`
+			Cost struct {
+				AudioMinute float64 `json:"audio_minute"`
+			} `json:"cost"`
+		}
+		if err := json.Unmarshal(m.Raw, &raw); err != nil {
+			t.Fatal(err)
+		}
+		if raw.Cost.AudioMinute != perMinute {
+			t.Errorf("%s costs %v a minute, want %v", id, raw.Cost.AudioMinute, perMinute)
+		}
+		if kind := DefaultKind(id, m.OutputModalities, raw.Type); kind != KindTranscription {
+			t.Errorf("%s is %s", id, kind)
+		}
+		// Not a token price: these are not billed by the token.
+		if m.InputCost != 0 || m.OutputCost != 0 {
+			t.Errorf("%s has token prices %v/%v", id, m.InputCost, m.OutputCost)
+		}
+	}
 }

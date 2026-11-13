@@ -1078,6 +1078,28 @@ export interface paths {
         patch: operations["updateImageGenerationSettings"];
         trace?: never;
     };
+    "/admin/speech-input": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Speech input settings */
+        get: operations["getSpeechInputSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change speech input settings
+         * @description 400 `invalid_speech_input_settings` for a length out of range, or a
+         *     model that is not a transcription model served by a channel.
+         */
+        patch: operations["updateSpeechInputSettings"];
+        trace?: never;
+    };
     "/admin/image-generation/test": {
         parameters: {
             query?: never;
@@ -2893,6 +2915,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/transcriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn a recording into text
+         * @description The composer's microphone (语音输入, docs/design/speech-input-plan.md):
+         *     the body is the recording itself, which is transcribed by the
+         *     administrator's transcription model and thrown away; the text comes
+         *     back for the person to edit and send, and is moderated then, like
+         *     anything typed. 409 `speech_input_off` when the microphone is not
+         *     offered to the caller; 413 `audio_too_large` past 25 MB or
+         *     `audio_too_long` past the longest recording allowed; 415
+         *     `unsupported_audio` for a type the service does not take; 409
+         *     `model_capacity_reached` when the model has reached its spending cap;
+         *     502 `transcription_failed` when the service failed.
+         */
+        post: operations["transcribe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/favicons/{domain}": {
         parameters: {
             query?: never;
@@ -4540,6 +4591,37 @@ export interface components {
             /** @description Whether people may write skills of their own (System settings). */
             personalSkills: boolean;
             deepResearch?: components["schemas"]["DeepResearchAllowance"];
+            speechInput?: components["schemas"]["SpeechInputAllowance"];
+        };
+        /**
+         * @description Present when the composer may offer its microphone (语音输入 settings:
+         *     on, with a transcription model offered to the caller).
+         */
+        SpeechInputAllowance: {
+            /** @description The longest a recording may be; the composer stops and transcribes there. */
+            maxSeconds: number;
+        };
+        TranscriptionResult: {
+            /** @description What was said */
+            text: string;
+        };
+        SpeechInputSettings: {
+            /** @description Whether the composer offers its microphone, to everyone the model is offered to. */
+            enabled: boolean;
+            /** @description The transcription model's id; empty when none is chosen. */
+            model: string;
+            /** @description The longest a recording may be, in seconds. */
+            maxSeconds: number;
+            /**
+             * @description Whether the model has a price the ledger can bill a recording at:
+             *     a price per minute, or the catalogue's token prices.
+             */
+            modelPriced: boolean;
+        };
+        UpdateSpeechInputSettingsRequest: {
+            enabled?: boolean;
+            model?: string;
+            maxSeconds?: number;
         };
         /**
          * @description Whether the caller can start a deep research (`@` → 深度研究). Absent
@@ -5193,10 +5275,11 @@ export interface components {
          *     `moderation` is a request that has a model classify a message
          *     (`ModerationSettings.mode` `model`); `subagent` is a model request of a
          *     sub-agent's run, logged on the conversation it works for; `image` is a
-         *     request to an image model for pictures (the image tool).
+         *     request to an image model for pictures (the image tool); `transcription`
+         *     is a recording turned into text for the composer (语音输入).
          * @enum {string}
          */
-        UsageKind: "chat" | "title" | "compression" | "moderation" | "subagent" | "image";
+        UsageKind: "chat" | "title" | "compression" | "moderation" | "subagent" | "image" | "transcription";
         /**
          * @description A user stopping a reply is `ok`; only a failed request is `error`.
          * @enum {string}
@@ -5290,6 +5373,18 @@ export interface components {
              * @description USD per picture, when the request was billed by the picture.
              */
             imagePrice?: number | null;
+            /**
+             * Format: double
+             * @description For a `transcription` request, the seconds of audio it was billed
+             *     for: what the provider reported, or the recording's own length
+             *     when it reported none (then `estimated`).
+             */
+            audioSeconds?: number | null;
+            /**
+             * Format: double
+             * @description USD per minute of audio, when the request was billed by the minute.
+             */
+            audioPrice?: number | null;
             /**
              * Format: int64
              * @description Request start to the first content, reasoning or tool-call delta.
@@ -5500,6 +5595,13 @@ export interface components {
              * @description USD per million output tokens.
              */
             outputCost?: number;
+            /**
+             * Format: double
+             * @description USD per minute of audio, for a transcription model the catalogue
+             *     prices that way. What a recording is billed at unless the
+             *     operator's `audioPrice` says otherwise.
+             */
+            audioCost?: number;
             releaseDate?: string;
             knowledge?: string;
             inputModalities?: string[];
@@ -5515,10 +5617,12 @@ export interface components {
             settings?: components["schemas"]["ModelSettings"];
         };
         /**
-         * @description What a model is for. Only `text` models are offered in chat.
+         * @description What a model is for. Only `text` models are offered in chat; `image`
+         *     models make pictures (图片生成) and `transcription` models turn speech
+         *     into text (语音输入).
          * @enum {string}
          */
-        ModelKind: "text" | "image" | "embedding" | "rerank";
+        ModelKind: "text" | "image" | "embedding" | "rerank" | "transcription";
         /**
          * @description What a model takes besides text.
          * @enum {string}
@@ -5587,6 +5691,14 @@ export interface components {
              *     figure.
              */
             imagePrice?: number | null;
+            /**
+             * Format: double
+             * @description For a transcription model: USD per minute of audio (at most six
+             *     decimals). Set, a recording is billed by its length even where the
+             *     provider reports tokens; null bills by tokens at the catalogue's
+             *     prices. Not a catalogue figure.
+             */
+            audioPrice?: number | null;
             kind?: components["schemas"]["ModelKind"] | null;
             reasoning?: boolean | null;
             toolCall?: boolean | null;
@@ -8196,6 +8308,52 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    getSpeechInputSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpeechInputSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateSpeechInputSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSpeechInputSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpeechInputSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     testImageGeneration: {
         parameters: {
             query?: never;
@@ -10582,6 +10740,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChatFeatures"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    transcribe: {
+        parameters: {
+            query: {
+                /** @description The recording's length as the client measured it, in whole seconds. */
+                seconds: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "audio/*": string;
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscriptionResult"];
                 };
             };
             default: components["responses"]["Error"];

@@ -1296,6 +1296,38 @@ paths:
               schema: { $ref: "#/components/schemas/ImageGenerationSettings" }
         default: { $ref: "#/components/responses/Error" }
 
+  /admin/speech-input:
+    get:
+      tags: [admin]
+      summary: Speech input settings
+      operationId: getSpeechInputSettings
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SpeechInputSettings" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [admin]
+      summary: Change speech input settings
+      description: |
+        400 `invalid_speech_input_settings` for a length out of range, or a
+        model that is not a transcription model served by a channel.
+      operationId: updateSpeechInputSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateSpeechInputSettingsRequest" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SpeechInputSettings" }
+        default: { $ref: "#/components/responses/Error" }
+
   /admin/image-generation/test:
     post:
       tags: [admin]
@@ -3346,6 +3378,41 @@ paths:
               schema: { $ref: "#/components/schemas/ChatFeatures" }
         default: { $ref: "#/components/responses/Error" }
 
+  /transcriptions:
+    post:
+      tags: [messages]
+      summary: Turn a recording into text
+      description: |
+        The composer's microphone (语音输入, docs/design/speech-input-plan.md):
+        the body is the recording itself, which is transcribed by the
+        administrator's transcription model and thrown away; the text comes
+        back for the person to edit and send, and is moderated then, like
+        anything typed. 409 `speech_input_off` when the microphone is not
+        offered to the caller; 413 `audio_too_large` past 25 MB or
+        `audio_too_long` past the longest recording allowed; 415
+        `unsupported_audio` for a type the service does not take; 409
+        `model_capacity_reached` when the model has reached its spending cap;
+        502 `transcription_failed` when the service failed.
+      operationId: transcribe
+      parameters:
+        - name: seconds
+          in: query
+          required: true
+          description: The recording's length as the client measured it, in whole seconds.
+          schema: { type: integer, minimum: 0 }
+      requestBody:
+        required: true
+        content:
+          audio/*:
+            schema: { type: string, format: binary }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TranscriptionResult" }
+        default: { $ref: "#/components/responses/Error" }
+
   /favicons/{domain}:
     get:
       tags: [messages]
@@ -5374,6 +5441,53 @@ components:
           description: Whether people may write skills of their own (System settings).
         deepResearch:
           $ref: "#/components/schemas/DeepResearchAllowance"
+        speechInput:
+          $ref: "#/components/schemas/SpeechInputAllowance"
+
+    SpeechInputAllowance:
+      type: object
+      description: |
+        Present when the composer may offer its microphone (语音输入 settings:
+        on, with a transcription model offered to the caller).
+      required: [maxSeconds]
+      properties:
+        maxSeconds:
+          type: integer
+          description: The longest a recording may be; the composer stops and transcribes there.
+
+    TranscriptionResult:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, description: What was said, as the transcription model wrote it. }
+
+    SpeechInputSettings:
+      type: object
+      required: [enabled, model, maxSeconds, modelPriced]
+      properties:
+        enabled:
+          type: boolean
+          description: Whether the composer offers its microphone, to everyone the model is offered to.
+        model:
+          type: string
+          description: The transcription model's id; empty when none is chosen.
+        maxSeconds:
+          type: integer
+          minimum: 10
+          maximum: 1800
+          description: The longest a recording may be, in seconds.
+        modelPriced:
+          type: boolean
+          description: |
+            Whether the model has a price the ledger can bill a recording at:
+            a price per minute, or the catalogue's token prices.
+
+    UpdateSpeechInputSettingsRequest:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        model: { type: string }
+        maxSeconds: { type: integer, minimum: 10, maximum: 1800 }
 
     DeepResearchAllowance:
       type: object
@@ -6222,11 +6336,12 @@ components:
         `moderation` is a request that has a model classify a message
         (`ModerationSettings.mode` `model`); `subagent` is a model request of a
         sub-agent's run, logged on the conversation it works for; `image` is a
-        request to an image model for pictures (the image tool).
-      enum: [chat, title, compression, moderation, subagent, image]
+        request to an image model for pictures (the image tool); `transcription`
+        is a recording turned into text for the composer (语音输入).
+      enum: [chat, title, compression, moderation, subagent, image, transcription]
       # Named explicitly: bare `Chat` would collide with ApiFormat's `chat` and
       # make the generator rename both enums' constants.
-      x-enum-varnames: [UsageKindChat, UsageKindTitle, UsageKindCompression, UsageKindModeration, UsageKindSubagent, UsageKindImage]
+      x-enum-varnames: [UsageKindChat, UsageKindTitle, UsageKindCompression, UsageKindModeration, UsageKindSubagent, UsageKindImage, UsageKindTranscription]
 
     UsageStatus:
       type: string
@@ -6308,6 +6423,19 @@ components:
           format: double
           nullable: true
           description: USD per picture, when the request was billed by the picture.
+        audioSeconds:
+          type: number
+          format: double
+          nullable: true
+          description: |
+            For a `transcription` request, the seconds of audio it was billed
+            for: what the provider reported, or the recording's own length
+            when it reported none (then `estimated`).
+        audioPrice:
+          type: number
+          format: double
+          nullable: true
+          description: USD per minute of audio, when the request was billed by the minute.
         firstTokenMs:
           type: integer
           format: int64
@@ -6543,6 +6671,13 @@ components:
         outputLimit: { type: integer, format: int64 }
         inputCost: { type: number, format: double, description: USD per million input tokens. }
         outputCost: { type: number, format: double, description: USD per million output tokens. }
+        audioCost:
+          type: number
+          format: double
+          description: |
+            USD per minute of audio, for a transcription model the catalogue
+            prices that way. What a recording is billed at unless the
+            operator's `audioPrice` says otherwise.
         releaseDate: { type: string }
         knowledge: { type: string }
         inputModalities:
@@ -6565,8 +6700,11 @@ components:
 
     ModelKind:
       type: string
-      description: What a model is for. Only `text` models are offered in chat.
-      enum: [text, image, embedding, rerank]
+      description: |
+        What a model is for. Only `text` models are offered in chat; `image`
+        models make pictures (图片生成) and `transcription` models turn speech
+        into text (语音输入).
+      enum: [text, image, embedding, rerank, transcription]
 
     InputModality:
       type: string
@@ -6639,6 +6777,16 @@ components:
             picture is billed at it even where the provider reports tokens;
             null bills by tokens at the catalogue's prices. Not a catalogue
             figure.
+        audioPrice:
+          type: number
+          format: double
+          nullable: true
+          minimum: 0
+          description: |
+            For a transcription model: USD per minute of audio (at most six
+            decimals). Set, a recording is billed by its length even where the
+            provider reports tokens; null bills by tokens at the catalogue's
+            prices. Not a catalogue figure.
         kind:
           nullable: true
           allOf: [{ $ref: "#/components/schemas/ModelKind" }]

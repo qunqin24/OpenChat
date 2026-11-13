@@ -1,4 +1,4 @@
-import { AppWindow, ArrowLeft, BookOpen, Boxes, Globe, HardDrive, ImageIcon, ImagePlus, KeyRound, LayoutDashboard, ListChecks, Plug, Puzzle, ScrollText, Settings, Settings2, ShieldAlert, Users } from 'lucide-react'
+import { AppWindow, ArrowLeft, BookOpen, Boxes, Globe, HardDrive, ImageIcon, ImagePlus, KeyRound, LayoutDashboard, ListChecks, Mic, Plug, Puzzle, ScrollText, Settings, Settings2, ShieldAlert, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { type SidebarData } from '../types'
@@ -30,6 +30,7 @@ export function useSidebarData(): SidebarData {
           { title: t('admin.nav.web-search'), url: '/admin/web-search', icon: Globe },
           { title: t('admin.nav.image-search'), url: '/admin/image-search', icon: ImageIcon },
           { title: t('admin.nav.image-generation'), url: '/admin/image-generation', icon: ImagePlus },
+          { title: t('admin.nav.speech-input'), url: '/admin/speech-input', icon: Mic },
           { title: t('admin.nav.browser'), url: '/admin/browser', icon: AppWindow },
           { title: t('admin.nav.storage'), url: '/admin/storage', icon: HardDrive },
           { title: t('admin.nav.skills'), url: '/admin/skills', icon: BookOpen },

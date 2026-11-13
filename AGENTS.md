@@ -205,6 +205,17 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 
 细节：[图片生成](docs/design/image-generation-plan.md)。
 
+## 语音输入
+
+输入框的麦克风：录音发到 `POST /transcriptions`，由后台「语音输入」选的语音转文字模型（`model_overrides.kind = 'transcription'`）转成文字，插回输入框，不自动发送（`api/speech_input.go`，适配器 `providers/openai/transcriptions.go`，前端 `hooks/use-dictation.ts`、`chat-core/src/speech-input.ts`）。
+
+- 录音不落盘、不进库，转完即丢；录音和转出的文字都不审——文字只回到用户自己的输入框，发送时照常整条送审。新增把转写结果直接交给模型的路径（比如语音对话）就不再是这个理由，要先想清楚审核。
+- 请求照模型请求的规矩：`transcriptionChannels`（kind、`admin_only`、容量、`servingOrder`）→ `Begin(Call{Kind: transcription, AudioSeconds})` → `Reserve` → 转写 → `EndTranscription`，没回结果才换渠道；带 end-user 标识。
+- 计费：模型设了每分钟价（`model_overrides.audio_price`）就按秒数 ÷ 60 × 价，盖过 token 价；秒数取服务商报的，没报用客户端报的并标估算。
+- 上限：单段 25 MB（OpenAI 的上限）和后台的最长秒数；花费靠模型的容量上限，没有每人每天的分钟数。
+
+细节：[语音输入](docs/design/speech-input-plan.md)。
+
 ## 参考聊天记录
 
 新对话的快照里带一份近期对话清单（`memory.Snapshot.Recent`，`memory/recent.go`），模型另有 `chat_history` 工具搜和读用户自己的历史对话（`tools/chat_history.go`）。开关独立于记忆：`users.chat_history` 和后台的 `chat_history`，都默认开，都开才算开（`Store.ChatHistoryAvailable`，按请求现查）。

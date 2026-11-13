@@ -14,12 +14,13 @@ WHERE model_id = ANY (sqlc.arg('model_ids')::text[]);
 -- period and exemption left out (NULL) are their defaults, total and exempt.
 INSERT INTO model_overrides (model_id, kind, reasoning, tool_call, input_modalities,
                              context_limit, input_limit, output_limit, reasoning_efforts, admin_only,
-                             capacity, capacity_period, capacity_admin_exempt, image_price)
+                             capacity, capacity_period, capacity_admin_exempt, image_price, audio_price)
 VALUES (sqlc.arg('model_id'), sqlc.narg('kind'), sqlc.narg('reasoning'), sqlc.narg('tool_call'),
         sqlc.narg('input_modalities')::text[], sqlc.narg('context_limit'), sqlc.narg('input_limit'),
         sqlc.narg('output_limit'), sqlc.narg('reasoning_efforts')::text[], sqlc.arg('admin_only'),
         sqlc.narg('capacity')::numeric, coalesce(sqlc.narg('capacity_period')::text, 'total'),
-        coalesce(sqlc.narg('capacity_admin_exempt')::boolean, true), sqlc.narg('image_price')::numeric)
+        coalesce(sqlc.narg('capacity_admin_exempt')::boolean, true), sqlc.narg('image_price')::numeric,
+        sqlc.narg('audio_price')::numeric)
 ON CONFLICT (model_id) DO UPDATE
     SET kind              = excluded.kind,
         reasoning         = excluded.reasoning,
@@ -36,6 +37,7 @@ ON CONFLICT (model_id) DO UPDATE
         capacity_period       = excluded.capacity_period,
         capacity_admin_exempt = excluded.capacity_admin_exempt,
         image_price           = excluded.image_price,
+        audio_price           = excluded.audio_price,
         updated_at        = now()
 RETURNING *;
 

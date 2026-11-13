@@ -16,6 +16,8 @@ const (
 	KindImage     Kind = "image"
 	KindEmbedding Kind = "embedding"
 	KindRerank    Kind = "rerank"
+	// KindTranscription turns speech into text (docs/design/speech-input-plan.md).
+	KindTranscription Kind = "transcription"
 )
 
 // DefaultKind reads a model's kind from what the catalogue says it is, then
@@ -34,6 +36,9 @@ func DefaultKind(modelID string, outputModalities []string, modelType string) Ki
 		return KindRerank
 	case strings.Contains(id, "embed"):
 		return KindEmbedding
+	case modelType == string(KindTranscription), strings.Contains(id, "transcribe"),
+		strings.Contains(id, "whisper"), strings.Contains(id, "-asr"):
+		return KindTranscription
 	case modelType == string(KindImage):
 		return KindImage
 	case len(outputModalities) > 0 && !slices.Contains(outputModalities, "text") &&

@@ -30,6 +30,7 @@ import { Route as AdminPluginCallsRouteImport } from './routes/admin.plugin-call
 import { Route as AdminPluginsRouteImport } from './routes/admin.plugins'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminSkillsRouteImport } from './routes/admin.skills'
+import { Route as AdminSpeechInputRouteImport } from './routes/admin.speech-input'
 import { Route as AdminStorageRouteImport } from './routes/admin.storage'
 import { Route as AdminSystemRouteImport } from './routes/admin.system'
 import { Route as AdminUsageLogsRouteImport } from './routes/admin.usage-logs'
@@ -145,6 +146,11 @@ const AdminSkillsRoute = AdminSkillsRouteImport.update({
   path: '/skills',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminSpeechInputRoute = AdminSpeechInputRouteImport.update({
+  id: '/speech-input',
+  path: '/speech-input',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminStorageRoute = AdminStorageRouteImport.update({
   id: '/storage',
   path: '/storage',
@@ -222,6 +228,7 @@ export interface FileRoutesByFullPath {
   '/admin/plugins': typeof AdminPluginsRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
   '/admin/skills': typeof AdminSkillsRoute
+  '/admin/speech-input': typeof AdminSpeechInputRoute
   '/admin/storage': typeof AdminStorageRoute
   '/admin/system': typeof AdminSystemRoute
   '/admin/usage-logs': typeof AdminUsageLogsRoute
@@ -252,6 +259,7 @@ export interface FileRoutesByTo {
   '/admin/plugin-calls': typeof AdminPluginCallsRoute
   '/admin/plugins': typeof AdminPluginsRoute
   '/admin/skills': typeof AdminSkillsRoute
+  '/admin/speech-input': typeof AdminSpeechInputRoute
   '/admin/storage': typeof AdminStorageRoute
   '/admin/system': typeof AdminSystemRoute
   '/admin/usage-logs': typeof AdminUsageLogsRoute
@@ -286,6 +294,7 @@ export interface FileRoutesById {
   '/admin/plugins': typeof AdminPluginsRoute
   '/admin/settings': typeof AdminSettingsRouteWithChildren
   '/admin/skills': typeof AdminSkillsRoute
+  '/admin/speech-input': typeof AdminSpeechInputRoute
   '/admin/storage': typeof AdminStorageRoute
   '/admin/system': typeof AdminSystemRoute
   '/admin/usage-logs': typeof AdminUsageLogsRoute
@@ -321,6 +330,7 @@ export interface FileRouteTypes {
     | '/admin/plugins'
     | '/admin/settings'
     | '/admin/skills'
+    | '/admin/speech-input'
     | '/admin/storage'
     | '/admin/system'
     | '/admin/usage-logs'
@@ -351,6 +361,7 @@ export interface FileRouteTypes {
     | '/admin/plugin-calls'
     | '/admin/plugins'
     | '/admin/skills'
+    | '/admin/speech-input'
     | '/admin/storage'
     | '/admin/system'
     | '/admin/usage-logs'
@@ -384,6 +395,7 @@ export interface FileRouteTypes {
     | '/admin/plugins'
     | '/admin/settings'
     | '/admin/skills'
+    | '/admin/speech-input'
     | '/admin/storage'
     | '/admin/system'
     | '/admin/usage-logs'
@@ -555,6 +567,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSkillsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/speech-input': {
+      id: '/admin/speech-input'
+      path: '/speech-input'
+      fullPath: '/admin/speech-input'
+      preLoaderRoute: typeof AdminSpeechInputRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/storage': {
       id: '/admin/storage'
       path: '/storage'
@@ -696,6 +715,7 @@ interface AdminRouteChildren {
   AdminPluginsRoute: typeof AdminPluginsRoute
   AdminSettingsRoute: typeof AdminSettingsRouteWithChildren
   AdminSkillsRoute: typeof AdminSkillsRoute
+  AdminSpeechInputRoute: typeof AdminSpeechInputRoute
   AdminStorageRoute: typeof AdminStorageRoute
   AdminSystemRoute: typeof AdminSystemRoute
   AdminUsageLogsRoute: typeof AdminUsageLogsRoute
@@ -716,6 +736,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminPluginsRoute: AdminPluginsRoute,
   AdminSettingsRoute: AdminSettingsRouteWithChildren,
   AdminSkillsRoute: AdminSkillsRoute,
+  AdminSpeechInputRoute: AdminSpeechInputRoute,
   AdminStorageRoute: AdminStorageRoute,
   AdminSystemRoute: AdminSystemRoute,
   AdminUsageLogsRoute: AdminUsageLogsRoute,

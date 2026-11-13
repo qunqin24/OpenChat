@@ -1,11 +1,14 @@
 import type { AvailableSkill, ConversationReference } from '@openchat/api-client'
-import { ArrowUp, BookOpen, Globe, Maximize2, Minimize2, Square, Telescope, X } from 'lucide-react'
+import { ArrowUp, BookOpen, Check, Globe, Maximize2, Mic, Minimize2, Square, Telescope, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { mentionAt } from '@openchat/chat-core/skill-mention'
+import { dictationErrorText, formatClock, insertDictation } from '@openchat/chat-core/speech-input'
 
 import type { PendingAttachment } from '@/hooks/use-attachments'
+import { canDictate, useDictation } from '@/hooks/use-dictation'
 import { highlightPassage } from '@/lib/highlight-passage'
 import { isEnter, withCtrl, withShift } from '@/lib/keys'
 import { cn } from '@/lib/utils'
@@ -78,6 +81,11 @@ interface ComposerProps {
    * under the plan's title, which `onStop` gives up.
    */
   plan?: { title: string; onStop: () => void }
+  /**
+   * The microphone (语音输入), when it is offered: what is said is transcribed
+   * and put where the caret is, for the person to edit and send.
+   */
+  speechInput?: { maxSeconds: number }
   attach?: {
     accept: string
     hint: string
@@ -111,6 +119,7 @@ export function Composer({
   research,
   browser,
   plan,
+  speechInput,
   attach,
 }: ComposerProps) {
   const { t } = useTranslation()
@@ -205,6 +214,38 @@ export function Composer({
     // vanish the moment the taller box fits the text.
     if (!expanded) setOverflowing(el.scrollHeight > el.clientHeight)
   }, [value, expanded])
+
+  // The microphone: what was said goes where the caret was when the
+  // recording was finished - or at the end, when the box did not have the
+  // focus - into the box as it is by then (typing goes on while recording).
+  const latest = useRef(value)
+  useEffect(() => {
+    latest.current = value
+  })
+  const spot = useRef<{ start: number; end: number } | null>(null)
+  const dictation = useDictation({
+    maxSeconds: speechInput?.maxSeconds ?? 300,
+    onText: (said) => {
+      const end = latest.current.length
+      const at = spot.current ?? { start: end, end }
+      const next = insertDictation(latest.current, at.start, at.end, said)
+      onValueChange(next.value)
+      requestAnimationFrame(() => {
+        ref.current?.focus()
+        ref.current?.setSelectionRange(next.caret, next.caret)
+        setCaret(next.caret)
+      })
+    },
+    onProblem: (problem) => toast.error(dictationErrorText(t, problem)),
+  })
+  const dictating = dictation.state !== 'idle'
+  const finishDictation = () => {
+    const el = ref.current
+    spot.current = el && document.activeElement === el ? { start: el.selectionStart, end: el.selectionEnd } : null
+    dictation.finish()
+  }
+  // Only where the browser can record; checked once, it does not change.
+  const [canRecord] = useState(canDictate)
 
   const canUpload = !!attach?.accept
   // Not while an answer is being made: Enter must not queue a second message behind it.
@@ -389,6 +430,20 @@ export function Composer({
             onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
             onPaste={handlePaste}
             onKeyDown={(event) => {
+              // While recording, Enter finishes it and Escape throws it away;
+              // nothing is sent until the text is back in the box.
+              if (dictating && !event.nativeEvent.isComposing) {
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  dictation.cancel()
+                  return
+                }
+                if (isEnter(event) && !withCtrl(event) && !withShift(event)) {
+                  event.preventDefault()
+                  if (dictation.state === 'recording') finishDictation()
+                  return
+                }
+              }
               if (picking && mention && !event.nativeEvent.isComposing) {
                 if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
                   event.preventDefault()
@@ -430,19 +485,50 @@ export function Composer({
         </div>
 
         <div className="n-composer-bar">
-          <AttachMenu
-            disabled={!canUpload}
-            filesOff={!canUpload}
-            side={menuSide}
-            hint={attach?.hint ?? t('chat.file.none')}
-            conversationId={attach?.conversationId}
-            references={attach?.references ?? []}
-            onPickFiles={() => picker.current?.click()}
-            onAdd={(files) => attach?.onAdd(files)}
-            onRefer={(reference) => attach?.onRefer(reference)}
-            research={research && !research.picked ? { desc: research.desc, blocked: research.blocked, onPick: research.onPick } : undefined}
-            onOpenBrowser={browser && !browser.open ? browser.onOpen : undefined}
-          />
+          {dictating ? (
+            // Recording: the bar is the recording's - what is typed stays in the box above.
+            <div className="n-dictation" role="status" aria-live="polite">
+              {dictation.state === 'transcribing' ? (
+                <span className="n-dictation-busy">
+                  <span className="n-spinner" data-motion="essential" aria-hidden="true" />
+                  {t('chat.voice.transcribing')}
+                </span>
+              ) : (
+                <>
+                  <span className="n-dictation-dot" aria-hidden="true" />
+                  <span className="n-dictation-time">{formatClock(dictation.seconds)}</span>
+                  <span className="sr-only">{t('chat.voice.recording')}</span>
+                  <span className="n-dictation-wave" aria-hidden="true">
+                    {dictation.levels.map((level, i) => (
+                      <i key={i} style={{ height: `${3 + Math.round(level * 20)}px` }} />
+                    ))}
+                  </span>
+                </>
+              )}
+            </div>
+          ) : (
+            <>
+              <AttachMenu
+                disabled={!canUpload}
+                filesOff={!canUpload}
+                side={menuSide}
+                hint={attach?.hint ?? t('chat.file.none')}
+                conversationId={attach?.conversationId}
+                references={attach?.references ?? []}
+                onPickFiles={() => picker.current?.click()}
+                onAdd={(files) => attach?.onAdd(files)}
+                onRefer={(reference) => attach?.onRefer(reference)}
+                research={research && !research.picked ? { desc: research.desc, blocked: research.blocked, onPick: research.onPick } : undefined}
+                onOpenBrowser={browser && !browser.open ? browser.onOpen : undefined}
+              />
+
+              {toolsSlot}
+
+              <div className="grow" />
+
+              {modelSlot}
+            </>
+          )}
           {attach && (
             <input
               ref={picker}
@@ -458,29 +544,70 @@ export function Composer({
             />
           )}
 
-          {toolsSlot}
-
-          <div className="grow" />
-
-          {modelSlot}
-
-          <Tooltip label={working ? t('chat.stop') : (attach?.blocked ?? t('chat.send'))}>
-            <span className="n-tip-wrap">
-              <button
-                type="button"
-                className="n-icon-btn primary"
-                disabled={!working && !canSend}
-                aria-label={working ? t('chat.stop') : t('chat.send')}
-                onClick={() => (working ? onStop() : onSend())}
-              >
-                {working ? (
-                  <Square className="h-3.5 w-3.5 fill-current" />
-                ) : (
-                  <ArrowUp className="h-[18px] w-[18px]" />
-                )}
-              </button>
-            </span>
-          </Tooltip>
+          {dictating ? (
+            <>
+              <Tooltip label={t('chat.voice.cancel')}>
+                <button
+                  type="button"
+                  className="n-icon-btn"
+                  aria-label={t('chat.voice.cancel')}
+                  // The box keeps the focus, and with it the caret the text goes to.
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={dictation.cancel}
+                >
+                  <X className="h-[18px] w-[18px]" />
+                </button>
+              </Tooltip>
+              <Tooltip label={dictation.state === 'recording' ? t('chat.voice.stop') : t('chat.voice.transcribing')}>
+                <span className="n-tip-wrap">
+                  <button
+                    type="button"
+                    className="n-icon-btn primary"
+                    disabled={dictation.state !== 'recording'}
+                    aria-label={t('chat.voice.stop')}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={finishDictation}
+                  >
+                    <Check className="h-[18px] w-[18px]" />
+                  </button>
+                </span>
+              </Tooltip>
+            </>
+          ) : (
+            <>
+              {speechInput && canRecord && (
+                <Tooltip label={t('chat.voice.start')}>
+                  <button
+                    type="button"
+                    className="n-icon-btn"
+                    disabled={disabled}
+                    aria-label={t('chat.voice.start')}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => void dictation.start()}
+                  >
+                    <Mic className="h-[18px] w-[18px]" />
+                  </button>
+                </Tooltip>
+              )}
+              <Tooltip label={working ? t('chat.stop') : (attach?.blocked ?? t('chat.send'))}>
+                <span className="n-tip-wrap">
+                  <button
+                    type="button"
+                    className="n-icon-btn primary"
+                    disabled={!working && !canSend}
+                    aria-label={working ? t('chat.stop') : t('chat.send')}
+                    onClick={() => (working ? onStop() : onSend())}
+                  >
+                    {working ? (
+                      <Square className="h-3.5 w-3.5 fill-current" />
+                    ) : (
+                      <ArrowUp className="h-[18px] w-[18px]" />
+                    )}
+                  </button>
+                </span>
+              </Tooltip>
+            </>
+          )}
         </div>
       </div>
     </TooltipGroup>

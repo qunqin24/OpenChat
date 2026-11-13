@@ -282,6 +282,9 @@ SELECT coalesce(m.provider_id, '')::text                            AS provider_
        coalesce(m.input_limit, 0)::bigint                           AS input_limit,
        coalesce(m.input_cost, 0)::double precision                  AS input_cost,
        coalesce(m.output_cost, 0)::double precision                 AS output_cost,
+       -- USD per minute of audio, for a transcription model the catalogue
+       -- prices that way (our supplement's ` + "`" + `cost.audio_minute` + "`" + `).
+       coalesce(m.audio_minute, 0)::double precision                AS audio_cost,
        coalesce(m.release_date, '')::text                           AS release_date,
        coalesce(m.knowledge, '')::text                              AS knowledge,
        coalesce(m.input_modalities, '{}')::text[]                   AS input_modalities,
@@ -313,6 +316,7 @@ FROM served s
                                    (c2.raw -> 'limit' ->> 'input')::numeric::bigint AS input_limit,
                                    c2.input_cost,
                                    c2.output_cost,
+                                   (c2.raw -> 'cost' ->> 'audio_minute')::numeric AS audio_minute,
                                    c2.release_date,
                                    c2.knowledge,
                                    c2.input_modalities,
@@ -357,6 +361,7 @@ type ListServedModelsRow struct {
 	InputLimit       int64    `json:"input_limit"`
 	InputCost        float64  `json:"input_cost"`
 	OutputCost       float64  `json:"output_cost"`
+	AudioCost        float64  `json:"audio_cost"`
 	ReleaseDate      string   `json:"release_date"`
 	Knowledge        string   `json:"knowledge"`
 	InputModalities  []string `json:"input_modalities"`
@@ -432,6 +437,7 @@ func (q *Queries) ListServedModels(ctx context.Context, arg ListServedModelsPara
 			&i.InputLimit,
 			&i.InputCost,
 			&i.OutputCost,
+			&i.AudioCost,
 			&i.ReleaseDate,
 			&i.Knowledge,
 			&i.InputModalities,

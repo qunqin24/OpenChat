@@ -173,6 +173,8 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 			// not the channels behind them.
 			r.Get("/models", wrapper.ListChatModels)
 			r.Get("/features", wrapper.GetChatFeatures)
+			// The microphone (speech_input.go): a recording in, text out.
+			r.Post("/transcriptions", wrapper.Transcribe)
 			r.Get("/favicons/{domain}", wrapper.GetFavicon)
 			// Pictures answers describe, found and served here (pictures.go).
 			r.Get("/images/search", wrapper.SearchImage)
@@ -279,6 +281,9 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 				r.Get("/admin/moderation", wrapper.GetModerationSettings)
 				r.Patch("/admin/moderation", wrapper.UpdateModerationSettings)
 				r.Get("/admin/moderation/events", wrapper.ListModerationEvents)
+
+				r.Get("/admin/speech-input", wrapper.GetSpeechInputSettings)
+				r.Patch("/admin/speech-input", wrapper.UpdateSpeechInputSettings)
 
 				r.Get("/admin/usage-logs", wrapper.ListUsageLogs)
 				r.Get("/admin/usage-logs/models", wrapper.ListUsageLogModels)

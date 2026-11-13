@@ -18,7 +18,8 @@ INSERT INTO usage_logs (created_at, kind, status, error_code, error_message,
                         model_id, served_model,
                         input_tokens, output_tokens, reasoning_tokens, cache_read_tokens, cache_write_tokens,
                         input_price, output_price, cache_read_price, cache_write_price, cost,
-                        streamed, first_token_ms, duration_ms, estimated, images, image_price)
+                        streamed, first_token_ms, duration_ms, estimated, images, image_price,
+                        audio_seconds, audio_price)
 VALUES ($1, $2, $3, $4, $5,
         (SELECT id FROM users WHERE id = $6::uuid),
         (SELECT id FROM conversations WHERE id = $7::uuid),
@@ -32,7 +33,9 @@ VALUES ($1, $2, $3, $4, $5,
         round(($21::double precision)::numeric, 10), round(($22::double precision)::numeric, 10),
         round(($23::double precision)::numeric, 10),
         $24, $25, $26, $27,
-        $28, round(($29::double precision)::numeric, 10))
+        $28, round(($29::double precision)::numeric, 10),
+        round(($30::double precision)::numeric, 3),
+        round(($31::double precision)::numeric, 10))
 RETURNING id
 `
 
@@ -66,6 +69,8 @@ type InsertUsageLogParams struct {
 	Estimated        bool               `json:"estimated"`
 	Images           int32              `json:"images"`
 	ImagePrice       *float64           `json:"image_price"`
+	AudioSeconds     *float64           `json:"audio_seconds"`
+	AudioPrice       *float64           `json:"audio_price"`
 }
 
 // Prices and cost arrive as double precision and are stored as numeric rounded
@@ -111,6 +116,8 @@ func (q *Queries) InsertUsageLog(ctx context.Context, arg InsertUsageLogParams) 
 		arg.Estimated,
 		arg.Images,
 		arg.ImagePrice,
+		arg.AudioSeconds,
+		arg.AudioPrice,
 	)
 	var id uuid.UUID
 	err := row.Scan(&id)
@@ -214,7 +221,9 @@ SELECT l.id,
        l.duration_ms,
        l.estimated,
        l.images,
-       l.image_price
+       l.image_price,
+       l.audio_seconds,
+       l.audio_price
 FROM usage_logs l
          LEFT JOIN users u ON u.id = l.user_id
 WHERE ($1::timestamptz IS NULL
@@ -276,6 +285,8 @@ type ListUsageLogsRow struct {
 	Estimated        bool               `json:"estimated"`
 	Images           int32              `json:"images"`
 	ImagePrice       pgtype.Numeric     `json:"image_price"`
+	AudioSeconds     pgtype.Numeric     `json:"audio_seconds"`
+	AudioPrice       pgtype.Numeric     `json:"audio_price"`
 }
 
 // Newest first, by keyset on (created_at, id): the order of usage_logs_created_idx,
@@ -338,6 +349,8 @@ func (q *Queries) ListUsageLogs(ctx context.Context, arg ListUsageLogsParams) ([
 			&i.Estimated,
 			&i.Images,
 			&i.ImagePrice,
+			&i.AudioSeconds,
+			&i.AudioPrice,
 		); err != nil {
 			return nil, err
 		}
@@ -435,7 +448,14 @@ SELECT c.name                                                     AS channel_nam
        (m.raw -> 'cost' ->> 'output')::numeric      AS output_price,
        (m.raw -> 'cost' ->> 'cache_read')::numeric  AS cache_read_price,
        (m.raw -> 'cost' ->> 'cache_write')::numeric AS cache_write_price,
-       (SELECT o.image_price FROM model_overrides o WHERE o.model_id = $1) AS image_price
+       (SELECT o.image_price FROM model_overrides o WHERE o.model_id = $1) AS image_price,
+       coalesce((SELECT o.audio_price FROM model_overrides o WHERE o.model_id = $1),
+                (SELECT (cm.raw -> 'cost' ->> 'audio_minute')::numeric
+                 FROM catalog_models cm
+                 WHERE cm.model_id = $1
+                   AND (cm.raw -> 'cost' ->> 'audio_minute') IS NOT NULL
+                 ORDER BY (cm.provider_id = c.type::text) DESC, cm.provider_id
+                 LIMIT 1))::numeric                               AS audio_price
 FROM (SELECT 1) one
          LEFT JOIN channels c ON c.id = $2::uuid
          LEFT JOIN users u ON u.id = $3::uuid
@@ -462,6 +482,7 @@ type UsagePricingRow struct {
 	CacheReadPrice  pgtype.Numeric `json:"cache_read_price"`
 	CacheWritePrice pgtype.Numeric `json:"cache_write_price"`
 	ImagePrice      pgtype.Numeric `json:"image_price"`
+	AudioPrice      pgtype.Numeric `json:"audio_price"`
 }
 
 // What a request needs to be priced and labelled: the channel's current name,
@@ -473,6 +494,9 @@ type UsagePricingRow struct {
 // actually carries a price beats one that does not. An operator's overrides
 // (model_overrides) have no token prices, so the catalogue is the only source
 // for those; the per-picture price of an image model is the operator's alone.
+// The per-minute price of a transcription model is the operator's when they
+// set one, else the catalogue's (`cost.audio_minute`, which only our own
+// supplement writes), from the channel's own provider first.
 // Always one row: a request whose channel or model is unknown gets NULLs.
 // Also the name of the account it is for, kept with the row in
 // case the account is deleted before the request ends.
@@ -487,6 +511,7 @@ func (q *Queries) UsagePricing(ctx context.Context, arg UsagePricingParams) (Usa
 		&i.CacheReadPrice,
 		&i.CacheWritePrice,
 		&i.ImagePrice,
+		&i.AudioPrice,
 	)
 	return i, err
 }

@@ -45,6 +45,9 @@ const (
 	// KindImage is a request to an image model for pictures, made by the
 	// image tool (api/image_tool.go).
 	KindImage Kind = "image"
+	// KindTranscription is a recording sent to a speech-to-text model by the
+	// composer's microphone (api/speech_input.go).
+	KindTranscription Kind = "transcription"
 )
 
 // Status is how a request ended.
@@ -133,6 +136,10 @@ type Call struct {
 	// is billed for it.
 	Images      int
 	ImageTokens int
+	// AudioSeconds is a recording's length as the client measured it: what a
+	// Reserver holds back for a transcription, and what its row is billed
+	// for when the provider reports no length of its own.
+	AudioSeconds float64
 	// Request is the request as it is sent, for a trace (Tracer). Nil offers
 	// none. Only its messages, tools and options are kept; files are kept as
 	// the references they are in the message, never their bytes.
@@ -331,6 +338,50 @@ func (m *Meter) EndImages(ctx context.Context, resp llm.ImageResponse, images in
 	m.write(ctx, row, usage, estimated, llm.ModelResponse{Model: resp.ServedModel}, ended)
 }
 
+// EndTranscription writes the row of a transcription. The seconds are the
+// provider's where it reported them; otherwise the client's, flagged
+// `estimated`, for a request that was taken up (it answered with tokens or
+// nothing, or was stopped while it was out). One that failed before the
+// provider took it up was not billed and carries no seconds.
+func (m *Meter) EndTranscription(ctx context.Context, resp llm.TranscriptionResponse, err error) {
+	defer m.Release()
+	if m.rec == nil || m.rec.q == nil {
+		return
+	}
+	ended := m.clock()
+	row := sqlc.InsertUsageLogParams{
+		CreatedAt:      pgtype.Timestamptz{Time: m.started, Valid: true},
+		Kind:           string(m.call.Kind),
+		Status:         string(StatusOK),
+		UserID:         owner(m.call.UserID),
+		ConversationID: m.call.ConversationID,
+		RunID:          m.call.RunID,
+		ChannelID:      m.call.ChannelID,
+		ModelID:        m.call.ModelID,
+		ServedModel:    resp.ServedModel,
+		DurationMs:     millis(ended.Sub(m.started)),
+	}
+	cancelled := ctx.Err() != nil
+	if err != nil && !cancelled {
+		code, message := describe(err)
+		row.Status = string(StatusError)
+		row.ErrorCode = &code
+		row.ErrorMessage = &message
+	}
+	var seconds *float64
+	estimated := false
+	switch {
+	case err != nil && !cancelled:
+	case resp.Seconds > 0:
+		seconds = &resp.Seconds
+	case resp.Usage == nil || cancelled:
+		estimate := max(m.call.AudioSeconds, 0)
+		seconds, estimated = &estimate, true
+	}
+	row.AudioSeconds = seconds
+	m.write(ctx, row, resp.Usage, estimated, llm.ModelResponse{Model: resp.ServedModel}, ended)
+}
+
 // write fills in the usage, prices and cost of a row and records it, with its
 // trace.
 func (m *Meter) write(ctx context.Context, row sqlc.InsertUsageLogParams, usage *llm.Usage, estimated bool, resp llm.ModelResponse, ended time.Time) {
@@ -518,6 +569,15 @@ func (m *Meter) price(ctx context.Context, row *sqlc.InsertUsageLogParams, usage
 		Input: row.InputPrice, Output: row.OutputPrice,
 		CacheRead: row.CacheReadPrice, CacheWrite: row.CacheWritePrice,
 	})
+	// A transcription model with a price per minute is billed by the minute,
+	// even where the provider reported tokens.
+	if Kind(row.Kind) == KindTranscription && row.AudioSeconds != nil {
+		if each := number(p.AudioPrice); each != nil {
+			row.AudioPrice = each
+			cost := *row.AudioSeconds / 60 * *each
+			row.Cost = &cost
+		}
+	}
 	// An image model with a price per picture is billed by the picture, even
 	// where the provider reported tokens: the operator set it to be exact.
 	if Kind(row.Kind) == KindImage {

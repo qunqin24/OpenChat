@@ -156,6 +156,8 @@ func (s *Server) toUsageLog(ctx context.Context, row sqlc.ListUsageLogsRow) Usag
 		DurationMs:       int64(row.DurationMs),
 		Estimated:        row.Estimated,
 		ImagePrice:       numberPtr(row.ImagePrice),
+		AudioSeconds:     numberPtr(row.AudioSeconds),
+		AudioPrice:       numberPtr(row.AudioPrice),
 	}
 	if row.Images > 0 {
 		images := int(row.Images)

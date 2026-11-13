@@ -111,6 +111,11 @@ func (r *SpendReserver) Reserve(ctx context.Context, call usage.Call) (func(), e
 			micros += int64(math.Ceil(float64(call.Images*call.ImageTokens) * numberOf(prices.OutputPrice)))
 		}
 	}
+	// A recording is held at the operator's price per minute, which is what it
+	// is billed at; without one there is nothing to hold but the tokens.
+	if call.Kind == usage.KindTranscription && call.AudioSeconds > 0 && prices.AudioPrice.Valid {
+		micros = int64(math.Ceil(call.AudioSeconds / 60 * numberOf(prices.AudioPrice) * 1_000_000))
+	}
 	if micros <= 0 {
 		return nothing, nil
 	}

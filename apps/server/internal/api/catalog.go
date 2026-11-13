@@ -342,5 +342,9 @@ func toCatalogModel(row sqlc.ListServedModelsRow) CatalogModel {
 		outputCost := float64(row.OutputCost)
 		model.OutputCost = &outputCost
 	}
+	if row.AudioCost > 0 {
+		audioCost := row.AudioCost
+		model.AudioCost = &audioCost
+	}
 	return model
 }

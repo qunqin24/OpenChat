@@ -39,6 +39,8 @@ export const adminKeys = {
   browser: () => [...adminKeys.all, 'browser'] as const,
   imageGeneration: () => [...adminKeys.all, 'image-generation'] as const,
   imageModels: () => [...adminKeys.all, 'image-generation', 'models'] as const,
+  speechInput: () => [...adminKeys.all, 'speech-input'] as const,
+  speechModels: () => [...adminKeys.all, 'speech-input', 'models'] as const,
   browserActions: (page: object) => [...adminKeys.all, 'browser', 'actions', page] as const,
 }
 

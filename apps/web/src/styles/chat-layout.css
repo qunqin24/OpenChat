@@ -108,6 +108,66 @@
   height: 30px;
 }
 
+/* The microphone recording (Composer, 语音输入): the bar becomes the
+   recording's - a red dot, the time, the loudness scrolling in from the
+   right - and what is typed stays in the box above. Then 正在转写. */
+.chat-ui .n-dictation {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  height: 30px;
+  padding-left: 8px;
+}
+.chat-ui .n-dictation-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--n-err);
+  animation: n-dictation-blink 1.2s ease-in-out infinite;
+}
+@keyframes n-dictation-blink { 50% { opacity: 0.35; } }
+.chat-ui .n-dictation-time {
+  flex: none;
+  min-width: 34px;
+  color: var(--n-text-2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.chat-ui .n-dictation-wave {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  min-width: 0;
+  height: 24px;
+  overflow: hidden;
+}
+.chat-ui .n-dictation-wave > i {
+  flex: none;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--n-text);
+  opacity: 0.7;
+}
+.chat-ui .n-dictation-busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--n-text-2);
+  font-size: 13px;
+}
+.chat-ui .n-dictation-busy .n-spinner {
+  width: 14px;
+  height: 14px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-ui .n-dictation-dot { animation: none; }
+}
+
 .chat-ui .n-composer-bar .n-icon-btn.primary:disabled {
   color: #fff;
 }

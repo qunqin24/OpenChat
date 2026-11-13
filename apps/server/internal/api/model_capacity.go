@@ -341,10 +341,20 @@ func (s *Server) refusedForCapacity(ctx context.Context, modelID string, who ask
 // imagePriceParam is an image model's price per picture as stored: whole
 // millionths of a dollar, like a cap, so it is billed without a float tail.
 func imagePriceParam(price *float64) (pgtype.Numeric, error) {
+	return dollarsParam(price, httpx.NewFieldError("imagePrice", "invalid_image_price", "a price per picture is 0 to 100 dollars, with at most six decimals"))
+}
+
+// audioPriceParam is a transcription model's price per minute of audio, stored
+// the same way.
+func audioPriceParam(price *float64) (pgtype.Numeric, error) {
+	return dollarsParam(price, httpx.NewFieldError("audioPrice", "invalid_audio_price", "a price per minute is 0 to 100 dollars, with at most six decimals"))
+}
+
+// dollarsParam is a price of 0 to 100 dollars in whole millionths, or invalid.
+func dollarsParam(price *float64, invalid error) (pgtype.Numeric, error) {
 	if price == nil {
 		return pgtype.Numeric{}, nil
 	}
-	invalid := httpx.NewFieldError("imagePrice", "invalid_image_price", "a price per picture is 0 to 100 dollars, with at most six decimals")
 	value := *price
 	if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 || value > 100 {
 		return pgtype.Numeric{}, invalid

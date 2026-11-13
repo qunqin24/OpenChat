@@ -163,6 +163,14 @@ export function usageLogsColumns(t: TFunction<'common'>): ColumnDef<UsageLog>[] 
       cell: ({ row }) => {
         const log = row.original
         if (log.status === 'error') return <ErrorCell log={log} t={t} />
+        // A recording is measured in seconds of audio, not in tokens.
+        if (log.kind === 'transcription' && log.audioSeconds != null) {
+          return (
+            <span className="whitespace-nowrap tabular-nums" title={t('admin.usage.audio-length-title')}>
+              {audioLength(log.audioSeconds, t)}
+            </span>
+          )
+        }
         const hit = cacheHitRate(log)
         const extras = [
           log.cacheReadTokens > 0 && t('admin.usage.cache-read', { n: formatCount(log.cacheReadTokens) }),
@@ -251,6 +259,14 @@ export function usageLogsColumns(t: TFunction<'common'>): ColumnDef<UsageLog>[] 
       header: header(t('admin.usage.details')),
       cell: ({ row }) => {
         const log = row.original
+        if (log.kind === 'transcription' && log.audioPrice != null) {
+          return (
+            <span className="text-xs whitespace-nowrap tabular-nums">
+              {/* As set, not rounded: formatCost's three decimals make 0.0045 read 0.005. */}
+              {t('admin.usage.audio-price-per-minute', { price: String(log.audioPrice) })}
+            </span>
+          )
+        }
         if (log.inputPrice == null || log.outputPrice == null) {
           return <span className="text-muted-foreground">{DASH}</span>
         }
@@ -278,6 +294,14 @@ export function usageLogsColumns(t: TFunction<'common'>): ColumnDef<UsageLog>[] 
       },
     },
   ]
+}
+
+/** `1 分 12 秒`; under a minute, just the seconds. */
+function audioLength(totalSeconds: number, t: TFunction<'common'>): string {
+  const whole = Math.max(0, Math.round(totalSeconds))
+  const m = Math.floor(whole / 60)
+  const s = whole % 60
+  return m > 0 ? t('admin.usage.audio-length', { m, s }) : t('admin.usage.audio-length-seconds', { s })
 }
 
 function Pill({

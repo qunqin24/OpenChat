@@ -1028,6 +1028,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
     <Composer
       value={input}
       onValueChange={setInput}
+      speechInput={features.data?.speechInput}
       onSend={() => void handleSend()}
       onStop={handleStop}
       note={revising ? t('chat.revise.label') : undefined}

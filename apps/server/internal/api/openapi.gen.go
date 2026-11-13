@@ -896,10 +896,11 @@ func (e MessageStatus) Valid() bool {
 
 // Defines values for ModelKind.
 const (
-	ModelKindEmbedding ModelKind = "embedding"
-	ModelKindImage     ModelKind = "image"
-	ModelKindRerank    ModelKind = "rerank"
-	ModelKindText      ModelKind = "text"
+	ModelKindEmbedding     ModelKind = "embedding"
+	ModelKindImage         ModelKind = "image"
+	ModelKindRerank        ModelKind = "rerank"
+	ModelKindText          ModelKind = "text"
+	ModelKindTranscription ModelKind = "transcription"
 )
 
 // Valid indicates whether the value is a known member of the ModelKind enum.
@@ -912,6 +913,8 @@ func (e ModelKind) Valid() bool {
 	case ModelKindRerank:
 		return true
 	case ModelKindText:
+		return true
+	case ModelKindTranscription:
 		return true
 	default:
 		return false
@@ -1754,12 +1757,13 @@ func (e UpdatePasskeySettingsRequestUserVerification) Valid() bool {
 
 // Defines values for UsageKind.
 const (
-	UsageKindChat        UsageKind = "chat"
-	UsageKindCompression UsageKind = "compression"
-	UsageKindImage       UsageKind = "image"
-	UsageKindModeration  UsageKind = "moderation"
-	UsageKindSubagent    UsageKind = "subagent"
-	UsageKindTitle       UsageKind = "title"
+	UsageKindChat          UsageKind = "chat"
+	UsageKindCompression   UsageKind = "compression"
+	UsageKindImage         UsageKind = "image"
+	UsageKindModeration    UsageKind = "moderation"
+	UsageKindSubagent      UsageKind = "subagent"
+	UsageKindTitle         UsageKind = "title"
+	UsageKindTranscription UsageKind = "transcription"
 )
 
 // Valid indicates whether the value is a known member of the UsageKind enum.
@@ -1776,6 +1780,8 @@ func (e UsageKind) Valid() bool {
 	case UsageKindSubagent:
 		return true
 	case UsageKindTitle:
+		return true
+	case UsageKindTranscription:
 		return true
 	default:
 		return false
@@ -2547,6 +2553,11 @@ type CapacityPeriod string
 type CatalogModel struct {
 	Attachment bool `json:"attachment"`
 
+	// AudioCost USD per minute of audio, for a transcription model the catalogue
+	// prices that way. What a recording is billed at unless the
+	// operator's `audioPrice` says otherwise.
+	AudioCost *float64 `json:"audioCost,omitempty"`
+
 	// Capacity The spend against the model's cap; absent when it has none.
 	Capacity *ModelCapacity `json:"capacity,omitempty"`
 
@@ -2838,6 +2849,10 @@ type ChatFeatures struct {
 
 	// Skills Whether skills are on (System settings).
 	Skills bool `json:"skills"`
+
+	// SpeechInput Present when the composer may offer its microphone (语音输入 settings:
+	// on, with a transcription model offered to the caller).
+	SpeechInput *SpeechInputAllowance `json:"speechInput,omitempty"`
 
 	// Subagents Whether models may launch sub-agents (Sub-agent settings).
 	Subagents *bool `json:"subagents,omitempty"`
@@ -3846,7 +3861,9 @@ type ModelChannel struct {
 	Name    string             `json:"name"`
 }
 
-// ModelKind What a model is for. Only `text` models are offered in chat.
+// ModelKind What a model is for. Only `text` models are offered in chat; `image`
+// models make pictures (图片生成) and `transcription` models turn speech
+// into text (语音输入).
 type ModelKind string
 
 // ModelOverride The operator's settings for a model. Null follows the catalogue.
@@ -3854,6 +3871,12 @@ type ModelOverride struct {
 	// AdminOnly Keep the model for administrators only. Not a catalogue figure:
 	// absent is the same as false.
 	AdminOnly *bool `json:"adminOnly,omitempty"`
+
+	// AudioPrice For a transcription model: USD per minute of audio (at most six
+	// decimals). Set, a recording is billed by its length even where the
+	// provider reports tokens; null bills by tokens at the catalogue's
+	// prices. Not a catalogue figure.
+	AudioPrice *float64 `json:"audioPrice,omitempty"`
 
 	// Capacity A spending cap in USD (at most six decimals; 400 `invalid_capacity`
 	// otherwise). Once what the model has cost in the cap's period (every
@@ -3907,7 +3930,9 @@ type ModelSettings struct {
 	InputLimit      int64           `json:"inputLimit"`
 	InputModalities []InputModality `json:"inputModalities"`
 
-	// Kind What a model is for. Only `text` models are offered in chat.
+	// Kind What a model is for. Only `text` models are offered in chat; `image`
+	// models make pictures (图片生成) and `transcription` models turn speech
+	// into text (语音输入).
 	Kind ModelKind `json:"kind"`
 
 	// OutputLimit Zero when unknown.
@@ -4712,6 +4737,29 @@ type SnapshotEvent struct {
 // SnapshotEventType defines model for SnapshotEvent.Type.
 type SnapshotEventType string
 
+// SpeechInputAllowance Present when the composer may offer its microphone (语音输入 settings:
+// on, with a transcription model offered to the caller).
+type SpeechInputAllowance struct {
+	// MaxSeconds The longest a recording may be; the composer stops and transcribes there.
+	MaxSeconds int `json:"maxSeconds"`
+}
+
+// SpeechInputSettings defines model for SpeechInputSettings.
+type SpeechInputSettings struct {
+	// Enabled Whether the composer offers its microphone, to everyone the model is offered to.
+	Enabled bool `json:"enabled"`
+
+	// MaxSeconds The longest a recording may be, in seconds.
+	MaxSeconds int `json:"maxSeconds"`
+
+	// Model The transcription model's id; empty when none is chosen.
+	Model string `json:"model"`
+
+	// ModelPriced Whether the model has a price the ledger can bill a recording at:
+	// a price per minute, or the catalogue's token prices.
+	ModelPriced bool `json:"modelPriced"`
+}
+
 // StorageDriver Where new uploads go.
 type StorageDriver string
 
@@ -5224,6 +5272,12 @@ type TranscriptChangedEvent struct {
 // TranscriptChangedEventType defines model for TranscriptChangedEvent.Type.
 type TranscriptChangedEventType string
 
+// TranscriptionResult defines model for TranscriptionResult.
+type TranscriptionResult struct {
+	// Text What was said
+	Text string `json:"text"`
+}
+
 // UpdateBrowserSettingsRequest Only the fields present are changed.
 type UpdateBrowserSettingsRequest struct {
 	Enabled      *bool     `json:"enabled,omitempty"`
@@ -5374,6 +5428,13 @@ type UpdatePersonalizationRequest struct {
 	ChatHistoryEnabled *bool   `json:"chatHistoryEnabled,omitempty"`
 	MemoryEnabled      *bool   `json:"memoryEnabled,omitempty"`
 	ResponseStyle      *string `json:"responseStyle,omitempty"`
+}
+
+// UpdateSpeechInputSettingsRequest defines model for UpdateSpeechInputSettingsRequest.
+type UpdateSpeechInputSettingsRequest struct {
+	Enabled    *bool   `json:"enabled,omitempty"`
+	MaxSeconds *int    `json:"maxSeconds,omitempty"`
+	Model      *string `json:"model,omitempty"`
 }
 
 // UpdateStorageS3Settings Only the fields present are changed.
@@ -5564,11 +5625,19 @@ type Usage struct {
 // `moderation` is a request that has a model classify a message
 // (`ModerationSettings.mode` `model`); `subagent` is a model request of a
 // sub-agent's run, logged on the conversation it works for; `image` is a
-// request to an image model for pictures (the image tool).
+// request to an image model for pictures (the image tool); `transcription`
+// is a recording turned into text for the composer (语音输入).
 type UsageKind string
 
 // UsageLog defines model for UsageLog.
 type UsageLog struct {
+	// AudioPrice USD per minute of audio, when the request was billed by the minute.
+	AudioPrice *float64 `json:"audioPrice,omitempty"`
+
+	// AudioSeconds For a `transcription` request, the seconds of audio it was billed
+	// for: what the provider reported, or the recording's own length
+	// when it reported none (then `estimated`).
+	AudioSeconds     *float64            `json:"audioSeconds,omitempty"`
 	CacheReadPrice   *float64            `json:"cacheReadPrice,omitempty"`
 	CacheReadTokens  int64               `json:"cacheReadTokens"`
 	CacheWritePrice  *float64            `json:"cacheWritePrice,omitempty"`
@@ -5631,7 +5700,8 @@ type UsageLog struct {
 	// `moderation` is a request that has a model classify a message
 	// (`ModerationSettings.mode` `model`); `subagent` is a model request of a
 	// sub-agent's run, logged on the conversation it works for; `image` is a
-	// request to an image model for pictures (the image tool).
+	// request to an image model for pictures (the image tool); `transcription`
+	// is a recording turned into text for the composer (语音输入).
 	Kind UsageKind `json:"kind"`
 
 	// Model The model id the request asked for.
@@ -6174,6 +6244,12 @@ type SetPluginTokenJSONBody struct {
 	Token string `json:"token"`
 }
 
+// TranscribeParams defines parameters for Transcribe.
+type TranscribeParams struct {
+	// Seconds The recording's length as the client measured it, in whole seconds.
+	Seconds int `form:"seconds" json:"seconds"`
+}
+
 // UpdatePasskeySettingsJSONRequestBody defines body for UpdatePasskeySettings for application/json ContentType.
 type UpdatePasskeySettingsJSONRequestBody = UpdatePasskeySettingsRequest
 
@@ -6245,6 +6321,9 @@ type SetSiteSkillEnabledJSONRequestBody = SkillEnabledRequest
 
 // UpdateSiteSkillJSONRequestBody defines body for UpdateSiteSkill for application/json ContentType.
 type UpdateSiteSkillJSONRequestBody = SkillRequest
+
+// UpdateSpeechInputSettingsJSONRequestBody defines body for UpdateSpeechInputSettings for application/json ContentType.
+type UpdateSpeechInputSettingsJSONRequestBody = UpdateSpeechInputSettingsRequest
 
 // UpdateStorageSettingsJSONRequestBody defines body for UpdateStorageSettings for application/json ContentType.
 type UpdateStorageSettingsJSONRequestBody = UpdateStorageSettingsRequest
@@ -7490,6 +7569,12 @@ type ServerInterface interface {
 	// GetSiteSkillVersion One kept version's files
 	// (GET /admin/skills/{skillId}/versions/{versionId})
 	GetSiteSkillVersion(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID, versionId openapi_types.UUID)
+	// GetSpeechInputSettings Speech input settings
+	// (GET /admin/speech-input)
+	GetSpeechInputSettings(w http.ResponseWriter, r *http.Request)
+	// UpdateSpeechInputSettings Change speech input settings
+	// (PATCH /admin/speech-input)
+	UpdateSpeechInputSettings(w http.ResponseWriter, r *http.Request)
 	// GetStorageSettings File storage settings
 	// (GET /admin/storage)
 	GetStorageSettings(w http.ResponseWriter, r *http.Request)
@@ -7838,6 +7923,9 @@ type ServerInterface interface {
 	// RunTask Run a task now
 	// (POST /tasks/{taskId}/run)
 	RunTask(w http.ResponseWriter, r *http.Request, taskId TaskId)
+	// Transcribe Turn a recording into text
+	// (POST /transcriptions)
+	Transcribe(w http.ResponseWriter, r *http.Request, params TranscribeParams)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -8195,6 +8283,18 @@ func (_ Unimplemented) ListSiteSkillVersions(w http.ResponseWriter, r *http.Requ
 // GetSiteSkillVersion One kept version's files
 // (GET /admin/skills/{skillId}/versions/{versionId})
 func (_ Unimplemented) GetSiteSkillVersion(w http.ResponseWriter, r *http.Request, skillId openapi_types.UUID, versionId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetSpeechInputSettings Speech input settings
+// (GET /admin/speech-input)
+func (_ Unimplemented) GetSpeechInputSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateSpeechInputSettings Change speech input settings
+// (PATCH /admin/speech-input)
+func (_ Unimplemented) UpdateSpeechInputSettings(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8891,6 +8991,12 @@ func (_ Unimplemented) UpdateTask(w http.ResponseWriter, r *http.Request, taskId
 // RunTask Run a task now
 // (POST /tasks/{taskId}/run)
 func (_ Unimplemented) RunTask(w http.ResponseWriter, r *http.Request, taskId TaskId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Transcribe Turn a recording into text
+// (POST /transcriptions)
+func (_ Unimplemented) Transcribe(w http.ResponseWriter, r *http.Request, params TranscribeParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -10396,6 +10502,34 @@ func (siw *ServerInterfaceWrapper) GetSiteSkillVersion(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetSiteSkillVersion(w, r, skillId, versionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSpeechInputSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetSpeechInputSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSpeechInputSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateSpeechInputSettings operation middleware
+func (siw *ServerInterfaceWrapper) UpdateSpeechInputSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateSpeechInputSettings(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13330,6 +13464,39 @@ func (siw *ServerInterfaceWrapper) RunTask(w http.ResponseWriter, r *http.Reques
 	handler.ServeHTTP(w, r)
 }
 
+// Transcribe operation middleware
+func (siw *ServerInterfaceWrapper) Transcribe(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params TranscribeParams
+
+	// ------------- Required query parameter "seconds" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "seconds", r.URL.Query(), &params.Seconds, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "seconds"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "seconds", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Transcribe(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -13636,6 +13803,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Patch(options.BaseURL+"/admin/image-generation", wrapper.UpdateImageGenerationSettings)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/speech-input", wrapper.GetSpeechInputSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/admin/speech-input", wrapper.UpdateSpeechInputSettings)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/admin/image-generation/test", wrapper.TestImageGeneration)
 	})
 	r.Group(func(r chi.Router) {
@@ -13934,6 +14107,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/features", wrapper.GetChatFeatures)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/transcriptions", wrapper.Transcribe)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/favicons/{domain}", wrapper.GetFavicon)

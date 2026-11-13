@@ -35,13 +35,16 @@ const CAPABILITIES = [
 ] as const
 
 /** Override fields that show on the card in their own way, not as "customised". */
-const OWN_BADGE = new Set(['adminOnly', 'capacity', 'capacityPeriod', 'capacityAdminExempt', 'imagePrice'])
+const OWN_BADGE = new Set(['adminOnly', 'capacity', 'capacityPeriod', 'capacityAdminExempt', 'imagePrice', 'audioPrice'])
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
       <dt className="text-muted-foreground text-[11px] leading-tight">{label}</dt>
-      <dd className="truncate text-xs font-medium tabular-nums">{value}</dd>
+      {/* The whole figure on hover, where the card's width cuts it short. */}
+      <dd className="truncate text-xs font-medium tabular-nums" title={value}>
+        {value}
+      </dd>
     </div>
   )
 }
@@ -82,12 +85,17 @@ export function ModelCard({ model }: { model: CatalogModel }) {
   const channels = model.channels ?? []
   const unserved = channels.length === 0
 
-  const cost =
-    model.inputCost === undefined && model.outputCost === undefined
-      ? undefined
-      : `${model.inputCost === undefined ? '—' : formatCost(model.inputCost)} / ${
-          model.outputCost === undefined ? '—' : formatCost(model.outputCost)
-        }`
+  // A transcription model the catalogue prices by the minute shows that, under
+  // a label that says so, instead of token prices it does not have. Not
+  // through formatCost: three decimals would make 0.0045 read 0.005.
+  const perMinute = model.audioCost !== undefined && model.inputCost === undefined && model.outputCost === undefined
+  const cost = perMinute
+    ? String(model.audioCost)
+    : model.inputCost === undefined && model.outputCost === undefined
+        ? undefined
+        : `${model.inputCost === undefined ? '—' : formatCost(model.inputCost)} / ${
+            model.outputCost === undefined ? '—' : formatCost(model.outputCost)
+          }`
 
   // Three dashes in a row are how a card looks broken. When upstream has said
   // nothing about any of the figures — which is every model it does not list —
@@ -190,7 +198,7 @@ export function ModelCard({ model }: { model: CatalogModel }) {
             label={t('admin.models.output')}
             value={outputLimit ? formatTokenLimit(outputLimit) : '—'}
           />
-          <Stat label={t('admin.models.cost')} value={cost ?? '—'} />
+          <Stat label={t(perMinute ? 'admin.models.cost-per-minute' : 'admin.models.cost')} value={cost ?? '—'} />
         </dl>
       )}
 

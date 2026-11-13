@@ -16,7 +16,8 @@ INSERT INTO usage_logs (created_at, kind, status, error_code, error_message,
                         model_id, served_model,
                         input_tokens, output_tokens, reasoning_tokens, cache_read_tokens, cache_write_tokens,
                         input_price, output_price, cache_read_price, cache_write_price, cost,
-                        streamed, first_token_ms, duration_ms, estimated, images, image_price)
+                        streamed, first_token_ms, duration_ms, estimated, images, image_price,
+                        audio_seconds, audio_price)
 VALUES (sqlc.arg('created_at'), sqlc.arg('kind'), sqlc.arg('status'), sqlc.narg('error_code'), sqlc.narg('error_message'),
         (SELECT id FROM users WHERE id = sqlc.narg('user_id')::uuid),
         (SELECT id FROM conversations WHERE id = sqlc.narg('conversation_id')::uuid),
@@ -30,7 +31,9 @@ VALUES (sqlc.arg('created_at'), sqlc.arg('kind'), sqlc.arg('status'), sqlc.narg(
         round((sqlc.narg('cache_read_price')::double precision)::numeric, 10), round((sqlc.narg('cache_write_price')::double precision)::numeric, 10),
         round((sqlc.narg('cost')::double precision)::numeric, 10),
         sqlc.arg('streamed'), sqlc.narg('first_token_ms'), sqlc.arg('duration_ms'), sqlc.arg('estimated'),
-        sqlc.arg('images'), round((sqlc.narg('image_price')::double precision)::numeric, 10))
+        sqlc.arg('images'), round((sqlc.narg('image_price')::double precision)::numeric, 10),
+        round((sqlc.narg('audio_seconds')::double precision)::numeric, 3),
+        round((sqlc.narg('audio_price')::double precision)::numeric, 10))
 RETURNING id;
 
 -- name: UsagePricing :one
@@ -43,6 +46,9 @@ RETURNING id;
 -- actually carries a price beats one that does not. An operator's overrides
 -- (model_overrides) have no token prices, so the catalogue is the only source
 -- for those; the per-picture price of an image model is the operator's alone.
+-- The per-minute price of a transcription model is the operator's when they
+-- set one, else the catalogue's (`cost.audio_minute`, which only our own
+-- supplement writes), from the channel's own provider first.
 -- Always one row: a request whose channel or model is unknown gets NULLs.
 -- Also the name of the account it is for, kept with the row in
 -- case the account is deleted before the request ends.
@@ -52,7 +58,14 @@ SELECT c.name                                                     AS channel_nam
        (m.raw -> 'cost' ->> 'output')::numeric      AS output_price,
        (m.raw -> 'cost' ->> 'cache_read')::numeric  AS cache_read_price,
        (m.raw -> 'cost' ->> 'cache_write')::numeric AS cache_write_price,
-       (SELECT o.image_price FROM model_overrides o WHERE o.model_id = sqlc.arg('model_id')) AS image_price
+       (SELECT o.image_price FROM model_overrides o WHERE o.model_id = sqlc.arg('model_id')) AS image_price,
+       coalesce((SELECT o.audio_price FROM model_overrides o WHERE o.model_id = sqlc.arg('model_id')),
+                (SELECT (cm.raw -> 'cost' ->> 'audio_minute')::numeric
+                 FROM catalog_models cm
+                 WHERE cm.model_id = sqlc.arg('model_id')
+                   AND (cm.raw -> 'cost' ->> 'audio_minute') IS NOT NULL
+                 ORDER BY (cm.provider_id = c.type::text) DESC, cm.provider_id
+                 LIMIT 1))::numeric                               AS audio_price
 FROM (SELECT 1) one
          LEFT JOIN channels c ON c.id = sqlc.narg('channel_id')::uuid
          LEFT JOIN users u ON u.id = sqlc.narg('user_id')::uuid
@@ -103,7 +116,9 @@ SELECT l.id,
        l.duration_ms,
        l.estimated,
        l.images,
-       l.image_price
+       l.image_price,
+       l.audio_seconds,
+       l.audio_price
 FROM usage_logs l
          LEFT JOIN users u ON u.id = l.user_id
 WHERE (sqlc.narg('cursor_created_at')::timestamptz IS NULL

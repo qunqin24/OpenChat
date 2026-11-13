@@ -576,6 +576,7 @@ type ModelOverride struct {
 	CapacityAdminExempt bool               `json:"capacity_admin_exempt"`
 	CapacitySince       pgtype.Timestamptz `json:"capacity_since"`
 	ImagePrice          pgtype.Numeric     `json:"image_price"`
+	AudioPrice          pgtype.Numeric     `json:"audio_price"`
 }
 
 type ModerationEvent struct {
@@ -893,6 +894,8 @@ type UsageLog struct {
 	DeletedUser      *string            `json:"deleted_user"`
 	Images           int32              `json:"images"`
 	ImagePrice       pgtype.Numeric     `json:"image_price"`
+	AudioSeconds     pgtype.Numeric     `json:"audio_seconds"`
+	AudioPrice       pgtype.Numeric     `json:"audio_price"`
 }
 
 type User struct {

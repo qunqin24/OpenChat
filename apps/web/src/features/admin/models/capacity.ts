@@ -33,6 +33,9 @@ export function parseImagePrice(raw: string): CapacityInput {
   return value >= 0 && value <= 100 ? { ok: true, value } : { ok: false }
 }
 
+/** An audio model's price per minute: the same range and precision as a picture's. */
+export const parseAudioPrice = parseImagePrice
+
 /** A cap as the field shows it: no trailing zeros, nothing for no cap. */
 export function capacityText(value: number | null | undefined): string {
   return value == null ? '' : String(Number(value.toFixed(MAX_DECIMALS)))

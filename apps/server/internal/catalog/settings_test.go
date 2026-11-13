@@ -23,6 +23,12 @@ func TestDefaultKind(t *testing.T) {
 		"typed image":  {"gpt-image-1.5", []string{"text", "image"}, "image", KindImage},
 		"gemini image": {"gemini-3.1-flash-image", []string{"text", "image"}, "image", KindImage},
 		"typed chat":   {"gpt-5.5", []string{"text"}, "chat", KindText},
+		// Speech to text: by models.dev's type, or by what the id says.
+		"typed transcription": {"some-stt", []string{"text"}, "transcription", KindTranscription},
+		"gpt-transcribe":      {"gpt-transcribe", []string{"text"}, "", KindTranscription},
+		"gpt-4o-transcribe":   {"gpt-4o-mini-transcribe", nil, "", KindTranscription},
+		"whisper":             {"whisper-1", nil, "", KindTranscription},
+		"asr":                 {"qwen3-asr-flash", nil, "", KindTranscription},
 	}
 	for name, c := range cases {
 		if got := DefaultKind(c.id, c.output, c.typ); got != c.want {
