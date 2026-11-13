@@ -469,7 +469,10 @@ func (h *pluginHost) Call(ctx context.Context, call codemode.Call) (any, error) 
 		return fail(PluginCallProgressStatusFailed, "invalid", fmt.Errorf("%s: %v", call.Tool.Path(), err))
 	}
 
-	if row.Permission == "confirm" {
+	// The person may have said once for all: allow these without asking
+	// (settings → 权限). An administrator's "ask first" is then theirs to waive;
+	// "blocked" never reaches here, and a sub-agent was turned away above.
+	if row.Permission == "confirm" && row.PluginCalls != "allow" {
 		granted, err := h.s.q.PluginToolGranted(ctx, sqlc.PluginToolGrantedParams{ConversationID: h.scope.ConversationID, PluginID: row.PluginID, Tool: row.Name})
 		if err != nil {
 			return fail(PluginCallProgressStatusFailed, "failed", errors.New("the tool could not be looked up; try again"))

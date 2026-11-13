@@ -924,6 +924,7 @@ type User struct {
 	DisabledBy                   *uuid.UUID         `json:"disabled_by"`
 	ImageDaily                   *int32             `json:"image_daily"`
 	ChatHistory                  bool               `json:"chat_history"`
+	PluginCalls                  string             `json:"plugin_calls"`
 }
 
 type UserMemory struct {

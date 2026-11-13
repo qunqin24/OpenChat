@@ -433,7 +433,8 @@ type Querier interface {
 	// A picture a tool answered with, to its conversation's owner only.
 	GetToolImage(ctx context.Context, arg GetToolImageParams) (GetToolImageRow, error)
 	// One tool as ListUsablePluginTools has it, read again at each call so a
-	// change made meanwhile counts; no row when it may not be called now.
+	// change made meanwhile counts; no row when it may not be called now. With it,
+	// the person's own answer to tools that ask first (users.plugin_calls).
 	GetUsablePluginTool(ctx context.Context, arg GetUsablePluginToolParams) (GetUsablePluginToolRow, error)
 	GetUser(ctx context.Context, id uuid.UUID) (User, error)
 	// Who a stored picture belongs to: the signed read URL of a locally kept file

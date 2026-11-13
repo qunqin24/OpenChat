@@ -4306,6 +4306,7 @@ export interface components {
              *     is off for everyone whatever `chatHistoryEnabled` says.
              */
             chatHistoryAllowed: boolean;
+            pluginCalls: components["schemas"]["PluginCallsMode"];
             /** @description Characters allowed in each instructions field. */
             instructionLimit: number;
             /** @description Memories allowed per person. */
@@ -4319,7 +4320,18 @@ export interface components {
             responseStyle?: string;
             memoryEnabled?: boolean;
             chatHistoryEnabled?: boolean;
+            pluginCalls?: components["schemas"]["PluginCallsMode"];
         };
+        /**
+         * @description What happens when a model calls a plugin tool an administrator set to
+         *     ask first (`confirm`): `ask` (the default) shows the person a card to
+         *     allow or refuse it; `allow` runs it without asking, in all of the
+         *     person's conversations, scheduled tasks' included. Tools an
+         *     administrator blocked stay blocked, and a sub-agent still gets only the
+         *     tools that never ask.
+         * @enum {string}
+         */
+        PluginCallsMode: "ask" | "allow";
         /**
          * @description Who wrote it: `user` by hand, `model` with its memory tool.
          * @enum {string}

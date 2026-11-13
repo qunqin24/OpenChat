@@ -2013,6 +2013,7 @@
       "general": "General",
       "personalization": "Personalization",
       "skills": "Skills",
+      "permissions": "Permissions",
       "account": "Account",
       "data": "Data"
     },
@@ -2156,7 +2157,8 @@
       "personalization": "custom instructions,memory,personalization,preferences",
       "account": "account,username,email,password,avatar",
       "data": "data,export,delete,temporary chat",
-      "skills": "skills,skill,workflow,instructions,playbook"
+      "skills": "skills,skill,workflow,instructions,playbook",
+      "permissions": "permissions,plugins,confirm,ask,allow"
     },
     "skills": {
       "title": "Skills",
@@ -2197,6 +2199,13 @@
       "current": "current",
       "export": "Export",
       "builtin": "built in"
+    },
+    "permissions": {
+      "plugins": "Plugins",
+      "plugin-calls": "Actions that ask first",
+      "ask": "Always ask",
+      "allow": "Allow all",
+      "allow-note": "Plugins act without asking you, in scheduled tasks too."
     }
   },
   "library": {

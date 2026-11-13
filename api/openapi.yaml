@@ -5039,7 +5039,7 @@ components:
 
     Personalization:
       type: object
-      required: [aboutYou, responseStyle, memoryEnabled, memoryAllowed, chatHistoryEnabled, chatHistoryAllowed, instructionLimit, memoryLimit, memoryLength]
+      required: [aboutYou, responseStyle, memoryEnabled, memoryAllowed, chatHistoryEnabled, chatHistoryAllowed, pluginCalls, instructionLimit, memoryLimit, memoryLength]
       properties:
         aboutYou:
           type: string
@@ -5069,6 +5069,8 @@ components:
           description: |
             The administrator's switch (`SystemSettings.chatHistory`). Off, it
             is off for everyone whatever `chatHistoryEnabled` says.
+        pluginCalls:
+          $ref: "#/components/schemas/PluginCallsMode"
         instructionLimit: { type: integer, description: Characters allowed in each instructions field. }
         memoryLimit: { type: integer, description: Memories allowed per person. }
         memoryLength: { type: integer, description: Characters allowed in one memory. }
@@ -5081,6 +5083,18 @@ components:
         responseStyle: { type: string }
         memoryEnabled: { type: boolean }
         chatHistoryEnabled: { type: boolean }
+        pluginCalls: { $ref: "#/components/schemas/PluginCallsMode" }
+
+    PluginCallsMode:
+      type: string
+      description: |
+        What happens when a model calls a plugin tool an administrator set to
+        ask first (`confirm`): `ask` (the default) shows the person a card to
+        allow or refuse it; `allow` runs it without asking, in all of the
+        person's conversations, scheduled tasks' included. Tools an
+        administrator blocked stay blocked, and a sub-agent still gets only the
+        tools that never ask.
+      enum: [ask, allow]
 
     MemorySource:
       type: string

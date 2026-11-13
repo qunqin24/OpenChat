@@ -3,6 +3,7 @@ SELECT instructions_about,
        instructions_style,
        memory_enabled,
        chat_history,
+       plugin_calls,
        instructions_about_checked_hash,
        instructions_about_blocked_hash,
        instructions_style_checked_hash,
@@ -22,6 +23,7 @@ SET instructions_about = COALESCE(sqlc.narg('instructions_about')::text, instruc
     instructions_style = COALESCE(sqlc.narg('instructions_style')::text, instructions_style),
     memory_enabled     = COALESCE(sqlc.narg('memory_enabled')::boolean, memory_enabled),
     chat_history       = COALESCE(sqlc.narg('chat_history')::boolean, chat_history),
+    plugin_calls       = COALESCE(sqlc.narg('plugin_calls')::text, plugin_calls),
     instructions_about_checked_hash = CASE
         WHEN sqlc.narg('instructions_about')::text IS NULL OR sqlc.narg('instructions_about')::text = instructions_about
             THEN instructions_about_checked_hash
@@ -40,7 +42,7 @@ SET instructions_about = COALESCE(sqlc.narg('instructions_about')::text, instruc
         ELSE NULL END,
     updated_at         = now()
 WHERE id = sqlc.arg('id')
-RETURNING instructions_about, instructions_style, memory_enabled, chat_history;
+RETURNING instructions_about, instructions_style, memory_enabled, chat_history, plugin_calls;
 
 -- name: MarkInstructionsModerated :exec
 -- What a snapshot-time check decided about the instructions, recorded only

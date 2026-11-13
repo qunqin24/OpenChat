@@ -52,6 +52,7 @@ func (s *Server) personalization(r *http.Request) (Personalization, error) {
 		MemoryAllowed:      allowed,
 		ChatHistoryEnabled: p.ChatHistory,
 		ChatHistoryAllowed: historyAllowed,
+		PluginCalls:        PluginCallsMode(p.PluginCalls),
 		InstructionLimit:   memory.MaxInstructions,
 		MemoryLimit:        memory.MaxMemories,
 		MemoryLength:       memory.MaxContent,
@@ -102,12 +103,22 @@ func (s *Server) UpdatePersonalization(w http.ResponseWriter, r *http.Request) {
 			*field.checked = &hash
 		}
 	}
+	var pluginCalls *string
+	if body.PluginCalls != nil {
+		if !body.PluginCalls.Valid() {
+			httpx.Fail(w, r, httpx.NewFieldError("pluginCalls", "invalid_plugin_calls", "ask or allow"))
+			return
+		}
+		mode := string(*body.PluginCalls)
+		pluginCalls = &mode
+	}
 	if _, err := s.q.UpdatePersonalization(ctx, sqlc.UpdatePersonalizationParams{
 		ID:                user.ID,
 		InstructionsAbout: body.AboutYou,
 		InstructionsStyle: body.ResponseStyle,
 		MemoryEnabled:     body.MemoryEnabled,
 		ChatHistory:       body.ChatHistoryEnabled,
+		PluginCalls:       pluginCalls,
 		AboutCheckedHash:  aboutChecked,
 		StyleCheckedHash:  styleChecked,
 	}); err != nil {

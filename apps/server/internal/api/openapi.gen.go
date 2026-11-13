@@ -1203,6 +1203,24 @@ func (e PluginCallProgressStatus) Valid() bool {
 	}
 }
 
+// Defines values for PluginCallsMode.
+const (
+	PluginCallsModeAllow PluginCallsMode = "allow"
+	PluginCallsModeAsk   PluginCallsMode = "ask"
+)
+
+// Valid indicates whether the value is a known member of the PluginCallsMode enum.
+func (e PluginCallsMode) Valid() bool {
+	switch e {
+	case PluginCallsModeAllow:
+		return true
+	case PluginCallsModeAsk:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PluginToolPermission.
 const (
 	PluginToolPermissionAllow   PluginToolPermission = "allow"
@@ -4226,6 +4244,14 @@ type Personalization struct {
 	// MemoryLimit Memories allowed per person.
 	MemoryLimit int `json:"memoryLimit"`
 
+	// PluginCalls What happens when a model calls a plugin tool an administrator set to
+	// ask first (`confirm`): `ask` (the default) shows the person a card to
+	// allow or refuse it; `allow` runs it without asking, in all of the
+	// person's conversations, scheduled tasks' included. Tools an
+	// administrator blocked stay blocked, and a sub-agent still gets only the
+	// tools that never ask.
+	PluginCalls PluginCallsMode `json:"pluginCalls"`
+
 	// ResponseStyle Custom instructions about how answers should be written.
 	ResponseStyle string `json:"responseStyle"`
 }
@@ -4353,6 +4379,14 @@ type PluginCallProgress struct {
 
 // PluginCallProgressStatus defines model for PluginCallProgress.Status.
 type PluginCallProgressStatus string
+
+// PluginCallsMode What happens when a model calls a plugin tool an administrator set to
+// ask first (`confirm`): `ask` (the default) shows the person a card to
+// allow or refuse it; `allow` runs it without asking, in all of the
+// person's conversations, scheduled tasks' included. Tools an
+// administrator blocked stay blocked, and a sub-agent still gets only the
+// tools that never ask.
+type PluginCallsMode string
 
 // PluginCodeProgress The calls a plugin script (or a directly listed plugin tool) made so far, as `ToolSlot.progress` and, once finished, the tool result's `details` (with `code`).
 type PluginCodeProgress struct {
@@ -5427,7 +5461,15 @@ type UpdatePersonalizationRequest struct {
 	AboutYou           *string `json:"aboutYou,omitempty"`
 	ChatHistoryEnabled *bool   `json:"chatHistoryEnabled,omitempty"`
 	MemoryEnabled      *bool   `json:"memoryEnabled,omitempty"`
-	ResponseStyle      *string `json:"responseStyle,omitempty"`
+
+	// PluginCalls What happens when a model calls a plugin tool an administrator set to
+	// ask first (`confirm`): `ask` (the default) shows the person a card to
+	// allow or refuse it; `allow` runs it without asking, in all of the
+	// person's conversations, scheduled tasks' included. Tools an
+	// administrator blocked stay blocked, and a sub-agent still gets only the
+	// tools that never ask.
+	PluginCalls   *PluginCallsMode `json:"pluginCalls,omitempty"`
+	ResponseStyle *string          `json:"responseStyle,omitempty"`
 }
 
 // UpdateSpeechInputSettingsRequest defines model for UpdateSpeechInputSettingsRequest.

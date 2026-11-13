@@ -277,7 +277,8 @@ ORDER BY p.slug, t.name;
 
 -- name: GetUsablePluginTool :one
 -- One tool as ListUsablePluginTools has it, read again at each call so a
--- change made meanwhile counts; no row when it may not be called now.
+-- change made meanwhile counts; no row when it may not be called now. With it,
+-- the person's own answer to tools that ask first (users.plugin_calls).
 SELECT p.id          AS plugin_id,
        p.slug,
        p.name        AS plugin_name,
@@ -292,7 +293,8 @@ SELECT p.id          AS plugin_id,
        t.description,
        t.input_schema,
        t.read_only,
-       t.permission
+       t.permission,
+       u.plugin_calls
 FROM plugin_installs i
          JOIN plugins p ON p.id = i.plugin_id
          JOIN plugin_tools t ON t.plugin_id = p.id

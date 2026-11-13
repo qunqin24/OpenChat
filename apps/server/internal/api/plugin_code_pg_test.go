@@ -180,6 +180,50 @@ return why`, ns, ns))
 		t.Fatalf("granted: %s", out.Content)
 	}
 
+	// The person's own "allow all" (settings → 权限): with no grant in the
+	// conversation, a tool that asks first runs without asking - in a
+	// scheduled task's run too - and asks again once they switch back.
+	if _, err := pool.Exec(ctx, `DELETE FROM plugin_tool_grants WHERE conversation_id = $1`, conversationID); err != nil {
+		t.Fatal(err)
+	}
+	setMode := func(mode string) {
+		t.Helper()
+		body := strings.NewReader(fmt.Sprintf(`{"pluginCalls":%q}`, mode))
+		rec := httptest.NewRecorder()
+		s.UpdatePersonalization(rec, httptest.NewRequest(http.MethodPatch, "/", body).WithContext(asUser))
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), fmt.Sprintf(`"pluginCalls":%q`, mode)) {
+			t.Fatalf("set %s: %d %s", mode, rec.Code, rec.Body)
+		}
+	}
+	setMode("allow")
+	if out := script(deleteOne); !strings.Contains(out.Content, `Returned: "deleted"`) || deleted.Load() != 3 {
+		t.Fatalf("allowed for all: %s", out.Content)
+	}
+	unattended := scope
+	unattended.Unattended = true
+	unattendedCtx := agent.WithToolCall(agent.WithScope(asUser, unattended), "call-2")
+	runUnattended := func() agent.ToolResult {
+		t.Helper()
+		raw, _ := json.Marshal(map[string]string{"code": deleteOne})
+		out, err := pluginCodeTool{s: s}.Execute(unattendedCtx, raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	if out := runUnattended(); !strings.Contains(out.Content, `Returned: "deleted"`) || deleted.Load() != 4 {
+		t.Fatalf("allowed for all, unattended: %s", out.Content)
+	}
+	setMode("ask")
+	if out := runUnattended(); strings.Contains(out.Content, `Returned: "deleted"`) || deleted.Load() != 4 {
+		t.Fatalf("asking again, unattended: %s", out.Content)
+	}
+	rec = httptest.NewRecorder()
+	s.UpdatePersonalization(rec, httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"pluginCalls":"sometimes"}`)).WithContext(asUser))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("an unknown mode: %d", rec.Code)
+	}
+
 	// An administrator blocking the tool reaches a script that already started.
 	if _, err := pool.Exec(ctx, `UPDATE plugin_tools SET permission = 'blocked' WHERE plugin_id = $1 AND name = 'get_item'`, pluginID); err != nil {
 		t.Fatal(err)
@@ -198,8 +242,9 @@ return why`, ns, ns))
 	if err := pool.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE outcome = 'denied') FROM plugin_calls WHERE user_id = $1`, user.ID).Scan(&calls, &refused); err != nil {
 		t.Fatal(err)
 	}
-	if calls != 8 || refused != 1 {
-		t.Fatalf("%d calls recorded (%d refused), want 8 (1)", calls, refused)
+	// Three more for "allow all": two that ran, one the unattended run was refused.
+	if calls != 11 || refused != 1 {
+		t.Fatalf("%d calls recorded (%d refused), want 11 (1)", calls, refused)
 	}
 
 	// The catalogue is taken once and kept; the turn note tells what came since.

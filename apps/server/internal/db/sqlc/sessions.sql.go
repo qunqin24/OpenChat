@@ -102,7 +102,7 @@ func (q *Queries) DeleteUserSessions(ctx context.Context, userID uuid.UUID) erro
 }
 
 const getDisabledSessionUser = `-- name: GetDisabledSessionUser :one
-SELECT users.id, users.email, users.name, users.created_at, users.updated_at, users.password_hash, users.role, users.disabled_at, users.last_seen_at, users.instructions_about, users.instructions_style, users.memory_enabled, users.avatar_key, users.pending, users.instructions_about_checked_hash, users.instructions_about_blocked_hash, users.instructions_style_checked_hash, users.instructions_style_blocked_hash, users.time_zone, users.storage_quota_bytes, users.disabled_reason, users.disabled_note, users.disabled_by, users.image_daily, users.chat_history
+SELECT users.id, users.email, users.name, users.created_at, users.updated_at, users.password_hash, users.role, users.disabled_at, users.last_seen_at, users.instructions_about, users.instructions_style, users.memory_enabled, users.avatar_key, users.pending, users.instructions_about_checked_hash, users.instructions_about_blocked_hash, users.instructions_style_checked_hash, users.instructions_style_blocked_hash, users.time_zone, users.storage_quota_bytes, users.disabled_reason, users.disabled_note, users.disabled_by, users.image_daily, users.chat_history, users.plugin_calls
 FROM sessions s
          JOIN users ON users.id = s.user_id
 WHERE s.token_hash = $1
@@ -147,12 +147,13 @@ func (q *Queries) GetDisabledSessionUser(ctx context.Context, tokenHash []byte) 
 		&i.User.DisabledBy,
 		&i.User.ImageDaily,
 		&i.User.ChatHistory,
+		&i.User.PluginCalls,
 	)
 	return i, err
 }
 
 const getSessionUser = `-- name: GetSessionUser :one
-SELECT users.id, users.email, users.name, users.created_at, users.updated_at, users.password_hash, users.role, users.disabled_at, users.last_seen_at, users.instructions_about, users.instructions_style, users.memory_enabled, users.avatar_key, users.pending, users.instructions_about_checked_hash, users.instructions_about_blocked_hash, users.instructions_style_checked_hash, users.instructions_style_blocked_hash, users.time_zone, users.storage_quota_bytes, users.disabled_reason, users.disabled_note, users.disabled_by, users.image_daily, users.chat_history, s.id AS session_id, s.expires_at
+SELECT users.id, users.email, users.name, users.created_at, users.updated_at, users.password_hash, users.role, users.disabled_at, users.last_seen_at, users.instructions_about, users.instructions_style, users.memory_enabled, users.avatar_key, users.pending, users.instructions_about_checked_hash, users.instructions_about_blocked_hash, users.instructions_style_checked_hash, users.instructions_style_blocked_hash, users.time_zone, users.storage_quota_bytes, users.disabled_reason, users.disabled_note, users.disabled_by, users.image_daily, users.chat_history, users.plugin_calls, s.id AS session_id, s.expires_at
 FROM sessions s
          JOIN users ON users.id = s.user_id
 WHERE s.token_hash = $1
@@ -200,6 +201,7 @@ func (q *Queries) GetSessionUser(ctx context.Context, tokenHash []byte) (GetSess
 		&i.User.DisabledBy,
 		&i.User.ImageDaily,
 		&i.User.ChatHistory,
+		&i.User.PluginCalls,
 		&i.SessionID,
 		&i.ExpiresAt,
 	)

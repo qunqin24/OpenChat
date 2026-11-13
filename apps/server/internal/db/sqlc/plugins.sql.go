@@ -571,7 +571,8 @@ SELECT p.id          AS plugin_id,
        t.description,
        t.input_schema,
        t.read_only,
-       t.permission
+       t.permission,
+       u.plugin_calls
 FROM plugin_installs i
          JOIN plugins p ON p.id = i.plugin_id
          JOIN plugin_tools t ON t.plugin_id = p.id
@@ -609,10 +610,12 @@ type GetUsablePluginToolRow struct {
 	InputSchema       []byte    `json:"input_schema"`
 	ReadOnly          bool      `json:"read_only"`
 	Permission        string    `json:"permission"`
+	PluginCalls       string    `json:"plugin_calls"`
 }
 
 // One tool as ListUsablePluginTools has it, read again at each call so a
-// change made meanwhile counts; no row when it may not be called now.
+// change made meanwhile counts; no row when it may not be called now. With it,
+// the person's own answer to tools that ask first (users.plugin_calls).
 func (q *Queries) GetUsablePluginTool(ctx context.Context, arg GetUsablePluginToolParams) (GetUsablePluginToolRow, error) {
 	row := q.db.QueryRow(ctx, getUsablePluginTool, arg.UserID, arg.PluginID, arg.Tool)
 	var i GetUsablePluginToolRow
@@ -632,6 +635,7 @@ func (q *Queries) GetUsablePluginTool(ctx context.Context, arg GetUsablePluginTo
 		&i.InputSchema,
 		&i.ReadOnly,
 		&i.Permission,
+		&i.PluginCalls,
 	)
 	return i, err
 }

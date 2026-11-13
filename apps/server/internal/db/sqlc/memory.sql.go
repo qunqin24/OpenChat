@@ -224,6 +224,7 @@ SELECT instructions_about,
        instructions_style,
        memory_enabled,
        chat_history,
+       plugin_calls,
        instructions_about_checked_hash,
        instructions_about_blocked_hash,
        instructions_style_checked_hash,
@@ -237,6 +238,7 @@ type GetPersonalizationRow struct {
 	InstructionsStyle            string  `json:"instructions_style"`
 	MemoryEnabled                bool    `json:"memory_enabled"`
 	ChatHistory                  bool    `json:"chat_history"`
+	PluginCalls                  string  `json:"plugin_calls"`
 	InstructionsAboutCheckedHash *string `json:"instructions_about_checked_hash"`
 	InstructionsAboutBlockedHash *string `json:"instructions_about_blocked_hash"`
 	InstructionsStyleCheckedHash *string `json:"instructions_style_checked_hash"`
@@ -251,6 +253,7 @@ func (q *Queries) GetPersonalization(ctx context.Context, id uuid.UUID) (GetPers
 		&i.InstructionsStyle,
 		&i.MemoryEnabled,
 		&i.ChatHistory,
+		&i.PluginCalls,
 		&i.InstructionsAboutCheckedHash,
 		&i.InstructionsAboutBlockedHash,
 		&i.InstructionsStyleCheckedHash,
@@ -831,10 +834,11 @@ SET instructions_about = COALESCE($1::text, instructions_about),
     instructions_style = COALESCE($2::text, instructions_style),
     memory_enabled     = COALESCE($3::boolean, memory_enabled),
     chat_history       = COALESCE($4::boolean, chat_history),
+    plugin_calls       = COALESCE($5::text, plugin_calls),
     instructions_about_checked_hash = CASE
         WHEN $1::text IS NULL OR $1::text = instructions_about
             THEN instructions_about_checked_hash
-        ELSE $5::text END,
+        ELSE $6::text END,
     instructions_about_blocked_hash = CASE
         WHEN $1::text IS NULL OR $1::text = instructions_about
             THEN instructions_about_blocked_hash
@@ -842,14 +846,14 @@ SET instructions_about = COALESCE($1::text, instructions_about),
     instructions_style_checked_hash = CASE
         WHEN $2::text IS NULL OR $2::text = instructions_style
             THEN instructions_style_checked_hash
-        ELSE $6::text END,
+        ELSE $7::text END,
     instructions_style_blocked_hash = CASE
         WHEN $2::text IS NULL OR $2::text = instructions_style
             THEN instructions_style_blocked_hash
         ELSE NULL END,
     updated_at         = now()
-WHERE id = $7
-RETURNING instructions_about, instructions_style, memory_enabled, chat_history
+WHERE id = $8
+RETURNING instructions_about, instructions_style, memory_enabled, chat_history, plugin_calls
 `
 
 type UpdatePersonalizationParams struct {
@@ -857,6 +861,7 @@ type UpdatePersonalizationParams struct {
 	InstructionsStyle *string   `json:"instructions_style"`
 	MemoryEnabled     *bool     `json:"memory_enabled"`
 	ChatHistory       *bool     `json:"chat_history"`
+	PluginCalls       *string   `json:"plugin_calls"`
 	AboutCheckedHash  *string   `json:"about_checked_hash"`
 	StyleCheckedHash  *string   `json:"style_checked_hash"`
 	ID                uuid.UUID `json:"id"`
@@ -867,6 +872,7 @@ type UpdatePersonalizationRow struct {
 	InstructionsStyle string `json:"instructions_style"`
 	MemoryEnabled     bool   `json:"memory_enabled"`
 	ChatHistory       bool   `json:"chat_history"`
+	PluginCalls       string `json:"plugin_calls"`
 }
 
 // Its own statement, apart from UpdateOwnProfile, for the same reason that one
@@ -881,6 +887,7 @@ func (q *Queries) UpdatePersonalization(ctx context.Context, arg UpdatePersonali
 		arg.InstructionsStyle,
 		arg.MemoryEnabled,
 		arg.ChatHistory,
+		arg.PluginCalls,
 		arg.AboutCheckedHash,
 		arg.StyleCheckedHash,
 		arg.ID,
@@ -891,6 +898,7 @@ func (q *Queries) UpdatePersonalization(ctx context.Context, arg UpdatePersonali
 		&i.InstructionsStyle,
 		&i.MemoryEnabled,
 		&i.ChatHistory,
+		&i.PluginCalls,
 	)
 	return i, err
 }
