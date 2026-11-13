@@ -115,14 +115,14 @@ function Section({
   children,
 }: {
   title: string
-  description: string
+  description?: string
   children: ReactNode
 }) {
   return (
     <section className="space-y-6">
       <div>
         <h3 className="text-lg font-medium">{title}</h3>
-        <p className="text-muted-foreground text-sm">{description}</p>
+        {description && <p className="text-muted-foreground text-sm">{description}</p>}
       </div>
       {children}
     </section>
@@ -271,7 +271,7 @@ function StorageForm({ settings }: { settings: StorageSettings }) {
         </Section>
 
         {driver === 'local' ? (
-          <Section title={t('admin.storage.local')} description={t('admin.storage.local-hint')}>
+          <Section title={t('admin.storage.local')}>
             <div className="space-y-8">
               <FormField
                 control={form.control}
@@ -506,7 +506,6 @@ function TestOutcome({ result }: { result: StorageTestResult }) {
           {t('admin.storage.test-summary', { ms: result.latencyMs })}
         </span>
       </AlertTitle>
-      <AlertDescription>{t('admin.storage.test-ok-hint')}</AlertDescription>
     </Alert>
   )
 }

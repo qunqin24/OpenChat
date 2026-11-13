@@ -310,11 +310,9 @@ function AndroidAppsForm({ settings }: { settings: PasskeySettings }) {
               <FormControl>
                 <Textarea {...field} rows={3} placeholder="org.qunqin.openchat AB:CD:…" spellCheck={false} className="font-mono text-sm" />
               </FormControl>
-              <FormDescription>
-                {settings.rpId
-                  ? t('admin.authentication.passkeys.android-apps-hint')
-                  : t('admin.authentication.passkeys.android-pin-rp', { current: settings.effectiveRpId })}
-              </FormDescription>
+              {!settings.rpId && (
+                <FormDescription>{t('admin.authentication.passkeys.android-pin-rp', { current: settings.effectiveRpId })}</FormDescription>
+              )}
               <FormMessage />
             </FormItem>
           )}

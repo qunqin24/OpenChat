@@ -1,5 +1,5 @@
 import { isOpenChatError, type Plugin } from '@openchat/api-client'
-import { Check, ExternalLink, Lock, Plus, Puzzle, X } from 'lucide-react'
+import { Check, ExternalLink, Plus, Puzzle, X } from 'lucide-react'
 import { Dialog } from 'radix-ui'
 import { useEffect, useId, useState, type CSSProperties, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -162,7 +162,6 @@ function PluginDialog({ host, plugin, onClose }: { host: HTMLElement | null; plu
   const busy = install.isPending || uninstall.isPending || connect.isPending || setToken.isPending
   const oauth = plugin?.authType === 'oauth'
   const token = plugin?.authType === 'token'
-  const account = oauth || token
   // Asked for straight away until there is one that works; once there is,
   // only when the person chooses to replace it.
   const [replacing, setReplacing] = useState<string | null>(null)
@@ -234,29 +233,18 @@ function PluginDialog({ host, plugin, onClose }: { host: HTMLElement | null; plu
                 <Dialog.Title className="n-plugin-dialog-title">
                   {plugin.installed ? plugin.name : t('plugins.install-title', { name: plugin.name })}
                 </Dialog.Title>
-                <Dialog.Description className="n-plugin-dialog-about">
-                  {account ? t(token ? 'plugins.token-about' : 'plugins.account-about', { name: plugin.name }) : plugin.about || plugin.description}
-                </Dialog.Description>
-                {account && (plugin.about || plugin.description) && <p className="n-plugin-dialog-about">{plugin.about || plugin.description}</p>}
+                <Dialog.Description className="n-plugin-dialog-about">{plugin.about || plugin.description}</Dialog.Description>
                 {plugin.needsReconnect && (
                   <p className="n-plugin-dialog-about is-warning">
                     {t(token ? 'plugins.needs-new-token' : 'plugins.needs-reconnect', { name: plugin.name })}
                   </p>
                 )}
-                <ul className="n-plugin-points">
-                  {plugin.readTools > 0 && (
+                {/* The one thing about its tools worth saying: it cannot change anything. */}
+                {plugin.readTools > 0 && plugin.writeTools === 0 && (
+                  <ul className="n-plugin-points">
                     <li><Check aria-hidden="true" /><span>{t('plugins.point-read', { count: plugin.readTools })}</span></li>
-                  )}
-                  {plugin.writeTools > 0 && (
-                    <li><Check aria-hidden="true" /><span>{t('plugins.point-write', { count: plugin.writeTools })}</span></li>
-                  )}
-                  {plugin.skills > 0 && (
-                    <li><Check aria-hidden="true" /><span>{t('plugins.point-skills', { count: plugin.skills })}</span></li>
-                  )}
-                  {account && (
-                    <li><Lock aria-hidden="true" /><span>{t('plugins.point-token')}</span></li>
-                  )}
-                </ul>
+                  </ul>
+                )}
                 {asking ? (
                   <TokenForm
                     key={plugin.id}

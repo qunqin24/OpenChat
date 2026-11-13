@@ -63,7 +63,6 @@ function Profile({ id, name, email, avatarUrl }: { id: string; name: string; ema
       <div className="n-settings-scroll">
         <div className="n-settings-heading-block">
           <div className="n-settings-heading">{t('settings.account.title')}</div>
-          <p className="n-settings-help">{t('settings.account.desc')}</p>
         </div>
 
         <div className="n-settings-profile">

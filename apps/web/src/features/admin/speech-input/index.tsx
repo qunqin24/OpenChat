@@ -3,7 +3,6 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { TriangleAlert } from 'lucide-react'
-import { type ReactNode } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -13,8 +12,7 @@ import { ConfigDrawer } from '@/components/shadcn/config-drawer'
 import { Header } from '@/components/shadcn/layout/header'
 import { Main } from '@/components/shadcn/layout/main'
 import { Search } from '@/components/shadcn/search'
-import { Alert, AlertDescription, AlertTitle } from '@/components/shadcn/ui/alert'
-import { Badge } from '@/components/shadcn/ui/badge'
+import { Alert, AlertTitle } from '@/components/shadcn/ui/alert'
 import { Button } from '@/components/shadcn/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/shadcn/ui/form'
 import { Input } from '@/components/shadcn/ui/input'
@@ -106,32 +104,15 @@ export function SpeechInputPage() {
 
 export default SpeechInputPage
 
-function Section({ title, description, children }: { title: string; description: string; children: ReactNode }) {
-  return (
-    <section className="space-y-6">
-      <div>
-        <h3 className="text-lg font-medium">{title}</h3>
-        <p className="text-muted-foreground text-sm">{description}</p>
-      </div>
-      {children}
-    </section>
-  )
-}
-
 function EnabledSwitch({ settings }: { settings: SpeechSettings }) {
   const { t } = useTranslation()
   const update = useUpdateSpeechSettings()
   return (
     <div className="flex flex-row items-center justify-between gap-6 rounded-lg border p-4">
       <div className="space-y-0.5">
-        <div className="flex items-center gap-2">
-          <Label htmlFor="speech-enabled" className="text-base">
-            {t('admin.speech-input.enabled')}
-          </Label>
-          <Badge variant={settings.enabled ? 'default' : 'secondary'}>
-            {settings.enabled ? t('admin.speech-input.status-on') : t('admin.speech-input.status-off')}
-          </Badge>
-        </div>
+        <Label htmlFor="speech-enabled" className="text-base">
+          {t('admin.speech-input.enabled')}
+        </Label>
         <p className="text-muted-foreground text-sm">{t('admin.speech-input.enabled-hint')}</p>
       </div>
       <Switch
@@ -182,8 +163,7 @@ function SettingsForm({ settings }: { settings: SpeechSettings }) {
   const list = models.data ?? []
   return (
     <Form {...form}>
-      <form className="space-y-10" onSubmit={form.handleSubmit(save)}>
-        <Section title={t('admin.speech-input.model-section')} description={t('admin.speech-input.model-section-hint')}>
+      <form className="space-y-6" onSubmit={form.handleSubmit(save)}>
           <FormField
             control={form.control}
             name="model"
@@ -220,18 +200,15 @@ function SettingsForm({ settings }: { settings: SpeechSettings }) {
           {chosen && chosen === settings.model && !settings.modelPriced && (
             <Alert>
               <TriangleAlert aria-hidden="true" />
-              <AlertTitle>{t('admin.speech-input.unpriced')}</AlertTitle>
-              <AlertDescription>
-                {t('admin.speech-input.unpriced-hint')}{' '}
+              <AlertTitle>
+                {t('admin.speech-input.unpriced')}{' '}
                 <Link to="/admin/models" className="underline underline-offset-4">
-                  {t('admin.speech-input.model-hint-link')}
+                  {t('admin.speech-input.unpriced-link')}
                 </Link>
-              </AlertDescription>
+              </AlertTitle>
             </Alert>
           )}
-        </Section>
 
-        <Section title={t('admin.speech-input.limits')} description={t('admin.speech-input.limits-hint')}>
           <FormField
             control={form.control}
             name="maxSeconds"
@@ -246,7 +223,6 @@ function SettingsForm({ settings }: { settings: SpeechSettings }) {
               </FormItem>
             )}
           />
-        </Section>
 
         <Button type="submit" disabled={update.isPending || !form.formState.isDirty}>
           {t('admin.speech-input.save')}
