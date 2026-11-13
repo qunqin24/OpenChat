@@ -31,6 +31,7 @@ import { Route as AdminPluginsRouteImport } from './routes/admin.plugins'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminSkillsRouteImport } from './routes/admin.skills'
 import { Route as AdminStorageRouteImport } from './routes/admin.storage'
+import { Route as AdminSystemRouteImport } from './routes/admin.system'
 import { Route as AdminUsageLogsRouteImport } from './routes/admin.usage-logs'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminWebSearchRouteImport } from './routes/admin.web-search'
@@ -149,6 +150,11 @@ const AdminStorageRoute = AdminStorageRouteImport.update({
   path: '/storage',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminSystemRoute = AdminSystemRouteImport.update({
+  id: '/system',
+  path: '/system',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminUsageLogsRoute = AdminUsageLogsRouteImport.update({
   id: '/usage-logs',
   path: '/usage-logs',
@@ -217,6 +223,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AdminSettingsRouteWithChildren
   '/admin/skills': typeof AdminSkillsRoute
   '/admin/storage': typeof AdminStorageRoute
+  '/admin/system': typeof AdminSystemRoute
   '/admin/usage-logs': typeof AdminUsageLogsRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/web-search': typeof AdminWebSearchRoute
@@ -246,6 +253,7 @@ export interface FileRoutesByTo {
   '/admin/plugins': typeof AdminPluginsRoute
   '/admin/skills': typeof AdminSkillsRoute
   '/admin/storage': typeof AdminStorageRoute
+  '/admin/system': typeof AdminSystemRoute
   '/admin/usage-logs': typeof AdminUsageLogsRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/web-search': typeof AdminWebSearchRoute
@@ -279,6 +287,7 @@ export interface FileRoutesById {
   '/admin/settings': typeof AdminSettingsRouteWithChildren
   '/admin/skills': typeof AdminSkillsRoute
   '/admin/storage': typeof AdminStorageRoute
+  '/admin/system': typeof AdminSystemRoute
   '/admin/usage-logs': typeof AdminUsageLogsRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/web-search': typeof AdminWebSearchRoute
@@ -313,6 +322,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/skills'
     | '/admin/storage'
+    | '/admin/system'
     | '/admin/usage-logs'
     | '/admin/users'
     | '/admin/web-search'
@@ -342,6 +352,7 @@ export interface FileRouteTypes {
     | '/admin/plugins'
     | '/admin/skills'
     | '/admin/storage'
+    | '/admin/system'
     | '/admin/usage-logs'
     | '/admin/users'
     | '/admin/web-search'
@@ -374,6 +385,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/skills'
     | '/admin/storage'
+    | '/admin/system'
     | '/admin/usage-logs'
     | '/admin/users'
     | '/admin/web-search'
@@ -550,6 +562,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminStorageRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/system': {
+      id: '/admin/system'
+      path: '/system'
+      fullPath: '/admin/system'
+      preLoaderRoute: typeof AdminSystemRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/usage-logs': {
       id: '/admin/usage-logs'
       path: '/usage-logs'
@@ -678,6 +697,7 @@ interface AdminRouteChildren {
   AdminSettingsRoute: typeof AdminSettingsRouteWithChildren
   AdminSkillsRoute: typeof AdminSkillsRoute
   AdminStorageRoute: typeof AdminStorageRoute
+  AdminSystemRoute: typeof AdminSystemRoute
   AdminUsageLogsRoute: typeof AdminUsageLogsRoute
   AdminUsersRoute: typeof AdminUsersRoute
   AdminWebSearchRoute: typeof AdminWebSearchRoute
@@ -697,6 +717,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminSettingsRoute: AdminSettingsRouteWithChildren,
   AdminSkillsRoute: AdminSkillsRoute,
   AdminStorageRoute: AdminStorageRoute,
+  AdminSystemRoute: AdminSystemRoute,
   AdminUsageLogsRoute: AdminUsageLogsRoute,
   AdminUsersRoute: AdminUsersRoute,
   AdminWebSearchRoute: AdminWebSearchRoute,

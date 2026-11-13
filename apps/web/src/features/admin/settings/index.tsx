@@ -1,5 +1,5 @@
 import { Outlet } from '@tanstack/react-router'
-import { Bug, Palette, UserCog, Wrench } from 'lucide-react'
+import { Palette, UserCog, Wrench } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { ConfigDrawer } from '@/components/shadcn/config-drawer'
@@ -13,7 +13,8 @@ import { SidebarNav } from './components/sidebar-nav'
  * Upstream's settings shell, with two of its five sections left out rather
  * than stubbed: Notifications has nothing to notify about, and Display toggles
  * which sidebar items appear — which the config drawer already does, from
- * every page.
+ * every page. The server's own settings are not here: they are the System
+ * page (features/admin/system), since they are nobody's personal settings.
  */
 export function Settings() {
   const { t } = useTranslation()
@@ -29,11 +30,6 @@ export function Settings() {
       title: t('admin.settings.appearance.title'),
       href: '/admin/settings/appearance',
       icon: <Palette size={18} />,
-    },
-    {
-      title: t('admin.settings.system.title'),
-      href: '/admin/settings/system',
-      icon: <Bug size={18} />,
     },
   ]
 

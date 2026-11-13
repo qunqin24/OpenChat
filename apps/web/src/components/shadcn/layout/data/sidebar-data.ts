@@ -1,4 +1,4 @@
-import { AppWindow, ArrowLeft, BookOpen, Boxes, Globe, HardDrive, ImageIcon, ImagePlus, KeyRound, LayoutDashboard, ListChecks, Plug, Puzzle, ScrollText, Settings, ShieldAlert, Users } from 'lucide-react'
+import { AppWindow, ArrowLeft, BookOpen, Boxes, Globe, HardDrive, ImageIcon, ImagePlus, KeyRound, LayoutDashboard, ListChecks, Plug, Puzzle, ScrollText, Settings, Settings2, ShieldAlert, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { type SidebarData } from '../types'
@@ -39,6 +39,7 @@ export function useSidebarData(): SidebarData {
       {
         title: t('admin.ui.nav-group.other'),
         items: [
+          { title: t('admin.nav.system'), url: '/admin/system', icon: Settings2 },
           { title: t('admin.ui.menu.settings'), url: '/admin/settings', icon: Settings },
           { title: t('admin.back-to-chat'), url: '/', icon: ArrowLeft },
         ],

@@ -15,7 +15,11 @@ import { Skeleton } from '@/components/shadcn/ui/skeleton'
 import { Switch } from '@/components/shadcn/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn/ui/tabs'
 import { ModerationPanel } from '@/features/admin/moderation/moderation-panel'
-import { ContentSection } from '../components/content-section'
+import { ConfigDrawer } from '@/components/shadcn/config-drawer'
+import { Header } from '@/components/shadcn/layout/header'
+import { Main } from '@/components/shadcn/layout/main'
+import { Search } from '@/components/shadcn/search'
+import { Separator } from '@/components/shadcn/ui/separator'
 import { RetentionForm } from './retention-form'
 import { ResearchLimitForm } from './research-limit-form'
 import { RunLimitForm } from './run-limit-form'
@@ -23,16 +27,17 @@ import { SubagentsPanel } from './subagents-panel'
 import { SYSTEM_TABS, type SystemTab } from './tabs'
 import { VersionRow } from './version-row'
 
-const route = getRouteApi('/admin/settings/system')
+const route = getRouteApi('/admin/system')
 
 /** The task model's select value for "each conversation's own" (Radix Select takes no empty value). */
 const OWN_MODEL = '__conversation__'
 
 /**
- * Settings that belong to the server rather than to this browser — which is
- * what separates this section from Appearance next door.
+ * Settings that belong to the server rather than to anyone's account or
+ * browser: a page of its own in the admin sidebar, not a section of the
+ * personal settings (profile, account, appearance) beside them.
  */
-export function SettingsSystem() {
+export function SystemSettings() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { tab = 'general' } = route.useSearch()
@@ -98,7 +103,20 @@ export function SettingsSystem() {
     )
 
   return (
-    <ContentSection title={t('admin.settings.system.title')} desc={t('admin.settings.system.subtitle')}>
+    <>
+      <Header fixed>
+        <Search className="me-auto" />
+        <ConfigDrawer />
+      </Header>
+
+      <Main className="flex flex-1 flex-col">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">{t('admin.settings.system.title')}</h2>
+          <p className="text-muted-foreground">{t('admin.settings.system.subtitle')}</p>
+        </div>
+        <Separator className="my-4 lg:my-6" />
+
+        <div className="max-w-2xl pb-12">
       <Tabs value={tab} onValueChange={(value) => setTab(value as SystemTab)}>
         <TabsList>
           {SYSTEM_TABS.map((value) => (
@@ -248,7 +266,9 @@ export function SettingsSystem() {
           {isPending || !data ? <Skeleton className="my-4 h-72 w-full" /> : <RetentionForm settings={data} />}
         </TabsContent>
       </Tabs>
-    </ContentSection>
+        </div>
+      </Main>
+    </>
   )
 }
 
@@ -318,4 +338,4 @@ function useSystemToggle(flag: SystemFlag, message: string, alsoRefresh: QueryKe
   })
 }
 
-export default SettingsSystem
+export default SystemSettings
