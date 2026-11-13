@@ -281,6 +281,7 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 				r.Get("/admin/moderation/events", wrapper.ListModerationEvents)
 
 				r.Get("/admin/usage-logs", wrapper.ListUsageLogs)
+				r.Get("/admin/usage-logs/models", wrapper.ListUsageLogModels)
 				r.Get("/admin/users", wrapper.ListUsers)
 				r.Post("/admin/users", wrapper.CreateUser)
 				r.Post("/admin/users/bulk", wrapper.BulkUpdateUsers)

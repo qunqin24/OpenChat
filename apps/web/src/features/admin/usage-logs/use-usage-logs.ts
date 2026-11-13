@@ -42,6 +42,20 @@ export const usageLogKeys = {
   all: ['admin', 'usage-logs'] as const,
   page: (cursor: string | undefined, limit: number, filters: UsageFilters) =>
     [...usageLogKeys.all, cursor ?? null, limit, filters] as const,
+  models: () => [...usageLogKeys.all, 'models'] as const,
+}
+
+/**
+ * The models the model filter offers: every one the log has requests for. Not
+ * the chat models on offer, which leave out image models and any model no
+ * channel serves any more, though their requests are in the log.
+ */
+export function useUsageLogModels() {
+  return useQuery({
+    queryKey: usageLogKeys.models(),
+    queryFn: async ({ signal }) => unwrap(await api.GET('/admin/usage-logs/models', { signal })).items,
+    staleTime: 60_000,
+  })
 }
 
 /**

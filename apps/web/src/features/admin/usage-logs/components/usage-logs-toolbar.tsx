@@ -27,9 +27,8 @@ import {
 import { Separator } from '@/components/shadcn/ui/separator'
 import { UserAvatar } from '@/components/user-avatar'
 import { useAdminChannels, useAdminUsers } from '@/features/admin/use-admin'
-import { useChatModels } from '@/hooks/use-chat-models'
 import { cn } from '@/lib/utils'
-import type { UsageFilters, UsageKind, UsageStatus } from '../use-usage-logs'
+import { useUsageLogModels, type UsageFilters, type UsageKind, type UsageStatus } from '../use-usage-logs'
 
 /** Radix Select cannot hold an empty value, so "no constraint" gets a name. */
 const ANY = '__any__'
@@ -246,7 +245,7 @@ export function UserFilter({
 function ModelFilter({ value, onPick }: { value?: string; onPick: (model?: string) => void }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
-  const { data: models } = useChatModels()
+  const { data: models } = useUsageLogModels()
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -261,22 +260,17 @@ function ModelFilter({ value, onPick }: { value?: string; onPick: (model?: strin
             <CommandGroup>
               {(models ?? []).map((model) => (
                 <CommandItem
-                  key={model.id}
-                  value={`${model.id} ${model.name}`}
+                  key={model}
+                  value={model}
                   onSelect={() => {
-                    onPick(value === model.id ? undefined : model.id)
+                    onPick(value === model ? undefined : model)
                     setOpen(false)
                   }}
                 >
-                  <ModelIcon
-                    subject="model"
-                    providerId={model.providerId}
-                    family={model.family || model.id}
-                    name={model.name}
-                    className="size-5"
-                  />
-                  <span className="truncate">{model.id}</span>
-                  {value === model.id && <CheckIcon className="ms-auto size-4" />}
+                  {/* As the table's model column draws it: the log has the id only. */}
+                  <ModelIcon subject="model" family={model} name={model} className="size-5" />
+                  <span className="truncate">{model}</span>
+                  {value === model && <CheckIcon className="ms-auto size-4" />}
                 </CommandItem>
               ))}
             </CommandGroup>

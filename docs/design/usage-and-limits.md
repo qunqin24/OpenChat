@@ -30,6 +30,7 @@
 ## 使用日志的游标分页
 
 - 使用日志用游标分页（`created_at, id`，走 `usage_logs_created_idx`），`nextCursor` 是下一页的 `cursor`，筛选条件在翻页间必须不变；总数是 `summary.requests`，没有页码也没有 `total`。
+- 「模型」筛选的选项是日志里出现过的模型（`GET /admin/usage-logs/models`，`ListUsageLogModels` 沿 `usage_logs_model_idx` 逐个跳着取，代价是模型数而不是请求数），不是当前提供的聊天模型：那份列表里没有绘图模型，也没有已经不再提供、但日志里还有请求的模型。
 
 ## 容量上限的前端
 

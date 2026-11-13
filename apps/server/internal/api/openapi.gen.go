@@ -5662,6 +5662,11 @@ type UsageLog struct {
 	UserName      *string             `json:"userName,omitempty"`
 }
 
+// UsageLogModels defines model for UsageLogModels.
+type UsageLogModels struct {
+	Items []string `json:"items"`
+}
+
 // UsageLogPage defines model for UsageLogPage.
 type UsageLogPage struct {
 	Items []UsageLog `json:"items"`
@@ -7515,6 +7520,9 @@ type ServerInterface interface {
 	// ListUsageLogs List model requests
 	// (GET /admin/usage-logs)
 	ListUsageLogs(w http.ResponseWriter, r *http.Request, params ListUsageLogsParams)
+	// ListUsageLogModels Models in the request log
+	// (GET /admin/usage-logs/models)
+	ListUsageLogModels(w http.ResponseWriter, r *http.Request)
 	// ListUsers List accounts
 	// (GET /admin/users)
 	ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams)
@@ -8247,6 +8255,12 @@ func (_ Unimplemented) UpdateSystemSettings(w http.ResponseWriter, r *http.Reque
 // ListUsageLogs List model requests
 // (GET /admin/usage-logs)
 func (_ Unimplemented) ListUsageLogs(w http.ResponseWriter, r *http.Request, params ListUsageLogsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListUsageLogModels Models in the request log
+// (GET /admin/usage-logs/models)
+func (_ Unimplemented) ListUsageLogModels(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -10645,6 +10659,20 @@ func (siw *ServerInterfaceWrapper) ListUsageLogs(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListUsageLogs(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListUsageLogModels operation middleware
+func (siw *ServerInterfaceWrapper) ListUsageLogModels(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListUsageLogModels(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13471,6 +13499,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/usage-logs", wrapper.ListUsageLogs)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/usage-logs/models", wrapper.ListUsageLogModels)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/channel-types", wrapper.ListChannelTypes)

@@ -145,6 +145,43 @@ func (q *Queries) LatestContextTokens(ctx context.Context, conversationID *uuid.
 	return i, err
 }
 
+const listUsageLogModels = `-- name: ListUsageLogModels :many
+WITH RECURSIVE models AS (
+    (SELECT u.model_id FROM usage_logs u ORDER BY u.model_id LIMIT 1)
+    UNION ALL
+    SELECT (SELECT u.model_id FROM usage_logs u WHERE u.model_id > m.model_id ORDER BY u.model_id LIMIT 1)
+    FROM models m
+    WHERE m.model_id IS NOT NULL
+)
+SELECT model_id::text AS model_id
+FROM models
+WHERE model_id IS NOT NULL
+`
+
+// Every model id the log has a request for, in order: what the log page can
+// filter by. Read as a loose index scan of usage_logs_model_idx - one probe
+// per model, the next id after the last - so it costs the number of models,
+// not the number of requests.
+func (q *Queries) ListUsageLogModels(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, listUsageLogModels)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var model_id string
+		if err := rows.Scan(&model_id); err != nil {
+			return nil, err
+		}
+		items = append(items, model_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUsageLogs = `-- name: ListUsageLogs :many
 SELECT l.id,
        l.created_at,

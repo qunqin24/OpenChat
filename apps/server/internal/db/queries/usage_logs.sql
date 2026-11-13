@@ -162,3 +162,19 @@ WHERE conversation_id = $1
   AND status = 'ok'
 ORDER BY created_at DESC
 LIMIT 1;
+
+-- name: ListUsageLogModels :many
+-- Every model id the log has a request for, in order: what the log page can
+-- filter by. Read as a loose index scan of usage_logs_model_idx - one probe
+-- per model, the next id after the last - so it costs the number of models,
+-- not the number of requests.
+WITH RECURSIVE models AS (
+    (SELECT u.model_id FROM usage_logs u ORDER BY u.model_id LIMIT 1)
+    UNION ALL
+    SELECT (SELECT u.model_id FROM usage_logs u WHERE u.model_id > m.model_id ORDER BY u.model_id LIMIT 1)
+    FROM models m
+    WHERE m.model_id IS NOT NULL
+)
+SELECT model_id::text AS model_id
+FROM models
+WHERE model_id IS NOT NULL;

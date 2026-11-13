@@ -378,6 +378,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/usage-logs/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Models in the request log
+         * @description Every model id the log has a request for, in order: what the log can
+         *     be filtered by. Not the models offered now - an image model, a model
+         *     a channel no longer serves and one only used for titles are all here
+         *     as long as the log has their requests.
+         */
+        get: operations["listUsageLogModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/channel-types": {
         parameters: {
             query?: never;
@@ -5316,6 +5339,9 @@ export interface components {
              */
             cacheSavings?: number | null;
         };
+        UsageLogModels: {
+            items: string[];
+        };
         UsageLogPage: {
             items: components["schemas"]["UsageLog"][];
             /** @description Absent on the last page. */
@@ -7100,6 +7126,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UsageLogPage"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listUsageLogModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageLogModels"];
                 };
             };
             default: components["responses"]["Error"];

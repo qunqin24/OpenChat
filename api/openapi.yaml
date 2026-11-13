@@ -470,6 +470,24 @@ paths:
               schema: { $ref: "#/components/schemas/UsageLogPage" }
         default: { $ref: "#/components/responses/Error" }
 
+  /admin/usage-logs/models:
+    get:
+      tags: [admin]
+      summary: Models in the request log
+      description: |
+        Every model id the log has a request for, in order: what the log can
+        be filtered by. Not the models offered now - an image model, a model
+        a channel no longer serves and one only used for titles are all here
+        as long as the log has their requests.
+      operationId: listUsageLogModels
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UsageLogModels" }
+        default: { $ref: "#/components/responses/Error" }
+
   /admin/channel-types:
     get:
       tags: [admin]
@@ -6327,6 +6345,14 @@ components:
           description: |
             USD the cached reads saved against the full input price, over the
             requests priced for both. Null when none were.
+
+    UsageLogModels:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { type: string }
 
     UsageLogPage:
       type: object

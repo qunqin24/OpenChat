@@ -12,6 +12,21 @@ import (
 	"github.com/qunqin24/openchat/apps/server/internal/httpx"
 )
 
+// ListUsageLogModels is every model the ledger has a request for: what the log
+// page offers to filter by. Read from the ledger rather than the models on
+// offer, which leave out image models and anything no longer served.
+func (s *Server) ListUsageLogModels(w http.ResponseWriter, r *http.Request) {
+	models, err := s.q.ListUsageLogModels(r.Context())
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	if models == nil {
+		models = []string{}
+	}
+	httpx.JSON(w, http.StatusOK, UsageLogModels{Items: models})
+}
+
 // ListUsageLogs pages the ledger of model requests, newest first, with totals
 // for everything the filters match. Paged by cursor over (created_at, id), the
 // order of the ledger's index: a request logged while an operator is reading

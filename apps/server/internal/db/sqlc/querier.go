@@ -766,6 +766,11 @@ type Querier interface {
 	// The tools a person's runs may call: of the plugins they installed that are
 	// on and theirs to see, connected when they act as the person, not blocked.
 	ListUsablePluginTools(ctx context.Context, userID uuid.UUID) ([]ListUsablePluginToolsRow, error)
+	// Every model id the log has a request for, in order: what the log page can
+	// filter by. Read as a loose index scan of usage_logs_model_idx - one probe
+	// per model, the next id after the last - so it costs the number of models,
+	// not the number of requests.
+	ListUsageLogModels(ctx context.Context) ([]string, error)
 	// Newest first, by keyset on (created_at, id): the order of usage_logs_created_idx,
 	// so a page deep into a ledger of millions of rows costs what the first one
 	// does, and a row written meanwhile cannot shift the pages. The total is the
