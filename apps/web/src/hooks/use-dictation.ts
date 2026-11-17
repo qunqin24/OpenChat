@@ -80,7 +80,10 @@ export function useDictation({
     try {
       const result = unwrap(
         await api.POST('/transcriptions', {
-          params: { query: { seconds: Math.max(1, Math.round(elapsedMs / 1000)) } },
+          // No more than the limit: in a background tab the browser slows the
+          // timer that stops at the limit, and a recording that ran on past
+          // it would be refused and lost.
+          params: { query: { seconds: Math.min(maxSeconds, Math.max(1, Math.round(elapsedMs / 1000))) } },
           // The recording itself is the body, sent as it is.
           body: blob as unknown as string,
           bodySerializer: (body: unknown) => body as BodyInit,
@@ -101,7 +104,7 @@ export function useDictation({
       if (request.current === controller) request.current = null
       setState('idle')
     }
-  }, [])
+  }, [maxSeconds])
 
   const start = useCallback(async () => {
     if (session.current || state !== 'idle') return

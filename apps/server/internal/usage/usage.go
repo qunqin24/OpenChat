@@ -374,7 +374,10 @@ func (m *Meter) EndTranscription(ctx context.Context, resp llm.TranscriptionResp
 	case err != nil && !cancelled:
 	case resp.Seconds > 0:
 		seconds = &resp.Seconds
-	case resp.Usage == nil || cancelled:
+	default:
+		// The provider gave no length - it reported tokens (gpt-4o-transcribe),
+		// nothing, or the request was cancelled: the recording's own length,
+		// marked as an estimate, so a per-minute price still applies.
 		estimate := max(m.call.AudioSeconds, 0)
 		seconds, estimated = &estimate, true
 	}

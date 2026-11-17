@@ -340,6 +340,18 @@ func TestTranscribe(t *testing.T) {
 		t.Errorf("ledger = %+v", rows)
 	}
 
+	// One that reports tokens and no length (gpt-4o-transcribe) is still
+	// billed by the minute, on the client's length.
+	f.first = func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"text":"tokens","usage":{"type":"tokens","input_tokens":120,"output_tokens":8}}`))
+	}
+	if rec := f.transcribe(f.member, "audio/webm", 20, audio); rec.Code != http.StatusOK {
+		t.Fatalf("token usage: %d %s", rec.Code, rec.Body)
+	}
+	if rows := f.rows(); len(rows) != 3 || !rows[2].Estimated || !closeTo(rows[2].Seconds, 20) || !closeTo(rows[2].Cost, 0.002) {
+		t.Errorf("ledger = %+v", rows)
+	}
+
 	// Refusals before any service is asked.
 	asked := f.firstN.Load() + f.secondN.Load()
 	for name, c := range map[string]struct {
