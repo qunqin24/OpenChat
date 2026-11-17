@@ -79,10 +79,10 @@ func convertTools(tools []llm.Tool) []map[string]any {
 	out := make([]map[string]any, 0, len(tools))
 	for _, tool := range tools {
 		declaration := map[string]any{"name": tool.Name, "description": tool.Description}
-		if len(tool.Parameters) > 0 {
-			// Omitted rather than defaulted for a tool that takes nothing: this
-			// API rejects an empty properties object, unlike the other two.
-			declaration["parameters"] = tool.Parameters
+		// Omitted rather than defaulted for a tool that takes nothing: this
+		// API rejects an empty properties object, unlike the other two.
+		if parameters, ok := toolParameters(tool.Parameters); ok {
+			declaration["parameters"] = parameters
 		}
 		out = append(out, declaration)
 	}
