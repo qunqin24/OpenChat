@@ -1,5 +1,5 @@
 import type { ToolCallPart, ToolResultPart } from '@openchat/api-client'
-import { Download, PenLine } from 'lucide-react'
+import { Download, ImageOff, PenLine } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -11,6 +11,7 @@ import { useImageViewer, type ViewerImage } from '@/stores/image-viewer-store'
 import { usePictureRefs } from '@/stores/picture-ref-store'
 import { imageRequestOf, pictureSrc, picturesOf, placeholderSize, type GeneratedPicture } from '@openchat/chat-core/image-tool'
 import DevelopingPicture from './DevelopingPicture'
+import { RemovedChip } from './MessageAttachments'
 
 // The pictures an image call made, in the reply itself (design A: frameless,
 // at their own shape, actions on hover), and before them the placeholders
@@ -23,13 +24,19 @@ import DevelopingPicture from './DevelopingPicture'
 interface Props {
   call: ToolCallPart
   result?: ToolResultPart
+  /** Pictures deleted from the library since (the tool row's `removedAttachments`). */
+  removed?: ReadonlySet<string>
   conversationId?: string
 }
 
-export default function GeneratedImages({ call, result, conversationId }: Props) {
+export default function GeneratedImages({ call, result, removed, conversationId }: Props) {
   const { t } = useTranslation()
   const request = imageRequestOf(call)
-  const pictures = picturesOf(result)
+  const made = picturesOf(result)
+  // A picture deleted from the library keeps its place as a muted chip, as a
+  // file deleted from a question does, rather than a frame that cannot load.
+  const pictures = made.filter((picture) => !removed?.has(picture.id))
+  const gone = made.length - pictures.length
   // Whether it was first drawn before its result: then the reader watched
   // it being made, and the pictures arrive into the placeholders. Drawn from
   // history, the pictures are simply there.
@@ -48,8 +55,16 @@ export default function GeneratedImages({ call, result, conversationId }: Props)
     return () => window.clearTimeout(timer)
   }, [leaving])
 
-  if (result && pictures.length === 0) return null
-  if (!request && pictures.length === 0) return null
+  if (result && made.length === 0) return null
+  if (!request && made.length === 0) return null
+  const goneChips = gone > 0 && (
+    <div className="n-pictures-removed">
+      {Array.from({ length: gone }, (_, i) => (
+        <RemovedChip key={i} name={t('chat.picture.viewer-title')} icon={ImageOff} />
+      ))}
+    </div>
+  )
+  if (result && pictures.length === 0) return goneChips
 
   // Each call starts from a palette of its own, so two side by side differ.
   const seed = [...call.id].reduce((sum, c) => sum + c.charCodeAt(0), 0)
@@ -61,6 +76,7 @@ export default function GeneratedImages({ call, result, conversationId }: Props)
   const prompt = request?.prompt ?? ''
 
   return (
+    <>
     <figure className="n-pictures-figure" aria-busy={developing} aria-label={developing ? t('chat.picture.making') : undefined}>
       <div className={cn('n-pictures', count > 1 && 'is-grid')}>
         {Array.from({ length: count }, (_, i) => (
@@ -88,6 +104,8 @@ export default function GeneratedImages({ call, result, conversationId }: Props)
         </figcaption>
       )}
     </figure>
+    {goneChips}
+    </>
   )
 }
 

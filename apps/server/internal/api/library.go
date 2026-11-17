@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"time"
@@ -184,12 +185,14 @@ func (s *Server) DeleteFile(w http.ResponseWriter, r *http.Request, fileId FileI
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// removedAttachments is the files a user message names in its parts that are
-// no longer attached to it: deleted from the library since. A file moves with
-// its question when the question is edited (MoveAttachments), so the rows on
-// the message are the ones it still has.
+// removedAttachments is the files a message names in its parts that are no
+// longer attached to it: deleted from the library since. For a user message,
+// the files it was sent with - a file moves with its question when the
+// question is edited (MoveAttachments), so the rows on the message are the
+// ones it still has. For a tool row, the pictures the image tool made, which
+// are claimed by the row that holds its result (ClaimRunFiles).
 func removedAttachments(row sqlc.Message, attached []Attachment) []RemovedAttachment {
-	if row.Role != sqlc.MessageRoleUser {
+	if row.Role != sqlc.MessageRoleUser && row.Role != sqlc.MessageRoleTool {
 		return nil
 	}
 	parts, err := agent.DecodeParts(row.Parts)
@@ -199,6 +202,9 @@ func removedAttachments(row sqlc.Message, attached []Attachment) []RemovedAttach
 	kept := make(map[string]bool, len(attached))
 	for _, a := range attached {
 		kept[a.Id.String()] = true
+	}
+	if row.Role == sqlc.MessageRoleTool {
+		return removedPictures(parts, kept)
 	}
 	var out []RemovedAttachment
 	for _, part := range parts {
@@ -212,6 +218,31 @@ func removedAttachments(row sqlc.Message, attached []Attachment) []RemovedAttach
 		}
 		kept[ref.Ref] = true
 		out = append(out, RemovedAttachment{Id: id, Filename: ref.Filename, ContentType: ref.MediaType})
+	}
+	return out
+}
+
+// removedPictures is the image tool's pictures in a tool row's results that
+// are no longer among its files.
+func removedPictures(parts []llm.Part, kept map[string]bool) []RemovedAttachment {
+	var out []RemovedAttachment
+	for _, part := range parts {
+		result, ok := part.(llm.ToolResultPart)
+		if !ok || result.Name != toolImageGenerate || len(result.Details) == 0 {
+			continue
+		}
+		var details ImageToolDetails
+		if json.Unmarshal(result.Details, &details) != nil {
+			continue
+		}
+		for _, picture := range details.Images {
+			id := picture.ID.String()
+			if picture.ID == uuid.Nil || kept[id] {
+				continue
+			}
+			kept[id] = true
+			out = append(out, RemovedAttachment{Id: picture.ID, Filename: picture.Handle, ContentType: picture.MediaType})
+		}
 	}
 	return out
 }

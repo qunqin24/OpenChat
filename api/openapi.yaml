@@ -4116,8 +4116,9 @@ components:
         removedAttachments:
           type: array
           description: |
-            User messages only: the files it was sent with that were deleted
-            since (`deleteFile`), to show where they were.
+            The files a user message was sent with, or the pictures a tool row's
+            image results made, that were deleted since (`deleteFile`), to
+            show where they were.
           items: { $ref: "#/components/schemas/RemovedAttachment" }
         createdAt: { type: string, format: date-time }
 

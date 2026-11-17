@@ -3800,8 +3800,9 @@ type Message struct {
 	// References The other conversations the message refers to (createMessage's conversationIds).
 	References *[]ConversationReference `json:"references,omitempty"`
 
-	// RemovedAttachments User messages only: the files it was sent with that were deleted
-	// since (`deleteFile`), to show where they were.
+	// RemovedAttachments The files a user message was sent with, or the pictures a tool row's
+	// image results made, that were deleted since (`deleteFile`), to
+	// show where they were.
 	RemovedAttachments *[]RemovedAttachment `json:"removedAttachments,omitempty"`
 	Role               Role                 `json:"role"`
 	RunId              *openapi_types.UUID  `json:"runId,omitempty"`

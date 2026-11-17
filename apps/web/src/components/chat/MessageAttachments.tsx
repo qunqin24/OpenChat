@@ -1,5 +1,5 @@
 import type { Attachment, ConversationReference, RemovedAttachment } from '@openchat/api-client'
-import { FileX2 } from 'lucide-react'
+import { FileX2, type LucideIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -49,21 +49,25 @@ export function MessageAttachments({
           <FileChip key={item.id} item={item} conversationId={conversationId} />
         ),
       )}
-      {removed.map((item) => <RemovedChip key={item.id} item={item} />)}
+      {removed.map((item) => <RemovedChip key={item.id} name={item.filename} />)}
       {references.map((reference) => <ReferenceChip key={reference.conversationId} reference={reference} />)}
     </div>
   )
 }
 
-function RemovedChip({ item }: { item: RemovedAttachment }) {
+/**
+ * A file deleted from the library since, in its place: a sent file under a
+ * question, or a picture the image tool made in a reply (GeneratedImages).
+ */
+export function RemovedChip({ name, icon: Icon = FileX2 }: { name: string; icon?: LucideIcon }) {
   const { t } = useTranslation()
   return (
     <span className="n-msg-chip is-removed" title={t('chat.file.removed-hint')}>
       <span className="n-attach-icon" aria-hidden>
-        <FileX2 className="h-4 w-4" />
+        <Icon className="h-4 w-4" />
       </span>
       <span className="n-attach-meta">
-        <span className="n-attach-name">{item.filename}</span>
+        <span className="n-attach-name">{name}</span>
         <span className="n-attach-status">{t('chat.file.removed')}</span>
       </span>
     </span>

@@ -481,6 +481,7 @@ export function AssistantTurn({
                   key={key}
                   call={part}
                   result={result}
+                  removed={turn.removed}
                   conversationId={conversationId}
                 />
               )

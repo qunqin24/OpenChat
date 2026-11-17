@@ -144,6 +144,16 @@ describe('buildTurns', () => {
   })
 })
 
+describe('buildTurns and deleted pictures', () => {
+  it('collects the pictures its tool rows lost to the library', () => {
+    const r = 'run-1'
+    const result = { ...toolResultRow('r1', r, 'c1', 'image_generate'), removedAttachments: [{ id: id('p1'), filename: 'img_a', contentType: 'image/png' }] }
+    const turns = buildTurns([user('q'), toolCallRow('c', r, 'c1', 'image_generate'), result, assistant('a', r)], null)
+    const turn = turns.find((t): t is AssistantTurn => t.kind === 'assistant')
+    expect([...(turn?.removed ?? [])]).toEqual([id('p1')])
+  })
+})
+
 describe('buildTurns with a summary', () => {
   const s = (through: string) => summary(through)
 

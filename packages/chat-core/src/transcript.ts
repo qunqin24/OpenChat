@@ -76,6 +76,8 @@ export type Turn =
       /** Every run that wrote a row of this reply: more than one when it went on after a question. */
       runs: string[]
       results: Record<string, ToolResultPart>
+      /** Files its tool rows made that were deleted from the library since (generated pictures), by id. */
+      removed: Set<string>
       /** The response still streaming, if this is the run in flight. */
       partial: MessagePart[] | null
       live: LiveRun | null
@@ -184,7 +186,7 @@ export function buildTurns(
   const endsAt = new Map<AssistantTurn, number>()
 
   const assistantTurn = (key: string): AssistantTurn => {
-    const turn: AssistantTurn = { kind: 'assistant', key, responses: [], reports: [], runs: [], results: {}, partial: null, live: null }
+    const turn: AssistantTurn = { kind: 'assistant', key, responses: [], reports: [], runs: [], results: {}, removed: new Set(), partial: null, live: null }
     turns.push(turn)
     return turn
   }
@@ -236,6 +238,7 @@ export function buildTurns(
       for (const part of message.parts) {
         if (part.type === 'tool_result') turn.results[part.callId] = part
       }
+      for (const file of message.removedAttachments ?? []) turn.removed.add(file.id)
     }
     if (summary && message.id === summary.throughMessageId) endsAt.set(turn, turn.responses.length)
   }

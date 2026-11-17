@@ -3537,8 +3537,9 @@ export interface components {
             origin?: "agent" | "subagent";
             attachments?: components["schemas"]["Attachment"][];
             /**
-             * @description User messages only: the files it was sent with that were deleted
-             *     since (`deleteFile`), to show where they were.
+             * @description The files a user message was sent with, or the pictures a tool row's
+             *     image results made, that were deleted since (`deleteFile`), to
+             *     show where they were.
              */
             removedAttachments?: components["schemas"]["RemovedAttachment"][];
             /** Format: date-time */

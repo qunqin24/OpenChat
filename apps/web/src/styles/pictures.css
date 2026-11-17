@@ -12,6 +12,12 @@
   grid-template-columns: 1fr 1fr;
   width: min(100%, 560px);
 }
+.chat-ui .n-pictures-removed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0;
+}
 .chat-ui .n-picture {
   position: relative;
   overflow: hidden;
