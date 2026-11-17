@@ -29,8 +29,15 @@ var formats = map[string]map[string]bool{
 }
 
 // maxRefDepth bounds how far $refs are followed, so a recursive definition (a
-// tree whose children are trees) ends as a plain object instead of looping.
-const maxRefDepth = 8
+// tree whose children are trees) ends instead of looping; maxNodes bounds the
+// whole rewrite, since a definition that refers to itself k times grows as k
+// to the depth (a filter of and/or/not reached half a megabyte at depth 8).
+// What is cut off is an object with nothing said about it, which the parent
+// leaves out (expressible).
+const (
+	maxRefDepth = 3
+	maxNodes    = 400
+)
 
 // toolParameters returns the schema to send as a declaration's parameters, or
 // false when there is none to send: this API rejects an object schema whose
@@ -40,7 +47,7 @@ func toolParameters(raw json.RawMessage) (map[string]any, bool) {
 	if len(raw) == 0 || json.Unmarshal(raw, &root) != nil {
 		return nil, false
 	}
-	c := cleaner{defs: map[string]any{}}
+	c := &cleaner{defs: map[string]any{}}
 	for _, key := range []string{"$defs", "definitions"} {
 		if defs, ok := root[key].(map[string]any); ok {
 			for name, def := range defs {
@@ -56,10 +63,15 @@ func toolParameters(raw json.RawMessage) (map[string]any, bool) {
 }
 
 type cleaner struct {
-	defs map[string]any
+	defs  map[string]any
+	nodes int
 }
 
-func (c cleaner) clean(node map[string]any, depth int) map[string]any {
+func (c *cleaner) clean(node map[string]any, depth int) map[string]any {
+	c.nodes++
+	if c.nodes > maxNodes {
+		return map[string]any{"type": "object"}
+	}
 	if ref, ok := node["$ref"].(string); ok {
 		target, found := c.defs[ref].(map[string]any)
 		if !found || depth >= maxRefDepth {
@@ -110,11 +122,35 @@ func (c cleaner) clean(node map[string]any, depth int) map[string]any {
 		if len(types) == 1 {
 			out["type"] = types[0]
 		} else if len(types) > 1 {
-			choices := make([]any, len(types))
-			for i, s := range types {
-				choices[i] = map[string]any{"type": s}
+			// Each type a choice of its own, carrying what goes with it (an
+			// array's items, an object's properties) rather than leaving
+			// those beside the choice.
+			var choices []any
+			for _, s := range types {
+				one := make(map[string]any, len(node))
+				for k, v := range node {
+					if k != "anyOf" && k != "oneOf" {
+						one[k] = v
+					}
+				}
+				one["type"] = s
+				if choice := c.clean(one, depth); expressible(choice) {
+					delete(choice, "description")
+					choices = append(choices, choice)
+				}
 			}
-			out["anyOf"] = choices
+			switch len(choices) {
+			case 0:
+			case 1:
+				for k, v := range choices[0].(map[string]any) {
+					if _, set := out[k]; !set {
+						out[k] = v
+					}
+				}
+			default:
+				out["anyOf"] = choices
+			}
+			return out
 		}
 	}
 
@@ -133,7 +169,9 @@ func (c cleaner) clean(node map[string]any, depth int) map[string]any {
 				out["nullable"] = true
 				continue
 			}
-			choices = append(choices, c.clean(sub, depth))
+			if choice := c.clean(sub, depth); expressible(choice) {
+				choices = append(choices, choice)
+			}
 		}
 		switch len(choices) {
 		case 0:
@@ -165,11 +203,17 @@ func (c cleaner) clean(node map[string]any, depth int) map[string]any {
 		out["enum"] = enum
 	}
 
-	if props, ok := node["properties"].(map[string]any); ok {
+	// What goes with another type is not carried: a choice of a type list is
+	// cleaned from the whole node, items and properties included.
+	if props, ok := node["properties"].(map[string]any); ok && (typ == "" || typ == "object") {
 		cleaned := map[string]any{}
 		for name, each := range props {
 			if sub, ok := each.(map[string]any); ok {
-				cleaned[name] = c.clean(sub, depth)
+				// One this API cannot take (a free-form map, an array of
+				// them) is left out rather than failing the whole request.
+				if schema := c.clean(sub, depth); expressible(schema) {
+					cleaned[name] = schema
+				}
 			}
 		}
 		if len(cleaned) > 0 {
@@ -188,15 +232,41 @@ func (c cleaner) clean(node map[string]any, depth int) map[string]any {
 			}
 		}
 	}
-	if items, ok := node["items"].(map[string]any); ok {
+	if items, ok := node["items"].(map[string]any); ok && (typ == "" || typ == "array") {
 		out["items"] = c.clean(items, depth)
+	}
+	if _, ok := out["properties"]; ok && out["type"] == nil {
+		out["type"] = "object"
+	}
+	// An array must say what it holds here; one that does not (or a tuple,
+	// which this API has no form for) is taken to hold strings.
+	if out["type"] == "array" && out["items"] == nil {
+		out["items"] = map[string]any{"type": "string"}
 	}
 	return out
 }
 
+// expressible is whether this API takes a cleaned schema: an object only with
+// properties to name, an array only of something it takes, a choice only with
+// choices left.
+func expressible(schema map[string]any) bool {
+	switch schema["type"] {
+	case "object":
+		props, _ := schema["properties"].(map[string]any)
+		return len(props) > 0
+	case "array":
+		items, ok := schema["items"].(map[string]any)
+		return ok && expressible(items)
+	}
+	if anyOf, ok := schema["anyOf"].([]any); ok {
+		return len(anyOf) > 0
+	}
+	return true
+}
+
 // mergeAll folds allOf into the schema holding it: properties and required
 // are joined, and otherwise the first to say something wins.
-func (c cleaner) mergeAll(node map[string]any, all []any, depth int) map[string]any {
+func (c *cleaner) mergeAll(node map[string]any, all []any, depth int) map[string]any {
 	merged := map[string]any{}
 	props := map[string]any{}
 	var required []any

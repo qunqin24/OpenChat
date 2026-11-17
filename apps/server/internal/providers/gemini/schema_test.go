@@ -16,9 +16,21 @@ var allowed = map[string]bool{
 	"default": true, "items": true, "minimum": true, "maximum": true,
 }
 
-// checkKeys walks a cleaned schema and fails on any keyword the API refuses.
+// checkKeys walks a cleaned schema and fails on any keyword the API refuses,
+// and on the two shapes it refuses: an object without properties and an array
+// without items.
 func checkKeys(t *testing.T, path string, schema map[string]any) {
 	t.Helper()
+	switch schema["type"] {
+	case "object":
+		if props, _ := schema["properties"].(map[string]any); len(props) == 0 {
+			t.Errorf("%s: an object without properties would be refused", path)
+		}
+	case "array":
+		if _, ok := schema["items"].(map[string]any); !ok {
+			t.Errorf("%s: an array without items would be refused", path)
+		}
+	}
 	for k, v := range schema {
 		if !allowed[k] {
 			t.Errorf("%s: %q would be refused", path, k)
@@ -130,7 +142,7 @@ func TestToolParametersRewritesAnMCPSchema(t *testing.T) {
     "kind": {"type": "string", "enum": ["point"]},
     "at": {"type": "object", "description": "Where.", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}, "required": ["x", "y"]},
     "both": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}, "z": {"type": "number"}}, "required": ["x", "y"]},
-    "tuple": {"type": "array"}
+    "tuple": {"type": "array", "items": {"type": "string"}}
   },
   "required": ["url"]
 }`)
@@ -157,14 +169,14 @@ func TestToolParametersKeepsAChoiceBetweenTypes(t *testing.T) {
 
 func TestToolParametersEndsARecursiveDefinition(t *testing.T) {
 	got := clean(t, `{"type": "object", "properties": {"root": {"$ref": "#/definitions/Node"}},
-  "definitions": {"Node": {"type": "object", "properties": {"children": {"type": "array", "items": {"$ref": "#/definitions/Node"}}}}}}`)
+  "definitions": {"Node": {"type": "object", "properties": {"name": {"type": "string"}, "children": {"type": "array", "items": {"$ref": "#/definitions/Node"}}}}}}`)
 	depth := 0
 	for node := got["properties"].(map[string]any)["root"].(map[string]any); ; depth++ {
-		props, ok := node["properties"].(map[string]any)
+		children, ok := node["properties"].(map[string]any)["children"].(map[string]any)
 		if !ok {
 			break
 		}
-		node = props["children"].(map[string]any)["items"].(map[string]any)
+		node = children["items"].(map[string]any)
 	}
 	if depth == 0 || depth > maxRefDepth {
 		t.Errorf("recursion unrolled %d levels, want between 1 and %d", depth, maxRefDepth)
@@ -184,5 +196,49 @@ func TestToolParametersSendsNothingForATakesNothingTool(t *testing.T) {
 		if schema, ok := toolParameters(json.RawMessage(raw)); ok {
 			t.Errorf("toolParameters(%q) = %v, want nothing", raw, schema)
 		}
+	}
+}
+
+// What this API has no form for - a free-form map, an array of them - is left
+// out, with its name out of required; an array that does not say what it holds
+// holds strings; each type of a type list carries what goes with it.
+func TestToolParametersLeavesOutWhatTheAPICannotTake(t *testing.T) {
+	got := clean(t, `{"type": "object", "properties": {
+  "title": {"type": "string"},
+  "metadata": {"type": "object", "additionalProperties": {"type": "string"}},
+  "rows": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+  "tags": {"type": "array"},
+  "ids": {"type": ["string", "array"], "items": {"type": "integer"}},
+  "anything": {"description": "Any value."}
+}, "required": ["title", "metadata"]}`)
+	want := wantSchema(t, `{"type": "object", "properties": {
+  "title": {"type": "string"},
+  "tags": {"type": "array", "items": {"type": "string"}},
+  "ids": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "integer"}}]},
+  "anything": {"description": "Any value."}
+}, "required": ["title"]}`)
+	if !reflect.DeepEqual(got, want) {
+		gotJSON, _ := json.MarshalIndent(got, "", "  ")
+		wantJSON, _ := json.MarshalIndent(want, "", "  ")
+		t.Errorf("got %s\nwant %s", gotJSON, wantJSON)
+	}
+}
+
+// A filter that refers to itself three times (and, or, not) grew as 3 to the
+// depth; it stays small.
+func TestToolParametersBoundsASelfReferentialSchema(t *testing.T) {
+	got := clean(t, `{"type": "object", "properties": {"filter": {"$ref": "#/$defs/Filter"}},
+  "$defs": {"Filter": {"type": "object", "properties": {
+    "field": {"type": "string"},
+    "and": {"type": "array", "items": {"$ref": "#/$defs/Filter"}},
+    "or": {"type": "array", "items": {"$ref": "#/$defs/Filter"}},
+    "not": {"$ref": "#/$defs/Filter"}
+  }}}}`)
+	data, _ := json.Marshal(got)
+	if len(data) > 32<<10 {
+		t.Errorf("parameters are %d bytes", len(data))
+	}
+	if _, ok := got["properties"].(map[string]any)["filter"]; !ok {
+		t.Error("the filter itself was left out")
 	}
 }
