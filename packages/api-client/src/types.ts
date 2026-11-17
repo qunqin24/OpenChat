@@ -53,6 +53,7 @@ export type ToolCallPart = Schemas['ToolCallPart']
 export type ToolResultPart = Schemas['ToolResultPart']
 export type ChatModel = Schemas['ChatModel']
 export type ModelMark = Schemas['ModelMark']
+export type ModelHealth = Schemas['ModelHealth']
 export type ReasoningEffort = Schemas['ReasoningEffort']
 
 export type Personalization = Schemas['Personalization']

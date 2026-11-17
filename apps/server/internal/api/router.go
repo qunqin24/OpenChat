@@ -197,6 +197,8 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 				r.Use(mw.RequireAdmin)
 
 				r.Get("/admin/dashboard", wrapper.GetAdminDashboard)
+				// The model marketplace's recent tab (model_health.go).
+				r.Get("/admin/models/health", wrapper.GetModelHealth)
 				// The 轨迹 view: the administrator's own conversations only
 				// (the query names the owner), so it reads nobody else's.
 				r.Get("/conversations/{conversationId}/trace", wrapper.GetConversationTrace)

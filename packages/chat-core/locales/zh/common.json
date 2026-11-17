@@ -1223,6 +1223,23 @@
     },
     "models": {
       "title": "模型市场",
+      "tab-models": "模型",
+      "tab-recent": "近 6 小时",
+      "health": {
+        "speed": "速度",
+        "first-token": "首字延迟",
+        "success": "成功率",
+        "ok": "正常",
+        "some-errors": "有错误",
+        "failing": "异常",
+        "idle": "没有请求",
+        "from": "6 小时前",
+        "now": "现在",
+        "requests": "{{count}} 次请求",
+        "tokens": "{{formatted}} token",
+        "empty": "还没有接入文字模型",
+        "failed": "加载失败"
+      },
       "none": "没有匹配的模型",
       "search": "搜索模型名称或系列",
       "enabled": "已启用",

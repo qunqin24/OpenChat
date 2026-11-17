@@ -327,6 +327,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/models/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How each model has done in the last six hours
+         * @description For the model marketplace's recent tab: each model's text requests
+         *     (chat, sub-agents, titles, compression) since six hours ago - volume,
+         *     errors, time to the first token, speed in output tokens a second,
+         *     tokens and cost - and the same in 15-minute buckets for its trend.
+         *     Models with requests come first, busiest first; then every other text
+         *     model on offer, by name, with nothing measured. Pictures and
+         *     transcription are not counted: their speed is not tokens a second.
+         */
+        get: operations["getModelHealth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/users": {
         parameters: {
             query?: never;
@@ -4736,6 +4762,64 @@ export interface components {
             /** @description The page names a picture; `getLinkPreviewImage` serves it. */
             image: boolean;
         };
+        ModelHealthReport: {
+            /** @description Where each bucket starts, oldest first; the last runs up to now. */
+            buckets: string[];
+            bucketMinutes: number;
+            models: components["schemas"]["ModelHealth"][];
+        };
+        ModelHealth: {
+            modelId: string;
+            name: string;
+            /** @description For the model's icon. Empty when unknown. */
+            providerId: string;
+            family: string;
+            /** Format: int64 */
+            requests: number;
+            /** Format: int64 */
+            errors: number;
+            /**
+             * Format: int64
+             * @description Cached tokens included.
+             */
+            inputTokens: number;
+            /** Format: int64 */
+            outputTokens: number;
+            /**
+             * Format: double
+             * @description USD; requests without a price count as nothing.
+             */
+            cost: number;
+            /**
+             * Format: double
+             * @description Absent with no successful request.
+             */
+            firstTokenP50Ms?: number;
+            /** Format: double */
+            firstTokenP95Ms?: number;
+            /**
+             * Format: double
+             * @description Output tokens a second over the whole request (as the usage log
+             *     shows it), the median over successful requests that wrote at least
+             *     20 tokens over 300 ms and are not estimates. Absent when there
+             *     were none.
+             */
+            speedP50?: number;
+            /** Format: double */
+            durationP50Ms?: number;
+            /** @description One point per bucket of the report, in order. */
+            series: components["schemas"]["ModelHealthPoint"][];
+        };
+        ModelHealthPoint: {
+            /** Format: int64 */
+            requests: number;
+            /** Format: int64 */
+            errors: number;
+            /** Format: double */
+            firstTokenP50Ms?: number;
+            /** Format: double */
+            speedP50?: number;
+        };
         ModelMark: {
             id: string;
             name: string;
@@ -7254,6 +7338,27 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getModelHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelHealthReport"];
+                };
+            };
             default: components["responses"]["Error"];
         };
     };

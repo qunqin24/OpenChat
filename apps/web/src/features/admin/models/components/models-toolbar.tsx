@@ -9,8 +9,9 @@ import { Switch } from '@/components/shadcn/ui/switch'
 type ModelsToolbarProps = {
   search: string
   onSearchChange: (value: string) => void
-  enabledOnly: boolean
-  onEnabledOnlyChange: (value: boolean) => void
+  /** Left out where there is nothing to switch (the recent tab): the search alone. */
+  enabledOnly?: boolean
+  onEnabledOnlyChange?: (value: boolean) => void
 }
 
 export function ModelsToolbar({
@@ -38,16 +39,18 @@ export function ModelsToolbar({
         />
       </div>
 
-      <div className="flex items-center gap-2 ps-1">
-        <Switch
-          id={enabledSwitchId}
-          checked={enabledOnly}
-          onCheckedChange={onEnabledOnlyChange}
-        />
-        <Label htmlFor={enabledSwitchId} className="text-sm font-normal">
-          {t('admin.models.filter-enabled')}
-        </Label>
-      </div>
+      {onEnabledOnlyChange && (
+        <div className="flex items-center gap-2 ps-1">
+          <Switch
+            id={enabledSwitchId}
+            checked={enabledOnly}
+            onCheckedChange={onEnabledOnlyChange}
+          />
+          <Label htmlFor={enabledSwitchId} className="text-sm font-normal">
+            {t('admin.models.filter-enabled')}
+          </Label>
+        </div>
+      )}
     </div>
   )
 }

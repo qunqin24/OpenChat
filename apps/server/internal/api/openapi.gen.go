@@ -3893,6 +3893,55 @@ type ModelChannel struct {
 	Name    string             `json:"name"`
 }
 
+// ModelHealth defines model for ModelHealth.
+type ModelHealth struct {
+	// Cost USD; requests without a price count as nothing.
+	Cost          float64  `json:"cost"`
+	DurationP50Ms *float64 `json:"durationP50Ms,omitempty"`
+	Errors        int64    `json:"errors"`
+	Family        string   `json:"family"`
+
+	// FirstTokenP50Ms Absent with no successful request.
+	FirstTokenP50Ms *float64 `json:"firstTokenP50Ms,omitempty"`
+	FirstTokenP95Ms *float64 `json:"firstTokenP95Ms,omitempty"`
+
+	// InputTokens Cached tokens included.
+	InputTokens  int64  `json:"inputTokens"`
+	ModelId      string `json:"modelId"`
+	Name         string `json:"name"`
+	OutputTokens int64  `json:"outputTokens"`
+
+	// ProviderId For the model's icon. Empty when unknown.
+	ProviderId string `json:"providerId"`
+	Requests   int64  `json:"requests"`
+
+	// Series One point per bucket of the report, in order.
+	Series []ModelHealthPoint `json:"series"`
+
+	// SpeedP50 Output tokens a second over the whole request (as the usage log
+	// shows it), the median over successful requests that wrote at least
+	// 20 tokens over 300 ms and are not estimates. Absent when there
+	// were none.
+	SpeedP50 *float64 `json:"speedP50,omitempty"`
+}
+
+// ModelHealthPoint defines model for ModelHealthPoint.
+type ModelHealthPoint struct {
+	Errors          int64    `json:"errors"`
+	FirstTokenP50Ms *float64 `json:"firstTokenP50Ms,omitempty"`
+	Requests        int64    `json:"requests"`
+	SpeedP50        *float64 `json:"speedP50,omitempty"`
+}
+
+// ModelHealthReport defines model for ModelHealthReport.
+type ModelHealthReport struct {
+	BucketMinutes int `json:"bucketMinutes"`
+
+	// Buckets Where each bucket starts, oldest first; the last runs up to now.
+	Buckets []time.Time   `json:"buckets"`
+	Models  []ModelHealth `json:"models"`
+}
+
 // ModelKind What a model is for. Only `text` models are offered in chat; `image`
 // models make pictures (图片生成) and `transcription` models turn speech
 // into text (语音输入).
@@ -7555,6 +7604,9 @@ type ServerInterface interface {
 	// TestImageSearch Find one picture with the current settings
 	// (POST /admin/image-search/test)
 	TestImageSearch(w http.ResponseWriter, r *http.Request)
+	// GetModelHealth How each model has done in the last six hours
+	// (GET /admin/models/health)
+	GetModelHealth(w http.ResponseWriter, r *http.Request)
 	// ResetModelCapacity Count a model's total spending cap again from now
 	// (POST /admin/models/{modelId}/capacity/reset)
 	ResetModelCapacity(w http.ResponseWriter, r *http.Request, modelId string)
@@ -8182,6 +8234,12 @@ func (_ Unimplemented) UpdateImageSearchSettings(w http.ResponseWriter, r *http.
 // TestImageSearch Find one picture with the current settings
 // (POST /admin/image-search/test)
 func (_ Unimplemented) TestImageSearch(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetModelHealth How each model has done in the last six hours
+// (GET /admin/models/health)
+func (_ Unimplemented) GetModelHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9698,6 +9756,20 @@ func (siw *ServerInterfaceWrapper) TestImageSearch(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.TestImageSearch(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetModelHealth operation middleware
+func (siw *ServerInterfaceWrapper) GetModelHealth(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetModelHealth(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13883,6 +13955,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/dashboard", wrapper.GetAdminDashboard)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/models/health", wrapper.GetModelHealth)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/users", wrapper.ListUsers)

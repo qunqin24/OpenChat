@@ -379,6 +379,20 @@ type Querier interface {
 	GetMemory(ctx context.Context, arg GetMemoryParams) (UserMemory, error)
 	GetMemoryEventForUpdate(ctx context.Context, arg GetMemoryEventForUpdateParams) (MemoryEvent, error)
 	GetMessage(ctx context.Context, id uuid.UUID) (Message, error)
+	// How each model has done since `since`, for the model marketplace's recent
+	// tab: the text requests (chat, sub-agents, titles, compression), not
+	// pictures or transcription, whose speed is not tokens a second.
+	//
+	// Speed is output tokens over the whole request, as the usage log works it
+	// out (outputSpeed in the web's usage-logs/format.ts): not over the time
+	// after the first token, since reasoning a provider bills but does not stream
+	// would make that tens of thousands a second. Only requests that wrote enough
+	// to measure (20 tokens, 300 ms) and whose tokens are not an estimate.
+	GetModelHealth(ctx context.Context, since pgtype.Timestamptz) ([]GetModelHealthRow, error)
+	// The same per model and 15-minute bucket (date_bin from the epoch, so the
+	// buckets line up with the window's start). Only buckets with requests come
+	// back; the handler fills the rest.
+	GetModelHealthBuckets(ctx context.Context, since pgtype.Timestamptz) ([]GetModelHealthBucketsRow, error)
 	GetModelOverride(ctx context.Context, modelID string) (ModelOverride, error)
 	// One of the caller's files, wherever it is, for viewing.
 	GetOwnAttachment(ctx context.Context, arg GetOwnAttachmentParams) (Attachment, error)

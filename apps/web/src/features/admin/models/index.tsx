@@ -5,7 +5,9 @@ import { ConfigDrawer } from '@/components/shadcn/config-drawer'
 import { Header } from '@/components/shadcn/layout/header'
 import { Main } from '@/components/shadcn/layout/main'
 import { Search } from '@/components/shadcn/search'
+import { Tabs, TabsList, TabsTrigger } from '@/components/shadcn/ui/tabs'
 import { CatalogStatusLine } from './components/catalog-status-line'
+import { ModelHealthGrid } from './components/model-health'
 import { ModelsGrid } from './components/models-grid'
 import { ModelsToolbar } from './components/models-toolbar'
 import { useCatalogModels, useChannelReach, useHasChannels } from './use-catalog'
@@ -30,10 +32,14 @@ const PAGE_SIZE = 24
  *
  * Searching, filtering and paging are all the server's, exactly as the user
  * table does it.
+ *
+ * A second tab shows how each model has done in the last six hours - speed,
+ * time to the first token, success - from the usage ledger (model-health.tsx).
  */
 export function Models() {
   const { t } = useTranslation()
 
+  const [tab, setTab] = useState<'models' | 'recent'>('models')
   const [search, setSearch] = useState('')
   const [enabledOnly, setEnabledOnly] = useState(false)
   const [page, setPage] = useState(1)
@@ -68,29 +74,47 @@ export function Models() {
 
       <Main className="flex flex-1 flex-col gap-4 sm:gap-6">
         <div className="flex flex-wrap items-end justify-between gap-2">
-          <h2 className="text-2xl font-bold tracking-tight">{t('admin.models.title')}</h2>
-          <CatalogStatusLine />
+          <div className="flex flex-wrap items-center gap-4">
+            <h2 className="text-2xl font-bold tracking-tight">{t('admin.models.title')}</h2>
+            <Tabs value={tab} onValueChange={(value) => setTab(value as 'models' | 'recent')}>
+              <TabsList>
+                <TabsTrigger value="models">{t('admin.models.tab-models')}</TabsTrigger>
+                <TabsTrigger value="recent">{t('admin.models.tab-recent')}</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+          {tab === 'models' && <CatalogStatusLine />}
         </div>
 
-        <ModelsToolbar
-          search={search}
-          onSearchChange={changeSearch}
-          enabledOnly={enabledOnly}
-          onEnabledOnlyChange={changeEnabledOnly}
-        />
+        {tab === 'recent' ? (
+          <>
+            {/* The same words as the models tab: switching keeps the search. */}
+            <ModelsToolbar search={search} onSearchChange={changeSearch} />
+            <ModelHealthGrid search={search} />
+          </>
+        ) : (
+          <>
+            <ModelsToolbar
+              search={search}
+              onSearchChange={changeSearch}
+              enabledOnly={enabledOnly}
+              onEnabledOnlyChange={changeEnabledOnly}
+            />
 
-        <ModelsGrid
-          models={data?.items ?? []}
-          total={data?.total ?? 0}
-          page={page}
-          limit={PAGE_SIZE}
-          onPageChange={setPage}
-          isPending={isPending}
-          isError={isError}
-          hasChannels={hasChannels}
-          hasModels={hasModels}
-          isReachPending={isChannelsPending || isReachPending}
-        />
+            <ModelsGrid
+              models={data?.items ?? []}
+              total={data?.total ?? 0}
+              page={page}
+              limit={PAGE_SIZE}
+              onPageChange={setPage}
+              isPending={isPending}
+              isError={isError}
+              hasChannels={hasChannels}
+              hasModels={hasModels}
+              isReachPending={isChannelsPending || isReachPending}
+            />
+          </>
+        )}
       </Main>
     </>
   )

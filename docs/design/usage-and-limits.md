@@ -53,3 +53,8 @@
 - 后台 → 系统「请求轨迹（调试）」开关（`request_traces`，**默认关**）。关着时不记录、`GET /conversations/{id}/trace` 404、`ChatFeatures.requestTraces` 为 false（顶栏不出现切换）；已记录的照常 7 天后删。`ChatFeatures.requestTraces` 只对管理员为 true。
 - 只记录管理员本人的请求（`agent.Options.Tracer` = `api.NewTracer`，按 `users.role` 判断），调用方在 `ledger.Call.Request` 里给出请求才会记（run 的对话请求和压缩请求给了，标题请求没给）。保留 7 天（`traceRetention`，清理循环删）。
 - 读取接口 `GET /conversations/{id}/trace` 挂在管理员分组里（非管理员 404），查询同时要求对话属于调用者本人：**管理员也读不到别人的对话**，和「没有任何管理员接口读得到别人的记忆」一致。
+
+## 模型市场「近 6 小时」
+
+后台模型市场的第二个 Tab（`GET /admin/models/health`，`api/model_health.go`，前端 `features/admin/models/components/model-health.tsx`）按模型展示最近 6 小时的文字请求（chat、子 Agent、标题、压缩；生图和语音转写不算）：请求数、错误数、首字延迟 P50/P95、速度 P50、耗时 P50、Token、费用，以及 24 个 15 分钟格的走势（`date_bin` 从 epoch 对齐，空格子由处理函数补齐）。速度和使用日志页同一算法：整个请求的输出 token ÷ 总时长，只算成功、非估算、至少 20 个 token 且至少 300 ms 的请求（不按「首字之后」算：不流式的推理 token 会让它虚高）。模型名和图标经 `ModelMarks`，最近被删的模型也有名字。页面开着时每分钟刷新。
+

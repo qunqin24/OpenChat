@@ -15,6 +15,7 @@ import { queryKeys } from '@openchat/chat-core/query-keys'
 export const adminKeys = {
   all: ['admin'] as const,
   dashboard: (range: DashboardRange) => [...adminKeys.all, 'dashboard', range] as const,
+  modelHealth: () => [...adminKeys.all, 'model-health'] as const,
   users: (page: number, search: string, status: readonly UserStatus[] = []) =>
     [...adminKeys.all, 'users', page, search, status] as const,
   system: () => [...adminKeys.all, 'system'] as const,
@@ -42,6 +43,16 @@ export const adminKeys = {
   speechInput: () => [...adminKeys.all, 'speech-input'] as const,
   speechModels: () => [...adminKeys.all, 'speech-input', 'models'] as const,
   browserActions: (page: object) => [...adminKeys.all, 'browser', 'actions', page] as const,
+}
+
+/** The model marketplace's recent tab: each model's last six hours, kept fresh while it is open. */
+export function useModelHealth() {
+  return useQuery({
+    queryKey: adminKeys.modelHealth(),
+    queryFn: async ({ signal }) => unwrap(await api.GET('/admin/models/health', { signal })),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  })
 }
 
 export function useAdminDashboard(range: DashboardRange) {

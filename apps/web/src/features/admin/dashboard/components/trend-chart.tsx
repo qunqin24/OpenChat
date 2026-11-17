@@ -58,7 +58,7 @@ export function TrendChart({
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={256} key={range}>
-          <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+          <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }} accessibilityLayer={false}>
             <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 3" />
             <XAxis
               dataKey="at"

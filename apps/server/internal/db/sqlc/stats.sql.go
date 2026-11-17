@@ -426,3 +426,132 @@ func (q *Queries) GetDashboardWindow(ctx context.Context, arg GetDashboardWindow
 	err := row.Scan(&i.Since, &i.PrevSince, &i.TotalUsers)
 	return i, err
 }
+
+const getModelHealth = `-- name: GetModelHealth :many
+SELECT model_id,
+       count(*)::bigint                                                       AS requests,
+       count(*) FILTER (WHERE status = 'error')::bigint                       AS errors,
+       coalesce(sum(input_tokens + cache_read_tokens + cache_write_tokens), 0)::bigint AS input_tokens,
+       coalesce(sum(output_tokens), 0)::bigint                                AS output_tokens,
+       coalesce(sum(cost), 0)::double precision                               AS cost,
+       coalesce(percentile_cont(0.5) WITHIN GROUP (ORDER BY first_token_ms)
+           FILTER (WHERE status = 'ok' AND first_token_ms IS NOT NULL), -1)::double precision AS first_token_p50_ms,
+       coalesce(percentile_cont(0.95) WITHIN GROUP (ORDER BY first_token_ms)
+           FILTER (WHERE status = 'ok' AND first_token_ms IS NOT NULL), -1)::double precision AS first_token_p95_ms,
+       coalesce(percentile_cont(0.5) WITHIN GROUP (ORDER BY output_tokens * 1000.0 / duration_ms)
+           FILTER (WHERE status = 'ok' AND NOT estimated AND output_tokens >= 20 AND duration_ms >= 300), -1)::double precision AS speed_p50,
+       coalesce(percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms) FILTER (WHERE status = 'ok'), -1)::double precision AS duration_p50_ms
+FROM usage_logs
+WHERE created_at >= $1::timestamptz
+  AND kind IN ('chat', 'subagent', 'title', 'compression')
+GROUP BY model_id
+ORDER BY count(*) DESC, model_id
+`
+
+type GetModelHealthRow struct {
+	ModelID         string  `json:"model_id"`
+	Requests        int64   `json:"requests"`
+	Errors          int64   `json:"errors"`
+	InputTokens     int64   `json:"input_tokens"`
+	OutputTokens    int64   `json:"output_tokens"`
+	Cost            float64 `json:"cost"`
+	FirstTokenP50Ms float64 `json:"first_token_p50_ms"`
+	FirstTokenP95Ms float64 `json:"first_token_p95_ms"`
+	SpeedP50        float64 `json:"speed_p50"`
+	DurationP50Ms   float64 `json:"duration_p50_ms"`
+}
+
+// How each model has done since `since`, for the model marketplace's recent
+// tab: the text requests (chat, sub-agents, titles, compression), not
+// pictures or transcription, whose speed is not tokens a second.
+//
+// Speed is output tokens over the whole request, as the usage log works it
+// out (outputSpeed in the web's usage-logs/format.ts): not over the time
+// after the first token, since reasoning a provider bills but does not stream
+// would make that tens of thousands a second. Only requests that wrote enough
+// to measure (20 tokens, 300 ms) and whose tokens are not an estimate.
+func (q *Queries) GetModelHealth(ctx context.Context, since pgtype.Timestamptz) ([]GetModelHealthRow, error) {
+	rows, err := q.db.Query(ctx, getModelHealth, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetModelHealthRow{}
+	for rows.Next() {
+		var i GetModelHealthRow
+		if err := rows.Scan(
+			&i.ModelID,
+			&i.Requests,
+			&i.Errors,
+			&i.InputTokens,
+			&i.OutputTokens,
+			&i.Cost,
+			&i.FirstTokenP50Ms,
+			&i.FirstTokenP95Ms,
+			&i.SpeedP50,
+			&i.DurationP50Ms,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getModelHealthBuckets = `-- name: GetModelHealthBuckets :many
+SELECT model_id,
+       date_bin(interval '15 minutes', created_at, timestamptz 'epoch')::timestamptz AS at,
+       count(*)::bigint                                                       AS requests,
+       count(*) FILTER (WHERE status = 'error')::bigint                       AS errors,
+       coalesce(percentile_cont(0.5) WITHIN GROUP (ORDER BY first_token_ms)
+           FILTER (WHERE status = 'ok' AND first_token_ms IS NOT NULL), -1)::double precision AS first_token_p50_ms,
+       coalesce(percentile_cont(0.5) WITHIN GROUP (ORDER BY output_tokens * 1000.0 / duration_ms)
+           FILTER (WHERE status = 'ok' AND NOT estimated AND output_tokens >= 20 AND duration_ms >= 300), -1)::double precision AS speed_p50
+FROM usage_logs
+WHERE created_at >= $1::timestamptz
+  AND kind IN ('chat', 'subagent', 'title', 'compression')
+GROUP BY 1, 2
+ORDER BY 1, 2
+`
+
+type GetModelHealthBucketsRow struct {
+	ModelID         string             `json:"model_id"`
+	At              pgtype.Timestamptz `json:"at"`
+	Requests        int64              `json:"requests"`
+	Errors          int64              `json:"errors"`
+	FirstTokenP50Ms float64            `json:"first_token_p50_ms"`
+	SpeedP50        float64            `json:"speed_p50"`
+}
+
+// The same per model and 15-minute bucket (date_bin from the epoch, so the
+// buckets line up with the window's start). Only buckets with requests come
+// back; the handler fills the rest.
+func (q *Queries) GetModelHealthBuckets(ctx context.Context, since pgtype.Timestamptz) ([]GetModelHealthBucketsRow, error) {
+	rows, err := q.db.Query(ctx, getModelHealthBuckets, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetModelHealthBucketsRow{}
+	for rows.Next() {
+		var i GetModelHealthBucketsRow
+		if err := rows.Scan(
+			&i.ModelID,
+			&i.At,
+			&i.Requests,
+			&i.Errors,
+			&i.FirstTokenP50Ms,
+			&i.SpeedP50,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

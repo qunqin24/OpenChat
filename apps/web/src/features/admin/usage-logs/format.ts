@@ -61,7 +61,7 @@ export function formatDuration(ms: number): string {
   return `${minutes}m ${String(Math.round(seconds - minutes * 60)).padStart(2, '0')}s`
 }
 
-/** Fewer output tokens, or less time, and a speed is noise: how the network cut the stream into chunks. */
+/** Fewer output tokens, or less time, and a speed is noise: how the network cut the stream into chunks. The recent tab's query (GetModelHealth) uses the same. */
 export const SPEED_MIN_TOKENS = 20
 export const SPEED_MIN_MS = 300
 

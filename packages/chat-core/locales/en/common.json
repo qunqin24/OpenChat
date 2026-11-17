@@ -1223,6 +1223,23 @@
     },
     "models": {
       "title": "Models",
+      "tab-models": "Models",
+      "tab-recent": "Last 6 hours",
+      "health": {
+        "speed": "Speed",
+        "first-token": "First token",
+        "success": "Success",
+        "ok": "Healthy",
+        "some-errors": "Some errors",
+        "failing": "Failing",
+        "idle": "No requests",
+        "from": "6 hours ago",
+        "now": "Now",
+        "requests": "{{count}} requests",
+        "tokens": "{{formatted}} tokens",
+        "empty": "No text models yet",
+        "failed": "Could not load"
+      },
       "none": "No matching models",
       "search": "Search name or family",
       "enabled": "Enabled",

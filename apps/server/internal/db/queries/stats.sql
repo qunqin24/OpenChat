@@ -132,3 +132,50 @@ FROM usage_logs
 WHERE status = 'error' AND created_at >= sqlc.arg('since')::timestamptz
 ORDER BY created_at DESC, id DESC
 LIMIT sqlc.arg('row_limit');
+
+-- name: GetModelHealth :many
+-- How each model has done since `since`, for the model marketplace's recent
+-- tab: the text requests (chat, sub-agents, titles, compression), not
+-- pictures or transcription, whose speed is not tokens a second.
+--
+-- Speed is output tokens over the whole request, as the usage log works it
+-- out (outputSpeed in the web's usage-logs/format.ts): not over the time
+-- after the first token, since reasoning a provider bills but does not stream
+-- would make that tens of thousands a second. Only requests that wrote enough
+-- to measure (20 tokens, 300 ms) and whose tokens are not an estimate.
+SELECT model_id,
+       count(*)::bigint                                                       AS requests,
+       count(*) FILTER (WHERE status = 'error')::bigint                       AS errors,
+       coalesce(sum(input_tokens + cache_read_tokens + cache_write_tokens), 0)::bigint AS input_tokens,
+       coalesce(sum(output_tokens), 0)::bigint                                AS output_tokens,
+       coalesce(sum(cost), 0)::double precision                               AS cost,
+       coalesce(percentile_cont(0.5) WITHIN GROUP (ORDER BY first_token_ms)
+           FILTER (WHERE status = 'ok' AND first_token_ms IS NOT NULL), -1)::double precision AS first_token_p50_ms,
+       coalesce(percentile_cont(0.95) WITHIN GROUP (ORDER BY first_token_ms)
+           FILTER (WHERE status = 'ok' AND first_token_ms IS NOT NULL), -1)::double precision AS first_token_p95_ms,
+       coalesce(percentile_cont(0.5) WITHIN GROUP (ORDER BY output_tokens * 1000.0 / duration_ms)
+           FILTER (WHERE status = 'ok' AND NOT estimated AND output_tokens >= 20 AND duration_ms >= 300), -1)::double precision AS speed_p50,
+       coalesce(percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms) FILTER (WHERE status = 'ok'), -1)::double precision AS duration_p50_ms
+FROM usage_logs
+WHERE created_at >= sqlc.arg('since')::timestamptz
+  AND kind IN ('chat', 'subagent', 'title', 'compression')
+GROUP BY model_id
+ORDER BY count(*) DESC, model_id;
+
+-- name: GetModelHealthBuckets :many
+-- The same per model and 15-minute bucket (date_bin from the epoch, so the
+-- buckets line up with the window's start). Only buckets with requests come
+-- back; the handler fills the rest.
+SELECT model_id,
+       date_bin(interval '15 minutes', created_at, timestamptz 'epoch')::timestamptz AS at,
+       count(*)::bigint                                                       AS requests,
+       count(*) FILTER (WHERE status = 'error')::bigint                       AS errors,
+       coalesce(percentile_cont(0.5) WITHIN GROUP (ORDER BY first_token_ms)
+           FILTER (WHERE status = 'ok' AND first_token_ms IS NOT NULL), -1)::double precision AS first_token_p50_ms,
+       coalesce(percentile_cont(0.5) WITHIN GROUP (ORDER BY output_tokens * 1000.0 / duration_ms)
+           FILTER (WHERE status = 'ok' AND NOT estimated AND output_tokens >= 20 AND duration_ms >= 300), -1)::double precision AS speed_p50
+FROM usage_logs
+WHERE created_at >= sqlc.arg('since')::timestamptz
+  AND kind IN ('chat', 'subagent', 'title', 'compression')
+GROUP BY 1, 2
+ORDER BY 1, 2;

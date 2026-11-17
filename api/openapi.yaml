@@ -368,6 +368,27 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  /admin/models/health:
+    get:
+      tags: [admin]
+      summary: How each model has done in the last six hours
+      description: |
+        For the model marketplace's recent tab: each model's text requests
+        (chat, sub-agents, titles, compression) since six hours ago - volume,
+        errors, time to the first token, speed in output tokens a second,
+        tokens and cost - and the same in 15-minute buckets for its trend.
+        Models with requests come first, busiest first; then every other text
+        model on offer, by name, with nothing measured. Pictures and
+        transcription are not counted: their speed is not tokens a second.
+      operationId: getModelHealth
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ModelHealthReport" }
+        default: { $ref: "#/components/responses/Error" }
+
   /admin/users:
     get:
       tags: [admin]
@@ -5619,6 +5640,54 @@ components:
         image:
           type: boolean
           description: The page names a picture; `getLinkPreviewImage` serves it.
+    ModelHealthReport:
+      type: object
+      required: [buckets, bucketMinutes, models]
+      properties:
+        buckets:
+          type: array
+          description: Where each bucket starts, oldest first; the last runs up to now.
+          items: { type: string, format: date-time }
+        bucketMinutes: { type: integer }
+        models:
+          type: array
+          items: { $ref: "#/components/schemas/ModelHealth" }
+    ModelHealth:
+      type: object
+      required: [modelId, name, providerId, family, requests, errors, inputTokens, outputTokens, cost, series]
+      properties:
+        modelId: { type: string }
+        name: { type: string }
+        providerId: { type: string, description: For the model's icon. Empty when unknown. }
+        family: { type: string }
+        requests: { type: integer, format: int64 }
+        errors: { type: integer, format: int64 }
+        inputTokens: { type: integer, format: int64, description: Cached tokens included. }
+        outputTokens: { type: integer, format: int64 }
+        cost: { type: number, format: double, description: USD; requests without a price count as nothing. }
+        firstTokenP50Ms: { type: number, format: double, description: Absent with no successful request. }
+        firstTokenP95Ms: { type: number, format: double }
+        speedP50:
+          type: number
+          format: double
+          description: |
+            Output tokens a second over the whole request (as the usage log
+            shows it), the median over successful requests that wrote at least
+            20 tokens over 300 ms and are not estimates. Absent when there
+            were none.
+        durationP50Ms: { type: number, format: double }
+        series:
+          type: array
+          description: One point per bucket of the report, in order.
+          items: { $ref: "#/components/schemas/ModelHealthPoint" }
+    ModelHealthPoint:
+      type: object
+      required: [requests, errors]
+      properties:
+        requests: { type: integer, format: int64 }
+        errors: { type: integer, format: int64 }
+        firstTokenP50Ms: { type: number, format: double }
+        speedP50: { type: number, format: double }
     ModelMark:
       type: object
       required: [id, name, providerId, family]
