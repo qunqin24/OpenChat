@@ -3685,6 +3685,19 @@ type LibraryFilePage struct {
 // LibraryFileType defines model for LibraryFileType.
 type LibraryFileType string
 
+// LinkPreview defines model for LinkPreview.
+type LinkPreview struct {
+	Description *string `json:"description,omitempty"`
+
+	// Image The page names a picture; `getLinkPreviewImage` serves it.
+	Image    bool    `json:"image"`
+	SiteName *string `json:"siteName,omitempty"`
+
+	// Title The page's own title for sharing, else its <title>.
+	Title *string `json:"title,omitempty"`
+	Url   string  `json:"url"`
+}
+
 // LiveState A run's work in flight, which is not a message yet.
 type LiveState struct {
 	// Compacting The run is compressing the conversation's context before its next request.
@@ -6240,6 +6253,17 @@ type GetConversationImageParams struct {
 	Url string `form:"url" json:"url"`
 }
 
+// GetLinkPreviewParams defines parameters for GetLinkPreview.
+type GetLinkPreviewParams struct {
+	Url string `form:"url" json:"url"`
+}
+
+// GetLinkPreviewImageParams defines parameters for GetLinkPreviewImage.
+type GetLinkPreviewImageParams struct {
+	// Url The page's address, not the image's.
+	Url string `form:"url" json:"url"`
+}
+
 // ListMessagesParams defines parameters for ListMessages.
 type ListMessagesParams struct {
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
@@ -7782,6 +7806,12 @@ type ServerInterface interface {
 	// GetConversationImage A picture an answer shows, fetched for the reader
 	// (GET /conversations/{conversationId}/images)
 	GetConversationImage(w http.ResponseWriter, r *http.Request, conversationId ConversationId, params GetConversationImageParams)
+	// GetLinkPreview The title, summary and picture of a page an answer links to
+	// (GET /conversations/{conversationId}/link-preview)
+	GetLinkPreview(w http.ResponseWriter, r *http.Request, conversationId ConversationId, params GetLinkPreviewParams)
+	// GetLinkPreviewImage The picture a linked page shares, fetched for the reader
+	// (GET /conversations/{conversationId}/link-preview/image)
+	GetLinkPreviewImage(w http.ResponseWriter, r *http.Request, conversationId ConversationId, params GetLinkPreviewImageParams)
 	// ListMessages List messages in a conversation
 	// (GET /conversations/{conversationId}/messages)
 	ListMessages(w http.ResponseWriter, r *http.Request, conversationId ConversationId, params ListMessagesParams)
@@ -8655,6 +8685,18 @@ func (_ Unimplemented) StreamConversationEvents(w http.ResponseWriter, r *http.R
 // GetConversationImage A picture an answer shows, fetched for the reader
 // (GET /conversations/{conversationId}/images)
 func (_ Unimplemented) GetConversationImage(w http.ResponseWriter, r *http.Request, conversationId ConversationId, params GetConversationImageParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetLinkPreview The title, summary and picture of a page an answer links to
+// (GET /conversations/{conversationId}/link-preview)
+func (_ Unimplemented) GetLinkPreview(w http.ResponseWriter, r *http.Request, conversationId ConversationId, params GetLinkPreviewParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetLinkPreviewImage The picture a linked page shares, fetched for the reader
+// (GET /conversations/{conversationId}/link-preview/image)
+func (_ Unimplemented) GetLinkPreviewImage(w http.ResponseWriter, r *http.Request, conversationId ConversationId, params GetLinkPreviewImageParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -11797,6 +11839,90 @@ func (siw *ServerInterfaceWrapper) GetConversationImage(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// GetLinkPreview operation middleware
+func (siw *ServerInterfaceWrapper) GetLinkPreview(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ConversationId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", chi.URLParam(r, "conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetLinkPreviewParams
+
+	// ------------- Required query parameter "url" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "url", r.URL.Query(), &params.Url, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "url"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "url", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetLinkPreview(w, r, conversationId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetLinkPreviewImage operation middleware
+func (siw *ServerInterfaceWrapper) GetLinkPreviewImage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId ConversationId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", chi.URLParam(r, "conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetLinkPreviewImageParams
+
+	// ------------- Required query parameter "url" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "url", r.URL.Query(), &params.Url, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "url"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "url", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetLinkPreviewImage(w, r, conversationId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListMessages operation middleware
 func (siw *ServerInterfaceWrapper) ListMessages(w http.ResponseWriter, r *http.Request) {
 
@@ -14215,6 +14341,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/conversations/{conversationId}/images", wrapper.GetConversationImage)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/conversations/{conversationId}/link-preview", wrapper.GetLinkPreview)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/conversations/{conversationId}/link-preview/image", wrapper.GetLinkPreviewImage)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/images/search", wrapper.SearchImage)

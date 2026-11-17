@@ -2996,6 +2996,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/conversations/{conversationId}/link-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The title, summary and picture of a page an answer links to
+         * @description For the card shown over a link in an answer. Only a page whose address
+         *     appears in one of this conversation's tool results is fetched - the
+         *     rule `getConversationImage` follows - so hovering over an address the
+         *     model made up, or one a prompt injection put in its prose, sends no
+         *     request anywhere. The page is fetched from public addresses only and
+         *     cached; one that cannot be read answers with only its `url`. 404
+         *     `link_not_found` when the address is not from this conversation.
+         */
+        get: operations["getLinkPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/conversations/{conversationId}/link-preview/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The picture a linked page shares, fetched for the reader
+         * @description The image a page names for sharing (`og:image`), for a link's card when
+         *     `getLinkPreview` said it has one. The same rule as `getLinkPreview`;
+         *     404 when the page has no picture that can be had.
+         */
+        get: operations["getLinkPreviewImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/images/search": {
         parameters: {
             query?: never;
@@ -4673,6 +4725,15 @@ export interface components {
              * @description When the month's allowance starts again.
              */
             resetsAt: string;
+        };
+        LinkPreview: {
+            url: string;
+            /** @description The page's own title for sharing, else its <title>. */
+            title?: string;
+            description?: string;
+            siteName?: string;
+            /** @description The page names a picture; `getLinkPreviewImage` serves it. */
+            image: boolean;
         };
         ModelMark: {
             id: string;
@@ -10842,6 +10903,57 @@ export interface operations {
     getConversationImage: {
         parameters: {
             query: {
+                url: string;
+            };
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": string;
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getLinkPreview: {
+        parameters: {
+            query: {
+                url: string;
+            };
+            header?: never;
+            path: {
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkPreview"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getLinkPreviewImage: {
+        parameters: {
+            query: {
+                /** @description The page's address, not the image's. */
                 url: string;
             };
             header?: never;

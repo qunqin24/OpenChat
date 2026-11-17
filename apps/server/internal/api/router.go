@@ -168,6 +168,9 @@ func NewRouter(cfg *config.Config, s *Server, mw *auth.Middleware) http.Handler 
 			r.Post("/conversations/{conversationId}/subagents/{subagentId}/resume", wrapper.ResumeSubagent)
 			r.Post("/conversations/{conversationId}/subagents/{subagentId}/background", wrapper.BackgroundSubagent)
 			r.Get("/conversations/{conversationId}/images", wrapper.GetConversationImage)
+			// The card over a link in an answer (link_previews.go).
+			r.Get("/conversations/{conversationId}/link-preview", wrapper.GetLinkPreview)
+			r.Get("/conversations/{conversationId}/link-preview/image", wrapper.GetLinkPreviewImage)
 
 			// Any signed-in user: these are the models a conversation can use,
 			// not the channels behind them.

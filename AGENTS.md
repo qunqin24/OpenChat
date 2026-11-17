@@ -175,6 +175,7 @@ grep -rn -- "--n-\|chat-ui" apps/web/src/features/admin apps/web/src/components/
 - `web_fetch` 的地址来自模型输出，只能经 `GuardedClient` 连接（每次拨号都检查目标是公网地址，每一跳重定向同样，不读环境代理）；不要新增绕开它的抓取路径。被拒时可改请 Jina Reader 代读（后台「网页读取」三种模式，`tools.ReaderMode`，`tools/reader.go`），连 Jina 同样走 `GuardedClient`，人机验证页按失败处理。
 - 转录行写入前经 `agent.EncodeParts`/`PlainText` 去掉 NUL（Postgres 的 text/jsonb 都不收，网页文字里偶尔有），别绕开它们直接写 `parts`/`content`。
 - 屏蔽站点（`Blocklist`）对请求的地址和重定向后的地址各查一次。
+- 回答里链接的悬浮卡片（标题、摘要、分享图，`api/link_previews.go`，前端 `MarkdownLink`）只读本对话工具结果里出现过的网页（`ToolResultMentions`，和图片代理同一条规矩），经 `GuardedClient`、查屏蔽站点；别放开成任意地址：悬停不是同意，模型编的或提示注入写的地址可能把对话内容带在查询串里。
 - 读取输出有上限：每次最多 `fetchMaxChars`，用 `offset` 续读；`find` 的段数和总量同样封顶。不要新增一次返回整篇长页面的路径。
 - 搜索的时间范围（`recency`）和限定网站（`sites`）：后端能过滤的交给后端，回来的结果在 `WebSearch.Run` 里再按同样条件过一遍。
 - 写给模型的文字（工具说明、提示词、结果）一律英文；联网提示词是 `api/agent_setup.go` 的 `webGuide`，主 Agent 和子 Agent 共用。

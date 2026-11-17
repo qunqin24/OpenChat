@@ -1,10 +1,12 @@
 import { ArrowUpRight, Check, Copy } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Popover } from 'radix-ui'
-import { useEffect, useRef, useState, type ComponentProps, type PointerEvent } from 'react'
+import { useContext, useEffect, useRef, useState, type ComponentProps, type PointerEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { copyClipboard } from '@/lib/clipboard'
-import { isHttpUrl } from '@openchat/chat-core/urls'
+import { isHttpUrl, siteName } from '@openchat/chat-core/urls'
+import { LinkPreviews, linkPreviewImage, linkPreviewQuery } from './link-preview'
 import { SourceMark } from './ToolActivity'
 
 type LinkProps = ComponentProps<'a'> & { node?: unknown }
@@ -15,8 +17,11 @@ const CLOSE_DELAY = 120
 /**
  * A link in an answer: its words with a dotted underline and a small arrow
  * after them, so a link reads as one without shouting in running text, and a
- * card on hover with the site's icon, the whole address, and buttons to open
- * or copy it - what the words alone do not say is where they go.
+ * card on hover with the page's sharing picture, its site and title, and
+ * buttons to open or copy it - what the words alone do not say is where they
+ * go. The page is read by the server (link-preview.ts), which reads only
+ * pages this conversation's tool results list; for any other link, and until
+ * the page is read, the card shows the address in the title's place.
  *
  * The card stands over the line the pointer is on. A link that wraps is two
  * boxes, and the box round both starts at the left of the lower line, far
@@ -37,6 +42,13 @@ export function MarkdownLink({ href, children, node: _node, className, ...rest }
     },
   })
   const [open, setOpen] = useState(false)
+  const conversationId = useContext(LinkPreviews)
+  const queryClient = useQueryClient()
+  // Asked for as the pointer arrives, so the delay before the card opens is
+  // spent reading the page rather than showing the address first.
+  const prefetch = () => {
+    if (conversationId && href && isHttpUrl(href)) void queryClient.prefetchQuery(linkPreviewQuery(conversationId, href))
+  }
   const timer = useRef(0)
   useEffect(() => () => window.clearTimeout(timer.current), [])
   const later = (next: boolean) => {
@@ -74,12 +86,14 @@ export function MarkdownLink({ href, children, node: _node, className, ...rest }
         onPointerEnter={(event) => {
           if (event.pointerType !== 'mouse') return
           pick(event)
+          prefetch()
           later(true)
         }}
         onPointerMove={pick}
         onPointerLeave={(event) => event.pointerType === 'mouse' && later(false)}
         onFocus={() => {
           line.current = 0
+          prefetch()
           later(true)
         }}
         onBlur={() => later(false)}
@@ -101,7 +115,7 @@ export function MarkdownLink({ href, children, node: _node, className, ...rest }
           onPointerEnter={stay}
           onPointerLeave={() => later(false)}
         >
-          <LinkCard url={href} />
+          <LinkCard url={href} conversationId={conversationId} />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
@@ -111,8 +125,11 @@ export function MarkdownLink({ href, children, node: _node, className, ...rest }
 /** What a virtual anchor has to offer: where it is. */
 type Measurable = { getBoundingClientRect: () => DOMRect }
 
-function LinkCard({ url }: { url: string }) {
+function LinkCard({ url, conversationId }: { url: string; conversationId: string | null }) {
   const { t } = useTranslation()
+  const preview = useQuery({ ...linkPreviewQuery(conversationId ?? '', url), enabled: conversationId !== null })
+  const page = preview.data
+  const [pictureFailed, setPictureFailed] = useState(false)
   const [copied, setCopied] = useState(false)
   const timer = useRef(0)
   useEffect(() => () => window.clearTimeout(timer.current), [])
@@ -122,12 +139,8 @@ function LinkCard({ url }: { url: string }) {
     window.clearTimeout(timer.current)
     timer.current = window.setTimeout(() => setCopied(false), 1500)
   }
-  return (
+  const buttons = (
     <>
-      <SourceMark url={url} />
-      <a className="n-link-card-url" href={url} rel="noreferrer" target="_blank" title={url}>
-        {url}
-      </a>
       <a className="n-link-card-button" href={url} rel="noreferrer" target="_blank" aria-label={t('chat.link-open')}>
         <ArrowUpRight aria-hidden="true" />
       </a>
@@ -135,6 +148,63 @@ function LinkCard({ url }: { url: string }) {
         {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
       </button>
     </>
+  )
+  const site = (
+    <div className="n-link-card-site">
+      <SourceMark url={url} />
+      <span>{page?.siteName || siteName(url)}</span>
+    </div>
+  )
+  const title = (
+    <a className={page?.title ? 'n-link-card-title' : 'n-link-card-title is-url'} href={url} rel="noreferrer" target="_blank" title={url}>
+      {page?.title || url}
+    </a>
+  )
+
+  // The richest the page allows: its picture over the site and title; with
+  // no picture (or one that will not load), the title and its summary; with
+  // no summary either, the site beside the buttons and the title under them.
+  if (conversationId && page?.image && !pictureFailed) {
+    return (
+      <>
+        <a className="n-link-card-picture" href={url} rel="noreferrer" target="_blank" tabIndex={-1} aria-hidden="true">
+          <img src={linkPreviewImage(conversationId, url)} alt="" decoding="async" onError={() => setPictureFailed(true)} />
+        </a>
+        <div className="n-link-card-body">
+          <div className="n-link-card-text">
+            {site}
+            {title}
+          </div>
+          {buttons}
+        </div>
+      </>
+    )
+  }
+  if (page?.description) {
+    return (
+      <>
+        <div className="n-link-card-summary">
+          {site}
+          {title}
+          <p className="n-link-card-description">{page.description}</p>
+        </div>
+        <div className="n-link-card-foot">
+          <span className="n-link-card-address" title={url}>
+            {url.replace(/^https?:\/\//, '')}
+          </span>
+          {buttons}
+        </div>
+      </>
+    )
+  }
+  return (
+    <div className="n-link-card-compact">
+      <div className="n-link-card-row">
+        {site}
+        {buttons}
+      </div>
+      {title}
+    </div>
   )
 }
 

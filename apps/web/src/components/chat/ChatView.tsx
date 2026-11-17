@@ -58,6 +58,7 @@ import DocumentPanel from './DocumentPanel'
 import { useDocumentPanel } from '@/stores/document-panel-store'
 import { API_BASE_URL } from '@/lib/api'
 import { ImageSource, proxiedImages } from './genui/image-source'
+import { LinkPreviews } from './link-preview'
 import SubagentPanel from './SubagentPanel'
 import SubagentSummary from './SubagentSummary'
 import PanelResizer from './PanelResizer'
@@ -1178,6 +1179,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
           <Welcome />
         ) : (
           <ImageSource.Provider value={images}>
+          <LinkPreviews.Provider value={conversationId ?? null}>
             <div className={attachments.items.length > 0 ? 'n-column n-chat-fade has-files' : 'n-column n-chat-fade'} ref={columnRef}>
               {(start > floor || hasOlder) && (
                 // Room for the spinner is always kept while there is more above,
@@ -1260,6 +1262,7 @@ export function ChatView({ conversationId, onCreated, onRemoved }: ChatViewProps
                 </>
               )}
             </div>
+          </LinkPreviews.Provider>
           </ImageSource.Provider>
         )}
       </div>

@@ -67,6 +67,8 @@ export const queryKeys = {
     list: () => [...queryKeys.memory.all, 'list'] as const,
     events: () => [...queryKeys.memory.all, 'events'] as const,
   },
+  /** The card over a link in an answer (`GET /conversations/{id}/link-preview`). */
+  linkPreview: (conversationId: string, url: string) => ['link-preview', conversationId, url] as const,
   models: {
     all: ['models'] as const,
     list: () => [...queryKeys.models.all, 'list'] as const,

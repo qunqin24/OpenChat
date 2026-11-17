@@ -21,6 +21,7 @@ import { displayTitle } from '@openchat/chat-core/titles'
 import { useDisplayTitle } from '@/lib/titles'
 import { buildTurns, sentTurns, type AssistantTurn as Turn } from '@openchat/chat-core/transcript'
 import { ImageSource, proxiedImages } from './genui/image-source'
+import { LinkPreviews } from './link-preview'
 import { AssistantTurn, UserMessage } from './MessageItem'
 
 interface Props {
@@ -354,6 +355,7 @@ function Preview({ conversationId, term }: { conversationId: string | null; term
       ) : (
         // Inert: a preview to read, not a transcript to act on.
         <ImageSource.Provider value={proxiedImages(API_BASE_URL, shown)}>
+        <LinkPreviews.Provider value={shown}>
           <div className="n-palette-transcript" inert>
             {/* Without the messages moderation refused: no search finds them. */}
             {sentTurns(turns).map((turn) =>
@@ -364,6 +366,7 @@ function Preview({ conversationId, term }: { conversationId: string | null; term
               ),
             )}
           </div>
+        </LinkPreviews.Provider>
         </ImageSource.Provider>
       )}
     </div>

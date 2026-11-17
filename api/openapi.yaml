@@ -3465,6 +3465,59 @@ paths:
               schema: { type: string, format: binary }
         default: { $ref: "#/components/responses/Error" }
 
+  /conversations/{conversationId}/link-preview:
+    parameters:
+      - { $ref: "#/components/parameters/ConversationId" }
+    get:
+      tags: [messages]
+      summary: The title, summary and picture of a page an answer links to
+      description: |
+        For the card shown over a link in an answer. Only a page whose address
+        appears in one of this conversation's tool results is fetched - the
+        rule `getConversationImage` follows - so hovering over an address the
+        model made up, or one a prompt injection put in its prose, sends no
+        request anywhere. The page is fetched from public addresses only and
+        cached; one that cannot be read answers with only its `url`. 404
+        `link_not_found` when the address is not from this conversation.
+      operationId: getLinkPreview
+      parameters:
+        - name: url
+          in: query
+          required: true
+          schema: { type: string, maxLength: 2048 }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LinkPreview" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /conversations/{conversationId}/link-preview/image:
+    parameters:
+      - { $ref: "#/components/parameters/ConversationId" }
+    get:
+      tags: [messages]
+      summary: The picture a linked page shares, fetched for the reader
+      description: |
+        The image a page names for sharing (`og:image`), for a link's card when
+        `getLinkPreview` said it has one. The same rule as `getLinkPreview`;
+        404 when the page has no picture that can be had.
+      operationId: getLinkPreviewImage
+      parameters:
+        - name: url
+          in: query
+          required: true
+          description: The page's address, not the image's.
+          schema: { type: string, maxLength: 2048 }
+      responses:
+        "200":
+          description: The image.
+          content:
+            image/*:
+              schema: { type: string, format: binary }
+        default: { $ref: "#/components/responses/Error" }
+
   /images/search:
     get:
       tags: [messages]
@@ -5552,6 +5605,19 @@ components:
           format: date-time
           description: When the month's allowance starts again.
 
+    LinkPreview:
+      type: object
+      required: [url, image]
+      properties:
+        url: { type: string }
+        title:
+          type: string
+          description: The page's own title for sharing, else its <title>.
+        description: { type: string }
+        siteName: { type: string }
+        image:
+          type: boolean
+          description: The page names a picture; `getLinkPreviewImage` serves it.
     ModelMark:
       type: object
       required: [id, name, providerId, family]
